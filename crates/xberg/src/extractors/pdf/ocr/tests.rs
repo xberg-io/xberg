@@ -12094,4 +12094,68 @@ Name: ___
             "page 2 keeps one record with its first error and is recovered; page 4 is added"
         );
     }
+
+    #[cfg(all(feature = "pdf", feature = "formula-recognition"))]
+    #[test]
+    fn formula_layout_inputs_keep_only_replaced_pages_with_formula_regions() {
+        use crate::core::config::LayoutDetectionConfig;
+        use crate::core::config::layout::FormulaModel;
+        use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
+
+        let page = |class: LayoutClass| {
+            let detection = LayoutDetection {
+                class_name: class,
+                confidence: 0.9,
+                bbox: BBox {
+                    x1: 0.0,
+                    y1: 0.0,
+                    x2: 2.0,
+                    y2: 2.0,
+                },
+            };
+            (
+                image::DynamicImage::new_rgb8(4, 4),
+                DetectionResult {
+                    page_width: 4,
+                    page_height: 4,
+                    detections: vec![detection],
+                },
+            )
+        };
+        let (images, detections): (Vec<_>, Vec<_>) = [LayoutClass::Formula, LayoutClass::Text, LayoutClass::Formula]
+            .map(page)
+            .into_iter()
+            .unzip();
+        let inputs = Some((images, detections));
+        let replaced = |pages: &[u32]| -> ahash::AHashMap<u32, String> {
+            pages.iter().map(|&page| (page, "ocr".to_string())).collect()
+        };
+        let layout = LayoutDetectionConfig {
+            formula_model: Some(FormulaModel::LatexOcr),
+            ..Default::default()
+        };
+
+        let (images, detections) =
+            formula_layout_inputs_for_replaced_pages(inputs.clone(), &replaced(&[1, 2]), Some(&layout))
+                .expect("replaced page 1 holds a formula region");
+        assert_eq!(images.iter().map(|image| image.width()).collect::<Vec<_>>(), [4, 0, 0]);
+        assert_eq!(
+            detections
+                .iter()
+                .map(|detection| detection.detections.len())
+                .collect::<Vec<_>>(),
+            [1, 0, 0]
+        );
+
+        assert!(formula_layout_inputs_for_replaced_pages(inputs.clone(), &replaced(&[2]), Some(&layout)).is_none());
+        assert!(
+            formula_layout_inputs_for_replaced_pages(
+                inputs.clone(),
+                &replaced(&[1]),
+                Some(&LayoutDetectionConfig::default())
+            )
+            .is_none()
+        );
+        assert!(formula_layout_inputs_for_replaced_pages(inputs, &replaced(&[1]), None).is_none());
+    }
 }

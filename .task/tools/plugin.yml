@@ -27,3 +27,4 @@ tasks:
     cmds:
       - node --test scripts/tests/opencode-plugin.test.mjs
       - python3 scripts/verify_pi_package.py
+      - python3 scripts/tests/test_verify_pi_package.py

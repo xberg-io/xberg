@@ -587,6 +587,33 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets
         shell: bash
 
+  # GH#2243: `xml`, `hwpx` and `email` each build on their own, so a helper that only another
+  # feature calls must carry that feature's cfg. `cargo check` only warns about dead code;
+  # clippy with `-D warnings` turns it into an error. ~keep
+  lib-clippy-feature-legs:
+    name: Lib clippy leg (${{ matrix.features }})
+    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [xml, hwpx, email]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-lib-clippy-${{ matrix.features }}
+          use-sccache: "true"
+
+      - name: cargo clippy -p xberg --lib --no-default-features --features ${{ matrix.features }}
+        run: cargo clippy --locked -p xberg --lib --no-default-features --features "${{ matrix.features }}" -- -D warnings
+        shell: bash
+
   # GH#2085: chunking cost must stay linear in document size. The `chunking_pipeline` tests
   # include a ratio-based scaling guard that is only meaningful with optimizations on, and the
   # broad unit-test leg builds the dev profile, so this leg runs them in release against the

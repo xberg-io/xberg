@@ -1,7 +1,10 @@
 ---
 type: Playbook
 title: Wasm Constraints
-description: WASM build constraints for the crates/xberg-wasm crate — the wasm-target feature set, no-tokio sync-only internal APIs, the crate-private SyncExtractor trait, the 2 MB HTML size limit, size-optimized build config (opt-level="z"), and the async-wrapper/sync-internal API pattern. Load when building for wasm32, adding or modifying a WASM-compatible extractor, or debugging WASM build/runtime failures.
+description: "WASM build constraints for crates/xberg-wasm: wasm-target features, sync-only internal APIs, SyncExtractor, HTML size limit, size-optimized build. Use when building for wasm32 or debugging WASM build or runtime failures."
+paths:
+  - "crates/xberg-wasm/**"
+  - "e2e/wasm/**"
 x-ai-rulez:
   kind: skill
   id: wasm-constraints

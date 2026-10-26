@@ -716,3 +716,13 @@ mod region_replace_native_paragraph_tests;
 #[cfg(test)]
 #[cfg(all(feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
 mod listed_pages_tests;
+
+#[cfg(test)]
+#[cfg(all(
+    feature = "pdf",
+    feature = "layout-detection",
+    feature = "ocr",
+    feature = "formula-recognition",
+    feature = "tokio-runtime"
+))]
+mod mixed_ocr_formula_tests;

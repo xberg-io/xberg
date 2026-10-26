@@ -1,6 +1,6 @@
-//! A table region's VLM answer must replace the native body paragraphs inside it whose words it carries
-//! and keep the others, end to end on a native PDF: stub layout engine, local VLM stub, `extract_content`,
-//! markdown rendered from the result.
+//! A table region's VLM answer must replace the native body paragraphs inside it that it carries at least
+//! 90% of the words of, and keep the others, end to end on a native PDF: stub layout engine, local VLM
+//! stub, `extract_content`, markdown rendered from the result.
 //!
 //! Lives under `engine` because the stub model is installed in the private engine pool, which only
 //! this module can construct an engine for; the VLM endpoint is a local wiremock stub.

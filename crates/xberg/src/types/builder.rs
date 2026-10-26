@@ -24,14 +24,14 @@
 
 use super::document_structure::{AnnotationKind, TextAnnotation};
 
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 use ahash::AHashMap;
 
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 use super::document_structure::{
     ContentLayer, DocumentNode, DocumentStructure, GridCell, NodeContent, NodeId, NodeIndex, TableGrid,
 };
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 use super::extraction::BoundingBox;
 #[cfg_attr(alef, alef(skip))]
 /// Builder for constructing `DocumentStructure` trees with automatic
@@ -40,7 +40,7 @@ use super::extraction::BoundingBox;
 /// The builder maintains an internal section stack: when you push a heading,
 /// it automatically creates a `Group` container and nests subsequent content
 /// under it. Higher-level headings pop deeper sections off the stack.
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 pub(crate) struct DocumentStructureBuilder {
     doc: DocumentStructure,
     section_stack: Vec<(u8, NodeIndex)>,
@@ -51,7 +51,7 @@ pub(crate) struct DocumentStructureBuilder {
     node_count: u32,
 }
 
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 impl DocumentStructureBuilder {
     /// Create a new empty builder.
     pub(crate) fn new() -> Self {
@@ -202,6 +202,7 @@ impl DocumentStructureBuilder {
     }
 
     /// Push an image reference node.
+    #[cfg(feature = "office")]
     pub(crate) fn push_image(
         &mut self,
         description: Option<&str>,
@@ -258,6 +259,7 @@ impl DocumentStructureBuilder {
     /// fresh. Subsequent body nodes will be parented under this slide
     /// until [`exit_container`](Self::exit_container) is called or a new
     /// slide is pushed.
+    #[cfg(feature = "office")]
     pub(crate) fn push_slide(&mut self, number: u32, title: Option<&str>) -> NodeIndex {
         self.section_stack.clear();
         self.container_stack.clear();
@@ -351,6 +353,7 @@ impl DocumentStructureBuilder {
 
     /// Push a raw `NodeContent` with full control over content layer and annotations.
     /// Nests under current section unless the content type is a root-level type.
+    #[cfg(feature = "office")]
     pub(crate) fn push_raw(
         &mut self,
         content: NodeContent,
@@ -381,7 +384,7 @@ impl DocumentStructureBuilder {
     ///
     /// Subsequent body nodes will be parented under this container
     /// until [`exit_container`](Self::exit_container) is called.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "office"))]
     pub(crate) fn enter_container(&mut self, container: NodeIndex) {
         self.container_stack.push(container);
     }
@@ -444,7 +447,7 @@ impl DocumentStructureBuilder {
     }
 }
 
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 impl Default for DocumentStructureBuilder {
     fn default() -> Self {
         Self::new()
@@ -452,7 +455,7 @@ impl Default for DocumentStructureBuilder {
 }
 
 /// Convert a simple cell grid to a `TableGrid`.
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "email"))]
 fn cells_to_grid(cells: &[Vec<String>]) -> TableGrid {
     let rows = cells.len() as u32;
     let cols = cells.iter().map(|r| r.len()).max().unwrap_or(0) as u32;
@@ -483,7 +486,7 @@ fn cells_to_grid(cells: &[Vec<String>]) -> TableGrid {
 }
 
 /// Check if a content type should always be root-level (not nested under sections).
-#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
+#[cfg(feature = "office")]
 fn is_always_root(content: &NodeContent) -> bool {
     matches!(content, NodeContent::PageBreak)
 }
@@ -627,7 +630,7 @@ pub(crate) fn highlight(start: u32, end: u32) -> TextAnnotation {
     }
 }
 
-#[cfg(all(test, any(feature = "office", feature = "email", feature = "xml")))]
+#[cfg(all(test, any(feature = "office", feature = "email")))]
 mod tests {
     use super::*;
 
@@ -714,6 +717,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_slide_captures_children() {
         let mut b = DocumentStructureBuilder::new();
@@ -894,6 +898,7 @@ mod tests {
         assert_eq!(doc.nodes[adm.0 as usize].children.len(), 2);
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_slide_with_headings_and_paragraphs() {
         let mut b = DocumentStructureBuilder::new();
@@ -913,6 +918,7 @@ mod tests {
         assert_eq!(h1_group.children.len(), 3);
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_nested_containers_slide_containing_quote() {
         let mut b = DocumentStructureBuilder::new();
@@ -932,6 +938,7 @@ mod tests {
         assert_eq!(doc.nodes[q.0 as usize].children.len(), 1);
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_enter_exit_container_manual() {
         let mut b = DocumentStructureBuilder::new();

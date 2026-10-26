@@ -1,7 +1,16 @@
 ---
 type: Playbook
 title: Ocr Pipeline And Quality
-description: Change or evaluate Xberg OCR backends, preprocessing, caching, page acceptance, geometry, hOCR structure, table reconstruction, or cross-backend quality. Load for OCR behavior and A/B quality work, not ordinary PDF text extraction.
+description: Change or evaluate Xberg OCR backends, preprocessing, caching, page acceptance, geometry, hOCR, table reconstruction or cross-backend quality. Use for OCR behavior and A/B quality work, not plain PDF text.
+paths:
+  - "crates/xberg/src/ocr/**"
+  - "crates/xberg/src/paddle_ocr/**"
+  - "crates/xberg/src/sceptre_ocr/**"
+  - "crates/xberg/src/candle_ocr/**"
+  - "crates/xberg-tesseract/**"
+  - "crates/xberg-paddle-ocr/**"
+  - "crates/xberg-candle-ocr/**"
+  - "tools/ocr-measure/**"
 x-ai-rulez:
   kind: skill
   id: ocr-pipeline-and-quality
