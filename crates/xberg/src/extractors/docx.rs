@@ -188,7 +188,7 @@ fn build_internal_document(
                     para_idx.or(formula_idx)
                 } else if let Some(nid) = paragraph.numbering_id {
                     let formula_idx = push_formulas(&mut builder, &math_formulas, current_page);
-                    if !text.is_empty() {
+                    if !text.trim().is_empty() {
                         let nlvl = paragraph.numbering_level.unwrap_or(0);
                         let is_ordered = paragraph
                             .numbering_id
@@ -241,7 +241,7 @@ fn build_internal_document(
                         open_list_count = 0;
                     }
                     let formula_idx = push_formulas(&mut builder, &math_formulas, current_page);
-                    if !text.is_empty() {
+                    if !text.trim().is_empty() {
                         let para_idx = builder.push_paragraph(&text, annotations.clone(), Some(current_page), None);
                         Some(para_idx)
                     } else {
@@ -5127,6 +5127,24 @@ mod tests {
                     ("formula", "y=2"),
                     ("quote_end", "")
                 ],
+                "{blank}"
+            );
+            assert_eq!(formula_latex(&result), ["x=1", "y=2"], "{blank}");
+        }
+    }
+
+    #[tokio::test]
+    async fn should_skip_a_blank_plain_paragraph_next_to_display_math() {
+        let space = r#"<w:r><w:t xml:space="preserve"> </w:t></w:r>"#;
+        for blank in [space, "<w:r><w:tab/></w:r>"] {
+            let body = format!(
+                r#"<w:p>{blank}{DISPLAY_X}</w:p>
+                <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>{blank}{DISPLAY_Y}</w:p>"#
+            );
+            let (elements, result) = extract_math_docx(&body).await;
+            assert_eq!(
+                math_blocks(&elements),
+                [("formula", "x=1"), ("formula", "y=2")],
                 "{blank}"
             );
             assert_eq!(formula_latex(&result), ["x=1", "y=2"], "{blank}");

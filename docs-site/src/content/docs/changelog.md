@@ -67,6 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(docx): A paragraph or list item holding only whitespace next to display math writes nothing.**
+  The equation was written, and an empty paragraph or list item came with it. Headings and quotes already skipped
+  the blank text. (#2262)
 - **(docx, pptx): Trim equation LaTeX.**
   An inline equation read `$\alpha $`, which Markdown does not take as math, and its entry in `formulas` kept the
   space. The OMML converter's result is now trimmed for every consumer, each line of a display equation on its own,
