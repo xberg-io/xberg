@@ -2507,7 +2507,7 @@ mod tests {
         });
         let mut attrs = AHashMap::new();
         attrs.insert("x_bold_fraction".to_string(), "1".to_string());
-        // `InternalElement::with_attributes` is gated on the xml/hwpx features, which the
+        // `InternalElement::with_attributes` is gated on the xml feature, which the
         // OCR test set does not enable; assign the public field directly instead.
         elem.attributes = Some(attrs);
         doc.push_element(elem);
@@ -2580,7 +2580,7 @@ mod tests {
         let mut attrs = AHashMap::new();
         attrs.insert("x_bold_fraction".to_string(), "not-a-number".to_string());
         attrs.insert("x_italic_fraction".to_string(), "5.0".to_string());
-        // `InternalElement::with_attributes` is gated on the xml/hwpx features, which the
+        // `InternalElement::with_attributes` is gated on the xml feature, which the
         // OCR test set does not enable; assign the public field directly instead.
         elem.attributes = Some(attrs);
         doc.push_element(elem);

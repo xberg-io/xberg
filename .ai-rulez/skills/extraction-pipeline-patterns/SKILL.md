@@ -1,7 +1,12 @@
 ---
 type: Playbook
 title: Extraction Pipeline Patterns
-description: Change or diagnose Xberg's core extraction orchestration, cache semantics, extractor fallback, post-processing, concurrency defaults, or format-wide quality invariants. Load for pipeline work, not a single parser's syntax.
+description: "Xberg core extraction orchestration: cache semantics, extractor fallback, post-processing, concurrency defaults, format-wide quality invariants. Use for pipeline changes or diagnosis, not a single parser's syntax."
+paths:
+  - "crates/xberg/src/core/**"
+  - "crates/xberg/src/extraction/**"
+  - "crates/xberg/src/extractors/**"
+  - "crates/xberg/src/plugins/**"
 x-ai-rulez:
   kind: skill
   id: extraction-pipeline-patterns

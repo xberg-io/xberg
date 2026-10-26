@@ -1,7 +1,11 @@
 ---
 type: Playbook
 title: Api Server Mcp
-description: REST API server and MCP protocol integration
+description: Xberg REST API server (axum routes, middleware, cache) and MCP protocol surface. Use when changing an API endpoint, server startup, the cache endpoints, or MCP tools.
+paths:
+  - "crates/xberg/src/api/**"
+  - "crates/xberg/src/mcp/**"
+  - "crates/xberg/src/cache/**"
 x-ai-rulez:
   kind: skill
   id: api-server-mcp

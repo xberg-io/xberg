@@ -5,9 +5,9 @@
 //! layout) regions, this module crops those regions from the page raster, calls
 //! the VLM via [`crate::llm::region_extractor`], and splices the resulting
 //! markdown back into the assembled document at the region's original position.
-//! A table or other region's answer replaces the native table elements inside it, and
-//! the body paragraphs inside it whose words the answer carries, matched by box; a
-//! figure's description is added beside it.
+//! A table or other region's answer replaces the native tables and body paragraphs inside
+//! it, matched by box, when it carries at least 90% of their words; the rest stay and the
+//! answer is added beside them, as is a figure's description.
 //! Native paragraphs have a box only when the PDF is built as a structured document
 //! (`needs_structured_extraction` in `extraction.rs`), so on the flat path (Plain, Json
 //! and other formats not built from Markdown) they stay, OCR paragraphs merged in with
@@ -46,8 +46,8 @@ const MIN_REGION_PIXEL_AREA: u32 = 1_000;
 /// Share of a native element's area that must lie inside a table or other region for
 /// the region's answer to replace it. Above one half, an element belongs to at most one
 /// of two disjoint regions, and the margin absorbs jitter between the layout box and the
-/// native geometry. An element straddling the edge is kept, as is a paragraph whose words the
-/// answer lacks: duplicated text over lost text.
+/// native geometry. An element straddling the edge is kept, as is one the answer does not
+/// carry ([`take_if_carried`]): duplicated text over lost text.
 const REPLACE_CONTAINMENT: f64 = 0.6;
 
 /// A VLM-extracted markdown string and the page index it belongs to.
@@ -391,9 +391,7 @@ fn inside_region(document: &InternalDocument, element: &InternalElement, page_nu
 }
 
 /// Whether an answer may stand in for `element`: a table, or a body paragraph that is not linked as
-/// a caption. A table's cells are what the VLM transcribed; a paragraph goes only if the answer
-/// carries its words ([`take_words`]), since a table prompt returns only the table and a note or
-/// title in the region would be lost. Everything else stays.
+/// a caption. Either goes only if the answer carries its words ([`take_if_carried`]). Everything else stays.
 fn replaceable(element: &InternalElement, is_caption: bool) -> bool {
     match element.kind {
         ElementKind::Table { .. } => true,
@@ -402,31 +400,53 @@ fn replaceable(element: &InternalElement, is_caption: bool) -> bool {
     }
 }
 
-/// Takes every word of `text` out of `answer` and returns `true`, or takes none and returns `false`
-/// when any is missing, so a partly transcribed paragraph is kept and two cannot share one word.
-fn take_words(text: &str, answer: &mut ahash::AHashMap<String, usize>) -> bool {
-    let words = super::token_multiset([text]);
-    if words
-        .iter()
-        .any(|(word, count)| answer.get(word).copied().unwrap_or_default() < *count)
-    {
-        return false;
-    }
-    for (word, count) in words {
-        if let Some(remaining) = answer.get_mut(&word) {
-            *remaining -= count;
+/// Whether `answer`'s remaining words carry at least `MIN_TABLE_TOKEN_REPRESENTATION` of `element`'s
+/// (a table's are its cells'); if so the matched words are taken out, so two elements cannot claim one,
+/// and otherwise nothing is. An element of fewer than ten words needs every word; one with none passes.
+/// A region answer can be degenerate (a repeated symbol, an invented table, a cut-off transcription),
+/// and replacing native text with it loses that text, while a missed match only prints it twice.
+fn take_if_carried(
+    document: &InternalDocument,
+    element: &InternalElement,
+    answer: &mut ahash::AHashMap<String, usize>,
+) -> bool {
+    let words = match element.kind {
+        ElementKind::Table { table_index } => {
+            let cells = document.tables.get(table_index as usize).into_iter();
+            super::token_multiset(cells.flat_map(|table| table.cells.iter().flatten()).map(String::as_str))
         }
-    }
-    true
+        _ => super::token_multiset([element.text.as_str()]),
+    };
+    super::take_if_represented(words, answer)
 }
 
-/// Takes `text`'s words out of `answer` as far as it holds them.
-fn spend_words(text: &str, answer: &mut ahash::AHashMap<String, usize>) {
-    for (word, count) in super::token_multiset([text]) {
-        if let Some(remaining) = answer.get_mut(&word) {
-            *remaining = remaining.saturating_sub(count);
+/// `answer` with every cell separator turned into a space, so the word count sees the cells of a compact
+/// pipe table (`|a|b|`), of `<br>` line breaks and of an HTML table as the native table's words.
+/// A tag is `<` followed by a letter, `/` or `!` up to the next `>`; any other `<` stays text. The scan
+/// moves forward only, so the cost is linear in the answer's length.
+fn answer_text_for_words(answer: &str) -> String {
+    let mut text = String::with_capacity(answer.len());
+    let mut rest = answer;
+    while let Some(open) = rest.find('<') {
+        text.push_str(&rest[..open]);
+        let tail = &rest[open + 1..];
+        let starts_tag = tail.starts_with(|c: char| c.is_ascii_alphabetic() || c == '/' || c == '!');
+        if !starts_tag {
+            text.push('<');
+            rest = tail;
+            continue;
         }
+        let Some(close) = tail.find('>') else {
+            // No `>` remains, so no later tag can close: keep the rest as text, in one forward scan.
+            text.push('<');
+            rest = tail;
+            break;
+        };
+        text.push(' ');
+        rest = &tail[close + 1..];
     }
+    text.push_str(rest);
+    text.replace('|', " ")
 }
 
 /// Also drops each container start and end pair the removal left with nothing inside, so the
@@ -531,27 +551,21 @@ fn remove_region_content(
         .filter(|relationship| matches!(relationship.kind, RelationshipKind::Caption))
         .map(|relationship| relationship.source)
         .collect();
-    let mut answer_words = super::token_multiset([answer]);
+    let mut answer_words = super::token_multiset([answer_text_for_words(answer).as_str()]);
     let candidates: Vec<usize> = (0..document.elements.len())
         .filter(|&index| {
             let element = &document.elements[index];
             replaceable(element, captions.contains(&(index as u32))) && inside_region(document, element, page_num, hint)
         })
         .collect();
+    let (tables, paragraphs): (Vec<usize>, Vec<usize>) = candidates
+        .into_iter()
+        .partition(|&index| matches!(document.elements[index].kind, ElementKind::Table { .. }));
     let mut drop = vec![false; document.elements.len()];
-    // A table's cells are what the answer transcribes, so they spend their words first; otherwise a title or
-    // note repeating a cell's words would be removed on the strength of the table's transcription. ~keep
-    for &index in &candidates {
-        if let ElementKind::Table { table_index } = document.elements[index].kind {
-            drop[index] = true;
-            let cells = document.tables.get(table_index as usize).into_iter();
-            for cell in cells.flat_map(|table| table.cells.iter().flatten()) {
-                spend_words(cell, &mut answer_words);
-            }
-        }
-    }
-    for &index in &candidates {
-        drop[index] = drop[index] || take_words(&document.elements[index].text, &mut answer_words);
+    // A passing table's cells are what the answer transcribes, so they spend their words first; otherwise a
+    // title or note repeating a cell's words would be removed on the strength of the table's transcription. ~keep
+    for index in tables.into_iter().chain(paragraphs) {
+        drop[index] = take_if_carried(document, &document.elements[index], &mut answer_words);
     }
     let first = &document.elements[drop.iter().position(|dropped| *dropped)?];
     let (depth, paged) = (first.depth, first.page == Some(page_num));
@@ -564,8 +578,8 @@ fn remove_region_content(
 
 /// Inject VLM-extracted region markdown into an `InternalDocument`.
 ///
-/// A table or other region's answer first replaces the native table elements mostly inside it
-/// ([`REPLACE_CONTAINMENT`]), and the body paragraphs there whose words it carries, and takes their
+/// A table or other region's answer first replaces the native tables and body paragraphs mostly
+/// inside it ([`REPLACE_CONTAINMENT`]) whose words it carries ([`take_if_carried`]), and takes their
 /// place: the position the removed content began at, and the depth of the first element replaced.
 /// Any other answer, a figure's, one that replaced nothing or one whose replaced content had no page
 /// of its own, is placed by [`find_insertion_index`] at depth 0. Placing a replacing answer by

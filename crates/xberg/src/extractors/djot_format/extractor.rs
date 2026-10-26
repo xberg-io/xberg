@@ -597,14 +597,6 @@ impl DjotExtractor {
                         }
                     }
                 }
-                Event::Start(Container::Table, _) => {
-                    // A table without rows, such as a lone `|---|` line, is not pushed. Its caption is
-                    // dropped here so the next table does not take it, and the references in that
-                    // caption follow the block before. ~keep
-                    table_rows.clear();
-                    table_caption.clear();
-                    pending_footnote_refs.flush(&mut b, FootnoteRefHolder::TableCaption);
-                }
                 Event::Start(Container::Caption, _) => {
                     in_table_caption = true;
                 }
@@ -638,6 +630,12 @@ impl DjotExtractor {
                         );
                     }
                     pending_footnote_refs.flush(&mut b, FootnoteRefHolder::TableCaption);
+                }
+                Event::End(Container::Table) => {
+                    // A table without rows, such as a lone `|---|` line, is not pushed. Its caption
+                    // and the references in that caption are dropped, so the next table takes neither. ~keep
+                    table_caption.clear();
+                    pending_footnote_refs.discard(FootnoteRefHolder::TableCaption);
                 }
                 Event::Str(s) => {
                     // An image in a caption or cell keeps its alt text there and in its metadata. ~keep
@@ -871,6 +869,44 @@ mod tests {
             name == "c" && kind == ElementKind::DefinitionDescription && text == "definition",
             "{cited:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_footnote_ref_of_a_caption_is_dropped_with_the_caption_of_an_empty_table() {
+        // A table without rows is not pushed, so its caption is dropped. The reference in that
+        // caption goes with it and does not land before the next table.
+        let content = b"|---|\n^ dropped caption[^a]\n\n| x | y |\n|---|---|\n| 1 | 2 |\n\n[^a]: Note a.\n";
+        let doc = DjotExtractor::new()
+            .extract_content(content, "text/djot", &ExtractionConfig::default())
+            .await
+            .expect("extraction should succeed");
+
+        let refs: Vec<_> = doc
+            .elements
+            .iter()
+            .filter(|element| element.kind == ElementKind::FootnoteRef)
+            .map(|element| element.text.clone())
+            .collect();
+        assert!(refs.is_empty(), "{refs:?} in {:?}", doc.elements);
+    }
+
+    #[tokio::test]
+    async fn test_dropping_an_empty_table_caption_keeps_the_references_of_other_blocks() {
+        // The list item holds reference `a` until it closes, after the empty table inside it.
+        // Only the caption reference `b` goes.
+        let content = b"- item[^a]\n\n  |---|\n  ^ cap[^b]\n\n- second\n\n[^a]: A.\n\n[^b]: B.\n";
+        let doc = DjotExtractor::new()
+            .extract_content(content, "text/djot", &ExtractionConfig::default())
+            .await
+            .expect("extraction should succeed");
+
+        let refs: Vec<_> = doc
+            .elements
+            .iter()
+            .filter(|element| element.kind == ElementKind::FootnoteRef)
+            .map(|element| element.text.as_str())
+            .collect();
+        assert_eq!(refs, ["a"], "{:?}", doc.elements);
     }
 
     #[test]
@@ -1324,7 +1360,7 @@ mod tests {
     }
 
     /// A plain table gets no caption, and the caption of a table without rows does not go to the
-    /// next table. The reference in that caption stays before the next table.
+    /// next table. The reference in that caption is dropped with it.
     #[tokio::test]
     async fn should_give_a_caption_only_to_its_own_table_djot() {
         for djot in [
@@ -1342,18 +1378,16 @@ mod tests {
                 String::from_utf8_lossy(djot),
                 doc.relationships
             );
-            let table_idx = doc
-                .elements
-                .iter()
-                .position(|e| matches!(e.kind, ElementKind::Table { .. }))
-                .expect("table element");
-            if let Some(reference_idx) = doc
-                .elements
-                .iter()
-                .position(|e| matches!(e.kind, ElementKind::FootnoteRef))
-            {
-                assert!(reference_idx < table_idx, "got {:?}", doc.elements);
-            }
+            assert!(
+                doc.elements.iter().any(|e| matches!(e.kind, ElementKind::Table { .. })),
+                "table element missing from {:?}",
+                doc.elements
+            );
+            assert!(
+                !doc.elements.iter().any(|e| matches!(e.kind, ElementKind::FootnoteRef)),
+                "got {:?}",
+                doc.elements
+            );
         }
     }
 }

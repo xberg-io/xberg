@@ -40,11 +40,15 @@ jobs:
       - uses: actions/checkout@v7
       - uses: xberg-io/actions/setup-ai-rulez@793d3a4d37a17009d91cce29f2825eda570d2abd
         with:
-          ai-rulez-version: "5.3.0"
-          source-revision: "bdabc8a6e9211de60ca1e4ad76225ac92fcf218f"
+          ai-rulez-version: "5.7.0"
       - uses: xberg-io/actions/validate-ai-rulez@98adf87f1ed4c62a57ff56f9010d62faf42d4db6
         with:
           expected-config-count: "2"
           additional-config-directories: "plugin/.ai-rulez"
           verify-plugin: "true"
           version-sync-script: "scripts/sync_integration_versions.py"
+      - uses: xberg-io/agent-conventions/actions/context-exposure@923818e1ce9b71ebe68306c7a551caeaf7b27106
+        with:
+          budgets: |
+            claude=6050
+            codex=7400
