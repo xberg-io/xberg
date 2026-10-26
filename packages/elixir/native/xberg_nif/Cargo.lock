@@ -8929,6 +8929,7 @@ dependencies = [
  "typst-syntax",
  "unhwp",
  "unicode-normalization",
+ "unicode-width",
  "ureq",
  "url",
  "urlencoding",
