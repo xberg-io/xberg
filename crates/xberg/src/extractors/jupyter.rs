@@ -527,7 +527,18 @@ impl JupyterExtractor {
             marks.clear();
         }
 
-        let mut out = String::with_capacity(text.len());
+        // Lines before the first `\r`, escape or 8-bit CSI are written as they are: without those, no
+        // character overwrites another, and the grid below would only copy the line.
+        let first_control = [text.find('\r'), text.find('\u{1b}'), text.find('\u{9b}')]
+            .into_iter()
+            .flatten()
+            .min();
+        let Some(first_control) = first_control else {
+            return text.to_owned();
+        };
+        let (plain, text) = text.split_at(text[..first_control].rfind('\n').map_or(0, |newline| newline + 1));
+        let mut out = String::with_capacity(plain.len() + text.len());
+        out.push_str(plain);
         // One entry per display column, 4 bytes each. Combining marks have no column of their own: they
         // sit in `marks`, keyed by the column of their base, and are rare.
         let mut line: Vec<Cell> = Vec::new();
@@ -1782,6 +1793,23 @@ mod tests {
         assert_eq!(JupyterExtractor::terminal_text("\u{9b}32mgreen\u{9b}0m"), "green");
         // A lone ESC before ordinary text, and an unterminated sequence, drop nothing else
         assert_eq!(JupyterExtractor::terminal_text("a\u{1b}\nb\u{1b}[1"), "a\nb");
+    }
+
+    #[test]
+    fn terminal_text_returns_text_without_control_characters_unchanged() {
+        // Narrow, wide and combining characters, tabs and other controls, with no `\r`, escape or 8-bit CSI
+        let text = "plain\ttext\n中文字 e\u{301}x \u{301}y\u{200b}z\u{85}\u{8}\n\n";
+        assert_eq!(JupyterExtractor::terminal_text(text), text);
+        assert_eq!(JupyterExtractor::terminal_text(""), "");
+    }
+
+    #[test]
+    fn terminal_text_applies_control_characters_only_to_the_lines_that_hold_them() {
+        // The first two lines are plain; the carriage return on the third line overwrites only that line
+        assert_eq!(JupyterExtractor::terminal_text("one\n中文\nabc\rX\nlast"), "one\n中文\nXbc\nlast");
+        // An escape sequence that runs over a newline still removes the text after it
+        assert_eq!(JupyterExtractor::terminal_text("one\n\u{1b}]0;title\nstill title\u{7}two"), "one\ntwo");
+        assert_eq!(JupyterExtractor::terminal_text("one\n\u{9b}1\nm two\r\nthree"), "one\n two\nthree");
     }
 
     #[test]
