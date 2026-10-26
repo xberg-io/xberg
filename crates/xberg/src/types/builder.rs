@@ -202,6 +202,7 @@ impl DocumentStructureBuilder {
     }
 
     /// Push an image reference node.
+    #[cfg(feature = "office")]
     pub(crate) fn push_image(
         &mut self,
         description: Option<&str>,
@@ -258,6 +259,7 @@ impl DocumentStructureBuilder {
     /// fresh. Subsequent body nodes will be parented under this slide
     /// until [`exit_container`](Self::exit_container) is called or a new
     /// slide is pushed.
+    #[cfg(feature = "office")]
     pub(crate) fn push_slide(&mut self, number: u32, title: Option<&str>) -> NodeIndex {
         self.section_stack.clear();
         self.container_stack.clear();
@@ -351,6 +353,7 @@ impl DocumentStructureBuilder {
 
     /// Push a raw `NodeContent` with full control over content layer and annotations.
     /// Nests under current section unless the content type is a root-level type.
+    #[cfg(feature = "office")]
     pub(crate) fn push_raw(
         &mut self,
         content: NodeContent,
@@ -483,7 +486,7 @@ fn cells_to_grid(cells: &[Vec<String>]) -> TableGrid {
 }
 
 /// Check if a content type should always be root-level (not nested under sections).
-#[cfg(any(feature = "office", feature = "email"))]
+#[cfg(feature = "office")]
 fn is_always_root(content: &NodeContent) -> bool {
     matches!(content, NodeContent::PageBreak)
 }
@@ -536,7 +539,7 @@ pub(crate) fn italic(start: u32, end: u32) -> TextAnnotation {
 }
 
 /// Create an underline annotation for the given byte range.
-#[cfg(any(feature = "office", feature = "email"))]
+#[cfg(any(feature = "office", feature = "email", feature = "xml"))]
 pub(crate) fn underline(start: u32, end: u32) -> TextAnnotation {
     TextAnnotation {
         start,
