@@ -528,17 +528,29 @@ impl JupyterExtractor {
         }
 
         // Lines before the first `\r`, escape or 8-bit CSI are written as they are: without those, no
-        // character overwrites another, and the grid below would only copy the line.
-        let first_control = [text.find('\r'), text.find('\u{1b}'), text.find('\u{9b}')]
-            .into_iter()
-            .flatten()
-            .min();
-        let Some(first_control) = first_control else {
-            return text.to_owned();
+        // character overwrites another, and the grid below would only copy the line. A `\r` before a
+        // newline is dropped and does not count.
+        let first_control = [
+            text.match_indices('\r')
+                .find(|&(at, _)| text.as_bytes().get(at + 1) != Some(&b'\n'))
+                .map(|(at, _)| at),
+            text.find('\u{1b}'),
+            text.find('\u{9b}'),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        let (plain, text) = match first_control {
+            Some(at) => text.split_at(text[..at].rfind('\n').map_or(0, |newline| newline + 1)),
+            None => (text, ""),
         };
-        let (plain, text) = text.split_at(text[..first_control].rfind('\n').map_or(0, |newline| newline + 1));
         let mut out = String::with_capacity(plain.len() + text.len());
-        out.push_str(plain);
+        for (index, piece) in plain.split("\r\n").enumerate() {
+            if index > 0 {
+                out.push('\n');
+            }
+            out.push_str(piece);
+        }
         // One entry per display column, 4 bytes each. Combining marks have no column of their own: they
         // sit in `marks`, keyed by the column of their base, and are rare.
         let mut line: Vec<Cell> = Vec::new();
@@ -1801,15 +1813,34 @@ mod tests {
         let text = "plain\ttext\n中文字 e\u{301}x \u{301}y\u{200b}z\u{85}\u{8}\n\n";
         assert_eq!(JupyterExtractor::terminal_text(text), text);
         assert_eq!(JupyterExtractor::terminal_text(""), "");
+        // Windows line endings: the `\r` before each newline is dropped, in a stream with no other control
+        assert_eq!(
+            JupyterExtractor::terminal_text("a\r\n中文\r\n\r\nb\r\n"),
+            "a\n中文\n\nb\n"
+        );
     }
 
     #[test]
     fn terminal_text_applies_control_characters_only_to_the_lines_that_hold_them() {
         // The first two lines are plain; the carriage return on the third line overwrites only that line
-        assert_eq!(JupyterExtractor::terminal_text("one\n中文\nabc\rX\nlast"), "one\n中文\nXbc\nlast");
+        assert_eq!(
+            JupyterExtractor::terminal_text("one\n中文\nabc\rX\nlast"),
+            "one\n中文\nXbc\nlast"
+        );
         // An escape sequence that runs over a newline still removes the text after it
-        assert_eq!(JupyterExtractor::terminal_text("one\n\u{1b}]0;title\nstill title\u{7}two"), "one\ntwo");
-        assert_eq!(JupyterExtractor::terminal_text("one\n\u{9b}1\nm two\r\nthree"), "one\n two\nthree");
+        assert_eq!(
+            JupyterExtractor::terminal_text("one\n\u{1b}]0;title\nstill title\u{7}two"),
+            "one\ntwo"
+        );
+        assert_eq!(
+            JupyterExtractor::terminal_text("one\n\u{9b}1\nm two\r\nthree"),
+            "one\n two\nthree"
+        );
+        // Plain lines with Windows line endings, then a progress bar
+        assert_eq!(
+            JupyterExtractor::terminal_text("a\r\nb\r\n 1%\r50%\r\nc"),
+            "a\nb\n50%\nc"
+        );
     }
 
     #[test]
