@@ -1395,8 +1395,14 @@ mod tests {
     #[tokio::test]
     async fn should_keep_an_image_alt_break_out_of_the_footnote_text_djot() {
         let cases: [(&[u8], &str); 2] = [
-            (b"Text[^a].\n\n[^a]: see ![first\n    second](x.png) end\n", "first second"),
-            (b"Text[^a].\n\n[^a]: see ![first\\\n    second](x.png) end\n", "first\nsecond"),
+            (
+                b"Text[^a].\n\n[^a]: see ![first\n    second](x.png) end\n",
+                "first second",
+            ),
+            (
+                b"Text[^a].\n\n[^a]: see ![first\\\n    second](x.png) end\n",
+                "first\nsecond",
+            ),
         ];
         for (content, expected_alt) in cases {
             let doc = DjotExtractor::new()
