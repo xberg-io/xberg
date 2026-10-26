@@ -384,7 +384,7 @@ impl DocumentStructureBuilder {
     ///
     /// Subsequent body nodes will be parented under this container
     /// until [`exit_container`](Self::exit_container) is called.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "office"))]
     pub(crate) fn enter_container(&mut self, container: NodeIndex) {
         self.container_stack.push(container);
     }
