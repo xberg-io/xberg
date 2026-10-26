@@ -2671,10 +2671,7 @@ async fn recognize_cached_image_tables(
     rgb: &std::sync::Arc<image::RgbImage>,
     detections: &[crate::layout::LayoutDetection],
     config: &ExtractionConfig,
-    load_model: fn(
-        Option<&crate::core::config::acceleration::AccelerationConfig>,
-        usize,
-    ) -> Option<crate::layout::TatrLease>,
+    load_model: crate::layout::TatrLoader,
 ) -> (Vec<crate::RecognizedTable>, Option<crate::types::ProcessingWarning>) {
     let Some(layout_config) = config.layout.as_ref() else {
         return (Vec::new(), None);
@@ -3325,27 +3322,6 @@ impl ImageExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let mut table_warning = None;
-        let mut doc = self
-            .extract_with_layout_ocr_inner(content, mime_type, config, &mut table_warning)
-            .await?;
-        if let Some(warning) = table_warning {
-            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
-        }
-        Ok(doc)
-    }
-
-    /// Runs the layout OCR route. `table_warning` receives the warning for a table model that
-    /// could not be loaded, so the caller can add it to whichever document the route returns.
-    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
-    #[cfg_attr(not(feature = "pdf"), allow(unused_variables))]
-    async fn extract_with_layout_ocr_inner(
-        &self,
-        content: &[u8],
-        mime_type: &str,
-        config: &ExtractionConfig,
-        table_warning: &mut Option<crate::types::ProcessingWarning>,
-    ) -> Result<InternalDocument> {
         let layout_config = config.layout.as_ref().ok_or_else(|| crate::XbergError::Parsing {
             message: "Layout config required for layout-enhanced OCR".to_string(),
             source: None,
@@ -3357,6 +3333,62 @@ impl ImageExtractor {
         })?;
 
         let preparation = prepare_layout_ocr(self, content, mime_type, config, layout_config.clone()).await?;
+        self.complete_layout_ocr(
+            content,
+            mime_type,
+            config,
+            ocr_config,
+            preparation,
+            #[cfg(feature = "pdf")]
+            crate::layout::take_or_create_tatr,
+        )
+        .await
+    }
+
+    /// Runs the layout OCR route after layout detection, then adds the warning for a table model
+    /// that could not be loaded to whichever document the route returns.
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+    async fn complete_layout_ocr(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+        ocr_config: &crate::core::config::OcrConfig,
+        preparation: LayoutOcrPreparation,
+        #[cfg(feature = "pdf")] load_model: crate::layout::TatrLoader,
+    ) -> Result<InternalDocument> {
+        let mut table_warning = None;
+        let mut doc = self
+            .complete_layout_ocr_inner(
+                content,
+                mime_type,
+                config,
+                ocr_config,
+                preparation,
+                #[cfg(feature = "pdf")]
+                load_model,
+                &mut table_warning,
+            )
+            .await?;
+        if let Some(warning) = table_warning {
+            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
+        }
+        Ok(doc)
+    }
+
+    /// `table_warning` receives the warning for a table model that could not be loaded.
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+    #[cfg_attr(not(feature = "pdf"), allow(unused_variables))]
+    async fn complete_layout_ocr_inner(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+        ocr_config: &crate::core::config::OcrConfig,
+        preparation: LayoutOcrPreparation,
+        #[cfg(feature = "pdf")] load_model: crate::layout::TatrLoader,
+        table_warning: &mut Option<crate::types::ProcessingWarning>,
+    ) -> Result<InternalDocument> {
         let (whole_image_result, rgb, detections) = match preparation {
             LayoutOcrPreparation::Complete(doc) => return Ok(doc),
             LayoutOcrPreparation::Detected {
@@ -3368,14 +3400,8 @@ impl ImageExtractor {
         #[cfg(feature = "pdf")]
         let recognized_tables = match &whole_image_result {
             Ok(whole_image_doc) => {
-                let (tables, warning) = recognize_cached_image_tables(
-                    whole_image_doc,
-                    &rgb,
-                    &detections,
-                    config,
-                    crate::layout::take_or_create_tatr,
-                )
-                .await;
+                let (tables, warning) =
+                    recognize_cached_image_tables(whole_image_doc, &rgb, &detections, config, load_model).await;
                 *table_warning = warning;
                 tables
             }
@@ -6597,6 +6623,56 @@ mod tests {
         let (_, disabled) =
             recognize_image_tables_with_missing_model(crate::layout::LayoutClass::Table, TableModel::Disabled).await;
         assert!(disabled.is_none(), "a disabled table model is a choice, not a failure");
+    }
+
+    /// Goes through the layout OCR route itself, not the table helper: the warning must be on the
+    /// document the route returns, whichever of its exits that document comes from.
+    #[cfg(all(feature = "layout-detection", feature = "pdf", feature = "ocr"))]
+    #[tokio::test]
+    async fn should_put_the_table_model_warning_on_the_document_the_layout_route_returns() {
+        let mut whole = whole_image_doc_with_elements("cell", vec![positioned_word("cell", 10, 10)], 100, 100);
+        for key in [
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY,
+        ] {
+            whole
+                .metadata
+                .additional
+                .insert(std::borrow::Cow::Borrowed(key), serde_json::json!(100));
+        }
+        let preparation = LayoutOcrPreparation::Detected {
+            whole_image_result: Ok(whole),
+            rgb: std::sync::Arc::new(image::RgbImage::new(100, 100)),
+            detections: vec![crate::layout::LayoutDetection::new(
+                crate::layout::LayoutClass::Table,
+                0.98,
+                crate::layout::BBox::new(0.0, 0.0, 100.0, 100.0),
+            )],
+        };
+        let config = ExtractionConfig {
+            layout: Some(crate::core::config::LayoutDetectionConfig::default()),
+            ocr: Some(crate::core::config::OcrConfig::default()),
+            ..Default::default()
+        };
+
+        let doc = ImageExtractor::new()
+            .complete_layout_ocr(
+                b"",
+                "image/png",
+                &config,
+                config.ocr.as_ref().unwrap(),
+                preparation,
+                |_, _| None,
+            )
+            .await
+            .expect("the route keeps the whole-image text when the table model is missing");
+
+        let warnings: Vec<_> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "image_tables")
+            .collect();
+        assert_eq!(warnings.len(), 1, "got {:?}", doc.processing_warnings);
     }
 
     #[cfg(all(feature = "layout-detection", feature = "pdf", feature = "ocr"))]

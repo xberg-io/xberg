@@ -2202,6 +2202,8 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         page_ocr_hints,
         0,
         None,
+        #[cfg(feature = "layout-detection")]
+        crate::layout::take_or_create_tatr,
     ))
     .await?;
     Ok((
@@ -2319,6 +2321,7 @@ pub(super) async fn extract_with_ocr_for_page(
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
     xobject_document: Option<&xberg_native_pdf::PdfDocument>,
+    #[cfg(feature = "layout-detection")] load_tatr: crate::layout::TatrLoader,
 ) -> OcrRunResult<(
     String,
     Option<f64>,
@@ -2706,7 +2709,7 @@ pub(super) async fn extract_with_ocr_for_page(
         let span = tracing::Span::current();
         tokio::task::spawn_blocking(move || {
             let _entered = span.entered();
-            crate::layout::take_or_create_tatr(tatr_acceleration.as_ref(), tatr_thread_budget)
+            load_tatr(tatr_acceleration.as_ref(), tatr_thread_budget)
         })
         .await
         .map_err(|e| crate::XbergError::Plugin {
@@ -5010,6 +5013,8 @@ async fn run_ocr_pipeline_stages(
             inputs.page_ocr_hints.clone(),
             inputs.page_index_offset,
             inputs.xobject_document,
+            #[cfg(feature = "layout-detection")]
+            crate::layout::take_or_create_tatr,
         ))
         .await;
 

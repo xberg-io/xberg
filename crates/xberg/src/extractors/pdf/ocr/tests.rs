@@ -5380,6 +5380,107 @@ pub(super) mod tests {
         }
     }
 
+    /// Goes through the force-OCR page route with a table-model loader that returns no model. The
+    /// warning must be on the document the route returns: the helper that builds it is tested on
+    /// its own, but only this test fails when the route stops adding it.
+    #[cfg(all(feature = "layout-detection", feature = "ocr"))]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn force_ocr_route_puts_the_table_model_warning_on_the_returned_document() {
+        use crate::core::config::OcrConfig;
+        use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
+        use crate::plugins::{ConfidenceSemantics, OcrBackend, OcrBackendType, Plugin};
+        use crate::types::ExtractedDocument;
+        use std::sync::Arc;
+
+        const BACKEND_NAME: &str = "missing-table-model-warning-test-backend";
+
+        struct TextBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for TextBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                Ok(ExtractedDocument {
+                    content: "Name Price Apple 3 Pear 4".to_string(),
+                    ..Default::default()
+                })
+            }
+            fn confidence_semantics(&self) -> ConfidenceSemantics {
+                ConfidenceSemantics::Uncalibrated
+            }
+        }
+
+        impl Plugin for TextBackend {
+            fn name(&self) -> &str {
+                BACKEND_NAME
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        crate::plugins::register_ocr_backend(Arc::new(TextBackend)).unwrap();
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: BACKEND_NAME.to_string(),
+                ..Default::default()
+            }),
+            layout: Some(crate::core::config::layout::LayoutDetectionConfig::default()),
+            ..Default::default()
+        };
+        let images = [image::DynamicImage::new_rgb8(100, 100)];
+        let detections = [DetectionResult {
+            page_width: 100,
+            page_height: 100,
+            detections: vec![LayoutDetection::new(
+                LayoutClass::Table,
+                0.9,
+                BBox::new(0.0, 0.0, 100.0, 100.0),
+            )],
+        }];
+
+        let result = extract_with_ocr_for_page(
+            None,
+            Some(&images),
+            Some(&detections),
+            &config,
+            None,
+            0,
+            false,
+            None,
+            None,
+            0,
+            None,
+            |_, _| None,
+        )
+        .await;
+
+        crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
+        let doc = result
+            .unwrap()
+            .4
+            .expect("the route returns a document carrying the warning");
+        let warnings: Vec<_> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "pdf_tables")
+            .collect();
+        assert_eq!(warnings.len(), 1, "got {:?}", doc.processing_warnings);
+    }
+
     /// The recognition-noise verdict computed inside `accept_or_reject_ocr_page` used to be
     /// discarded one frame before `run_ocr_pipeline_for_page`'s accept/reject decision --
     /// `extract_with_ocr_for_page` returned only a warning string, never the numbers that
@@ -5464,6 +5565,8 @@ pub(super) mod tests {
             None,
             0,
             None,
+            #[cfg(feature = "layout-detection")]
+            crate::layout::take_or_create_tatr,
         )
         .await
         .unwrap();
@@ -5588,6 +5691,8 @@ pub(super) mod tests {
             None,
             0,
             None,
+            #[cfg(feature = "layout-detection")]
+            crate::layout::take_or_create_tatr,
         )
         .await
         .unwrap();
