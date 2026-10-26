@@ -517,7 +517,9 @@ impl JupyterExtractor {
             for (column, cell) in line.drain(..).enumerate() {
                 if let Cell::Char(c) = cell {
                     out.push(c);
-                    if let Some(joined) = marks.get(&column) {
+                    if !marks.is_empty()
+                        && let Some(joined) = marks.get(&column)
+                    {
                         out.push_str(joined);
                     }
                 }
@@ -557,7 +559,12 @@ impl JupyterExtractor {
                     column = 0;
                 }
                 _ => {
-                    let width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+                    // ASCII, controls included, takes one column: skip the table lookup
+                    let width = if ch.is_ascii() {
+                        1
+                    } else {
+                        unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1)
+                    };
                     if width == 0 && column > 0 {
                         // A combining mark has no column: it joins the character before it
                         let base = if matches!(line[column - 1], Cell::Tail) {
@@ -569,6 +576,13 @@ impl JupyterExtractor {
                         continue;
                     }
                     let width = width.max(1);
+                    if column == line.len() {
+                        // Appending past the end of the line: nothing to overwrite
+                        line.push(Cell::Char(ch));
+                        line.resize(column + width, Cell::Tail);
+                        column += width;
+                        continue;
+                    }
                     // Overwriting the second column of a wide character blanks its first column, and
                     // overwriting the first column blanks the second.
                     if column > 0 && matches!(line.get(column), Some(Cell::Tail)) {
