@@ -47,8 +47,8 @@ jobs:
           additional-config-directories: "plugin/.ai-rulez"
           verify-plugin: "true"
           version-sync-script: "scripts/sync_integration_versions.py"
-      - uses: xberg-io/agent-conventions/actions/context-exposure@3f5cc5a5cf3cb34578289c096ab66cb75238045b
+      - uses: xberg-io/agent-conventions/actions/context-exposure@923818e1ce9b71ebe68306c7a551caeaf7b27106
         with:
           budgets: |
-            claude=4650
-            codex=7250
+            claude=6050
+            codex=7400
