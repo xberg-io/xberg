@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(djot): The footnote reference in the caption of a table without rows is dropped with the caption.**
   A table without rows, such as a lone `|---|` line, is not written and its caption is dropped. The footnote
   reference in that caption used to stay and appeared before the next table.
+- **(build): Clippy passes with the `xml`, `hwpx` or `email` feature turned on alone.**
+  Helpers that only other features call carry those features' cfg, and CI now runs clippy with `-D warnings` on each
+  of the three feature sets. (#2243)
 - **(docx): A paragraph or list item holding only whitespace next to display math writes nothing.**
   The equation was written, and an empty paragraph or list item came with it. Headings and quotes already skipped
   the blank text. (#2262)
@@ -106,23 +109,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   With VLM regions on, the answer was spliced in beside the native table and text it transcribed, so the table printed
   twice. When the PDF is built as a structured document (Markdown, Djot, HTML, DocTags and the formats built from
   Markdown, or any format once hierarchy, `include_document_structure`, a content filter or inline-image OCR is on),
-  table elements at least 60% inside the region are now removed first, and so is each body paragraph there whose words
-  the answer carries in full, with any group the removal empties and any page break it leaves leading or doubled; the
-  answer takes the place and depth of the content it replaced. Other paragraphs stay, such as a note inside a table
-  region, whose answer is only the table, and so does a paragraph linked as a caption. A figure's description is still
-  only added, a failed or empty answer changes nothing, and the `tables` list keeps the native table. Known limits:
-  otherwise, output formats that take the flat path (Plain, Json and others not built from Markdown) have paragraphs
-  with no position, so they stay and the answer goes after the page's last element (at the end of the document, after
-  a page break, when the paragraphs carry no page); the flat path replaces only a table element it added for a
-  detected table whose cells are not already in the page text, which Json output adds and Plain output on native text
-  never does, and the boxed OCR paragraphs of a partly scanned document in flat output other than Plain. With `include_bbox: false`,
-  paragraph boxes are dropped before the replacement runs, so paragraphs stay; a table element whose table has a box
-  is still replaced, and otherwise the answer goes after the page's last element. When the structured pass falls back
-  to the page text (it lost over 30% of the native text, produced nothing, or failed), the flat path's limits apply.
-  In builds with OCR, a document with any rotated page drops its layout images before the region pass, so no region
-  reaches the VLM; otherwise the region and the text are compared as if in one page frame, so on a rotated page, or
-  one whose MediaBox does not start at the origin, a region can miss the text it covers. There is no check on the
-  answer itself, so a wrong but non-empty answer replaces the table text and any covered paragraph whose words it has.
+  table elements and then body paragraphs at least 60% inside the region are now removed when the answer carries at
+  least 90% of their words (every word under ten), with any group the removal empties and any page break it leaves
+  leading or doubled; the answer takes the place and depth of the content it replaced, or goes beside the native
+  content when nothing is replaced. Anything else stays: a note the answer omits, a linked caption, or what a
+  degenerate answer (a repeated symbol, an invented table) covers, since a wrong replacement loses text where a missed
+  match only repeats it. A figure's description is still only added, a failed or empty answer changes nothing, and the
+  `tables` list keeps the native table. Known limits: otherwise, output formats that take the flat path (Plain, Json
+  and others not built from Markdown) have paragraphs with no position, so they stay and the answer goes after the
+  page's last element (at the end of the document, after a page break, when the paragraphs carry no page); the flat
+  path replaces only a table element it added for a detected table whose cells are not already in the page text, which
+  Json output adds and Plain output on native text never does, and the boxed OCR paragraphs of a partly scanned
+  document in flat output other than Plain. With `include_bbox: false`, paragraph boxes are dropped before the
+  replacement runs, so paragraphs stay; a table element whose table has a box can still be replaced, and otherwise the
+  answer goes after the page's last element. When the structured pass falls back to the page text (it lost over 30% of
+  the native text, produced nothing, or failed), the flat path's limits apply. In builds with OCR, a document with any
+  rotated page drops its layout images before the region pass, so no region reaches the VLM; otherwise the region and
+  the text are compared as if in one page frame, so on a rotated page, or one whose MediaBox does not start at the
+  origin, a region can miss the text it covers.
 - **(djot): Keep apostrophes, quotes, dashes and ellipses, and read table captions.**
   jotdown reports smart punctuation as events of their own, which the extractor skipped in every block, so
   `Don't` came out as `Dont`, `"fine"` as `fine` and `1--2` as `12`. They now come out as the characters

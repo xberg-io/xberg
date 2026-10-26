@@ -1,7 +1,15 @@
 ---
 type: Playbook
 title: Xberg Typescript Toolchain
-description: Work on Xberg TypeScript or JavaScript packages with the repository's actual poly, pnpm, npm, Vitest, napi-rs, wasm-pack, and integration-package boundaries. Load for TS/JS tooling or package changes, not Rust-only binding generation.
+description: "Xberg TypeScript/JavaScript tooling: poly, pnpm vs npm lockfiles, Vitest, napi-rs, wasm-pack, integration packages. Use for TS/JS package or tooling changes, not Rust-only binding generation."
+paths:
+  - "crates/xberg-node/**"
+  - "crates/xberg-wasm/**"
+  - "integrations/node/**"
+  - "e2e/node/**"
+  - "e2e/wasm/**"
+  - "package.json"
+  - "tsconfig.json"
 x-ai-rulez:
   kind: skill
   id: xberg-typescript-toolchain

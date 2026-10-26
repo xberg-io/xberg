@@ -1,7 +1,10 @@
 ---
 type: Playbook
 title: Config Loading Precedence
-description: How Xberg resolves configuration — CLI-mode and server/MCP-mode precedence orders, project config walk-up, user config fallback, field-level inline JSON merge (merge_json_into_config), the ExtractionOverrides CLI layer, and the two mechanisms that make a config change silently do nothing. Load when adding a config flag or env var, changing config precedence, or debugging why a setting is or isn't taking effect.
+description: "How Xberg resolves configuration: CLI and server/MCP precedence, config file walk-up, inline JSON merge, CLI overrides, silent no-op traps. Use when adding a config flag or env var or a setting does not take effect."
+paths:
+  - "crates/xberg/src/core/config/**"
+  - "crates/xberg-cli/src/**"
 x-ai-rulez:
   kind: skill
   id: config-loading-precedence
@@ -85,12 +88,12 @@ routes that materialise that struct. Before changing any config default, grep th
 type name (a `pub use module::*;` makes a qualified path unsearchable) and check for a second
 definition.
 
-**Unknown keys are ignored.** `#[serde(deny_unknown_fields)]` is on exactly two structs:
-`ExtractionConfig` (`core/config/extraction/core.rs`) and `UrlExtractionConfig`
-(`core/config/extraction/types.rs`). Every nested config silently ignores a typo'd key, so a
-wrong setting parses clean, does nothing, and the test still passes. Write config fixtures
-against the serde **wire** names (`ChunkingConfig` declares `max_characters` but renames to
-`max_chars`), and assert the parsed config differs from the default rather than that it parsed.
+**Unknown keys are rejected.** Nearly every config struct under `core/config/` (including
+`ExtractionConfig`, `OcrConfig`, `PdfConfig`, `ChunkingConfig` and `LlmConfig`) carries
+`#[serde(deny_unknown_fields)]`, so a typo'd key fails to parse instead of being ignored. Check the
+struct's definition before relying on that for a new one. Write config fixtures against the serde
+**wire** names (`ChunkingConfig`'s `max_characters` is `max_chars` on the wire; the field name
+is only an alias).
 
 ## Critical Rules
 

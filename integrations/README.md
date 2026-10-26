@@ -29,7 +29,7 @@ lockstep with the core `xberg` release (including `-rc.N` pre-releases).
 Never hand-edit an integration's `version` or its `xberg` dependency pin. The root
 `Cargo.toml` version is the single source of truth; `task version:sync` propagates it
 to every integration via `scripts/sync_integration_versions.py`. See the
-`release-versioning` skill under `.ai-rulez/skills/`.
+`xberg-release` skill under `.ai-rulez/skills/`.
 
 ## Dependencies
 

@@ -360,10 +360,34 @@ poly.local.toml
 testResults.xml
 
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
-.ai-rulez/.generated-manifest.json
 .ai-rulez/.generated-manifest.local.json
 .ai-rulez/local/
 .github/agents/
+.github/instructions/api-compatibility.instructions.md
+.github/instructions/async-and-concurrency.instructions.md
+.github/instructions/c-ffi.instructions.md
+.github/instructions/changelog-policy.instructions.md
+.github/instructions/csharp.instructions.md
+.github/instructions/dart.instructions.md
+.github/instructions/elixir.instructions.md
+.github/instructions/extraction-measurement-hygiene.instructions.md
+.github/instructions/extraction-safety.instructions.md
+.github/instructions/generated-code-policy.instructions.md
+.github/instructions/go.instructions.md
+.github/instructions/java.instructions.md
+.github/instructions/kotlin-android.instructions.md
+.github/instructions/logging-tracing.instructions.md
+.github/instructions/measurement-discipline.instructions.md
+.github/instructions/partner-corpus-handling.instructions.md
+.github/instructions/php.instructions.md
+.github/instructions/python.instructions.md
+.github/instructions/r.instructions.md
+.github/instructions/ruby.instructions.md
+.github/instructions/rust.instructions.md
+.github/instructions/swift.instructions.md
+.github/instructions/typescript.instructions.md
+.github/instructions/wasm.instructions.md
+.github/instructions/zig.instructions.md
 .github/prompts/iterate.prompt.md
 .github/prompts/parallelize.prompt.md
 .opencode/agents/

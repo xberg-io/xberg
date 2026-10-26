@@ -51,8 +51,31 @@ def verify_archive(archive: Path, expected_name: str, expected_skills: int, expe
         print(f"Pi {prefix}: expected {expected}, packed {actual}")
 
 
+def verify_root_pi(root: Path) -> None:
+    """Require the root package.json Pi lists to resolve and to name the plugin's resources."""
+    root_pi = json.loads((root / "package.json").read_text()).get("pi", {})
+    plugin_pi = json.loads((root / "plugin/package.json").read_text()).get("pi", {})
+    for kind in ("skills", "prompts"):
+        for entry in root_pi.get(kind, []):
+            path = root / entry
+            found = (path / "SKILL.md").is_file() if kind == "skills" else path.is_file()
+            if not found:
+                raise ValueError(f"Root package.json pi.{kind} path does not resolve: {entry}")
+        listed = [Path(entry).name for entry in root_pi.get(kind, [])]
+        duplicates = sorted({name for name in listed if listed.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"Root package.json pi.{kind} lists a name twice: {duplicates}")
+        root_names = set(listed)
+        plugin_names = {Path(entry).name for entry in plugin_pi.get(kind, [])}
+        if root_names != plugin_names:
+            raise ValueError(
+                f"Root package.json pi.{kind} differs from plugin/package.json: {sorted(root_names ^ plugin_names)}"
+            )
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
+    verify_root_pi(root)
     plugin = root / "plugin"
     metadata = json.loads((plugin / "package.json").read_text())
     skills = len(list((plugin / ".ai-rulez/skills").glob("*/SKILL.md")))

@@ -630,7 +630,8 @@ fn attach_unrepresented_tables(doc: &mut InternalDocument, tables: Vec<crate::ty
 }
 
 /// Share of a table's cell tokens that must already be in the element stream
-/// before the table counts as represented.
+/// before the table counts as represented; also the share of a table's or a
+/// paragraph's tokens a VLM region answer must carry to replace it.
 const MIN_TABLE_TOKEN_REPRESENTATION: f64 = 0.90;
 /// Cell-token count below which the containment check abstains: on a handful of
 /// tokens an incidental overlap with unrelated prose is likely, and injecting a
@@ -665,31 +666,26 @@ fn element_token_multiset(doc: &InternalDocument) -> ahash::AHashMap<String, usi
 /// Both bailouts err toward returning `false` (inject), because a duplicated
 /// table costs precision while a dropped one costs content.
 fn table_is_represented(table: &crate::types::Table, represented: &mut ahash::AHashMap<String, usize>) -> bool {
-    let mut table_tokens = ahash::AHashMap::<String, usize>::new();
-    let mut table_token_count = 0usize;
-    for token in table
-        .cells
-        .iter()
-        .flatten()
-        .flat_map(|cell| normalized_pdf_tokens(cell))
-    {
-        *table_tokens.entry(token).or_default() += 1;
-        table_token_count += 1;
-    }
-    if table_token_count < MIN_TABLE_TOKENS_FOR_CONTAINMENT {
+    let tokens = token_multiset(table.cells.iter().flatten().map(String::as_str));
+    if tokens.values().sum::<usize>() < MIN_TABLE_TOKENS_FOR_CONTAINMENT {
         return false;
     }
+    take_if_represented(tokens, represented)
+}
 
-    let matched: usize = table_tokens
+/// Takes `tokens` out of `pool` when the pool holds at least `MIN_TABLE_TOKEN_REPRESENTATION` of them, so
+/// two texts cannot claim the same tokens, and reports whether it did. No tokens at all passes.
+fn take_if_represented(tokens: ahash::AHashMap<String, usize>, pool: &mut ahash::AHashMap<String, usize>) -> bool {
+    let total: usize = tokens.values().sum();
+    let matched: usize = tokens
         .iter()
-        .map(|(token, count)| (*count).min(represented.get(token).copied().unwrap_or_default()))
+        .map(|(token, count)| (*count).min(pool.get(token).copied().unwrap_or_default()))
         .sum();
-    if (matched as f64 / table_token_count as f64) < MIN_TABLE_TOKEN_REPRESENTATION {
+    if (matched as f64 / total as f64) < MIN_TABLE_TOKEN_REPRESENTATION {
         return false;
     }
-
-    for (token, count) in table_tokens {
-        if let Some(remaining) = represented.get_mut(&token) {
+    for (token, count) in tokens {
+        if let Some(remaining) = pool.get_mut(&token) {
             *remaining = remaining.saturating_sub(count);
         }
     }

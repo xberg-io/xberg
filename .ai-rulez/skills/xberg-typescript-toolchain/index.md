@@ -1,3 +1,3 @@
 # Concepts
 
-* [Xberg Typescript Toolchain](SKILL.md) - Work on Xberg TypeScript or JavaScript packages with the repository's actual poly, pnpm, npm, Vitest, napi-rs, wasm-pack, and integration-package boundaries. Load for TS/JS tooling or package changes, not Rust-only binding generation.
+* [Xberg Typescript Toolchain](SKILL.md) - Xberg TypeScript/JavaScript tooling: poly, pnpm vs npm lockfiles, Vitest, napi-rs, wasm-pack, integration packages. Use for TS/JS package or tooling changes, not Rust-only binding generation.
