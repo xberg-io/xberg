@@ -890,6 +890,25 @@ mod tests {
         assert!(refs.is_empty(), "{refs:?} in {:?}", doc.elements);
     }
 
+    #[tokio::test]
+    async fn test_dropping_an_empty_table_caption_keeps_the_references_of_other_blocks() {
+        // The list item holds reference `a` until it closes, after the empty table inside it.
+        // Only the caption reference `b` goes.
+        let content = b"- item[^a]\n\n  |---|\n  ^ cap[^b]\n\n- second\n\n[^a]: A.\n\n[^b]: B.\n";
+        let doc = DjotExtractor::new()
+            .extract_content(content, "text/djot", &ExtractionConfig::default())
+            .await
+            .expect("extraction should succeed");
+
+        let refs: Vec<_> = doc
+            .elements
+            .iter()
+            .filter(|element| element.kind == ElementKind::FootnoteRef)
+            .map(|element| element.text.as_str())
+            .collect();
+        assert_eq!(refs, ["a"], "{:?}", doc.elements);
+    }
+
     #[test]
     fn test_djot_extractor_creation() {
         let extractor = DjotExtractor::new();
