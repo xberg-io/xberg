@@ -587,7 +587,7 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets
         shell: bash
 
-  # GH#2243: `xml` and `hwpx` each build on their own, so a helper that only another
+  # GH#2243: `xml`, `hwpx` and `email` each build on their own, so a helper that only another
   # feature calls must carry that feature's cfg. `cargo check` only warns about dead code;
   # clippy with `-D warnings` turns it into an error. ~keep
   lib-clippy-feature-legs:
@@ -598,7 +598,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        features: [xml, hwpx]
+        features: [xml, hwpx, email]
     steps:
       - uses: actions/checkout@v7
         with:
