@@ -65,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(djot): The footnote reference in the caption of a table without rows is dropped with the caption.**
+  A table without rows, such as a lone `|---|` line, is not written and its caption is dropped. The footnote
+  reference in that caption used to stay and appeared before the next table.
 - **(docx): A paragraph or list item holding only whitespace next to display math writes nothing.**
   The equation was written, and an empty paragraph or list item came with it. Headings and quotes already skipped
   the blank text. (#2262)

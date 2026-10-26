@@ -48,6 +48,11 @@ impl PendingFootnoteRefs {
         });
     }
 
+    /// Drop the references read in `holder`, because `holder` itself is dropped.
+    pub(crate) fn discard(&mut self, holder: FootnoteRefHolder) {
+        self.0.retain(|(owner, _)| *owner != holder);
+    }
+
     /// Push every reference still waiting, so a holder that never closed loses none.
     pub(crate) fn flush_all(&mut self, builder: &mut InternalDocumentBuilder) {
         for (_, name) in self.0.drain(..) {
