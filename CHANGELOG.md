@@ -65,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(build): Clippy passes with the `xml` feature or the `hwpx` feature turned on alone.**
+  Helpers that only other features call carry those features' cfg, and CI now runs clippy with `-D warnings` on both
+  feature sets. (#2243)
 - **(docx): A paragraph or list item holding only whitespace next to display math writes nothing.**
   The equation was written, and an empty paragraph or list item came with it. Headings and quotes already skipped
   the blank text. (#2262)
