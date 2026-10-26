@@ -65,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(djot): Keep the line breaks inside a footnote definition.**
+  A soft break in a footnote definition was dropped, so `first` and `second` on two lines came out as
+  `firstsecond`; a hard break was dropped the same way. A soft break is now a space and a hard break a newline,
+  as in a paragraph. (#2247)
 - **(docx, pptx): Trim equation LaTeX.**
   An inline equation read `$\alpha $`, which Markdown does not take as math, and its entry in `formulas` kept the
   space. The OMML converter's result is now trimmed for every consumer, each line of a display equation on its own,
