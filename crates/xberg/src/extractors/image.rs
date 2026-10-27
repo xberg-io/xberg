@@ -3327,7 +3327,7 @@ impl ImageExtractor {
             source: None,
         })?;
 
-        let ocr_config = config.ocr.as_ref().ok_or_else(|| crate::XbergError::Parsing {
+        config.ocr.as_ref().ok_or_else(|| crate::XbergError::Parsing {
             message: "OCR config required for layout-enhanced OCR".to_string(),
             source: None,
         })?;
@@ -3337,7 +3337,6 @@ impl ImageExtractor {
             content,
             mime_type,
             config,
-            ocr_config,
             preparation,
             #[cfg(feature = "pdf")]
             crate::layout::take_or_create_tatr,
@@ -3353,7 +3352,6 @@ impl ImageExtractor {
         content: &[u8],
         mime_type: &str,
         config: &ExtractionConfig,
-        ocr_config: &crate::core::config::OcrConfig,
         preparation: LayoutOcrPreparation,
         #[cfg(feature = "pdf")] load_model: crate::layout::TatrLoader,
     ) -> Result<InternalDocument> {
@@ -3363,7 +3361,6 @@ impl ImageExtractor {
                 content,
                 mime_type,
                 config,
-                ocr_config,
                 preparation,
                 #[cfg(feature = "pdf")]
                 load_model,
@@ -3379,13 +3376,11 @@ impl ImageExtractor {
     /// `table_warning` receives the warning for a table model that could not be loaded.
     #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
     #[cfg_attr(not(feature = "pdf"), allow(unused_variables))]
-    #[allow(clippy::too_many_arguments)]
     async fn complete_layout_ocr_inner(
         &self,
         content: &[u8],
         mime_type: &str,
         config: &ExtractionConfig,
-        ocr_config: &crate::core::config::OcrConfig,
         preparation: LayoutOcrPreparation,
         #[cfg(feature = "pdf")] load_model: crate::layout::TatrLoader,
         table_warning: &mut Option<crate::types::ProcessingWarning>,
@@ -3449,7 +3444,15 @@ impl ImageExtractor {
             return Ok(structured);
         }
 
-        let (backend, region_ocr_config) = match configured_region_ocr(config, ocr_config) {
+        let configured = config
+            .ocr
+            .as_ref()
+            .ok_or_else(|| crate::XbergError::Parsing {
+                message: "OCR config required for layout-enhanced OCR".to_string(),
+                source: None,
+            })
+            .and_then(|ocr_config| configured_region_ocr(config, ocr_config));
+        let (backend, region_ocr_config) = match configured {
             Ok(configured) => configured,
             Err(error) => return cached_whole_image_after_layout_error(&whole_image_result, error),
         };
@@ -6657,14 +6660,7 @@ mod tests {
         };
 
         let doc = ImageExtractor::new()
-            .complete_layout_ocr(
-                b"",
-                "image/png",
-                &config,
-                config.ocr.as_ref().unwrap(),
-                preparation,
-                |_, _| None,
-            )
+            .complete_layout_ocr(b"", "image/png", &config, preparation, |_, _| None)
             .await
             .expect("the route keeps the whole-image text when the table model is missing");
 
