@@ -96,7 +96,13 @@ fn parse_track(source: &str) -> ParsedTrack {
         if !trailing.is_empty() {
             title = Some(trailing.to_string());
         }
-        1
+        // The header runs on to the first blank line. Lines there, such as the `Kind: captions`
+        // and `Language: en` that YouTube tracks carry, are not cue text.
+        let header_lines = lines[1..]
+            .iter()
+            .take_while(|line| !line.trim().is_empty() && !line.contains(TIMING_ARROW))
+            .count();
+        1 + header_lines
     } else {
         warnings.push(warning("missing WEBVTT signature line; parsing as WebVTT anyway"));
         0
@@ -691,6 +697,18 @@ mod tests {
             parsed.warnings.iter().map(|w| w.message.as_ref()).collect::<Vec<_>>(),
             vec!["block without a timing line skipped"]
         );
+    }
+
+    #[test]
+    fn should_skip_header_lines_after_the_signature() {
+        let parsed = parse_track("WEBVTT\nKind: captions\nLanguage: en\n\n00:00:01.000 --> 00:00:02.000\nHello\n");
+        assert_eq!(parsed.cues.len(), 1);
+        assert_eq!(parsed.cues[0].text, "Hello");
+        assert!(parsed.warnings.is_empty());
+
+        let parsed = parse_track("WEBVTT\nKind: captions\n\nstray line\n");
+        assert_eq!(parsed.cues.len(), 1);
+        assert_eq!(parsed.cues[0].text, "stray line");
     }
 
     /// The recovered text must not be mistaken for a real cue: `cue_attributes` emits no
