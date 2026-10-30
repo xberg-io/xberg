@@ -73,12 +73,13 @@ impl<'doc> TextExtractor<'doc> {
         self.extract_spans = true;
         self.spans.clear();
         self.span_sequence_counter = 0;
-        self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
+        self.begin_placed_page(content_stream);
 
         extract_log_debug!("Parsing content stream for text extraction");
         self.run_content_stream(content_stream)?;
 
         self.flush_tj_span_buffer()?;
+        self.settle_placed_holds();
 
         // Detect RTL glyph DRAW DIRECTION on the raw stream order, BEFORE the
         // reading-order sort destroys it (ISO 32000-1 §14.8.2.3.3 method 1). ~keep
@@ -209,9 +210,10 @@ impl<'doc> TextExtractor<'doc> {
         self.extract_spans = false;
         self.chars.clear();
         self.spans.clear(); // Ensure spans are clear so they don't poison xobject_spans_cache ~keep
-        self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
+        self.begin_placed_page(content_stream);
 
         self.run_content_stream(content_stream)?;
+        self.settle_placed_holds();
 
         // Sort characters by reading order (top-to-bottom, left-to-right)
         // PDF content streams are in rendering order, not reading order.

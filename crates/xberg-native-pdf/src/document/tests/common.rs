@@ -168,6 +168,240 @@ pub(super) fn build_xobject_do_with_orphaned_operands_pdf(direct_text: Option<&s
     pdf
 }
 
+/// Build a one-page PDF whose page stream only paints Form XObject "Fm0".
+/// The form holds `lines` text lines, all inside one `/PlacedPDF` marked-content
+/// scope; the page stream itself has no `/PlacedPDF` tag.
+pub(super) fn build_placed_pdf_inside_form_pdf(lines: &[String]) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let off1 = pdf.len();
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    let off2 = pdf.len();
+    pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    let off3 = pdf.len();
+    pdf.extend_from_slice(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] \
+              /Contents 4 0 R /Resources << /XObject << /Fm0 6 0 R >> >> >>\nendobj\n",
+    );
+    let off4 = pdf.len();
+    let content = b"/Figure BDC q /Fm0 Do Q EMC";
+    pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
+    pdf.extend_from_slice(content);
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    let off5 = pdf.len();
+    pdf.extend_from_slice(
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+              /Encoding /WinAnsiEncoding >>\nendobj\n",
+    );
+    let off6 = pdf.len();
+    let mut form = String::from("/PlacedPDF /MC0 BDC\nBT /F1 10 Tf\n");
+    for (i, line) in lines.iter().enumerate() {
+        let y = 780 - 12 * i;
+        form.push_str(&format!("1 0 0 1 20 {y} Tm ({line}) Tj\n"));
+    }
+    form.push_str("ET\nEMC\n");
+    pdf.extend_from_slice(
+        format!(
+            "6 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] \
+             /Resources << /Font << /F1 5 0 R >> >> /Length {} >>\nstream\n",
+            form.len()
+        )
+        .as_bytes(),
+    );
+    pdf.extend_from_slice(form.as_bytes());
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    let xref_off = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 7\n0000000000 65535 f \n");
+    for off in [off1, off2, off3, off4, off5, off6] {
+        pdf.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off).as_bytes());
+    pdf
+}
+
+/// Build a one-page PDF with the given page content stream and the given
+/// content stream for Form XObject "Fm0". Both use Helvetica as `/F1`.
+pub(super) fn build_page_and_form_pdf(page_stream: &str, form_stream: &str) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let off1 = pdf.len();
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    let off2 = pdf.len();
+    pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    let off3 = pdf.len();
+    pdf.extend_from_slice(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R \
+              /Resources << /Font << /F1 5 0 R >> /XObject << /Fm0 6 0 R >> >> >>\nendobj\n",
+    );
+    let off4 = pdf.len();
+    pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", page_stream.len()).as_bytes());
+    pdf.extend_from_slice(page_stream.as_bytes());
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    let off5 = pdf.len();
+    pdf.extend_from_slice(
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+              /Encoding /WinAnsiEncoding >>\nendobj\n",
+    );
+    let off6 = pdf.len();
+    pdf.extend_from_slice(
+        format!(
+            "6 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] \
+             /Resources << /Font << /F1 5 0 R >> >> /Length {} >>\nstream\n",
+            form_stream.len()
+        )
+        .as_bytes(),
+    );
+    pdf.extend_from_slice(form_stream.as_bytes());
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    let xref_off = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 7\n0000000000 65535 f \n");
+    for off in [off1, off2, off3, off4, off5, off6] {
+        pdf.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off).as_bytes());
+    pdf
+}
+
+/// Build a two-page PDF whose pages both paint Form XObject "Fm0" with the same
+/// form stream. Page 1 paints `page_a`, page 2 paints `page_b`.
+pub(super) fn build_two_pages_sharing_form_pdf(page_a: &str, page_b: &str, form_stream: &str) -> Vec<u8> {
+    build_two_pages_with_forms_pdf(page_a, page_b, form_stream, None)
+}
+
+/// Like [`build_two_pages_sharing_form_pdf`], with an optional second form "Fm1"
+/// that both pages and "Fm0" can paint.
+pub(super) fn build_two_pages_with_forms_pdf(
+    page_a: &str,
+    page_b: &str,
+    form_stream: &str,
+    inner_stream: Option<&str>,
+) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offs = Vec::new();
+    let (xobjects, form_xobjects) = if inner_stream.is_some() {
+        ("/Fm0 6 0 R /Fm1 9 0 R", " /XObject << /Fm1 9 0 R >>")
+    } else {
+        ("/Fm0 6 0 R", "")
+    };
+    let res = format!("/Resources << /Font << /F1 5 0 R >> /XObject << {xobjects} >> >>");
+    let mut push = |pdf: &mut Vec<u8>, body: String| {
+        offs.push(pdf.len());
+        pdf.extend_from_slice(body.as_bytes());
+    };
+    push(&mut pdf, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".into());
+    push(
+        &mut pdf,
+        "2 0 obj\n<< /Type /Pages /Kids [3 0 R 7 0 R] /Count 2 >>\nendobj\n".into(),
+    );
+    push(
+        &mut pdf,
+        format!("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R {res} >>\nendobj\n"),
+    );
+    push(
+        &mut pdf,
+        format!(
+            "4 0 obj\n<< /Length {} >>\nstream\n{page_a}\nendstream\nendobj\n",
+            page_a.len()
+        ),
+    );
+    push(
+        &mut pdf,
+        "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n".into(),
+    );
+    push(
+        &mut pdf,
+        format!(
+            "6 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << /Font << /F1 5 0 R >>{form_xobjects} >> /Length {} >>\nstream\n{form_stream}\nendstream\nendobj\n",
+            form_stream.len()
+        ),
+    );
+    push(
+        &mut pdf,
+        format!("7 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 8 0 R {res} >>\nendobj\n"),
+    );
+    push(
+        &mut pdf,
+        format!(
+            "8 0 obj\n<< /Length {} >>\nstream\n{page_b}\nendstream\nendobj\n",
+            page_b.len()
+        ),
+    );
+    let mut size = 9;
+    if let Some(inner) = inner_stream {
+        push(
+            &mut pdf,
+            format!(
+                "9 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << /Font << /F1 5 0 R >> >> /Length {} >>\nstream\n{inner}\nendstream\nendobj\n",
+                inner.len()
+            ),
+        );
+        size = 10;
+    }
+    let xref_off = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+    for off in offs {
+        pdf.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            xref_off
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+/// Text lines as `Tm`/`Tj` operators at `x`, starting at `top` and stepping down 12 units.
+pub(super) fn text_lines_stream(lines: &[String], x: i32, top: i32) -> String {
+    let mut out = String::from("BT /F1 10 Tf\n");
+    for (i, line) in lines.iter().enumerate() {
+        let y = top - 12 * i as i32;
+        out.push_str(&format!("1 0 0 1 {x} {y} Tm ({line}) Tj\n"));
+    }
+    out.push_str("ET\n");
+    out
+}
+
+/// Build a one-page PDF whose page paints `page_stream`, with one Form XObject per
+/// `(name, bbox, stream)` entry. The page and every form can paint every form,
+/// and all use Helvetica as `/F1`.
+pub(super) fn build_forms_pdf(page_stream: &str, forms: &[(&str, &str, &str)]) -> Vec<u8> {
+    let xobjects: String = forms
+        .iter()
+        .enumerate()
+        .map(|(i, (name, _, _))| format!("/{name} {} 0 R ", i + 6))
+        .collect();
+    let res = format!("/Resources << /Font << /F1 5 0 R >> /XObject << {xobjects}>> >>");
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R {res} >>"),
+        format!("<< /Length {} >>\nstream\n{page_stream}\nendstream", page_stream.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+    ];
+    for (_, bbox, stream) in forms {
+        objects.push(format!(
+            "<< /Type /XObject /Subtype /Form /BBox {bbox} {res} /Length {} >>\nstream\n{stream}\nendstream",
+            stream.len()
+        ));
+    }
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offs.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref_off = pdf.len();
+    let size = objects.len() + 1;
+    pdf.extend_from_slice(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+    for off in offs {
+        pdf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n").as_bytes(),
+    );
+    pdf
+}
+
 /// Build a minimal one-page PDF where XObject "Outer" invokes a second
 /// XObject "Inner" (both via the same malformed missing-`cm` `Do` shape
 /// as [`build_xobject_do_with_orphaned_operands_pdf`]), and "Inner" is

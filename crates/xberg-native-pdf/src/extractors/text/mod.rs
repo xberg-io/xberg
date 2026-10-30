@@ -2243,6 +2243,21 @@ pub struct TextExtractor<'doc> {
     /// flips this on only when the placed text dominates and the non-placed text
     /// is negligible. pymupdf/pdftotext likewise extract the body in that case.
     placed_pdf_keep: bool,
+    /// Group of the form that holds `/PlacedPDF` text back now, or 0. When the
+    /// page verdict drops placed text, a form with its own `/PlacedPDF` tag holds
+    /// its placed text instead, and `settle_placed_holds` judges it once the page
+    /// is done.
+    placed_hold: u32,
+    /// Number of hold groups opened on this page.
+    placed_hold_groups: u32,
+    /// Hold group of each entry in `spans`, or 0 for text that is not held.
+    /// Empty while the page holds nothing.
+    span_holds: Vec<u32>,
+    /// Hold group of each entry in `chars`, as `span_holds` is for `spans`.
+    char_holds: Vec<u32>,
+    /// Count of forms that carry a `/PlacedPDF` tag. A form whose run moved this
+    /// count depends on the verdict of the page, so its spans are not cached.
+    form_placed_tags: u32,
     /// Ink / separation names to exclude from extraction.
     ///
     /// When a `cs` operator sets a Separation or DeviceN color space whose ink name(s)

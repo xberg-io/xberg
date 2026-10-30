@@ -7,7 +7,138 @@
 
 use super::*;
 
+/// Text of one hold group, or of the page text that is not held, as the
+/// duplicate measure of `placed_text_kept` reads it.
+#[derive(Default, Clone)]
+struct HeldText {
+    chars: usize,
+    txt: Vec<u8>,
+    line_y: Option<f32>,
+}
+
+impl HeldText {
+    /// Add one span (`line_y` is `None`) or one character on the line at `line_y`.
+    fn add(&mut self, text: &str, line_y: Option<f32>) {
+        if let Some(y) = line_y
+            && self.line_y.is_none_or(|last| (last - y).abs() > 0.01)
+        {
+            self.txt.push(b' ');
+            self.line_y = Some(y);
+        }
+        self.chars += text.chars().count();
+        self.txt.extend_from_slice(text.as_bytes());
+        if line_y.is_none() {
+            self.txt.push(b' ');
+        }
+    }
+}
+
+/// Push `item` with its hold group. `holds` stays empty until an item is held.
+pub(super) fn push_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, item: T, hold: u32) {
+    if hold != 0 || !holds.is_empty() {
+        holds.resize(items.len(), 0);
+        holds.push(hold);
+    }
+    items.push(item);
+}
+
+/// Keep the items from `start` on that pass `keep`, with their hold groups.
+pub(super) fn retain_held_from<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, start: usize, keep: impl Fn(&T) -> bool) {
+    let added = items.split_off(start);
+    if holds.is_empty() {
+        items.extend(added.into_iter().filter(|item| keep(item)));
+        return;
+    }
+    holds.resize(start + added.len(), 0);
+    let added_holds = holds.split_off(start);
+    for (item, hold) in added.into_iter().zip(added_holds) {
+        if keep(&item) {
+            items.push(item);
+            holds.push(hold);
+        }
+    }
+}
+
+/// Drop each hold group that `placed_text_kept` rejects against the items that
+/// are not held. Kept groups stay in paint position.
+fn settle_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, groups: u32, add: impl Fn(&T, &mut HeldText)) {
+    if holds.is_empty() {
+        return;
+    }
+    holds.resize(items.len(), 0);
+    let mut other = HeldText::default();
+    let mut held = vec![HeldText::default(); groups as usize];
+    for (item, &hold) in items.iter().zip(holds.iter()) {
+        match hold.checked_sub(1).and_then(|g| held.get_mut(g as usize)) {
+            Some(group) => add(item, group),
+            None => add(item, &mut other),
+        }
+    }
+    let kept: Vec<bool> = held
+        .iter()
+        .map(|group| TextExtractor::placed_text_kept(group.chars, &group.txt, other.chars, &other.txt))
+        .collect();
+    let mut index = 0;
+    items.retain(|_| {
+        let hold = holds[index];
+        index += 1;
+        hold.checked_sub(1)
+            .and_then(|g| kept.get(g as usize))
+            .is_none_or(|&keep| keep)
+    });
+    holds.clear();
+}
+
 impl<'doc> TextExtractor<'doc> {
+    /// Start the `/PlacedPDF` state of a page: the page verdict from its own
+    /// stream, and no hold groups.
+    pub(super) fn begin_placed_page(&mut self, content_stream: &[u8]) {
+        self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
+        self.placed_hold = 0;
+        self.placed_hold_groups = 0;
+        self.span_holds.clear();
+        self.char_holds.clear();
+    }
+
+    /// Hold group of text emitted now (0 when it is not held), or `None` when
+    /// the current state suppresses it.
+    pub(super) fn emit_hold(&self) -> Option<u32> {
+        if self.is_content_suppressed() {
+            None
+        } else if self.inside_placed_pdf && !self.placed_pdf_keep {
+            Some(self.placed_hold)
+        } else {
+            Some(0)
+        }
+    }
+
+    /// Emit a span, unless the current state suppresses it.
+    pub(super) fn push_span(&mut self, span: TextSpan) {
+        if let Some(hold) = self.emit_hold() {
+            push_held(&mut self.spans, &mut self.span_holds, span, hold);
+        }
+    }
+
+    /// Emit a character, unless the current state suppresses it.
+    pub(super) fn push_char(&mut self, ch: TextChar) {
+        if let Some(hold) = self.emit_hold() {
+            push_held(&mut self.chars, &mut self.char_holds, ch, hold);
+        }
+    }
+
+    /// Judge each hold group of the page once all its text is known: a group
+    /// stays when `placed_text_kept` accepts it against the page text that is not
+    /// held, after clipping. Paint order does not matter. ~keep
+    pub(super) fn settle_placed_holds(&mut self) {
+        let groups = self.placed_hold_groups;
+        settle_held(&mut self.spans, &mut self.span_holds, groups, |span, text| {
+            text.add(&span.text, None)
+        });
+        settle_held(&mut self.chars, &mut self.char_holds, groups, |ch, text| {
+            text.add(ch.char.encode_utf8(&mut [0; 4]), Some(ch.origin_y))
+        });
+    }
+
     /// Update the artifact state based on the marked content stack.
     ///
     /// This method computes whether we're currently inside an artifact region
@@ -31,6 +162,11 @@ impl<'doc> TextExtractor<'doc> {
         self.inside_placed_pdf = self.marked_content_stack.iter().any(|ctx| ctx.is_placed_pdf);
     }
 
+    /// Whether a content stream mentions the `/PlacedPDF` tag at all.
+    pub(super) fn has_placed_tag(content_stream: &[u8]) -> bool {
+        content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF")
+    }
+
     /// Whether content emission should be suppressed.
     ///
     /// Returns true when the current graphics/marked-content state means
@@ -42,7 +178,9 @@ impl<'doc> TextExtractor<'doc> {
     /// Note: artifact filtering is handled separately via span metadata and
     /// downstream filtering, so `inside_artifact` is intentionally not checked here.
     pub(super) fn is_content_suppressed(&self) -> bool {
-        self.inside_excluded_layer || self.inside_excluded_ink || (self.inside_placed_pdf && !self.placed_pdf_keep)
+        self.inside_excluded_layer
+            || self.inside_excluded_ink
+            || (self.inside_placed_pdf && !self.placed_pdf_keep && self.placed_hold == 0)
     }
 
     /// Decide whether `/PlacedPDF` text should be kept (not suppressed) for a page.
@@ -66,23 +204,16 @@ impl<'doc> TextExtractor<'doc> {
     ///    (e.g. an InDesign figure that holds the page's labels and body text, as
     ///    on placed floor-plan / marketing spreads) and must be kept.
     ///
-    /// Conservative on purpose: when placed text lives in a nested XObject the
-    /// page-stream scan undercounts it and gate 1 falls back to suppression (the
-    /// prior behaviour).
+    /// The scan reads the page stream only. A form with its own `/PlacedPDF` tag
+    /// holds its placed text instead, judged by `settle_placed_holds`. ~keep
     pub(super) fn placed_pdf_text_dominates(content_stream: &[u8]) -> bool {
         // Gate: only pages that actually carry the InDesign tag pay for a parse. ~keep
-        if !content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF") {
+        if !Self::has_placed_tag(content_stream) {
             return false;
         }
         let Ok(operators) = parse_content_stream(content_stream) else {
             return false;
         };
-        // A substantial placed body; below this a placed region is treated as a
-        // decorative figure, not the page's logical content. ~keep
-        const MIN_PLACED_CHARS: usize = 800;
-        // Keep placed text whose words are mostly unique; suppress it once a
-        // majority is also present in the non-placed text (a duplicate overlay). ~keep
-        const MAX_DUP_FRACTION: f64 = 0.5;
 
         let mut placed_stack: Vec<bool> = Vec::new();
         let mut placed_chars: usize = 0;
@@ -135,6 +266,18 @@ impl<'doc> TextExtractor<'doc> {
                 _ => {}
             }
         }
+        Self::placed_text_kept(placed_chars, &placed_txt, other_chars, &other_txt)
+    }
+
+    /// The keep/suppress gates of `placed_pdf_text_dominates`, for placed text
+    /// judged against the non-placed text beside it.
+    fn placed_text_kept(placed_chars: usize, placed_txt: &[u8], other_chars: usize, other_txt: &[u8]) -> bool {
+        // A substantial placed body; below this a placed region is treated as a
+        // decorative figure, not the page's logical content. ~keep
+        const MIN_PLACED_CHARS: usize = 800;
+        // Keep placed text whose words are mostly unique; suppress it once a
+        // majority is also present in the non-placed text (a duplicate overlay). ~keep
+        const MAX_DUP_FRACTION: f64 = 0.5;
 
         if placed_chars < MIN_PLACED_CHARS {
             return false;
@@ -146,7 +289,7 @@ impl<'doc> TextExtractor<'doc> {
         // or larger. Keep it unless a majority of the placed words also appear
         // outside (a duplicate overlay). Tokenising here (behind gates 1 and 2)
         // keeps the common single-column path allocation-free. ~keep
-        Self::text_duplication_fraction(&placed_txt, &other_txt) < MAX_DUP_FRACTION
+        Self::text_duplication_fraction(placed_txt, other_txt) < MAX_DUP_FRACTION
     }
 
     /// Fraction of alphanumeric word tokens in `a` (counting repeats) that also
