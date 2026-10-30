@@ -324,8 +324,8 @@ fn test_form_painted_inside_a_placed_scope_is_not_outside_text() {
     );
     let inner = text_lines_stream(&lines, 29, 771);
     let page = "/Fm0 Do\n".to_string();
-    let doc = PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &outer, Some(&inner)))
-        .expect("parse pdf");
+    let doc =
+        PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &outer, Some(&inner))).expect("parse pdf");
 
     let first = doc.extract_text(0).unwrap();
     assert!(

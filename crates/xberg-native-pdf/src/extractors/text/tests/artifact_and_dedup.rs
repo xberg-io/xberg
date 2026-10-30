@@ -989,7 +989,11 @@ fn self_painting_form_pdf(form_stream: &str) -> Vec<u8> {
 fn outside_chars_of_self_painting_form(form_stream: &str) -> usize {
     let doc = crate::document::PdfDocument::from_bytes(self_painting_form_pdf(form_stream)).expect("parse pdf");
     let page = doc.load_object(ObjectRef::new(3, 0)).expect("page");
-    let resources = page.as_dict().and_then(|d| d.get("Resources")).cloned().expect("resources");
+    let resources = page
+        .as_dict()
+        .and_then(|d| d.get("Resources"))
+        .cloned()
+        .expect("resources");
     let mut extractor = TextExtractor::new();
     extractor.set_document(&doc);
     extractor.set_resources(resources);
@@ -1007,5 +1011,8 @@ fn test_outside_text_walk_stops_at_the_form_depth_limit() {
 fn test_outside_text_walk_stops_at_the_form_decode_limit() {
     // A form that paints itself twice would reach 1023 forms in ten levels; the
     // walk stops after 500 decodes. ~keep
-    assert_eq!(outside_chars_of_self_painting_form("BT (ab) Tj ET\n/Fm0 Do\n/Fm0 Do\n"), 1000);
+    assert_eq!(
+        outside_chars_of_self_painting_form("BT (ab) Tj ET\n/Fm0 Do\n/Fm0 Do\n"),
+        1000
+    );
 }

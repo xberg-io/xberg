@@ -191,7 +191,8 @@ impl<'doc> TextExtractor<'doc> {
     /// text, a duplicate overlay in a form would have nothing to repeat and would
     /// be kept. ~keep
     pub(super) fn placed_pdf_text_dominates(content_stream: &[u8]) -> bool {
-        Self::scan_placed_text(content_stream).is_some_and(|scan| Self::placed_scan_dominates(&scan.placed, &scan.other))
+        Self::scan_placed_text(content_stream)
+            .is_some_and(|scan| Self::placed_scan_dominates(&scan.placed, &scan.other))
     }
 
     /// Whether a content stream mentions the `/PlacedPDF` tag at all.
