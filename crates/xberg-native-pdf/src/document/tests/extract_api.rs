@@ -255,10 +255,10 @@ fn test_placed_form_copy_of_a_body_painted_by_an_enclosing_form_is_suppressed() 
     );
 }
 
-/// Page 1 paints a form with a placed body, and that form paints a second form
-/// whose text is kept under the first form's verdict. Page 2 paints the second
-/// form directly, next to its own copy of that text, so the form is a duplicate
-/// overlay there. The spans of the nested form must not be reused on page 2.
+/// Page 1 holds a copy of the body of a form with a placed scope, so that form is a
+/// duplicate overlay there and its placed scope drops the text of the plain form it
+/// paints. Page 2 paints the plain form directly, so its text must stay. The empty
+/// result of page 1 must not be reused on page 2.
 #[test]
 fn test_form_nested_in_a_placed_form_is_not_reused_across_pages() {
     let outer_lines: Vec<String> = (0..30)
@@ -268,28 +268,93 @@ fn test_form_nested_in_a_placed_form_is_not_reused_across_pages() {
         .map(|i| format!("Inner note number {i} covering orchard frost"))
         .collect();
     let outer = format!(
-        "/PlacedPDF /MC0 BDC\n{}EMC\n/Fm1 Do\n",
+        "/PlacedPDF /MC0 BDC\n{}/Fm1 Do\nEMC\n",
         text_lines_stream(&outer_lines, 29, 771)
     );
-    let inner = format!(
-        "/PlacedPDF /MC1 BDC\n{}EMC\n",
-        text_lines_stream(&inner_lines, 300, 771)
-    );
-    let page_a = "/Fm0 Do\n".to_string();
-    let page_b = format!("{}/Fm1 Do\n", text_lines_stream(&inner_lines, 20, 780));
+    let inner = text_lines_stream(&inner_lines, 300, 771);
+    let page_a = format!("{}/Fm0 Do\n", text_lines_stream(&outer_lines, 20, 780));
+    let page_b = "/Fm1 Do\n".to_string();
     let doc = PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page_a, &page_b, &outer, Some(&inner)))
         .expect("parse pdf");
 
     let first = doc.extract_text(0).unwrap();
-    assert!(
-        first.contains("Inner note number 7 "),
-        "page 1 lost the nested form text: {first:?}"
+    assert_eq!(
+        first.matches("Outer body sentence 7 ").count(),
+        1,
+        "page 1 kept the duplicate placed copy: {first:?}"
     );
     let second = doc.extract_text(1).unwrap();
+    assert!(
+        second.contains("Inner note number 7 "),
+        "page 2 reused the empty result of the nested form from page 1: {second:?}"
+    );
+}
+
+/// The page keeps its own placed body. A form with a small placed scope follows the
+/// page and is kept; it does not get a verdict of its own, which would drop it.
+#[test]
+fn test_small_placed_form_follows_a_page_that_keeps_its_placed_body() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Paragraph line number {i} of the placed body text"))
+        .collect();
+    let page = format!(
+        "/PlacedPDF /MC0 BDC\n{}EMC\n/Fm0 Do\n",
+        text_lines_stream(&lines, 20, 780)
+    );
+    let form = format!(
+        "/PlacedPDF /MC1 BDC\n{}EMC\n",
+        text_lines_stream(&["Small form note".to_string()], 400, 100)
+    );
+    let doc = PdfDocument::from_bytes(build_page_and_form_pdf(&page, &form)).expect("parse pdf");
+
+    let text = doc.extract_text(0).unwrap();
+    assert!(text.contains("Paragraph line number 5 "), "page body lost: {text:?}");
+    assert!(text.contains("Small form note"), "form text dropped: {text:?}");
+}
+
+/// A form that keeps its own placed body does not change the verdict of the page
+/// stream after the form: a small placed note the page paints later stays dropped.
+#[test]
+fn test_form_verdict_does_not_leak_to_the_page_text_after_the_form() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Paragraph line number {i} of the form body text"))
+        .collect();
+    let form = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let page = format!(
+        "/Fm0 Do\n/PlacedPDF /MC1 BDC\n{}EMC\n",
+        text_lines_stream(&["Late placed note".to_string()], 400, 100)
+    );
+    let doc = PdfDocument::from_bytes(build_page_and_form_pdf(&page, &form)).expect("parse pdf");
+
+    let text = doc.extract_text(0).unwrap();
+    assert!(text.contains("Paragraph line number 7 "), "form body lost: {text:?}");
+    assert!(
+        !text.contains("Late placed note"),
+        "the verdict of the form leaked to the page text: {text:?}"
+    );
+}
+
+/// Page 1 paints the plain body form, so its spans enter the cache. Page 2 paints it
+/// again from the cache and then a shifted `/PlacedPDF` copy of it. The cached
+/// spans are still outside text, so the copy is dropped.
+#[test]
+fn test_placed_form_copy_of_a_cached_sibling_form_body_is_suppressed() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Cached paragraph number {i} about lock keepers"))
+        .collect();
+    let body = text_lines_stream(&lines, 20, 780);
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let page_a = "/Fm1 Do\n".to_string();
+    let page_b = "/Fm1 Do\n/Fm0 Do\n".to_string();
+    let doc = PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page_a, &page_b, &copy, Some(&body)))
+        .expect("parse pdf");
+
+    doc.extract_text(0).unwrap();
+    let second = doc.extract_text(1).unwrap();
     assert_eq!(
-        second.matches("Inner note number 7 ").count(),
+        second.matches("Cached paragraph number 7 ").count(),
         1,
-        "page 2 reused the spans of the nested form from page 1: {second:?}"
+        "the placed copy next to a cached sibling form body was kept: {second:?}"
     );
 }
 
