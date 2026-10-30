@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Ocr Pipeline And Quality
-description: "Xberg OCR backends, preprocessing, caching, page acceptance, hOCR, tables, cross-backend quality. Use for OCR behavior or A/B quality work."
+description: "OCR backends, preprocessing, caches, hOCR, tables and quality comparisons."
 paths:
   - "crates/xberg/src/ocr/**"
   - "crates/xberg/src/paddle_ocr/**"

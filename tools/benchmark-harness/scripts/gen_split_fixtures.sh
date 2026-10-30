@@ -33,6 +33,10 @@ make_fixture() {
     inputs+=("$f")
     local n
     n="$(pagecount "$f")"
+    if [[ ! "$n" =~ ^[1-9][0-9]*$ ]]; then
+      echo "invalid page count for $f: $n" >&2
+      exit 1
+    fi
     local end=$((start + n - 1))
     bounds+=("{\"start_page\":$start,\"end_page\":$end}")
     start=$((end + 1))

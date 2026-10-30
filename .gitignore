@@ -1,6 +1,8 @@
 # Build artifacts
 target/
 build/
+!mise-tasks/integrations/build/
+!mise-tasks/integrations/ci/build/
 dist/
 .polylint/
 # Ad-hoc PDF/image debug binaries
@@ -295,7 +297,6 @@ pkg/
 
 
 # Local dev artifacts
-docs-site/public/demo-dev.html
 docs-site/dist/
 docs-site/.astro/
 demo-loaded.png
@@ -363,7 +364,7 @@ testResults.xml
 .ai-rulez/.config.local.*
 .opencode/agents/
 .opencode/commands/
-opencode.json
+/opencode.json
 # END ai-rulez
 
 # Agent harness output outside the ai-rulez managed block: the machine-local overlay,

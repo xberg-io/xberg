@@ -1,0 +1,32 @@
+version = 1
+canonical = 1
+
+[adrs."adrs/0000-record-architecture-decisions.md"]
+number = 0
+status = "accepted"
+blake3 = "11819296694fb9781dafaf1b1b5ec12dec8f35ab3c23029cba88edac6daaae2d"
+
+[adrs."adrs/0001-synchronous-extraction-paths-on-wasm.md"]
+number = 1
+status = "accepted"
+blake3 = "5277a6ecdb290c3ecca432e3fc55a15447b54c9bfe00556c9889769224795255"
+
+[adrs."adrs/0002-pure-rust-native-pdf-engine-by-default.md"]
+number = 2
+status = "accepted"
+blake3 = "9c96736a932d390b7af6f9a4380aa5da75c1d15b5b3be7150fe120241fb1abc9"
+
+[adrs."adrs/0003-java-on-panama-ffm-jni-only-for-kotlin-android.md"]
+number = 3
+status = "accepted"
+blake3 = "d4a596340c4ac28f5eb3e2c3eccc2182f0308b59c79fd16153f2226a7cdacd9f"
+
+[adrs."adrs/0004-rust-only-engine-seams-for-the-enterprise-boundary.md"]
+number = 4
+status = "accepted"
+blake3 = "bafee6b0f4671c374e93eaa0610d60fefb8f4ebc0015db004b91b82e77850249"
+
+[adrs."adrs/0005-engine-neutral-inference-seam-over-ort-and-tract.md"]
+number = 5
+status = "accepted"
+blake3 = "d9b37e8d82cca07eaf2bbaca420280509d75e835ec0311f54c11a5b114f09c4b"

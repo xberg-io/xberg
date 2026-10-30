@@ -257,3 +257,45 @@ fn should_keep_confirmed_numeric_note_separate_from_a_true_exponent() {
         "only the exponent is annotated: {output:?}"
     );
 }
+
+#[test]
+fn should_preserve_scripts_inside_a_detected_ruled_pdf_table_gh2275() {
+    let mut content = String::from("0.5 w 0 0 0 RG\n");
+    for y in [660, 690, 720, 750] {
+        content.push_str(&format!("50 {y} m 550 {y} l S\n"));
+    }
+    for x in [50, 200, 400, 550] {
+        content.push_str(&format!("{x} 660 m {x} 750 l S\n"));
+    }
+    for (x, y, text) in [
+        (60, 730, "Parameter"),
+        (210, 730, "Value"),
+        (410, 730, "Status"),
+        (60, 700, "Count"),
+        (410, 700, "Approved"),
+        (60, 670, "Compound"),
+        (410, 670, "Verified"),
+    ] {
+        content.push_str(&format!("BT /F1 12 Tf 1 0 0 1 {x} {y} Tm ({text}) Tj ET\n"));
+    }
+    content.push_str("BT /F1 12 Tf 1 0 0 1 210 700 Tm (10) Tj /F1 8 Tf 3 Ts (9) Tj /F1 12 Tf 0 Ts (/l) Tj ET\n");
+    content.push_str("BT /F1 12 Tf 1 0 0 1 210 670 Tm (H) Tj /F1 8 Tf -2 Ts (2) Tj /F1 12 Tf 0 Ts (O) Tj ET\n");
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        disable_ocr: true,
+        use_cache: false,
+        pdf_options: Some(PdfConfig {
+            backend: PdfBackend::Native,
+            extract_tables: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = extract_bytes_document_blocking(&script_pdf(&content), "application/pdf", &config)
+        .expect("ruled script table extracts");
+    assert_eq!(result.tables.len(), 1, "fixture must produce one actual table");
+    assert_eq!(result.tables[0].cells.len(), 3);
+    assert!(result.tables[0].cells.iter().all(|row| row.len() == 3));
+    assert_eq!(result.content.matches("10^9^/l").count(), 1, "{}", result.content);
+    assert_eq!(result.content.matches("H~2~O").count(), 1, "{}", result.content);
+}

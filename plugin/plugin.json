@@ -21,7 +21,7 @@
   "extensions": {
     "com.openai": {
       "interface": {
-        "brandColor": "#1F6FEB",
+        "brandColor": "#00E0C2",
         "capabilities": [
           "Read"
         ],

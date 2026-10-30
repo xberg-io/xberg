@@ -45,6 +45,7 @@ arm64 | aarch64) arch_id="arm64" ;;
 esac
 
 tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
 echo "Downloading Pdfium ${version} for ${platform_id}/${arch_id}..."
 curl -fsSL -o "$tmpdir/pdfium.tgz" "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/pdfium-${platform_id}-${arch_id}.tgz"
 mkdir -p "$tmpdir/extracted"

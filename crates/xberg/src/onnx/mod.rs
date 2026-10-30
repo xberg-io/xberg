@@ -280,6 +280,28 @@ fn verify_downloaded(manifest: &[(String, String)], repo_path: &str, local: &Pat
     Ok(())
 }
 
+fn model_file_manifest(
+    manifest: Option<&str>,
+    model_file: &str,
+    additional_files: &[String],
+) -> Result<Vec<(String, String)>, String> {
+    let Some(content) = manifest else {
+        return Ok(Vec::new());
+    };
+    let entries = crate::model_download::parse_sha256_manifest(content)?;
+    if entries.is_empty() {
+        return Err("Supplied SHA-256 manifest lists no artifacts".to_owned());
+    }
+    for requested in std::iter::once(model_file).chain(additional_files.iter().map(String::as_str)) {
+        manifest_checksum(&entries, requested)?;
+    }
+    Ok(entries)
+}
+
+#[cfg(test)]
+#[path = "manifest_preflight_tests.rs"]
+mod manifest_preflight_tests;
+
 #[allow(clippy::too_many_arguments)]
 fn download_model_files_inner(
     repo_name: &str,
@@ -291,11 +313,8 @@ fn download_model_files_inner(
     manifest: Option<&str>,
     err: ErrCtor,
 ) -> crate::Result<DownloadedModel> {
-    let manifest: Vec<(String, String)> = match manifest {
-        Some(content) => crate::model_download::parse_sha256_manifest(content)
-            .map_err(|e| err(format!("Invalid sha256 manifest for {repo_name}: {e}")))?,
-        None => Vec::new(),
-    };
+    let manifest = model_file_manifest(manifest, model_file, additional_files)
+        .map_err(|error| err(format!("Invalid sha256 manifest for {repo_name}: {error}")))?;
 
     let model_sha = manifest_checksum(&manifest, model_file).map_err(err)?;
     let model = crate::model_download::hf_resolve_file_with_progress(

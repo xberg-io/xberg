@@ -162,9 +162,9 @@ Edit `plugin/.ai-rulez` sources, then run these commands from the repository roo
 with a Pi-capable ai-rulez v5 binary installed:
 
 ```bash
-task plugin:generate
-task plugin:verify
-task plugin:test
+mise run plugin:generate
+mise run plugin:verify
+mise run plugin:test
 ```
 
 CI builds the generator from a pinned source revision and verifies the generated
@@ -223,13 +223,13 @@ resources as `plugin/skills/`. Install them independently of a plugin runtime:
 npx skills add xberg-io/xberg --skill xberg
 ```
 
-Edit `plugin/.ai-rulez/skills`, then run `task plugin:generate` to regenerate runtime
-bundles and synchronize the public export. `task plugin:verify` checks both projections;
-`task plugin:skills:test` verifies resource freshness, ownership and symlink protection.
+Edit `plugin/.ai-rulez/skills`, then run `mise run plugin:generate` to regenerate runtime
+bundles and synchronize the public export. `mise run plugin:verify` checks both projections;
+`mise run plugin:skills:test` verifies resource freshness, ownership and symlink protection.
 The public ownership manifest records SHA-256 hashes of every exported file.
 
 Download integrity: the launcher currently relies on HTTPS for direct binary downloads.
 Verify release checksums separately when available before manually installing an archive.
 
 Launcher and visual assets are authored in `plugin/.ai-rulez/scripts/` and
-`plugin/.ai-rulez/assets/`; `task plugin:generate` copies them into the runtime bundle.
+`plugin/.ai-rulez/assets/`; `mise run plugin:generate` copies them into the runtime bundle.

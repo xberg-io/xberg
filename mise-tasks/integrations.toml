@@ -1,0 +1,19 @@
+# First-party integrations under integrations/, included from mise.toml [task_config]. The package
+# lists live in mise-tasks/integrations/.lib/packages.sh. ~keep
+
+["integrations:sync"]
+description = "Install integration dependencies (Python uv projects)"
+run = [{ task = "integrations:deps", args = ["sync"] }]
+
+["integrations:update"]
+description = "Update integration dependencies within major versions"
+run = [{ task = "integrations:deps", args = ["update"] }]
+
+["integrations:upgrade"]
+description = "Upgrade integration dependencies to latest and refresh lock files"
+run = [{ task = "integrations:deps", args = ["upgrade"] }]
+
+["integrations:ci:build:python-binding"]
+description = "Build the abi3 Python wheel the integration jobs test against into dist/python"
+dir = "{{config_root}}/packages/python"
+run = 'uvx --from "maturin>=1,<2" maturin build --release --out ../../dist/python'

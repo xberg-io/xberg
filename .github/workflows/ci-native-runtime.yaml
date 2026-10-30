@@ -11,7 +11,8 @@ on:
       - "crates/xberg-libheif/**"
       - "Cargo.toml"
       - "Cargo.lock"
-      - ".task/languages/rust.yml"
+      - "mise-tasks/rust.toml"
+      - "mise-tasks/rust/**"
       - "mise.toml"
       - "mise.lock"
   workflow_dispatch:
@@ -33,7 +34,7 @@ jobs:
           submodules: recursive
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
           config-ref: ${{ github.sha }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Fetch actual decoder fixtures
@@ -54,4 +55,4 @@ jobs:
           CARGO_BUILD_JOBS: "1"
           CARGO_INCREMENTAL: "0"
           CARGO_PROFILE_DEV_DEBUG: "0"
-        run: task rust:check:libheif-runtime
+        run: mise run rust:check:libheif-runtime

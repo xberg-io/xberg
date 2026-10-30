@@ -250,34 +250,6 @@ public func ocrBackendSupportsLanguage<GenericIntoRustString: IntoRustString>(_ 
 public func ocrBackendSupportsLanguageFor<GenericIntoRustString: IntoRustString>(_ backend: GenericIntoRustString, _ language: GenericIntoRustString, _ config: OcrConfig) throws -> Bool {
     try { let val = __swift_bridge__$ocr_backend_supports_language_for({ let rustString = backend.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = language.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {config.isOwned = false; return config.ptr;}()); switch val.tag { case __swift_bridge__$ResultBoolAndAlefBridgeError$ResultOk: return val.payload.ok case __swift_bridge__$ResultBoolAndAlefBridgeError$ResultErr: throw AlefBridgeError(ptr: val.payload.err) default: fatalError() } }()
 }
-public func extractWithLayoutPages(_ input: ExtractInput, _ config: ExtractionConfig, _ pages: RustVec<UInt32>) async throws -> ExtractionResult {
-    func onComplete(cbWrapperPtr: UnsafeMutableRawPointer?, rustFnRetVal: __private__ResultPtrAndPtr) {
-        let wrapper = Unmanaged<CbWrapper$extract_with_layout_pages>.fromOpaque(cbWrapperPtr!).takeRetainedValue()
-        if rustFnRetVal.is_ok {
-            wrapper.cb(.success(ExtractionResult(ptr: rustFnRetVal.ok_or_err!)))
-        } else {
-            wrapper.cb(.failure(AlefBridgeError(ptr: rustFnRetVal.ok_or_err!)))
-        }
-    }
-
-    return try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<ExtractionResult, Error>) in
-        let callback = { rustFnRetVal in
-            continuation.resume(with: rustFnRetVal)
-        }
-
-        let wrapper = CbWrapper$extract_with_layout_pages(cb: callback)
-        let wrapperPtr = Unmanaged.passRetained(wrapper).toOpaque()
-
-        __swift_bridge__$extract_with_layout_pages(wrapperPtr, onComplete, {input.isOwned = false; return input.ptr;}(), {config.isOwned = false; return config.ptr;}(), { let val = pages; val.isOwned = false; return val.ptr }())
-    })
-}
-class CbWrapper$extract_with_layout_pages {
-    var cb: (Result<ExtractionResult, Error>) -> ()
-
-    public init(cb: @escaping (Result<ExtractionResult, Error>) -> ()) {
-        self.cb = cb
-    }
-}
 public func __alef_owned_vec_max_sim_rank(_ query: MultiVectorEmbedding, _ docs: RustVec<MultiVectorEmbedding>) -> RustVec<LateInteractionMatch> {
     RustVec(ptr: __swift_bridge__$max_sim_rank({query.isOwned = false; return query.ptr;}(), { let val = docs; val.isOwned = false; return val.ptr }()))
 }

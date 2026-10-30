@@ -6,7 +6,7 @@
 # for. 0.83.0 additionally fixes the php/napi/pyo3 mirror defaults, the elixir bytes
 # hop and the typescript/wasm mock-url builder that this repo's e2e legs were red on.
 # ~keep
-alef_version = "0.115.5"
+alef_version = "0.115.6"
 # Alef 0.115.5 emits a redundant PathBuf conversion closure in the Dart bridge. ~keep
 # This supported allow-list applies only to generated Rust bindings. ~keep
 extra_clippy_allows = ["redundant_closure"]
@@ -35,7 +35,6 @@ node_package_manager = "pnpm"
 
 [workspace.ownership]
 user_owned = [
-  "Taskfile.yml",
   "e2e/csharp/Xberg.E2eTests.csproj",
   "e2e/dart/pubspec.yaml",
   "e2e/go/go.mod",
@@ -135,6 +134,18 @@ description = "Available embedding model presets when the embeddings feature is 
 [workspace.docs.skills]
 template_dir = "templates/docs/skills"
 outputs = [".codex/skills", ".agents/skills", ".github/skills", ".claude/skills"]
+
+[workspace.docs.skills.templates.api]
+template = "api/SKILL.md.jinja"
+output = "api/SKILL.md"
+
+[workspace.docs.skills.templates.cli]
+template = "cli/SKILL.md.jinja"
+output = "cli/SKILL.md"
+
+[workspace.docs.skills.templates.mcp]
+template = "mcp/SKILL.md.jinja"
+output = "xberg-mcp-reference/SKILL.md"
 
 [workspace.docs.snippets]
 dirs = ["docs-site/src/snippets-generated"]
@@ -376,7 +387,7 @@ exclude = [
   # lint rules (docstring/annotation/complexity checks fire on generator structure, not
   # human choices). The real gate is execution + freshness, both already wired: the CI E2E
   # workflow's `e2e-tests` matrix runs all 14 languages, and the `e2e-freshness` job
-  # (`task e2e:verify`) regenerates and diffs the tree so a stale commit fails CI. `poly
+  # (`mise run e2e:verify`) regenerates and diffs the tree so a stale commit fails CI. `poly
   # lint e2e/**` reporting "0 files linted, exit 0" is therefore not a silent gap -- do not
   # remove this exclude to "fix" that read without first replacing execution+freshness with
   # something at least as strong. ~keep
@@ -423,6 +434,9 @@ exclude = [
   # line in 888023d75d, and 8a60458a7dd was an earlier re-pin for the same cause. ~keep
   "tools/benchmark-harness/cohorts/**",
   "/skills/**",
+  # adrlint owns ADR Markdown with its own rumdl config and content-hash lock; poly would
+  # double-report and its lock-unaware formatter would break locks. ~keep
+  "/adrs/**",
 ]
 
 # Appended only to poly's `file_safety` builtin hook. swift-bridge emits its
@@ -633,7 +647,7 @@ traineddata = "traineddata"
 "tools/benchmark-harness/baselines/initial_baseline.json" = ["file-too-long"]
 "tools/benchmark-harness/guardrails.json" = ["file-too-long"]
 # --- quality-debt baseline (generated) ---
-# 424 size/complexity rule attachments across 149 files that predate these metrics, listed per file
+# 423 size/complexity rule attachments across 148 files that predate these metrics, listed per file
 # rather than switching the rules off, so the metrics still fire on every file NOT listed
 # here -- new code stays covered, and each path below is one discrete unit of work.
 #
@@ -981,7 +995,6 @@ traineddata = "traineddata"
   "nesting-too-deep",
 ]
 "crates/xberg/src/layout/models/slanet.rs" = ["cyclomatic-complexity", "function-too-long"]
-"crates/xberg/src/layout/models/yolo.rs" = ["function-too-long"]
 "crates/xberg/src/mcp/server.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 "crates/xberg/src/model_download.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/ocr/conversion.rs" = ["file-too-long", "function-too-long"]
@@ -1782,7 +1795,7 @@ exclude_types = ["Recyclable"]
 [crates.elixir.dependency_versions]
 "cargo:alloc-no-stdlib" = "^3.0.0"
 "cargo:alloc-stdlib" = "^0.3.0"
-"cargo:brotli-decompressor" = "^6.0.1"
+"cargo:brotli-decompressor" = "^6.2.0"
 
 [[crates.elixir.target_dep_overrides]]
 cfg = 'target_os = "windows"'
@@ -2456,9 +2469,16 @@ exclude_functions = [
 pubspec_name = "xberg"
 lib_name = "xberg"
 style = "frb"
-# `cfg(not(android/ios/windows))` target dep uses `features = ["full"]` which
-# get them through the `cfg(not(android/ios/windows))` `features = ["full"]` dep.
-excluded_default_features = ["heic", "embeddings", "reranker", "sparse-embeddings", "late-interaction"]
+# Wrapper defaults must not re-enable the ORT feature on mobile. Desktop core
+# capabilities remain selected by the explicit desktop dependency override below. ~keep
+excluded_default_features = [
+  "heic",
+  "embeddings",
+  "reranker",
+  "sparse-embeddings",
+  "late-interaction",
+  "layout-detection",
+]
 features = [
   "pdf",
   "excel",
@@ -2509,6 +2529,7 @@ features = [
   "stopwords",
 ]
 exclude_functions = [
+  "extract_with_layout_pages",
   "calculate_quality_score",
   "count_tokens",
   "embed_texts",
@@ -2546,6 +2567,59 @@ default_features = false
 [[crates.dart.target_dep_overrides]]
 cfg = 'all(target_os = "macos", target_arch = "x86_64")'
 features = ["macos-intel-target", "simd-utf8"]
+default_features = false
+
+
+# Preserve the existing desktop core feature edge independently of wrapper defaults,
+# including builds using --no-default-features. Mobile overrides remain ORT-free. ~keep
+[[crates.dart.target_dep_overrides]]
+cfg = 'not(any(target_os = "android", target_os = "ios", target_os = "windows", all(target_os = "macos", target_arch = "x86_64")))'
+features = [
+  "pdf",
+  "excel",
+  "office",
+  "hwp",
+  "hwpx",
+  "iwork",
+  "email",
+  "html",
+  "xml",
+  "archives",
+  "mdx",
+  "svg",
+  "language-detection",
+  "chunking",
+  "chunking-tokenizers",
+  "quality",
+  "keywords",
+  "diff",
+  "api",
+  "api-types",
+  "mcp",
+  "ocr",
+  "paddle-ocr",
+  "paddle-ocr-types",
+  "layout-detection",
+  "layout-types",
+  "embedding-presets",
+  "reranker-presets",
+  "sparse-embedding-presets",
+  "late-interaction-presets",
+  "transcription-types",
+  "tree-sitter",
+  "liter-llm",
+  "tokio-runtime",
+  "ner-llm",
+  "ner-onnx",
+  "redaction",
+  "summarization",
+  "classification",
+  "captioning",
+  "qr-codes",
+  "auto-rotate-types",
+  "stopwords",
+  "simd-utf8",
+]
 default_features = false
 
 [crates.kotlin_android]
@@ -2669,8 +2743,9 @@ default_features = false
 [crates.swift]
 module_name = "Xberg"
 package_name = "Xberg"
-# `cfg(not(ios/android/windows))` target dep uses `features = ["full"]` which
-excluded_default_features = ["heic"]
+# Mobile uses tract; preset types stay default while native inference flags remain opt-in.
+# The desktop FFI dependency below retains the full native inference surface. ~keep
+excluded_default_features = ["heic", "layout-detection", "reranker", "late-interaction"]
 # The swift shim also links `xberg-ffi` directly. Emit that dependency with
 # `default-features = false` + `full-no-heic` so heic (whose `libheif-sys`
 # build.rs cannot cross-compile) is dropped on every cross-compiled swift
@@ -2709,7 +2784,6 @@ features = [
   "ocr",
   "paddle-ocr",
   "paddle-ocr-types",
-  "layout-detection",
   "layout-types",
   "embeddings",
   "embedding-presets",
@@ -3047,16 +3121,21 @@ types = [
 
   "xberg::engine::structured::rasterize::PageImage",
   "xberg::engine::structured::rasterize::RasterizeError",
+  "xberg::engine::structured::rasterize::RasterizeOptions",
   "xberg::engine::structured::chunk::Batch",
   "xberg::engine::structured::chunk::ChunkerConfig",
   "xberg::engine::structured::schema::Outcome",
   "xberg::engine::structured::schema::MergedOutput",
+  "xberg::engine::structured::schema::ValidationReport",
+  "xberg::engine::structured::schema::BatchValidationReport",
+  "xberg::engine::structured::schema::ValidationError",
   "xberg::engine::structured::citations::CitationSource",
   "xberg::engine::structured::citations::CitedField",
   "xberg::engine::structured::citations::CitationOutput",
   "xberg::engine::structured::prompts::BuiltPrompt",
 
   "xberg::engine::structured::finalize::FinalizedOutput",
+  "xberg::engine::structured::finalize::FinalizationRecovery",
   "xberg::engine::structured::finalize::CitationInputs",
 
   "xberg::engine::parsed::ParsedDocument",
@@ -3084,6 +3163,7 @@ functions = [
   # Composes validate_and_merge into fuse; takes the excluded CitationInputs and
   # returns the excluded FinalizedOutput.
   "merge_and_cite",
+  "finalize_with_recovery",
   # Wraps build_vision_fallback_prompt with the threshold decision; returns
   # Option<BuiltPrompt>, and BuiltPrompt is already excluded above.
   "escalate_if_below_threshold",
@@ -3096,7 +3176,9 @@ functions = [
   "batch_pages",
   "pages_for_call",
   "pages_for_call_with_security_limits",
+  "pages_for_call_with_options",
   "validate_and_merge",
+  "validate_and_report",
   "apply_strategy",
 
   "classify_one",
@@ -5305,7 +5387,7 @@ CRAWLBERG_ALLOW_PRIVATE_NETWORK = "true"
 # The extract future is large enough in a debug build that `test_config_security_limits`
 # overflows the default 2 MiB test-thread stack -- measured: it fails at 2304 KiB and passes
 # at 2560 KiB. Every CI workflow already exports RUST_MIN_STACK=16777216, so CI never saw
-# it and only local `task e2e:lang E2E_LANG=rust` runs failed. Emitted with force = false,
+# it and only local single-language rust e2e runs failed. Emitted with force = false,
 # so an explicit shell value still wins. Verified that cargo's [env] table does reach the
 # test binary by running the failing test with the shell variable unset. ~keep
 RUST_MIN_STACK = "16777216"
@@ -5660,5 +5742,11 @@ clear_fn = "clear_tokenizer_backends"
 [[workspace.poly.hooks-sources]]
 id = "ai-rulez"
 git = "https://github.com/Goldziher/ai-rulez.git"
-revision = "v5.8.0"
+revision = "v5"
 hooks = ["ai-rulez-validate", "ai-rulez-plugin-verify"]
+
+[[workspace.poly.hooks-sources]]
+id = "adrlint"
+git = "https://github.com/Goldziher/adrlint.git"
+revision = "v0.4.0"
+hooks = ["adrlint-lint", "adrlint-format-check", "adrlint-lock-check"]

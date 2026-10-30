@@ -14,7 +14,7 @@ if [ -f "$TARGET_DIR/OmniDocBench.json" ]; then
   echo "OmniDocBench.json already exists, skipping"
 else
   echo "Downloading OmniDocBench.json (65 MB)..."
-  curl -L -o "$TARGET_DIR/OmniDocBench.json" "$HF_BASE/OmniDocBench.json"
+  curl -f -L -o "$TARGET_DIR/OmniDocBench.json" "$HF_BASE/OmniDocBench.json"
 fi
 
 if [ -d "$TARGET_DIR/images" ] && [ "$(find "$TARGET_DIR/images" -maxdepth 1 -type f 2>/dev/null | wc -l)" -gt 100 ]; then
@@ -31,8 +31,8 @@ else
     TEMP_CLONE="$(mktemp -d)"
     git clone --depth 1 "https://huggingface.co/datasets/opendatalab/OmniDocBench" "$TEMP_CLONE"
     cd "$TEMP_CLONE" && git lfs pull
-    cp -r "$TEMP_CLONE/images" "$TARGET_DIR/" 2>/dev/null || true
-    cp -r "$TEMP_CLONE/ori_pdfs" "$TARGET_DIR/" 2>/dev/null || true
+    cp -r "$TEMP_CLONE/images" "$TARGET_DIR/"
+    cp -r "$TEMP_CLONE/ori_pdfs" "$TARGET_DIR/"
     rm -rf "$TEMP_CLONE"
   else
     echo "ERROR: Need either huggingface-cli or git-lfs to download images."

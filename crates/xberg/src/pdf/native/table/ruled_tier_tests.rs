@@ -16,6 +16,7 @@ fn merge_control_table(label: &str, page: u32, bounding_box: Option<BoundingBox>
         })
         .collect();
     NativeTable {
+        scripts: None,
         table: Table {
             cells,
             page_number: page,

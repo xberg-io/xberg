@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Wasm Constraints
-description: "crates/xberg-wasm build constraints: wasm-target features, sync-only APIs, SyncExtractor, size limits. Use for wasm32 build or runtime failures."
+description: "Diagnose wasm32 builds/runtime: feature limits, sync APIs and size constraints."
 paths:
   - "crates/xberg-wasm/**"
   - "e2e/wasm/**"

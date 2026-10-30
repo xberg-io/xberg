@@ -461,6 +461,8 @@ impl InternalDocumentExtractor for ExcelExtractor {
 
         let security_limits = config.security_limits.clone().unwrap_or_default();
         let (workbook, read_warnings) = crate::extraction::excel::read_excel_file(path_str, &security_limits)?;
+        let mut budget = SecurityBudget::from_config(config);
+        validate_workbook_budget(&workbook, &mut budget)?;
         let mut doc = Self::workbook_to_internal_document(&workbook);
         doc.processing_warnings.extend(read_warnings);
         doc.mime_type = mime_type.to_string();

@@ -608,6 +608,7 @@ fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {
     let rows = table.cells.len() as u32;
     let cols = table.cells.iter().map(|r| r.len()).max().unwrap_or(0) as u32;
 
+    let has_header_row = table.has_header_row();
     let mut cells = Vec::new();
     for (row_idx, row) in table.cells.iter().enumerate() {
         for (col_idx, cell_content) in row.iter().enumerate() {
@@ -621,7 +622,7 @@ fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {
                 col: col_idx as u32,
                 row_span: 1,
                 col_span: 1,
-                is_header: row_idx == 0,
+                is_header: row_idx == 0 && has_header_row,
                 bbox: None,
                 heading_level: style.and_then(|s| s.heading_level),
                 style_name: style.and_then(|s| s.style_name.clone()),
@@ -946,6 +947,8 @@ fn source_format_to_mime_type(format: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
+mod table_header_metadata_tests;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]

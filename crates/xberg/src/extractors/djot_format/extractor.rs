@@ -605,6 +605,9 @@ impl DjotExtractor {
                 }
                 Event::End(Container::Caption) => {
                     in_table_caption = false;
+                    if in_footnote {
+                        footnote_text.push_str(std::mem::take(&mut table_caption).trim());
+                    }
                 }
                 Event::Start(Container::TableRow { .. }, _) => {
                     table_row.clear();

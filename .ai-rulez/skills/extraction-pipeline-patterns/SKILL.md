@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Extraction Pipeline Patterns
-description: "Xberg core extraction orchestration: cache, extractor fallback, post-processing, concurrency, quality invariants. Use for pipeline changes."
+description: "Change extraction orchestration: cache, fallback, processing and concurrency."
 paths:
   - "crates/xberg/src/core/**"
   - "crates/xberg/src/extraction/**"

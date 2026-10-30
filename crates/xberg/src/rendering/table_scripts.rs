@@ -7,7 +7,7 @@ use crate::types::{AnnotationKind, TextAnnotation};
 
 pub(crate) const TABLE_CELL_SCRIPTS_ATTRIBUTE: &str = "xberg:internal:table-cell-scripts";
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CellScriptAnnotation {
     pub row: usize,
     pub col: usize,

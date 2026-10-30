@@ -1,4 +1,6 @@
 setup() {
+	bats_load_library xberg-bats
+	xberg_setup
 	REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
 }
 
@@ -132,6 +134,7 @@ verify_published_ocr_notices() {
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -161,6 +164,11 @@ with tempfile.TemporaryDirectory() as temporary:
         script = script.replace("${{ matrix.target }}", "x86_64-unknown-linux-gnu")
         assert "${{" not in script, title
         work = base / kind
+        helper = work / "scripts/ci/package-notices.py"
+        helper.parent.mkdir(parents=True)
+        shutil.copyfile(root / "scripts/ci/package-notices.py", helper)
+        for name in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
+            shutil.copyfile(root / name, work / name)
         output = work / "build-output"
         output.mkdir(parents=True)
         (output / ("xberg.node" if kind == "npm" else "libxberg_nif.so")).write_bytes(b"staging fixture")

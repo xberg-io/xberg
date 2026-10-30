@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Config Loading Precedence
-description: "How Xberg resolves config: CLI and server/MCP precedence, file walk-up, inline JSON, overrides. Use when adding a setting or one does not take effect."
+description: "Resolve config precedence: CLI, server/MCP, walk-up files, JSON and overrides."
 paths:
   - "crates/xberg/src/core/config/**"
   - "crates/xberg-cli/src/**"

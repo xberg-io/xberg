@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "vendored/**"
       - "crates/**"
       - "packages/dart/rust/**"
       - "packages/swift/rust/**"
@@ -15,7 +16,8 @@ on:
       - ".github/workflows/ci-rust.yaml"
       - "mise.toml"
       - "mise.lock"
-      - ".task/languages/rust.yml"
+      - "mise-tasks/rust.toml"
+      - "mise-tasks/rust/**"
       - "scripts/ci/rust/**"
       - "scripts/ci/install-system-deps/**"
       - ".github/actions/install-system-deps/**"
@@ -74,7 +76,7 @@ jobs:
         with:
           submodules: recursive
 
-      # Broad workspace test surface (task rust:test:ci runs `cargo test --workspace
+      # Broad workspace test surface (mise run rust:test:ci runs `cargo test --workspace
       # --all-features`-equivalent across every crate) -- no single glob prefix is safe
       # to drop, so fetch the full corpus. ~keep
       - name: Fetch test_documents fixtures
@@ -110,14 +112,14 @@ jobs:
         with:
           label: ${{ matrix.os }}
 
-      - name: Install Task
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
 
       - name: Verify system Tesseract dynamic linking
         if: matrix.os == 'ubuntu-latest'
-        run: task rust:check:tesseract-dynamic
+        run: mise run rust:check:tesseract-dynamic
         shell: bash
 
       - name: Run clippy
@@ -171,20 +173,20 @@ jobs:
       # target/. Clear those lint-only artifacts before the equally broad test matrix fills the
       # runner, while keeping unit tests and doctests adjacent so they still share artifacts. ~keep
       - name: Reclaim clippy artifacts
-        run: task rust:clean
+        run: mise run rust:clean
         shell: bash
 
       - name: Verify MIME handling without tree-sitter
-        run: task rust:test:mime
+        run: mise run rust:test:mime
         shell: bash
 
       - name: Verify native VLM auto gate without formula recognition
         if: matrix.os == 'ubuntu-latest'
-        run: task rust:test:vlm-auto-gate
+        run: mise run rust:test:vlm-auto-gate
         shell: bash
 
       - name: Run tests
-        # ~keep `task rust:test:ci` is gated on its exit code alone, which cannot distinguish a
+        # ~keep `mise run rust:test:ci` is gated on its exit code alone, which cannot distinguish a
         # real pass from a run that executed nothing: a feature-gating typo that drops an entire
         # `#[cfg(test)]` module still exits 0. The sibling legs in this file (tract-no-ort,
         # pdfium-engine, the cli feature legs) already assert a nonzero pass count; this is the
@@ -193,7 +195,7 @@ jobs:
         # ~23 test binaries legitimately report "ok. 0 passed", so only the SUM is meaningful.
         run: |
           set -euo pipefail
-          task rust:test:ci 2>&1 | tee /tmp/rust-tests.log
+          mise run rust:test:ci 2>&1 | tee /tmp/rust-tests.log
           # awk, not grep|paste|bc: this job also runs on windows-latest where `bc` is absent,
           # and a no-match `grep` under `set -e` would abort with its own exit 1 before the
           # explicit error below could ever be printed. awk always exits 0 and prints 0. ~keep
@@ -207,13 +209,16 @@ jobs:
           fi
         shell: bash
         env:
+          # ~keep The pass count above anchors at `^test result:`; mise's prefix output mode would
+          # prepend `[rust:test:ci] ` to every line and turn the sum into 0.
+          MISE_TASK_OUTPUT: interleave
           # ~keep Optimize macOS tests to shrink __eh_frame below the compact-unwind table's 16 MB offset limit.
           CARGO_PROFILE_TEST_OPT_LEVEL: "${{ runner.os == 'macOS' && '1' || '0' }}"
           LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH || '' }}
           DYLD_LIBRARY_PATH: ${{ env.DYLD_LIBRARY_PATH || '' }}
           DYLD_FALLBACK_LIBRARY_PATH: ${{ env.DYLD_FALLBACK_LIBRARY_PATH || '' }}
 
-      # `task rust:test:ci` passes `--all-targets`, which runs --lib/--bins/--tests/
+      # `mise run rust:test:ci` passes `--all-targets`, which runs --lib/--bins/--tests/
       # --examples/--benches but deliberately EXCLUDES `--doc`. That left every rustdoc
       # example in `-p xberg` with zero CI coverage, so they rotted into ~25 compile
       # failures before anyone noticed (#313). This is the leg that catches that.
@@ -599,20 +604,20 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets
         shell: bash
 
-      - name: Install Task
+      - name: Install mise
         if: matrix.name == 'email' || matrix.name == 'xml' || matrix.name == 'hwpx'
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
 
       - name: Clippy email without Tokio
         if: matrix.name == 'email'
-        run: task rust:lint:email
+        run: mise run rust:lint:email
         shell: bash
 
       - name: Clippy standalone library feature
         if: matrix.name == 'xml' || matrix.name == 'hwpx'
-        run: task rust:lint:feature FEATURE="${{ matrix.features }}"
+        run: mise run rust:lint:feature "${{ matrix.features }}"
         shell: bash
 
   # GH#2085: chunking cost must stay linear in document size. The `chunking_pipeline` tests
@@ -790,7 +795,7 @@ jobs:
   # executed CI coverage. Its regression test,
   # `pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available`, is gated
   # `#[cfg(all(feature = "pdf", feature = "pdf-pdfium"))]`, and `pdf-pdfium` is enabled by no
-  # feature set any job in this file (or `task rust:test:ci`) builds -- not even `full` -- so
+  # feature set any job in this file (or `mise run rust:test:ci`) builds -- not even `full` -- so
   # the test has never once compiled, let alone run. On top of that, the test itself
   # soft-passes (returns early reporting success) whenever `bind_once()` cannot load a real
   # `libpdfium`, which is true on every runner today because nothing provisions the library.

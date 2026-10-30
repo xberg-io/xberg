@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "vendored/**"
       - "crates/xberg/**"
       - "crates/xberg-native-pdf/**"
       - "crates/xberg-ffi/**"
@@ -18,6 +19,9 @@ on:
       - "packages/kotlin-android/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "alef.toml"
+      - "scripts/ci/check-mobile-features.py"
+      - "scripts/ci/test_check_mobile_features.py"
       - ".github/workflows/ci-mobile.yaml"
   workflow_dispatch:
 
@@ -50,7 +54,9 @@ jobs:
       - uses: xberg-io/actions/setup-rust@v1
         with:
           cache-key-prefix: ci-mobile-android-${{ matrix.abi }}
-          use-sccache: "true"
+          # GitHub cache startup returns HTTP 503 for x86_64; compile directly until the shared fallback ships. ~keep
+          use-sccache: ${{ matrix.abi != 'x86_64' }}
+      # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - uses: xberg-io/actions/setup-android-ndk@v1
       - name: cargo ndk check xberg-dart
         run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p xberg-dart --no-default-features --features android-target
@@ -73,6 +79,10 @@ jobs:
           target: ${{ matrix.target }}
           cache-key-prefix: ci-mobile-ios-${{ matrix.target }}
           use-sccache: "true"
+      - name: Verify ORT-free mobile feature graphs
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_check_mobile_features.py
+          python3 scripts/ci/check-mobile-features.py --target ${{ matrix.target }}
       - name: cargo check xberg-dart
         run: cargo check --locked -p xberg-dart --target ${{ matrix.target }}
       - name: cargo check xberg-swift

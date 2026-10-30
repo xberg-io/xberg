@@ -48,6 +48,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref_name }}
           submodules: recursive
 
+      # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
       - uses: dart-lang/setup-dart@v1
 
       - uses: xberg-io/actions/publish-pub@v1

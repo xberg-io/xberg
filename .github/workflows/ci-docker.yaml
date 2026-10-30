@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "vendored/**"
       - "docker/**"
       - "scripts/ci/docker/**"
       - "scripts/test/test-docker-config-local.sh"

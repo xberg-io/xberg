@@ -63,6 +63,7 @@ RUN mkdir -p /build/.cargo && { \
     } > /build/.cargo/config.toml && cat /build/.cargo/config.toml
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-cli/ crates/xberg-cli/

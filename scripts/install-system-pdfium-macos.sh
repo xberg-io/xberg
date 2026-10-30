@@ -117,13 +117,20 @@ install_library() {
     sudo_prefix="sudo"
   fi
 
+  local installed=0
   for lib_file in "$lib_src"/*.dylib*; do
     if [[ -f "$lib_file" ]]; then
       log_info "  Installing $(basename "$lib_file")"
       $sudo_prefix cp "$lib_file" "$prefix/lib/"
       $sudo_prefix chmod 0755 "$prefix/lib/$(basename "$lib_file")"
+      installed=$((installed + 1))
     fi
   done
+
+  if [[ "$installed" -eq 0 ]]; then
+    log_error "No PDFium shared libraries found in archive"
+    exit 1
+  fi
 
   log_info "Library installation complete"
 }
@@ -146,7 +153,7 @@ install_headers() {
     sudo_prefix="sudo"
   fi
 
-  $sudo_prefix cp -r "$headers_src"/* "$prefix/include/pdfium/" 2>/dev/null || true
+  $sudo_prefix cp -r "$headers_src"/* "$prefix/include/pdfium/"
 
   log_info "Header installation complete"
 }
@@ -208,7 +215,7 @@ verify_installation() {
 
   if command -v pkg-config &>/dev/null; then
     log_info "Verifying with pkg-config..."
-    if PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$PKG_CONFIG_PATH" pkg-config --modversion pdfium 2>/dev/null; then
+    if PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}" pkg-config --modversion pdfium 2>/dev/null; then
       log_info "✓ pkg-config verification successful"
     else
       log_warn "pkg-config could not find pdfium. You may need to set PKG_CONFIG_PATH:"
@@ -245,7 +252,7 @@ print_summary() {
   echo
 }
 
-main() {
+main() (
   log_info "PDFium System Installation Script for macOS"
   log_info "============================================"
   echo
@@ -272,6 +279,6 @@ main() {
   verify_installation "$PREFIX" "$PDFIUM_VERSION"
 
   print_summary "$PREFIX" "$PDFIUM_VERSION" "$arch"
-}
+)
 
 main "$@"

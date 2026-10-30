@@ -163,5 +163,10 @@ if [ ! -d "$platform_npm_dir" ]; then
   exit 1
 fi
 
+NOTICE_TOOL="$(cd "$(dirname "$0")/../../ci" && pwd)/package-notices.py"
+python3 "$NOTICE_TOOL" stage "$platform_npm_dir"
+
 echo "Creating tarball with platform directory: $platform_dir"
 tar -czf "node-bindings-${target}.tar.gz" -C crates/xberg-node/npm "${platform_dir}"
+
+python3 "$NOTICE_TOOL" verify "node-bindings-${target}.tar.gz" "$platform_dir"

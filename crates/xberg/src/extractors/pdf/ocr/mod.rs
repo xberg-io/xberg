@@ -67,7 +67,7 @@ pub(crate) use rendering::render_selected_pages_for_ocr;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use document::{
-    boundaries_after_replacements, merge_ocr_pages_into_internal_document,
+    boundaries_after_replacements, clean_native_page_layers, merge_ocr_pages_into_internal_document,
     merge_structured_ocr_pages_into_internal_document,
 };
 
@@ -101,9 +101,13 @@ mod numeric_repair_tests;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
 mod page_failure_cause_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod photo_layer_tests;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod plausibility_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod recognition_noise_tests;
+#[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
+mod security_limits_tests;
 #[cfg(all(test, feature = "tokio-runtime", feature = "ocr"))]
 mod sideways_retry_tests;
 #[cfg(all(test, feature = "ocr"))]

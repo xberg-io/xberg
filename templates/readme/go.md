@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/xberg-io/assets@v1/banner/readme-banner-dark.svg">
+    <img alt="Xberg" width="420" src="https://cdn.jsdelivr.net/gh/xberg-io/assets@v1/banner/readme-banner-light.svg">
+  </picture>
+</p>
+
 # Xberg
 
 {% include 'partials/badges.html.jinja' %}
@@ -302,9 +309,7 @@ func init() {
 
 ## Testing / Tooling
 
-- `task go:lint` – runs `gofmt` and `golangci-lint` (`golangci-lint` pinned to v2.11.3).
-- `task go:test` – executes `go test ./...` (after building the static FFI library).
-- `task e2e:go:verify` – regenerates fixtures via the e2e generator and runs `go test ./...` inside `e2e/go`.
+- `mise run go:e2e` – builds xberg-ffi and runs the generated e2e suite in `e2e/go`.
 
 Need help? Join the [Discord](https://discord.gg/xt9WY3GnKR) or open an issue with logs, platform info, and the steps you tried.
 

@@ -19,7 +19,7 @@ BUILT_EXT=$(cd "$(dirname "$BUILT_EXT")" && pwd)/$(basename "$BUILT_EXT")
 
 BASENAME=$(basename "$BUILT_EXT")
 TARGET="$EXT_DIR/$BASENAME"
-cp "$BUILT_EXT" "$TARGET" 2>/dev/null || true
+cp "$BUILT_EXT" "$TARGET"
 echo "Extension copied/verified: $TARGET"
 
 cat >php.ini <<EOF

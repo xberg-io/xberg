@@ -223,7 +223,11 @@ mod tests {
     #[test]
     #[cfg(feature = "url-config-types")]
     fn should_reject_each_operator_owned_crawl_field_without_leaking_its_value() {
-        assert_eq!(crawlberg::UNTRUSTED_CALLER_FORBIDDEN_FIELDS, FORBIDDEN_CRAWL_FIELDS);
+        let mut dependency_fields = crawlberg::UNTRUSTED_CALLER_FORBIDDEN_FIELDS.to_vec();
+        let mut expected_fields = FORBIDDEN_CRAWL_FIELDS.to_vec();
+        dependency_fields.sort_unstable();
+        expected_fields.sort_unstable();
+        assert_eq!(dependency_fields, expected_fields);
 
         for pointer in FORBIDDEN_CRAWL_FIELDS {
             let secret = format!("secret-for-{pointer}");

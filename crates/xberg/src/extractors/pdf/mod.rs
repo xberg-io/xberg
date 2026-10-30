@@ -1983,7 +1983,7 @@ async fn recognize_pdf_formula_regions(
 
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
 async fn recognize_pdf_formula_page_inputs(
-    ocr_doc: Option<&mut crate::types::internal::InternalDocument>,
+    mut ocr_doc: Option<&mut crate::types::internal::InternalDocument>,
     formulas: &mut Vec<crate::types::Formula>,
     inputs: &FormulaPageInputs<'_>,
     layout: &crate::core::config::LayoutDetectionConfig,
@@ -1995,7 +1995,7 @@ async fn recognize_pdf_formula_page_inputs(
     let page_count = inputs.page_count;
     let mut element_slots: Vec<Vec<(Option<crate::types::BoundingBox>, &mut String)>> =
         (0..page_count).map(|_| Vec::new()).collect();
-    if let Some(doc) = ocr_doc {
+    if let Some(doc) = ocr_doc.as_deref_mut() {
         for element in doc.elements.iter_mut() {
             if matches!(element.kind, crate::types::internal::ElementKind::Formula)
                 && let Some(page) = element.page
@@ -2005,6 +2005,7 @@ async fn recognize_pdf_formula_page_inputs(
             }
         }
     }
+    let mut missing_elements = Vec::new();
     // Page MediaBox sizes, parsed once on first need (geometric pairing or a
     // synthesized bbox); fully positional pages never pay for the parse.
     let mut page_sizes_pt: Option<Option<Vec<(f32, f32)>>> = None;
@@ -2100,24 +2101,39 @@ async fn recognize_pdf_formula_page_inputs(
                 let crop = image::imageops::crop_imm(rgb, x, y, w, h).to_image();
                 match crate::formula_recognition::recognize_crop_blocking(crop, layout.acceleration.clone()).await {
                     Ok(Some(latex)) => {
-                        let mut replaced = false;
-                        if let Some(slot) = formula_assign[region_idx].and_then(|i| formula_slots.get_mut(i)) {
-                            slot.latex = latex.clone();
-                            replaced = true;
-                        }
-                        if let Some(entry) = element_assign[region_idx].and_then(|i| elements.get_mut(i)) {
-                            *entry.1 = latex.clone();
-                            replaced = true;
-                        }
-                        if !replaced && allow_synthesis {
-                            let bbox = regions_pts.as_ref().map(|pts| pts[region_idx]).unwrap_or_else(|| {
-                                crate::types::BoundingBox {
+                        let formula_slot = formula_assign[region_idx].and_then(|i| formula_slots.get_mut(i));
+                        let element_slot = element_assign[region_idx].and_then(|i| elements.get_mut(i));
+                        let bbox = formula_slot.as_ref().and_then(|slot| slot.bbox).unwrap_or_else(|| {
+                            regions_pts
+                                .as_ref()
+                                .map(|pts| pts[region_idx])
+                                .unwrap_or(crate::types::BoundingBox {
                                     x0: f64::from(x),
                                     y0: f64::from(y),
                                     x1: f64::from(x + w),
                                     y1: f64::from(y + h),
-                                }
-                            });
+                                })
+                        });
+                        if element_slot.is_none() && (formula_slot.is_some() || allow_synthesis) {
+                            missing_elements.push((
+                                crate::types::Formula {
+                                    latex: latex.clone(),
+                                    bbox: Some(bbox),
+                                    page: Some(page_number),
+                                },
+                                regions_pts.is_some(),
+                            ));
+                        }
+                        let mut replaced = false;
+                        if let Some(slot) = formula_slot {
+                            slot.latex = latex.clone();
+                            replaced = true;
+                        }
+                        if let Some(entry) = element_slot {
+                            *entry.1 = latex.clone();
+                            replaced = true;
+                        }
+                        if !replaced && allow_synthesis {
                             synthesized.push(crate::types::Formula {
                                 latex,
                                 bbox: Some(bbox),
@@ -2141,6 +2157,180 @@ async fn recognize_pdf_formula_page_inputs(
             formulas.extend(synthesized);
         }
     }
+    drop(element_slots);
+    if let Some(doc) = ocr_doc {
+        insert_missing_formula_elements(doc, missing_elements);
+    }
+}
+
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+fn insert_missing_formula_elements(doc: &mut InternalDocument, missing_elements: Vec<(crate::types::Formula, bool)>) {
+    let mut deferred_ids = std::collections::HashSet::new();
+    for (formula, has_point_geometry) in missing_elements {
+        insert_recognized_formula_element(doc, formula, has_point_geometry, &mut deferred_ids);
+    }
+}
+
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+fn insert_recognized_formula_element(
+    doc: &mut InternalDocument,
+    formula: crate::types::Formula,
+    has_point_geometry: bool,
+    deferred_ids: &mut std::collections::HashSet<crate::types::internal::InternalElementId>,
+) {
+    let mut at = doc.elements.len();
+    for (index, element) in doc.elements.iter().enumerate() {
+        if element.page > formula.page
+            || (has_point_geometry
+                && element.page == formula.page
+                && element
+                    .bbox
+                    .zip(formula.bbox)
+                    .is_some_and(|(existing, recognized)| existing.y1 < recognized.y0))
+        {
+            at = index;
+            break;
+        }
+    }
+    let before_later_page = doc.elements.get(at).is_some_and(|element| element.page > formula.page);
+    // ~keep New root-level math must precede unopened containers without splitting their first member from the start.
+    while at > 0
+        && doc.elements[at - 1].kind.is_container_start()
+        && (doc.elements[at - 1].page.is_none() || doc.elements[at - 1].page >= formula.page)
+    {
+        at -= 1;
+    }
+    // ~keep Cross a following page's boundary only for earlier-page math; same-page math stays after its boundary.
+    if before_later_page {
+        while at > 0 && matches!(doc.elements[at - 1].kind, ElementKind::PageBreak) {
+            at -= 1;
+        }
+    }
+    let Some(safe_at) = formula_container_boundary(doc, at, formula.page) else {
+        doc.processing_warnings.push(crate::types::ProcessingWarning {
+            source: std::borrow::Cow::Borrowed("formula_recognition"),
+            message: std::borrow::Cow::Owned(format!(
+                "recognized formula on page {} retained in side channel; body insertion declined because no safe same-page container boundary exists",
+                formula.page.unwrap_or(0),
+            )),
+        });
+        return;
+    };
+    let is_deferred = safe_at > at;
+    if is_deferred {
+        // ~keep Only formulas deferred by this batch share its insertion cursor; original following math stays after them.
+        at = safe_at;
+        while doc.elements.get(at).is_some_and(|element| {
+            matches!(element.kind, ElementKind::Formula)
+                && element.page == formula.page
+                && deferred_ids.contains(&element.id)
+        }) {
+            at += 1;
+        }
+    } else {
+        at = safe_at;
+    }
+    let first_on_page = !doc.elements.iter().any(|element| element.page == formula.page);
+    if first_on_page && at > 0 && !matches!(doc.elements[at - 1].kind, ElementKind::PageBreak) {
+        insert_formula_document_element(doc, at, InternalElement::text(ElementKind::PageBreak, "", 0));
+        at += 1;
+    }
+    let mut element = InternalElement::text(ElementKind::Formula, formula.latex, 0);
+    element.page = formula.page;
+    element.bbox = formula.bbox;
+    insert_formula_document_element(doc, at, element);
+    if is_deferred {
+        deferred_ids.insert(doc.elements[at].id.clone());
+    }
+    if first_on_page
+        && doc
+            .elements
+            .get(at + 1)
+            .is_some_and(|next| !matches!(next.kind, ElementKind::PageBreak))
+    {
+        insert_formula_document_element(doc, at + 1, InternalElement::text(ElementKind::PageBreak, "", 0));
+    }
+}
+
+// ~keep Detection geometry cannot assign list-item ownership. Defer standalone math until all open containers close.
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+fn formula_container_boundary(doc: &InternalDocument, at: usize, page: Option<u32>) -> Option<usize> {
+    let mut open = Vec::new();
+    for element in &doc.elements[..at] {
+        update_formula_container_stack(&mut open, element.kind);
+    }
+    if open.is_empty() {
+        return Some(at);
+    }
+    for (offset, element) in doc.elements[at..].iter().enumerate() {
+        if matches!(element.kind, ElementKind::PageBreak)
+            || element.page.is_some_and(|element_page| Some(element_page) != page)
+        {
+            return None;
+        }
+        update_formula_container_stack(&mut open, element.kind);
+        if open.is_empty() {
+            return Some(at + offset + 1);
+        }
+    }
+    None
+}
+
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+fn update_formula_container_stack(open: &mut Vec<ElementKind>, kind: ElementKind) {
+    if kind.is_container_start() {
+        open.push(kind);
+    } else if let Some(position) = open.iter().rposition(|start| {
+        matches!(
+            (start, kind),
+            (ElementKind::ListStart { .. }, ElementKind::ListEnd)
+                | (ElementKind::QuoteStart, ElementKind::QuoteEnd)
+                | (ElementKind::GroupStart, ElementKind::GroupEnd)
+        )
+    }) {
+        open.truncate(position);
+    }
+}
+
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+fn insert_formula_document_element(doc: &mut InternalDocument, at: usize, mut element: InternalElement) {
+    // ~keep Insertion positions can be reused after shifts; allocate a fresh identity without renumbering old IDs.
+    let mut identity_index = doc.elements.len() as u32;
+    loop {
+        element.id = crate::types::internal::InternalElementId::generate(
+            element.kind.discriminant(),
+            &element.text,
+            element.page,
+            identity_index,
+        );
+        if doc.elements.iter().all(|existing| existing.id != element.id) {
+            break;
+        }
+        identity_index = identity_index.wrapping_add(1);
+    }
+    // ~keep Preserve stable element IDs while moving positional relationship endpoints with their elements.
+    for relationship in &mut doc.relationships {
+        if relationship.source >= at as u32 {
+            relationship.source += 1;
+        }
+        if let crate::types::internal::RelationshipTarget::Index(target) = &mut relationship.target
+            && *target >= at as u32
+        {
+            *target += 1;
+        }
+    }
+    doc.elements.insert(at, element);
+}
+
+#[cfg(all(test, feature = "formula-recognition", feature = "layout-detection"))]
+pub(crate) async fn recognize_formula_regions_for_test(
+    doc: &mut InternalDocument,
+    formulas: &mut Vec<crate::types::Formula>,
+    images: &[image::RgbImage],
+    detections: &[crate::layout::DetectionResult],
+    layout: &crate::core::config::LayoutDetectionConfig,
+) {
+    recognize_pdf_formula_regions(Some(doc), formulas, images, detections, layout, &[]).await;
 }
 
 /// Whether the caller actually asked for the recovered diagram, i.e. the
@@ -2233,7 +2423,38 @@ fn automatic_unmapped_text_hints(metadata: &crate::pdf::metadata::PdfExtractionM
         source_dpi: None,
         known_full_page_scan: false,
         single_block_pages: Some(std::sync::Arc::new(pages.iter().copied().collect())),
+        native_page_layers: None,
     })
+}
+
+/// Hints for the whole-document OCR fallback: the fabricated-text pages, plus the readable text
+/// layer of each page, so a page whose OCR text is judged recognition noise keeps its layer.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn whole_document_ocr_hints(
+    metadata: &crate::pdf::metadata::PdfExtractionMetadata,
+    native_text: &str,
+    boundaries: Option<&[crate::types::PageBoundary]>,
+    config: &ExtractionConfig,
+) -> Option<ocr::PageOcrHints> {
+    let thresholds = config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.quality_thresholds.clone())
+        .unwrap_or_default();
+    let layers = ocr::clean_native_page_layers(native_text, boundaries.unwrap_or(&[]), None, &thresholds);
+    let layers = (!layers.is_empty()).then(|| std::sync::Arc::new(layers));
+    let mut hints = automatic_unmapped_text_hints(metadata);
+    if layers.is_some() {
+        hints
+            .get_or_insert_with(|| ocr::PageOcrHints {
+                source_dpi: None,
+                known_full_page_scan: false,
+                single_block_pages: None,
+                native_page_layers: None,
+            })
+            .native_page_layers = layers;
+    }
+    hints
 }
 
 /// PDF document extractor using xberg_native_pdf.
@@ -2990,7 +3211,7 @@ impl PdfExtractor {
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
-                            hints: automatic_unmapped_text_hints(&pdf_metadata),
+                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
                         },
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_images.take(),
@@ -3807,6 +4028,383 @@ mod tests {
     use crate::core::config::OcrQualityThresholds;
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     use serial_test::serial;
+
+    #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+    mod formula_insertion_tests {
+        use super::*;
+        use crate::core::config::OutputFormat;
+        use crate::types::document_structure::NodeContent;
+        use crate::types::internal::{Relationship, RelationshipKind, RelationshipTarget};
+
+        fn paragraph(text: &str, page: u32) -> InternalElement {
+            let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_page(page);
+            element.bbox = Some(crate::types::BoundingBox {
+                x0: 0.0,
+                y0: 100.0,
+                x1: 100.0,
+                y1: 150.0,
+            });
+            element
+        }
+
+        fn formula(page: u32) -> crate::types::Formula {
+            crate::types::Formula {
+                latex: "x^{2}+1".to_string(),
+                page: Some(page),
+                bbox: Some(crate::types::BoundingBox {
+                    x0: 0.0,
+                    y0: 200.0,
+                    x1: 100.0,
+                    y1: 250.0,
+                }),
+            }
+        }
+
+        #[test]
+        fn consecutive_empty_pages_keep_all_element_ids_unique() {
+            let mut doc = InternalDocument::new("pdf");
+            doc.push_element(paragraph("Source on third page", 3));
+            doc.push_element(paragraph("Target on third page", 3));
+            let old_ids: Vec<_> = doc.elements.iter().map(|element| element.id.clone()).collect();
+            doc.push_relationship(Relationship {
+                source: 0,
+                target: RelationshipTarget::Index(1),
+                kind: RelationshipKind::CrossReference,
+            });
+            insert_missing_formula_elements(&mut doc, vec![(formula(1), true), (formula(2), true)]);
+            let retained: Vec<_> = doc
+                .elements
+                .iter()
+                .filter(|element| element.page == Some(3))
+                .map(|element| element.id.clone())
+                .collect();
+            assert_eq!(retained, old_ids);
+            let relationship = &doc.relationships[0];
+            assert_eq!(doc.elements[relationship.source as usize].id, old_ids[0]);
+            let RelationshipTarget::Index(target) = relationship.target else {
+                panic!("indexed target")
+            };
+            assert_eq!(doc.elements[target as usize].id, old_ids[1]);
+            let unique: std::collections::BTreeSet<_> =
+                doc.elements.iter().map(|element| element.id.to_string()).collect();
+            assert_eq!(
+                unique.len(),
+                doc.elements.len(),
+                "new page boundaries must have unique IDs"
+            );
+        }
+
+        #[test]
+        fn formula_above_first_page_element_stays_after_its_page_break() {
+            let mut doc = InternalDocument::new("pdf");
+            doc.push_element(paragraph("First page prose", 1));
+            doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 0));
+            doc.push_element(paragraph("Second page prose", 2));
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            let result = crate::extraction::derive::derive_extraction_result(doc, true, OutputFormat::DocTags);
+            let rendered = result.formatted_content.as_deref().expect("rendered DocTags");
+            let boundary = rendered.find("<page_break>").expect("existing page boundary");
+            let math = rendered.find("<formula>").expect("recognized formula");
+            assert!(
+                boundary < math,
+                "DocTags must put page-two math after the page boundary: {}",
+                rendered
+            );
+            assert_eq!(rendered.matches("<page_break>").count(), 1);
+            let structure = result.document.expect("derived structure");
+            let boundary = structure
+                .nodes
+                .iter()
+                .position(|node| matches!(node.content, NodeContent::PageBreak))
+                .unwrap();
+            let math = structure
+                .nodes
+                .iter()
+                .position(|node| matches!(node.content, NodeContent::Formula { .. }))
+                .unwrap();
+            assert!(boundary < math);
+            assert_eq!(structure.nodes[math].page, Some(2));
+            assert!(rendered.contains("Second page prose"));
+        }
+
+        fn list_document(start_page: Option<u32>, first_item_above_math: bool, ordered: bool) -> InternalDocument {
+            let mut doc = InternalDocument::new("pdf");
+            doc.push_element(paragraph("First page prose", 1));
+            doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 0));
+            let mut start = InternalElement::text(ElementKind::ListStart { ordered }, "", 0);
+            start.page = start_page;
+            doc.push_element(start);
+            for (index, text) in ["First retained item", "Second retained item"].into_iter().enumerate() {
+                let mut item = paragraph(text, 2);
+                item.kind = ElementKind::ListItem { ordered };
+                item.depth = 1;
+                if index == 0 && first_item_above_math {
+                    item.bbox = Some(crate::types::BoundingBox {
+                        x0: 0.0,
+                        y0: 300.0,
+                        x1: 100.0,
+                        y1: 350.0,
+                    });
+                }
+                doc.push_element(item);
+            }
+            doc.push_element(InternalElement::text(ElementKind::ListEnd, "", 0));
+            doc
+        }
+
+        fn assert_formula_list_integrity(doc: InternalDocument, math_after_list: bool, ordered: bool) {
+            let result = crate::extraction::derive::derive_extraction_result(doc, true, OutputFormat::Markdown);
+            let rendered = result.formatted_content.as_deref().expect("rendered Markdown");
+            let first = rendered.find("First retained item").expect("first item retained");
+            let second = rendered.find("Second retained item").expect("second item retained");
+            let math = rendered.find("x^{2}+1").expect("math retained");
+            assert_eq!(
+                first < math,
+                math_after_list,
+                "container-boundary placement: {rendered}"
+            );
+            assert!(first < second, "existing item order must be retained: {rendered}");
+            assert_eq!(
+                second < math,
+                math_after_list,
+                "math must stay outside the intact list: {rendered}"
+            );
+            if ordered {
+                assert!(
+                    rendered.contains("1. First retained item"),
+                    "first ordinal retained: {rendered}"
+                );
+                assert!(
+                    rendered.contains("2. Second retained item"),
+                    "second ordinal retained: {rendered}"
+                );
+            }
+            let structure = result.document.expect("derived structure");
+            let items: Vec<_> = structure
+                .nodes
+                .iter()
+                .filter(|node| matches!(node.content, NodeContent::ListItem { .. }))
+                .collect();
+            assert_eq!(items.len(), 2);
+            for item in items {
+                let parent = item.parent.expect("every original item retains a list parent");
+                assert!(matches!(
+                    structure.nodes[parent.0 as usize].content,
+                    NodeContent::List { .. }
+                ));
+            }
+            let math = structure
+                .nodes
+                .iter()
+                .find(|node| matches!(node.content, NodeContent::Formula { .. }))
+                .unwrap();
+            assert_eq!(
+                math.parent, None,
+                "no source evidence assigns standalone detected math to a list item"
+            );
+            assert_eq!(
+                structure
+                    .nodes
+                    .iter()
+                    .filter(|node| matches!(node.content, NodeContent::List { .. }))
+                    .count(),
+                1,
+                "the original list must not be split"
+            );
+            for list in structure
+                .nodes
+                .iter()
+                .filter(|node| matches!(node.content, NodeContent::List { .. }))
+            {
+                assert!(!list.children.is_empty(), "the original list must retain its children");
+                assert!(
+                    list.children
+                        .iter()
+                        .all(|index| matches!(structure.nodes[index.0 as usize].content, NodeContent::ListItem { .. }))
+                );
+            }
+        }
+
+        #[test]
+        fn formula_between_list_items_preserves_both_items_container_ownership() {
+            let mut doc = list_document(None, true, false);
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            assert_formula_list_integrity(doc, true, false);
+        }
+
+        #[test]
+        fn formula_above_page_attributed_list_start_keeps_container_ownership() {
+            let mut doc = list_document(Some(2), false, false);
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            assert_formula_list_integrity(doc, false, false);
+        }
+
+        #[test]
+        fn formula_between_ordered_items_preserves_single_list_and_numbering() {
+            let mut doc = list_document(Some(2), true, true);
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            assert_formula_list_integrity(doc, true, true);
+        }
+
+        #[test]
+        fn formulas_deferred_after_one_container_keep_recognition_order() {
+            let mut doc = list_document(Some(2), true, true);
+            let first = formula(2);
+            let mut second = formula(2);
+            second.latex = "y^{2}+1".to_string();
+            second.bbox = Some(crate::types::BoundingBox {
+                x0: 0.0,
+                y0: 160.0,
+                x1: 100.0,
+                y1: 190.0,
+            });
+            doc.formulas = vec![first.clone(), second.clone()];
+            let side_channel = serde_json::to_value(&doc.formulas).unwrap();
+            insert_missing_formula_elements(&mut doc, vec![(first, true), (second, true)]);
+            assert_eq!(serde_json::to_value(&doc.formulas).unwrap(), side_channel);
+            assert_formula_list_integrity(doc.clone(), true, true);
+            let result = crate::extraction::derive::derive_extraction_result(doc, true, OutputFormat::Markdown);
+            assert_eq!(serde_json::to_value(&result.formulas).unwrap(), side_channel);
+            let rendered = result.formatted_content.as_deref().expect("rendered Markdown");
+            let first = rendered.find("x^{2}+1").expect("first recognized formula");
+            let second = rendered.find("y^{2}+1").expect("second recognized formula");
+            assert!(
+                first < second,
+                "shared-boundary insertion must retain recognition order: {rendered}"
+            );
+            let structure = result.document.expect("derived structure");
+            let formulas: Vec<_> = structure
+                .nodes
+                .iter()
+                .filter_map(|node| match &node.content {
+                    NodeContent::Formula { text } => {
+                        assert_eq!(node.parent, None);
+                        assert_eq!(node.page, Some(2));
+                        Some(text.as_str())
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(formulas, ["x^{2}+1", "y^{2}+1"]);
+        }
+
+        #[test]
+        fn deferred_formula_batch_keeps_original_following_formula_after_new_math() {
+            let mut doc = list_document(Some(2), true, true);
+            let mut original = InternalElement::text(ElementKind::Formula, "c^{2}+1", 0).with_page(2);
+            original.bbox = Some(crate::types::BoundingBox {
+                x0: 0.0,
+                y0: 0.0,
+                x1: 100.0,
+                y1: 50.0,
+            });
+            let original_id = original.id.clone();
+            doc.push_element(original);
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            assert_formula_list_integrity(doc.clone(), true, true);
+            assert_eq!(
+                doc.elements
+                    .iter()
+                    .find(|element| element.text == "c^{2}+1")
+                    .unwrap()
+                    .id,
+                original_id
+            );
+            let result = crate::extraction::derive::derive_extraction_result(doc, true, OutputFormat::Markdown);
+            let rendered = result.formatted_content.as_deref().expect("rendered Markdown");
+            let recognized = rendered.find("x^{2}+1").expect("new recognized formula");
+            let original = rendered.find("c^{2}+1").expect("original formula");
+            assert!(
+                recognized < original,
+                "deferral must not jump over original following math: {rendered}"
+            );
+            let structure = result.document.expect("derived structure");
+            let formulas: Vec<_> = structure
+                .nodes
+                .iter()
+                .filter_map(|node| match &node.content {
+                    NodeContent::Formula { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(formulas, ["x^{2}+1", "c^{2}+1"]);
+        }
+
+        #[test]
+        fn formula_inside_cross_page_container_keeps_sidechannel_and_body_unchanged() {
+            let mut doc = list_document(Some(2), true, false);
+            doc.elements[4].page = Some(3);
+            doc.elements
+                .insert(4, InternalElement::text(ElementKind::PageBreak, "", 0));
+            doc.formulas.push(formula(2));
+            doc.push_relationship(Relationship {
+                source: 3,
+                target: RelationshipTarget::Index(5),
+                kind: RelationshipKind::CrossReference,
+            });
+            let old_elements = serde_json::to_value(&doc.elements).unwrap();
+            let old_relationships = doc.relationships.clone();
+            let old_formulas = serde_json::to_value(&doc.formulas).unwrap();
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            assert_eq!(
+                serde_json::to_value(&doc.elements).unwrap(),
+                old_elements,
+                "ambiguous cross-page ownership must not alter body, IDs, or geometry"
+            );
+            assert_eq!(doc.relationships, old_relationships);
+            assert_eq!(serde_json::to_value(&doc.formulas).unwrap(), old_formulas);
+            assert_eq!(doc.processing_warnings.len(), 1);
+            assert_eq!(doc.processing_warnings[0].source, "formula_recognition");
+            assert!(
+                doc.processing_warnings[0]
+                    .message
+                    .contains("same-page container boundary")
+            );
+        }
+
+        #[test]
+        fn formula_before_first_list_item_stays_outside_the_list() {
+            let mut doc = InternalDocument::new("pdf");
+            doc.push_element(paragraph("First page prose", 1));
+            doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 0));
+            doc.push_element(InternalElement::text(ElementKind::ListStart { ordered: false }, "", 0));
+            for text in ["First retained item", "Second retained item"] {
+                let mut item = paragraph(text, 2);
+                item.kind = ElementKind::ListItem { ordered: false };
+                item.depth = 1;
+                doc.push_element(item);
+            }
+            doc.push_element(InternalElement::text(ElementKind::ListEnd, "", 0));
+            insert_missing_formula_elements(&mut doc, vec![(formula(2), true)]);
+            let result = crate::extraction::derive::derive_extraction_result(doc, true, OutputFormat::Markdown);
+            let rendered = result.formatted_content.as_deref().expect("rendered Markdown");
+            let math = rendered.find("x^{2}+1").expect("rendered math");
+            assert!(math < rendered.find("- First retained item").expect("first list item"));
+            assert!(
+                rendered.contains("- Second retained item"),
+                "both items must remain in the list: {}",
+                rendered
+            );
+            let structure = result.document.expect("derived structure");
+            let math = structure
+                .nodes
+                .iter()
+                .find(|node| matches!(node.content, NodeContent::Formula { .. }))
+                .unwrap();
+            assert_eq!(math.parent, None);
+            let list = structure
+                .nodes
+                .iter()
+                .find(|node| matches!(node.content, NodeContent::List { .. }))
+                .unwrap();
+            assert_eq!(list.children.len(), 2, "the existing list must retain both children");
+            assert!(
+                list.children
+                    .iter()
+                    .all(|index| matches!(structure.nodes[index.0 as usize].content, NodeContent::ListItem { .. }))
+            );
+        }
+    }
 
     #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[tokio::test(flavor = "current_thread")]

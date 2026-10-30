@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import 'frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
@@ -17,22 +18,6 @@ Future<ExtractionResult> extract({
   required ExtractInput input,
   required ExtractionConfig config,
 }) => RustLib.instance.api.crateExtract(input: input, config: config);
-
-/// Extract one PDF bytes input with layout inference restricted to explicit 1-based pages.
-///
-/// This call enables layout on the native PDF route even when ordinary extraction leaves it disabled.
-/// Selected pages override the automatic layout gate; an empty list skips layout inference.
-/// Invalid pages are ignored with processing warnings. Both extraction caches are bypassed.
-/// This additive entry point leaves existing extraction configuration structs unchanged.
-Future<ExtractionResult> extractWithLayoutPages({
-  required ExtractInput input,
-  required ExtractionConfig config,
-  required Int64List pages,
-}) => RustLib.instance.api.crateExtractWithLayoutPages(
-  input: input,
-  config: config,
-  pages: pages,
-);
 
 /// Extract one bytes input and redact a JSON array or JSON Lines payload from an external inspection engine.
 ///
@@ -18702,11 +18687,11 @@ class Table {
   /// serialises exactly as it did before. Indices are into `cells`.
   final List<TableCellStyle> cellStyles;
 
-  /// Header cells for this fragment, i.e. the first row of `cells`.
+  /// Declared column header labels for this fragment.
   ///
-  /// Populated even when this fragment's own header row was merged away or
-  /// physically lives in a sibling fragment (see `table_id`), so a single
-  /// fragment is interpretable in isolation. `None` when no header row
+  /// These may describe the first row of `cells` or be inherited from a sibling
+  /// fragment (see `table_id`) whose header row is absent here, so a single
+  /// fragment is interpretable in isolation. `None` when no column headers
   /// could be determined.
   final List<String>? columns;
 

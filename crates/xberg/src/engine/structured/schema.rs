@@ -8,6 +8,8 @@
 //! caller decides which mode to apply. No preset or policy type crosses this
 //! boundary.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::core::config::MergeMode;
@@ -40,6 +42,111 @@ pub struct MergedOutput {
     /// Confidence score computed after merging (when available from the orchestrator).
     /// Set by the orchestrator after calling `validate_and_merge` + computing signals.
     pub confidence: Option<crate::heuristics::confidence::ExtractionConfidence>,
+}
+
+/// Strict validated output alongside explicitly unvalidated original responses.
+///
+/// Only `validated` has the guarantees of [`validate_and_merge`]. The original
+/// responses in `batches` are available for inspection or an explicit downstream
+/// recovery policy; they are never merged into the validated output or passed
+/// to citation fusion by this API.
+pub struct ValidationReport {
+    /// The unchanged strict batch-validation and merging result.
+    pub validated: MergedOutput,
+    /// Original responses and diagnostics, in input batch order.
+    pub batches: Vec<BatchValidationReport>,
+}
+
+/// An original response and its complete batch-local validation diagnostics.
+///
+/// A response with errors may violate required, whole-document or cross-field
+/// constraints. Preserving its fields does not establish that individual leaves
+/// are independently valid. Callers must not treat this candidate as validated
+/// output, even when some of its fields are useful.
+#[derive(Debug, Clone)]
+pub struct BatchValidationReport {
+    /// Zero-based index in the original response list.
+    pub batch_index: usize,
+    /// Original input, including malformed JSON strings, without pruning or merging.
+    pub unvalidated_response: serde_json::Value,
+    /// All validation errors, or an error explaining why validation was impossible.
+    pub errors: Vec<ValidationError>,
+}
+
+/// One validation or parsing error in a reported batch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidationError {
+    /// JSON Pointer within this batch's parsed JSON value, not a merged output.
+    /// For string-wrapped JSON this addresses the decoded value. `None` means
+    /// parsing or schema construction failed; `Some("")` denotes the root value.
+    pub instance_pointer: Option<String>,
+    /// Canonical JSON Pointer to the failed schema keyword, including local
+    /// reference targets. `None` means no schema keyword could be evaluated.
+    pub schema_pointer: Option<String>,
+    /// Human-readable validation, parsing or schema-construction failure.
+    pub message: String,
+}
+
+impl ValidationError {
+    fn without_location(message: String) -> Self {
+        Self {
+            instance_pointer: None,
+            schema_pointer: None,
+            message,
+        }
+    }
+}
+
+/// Report original candidate responses without weakening strict validation.
+///
+/// The `validated` result is exactly [`validate_and_merge`]'s result. Every
+/// original response is retained separately, including when every batch fails.
+/// Diagnostics collect all errors with batch-local instance and schema pointers;
+/// fields are neither pruned nor represented as independently validated. JSON
+/// Schema drafts, references and combinators retain their original meaning.
+/// Schema construction uses the same offline reference policy as the strict API.
+pub fn validate_and_report(
+    raw_responses: Vec<serde_json::Value>,
+    schema: &serde_json::Value,
+    merge_mode: MergeMode,
+) -> ValidationReport {
+    let validated = validate_and_merge(raw_responses.clone(), schema, merge_mode);
+    let validator = jsonschema::options().offline().build(schema);
+    let batches = raw_responses
+        .into_iter()
+        .enumerate()
+        .map(|(batch_index, unvalidated_response)| {
+            let errors = match &validator {
+                Ok(validator) => response_validation_errors(validator, &unvalidated_response),
+                Err(error) => vec![ValidationError::without_location(format!("schema is invalid: {error}"))],
+            };
+            BatchValidationReport {
+                batch_index,
+                unvalidated_response,
+                errors,
+            }
+        })
+        .collect();
+    ValidationReport { validated, batches }
+}
+
+fn response_validation_errors(validator: &jsonschema::Validator, response: &serde_json::Value) -> Vec<ValidationError> {
+    let normalized = if response.is_string() {
+        match normalize_response(response.clone()) {
+            Ok(value) => Cow::Owned(value),
+            Err(message) => return vec![ValidationError::without_location(message)],
+        }
+    } else {
+        Cow::Borrowed(response)
+    };
+    validator
+        .iter_errors(normalized.as_ref())
+        .map(|error| ValidationError {
+            instance_pointer: Some(error.instance_path().to_string()),
+            schema_pointer: Some(error.schema_path().to_string()),
+            message: error.to_string(),
+        })
+        .collect()
 }
 
 /// Validate each raw response and merge by the configured strategy.
@@ -142,6 +249,28 @@ fn normalize_response(value: serde_json::Value) -> Result<serde_json::Value, Str
     }
 }
 
+pub(super) fn merge_unvalidated_batches(
+    batches: &mut [BatchValidationReport],
+    merge_mode: MergeMode,
+) -> Option<serde_json::Value> {
+    let mut candidates = Vec::new();
+    for batch in batches {
+        match normalize_response(batch.unvalidated_response.clone()) {
+            Ok(candidate) => candidates.push(candidate),
+            Err(message) => {
+                if !batch.errors.iter().any(|error| error.message == message) {
+                    batch.errors.push(ValidationError::without_location(message));
+                }
+            }
+        }
+    }
+    if candidates.is_empty() {
+        None
+    } else {
+        Some(merge_validated(candidates, merge_mode))
+    }
+}
+
 /// Merge validated batches by merge mode.
 fn merge_validated(batches: Vec<serde_json::Value>, merge_mode: MergeMode) -> serde_json::Value {
     use crate::core::config::MergeMode::*;
@@ -170,6 +299,10 @@ fn merge_validated(batches: Vec<serde_json::Value>, merge_mode: MergeMode) -> se
         ObjectFirst => batches.into_iter().next().unwrap_or(serde_json::Value::Null),
     }
 }
+
+#[cfg(test)]
+#[path = "schema_report_tests.rs"]
+mod report_tests;
 
 #[cfg(test)]
 mod tests {

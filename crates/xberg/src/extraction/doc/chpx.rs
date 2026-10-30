@@ -1,14 +1,19 @@
-//! Direct main-story character scripts from authoritative CHPX runs. ~keep
+//! DOC character scripts from authoritative CHPX runs and piece properties. ~keep
 
 use super::{DOC_WARNING_SOURCE, normalized_doc_character, papx};
 use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityBudget;
 use crate::types::{AnnotationKind, ProcessingWarning, TextAnnotation};
 
+#[path = "style_scripts.rs"]
+mod style_scripts;
+
 const CHPX_PAIR: usize = 12;
 const PAGE_BYTES: usize = 512;
 const PAGE_MASK: u32 = 0x003f_ffff;
 const SPRM_C_ISS: u16 = 0x2a48;
+const SPRM_C_ISTD: u16 = 0x4a30;
+const SPRM_C_PLAIN: u16 = 0x2a33;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Script {
@@ -18,14 +23,46 @@ pub(super) enum Script {
     Subscript,
 }
 
+pub(super) fn compact_prm_script(prm: u16) -> Option<Script> {
+    const COMPLEX_FLAG: u16 = 1;
+    const ISPRM_MASK: u16 = 0x7f;
+    const ISPRM_C_ISS: u16 = 0x68;
+    if prm & COMPLEX_FLAG != 0 || (prm >> 1) & ISPRM_MASK != ISPRM_C_ISS {
+        return None;
+    }
+    match prm >> 8 {
+        0 => Some(Script::Normal),
+        1 => Some(Script::Superscript),
+        2 => Some(Script::Subscript),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum ScriptProperty {
+    Unchanged,
+    Override(Script),
+    Malformed,
+}
+
 struct ScriptRun {
     start: u32,
     end: u32,
-    script: Script,
+    effect: ScriptEffect,
+}
+
+#[derive(Clone, Copy, Default)]
+struct ScriptEffect {
+    character_style: Option<u16>,
+    script: Option<Script>,
 }
 
 #[derive(Default)]
-pub(super) struct ScriptIndex(Vec<ScriptRun>);
+pub(super) struct ScriptIndex {
+    runs: Vec<ScriptRun>,
+    styles: style_scripts::StyleScripts,
+    paragraphs: papx::ParagraphListIndex,
+}
 
 impl ScriptIndex {
     pub(super) fn read(
@@ -35,20 +72,27 @@ impl ScriptIndex {
         budget: &mut SecurityBudget,
         warnings: &mut Vec<ProcessingWarning>,
     ) -> Result<Self> {
+        let inherited = Self {
+            styles: style_scripts::StyleScripts::read(word, table, pairs, budget, warnings)?,
+            paragraphs: papx::ParagraphListIndex::build(word, table, pairs),
+            ..Self::default()
+        };
         let declared = pairs.checked_sub(2).and_then(|offset| word.get(offset..pairs));
         if !declared.is_some_and(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]) as usize > CHPX_PAIR) {
-            return Ok(Self::default());
+            return Ok(inherited);
         }
         let Some((offset, length)) = papx::read_fc_lcb(word, pairs, CHPX_PAIR) else {
-            return Ok(Self::default());
+            return Ok(inherited);
         };
         if length == 0 {
-            return Ok(Self::default());
+            return Ok(inherited);
         }
         let bte = offset.checked_add(length).and_then(|end| table.get(offset..end));
         if let Some(bte) = bte
-            && let Some(index) = Self::from_bte(word, bte, budget)?
+            && let Some(mut index) = Self::from_bte(word, bte, budget)?
         {
+            index.styles = inherited.styles;
+            index.paragraphs = inherited.paragraphs;
             return Ok(index);
         }
         crate::core::diagnostics::push_warning(
@@ -56,7 +100,7 @@ impl ScriptIndex {
             DOC_WARNING_SOURCE,
             "Malformed DOC character properties were ignored; paragraph text was preserved",
         );
-        Ok(Self::default())
+        Ok(inherited)
     }
 
     fn from_bte(word: &[u8], bte: &[u8], budget: &mut SecurityBudget) -> Result<Option<Self>> {
@@ -95,8 +139,8 @@ impl ScriptIndex {
                 return Ok(false);
             }
             let offset = usize::from(fkp[4 * (count + 1) + row]) * 2;
-            let script = if offset == 0 {
-                Script::Normal
+            let effect = if offset == 0 {
+                ScriptEffect::default()
             } else {
                 if offset < header || offset >= PAGE_BYTES - 1 {
                     return Ok(false);
@@ -108,26 +152,37 @@ impl ScriptIndex {
                 else {
                     return Ok(false);
                 };
-                let Some(script) = script_property(properties, budget)? else {
+                let Some(effect) = script_effect(properties, budget)? else {
                     return Ok(false);
                 };
-                script
+                effect
             };
             let (start, end) = (start.max(first), end.min(last));
-            if start < end && script != Script::Normal {
+            if start < end && (effect.script.is_some() || effect.character_style.is_some()) {
                 step(budget)?;
-                self.0.push(ScriptRun { start, end, script });
+                self.runs.push(ScriptRun { start, end, effect });
             }
         }
         Ok(true)
     }
 
     pub(super) fn at(&self, fc_end: u32) -> Script {
-        let next = self.0.partition_point(|run| run.start < fc_end);
-        next.checked_sub(1)
-            .and_then(|row| self.0.get(row))
+        let paragraph = self
+            .styles
+            .at(self.paragraphs.style_for_character_end(fc_end))
+            .unwrap_or_default();
+        let next = self.runs.partition_point(|run| run.start < fc_end);
+        let effect = next
+            .checked_sub(1)
+            .and_then(|row| self.runs.get(row))
             .filter(|run| fc_end <= run.end)
-            .map_or(Script::Normal, |run| run.script)
+            .map_or(ScriptEffect::default(), |run| run.effect);
+        effect.script.unwrap_or_else(|| {
+            effect
+                .character_style
+                .and_then(|style| self.styles.at(style))
+                .unwrap_or(paragraph)
+        })
     }
 }
 
@@ -143,8 +198,8 @@ fn step(budget: &mut SecurityBudget) -> Result<()> {
     budget.step().map_err(|error| XbergError::validation(error.to_string()))
 }
 
-fn script_property(mut properties: &[u8], budget: &mut SecurityBudget) -> Result<Option<Script>> {
-    let mut script = Script::Normal;
+fn script_effect(mut properties: &[u8], budget: &mut SecurityBudget) -> Result<Option<ScriptEffect>> {
+    let mut effect = ScriptEffect::default();
     while !properties.is_empty() {
         step(budget)?;
         let Some(opcode) = properties.get(..2) else {
@@ -158,16 +213,56 @@ fn script_property(mut properties: &[u8], budget: &mut SecurityBudget) -> Result
         let Some(operand) = properties.get(..length) else {
             return Ok(None);
         };
-        if opcode == SPRM_C_ISS {
-            script = match operand[0] {
-                1 => Script::Superscript,
-                2 => Script::Subscript,
-                _ => Script::Normal,
-            };
+        match opcode {
+            SPRM_C_ISS => effect.script = Some(decode_script(operand[0])),
+            SPRM_C_ISTD => {
+                effect = ScriptEffect {
+                    character_style: Some(u16::from_le_bytes([operand[0], operand[1]])),
+                    script: None,
+                }
+            }
+            SPRM_C_PLAIN => {
+                effect = ScriptEffect {
+                    character_style: None,
+                    script: None,
+                }
+            }
+            _ => {}
         }
         properties = &properties[length..];
     }
-    Ok(Some(script))
+    Ok(Some(effect))
+}
+
+fn decode_script(value: u8) -> Script {
+    match value {
+        1 => Script::Superscript,
+        2 => Script::Subscript,
+        _ => Script::Normal,
+    }
+}
+
+pub(super) fn piece_script_property(mut properties: &[u8], budget: &mut SecurityBudget) -> Result<ScriptProperty> {
+    let mut script = None;
+    while !properties.is_empty() {
+        step(budget)?;
+        let Some(opcode) = properties.get(..2) else {
+            return Ok(ScriptProperty::Malformed);
+        };
+        let opcode = u16::from_le_bytes([opcode[0], opcode[1]]);
+        properties = &properties[2..];
+        let Some(length) = papx::sprm_operand_length(opcode, properties) else {
+            return Ok(ScriptProperty::Malformed);
+        };
+        let Some(operand) = properties.get(..length) else {
+            return Ok(ScriptProperty::Malformed);
+        };
+        if opcode == SPRM_C_ISS {
+            script = Some(decode_script(operand[0]));
+        }
+        properties = &properties[length..];
+    }
+    Ok(script.map_or(ScriptProperty::Unchanged, ScriptProperty::Override))
 }
 
 pub(super) fn normalize(

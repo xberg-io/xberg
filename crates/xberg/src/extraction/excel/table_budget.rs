@@ -90,7 +90,7 @@ pub(super) fn validate_xlsx<R: Read + Seek>(workbook: &mut calamine::Xlsx<R>, li
         let mut nonempty_shared = ahash::AHashSet::new();
         let mut reader = match workbook.worksheet_cells_reader(&name) {
             Ok(reader) => reader,
-            Err(calamine::XlsxError::NotAWorksheet(_)) => continue,
+            Err(calamine::XlsxError::NotAWorksheet(_) | calamine::XlsxError::WorksheetNotFound(_)) => continue,
             Err(error) => {
                 return Err(XbergError::parsing(format!(
                     "Failed to read worksheet '{name}': {error}"
@@ -120,12 +120,24 @@ pub(super) fn validate_xlsx<R: Read + Seek>(workbook: &mut calamine::Xlsx<R>, li
             }
             if !matches!(cell.value, DataRef::Empty) {
                 bounds.value(cell.pos, &mut budget)?;
+                account_xlsx_cell_text(&cell.value, &mut budget)?;
             }
             if formula_occupies_range(cell.formula.as_ref(), &mut nonempty_shared)? {
                 bounds.formula(cell.pos, &mut budget)?;
             }
         }
     }
+    Ok(())
+}
+
+fn account_xlsx_cell_text(value: &DataRef<'_>, budget: &mut SecurityBudget) -> Result<()> {
+    let length = match value {
+        DataRef::String(text) | DataRef::DateTimeIso(text) => text.len(),
+        DataRef::SharedString(text) => text.len(),
+        DataRef::DurationIso(text) => super::DURATION_PREFIX.len().saturating_add(text.len()),
+        _ => super::format_cell_to_string(&super::owned_xlsx_cell_value(value)).len(),
+    };
+    budget.account_text(length)?;
     Ok(())
 }
 

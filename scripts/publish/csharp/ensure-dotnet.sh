@@ -15,4 +15,6 @@ chmod +x dotnet-install.sh
 echo "$HOME/.dotnet" >>"${GITHUB_PATH:?GITHUB_PATH not set}"
 echo "$HOME/.dotnet/tools" >>"${GITHUB_PATH:?GITHUB_PATH not set}"
 
+export PATH="$HOME/.dotnet:$PATH"
+
 dotnet --info

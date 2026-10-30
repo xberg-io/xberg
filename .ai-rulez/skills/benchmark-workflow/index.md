@@ -1,3 +1,3 @@
 # Concepts
 
-* [Benchmark Workflow](SKILL.md) - Xberg extraction benchmarks: running, quality scoring, fixtures, ground truth. Use for the Benchmarks workflow or benchmark-harness work.
+* [Benchmark Workflow](SKILL.md) - Run extraction benchmarks; score quality and manage fixtures or ground truth.

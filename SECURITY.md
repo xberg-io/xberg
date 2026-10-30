@@ -79,7 +79,7 @@ let config = ExtractionConfig {
 Email both maintainers directly:
 
 - **Na'aman Hirschfeld** — <naaman@xberg.io>
-- **Tobias Silva** — <tobias@xberg.io>
+- **Tobias Perelstein** — <tobias@xberg.io>
 
 You may also use GitHub's [private vulnerability
 reporting](https://github.com/xberg-io/xberg/security/advisories/new)

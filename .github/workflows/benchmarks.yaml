@@ -90,10 +90,10 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Install Task, Python and uv for benchmark dependency contracts
+      - name: Install Python and uv for benchmark dependency contracts
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task python uv
+          install-args: python uv
           config-ref: ${{ github.sha }}
       - name: Resolve the mise Python version
         id: mise-python
@@ -107,7 +107,7 @@ jobs:
           restore-keys: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-
 
       - name: Validate benchmark scripts
-        run: task benchmark:validate:scripts
+        run: mise run benchmark:validate:scripts
 
       - name: Cache benchmark harness
         uses: ./.github/actions/cache-benchmark-harness
@@ -115,7 +115,7 @@ jobs:
           build-profile: release
 
       - name: Provision swap for all-feature release link
-        run: task benchmark:setup:swap
+        run: mise run benchmark:setup:swap
 
       - name: Build xberg-cli (release, all features + Sceptre tract diagnostic)
         run: cargo build --locked --release -p xberg-cli --features all,xberg/sceptre-ocr-tract

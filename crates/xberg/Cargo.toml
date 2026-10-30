@@ -119,7 +119,7 @@ default = ["tokio-runtime", "simd-utf8"]
 # `LayoutEngine::detect_batch_for_benchmark` hook (layout/engine.rs) that the
 # pdf_layout_microbatch bench requires. The actual pprof flamegraph capture lives
 # in tools/benchmark-harness, which owns its own `profiling`/`pprof` pair;
-# `task rust:build:profiling` turns both on in one workspace build.
+# `mise run rust:build:profiling` turns both on in one workspace build.
 profiling = []
 
 simd-utf8 = ["dep:simdutf8"]

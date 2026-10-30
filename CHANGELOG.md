@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
+  Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.
+
+- **(benchmarks): Fetch pinned ParseBench and olmOCR inputs as upstream references.**
+  The corpus submodule records 1,493 file hashes and source license notices; offline staging preserves raw table oracles.
+
+- **(benchmarks): Reproduce full ParseBench HTML table comparisons with the official evaluator.** (#2332)
+  Pin inputs, model artifacts, executable and configuration identities; retain extraction failures and metric exclusions.
+
+- **(structured): Add opt-in partial-response recovery with batch-local validation diagnostics.** (#2318)
+  Return usable candidate fields separately from validated output and citation fusion.
+- **(structured): Add caller-selected image size limits and option-aware render caching.** (#2319)
+  Resize images before PNG encoding while honoring the caller’s security budget.
+- **(benchmarks): Score layout detections against hash-bound COCO annotations.**
+  With geometry annotations supplied, model comparisons report bounding-box precision, recall, F1 and COCO AP,
+  retain annotation sources,
+  and reject altered saved results. (#2284)
+
 - **(layout): Select PDF pages with `extract_with_layout_pages`.**
   The additive API uses 1-based page numbers, retains native text on excluded pages and warns about invalid pages. (#2255)
 
@@ -26,6 +44,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
+  Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
+- **(dependencies): Update Liter LLM to 2.4.2 and refresh Rust dependency locks.**
+  Elixir native builds now require Brotli decompressor 6.2 or later within the compatible major version.
+- **(development): Follow shared toolchain baseline 1.12.0 and agent conventions 1.5.1.**
+  Governance checks follow the shared AI-Rulez version policy.
+- **(plugin): Use the Xberg symbol for the plugin icon and logo.**
+- **(tests): Refresh the published corpus governance and tooling pin.** (#2338)
+  Document contents and checksums are unchanged.
+- **(ocr): Add regression coverage for caller-selected image budgets in direct and staged OCR.** (#2325)
+- **(ci): Run governance, fixture, archive and OCR-cache contract tests, and document manual OCR-cache acceptance.**
+- **(layout): Simplify YOLO decoding and remove its function-length lint exception.** (#1567)
+- **(development): Consolidate Mise task aliases and align guides with supported commands.**
+- **(development): Upgrade binding generation to Alef 0.115.6.**
+  Fix Python keyword exports and stubs, Ruby typed payloads, and frozen-file cache refresh.
+- **(development): Run the complete benchmark harness with `mise run benchmark:test`.**
+  Resource-monitor checks validate recorded timestamps without relying on operating-system sleep precision.
+- **(validation): Keep Markdown and request-policy regression checks compatible with upstream metadata.**
+  YAML front matter and Crawlberg field declaration order no longer cause unrelated check failures.
 
 - **(Rust): Update Crawlberg configuration types and error matching.**
   Exhaustive Crawlberg configuration literals need the new upstream fields; use `..Default::default()` where appropriate.
@@ -44,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Windows builds verified Tesseract source; Linux and macOS provisioning checks selected runtimes and real decoding.
 
 ### Security
+
+- **(build): Update the zlib build dependency to 1.1.31 for RUSTSEC-2026-0418.**
 
 - **(rendering): Avoid quadratic work when rendering user-controlled HTML table cells.**
   Comrak 0.59 includes the upstream table-cell rendering fix.
@@ -91,10 +131,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): A scanned page whose text lines run sideways keeps its words.**
   If sparse-text reading returns low-confidence noise for a page that is one full-page scan, the page is read again with automatic layout. The second read replaces the first only when its quality score is higher and most of its word boxes are taller than wide. A caller-set segmentation mode is never changed. (#2314)
+- **(pdf): A photo page keeps its text layer when OCR reads only noise.**
+  When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
+
+- **(models): Reject ambiguous or incomplete pinned model inventories before downloading.** (#2336)
+  Duplicate paths, unsafe portable filenames, empty supplied manifests and unpinned external weights fail validation.
+
+- **(pdf): Keep superscripts and formatting on their source characters after text repair.** (#2275)
+  Annotation ranges follow ligature expansion, absorbed spaces and Unicode normalization.
+- **(tables): Retain OCR table headers, spans and cell geometry in image and PDF output.** (#2332)
+  PDF table elements and retained cells use the same final page coordinates.
+- **(tables): Preserve native TATR headers, merged cells and cell coordinates through PDF assembly.** (#2332)
+  HTML retains row and column spans, and stale or ambiguous table geometry is discarded.
+- **(pdf): Retain each text run’s baseline when cached form objects reuse source span IDs.**
+  Raw script geometry no longer inherits a different run’s baseline after sorting.
+
+- **(pdf): Preserve separate values during leftward reading-order jumps.**
+  Adjacent values such as `5.55` and `16` no longer fuse when their baselines differ slightly.
+
+- **(tables): Preserve declared headers across PDF table fragments.**
+  HTML and document structure distinguish physical header rows from labels inherited from another fragment,
+  while keeping multiline headers and existing table anchors. (#2332)
+
+- **(pdf): Render recognized formulas missing from OCR body elements.**
+  Preserve page order, existing list ownership and element references; retain math in metadata with a warning
+  when no safe same-page insertion boundary exists. (#2331)
+
+- **(ci): Install governance tools through the locked mise toolchain.**
+  Generation and validation now use the reviewed AI-Rulez and Python versions.
+- **(rendering): Honor table header metadata in HTML and preserve headerless data rows.** (#2332)
+- **(development): Keep generated skill summaries within Claude and Codex context budgets.**
+- **(ci): Refresh governance server tracking for ai-rulez 5.9.3 validation.**
+- **(vtt): Reject overflowing timestamps and decode character references in speaker annotations.** (#2330, #2329)
+- **(bindings): Keep Rust-only structured rendering and recovery APIs outside generated language bindings.**
+- **(ci): Keep Android x86_64 checks compiling when the remote compiler-cache backend is unavailable.**
+- **(excel): Enforce XLSX text limits before cell materialization and apply workbook limits to file inputs.** (#2321)
+  Count repeated shared strings against the complete workbook’s text budget.
+- **(excel): Retain missing-worksheet warnings alongside readable sheet content after dependency updates.**
+- **(djot): Keep nested table captions inside footnotes without duplicating them.**
+- **(build): Retry Windows tool installation until the requested versions are verified.**
+- **(development): Restore local Node and Java binding builds used by integration CI.**
+  Integration jobs build and stage the checked-out bindings before testing their dependent packages.
+- **(vtt): Skip WebVTT header metadata while preserving the first timed cue.** (#2320)
+- **(development): Generate the MCP reference skill without shadowing Claude’s built-in `/mcp` command.**
+- **(packaging): Include canonical licensing notices in Docker images and custom native release archives.**
+  Dart and Swift packaging checks use the checked-out release inputs.
+
+- **(mobile): Restore default Dart and Swift builds for iOS devices and simulators.**
+- **(doc): Retain inherited superscript and subscript character styles while honoring direct formatting.** (#2275)
+- **(pdf): Preserve superscript and subscript annotations in detected tables, including rotated text.** (#2275)
+- **(packaging): Reject failed macOS dependency inspections and support Node vendoring with Bash 3.2.**
+
 - **(pdf): Cache Type 3 font-mapping provenance during text extraction.**
   Repeated glyphs retain their fallback markers without rescanning the font for every character. (#2307)
-- **(doc): Preserve superscript and subscript annotations in footnotes and comments.**
-  Markdown, Djot and HTML retain the annotations through story decoding and whitespace normalization. (#2275)
+- **(doc): Preserve direct and piece-level superscript and subscript formatting.**
+  Compact and complex Word piece properties retain their logical character positions, including reused source bytes.
+  Footnotes and comments keep annotations in Markdown, Djot and HTML through decoding and whitespace normalization. (#2275)
 
 - **(pptx): Preserve slide headings and table grids in plain document structures.**
   Tables retain literal pipe characters and remain available in extraction results. (#2302)

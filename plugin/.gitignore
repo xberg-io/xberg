@@ -1,3 +1,5 @@
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
-.ai-rulez/.generated-manifest.json
+.ai-rulez/.config.local.*
+.ai-rulez/config.local.*
+.ai-rulez/local/
 # END ai-rulez

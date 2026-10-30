@@ -39,6 +39,7 @@ ENV ORT_SKIP_DOWNLOAD=1
 ENV ORT_STRATEGY=system
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-py/ crates/xberg-py/

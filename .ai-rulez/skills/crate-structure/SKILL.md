@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Crate Structure
-description: "Xberg workspace layout: version source, members and excluded crates, packages/, tools/, ignore allowlists. Use when placing code or adding a crate."
+description: "Place code or crates: workspace members, versions, package paths and ignore rules."
 x-ai-rulez:
   kind: skill
   id: crate-structure
@@ -68,7 +68,7 @@ is never committed:
    and a fresh clone will not build.
 3. Every `docker/Dockerfile.*` must either `COPY crates/<name>/` or `sed`-exclude the member
    from the workspace list.
-4. Run `task verify:docker-crates`. It checks (1) and (3) in both directions — it also catches
+4. Run `mise run verify:docker-crates`. It checks (1) and (3) in both directions — it also catches
    a `COPY` line naming a crate that no longer exists. It does **not** look at `.gitignore`;
    verify that by hand.
 

@@ -54,6 +54,7 @@ RUN mkdir -p /build/pdfium && \
     rm /build/pdfium.tgz
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-cli/ crates/xberg-cli/

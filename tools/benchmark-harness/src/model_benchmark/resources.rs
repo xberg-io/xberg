@@ -26,24 +26,25 @@ pub struct ResourceHostIdentity {
 }
 
 impl ResourceHostIdentity {
-    fn capture(load: &SystemLoad) -> Self {
-        let mut system = System::new();
+    fn capture(load: &SystemLoad) -> Result<Self> {
+        let mut system =
+            System::new().map_err(|error| Error::Benchmark(format!("initialize resource host identity: {error}")))?;
         system.refresh_cpu_all();
         let cpu_brand = system
             .cpus()
             .first()
             .map(|cpu| cpu.brand().trim().to_string())
             .filter(|brand| !brand.is_empty());
-        Self {
+        Ok(Self {
             os_family: std::env::consts::OS.to_string(),
-            os_name: System::name(),
-            os_version: System::os_version(),
-            kernel_version: System::kernel_version(),
+            os_name: System::name().ok(),
+            os_version: System::os_version().ok(),
+            kernel_version: System::kernel_version().ok(),
             architecture: System::cpu_arch(),
             cpu_brand,
             logical_cores: load.logical_cores,
             physical_cores: load.physical_cores,
-        }
+        })
     }
 }
 
@@ -123,11 +124,11 @@ where
     F: FnOnce() -> Result<T> + Send + 'static,
 {
     let (host, load_before) = tokio::task::spawn_blocking(|| {
-        let load = SystemLoad::capture();
-        (ResourceHostIdentity::capture(&load), load)
+        let load = SystemLoad::capture()?;
+        Ok::<_, Error>((ResourceHostIdentity::capture(&load)?, load))
     })
     .await
-    .map_err(super::benchmark_error)?;
+    .map_err(super::benchmark_error)??;
     monitor.start(Duration::from_millis(SAMPLE_INTERVAL_MS)).await;
     if monitor.get_snapshots().await.is_empty() {
         monitor.stop().await;
@@ -156,7 +157,7 @@ async fn collect_resources(
     let stats = ResourceMonitor::calculate_stats(samples, &snapshots, baseline);
     let load_after = tokio::task::spawn_blocking(SystemLoad::capture)
         .await
-        .map_err(super::benchmark_error)?;
+        .map_err(super::benchmark_error)??;
     let resources = PairedProcessResources {
         scope: RESOURCE_SCOPE.to_string(),
         measured_process_id: std::process::id(),

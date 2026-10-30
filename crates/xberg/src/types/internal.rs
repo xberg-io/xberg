@@ -24,6 +24,12 @@ use super::ocr_elements::{OcrBoundingGeometry, OcrConfidence, OcrElementLevel, O
 use super::tables::Table;
 use crate::types::ExtractedImage;
 
+#[cfg(any(
+    feature = "pdf",
+    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
+))]
+pub(crate) mod table_grid;
+
 mod element_id;
 pub use element_id::InternalElementId;
 

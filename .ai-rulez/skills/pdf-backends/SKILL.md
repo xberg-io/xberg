@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Pdf Backends
-description: "Xberg PDF extraction: native/Pdfium backend selection, rendering, encryption, OCR fallback, capability gaps. Use for PDF engine work."
+description: "Native/Pdfium selection, rendering, encryption and OCR fallback for PDF work."
 paths:
   - "crates/xberg/src/pdf/**"
   - "crates/xberg/src/extractors/pdf/**"

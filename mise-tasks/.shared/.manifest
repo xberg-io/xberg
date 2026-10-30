@@ -1,0 +1,5 @@
+# Files scripts/toolchains.py sync wrote for task sets; it deletes them when no set ships them.
+mise-tasks/.shared/alef-version/show.sh
+mise-tasks/.shared/deps-refresh/refresh.sh
+mise-tasks/.shared/governance/hooks-install.sh
+mise-tasks/shared.toml

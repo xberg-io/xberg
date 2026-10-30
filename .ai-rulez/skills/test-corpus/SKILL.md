@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Test Corpus
-description: "The test_documents corpus (submodule, bucket-fetched): read_test_fixture, missing fixtures, A/B controls. Use on a fresh clone or a missing fixture."
+description: "Fetch test_documents fixtures or use read_test_fixture and A/B corpus controls."
 x-ai-rulez:
   kind: skill
   id: test-corpus
@@ -61,7 +61,7 @@ the main checkout; and a shared `CARGO_TARGET_DIR` will thrash.
 Working setup (worktrees live under the polyrepo root's `.worktrees/<repo>/<name>`):
 
 ```bash
-task worktree:add REPO=xberg BRANCH=ctl BASE=<ref>   # at the polyrepo root
+mise run worktree:add xberg ctl --base <ref>   # at the polyrepo root
 cd .worktrees/xberg/ctl
 rmdir test_documents && ln -sfn <main-tree>/test_documents test_documents
 CARGO_TARGET_DIR=<main-tree>/target/ctl cargo test ...

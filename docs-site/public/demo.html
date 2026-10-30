@@ -396,7 +396,7 @@
     // release we resolved and display in the header badge.
     //
     // WASM_CDN_ORIGIN is the only URL that changes between prod and dev.
-    // patch-demo-dev.mjs rewrites it to http://localhost:PORT for local dev;
+    // Point it at http://localhost:PORT to serve a local pkg/ build;
     // in that mode we skip the registry lookup and serve pkg/ from that origin.
     const WASM_PKG = "@xberg-io/xberg-wasm";
     const WASM_CDN_ORIGIN = "https://cdn.jsdelivr.net/npm/@xberg-io/xberg-wasm";

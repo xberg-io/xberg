@@ -61,10 +61,10 @@ jobs:
         with:
           ref: ${{ inputs.ref || inputs.tag || github.event.client_payload.tag || github.ref }}
 
-      - name: Install Task
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
           config-ref: ${{ github.sha }}
 
       - name: Resolve version
@@ -101,7 +101,7 @@ jobs:
       - name: Validate release metadata
         env:
           RELEASE_VERSION: ${{ steps.meta.outputs.version }}
-        run: task version:check
+        run: mise run version:check
 
       - name: Setup Helm
         uses: azure/setup-helm@v5

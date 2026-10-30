@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Alef Generated Bindings
-description: "Xberg on top of the shared Alef workflow: output locations, alef.toml sections, regen-breaking core edits, FFI JSON bridge. Use when editing bindings."
+description: "Edit Alef bindings: output paths, configuration, core regeneration and FFI JSON."
 paths:
   - "alef.toml"
   - "packages/**"
@@ -25,14 +25,16 @@ x-ai-rulez:
 Xberg specifics on top of the shared Alef workflow skill (generic regenerate/verify/commit loop).
 
 - Check `alef.toml` before touching anything in `packages/*/` or a binding crate.
-- `task alef:generate` runs `alef all --clean` and formats via poly; there is no `task alef:format`.
-- `task alef:verify` runs `alef verify --exit-code`.
-- The `alef:*` namespace is exactly: `generate`, `verify`, `build`, `sync`, `docs`, `verify:readme-paths`,
-  `verify:ffi-formats`, `verify:fields`.
+- Regenerate with `alef all --clean --skip-compile --skip-snippet-validation` (after
+  `mise run dart:format:context`); it formats via poly. There is no `alef:generate` or `alef:format` task.
+- `mise run alef:verify` runs `alef verify --exit-code`.
+- Run `alef docs` directly to generate API documentation.
+- The `alef:*` namespace is exactly: `verify`, `build`, `verify:readme-paths`, `verify:ffi-formats`,
+  `verify:fields`.
 
 ## Freshness check
 
-`task alef:verify`. A hand-rolled `git diff` over `packages/` is under-scoped — generated
+`mise run alef:verify`. A hand-rolled `git diff` over `packages/` is under-scoped — generated
 output also lands in `crates/xberg-py/`, `crates/xberg-php/`, `crates/xberg-jni/`,
 `crates/xberg-node/`, `crates/xberg-wasm/`, `crates/xberg-ffi/`, `packages/dart/rust/`,
 `packages/swift/rust/`, and `e2e/`.
@@ -60,7 +62,7 @@ There are no `[crate]`, `[languages.*]`, `[e2e]` or `[readme]` top-level tables,
 `alef.toml` declares **no rename mappings** — the generated Go trait type is
 `DocumentExtractor`, unchanged.
 
-Besides the canonical e2e tasks, this repo has `e2e:verify`, `e2e:lint`, `e2e:quick`, `e2e:lang`.
+Besides the per-language `<lang>:e2e` tasks, this repo has `e2e:verify`.
 
 ## Core-side edits that break a regen
 
@@ -92,7 +94,7 @@ that churn rather than committing it.
 
 ## Which alef answered
 
-`task alef:generate` runs whatever `alef` is first on `PATH`, not a `cargo run` against a
+`alef all` runs whatever `alef` is first on `PATH`, not a `cargo run` against a
 sibling checkout; check `alef --version` against `alef.toml` `alef_version` before
 regenerating. A source fix in a sibling checkout has zero effect until it is installed. Generator fixes ship in order: land upstream → release alef
 → bump the pinned version → regen. Regenerating against a locally modified alef produces a

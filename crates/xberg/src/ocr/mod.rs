@@ -56,8 +56,11 @@ pub mod error;
 pub mod hocr_parser;
 #[cfg(all(
     feature = "layout-detection",
-    feature = "pdf",
-    any(feature = "ocr", feature = "ocr-pipeline")
+    any(
+        feature = "ocr",
+        feature = "ocr-wasm",
+        all(feature = "pdf", feature = "ocr-pipeline")
+    )
 ))]
 /// Assembles layout-detection bounding boxes with OCR word spans for region-level extraction.
 pub mod layout_assembly;

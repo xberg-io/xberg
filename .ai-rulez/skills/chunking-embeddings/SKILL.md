@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Chunking Embeddings
-description: "Xberg text chunking (ChunkerType, ChunkingConfig wire names), embeddings and RAG. Use when changing chunking or embeddings code or config."
+description: "Change text chunking, embeddings or RAG configuration and code."
 paths:
   - "crates/xberg/src/chunking/**"
   - "crates/xberg/src/embeddings/**"

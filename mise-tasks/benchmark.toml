@@ -1,0 +1,30 @@
+# Benchmark harness tasks, included from mise.toml [task_config]. ~keep
+
+["benchmark:setup:swap"]
+description = "Provision Linux swap for the benchmark all-feature release link"
+depends = ["os:require linux"]
+run = 'SWAP_SIZE_GIB="${SWAP_SIZE_GIB:-16}" bash scripts/ci/benchmarks/setup-build-swap.sh'
+
+["benchmark:validate:scripts"]
+description = "Validate benchmark workflow configuration and Python adapters"
+depends = ["benchmark:validate:parsebench", "benchmark:validate:olmocr"]
+run = [
+  "scripts/ci/benchmarks/validate-workflow-build-config.sh",
+  "python3 -m unittest scripts/ci/benchmarks/test_validate_workflow_matrix.py",
+  "python3 -m unittest scripts/ci/benchmarks/test_dependency_groups.py",
+  "python3 -m unittest tools/benchmark-harness/tests/test_corpus_cache_manifest.py",
+  "python3 -m unittest tools/benchmark-harness/tests/test_docling_extract.py",
+  "python3 -m unittest tools/benchmark-harness/tests/test_mineru_extract.py",
+]
+
+["benchmark:validate:layout-annotations"]
+description = "Validate independent layout ground-truth preservation and identity checks"
+run = "uv run --frozen --only-dev python -m pytest -q tools/benchmark-harness/tests/test_import_omnidocbench.py"
+
+["benchmark:validate:parsebench"]
+description = "Validate ParseBench invocation, integrity, coverage and scoring contracts"
+run = "python3 -m unittest tools/benchmark-harness/tests/test_parsebench_html_contracts.py tools/benchmark-harness/tests/test_parsebench_html_safeguards.py tools/benchmark-harness/tests/test_parsebench_html_staging.py"
+
+["benchmark:validate:olmocr"]
+description = "Validate olmOCR invocation, integrity and complete coverage contracts"
+run = "python3 -m unittest tools/benchmark-harness/tests/test_olmocr_contracts.py"

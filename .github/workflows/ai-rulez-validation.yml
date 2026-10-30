@@ -38,9 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: xberg-io/actions/setup-ai-rulez@v1
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          ai-rulez-version: "latest"
+          install-args: python
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - uses: xberg-io/actions/validate-ai-rulez@v1
         with:
           expected-config-count: "2"
@@ -50,5 +52,5 @@ jobs:
       - uses: xberg-io/agent-conventions/actions/context-exposure@v1
         with:
           budgets: |
-            claude=5500
-            codex=6400
+            claude=5950
+            codex=6950

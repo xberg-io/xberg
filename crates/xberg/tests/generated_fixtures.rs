@@ -19,7 +19,7 @@
 //! To run the example tests locally after generating fixtures:
 //!
 //! ```text
-//! task fixtures:generate
+//! mise run fixtures:generate
 //! cargo test --test generated_fixtures -- --ignored
 //! ```
 
@@ -78,7 +78,7 @@ pub fn load_fixture(name: &str) -> (PathBuf, FixtureGt) {
     let sidecar = find_sidecar(&root, name).unwrap_or_else(|| {
         panic!(
             "ground-truth sidecar {name}.gt.json not found under {root}\n\
-             Run `task fixtures:generate` to produce the fixture set.",
+             Run `mise run fixtures:generate` to produce the fixture set.",
             root = root.display(),
         )
     });
@@ -118,7 +118,7 @@ fn find_sidecar(root: &Path, name: &str) -> Option<PathBuf> {
 /// Returns `true` when the generated-fixtures tree is empty / absent.
 ///
 /// The example tests below short-circuit through this so a fresh clone (no
-/// submodule init, no `task fixtures:generate` run) doesn't fail the suite
+/// submodule init, no `mise run fixtures:generate` run) doesn't fail the suite
 /// noisily — the `#[ignore]` gate is the primary guard, this is belt + braces.
 fn generated_tree_present() -> bool {
     generated_root().is_dir()
@@ -130,7 +130,7 @@ fn generated_tree_present() -> bool {
 // One per feature stream. Each is `#[ignore]`d until the binary fixtures land
 
 #[test]
-#[ignore = "requires fixtures from `task fixtures:generate` to be checked into test_documents/"]
+#[ignore = "requires fixtures from `mise run fixtures:generate` to be checked into test_documents/"]
 fn revisions_docx_track_changes_basic_matches_ground_truth() {
     if !generated_tree_present() {
         return;
@@ -152,7 +152,7 @@ fn revisions_docx_track_changes_basic_matches_ground_truth() {
 }
 
 #[test]
-#[ignore = "requires fixtures from `task fixtures:generate` to be checked into test_documents/"]
+#[ignore = "requires fixtures from `mise run fixtures:generate` to be checked into test_documents/"]
 fn diff_xlsx_budget_pair_round_trips() {
     if !generated_tree_present() {
         return;
@@ -175,7 +175,7 @@ fn diff_xlsx_budget_pair_round_trips() {
 }
 
 #[test]
-#[ignore = "requires fixtures from `task fixtures:generate` to be checked into test_documents/"]
+#[ignore = "requires fixtures from `mise run fixtures:generate` to be checked into test_documents/"]
 fn security_zip_bomb_pathological_is_rejected() {
     if !generated_tree_present() {
         return;

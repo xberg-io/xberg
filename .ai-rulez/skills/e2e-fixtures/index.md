@@ -1,3 +1,3 @@
 # Concepts
 
-* [E2E Fixtures](SKILL.md) - xberg's e2e fixture schema: fields, categories, calls, inputs, mock responses, assertions. Use when adding or editing an xberg e2e fixture.
+* [E2E Fixtures](SKILL.md) - Add or edit e2e fixtures: calls, inputs, mocks, assertions and schema.

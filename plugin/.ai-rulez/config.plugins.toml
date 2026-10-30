@@ -21,7 +21,7 @@ homepage = "https://xberg.io"
 repository = "https://github.com/xberg-io/xberg"
 license = "MIT"
 category = "document-intelligence"
-brand_color = "#1F6FEB"
+brand_color = "#00E0C2"
 icon = "./assets/icon.svg"
 logo = "./assets/logo.png"
 keywords = ["document-intelligence", "extraction", "ocr", "pdf", "tables"]
@@ -53,7 +53,7 @@ privacy_policy_url = "https://xberg.io/privacy"
 terms_of_service_url = "https://xberg.io/terms"
 composer_icon = "./assets/icon.svg"
 logo = "./assets/logo.png"
-brand_color = "#1F6FEB"
+brand_color = "#00E0C2"
 
 [plugin.gemini]
 context_file_name = "GEMINI.md"

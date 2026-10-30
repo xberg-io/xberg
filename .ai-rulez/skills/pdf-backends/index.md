@@ -1,3 +1,3 @@
 # Concepts
 
-* [Pdf Backends](SKILL.md) - Xberg PDF extraction: native/Pdfium backend selection, rendering, encryption, OCR fallback, capability gaps. Use for PDF engine work.
+* [Pdf Backends](SKILL.md) - Native/Pdfium selection, rendering, encryption and OCR fallback for PDF work.

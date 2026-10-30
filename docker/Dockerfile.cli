@@ -55,6 +55,7 @@ RUN mkdir -p /build/pdfium && \
     strip --strip-unneeded /build/pdfium/lib/libpdfium.so
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-cli/ crates/xberg-cli/
@@ -103,6 +104,7 @@ RUN apk add --no-cache libgcc && \
           /usr/bin/protoc-gen-upb-* /usr/bin/protoc-gen-upbdefs-*
 
 COPY --from=builder /build/xberg /usr/local/bin/xberg
+COPY LICENSE THIRD_PARTY_LICENSES.md /usr/local/share/licenses/xberg/
 COPY --from=builder /build/pdfium/lib/libpdfium.so /usr/local/lib/
 
 LABEL org.opencontainers.image.source="https://github.com/xberg-io/xberg"

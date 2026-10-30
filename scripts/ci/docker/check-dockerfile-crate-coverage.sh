@@ -31,12 +31,21 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-mapfile -t members < <(grep -oE '"crates/[a-zA-Z0-9_-]+"' Cargo.toml | tr -d '"' | sed 's#^crates/##')
+members=()
+while IFS= read -r member; do
+  members+=("$member")
+done < <(grep -oE '"crates/[a-zA-Z0-9_-]+"' Cargo.toml | tr -d '"' | sed 's#^crates/##' | sort -u)
+if [ "${#members[@]}" -eq 0 ]; then
+  echo "::error::no workspace crates found; refusing an empty coverage check" >&2
+  exit 1
+fi
 
 status=0
+dockerfile_count=0
 
 for dockerfile in docker/Dockerfile.*; do
   [ -f "$dockerfile" ] || continue
+  dockerfile_count=$((dockerfile_count + 1))
 
   for crate in "${members[@]}"; do
     if grep -q "COPY crates/${crate}/ " "$dockerfile"; then
@@ -60,6 +69,11 @@ for dockerfile in docker/Dockerfile.*; do
   done
 done
 
+if [ "$dockerfile_count" -eq 0 ]; then
+  echo "::error::no Dockerfiles found; refusing an empty coverage check" >&2
+  exit 1
+fi
+
 # Reverse direction: every `COPY crates/<x>/` must name a real workspace member.
 # Guards against a deleted crate leaving a dangling COPY behind.
 for dockerfile in docker/Dockerfile.*; do
@@ -82,13 +96,16 @@ done
 
 # Third direction: every COPYd crates/ path must survive .dockerignore, and every
 # crates/ entry in the allowlist must name a directory that still exists.
-mapfile -t allowed < <(grep -oE '^!crates/[a-zA-Z0-9_-]+' .dockerignore | sed 's#^!crates/##')
+allowed=()
+while IFS= read -r entry; do
+  allowed+=("$entry")
+done < <(grep -oE '^!crates/[a-zA-Z0-9_-]+' .dockerignore | sed 's#^!crates/##')
 
 for dockerfile in docker/Dockerfile.*; do
   [ -f "$dockerfile" ] || continue
   while read -r copied; do
     [ -n "$copied" ] || continue
-    for entry in "${allowed[@]}"; do
+    for entry in ${allowed[@]+"${allowed[@]}"}; do
       if [ "$entry" = "$copied" ]; then
         copied=""
         break
@@ -101,7 +118,7 @@ for dockerfile in docker/Dockerfile.*; do
     sed 's#^COPY crates/##; s#/$##' | sort -u)
 done
 
-for entry in "${allowed[@]}"; do
+for entry in ${allowed[@]+"${allowed[@]}"}; do
   if [ ! -d "crates/${entry}" ]; then
     echo "::error file=.dockerignore::allowlists 'crates/${entry}', which no longer exists. Stale entries hide real omissions"
     status=1
@@ -109,6 +126,7 @@ for entry in "${allowed[@]}"; do
 done
 
 if [ "$status" -eq 0 ]; then
+  echo "Checked ${#members[@]} workspace crates across $dockerfile_count Dockerfiles."
   echo "All Cargo workspace members are covered by every docker/Dockerfile.*,"
   echo "every docker COPY of a crates/ path names a real workspace member,"
   echo "and every COPYd path survives .dockerignore."

@@ -818,10 +818,18 @@ jobs:
           # dylib closure, reusing this restored file; on the other targets this
           # repack produces the final tarball (build-node-napi does not repack).
           git checkout HEAD -- crates/xberg-node/index.d.ts
+          notice_roots=()
+          for platform_dir in crates/xberg-node/npm/*/; do
+            ls "$platform_dir"*.node >/dev/null 2>&1 || continue
+            python3 scripts/ci/package-notices.py stage "$platform_dir"
+            notice_roots+=("npm/$(basename "$platform_dir")")
+          done
+          [ "${#notice_roots[@]}" -gt 0 ] || { echo "::error::no populated NAPI platform packages"; exit 1; }
           members=(npm)
           [ -f crates/xberg-node/index.js ] && members+=(index.js)
           [ -f crates/xberg-node/index.d.ts ] && members+=(index.d.ts)
           tar -czf "node-bindings-${{ matrix.target }}.tar.gz" -C crates/xberg-node "${members[@]}"
+          python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "${notice_roots[@]}"
 
       - name: Vendor macOS dylib closure (libheif + codecs) into the .node package
         if: contains(matrix.target, 'apple-darwin')
@@ -835,6 +843,7 @@ jobs:
           node_file="$(find crates/xberg-node/npm -maxdepth 2 -name '*.node' -type f | head -1)"
           [ -n "$node_file" ] || { echo "::error::no .node staged under crates/xberg-node/npm"; exit 1; }
           platform_dir="$(dirname "$node_file")"
+          python3 scripts/ci/package-notices.py stage "$platform_dir"
           bash scripts/ci/vendor-macos-node-dylibs.sh "$platform_dir"
           # Reconcile the platform package.json `files` with every binary now on
           # disk so npm pack ships the whole closure.
@@ -856,6 +865,7 @@ jobs:
           [ -f crates/xberg-node/index.js ] && members+=(index.js)
           [ -f crates/xberg-node/index.d.ts ] && members+=(index.d.ts)
           tar -czf "node-bindings-${{ matrix.target }}.tar.gz" -C crates/xberg-node "${members[@]}"
+          python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/$(basename "$platform_dir")"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -917,6 +927,7 @@ jobs:
             echo "::error::no vendored shared libs produced by musl build for ${platform}"; exit 1
           fi
           cp "crates/xberg-node/npm/${platform}/package.json" "staging/npm/${platform}/package.json"
+          python3 scripts/ci/package-notices.py stage "staging/npm/${platform}"
           # Reconcile `files` with the binaries on disk — napi create-npm-dirs
           # regenerates the committed package.json to list only *.node, so the
           # vendored libs must be re-added here or npm publish drops them.
@@ -932,6 +943,7 @@ jobs:
           print("reconciled files:", pkg["files"])
           ' "staging/npm/${platform}"
           tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
+          python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/${platform}"
 
       # The steps above only prove a .node file (and its vendored shared-lib
       # closure) exist on disk -- never that require()ing it actually works.
@@ -1020,6 +1032,7 @@ jobs:
             echo "::error::no vendored shared libs produced by manylinux build for ${platform}"; exit 1
           fi
           cp "crates/xberg-node/npm/${platform}/package.json" "staging/npm/${platform}/package.json"
+          python3 scripts/ci/package-notices.py stage "staging/npm/${platform}"
           for notice in tesseract-5.5.4/LICENSE tesseract-5.5.4/AUTHORS leptonica-1.87.0/leptonica-license.txt; do
             test -s "build-output/licenses/xberg-system-ocr/$notice" || {
               echo "::error::Missing OCR notice: $notice" >&2; exit 1; }
@@ -1041,6 +1054,7 @@ jobs:
           print("reconciled files:", pkg["files"])
           ' "staging/npm/${platform}"
           tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
+          python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/${platform}"
       - name: Verify glibc floor
         run: bash scripts/ci/verify-glibc-floor.sh "staging/npm/linux-${{ matrix.napi_arch }}-gnu" "$GLIBC_FLOOR"
       - uses: actions/upload-artifact@v7
@@ -1119,8 +1133,8 @@ jobs:
           # `[target.wasm32-unknown-unknown] rustflags` entry is silently discarded
           # whenever RUSTFLAGS is set (CI sets `-D warnings`) — see
           # crates/xberg-wasm/build.rs — and rather than in package.json, which alef
-          # regenerates. Keep it in step with .task/languages/rust.yml's
-          # `wasm:build:all` so a local build measures what publish ships. ~keep
+          # regenerates. Keep it in step with mise-tasks/rust.toml's
+          # `rust:wasm:build:all` so a local build measures what publish ships. ~keep
           build-command: "CARGO_PROFILE_RELEASE_OPT_LEVEL=z pnpm run build:all && node scripts/fix-wasi-imports.mjs"
 
       - name: Enforce WASM CDN size budget (jsDelivr limits)
@@ -1339,6 +1353,7 @@ jobs:
           fetch-depth: 0
 
           submodules: false
+      # PHP stays on its setup action (toolchain-management rule). ~keep
       - uses: xberg-io/actions/setup-php@v1
         with:
           php-version: ${{ matrix.php }}
@@ -1890,10 +1905,10 @@ jobs:
           submodules: false
       # Zig is used only by the linux-gnu legs' glibc 2.28 floor build; one setup-mise call per
       # job keeps the mise cache for this key from carrying tools another call installed. ~keep
-      - name: Install Task and Zig
+      - name: Install Zig
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task zig
+          install-args: zig
           config-ref: ${{ github.sha }}
 
       - uses: xberg-io/actions/setup-rust@v1
@@ -1933,12 +1948,12 @@ jobs:
       - name: Package versioned Go archive with static-link metadata
         if: ${{ !matrix.musl }}
         shell: bash
-        run: task go:publish:package TARGET=${{ matrix.target }} VERSION=${{ needs.prepare.outputs.version }}
+        run: mise run go:publish:package "${{ matrix.target }}" "${{ needs.prepare.outputs.version }}"
 
       - name: Build and package musl Go archive
         if: ${{ matrix.musl }}
         shell: bash
-        run: task go:publish:package:musl TARGET=${{ matrix.target }} PLATFORM=${{ matrix.platform }} VERSION=${{ needs.prepare.outputs.version }}
+        run: mise run go:publish:package:musl "${{ matrix.target }}" "${{ matrix.platform }}" "${{ needs.prepare.outputs.version }}"
 
       - name: Ship + verify ONNX Runtime (glibc Linux)
         if: contains(matrix.target, '-linux-gnu')
@@ -2056,12 +2071,7 @@ jobs:
             exit 1
           fi
           cp crates/xberg-ffi/include/xberg.h "$STAGE/include/"
-          # A published C FFI tarball missing its LICENSE is a distribution defect. ~keep
-          [ -f LICENSE ] || {
-            echo "::error::LICENSE is missing from the checkout — refusing to stage a C FFI tarball without it"
-            exit 1
-          }
-          cp LICENSE "$STAGE/"
+          python3 scripts/ci/package-notices.py stage "$STAGE"
           # Windows links ONNX Runtime dynamically (`Setup ONNX Runtime` above
           # runs with its default `system` strategy); this leg had no
           # equivalent of the glibc-Linux step below and shipped no ONNX
@@ -2073,6 +2083,7 @@ jobs:
           fi
           mkdir -p dist/c-ffi
           tar -czf "dist/c-ffi/${STAGE}.tar.gz" "$STAGE"
+          python3 scripts/ci/package-notices.py verify "dist/c-ffi/${STAGE}.tar.gz" "$STAGE"
 
       - name: Verify C FFI distribution has no DirectML import and ships ONNX Runtime (Windows)
         if: contains(matrix.target, '-pc-windows-msvc')
@@ -2090,6 +2101,8 @@ jobs:
           for t in dist/c-ffi/*.tar.gz; do
             shipped=1
             bash scripts/ci/vendor-native-closure.sh "$t"
+            notice_root="$(basename "$t" .tar.gz)"
+            python3 scripts/ci/package-notices.py verify "$t" "$notice_root"
             bash scripts/ci/verify-glibc-floor.sh "$t" "$GLIBC_FLOOR"
           done
           [ "$shipped" = 1 ] || echo "::notice::no artifact produced (dry-run stub); skipping ship+verify"
@@ -2477,6 +2490,7 @@ jobs:
         shell: bash
         run: echo "ImageOS=win25" >> "$GITHUB_ENV"
 
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.17"
@@ -2619,8 +2633,10 @@ jobs:
           # would have failed to load had musl ever been added to `nif_targets`. ~keep
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
           cp build-output/libxberg_nif.so "staging/${RENAMED}"
+          python3 scripts/ci/package-notices.py stage staging
           TARBALL="${RENAMED}.tar.gz"
-          tar -czf "dist/elixir-natives/${TARBALL}" -C staging "${RENAMED}"
+          tar -czf "dist/elixir-natives/${TARBALL}" -C staging "${RENAMED}" LICENSE THIRD_PARTY_LICENSES.md
+          python3 scripts/ci/package-notices.py verify "dist/elixir-natives/${TARBALL}" .
           ( cd dist/elixir-natives && sha256sum "${TARBALL}" >"${TARBALL}.sha256" )
 
       - uses: actions/upload-artifact@v7
@@ -2709,6 +2725,7 @@ jobs:
           mkdir -p dist/elixir-natives staging
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
           cp build-output/libxberg_nif.so "staging/${RENAMED}"
+          python3 scripts/ci/package-notices.py stage staging
           for notice in tesseract-5.5.4/LICENSE tesseract-5.5.4/AUTHORS leptonica-1.87.0/leptonica-license.txt; do
             test -s "build-output/licenses/xberg-system-ocr/$notice" || {
               echo "::error::Missing OCR notice: $notice" >&2; exit 1; }
@@ -2724,6 +2741,7 @@ jobs:
           [ "$vendored" -gt 0 ] || { echo "::error::no vendored libraries in build-output" >&2; exit 1; }
           TARBALL="${RENAMED}.tar.gz"
           tar -czf "dist/elixir-natives/${TARBALL}" -C staging .
+          python3 scripts/ci/package-notices.py verify "dist/elixir-natives/${TARBALL}" .
           ( cd dist/elixir-natives && sha256sum "${TARBALL}" >"${TARBALL}.sha256" )
 
       # Verify only -- do NOT re-run vendor-native-closure.sh here. The closure was
@@ -2839,6 +2857,7 @@ jobs:
           STAGE=dist/server-natives
           mkdir -p "$STAGE"
           cp "target/${TARGET}/release/${LIB}" "$STAGE/${LIB}"
+          python3 scripts/ci/package-notices.py stage "$STAGE"
           # The Dart native dynamically links ONNX Runtime; the download-based
           # pub package ships only these staged files, so the ORT runtime must be
           # bundled beside the native or `RustLib.init()` fails to dlopen it.
@@ -2895,6 +2914,13 @@ jobs:
       ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_dart == 'true' && needs.dart-server-natives.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -2924,7 +2950,9 @@ jobs:
             # resolves ORT via @loader_path (macOS) / $ORIGIN (Linux) / the load
             # directory (Windows).
             tarball="xberg-dart-v${VERSION}-${blob}.tar.gz"
+            python3 scripts/ci/package-notices.py stage "$dir"
             tar -czf "dist/dart-release/${tarball}" -C "$dir" .
+            python3 scripts/ci/package-notices.py verify "dist/dart-release/${tarball}" .
             ( cd dist/dart-release && sha256sum "${tarball}" >"${tarball}.sha256" )
           done
 
@@ -2988,7 +3016,7 @@ jobs:
           cargo-zigbuild-revision: "89c352ae6ff0bbafe17788da327764d9ef92240b"
           macos-dynamic-lookup: "false"
 
-      - uses: xberg-io/actions/build-swift-artifactbundle@v1
+      - uses: xberg-io/actions/build-swift-artifactbundle@624902e41e000f252cc3811b9b357f5cc5a7d0a8
         id: libs
         # Must equal the `.iOS(.vN)` floor in Package.swift. Unset, rustc links at its iOS default
         # (10.0) while cc/cmake compile for the runner SDK (18.5), and prebuilt ORT objects call
@@ -3035,7 +3063,7 @@ jobs:
           merge-multiple: true
           path: swift-libs
 
-      - uses: xberg-io/actions/build-swift-artifactbundle@v1
+      - uses: xberg-io/actions/build-swift-artifactbundle@624902e41e000f252cc3811b9b357f5cc5a7d0a8
         id: bundle
         with:
           crate-name: xberg-swift
@@ -3047,6 +3075,9 @@ jobs:
           include-macos-x86_64: "false"
           include-ios-x86_64: "false"
           prebuilt-libs-dir: swift-libs
+          additional-license-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
 
       - uses: actions/upload-artifact@v7
         with:
@@ -3827,10 +3858,10 @@ jobs:
           ref: v1
           path: .python-publication-actions
           persist-credentials: false
-      - name: Install task runner
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
       - uses: actions/download-artifact@v8
         with:
           pattern: python-wheels-*
@@ -3866,7 +3897,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.archive-token.outputs.token }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: task python:publish:archive:prepare
+        run: mise run python:publish:archive:prepare
       - name: Archive every Python distribution permanently
         if: needs.prepare.outputs.dry_run != 'true'
         uses: xberg-io/actions/archive-python@v1
@@ -3882,7 +3913,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.archive-token.outputs.token }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: task python:publish:archive:wait
+        run: mise run python:publish:archive:wait
       - name: Publish primarily to PyPI
         uses: xberg-io/actions/publish-pypi@v1
         with:
@@ -4053,7 +4084,17 @@ jobs:
           cd crates/xberg-node/npm
           for dir in */; do
             if [ -f "$dir/package.json" ] && ls "$dir"*.node >/dev/null 2>&1; then
-              (cd "$dir" && npm pack && mv ./*.tgz ..)
+              python3 "$GITHUB_WORKSPACE/scripts/ci/package-notices.py" stage "$dir"
+              (
+                cd "$dir"
+                npm pack
+                packed=(./*.tgz)
+                [ "${#packed[@]}" -eq 1 ] && [ -f "${packed[0]}" ] || {
+                  echo "::error::expected one packed npm platform archive"; exit 1;
+                }
+                python3 "$GITHUB_WORKSPACE/scripts/ci/package-notices.py" verify "${packed[0]}" package
+                mv "${packed[0]}" ..
+              )
             fi
           done
           cd ../../..
@@ -4376,6 +4417,7 @@ jobs:
             fi
           done
 
+      # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - uses: android-actions/setup-android@v4
         with:
           packages: "platforms;android-36 build-tools;36.0.0"
@@ -4422,6 +4464,7 @@ jobs:
           done
         shell: bash
 
+      # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
@@ -4516,6 +4559,7 @@ jobs:
 
           submodules: false
       - uses: xberg-io/actions/setup-rust@v1
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.17"
@@ -5424,13 +5468,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Node, pnpm and ai-rulez
+      - name: Install Node and pnpm
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm github:Goldziher/ai-rulez
+          install-args: node pnpm
           config-ref: ${{ github.sha }}
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Install pnpm workspace dependencies
         shell: bash
         run: pnpm install --no-frozen-lockfile
@@ -5484,13 +5528,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Python, uv and ai-rulez
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv github:Goldziher/ai-rulez
+          install-args: python uv
           config-ref: ${{ github.sha }}
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -5527,13 +5571,8 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
       - name: Install ai-rulez
-        uses: xberg-io/actions/setup-mise@v1
-        with:
-          install-args: github:Goldziher/ai-rulez
-          config-ref: ${{ github.sha }}
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Verify public skill exports
         run: python3 scripts/sync_public_skills.py --check
       - name: Package all supported plugin runtimes
@@ -5601,12 +5640,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Node, pnpm and ai-rulez
+      - name: Install Node and pnpm
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm github:Goldziher/ai-rulez
+          install-args: node pnpm
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Verify plugin versions and generated resources
         uses: xberg-io/actions/verify-ai-rulez-plugin@v1
         with:
@@ -5672,12 +5711,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Python, uv and ai-rulez
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv github:Goldziher/ai-rulez
+          install-args: python uv
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash

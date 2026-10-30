@@ -708,9 +708,9 @@ Requires Zig 0.16.0 or higher (declared via `minimum_zig_version` in `build.zig.
 For working on the Xberg repository itself:
 
 ```bash
-task setup      # installs all language toolchains
-task lint        # linters across all languages
-task dev:test    # full test suite
+mise run setup      # installs all language toolchains
+mise run lint       # linters across all languages
+mise run test       # Rust core test suite
 ```
 
 See [Contributing](/contributing/) for conventions and expectations.

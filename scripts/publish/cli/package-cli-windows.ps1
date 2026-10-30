@@ -29,7 +29,9 @@ if (-not $exePath) {
 }
 
 Copy-Item $exePath $stage
-Copy-Item "LICENSE" $stage
+$noticeTool = Join-Path $PSScriptRoot "../../ci/package-notices.py"
+& python3 $noticeTool stage $stage
+if ($LASTEXITCODE -ne 0) { throw "Canonical notice staging failed" }
 Copy-Item "README.md" $stage
 
 if (Test-Path ("target/" + $target + "/release/pdfium.dll")) {
@@ -37,4 +39,6 @@ if (Test-Path ("target/" + $target + "/release/pdfium.dll")) {
 }
 
 Compress-Archive -Path "$stage/*" -DestinationPath ($stage + ".zip") -Force
+& python3 $noticeTool verify ($stage + ".zip") .
+if ($LASTEXITCODE -ne 0) { throw "Canonical archive notice verification failed" }
 Remove-Item -Recurse -Force $stage
