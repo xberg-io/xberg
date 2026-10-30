@@ -112,6 +112,8 @@ function Ensure-TesseractData {
   $models = @(
     @{ Name = 'eng'; Size = 4113088; Hash = '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2' }
     @{ Name = 'osd'; Size = 10562727; Hash = '9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff' }
+    # The Han second pass test (gh2300_ocr_han_second_pass) reads Chinese and needs this model. ~keep
+    @{ Name = 'chi_sim'; Size = 2469156; Hash = 'a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730' }
   )
   foreach ($model in $models) {
     $path = Join-Path $Directory ($model.Name + '.traineddata')
