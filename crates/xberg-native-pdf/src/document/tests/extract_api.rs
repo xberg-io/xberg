@@ -531,15 +531,30 @@ fn test_self_painting_form_does_not_hide_a_later_sibling_body() {
     let lines = body_lines("Meadow");
     let body = text_lines_stream(&lines, 20, 780);
     let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
-    let looping = format!("{}/Fs Do\n/Fs Do\n", text_lines_stream(&["Looping side note".to_string()], 400, 60));
+    let looping = format!(
+        "{}/Fs Do\n/Fs Do\n",
+        text_lines_stream(&["Looping side note".to_string()], 400, 60)
+    );
     let pdf = build_forms_pdf(
         "/Fs Do\n/Fb Do\n/Fp Do\n",
-        &[("Fs", FULL_BBOX, &looping), ("Fb", FULL_BBOX, &body), ("Fp", FULL_BBOX, &copy)],
+        &[
+            ("Fs", FULL_BBOX, &looping),
+            ("Fb", FULL_BBOX, &body),
+            ("Fp", FULL_BBOX, &copy),
+        ],
     );
     let doc = PdfDocument::from_bytes(pdf.clone()).expect("parse pdf");
     let text = doc.extract_text(0).unwrap();
-    assert_eq!(text.matches("Looping side note").count(), 1, "self-painting form text: {text:?}");
-    assert_eq!(body_line_counts(pdf, "Meadow"), (1, 1), "body copies (text, chars): {text:?}");
+    assert_eq!(
+        text.matches("Looping side note").count(),
+        1,
+        "self-painting form text: {text:?}"
+    );
+    assert_eq!(
+        body_line_counts(pdf, "Meadow"),
+        (1, 1),
+        "body copies (text, chars): {text:?}"
+    );
 }
 
 /// Two forms that paint each other twice, then a sibling form with the body, then
@@ -550,8 +565,14 @@ fn test_mutually_painting_forms_do_not_hide_a_later_sibling_body() {
     let lines = body_lines("Orchard");
     let body = text_lines_stream(&lines, 20, 780);
     let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
-    let first = format!("{}/Ft Do\n/Ft Do\n", text_lines_stream(&["First cycle note".to_string()], 400, 60));
-    let second = format!("{}/Fs Do\n/Fs Do\n", text_lines_stream(&["Second cycle note".to_string()], 400, 40));
+    let first = format!(
+        "{}/Ft Do\n/Ft Do\n",
+        text_lines_stream(&["First cycle note".to_string()], 400, 60)
+    );
+    let second = format!(
+        "{}/Fs Do\n/Fs Do\n",
+        text_lines_stream(&["Second cycle note".to_string()], 400, 40)
+    );
     let pdf = build_forms_pdf(
         "/Fs Do\n/Fb Do\n/Fp Do\n",
         &[
@@ -565,7 +586,11 @@ fn test_mutually_painting_forms_do_not_hide_a_later_sibling_body() {
     let text = doc.extract_text(0).unwrap();
     assert_eq!(text.matches("First cycle note").count(), 1, "cycle text: {text:?}");
     assert_eq!(text.matches("Second cycle note").count(), 1, "cycle text: {text:?}");
-    assert_eq!(body_line_counts(pdf, "Orchard"), (1, 1), "body copies (text, chars): {text:?}");
+    assert_eq!(
+        body_line_counts(pdf, "Orchard"),
+        (1, 1),
+        "body copies (text, chars): {text:?}"
+    );
 }
 
 /// The page paints its body inside the box of a form. The form paints text outside
@@ -575,7 +600,9 @@ fn test_mutually_painting_forms_do_not_hide_a_later_sibling_body() {
 #[test]
 fn test_placed_copy_after_clipped_text_in_the_same_form_is_dropped() {
     let lines = body_lines("Canyon");
-    let stray: Vec<String> = (0..10).map(|i| format!("Stray galley line {i} beyond the box")).collect();
+    let stray: Vec<String> = (0..10)
+        .map(|i| format!("Stray galley line {i} beyond the box"))
+        .collect();
     let page = format!("{}/Fe Do\n", text_lines_stream(&lines, 20, 380));
     let enclosing = format!("{}/Fp Do\n", text_lines_stream(&stray, 20, 780));
     let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 371));
@@ -590,7 +617,11 @@ fn test_placed_copy_after_clipped_text_in_the_same_form_is_dropped() {
 fn test_placed_copy_in_another_line_order_is_dropped_in_text_and_chars() {
     let words: Vec<String> = (0..80).map(|i| format!("Wordform{i:03}")).collect();
     let (left, right) = words.split_at(40);
-    let body = format!("{}{}", text_lines_stream(left, 20, 780), text_lines_stream(right, 300, 780));
+    let body = format!(
+        "{}{}",
+        text_lines_stream(left, 20, 780),
+        text_lines_stream(right, 300, 780)
+    );
     let mut reversed_left = left.to_vec();
     reversed_left.reverse();
     let mut reversed_right = right.to_vec();
@@ -605,7 +636,11 @@ fn test_placed_copy_in_another_line_order_is_dropped_in_text_and_chars() {
     let text = doc.extract_text(0).unwrap();
     let chars: String = doc.extract_chars(0).unwrap().iter().map(|c| c.char).collect();
     assert_eq!(text.matches("Wordform007").count(), 1, "text kept the copy: {text:?}");
-    assert_eq!(chars.matches("Wordform007").count(), 1, "chars kept the copy: {chars:?}");
+    assert_eq!(
+        chars.matches("Wordform007").count(),
+        1,
+        "chars kept the copy: {chars:?}"
+    );
 }
 
 /// A form keeps its whole body inside one `/PlacedPDF` scope and first paints a

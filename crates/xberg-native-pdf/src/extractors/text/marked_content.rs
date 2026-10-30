@@ -34,7 +34,7 @@ impl HeldText {
 }
 
 /// Push `item` with its hold group. `holds` stays empty until an item is held.
-fn push_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, item: T, hold: u32) {
+pub(super) fn push_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, item: T, hold: u32) {
     if hold != 0 || !holds.is_empty() {
         holds.resize(items.len(), 0);
         holds.push(hold);
@@ -100,27 +100,28 @@ impl<'doc> TextExtractor<'doc> {
         self.char_holds.clear();
     }
 
-    /// Hold group of text emitted now, or 0 when the text is not held.
-    fn current_hold(&self) -> u32 {
-        if self.inside_placed_pdf && !self.placed_pdf_keep {
-            self.placed_hold
+    /// Hold group of text emitted now (0 when it is not held), or `None` when
+    /// the current state suppresses it.
+    pub(super) fn emit_hold(&self) -> Option<u32> {
+        if self.is_content_suppressed() {
+            None
+        } else if self.inside_placed_pdf && !self.placed_pdf_keep {
+            Some(self.placed_hold)
         } else {
-            0
+            Some(0)
         }
     }
 
     /// Emit a span, unless the current state suppresses it.
     pub(super) fn push_span(&mut self, span: TextSpan) {
-        if !self.is_content_suppressed() {
-            let hold = self.current_hold();
+        if let Some(hold) = self.emit_hold() {
             push_held(&mut self.spans, &mut self.span_holds, span, hold);
         }
     }
 
     /// Emit a character, unless the current state suppresses it.
     pub(super) fn push_char(&mut self, ch: TextChar) {
-        if !self.is_content_suppressed() {
-            let hold = self.current_hold();
+        if let Some(hold) = self.emit_hold() {
             push_held(&mut self.chars, &mut self.char_holds, ch, hold);
         }
     }

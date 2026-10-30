@@ -396,7 +396,9 @@ pub(super) fn build_forms_pdf(page_stream: &str, forms: &[(&str, &str, &str)]) -
     for off in offs {
         pdf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
     }
-    pdf.extend_from_slice(format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n").as_bytes());
+    pdf.extend_from_slice(
+        format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n").as_bytes(),
+    );
     pdf
 }
 

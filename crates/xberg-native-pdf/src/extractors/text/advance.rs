@@ -1026,7 +1026,9 @@ impl<'doc> TextExtractor<'doc> {
                         ]),
                     };
 
-                    self.push_char(text_char);
+                    if let Some(hold) = self.emit_hold() {
+                        super::marked_content::push_held(&mut self.chars, &mut self.char_holds, text_char, hold);
+                    }
                 }
             }
 
