@@ -27,6 +27,8 @@ mod pipeline;
 mod plausibility;
 mod rendering;
 mod scoring;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), not(target_arch = "wasm32")))]
+mod sideways_retry;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use plausibility::scan_text_plausibility;
@@ -104,6 +106,8 @@ mod plausibility_tests;
 mod recognition_noise_tests;
 #[cfg(all(test, feature = "ocr"))]
 mod tests;
+#[cfg(all(test, feature = "tokio-runtime", feature = "ocr"))]
+mod sideways_retry_tests;
 
 #[cfg(all(test, feature = "tokio-runtime", any(feature = "ocr", feature = "ocr-pipeline")))]
 mod raw_transcript_tests;
