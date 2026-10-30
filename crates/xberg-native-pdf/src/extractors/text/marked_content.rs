@@ -10,7 +10,7 @@ use super::*;
 /// Length and bytes of the text-show operands in one `/PlacedPDF` bucket.
 #[derive(Debug, Default, Clone)]
 pub(super) struct PlacedBucket {
-    chars: usize,
+    pub(super) chars: usize,
     txt: Vec<u8>,
 }
 

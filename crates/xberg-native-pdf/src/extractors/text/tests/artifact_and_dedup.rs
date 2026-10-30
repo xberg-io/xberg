@@ -944,3 +944,18 @@ fn test_detect_span_columns_empty() {
     let columns = extractor.detect_span_columns();
     assert!(columns.is_empty());
 }
+
+#[test]
+fn test_outside_text_of_one_page_is_not_carried_to_the_next_stream() {
+    // An extractor that runs a second stream starts from the outside text of that
+    // stream: the page text and the form text of the first stream are gone.
+    let mut extractor = TextExtractor::new();
+    extractor.begin_page_placed_scan(b"BT (first stream words) Tj ET\n/PlacedPDF BMC\nEMC\n");
+    extractor.form_outside_text.add_text("text of a form of the first stream");
+    extractor.top_form_spans_start = Some(3);
+    assert!(extractor.outside_text_for_form().chars > 40);
+
+    extractor.begin_page_placed_scan(b"BT (b) Tj ET\n/PlacedPDF BMC\nEMC\n");
+    assert_eq!(extractor.outside_text_for_form().chars, 1);
+    assert!(extractor.top_form_spans_start.is_none());
+}
