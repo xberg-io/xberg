@@ -4,8 +4,9 @@
 //! keeps the table values that automatic layout loses on upright scans (GH#1786). Sparse-text
 //! mode also drops most words of a page whose lines run sideways. Such a page carries the
 //! low-confidence noise verdict, so that verdict triggers one more read with automatic layout.
-//! The second read replaces the first only when it scores strictly higher and its word boxes
-//! are mostly taller than wide, which keeps upright pages on psm 11.
+//! The second read replaces the first only when it scores strictly higher, reads at least as many
+//! words, and its word boxes are mostly taller than wide. The word floor keeps a page whose first
+//! read holds real words on psm 11; the box shape keeps upright pages there.
 
 use std::sync::Arc;
 
@@ -56,19 +57,15 @@ pub(super) async fn read_whole_page_raster(
         return Err(crate::XbergError::Cancelled);
     }
 
-    let caller_wants_elements = original_config
-        .element_config
-        .as_ref()
-        .is_some_and(|elements| elements.include_elements);
+    // ~keep The decision reads private, unfiltered word geometry whatever the caller selected;
+    // the caller's own element selection is restored on the kept read below.
     let mut retry_config = crate::extractors::image::sparse_image_ocr_fallback_config(effective_config);
-    if !caller_wants_elements {
-        let elements = retry_config
-            .element_config
-            .get_or_insert_with(crate::types::OcrElementConfig::default);
-        elements.include_elements = true;
-        elements.min_level = OcrElementLevel::Word;
-        elements.min_confidence = 0.0;
-    }
+    retry_config.element_config = Some(crate::types::OcrElementConfig {
+        include_elements: true,
+        min_level: OcrElementLevel::Word,
+        min_confidence: 0.0,
+        build_hierarchy: false,
+    });
     let mut retry = match backend.process_image_owned(image_bytes, &retry_config).await {
         Ok(retry) => retry,
         Err(error @ crate::XbergError::Cancelled) => return Err(error),
@@ -79,21 +76,31 @@ pub(super) async fn read_whole_page_raster(
     };
     let retry_score = compute_quality_score(&retry.content, thresholds);
     let improves = retry_score > compute_quality_score(&primary.content, thresholds);
-    if !improves || !words_run_sideways(&retry) {
+    if !improves || count_words(&retry.content) < count_words(&primary.content) || !words_run_sideways(&retry) {
         return Ok(primary);
     }
-    if !caller_wants_elements {
-        retry.ocr_elements = None;
-    }
+    retry.ocr_elements = match (original_config.element_config.as_ref(), retry.ocr_elements.take()) {
+        (Some(selection), Some(elements)) if selection.include_elements => Some(selection.select_elements(&elements)),
+        _ => None,
+    };
     crate::extractors::image::merge_primary_warnings_into_selected(&primary, &mut retry);
     Ok(retry)
 }
 
-/// True when more than half of the read's word boxes are taller than wide.
+/// Words of three or more letters or digits. Only a floor uses it: a retry that reads fewer of
+/// them than the first read has lost words, whatever its quality score says.
+pub(super) fn count_words(text: &str) -> usize {
+    text.split_whitespace()
+        .filter(|token| token.chars().filter(|character| character.is_alphanumeric()).count() >= 3)
+        .count()
+}
+
+/// True when more than half of the read's word boxes are taller than wide. Lines, blocks and the
+/// page box are not words: a tall upright paragraph says nothing about the direction of the text.
 fn words_run_sideways(document: &ExtractedDocument) -> bool {
     let (mut tall, mut total) = (0usize, 0usize);
     for element in document.ocr_elements.iter().flatten() {
-        if element.level == OcrElementLevel::Page {
+        if element.level != OcrElementLevel::Word {
             continue;
         }
         if let OcrBoundingGeometry::Rectangle { width, height, .. } = element.geometry {

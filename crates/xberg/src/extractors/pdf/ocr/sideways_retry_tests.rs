@@ -9,6 +9,8 @@ use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElemen
 
 const SPARSE_PSM: i32 = 11;
 const AUTO_PSM: i32 = 3;
+/// Blocks in a `read_levels` read: more than the five words, so counting them would decide the verdict.
+const BLOCKS: usize = 8;
 const NOISY_TEXT: &str = "ab cd ef gh ij kl mn op qr st uv wx";
 const CLEAN_TEXT: &str =
     "The quarterly report lists every invoice number and the matching payment date for each supplier in the region.";
@@ -40,7 +42,15 @@ impl OcrBackend for ModeBackend {
         }
         *self.last_auto_config.lock().unwrap() = Some(config.clone());
         match &self.auto {
-            Ok(document) => Ok(document.clone()),
+            Ok(document) => {
+                // Like the real engine: the element selection of the request filters the elements.
+                let mut document = document.clone();
+                document.ocr_elements = match (config.element_config.as_ref(), document.ocr_elements.take()) {
+                    (Some(selection), Some(elements)) => Some(selection.select_elements(&elements)),
+                    _ => None,
+                };
+                Ok(document)
+            }
             Err(error) => Err(crate::XbergError::Other(error.to_string())),
         }
     }
@@ -61,10 +71,10 @@ impl Plugin for ModeBackend {
     }
 }
 
-fn word(width: u32, height: u32) -> OcrElement {
+fn element(level: OcrElementLevel, width: u32, height: u32) -> OcrElement {
     OcrElement {
         text: "word".to_string(),
-        level: OcrElementLevel::Word,
+        level,
         geometry: OcrBoundingGeometry::Rectangle {
             left: 0,
             top: 0,
@@ -73,6 +83,10 @@ fn word(width: u32, height: u32) -> OcrElement {
         },
         ..Default::default()
     }
+}
+
+fn word(width: u32, height: u32) -> OcrElement {
+    element(OcrElementLevel::Word, width, height)
 }
 
 fn read(content: &str, confidence: f64, tall: bool) -> ExtractedDocument {
@@ -86,6 +100,16 @@ fn read(content: &str, confidence: f64, tall: bool) -> ExtractedDocument {
         .metadata
         .additional
         .insert("mean_text_conf".into(), serde_json::json!(confidence));
+    document
+}
+
+/// A read whose words run `words_tall` and whose blocks and page box run `blocks_tall`.
+fn read_levels(content: &str, confidence: f64, words_tall: bool, blocks_tall: bool) -> ExtractedDocument {
+    let mut document = read(content, confidence, words_tall);
+    let (width, height) = if blocks_tall { (100, 400) } else { (400, 100) };
+    let elements = document.ocr_elements.as_mut().unwrap();
+    elements.extend(vec![element(OcrElementLevel::Block, width, height); BLOCKS]);
+    elements.push(element(OcrElementLevel::Page, width, height));
     document
 }
 
@@ -173,6 +197,21 @@ async fn a_lower_scoring_retry_keeps_the_sparse_read() {
     assert_eq!(backend.calls.load(Ordering::SeqCst), 2);
 }
 
+/// A sideways, higher-scoring retry that reads fewer words than the first read has lost words.
+#[tokio::test]
+async fn a_retry_that_reads_fewer_words_keeps_the_sparse_read() {
+    let thresholds = OcrQualityThresholds::default();
+    let wordy = format!("{CLEAN_TEXT} {CLEAN_TEXT} {NOISY_TEXT} {NOISY_TEXT}");
+    let short = "The quarterly report lists every invoice number.";
+    assert!(compute_quality_score(short, &thresholds) > compute_quality_score(&wordy, &thresholds));
+    assert!(super::sideways_retry::count_words(short) < super::sideways_retry::count_words(&wordy));
+    let backend = backend(read(&wordy, 40.0, false), Ok(read(short, 90.0, true)));
+    let original = implicit_config();
+    let selected = run(&backend, &original, &sparse_config(&original), true).await;
+    assert_eq!(selected.content, wordy);
+    assert_eq!(backend.calls.load(Ordering::SeqCst), 2);
+}
+
 #[tokio::test]
 async fn a_tied_score_keeps_the_sparse_read() {
     let mut sparse = read(CLEAN_TEXT, 40.0, false);
@@ -225,6 +264,70 @@ async fn word_boxes_are_dropped_when_the_caller_did_not_ask_for_them() {
             .element_config
             .is_some_and(|elements| elements.include_elements)
     );
+}
+
+fn caller_selecting(min_level: OcrElementLevel) -> OcrConfig {
+    let mut original = implicit_config();
+    original.element_config = Some(OcrElementConfig {
+        include_elements: true,
+        min_level,
+        ..Default::default()
+    });
+    original
+}
+
+#[tokio::test]
+async fn block_only_output_does_not_make_tall_upright_paragraphs_sideways() {
+    let backend = backend(
+        read(NOISY_TEXT, 40.0, false),
+        Ok(read_levels(CLEAN_TEXT, 90.0, false, true)),
+    );
+    let original = caller_selecting(OcrElementLevel::Block);
+    let selected = run(&backend, &original, &sparse_config(&original), true).await;
+    assert_eq!(selected.content, NOISY_TEXT);
+}
+
+#[tokio::test]
+async fn page_only_output_still_recognises_a_sideways_page() {
+    let backend = backend(
+        read(NOISY_TEXT, 40.0, false),
+        Ok(read_levels(CLEAN_TEXT, 90.0, true, false)),
+    );
+    let original = caller_selecting(OcrElementLevel::Page);
+    let selected = run(&backend, &original, &sparse_config(&original), true).await;
+    assert_eq!(selected.content, CLEAN_TEXT);
+}
+
+#[tokio::test]
+async fn the_caller_element_selection_is_restored_on_the_kept_read() {
+    let backend = backend(
+        read(NOISY_TEXT, 40.0, false),
+        Ok(read_levels(CLEAN_TEXT, 90.0, true, false)),
+    );
+    let original = caller_selecting(OcrElementLevel::Block);
+    let selected = run(&backend, &original, &sparse_config(&original), true).await;
+    assert_eq!(selected.content, CLEAN_TEXT);
+    let levels: Vec<_> = selected.ocr_elements.iter().flatten().map(|e| e.level).collect();
+    assert_eq!(
+        levels.len(),
+        BLOCKS + 1,
+        "the blocks and the page box, no words: {levels:?}"
+    );
+    assert!(levels.iter().all(|level| *level != OcrElementLevel::Word));
+}
+
+#[tokio::test]
+async fn the_detector_gets_unfiltered_words_for_every_caller_selection() {
+    for selection in [None, Some(OcrElementLevel::Word), Some(OcrElementLevel::Page)] {
+        let backend = backend(read(NOISY_TEXT, 40.0, false), Ok(read(CLEAN_TEXT, 90.0, true)));
+        let original = selection.map_or_else(implicit_config, caller_selecting);
+        run(&backend, &original, &sparse_config(&original), true).await;
+        let request = backend.last_auto_config.lock().unwrap().clone().expect("a retry ran");
+        let elements = request.element_config.expect("the request selects elements");
+        assert!(elements.include_elements, "{selection:?}");
+        assert_eq!(elements.min_level, OcrElementLevel::Word, "{selection:?}");
+        assert_eq!(elements.min_confidence, 0.0, "{selection:?}");
+    }
 }
 
 #[tokio::test]
