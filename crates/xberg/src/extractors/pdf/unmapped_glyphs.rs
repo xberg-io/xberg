@@ -44,11 +44,7 @@ fn without_markers(text: &str) -> String {
 /// Remove the markers that native extraction left in `text`. `boundaries` index `text` by byte and
 /// move with it. A character U+FFFD inside a page in `ocr_pages` belongs to the OCR output, so it
 /// stays. Returns the number of markers removed.
-pub(super) fn strip_text(
-    text: &mut String,
-    boundaries: Option<&mut Vec<PageBoundary>>,
-    ocr_pages: &[u32],
-) -> usize {
+pub(super) fn strip_text(text: &mut String, boundaries: Option<&mut Vec<PageBoundary>>, ocr_pages: &[u32]) -> usize {
     let protected: Vec<(usize, usize)> = boundaries
         .as_deref()
         .into_iter()
@@ -348,7 +344,11 @@ mod tests {
             .collect();
         let mut objects: Vec<String> = vec![
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-            format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), page_texts.len()),
+            format!(
+                "<< /Type /Pages /Kids [{}] /Count {} >>",
+                kids.join(" "),
+                page_texts.len()
+            ),
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
             "<< /Type /Font /Subtype /Type0 /BaseFont /AAAAAA+Test /Encoding /Identity-H \
              /DescendantFonts [5 0 R] /ToUnicode 7 0 R >>"
