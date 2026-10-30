@@ -3346,7 +3346,11 @@ impl PdfExtractor {
             let page_boundaries = selector_boundaries.as_mut();
             #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
             let page_boundaries = boundaries.as_mut();
-            unmapped_glyphs::strip_text(&mut text, page_boundaries)
+            #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+            let ocr_pages: Vec<u32> = ocr_results_map.iter().flat_map(|replaced| replaced.keys().copied()).collect();
+            #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
+            let ocr_pages: Vec<u32> = Vec::new();
+            unmapped_glyphs::strip_text(&mut text, page_boundaries, &ocr_pages)
         };
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if let Some(ref mut page_structure) = pdf_metadata.page_structure {

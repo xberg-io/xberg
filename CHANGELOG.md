@@ -90,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): Route pages with Type 0 glyphs that have no Unicode value to OCR.**
-  The extractor now counts each such glyph, so the OCR fallback sees the loss instead of a clean page of surviving characters. A page that stays native shows no replacement character. An extraction with no `ocr` block adds a warning that names the setting to use. (#2299, #2309)
+  The extractor now counts each such glyph, so the OCR fallback sees the loss instead of a clean page of surviving characters. A page that stays native shows no replacement character, and a replacement character in OCR output stays. A document that still lacks glyphs after extraction carries a warning. The warning names the `ocr` setting when the caller has not set it. (#2299, #2309)
 - **(pdf): Cache Type 3 font-mapping provenance during text extraction.**
   Repeated glyphs retain their fallback markers without rescanning the font for every character. (#2307)
 - **(doc): Preserve superscript and subscript annotations in footnotes and comments.**

@@ -19,7 +19,16 @@ struct MarkerPositions(Vec<usize>);
 
 impl MarkerPositions {
     fn of(text: &str) -> Option<Self> {
-        let positions: Vec<usize> = text.match_indices(LOST_GLYPH_MARKER).map(|(at, _)| at).collect();
+        Self::outside(text, &[])
+    }
+
+    /// The markers that lie outside every protected byte range.
+    fn outside(text: &str, protected: &[(usize, usize)]) -> Option<Self> {
+        let positions: Vec<usize> = text
+            .match_indices(LOST_GLYPH_MARKER)
+            .map(|(at, _)| at)
+            .filter(|at| !protected.iter().any(|&(start, end)| (start..end).contains(at)))
+            .collect();
         (!positions.is_empty()).then_some(Self(positions))
     }
 
@@ -32,17 +41,36 @@ fn without_markers(text: &str) -> String {
     text.replace(LOST_GLYPH_MARKER, "")
 }
 
-/// Remove every marker from `text`. `boundaries` index `text` by byte and move with it.
-/// Returns the number of markers removed.
-pub(super) fn strip_text(text: &mut String, boundaries: Option<&mut Vec<PageBoundary>>) -> usize {
-    let Some(markers) = MarkerPositions::of(text) else {
+/// Remove the markers that native extraction left in `text`. `boundaries` index `text` by byte and
+/// move with it. A character U+FFFD inside a page in `ocr_pages` belongs to the OCR output, so it
+/// stays. Returns the number of markers removed.
+pub(super) fn strip_text(
+    text: &mut String,
+    boundaries: Option<&mut Vec<PageBoundary>>,
+    ocr_pages: &[u32],
+) -> usize {
+    let protected: Vec<(usize, usize)> = boundaries
+        .as_deref()
+        .into_iter()
+        .flatten()
+        .filter(|b| ocr_pages.contains(&b.page_number))
+        .map(|b| (b.byte_start, b.byte_end))
+        .collect();
+    let Some(markers) = MarkerPositions::outside(text, &protected) else {
         return 0;
     };
     for boundary in boundaries.into_iter().flatten() {
         boundary.byte_start = markers.map(boundary.byte_start);
         boundary.byte_end = markers.map(boundary.byte_end);
     }
-    *text = without_markers(text);
+    let mut kept = String::with_capacity(text.len());
+    let mut from = 0;
+    for &at in &markers.0 {
+        kept.push_str(&text[from..at]);
+        from = at + LOST_GLYPH_MARKER.len_utf8();
+    }
+    kept.push_str(&text[from..]);
+    *text = kept;
     markers.0.len()
 }
 
@@ -101,18 +129,22 @@ pub(super) fn strip_table(table: &mut Table) -> usize {
     removed
 }
 
-/// The warning for a caller whose extraction lost glyphs and has no way to recover them: no `ocr`
-/// block, and OCR not switched off. Other callers either asked for OCR or chose to go without.
+/// The warning for a document that still lacks characters after extraction. It names the OCR
+/// setting only for a caller who has not configured OCR and has not switched it off.
 pub(super) fn lost_glyph_warning(lost: usize, config: &ExtractionConfig) -> Option<ProcessingWarning> {
-    if lost == 0 || config.ocr.is_some() || config.effective_disable_ocr() {
+    if lost == 0 {
         return None;
     }
+    let message = if config.ocr.is_none() && !config.effective_disable_ocr() {
+        "Some glyphs in this PDF have no Unicode value, so their characters are missing from the text. \
+         Set `ocr` to read the affected pages with OCR."
+    } else {
+        "Some glyphs in this PDF have no Unicode value, and their characters are missing from the text \
+         that OCR did not replace."
+    };
     Some(ProcessingWarning {
         source: std::borrow::Cow::Borrowed("pdf"),
-        message: std::borrow::Cow::Borrowed(
-            "Some glyphs in this PDF have no Unicode value, so their characters are missing from \
-             the text. Set `ocr` to read the affected pages with OCR.",
-        ),
+        message: std::borrow::Cow::Borrowed(message),
     })
 }
 
@@ -144,7 +176,7 @@ mod tests {
             },
         ];
 
-        let removed = strip_text(&mut text, Some(&mut boundaries));
+        let removed = strip_text(&mut text, Some(&mut boundaries), &[]);
 
         assert_eq!(removed, 2);
         assert_eq!(text, "abcdef");
@@ -169,7 +201,7 @@ mod tests {
             .map(|b| (b.byte_start, b.byte_end, b.page_number))
             .collect();
 
-        assert_eq!(strip_text(&mut text, Some(&mut boundaries)), 0);
+        assert_eq!(strip_text(&mut text, Some(&mut boundaries), &[]), 0);
         assert_eq!(text, "plain \u{e9} text");
         let after: Vec<(usize, usize, u32)> = boundaries
             .iter()
@@ -239,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn warning_names_the_missing_ocr_setting_only_for_a_caller_without_ocr() {
+    fn warning_stays_until_recovery_and_names_the_ocr_setting_only_when_it_helps() {
         let bare = ExtractionConfig::default();
         let with_block = ExtractionConfig {
             ocr: Some(OcrConfig::default()),
@@ -263,35 +295,67 @@ mod tests {
             warning.message
         );
         assert!(lost_glyph_warning(0, &bare).is_none(), "no lost glyph, no warning");
-        assert!(lost_glyph_warning(3, &with_block).is_none(), "the caller asked for OCR");
-        assert!(
-            lost_glyph_warning(3, &switched_off).is_none(),
-            "the caller switched OCR off"
-        );
+        for config in [&with_block, &switched_off] {
+            let warning = lost_glyph_warning(3, config).expect("lost glyphs that OCR did not recover keep a signal");
+            assert!(
+                warning.message.contains("no Unicode value"),
+                "message: {}",
+                warning.message
+            );
+            assert!(
+                !warning.message.contains("`ocr`"),
+                "no advice to set what is already set or off: {}",
+                warning.message
+            );
+        }
     }
 
-    /// One page: a Helvetica line of real words, then a Type0 line whose ToUnicode maps code
-    /// 0x0041 to "A" and code 0x0044 to NUL (a glyph without a Unicode value).
-    fn build_type0_lost_glyph_pdf() -> Vec<u8> {
-        let content = "BT /F1 12 Tf 72 700 Td (Real words stay.) Tj /F2 12 Tf 0 -20 Td <00410044> Tj ET\n";
+    #[test]
+    fn strip_text_keeps_a_replacement_character_that_belongs_to_ocr_output() {
+        // Page 1 is OCR output "A<mark>B" (bytes 0..5); page 2 is native "c<mark>d" (bytes 5..10).
+        let mut text = format!("A{MARK}Bc{MARK}d");
+        let mut boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: 5,
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: 5,
+                byte_end: 10,
+                page_number: 2,
+            },
+        ];
+
+        let removed = strip_text(&mut text, Some(&mut boundaries), &[1]);
+
+        assert_eq!(removed, 1, "only the native marker counts as a loss");
+        assert_eq!(text, format!("A{MARK}Bcd"));
+        assert_eq!((boundaries[0].byte_start, boundaries[0].byte_end), (0, 5));
+        assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (5, 7));
+    }
+
+    /// A document whose pages each hold a Helvetica line of real words, then a Type0 line whose
+    /// ToUnicode maps code 0x0041 to "A" and code 0x0044 to NUL (a glyph without a Unicode value).
+    fn build_type0_lost_glyph_pdf_pages(page_texts: &[&str]) -> Vec<u8> {
         let to_unicode = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap \
             /CMapName /Test-UCS def /CMapType 2 def \
             1 begincodespacerange <0000> <FFFF> endcodespacerange \
             2 beginbfchar <0041> <0041> <0044> <0000> endbfchar endcmap end end";
-        let objects: Vec<String> = vec![
+        let first_page_object = 8;
+        let kids: Vec<String> = (0..page_texts.len())
+            .map(|index| format!("{} 0 R", first_page_object + 2 * index))
+            .collect();
+        let mut objects: Vec<String> = vec![
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
-             /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"
-                .to_string(),
-            format!("<< /Length {} >>\nstream\n{content}endstream", content.len()),
+            format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), page_texts.len()),
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
             "<< /Type /Font /Subtype /Type0 /BaseFont /AAAAAA+Test /Encoding /Identity-H \
-             /DescendantFonts [7 0 R] /ToUnicode 9 0 R >>"
+             /DescendantFonts [5 0 R] /ToUnicode 7 0 R >>"
                 .to_string(),
             "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /AAAAAA+Test \
              /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> \
-             /DW 600 /FontDescriptor 8 0 R /CIDToGIDMap /Identity >>"
+             /DW 600 /FontDescriptor 6 0 R /CIDToGIDMap /Identity >>"
                 .to_string(),
             "<< /Type /FontDescriptor /FontName /AAAAAA+Test /Flags 4 /FontBBox [0 0 1000 1000] \
              /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 >>"
@@ -301,6 +365,15 @@ mod tests {
                 to_unicode.len() + 1
             ),
         ];
+        for (index, text) in page_texts.iter().enumerate() {
+            let content = format!("BT /F1 12 Tf 72 700 Td ({text}) Tj /F2 12 Tf 0 -20 Td <00410044> Tj ET\n");
+            objects.push(format!(
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R \
+                 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>",
+                first_page_object + 2 * index + 1
+            ));
+            objects.push(format!("<< /Length {} >>\nstream\n{content}endstream", content.len()));
+        }
         let mut pdf = b"%PDF-1.4\n".to_vec();
         let mut offsets = Vec::new();
         for (index, body) in objects.iter().enumerate() {
@@ -320,6 +393,10 @@ mod tests {
             .as_bytes(),
         );
         pdf
+    }
+
+    fn build_type0_lost_glyph_pdf() -> Vec<u8> {
+        build_type0_lost_glyph_pdf_pages(&["Real words stay."])
     }
 
     async fn extract(config: &ExtractionConfig) -> crate::types::ExtractedDocument {
@@ -366,9 +443,10 @@ mod tests {
         );
     }
 
-    /// Control: with OCR switched off the output keeps its base value, so no marker and no new warning.
+    /// With OCR switched off the text keeps its base value, and the caller keeps a signal that
+    /// glyphs are missing: nothing recovered them.
     #[tokio::test]
-    async fn extraction_with_ocr_off_hides_the_marker_without_a_warning() {
+    async fn extraction_with_ocr_off_hides_the_marker_and_keeps_the_loss_signal() {
         let config = ExtractionConfig {
             disable_ocr: true,
             ..ExtractionConfig::default()
@@ -387,11 +465,136 @@ mod tests {
             result.content
         );
         assert!(
-            !result
+            result
                 .processing_warnings
                 .iter()
                 .any(|w| w.message.contains("no Unicode value")),
-            "warnings: {:?}",
+            "silent loss with OCR off: {:?}",
+            result.processing_warnings
+        );
+    }
+
+    /// A stand-in OCR backend that returns a fixed transcript and counts its calls.
+    #[cfg(feature = "ocr")]
+    struct RecordingOcrBackend {
+        transcript: &'static str,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for RecordingOcrBackend {
+        fn name(&self) -> &str {
+            "unmapped-glyphs-recording-ocr"
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for RecordingOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(crate::types::ExtractedDocument {
+                content: self.transcript.to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    /// Mixed page set: page 1 goes to OCR and its transcript holds a real U+FFFD, page 2 stays
+    /// native and lost a glyph. The transcript keeps its character, the native loss is removed
+    /// and still reported.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn mixed_pages_keep_an_ocr_replacement_character_and_report_the_native_loss() {
+        const TRANSCRIPT: &str = "Scanned transcript with a damaged letter A\u{FFFD}B and enough alphanumeric \
+            characters to clear the retention guard for the page that OCR replaces";
+        let backend = std::sync::Arc::new(RecordingOcrBackend {
+            transcript: TRANSCRIPT,
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).expect("the stand-in backend registers");
+        let config = ExtractionConfig {
+            force_ocr_pages: Some(vec![1]),
+            ocr: Some(OcrConfig {
+                backend: "unmapped-glyphs-recording-ocr".to_string(),
+                language: vec!["eng".to_string()],
+                ..OcrConfig::default()
+            }),
+            pages: Some(crate::core::config::PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            use_cache: false,
+            ..ExtractionConfig::default()
+        };
+
+        let document = PdfExtractor::new()
+            .extract_content(
+                &build_type0_lost_glyph_pdf_pages(&["First page words.", "Second page words."]),
+                "application/pdf",
+                &config,
+            )
+            .await;
+        let _ = crate::plugins::unregister_ocr_backend("unmapped-glyphs-recording-ocr");
+        let result = crate::extraction::derive::derive_extraction_result(
+            document.expect("the two page PDF extracts"),
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        assert_eq!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "only page 1 reaches OCR"
+        );
+        assert!(
+            result.content.contains(TRANSCRIPT),
+            "the OCR transcript keeps its own U+FFFD: {:?}",
+            result.content
+        );
+        assert_eq!(
+            result.content.matches(LOST_GLYPH_MARKER).count(),
+            1,
+            "the native loss on page 2 is gone: {:?}",
+            result.content
+        );
+        assert!(
+            result.content.contains("Second page words."),
+            "content: {:?}",
+            result.content
+        );
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .any(|w| w.message.contains("no Unicode value")),
+            "the native page still reports its loss: {:?}",
             result.processing_warnings
         );
     }
