@@ -33,7 +33,6 @@ pub(super) struct PlacedScan {
 #[derive(Default)]
 struct OutsideWalk {
     decodes: u32,
-    visited: HashSet<(ObjectRef, bool)>,
     other: PlacedBucket,
 }
 
@@ -71,8 +70,8 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Add the non-placed text of `stream` and of the forms it paints to `walk`.
     /// `placed` says whether the stream is painted inside a placed scope. The walk
-    /// keeps the depth and decode limits of `process_xobject` and reads each form
-    /// once per placed state, which also stops a cycle.
+    /// keeps the depth and decode limits of `process_xobject`, which also stop a
+    /// form that paints itself.
     fn collect_outside_text(
         doc: Option<&crate::document::PdfDocument>,
         stream: &[u8],
@@ -106,7 +105,7 @@ impl<'doc> TextExtractor<'doc> {
             let Some(form_ref) = xobjects.get(&name).and_then(Object::as_reference) else {
                 continue;
             };
-            if !walk.visited.insert((form_ref, inside)) || !doc.is_form_xobject(form_ref) {
+            if !doc.is_form_xobject(form_ref) {
                 continue;
             }
             let Ok(form) = doc.load_object(form_ref) else {

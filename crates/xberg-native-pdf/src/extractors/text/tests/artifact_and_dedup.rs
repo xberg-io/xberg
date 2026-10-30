@@ -956,3 +956,56 @@ fn test_outside_text_of_one_page_is_not_carried_to_the_next_stream() {
     extractor.begin_page_placed_scan(b"BT (b) Tj ET\n/PlacedPDF BMC\nEMC\n");
     assert_eq!(extractor.page_outside_text().chars, 1);
 }
+
+/// A one-page PDF whose page paints form `Fm0`, and whose form paints itself.
+fn self_painting_form_pdf(form_stream: &str) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offs = Vec::new();
+    let page = "/Fm0 Do\n";
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /XObject << /Fm0 5 0 R >> >> >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+        format!(
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << /XObject << /Fm0 5 0 R >> >> /Length {} >>\nstream\n{form_stream}\nendstream",
+            form_stream.len()
+        ),
+    ];
+    for (i, body) in objects.iter().enumerate() {
+        offs.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref_off = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+    for off in offs {
+        pdf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n").as_bytes());
+    pdf
+}
+
+/// The outside text that the page walk collects from a form that paints itself.
+fn outside_chars_of_self_painting_form(form_stream: &str) -> usize {
+    let doc = crate::document::PdfDocument::from_bytes(self_painting_form_pdf(form_stream)).expect("parse pdf");
+    let page = doc.load_object(ObjectRef::new(3, 0)).expect("page");
+    let resources = page.as_dict().and_then(|d| d.get("Resources")).cloned().expect("resources");
+    let mut extractor = TextExtractor::new();
+    extractor.set_document(&doc);
+    extractor.set_resources(resources);
+    extractor.begin_page_placed_scan(b"/Fm0 Do\n");
+    extractor.page_outside_text().chars
+}
+
+#[test]
+fn test_outside_text_walk_stops_at_the_form_depth_limit() {
+    // Each level adds two characters; the walk enters ten levels of forms. ~keep
+    assert_eq!(outside_chars_of_self_painting_form("BT (ab) Tj ET\n/Fm0 Do\n"), 20);
+}
+
+#[test]
+fn test_outside_text_walk_stops_at_the_form_decode_limit() {
+    // A form that paints itself twice would reach 1023 forms in ten levels; the
+    // walk stops after 500 decodes. ~keep
+    assert_eq!(outside_chars_of_self_painting_form("BT (ab) Tj ET\n/Fm0 Do\n/Fm0 Do\n"), 1000);
+}

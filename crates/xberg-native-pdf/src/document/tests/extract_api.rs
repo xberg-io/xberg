@@ -310,6 +310,30 @@ fn test_placed_form_copy_painted_before_the_enclosing_form_body_is_suppressed() 
     );
 }
 
+/// A form keeps its whole body inside one `/PlacedPDF` scope, and paints a second
+/// form inside that scope with a copy of the body. The second form's text is placed
+/// text too, not outside text, so the body is not judged a duplicate and dropped.
+#[test]
+fn test_form_painted_inside_a_placed_scope_is_not_outside_text() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Placed paragraph number {i} about meadow birds"))
+        .collect();
+    let outer = format!(
+        "/PlacedPDF /MC0 BDC\n{}/Fm1 Do\nEMC\n",
+        text_lines_stream(&lines, 20, 780)
+    );
+    let inner = text_lines_stream(&lines, 29, 771);
+    let page = "/Fm0 Do\n".to_string();
+    let doc = PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &outer, Some(&inner)))
+        .expect("parse pdf");
+
+    let first = doc.extract_text(0).unwrap();
+    assert!(
+        first.contains("Placed paragraph number 7 "),
+        "the placed body was judged against its own nested copy: {first:?}"
+    );
+}
+
 /// Page 1 holds a copy of the body of a form with a placed scope, so that form is a
 /// duplicate overlay there and its placed scope drops the text of the plain form it
 /// paints. Page 2 paints the plain form directly, so its text must stay. The empty
