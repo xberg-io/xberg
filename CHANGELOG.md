@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(development): Follow shared toolchain baseline 1.12.0 and agent conventions 1.5.1.**
   Governance checks follow the shared AI-Rulez version policy.
 - **(plugin): Use the Xberg symbol for the plugin icon and logo.**
+- **(tests): Refresh the published corpus governance and tooling pin.** (#2338)
+  Document contents and checksums are unchanged.
 - **(ocr): Add regression coverage for caller-selected image budgets in direct and staged OCR.** (#2325)
 - **(ci): Run governance, fixture, archive and OCR-cache contract tests, and document manual OCR-cache acceptance.**
 - **(layout): Simplify YOLO decoding and remove its function-length lint exception.** (#1567)
