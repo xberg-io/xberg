@@ -52,6 +52,12 @@ impl OrtBackend {
                 .map_err(|e| ort::Error::new(e.message()))?
                 .with_inter_threads(1)
                 .map_err(|e| ort::Error::new(e.message()))?;
+            #[cfg(all(test, feature = "layout-detection"))]
+            if let Some(path) = super::recording::profile_prefix() {
+                builder = builder
+                    .with_profiling(path)
+                    .map_err(|error| ort::Error::new(error.message()))?;
+            }
             if with_eps {
                 builder = crate::ort_discovery::apply_execution_providers(builder, accel)?;
             }
@@ -91,7 +97,12 @@ impl OrtBackend {
         };
 
         let input_names = session.inputs().iter().map(|i| i.name().to_string()).collect();
-        Ok(Box::new(OrtSession { session, input_names }))
+        Ok(Box::new(OrtSession {
+            session,
+            input_names,
+            #[cfg(all(test, feature = "layout-detection"))]
+            profiling_enabled: super::recording::profile_prefix().is_some(),
+        }))
     }
 }
 
@@ -158,6 +169,8 @@ impl InferenceBackend for OrtBackend {
 /// An ONNX Runtime session behind the neutral [`InferenceSession`] trait.
 pub struct OrtSession {
     session: Session,
+    #[cfg(all(test, feature = "layout-detection"))]
+    profiling_enabled: bool,
     input_names: Vec<String>,
 }
 
@@ -293,6 +306,17 @@ mod tests {
         match value_to_tensor(&value).unwrap() {
             InferenceTensor::I64(extracted) => assert_eq!(extracted, array),
             other => panic!("expected I64 tensor, got {other:?}"),
+        }
+    }
+}
+
+#[cfg(all(test, feature = "layout-detection"))]
+impl Drop for OrtSession {
+    fn drop(&mut self) {
+        if self.profiling_enabled {
+            self.session
+                .end_profiling()
+                .expect("finalized production parity profile");
         }
     }
 }
