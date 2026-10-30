@@ -562,6 +562,10 @@ impl LayoutModel for PpDocLayoutV3Model {
 mod preprocessing_tests;
 
 #[cfg(test)]
+#[path = "pp_doclayout_v3/batch_contract_tests.rs"]
+mod batch_contract_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

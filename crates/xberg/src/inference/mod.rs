@@ -32,6 +32,8 @@ mod ort_backend;
 #[cfg(all(feature = "tract", any(not(inference_ort), test)))]
 pub(crate) mod tract_backend;
 
+#[cfg(all(test, feature = "layout-detection"))]
+pub(crate) use backend::InferenceError;
 pub(crate) use backend::{InferenceBackend, InferenceSession};
 pub(crate) use tensor::InferenceTensor;
 
