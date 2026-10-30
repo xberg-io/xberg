@@ -14,6 +14,24 @@ WORKFLOW = (REPOSITORY_ROOT / ".github/workflows/benchmarks.yaml").read_text()
 
 
 class TestWorkflowMatrixValidation(unittest.TestCase):
+    def test_parses_a_flow_sequence_starting_after_the_dimension_key(self) -> None:
+        lines = [
+            "        cohort:",
+            "          [",
+            "            native-pdf-fast-b8,",
+            "            native-office-fast,",
+            "          ]",
+            "    steps:",
+        ]
+
+        assert VALIDATOR.parse_list(lines, 0, "") == (["native-pdf-fast-b8", "native-office-fast"], 4)
+
+    def test_rejects_a_dimension_with_no_sequence_before_the_next_field(self) -> None:
+        lines = ["      matrix:", "        cohort:", "        mode: [single-file]", "    steps:"]
+
+        with self.assertRaisesRegex(ValueError, "matrix dimension 'cohort' has no values"):
+            VALIDATOR.parse_matrix("empty-cohort", lines)
+
     def test_expands_every_exact_contract_cell_once(self) -> None:
         cells = VALIDATOR.workflow_cells(WORKFLOW)
 

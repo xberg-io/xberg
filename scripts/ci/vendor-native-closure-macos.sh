@@ -38,9 +38,10 @@ is_system_path() {
 # Emit the dependency load paths of a Mach-O file, skipping otool's header line
 # and the file's own LC_ID_DYLIB entry (a dylib lists its own install name first).
 deps_of() {
-  local file="$1" self dep
+  local file="$1" self dep load_commands
   self="$(basename "$file")"
-  otool -L "$file" | tail -n +2 | awk '{print $1}' | while IFS= read -r dep; do
+  load_commands="$(otool -L "$file")" || return 1
+  printf '%s\n' "$load_commands" | tail -n +2 | awk '{print $1}' | while IFS= read -r dep; do
     [ -n "$dep" ] || continue
     [ "$(basename "$dep")" = "$self" ] && continue
     printf '%s\n' "$dep"
@@ -64,7 +65,7 @@ main() {
   binary="$base_dir/$(basename "$binary")"
   [ -f "$binary" ] || die "no such binary: $binary"
 
-  local queue seen item dep base dest
+  local queue seen item dep base dest dependencies final_report
   WORKDIR="$(mktemp -d)"
   queue="$WORKDIR/queue"
   seen="$WORKDIR/seen"
@@ -75,6 +76,7 @@ main() {
     item="$(head -n1 "$queue")"
     tail -n +2 "$queue" >"$queue.tmp" && mv "$queue.tmp" "$queue"
 
+    dependencies="$(deps_of "$item")" || die "failed to inspect dependencies of $(basename "$item")"
     while IFS= read -r dep; do
       [ -n "$dep" ] || continue
       is_system_path "$dep" && continue
@@ -94,17 +96,19 @@ main() {
         printf '%s\n' "$dest" >>"$queue"
         log "vendored $base beside $(basename "$binary")"
       fi
-    done < <(deps_of "$item")
+    done <<<"$dependencies"
 
     resign "$item"
   done
 
   # Nothing outside the bundle may remain (mirrors the Intel ONNX Runtime check).
   local residual
-  residual="$({
-    otool -L "$binary"
-    while IFS= read -r base; do otool -L "$base_dir/$base"; done <"$seen"
-  } | awk '{print $1}' | grep -E '^(/opt/|/usr/local/)' || true)"
+  final_report="$WORKDIR/final-dependencies"
+  otool -L "$binary" >"$final_report" || die "failed to inspect final closure of $(basename "$binary")"
+  while IFS= read -r base; do
+    otool -L "$base_dir/$base" >>"$final_report" || die "failed to inspect final closure of $base"
+  done <"$seen"
+  residual="$(awk '{print $1}' "$final_report" | grep -E '^(/opt/|/usr/local/)' || true)"
   if [ -n "$residual" ]; then
     log "residual non-system load paths after vendoring:"
     printf '%s\n' "$residual" >&2

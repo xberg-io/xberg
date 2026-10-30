@@ -1,4 +1,4 @@
-//! Detector-only A/B measurements on identical rendered PDF pages.
+//! Detector-only A/B measurements on identical PDF renders or original raster images.
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -9,18 +9,22 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use xberg::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
 use xberg::layout::{CustomModelVariant, LayoutEngine, LayoutEngineConfig, LayoutModelManager, ModelBackend};
-use xberg::pdf::render::PdfRenderSession;
 
 use crate::corpus::CorpusDocument;
 use crate::{CohortManifest, Error, Result};
 
 mod contract;
+mod geometry;
+mod input;
 mod resources;
 #[cfg(test)]
 mod tests;
 
 pub use contract::{DetectorMeasurement, DetectorPageRow, ExpectedDocument, ModelBenchmarkReport, ModelIdentity};
+pub use geometry::GeometryEvidence;
 pub use resources::{PairedProcessResources, ResourceHostIdentity};
+
+use input::{PreparedInput, read_document, validate_file_type};
 
 const DEFAULT_RENDER_DPI: i32 = 150;
 const DEFAULT_MAX_PAGES: usize = 3;
@@ -39,9 +43,12 @@ pub struct ModelBenchmarkConfig {
     pub model_b: String,
     pub max_pages: usize,
     pub iterations: usize,
+    /// PDF rasterization DPI; image inputs retain their original pixel dimensions.
     pub dpi: i32,
     pub confidence_threshold: f32,
     pub expected_pages: Option<usize>,
+    /// Hash-bound COCO geometry annotations; absent keeps timing-only reporting.
+    pub geometry_annotations: Option<PathBuf>,
 }
 
 impl Default for ModelBenchmarkConfig {
@@ -56,6 +63,7 @@ impl Default for ModelBenchmarkConfig {
             dpi: DEFAULT_RENDER_DPI,
             confidence_threshold: DEFAULT_CONFIDENCE,
             expected_pages: None,
+            geometry_annotations: None,
         }
     }
 }
@@ -197,35 +205,41 @@ fn load_documents(config: &ModelBenchmarkConfig) -> Result<Vec<CorpusDocument>> 
     if documents.is_empty() {
         return Err(Error::Config("detector benchmark corpus is empty".to_string()));
     }
-    if documents.len() != manifest.fixtures.len() || documents.iter().any(|doc| doc.file_type != "pdf") {
+    if documents.len() != manifest.fixtures.len() {
         return Err(Error::Config(
-            "detector cohort must load every declared PDF fixture".to_string(),
+            "detector cohort must load every declared fixture".to_string(),
         ));
+    }
+    for document in &documents {
+        validate_file_type(&document.file_type)?;
     }
     Ok(documents)
 }
 
-fn measure(detector: &mut PreparedDetector, png: &[u8]) -> Result<DetectorMeasurement> {
+fn measure(detector: &mut PreparedDetector, image_bytes: &[u8]) -> Result<DetectorMeasurement> {
     let started = Instant::now();
-    let result = detector.engine.detect_image_bytes(png).map_err(benchmark_error)?;
+    let result = detector
+        .engine
+        .detect_image_bytes(image_bytes)
+        .map_err(benchmark_error)?;
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     DetectorMeasurement::from_detection(result, elapsed_ms)
 }
 
 fn measure_pair(
     engines: &mut [PreparedDetector; 2],
-    png: &[u8],
+    image_bytes: &[u8],
     ordinal: usize,
 ) -> Result<([DetectorMeasurement; 2], bool)> {
-    // ~keep Alternate paired order; both arms consume the same already-rendered PNG bytes.
+    // ~keep Alternate paired order; both arms consume the same rendered or original page bytes.
     let a_first = ordinal.is_multiple_of(2);
     let (a, b) = if a_first {
-        let a = measure(&mut engines[0], png)?;
-        let b = measure(&mut engines[1], png)?;
+        let a = measure(&mut engines[0], image_bytes)?;
+        let b = measure(&mut engines[1], image_bytes)?;
         (a, b)
     } else {
-        let b = measure(&mut engines[1], png)?;
-        let a = measure(&mut engines[0], png)?;
+        let b = measure(&mut engines[1], image_bytes)?;
+        let a = measure(&mut engines[0], image_bytes)?;
         (a, b)
     };
     Ok(([a, b], a_first))
@@ -237,9 +251,9 @@ fn plan_documents(
 ) -> Result<BTreeMap<String, ExpectedDocument>> {
     let mut expected = BTreeMap::new();
     for doc in documents {
-        let bytes = std::fs::read(&doc.document_path)?;
-        let session = PdfRenderSession::open(&bytes, None).map_err(benchmark_error)?;
-        let pages = session.page_count().min(config.max_pages);
+        let bytes = read_document(doc)?;
+        let input = PreparedInput::open(&bytes, &doc.file_type)?;
+        let pages = input.page_count().min(config.max_pages);
         if pages == 0 || expected.contains_key(&doc.name) {
             return Err(Error::Config(
                 "empty PDF or duplicate detector document name".to_string(),
@@ -275,18 +289,17 @@ fn measure_document(
     engines: &mut [PreparedDetector; 2],
     rows: &mut Vec<DetectorPageRow>,
 ) -> Result<()> {
-    let bytes = std::fs::read(&doc.document_path)?;
+    let bytes = read_document(doc)?;
     if hash_bytes(&bytes) != expected.document_sha256 || hash_file(&doc.fixture_path)? != expected.fixture_sha256 {
         return Err(Error::Benchmark("detector input changed after planning".to_string()));
     }
-    let session = PdfRenderSession::open(&bytes, None).map_err(benchmark_error)?;
+    let input = PreparedInput::open(&bytes, &doc.file_type)?;
     for page in 0..expected.pages {
-        let png = session
-            .render_page_to_png(page, Some(config.dpi))
-            .map_err(benchmark_error)?;
-        let render_sha256 = hash_bytes(&png);
+        let prepared = input.page(page, config.dpi)?;
+        let render_sha256 = hash_bytes(&prepared.bytes);
         for iteration in 0..config.iterations {
-            let (measurements, a_first) = measure_pair(engines, &png, rows.len())?;
+            let (measurements, a_first) = measure_pair(engines, &prepared.bytes, rows.len())?;
+            prepared.validate_measurements(&measurements)?;
             rows.push(DetectorPageRow {
                 fixture_sha256: expected.fixture_sha256.clone(),
                 document: doc.name.clone(),
@@ -302,7 +315,7 @@ fn measure_document(
     Ok(())
 }
 
-/// Run actual detectors. Successful output is timing/count evidence, not a quality qualification.
+/// Run actual detectors; optional bbox metrics do not constitute quality qualification.
 pub async fn run_model_benchmark(config: &ModelBenchmarkConfig) -> Result<ModelBenchmarkReport> {
     validate_config(config)?;
     let config = config.clone();
@@ -318,6 +331,11 @@ fn run_detectors(config: &ModelBenchmarkConfig) -> Result<ModelBenchmarkReport> 
     let cohort_sha256 = hash_file(&config.cohort)?;
     let documents = load_documents(config)?;
     let expected = plan_documents(&documents, config)?;
+    let geometry = config
+        .geometry_annotations
+        .as_ref()
+        .map(|path| geometry::load(path, &documents, &expected))
+        .transpose()?;
     let mut engines = [
         prepare_detector(detectors[0], config.confidence_threshold)?,
         prepare_detector(detectors[1], config.confidence_threshold)?,
@@ -333,13 +351,19 @@ fn run_detectors(config: &ModelBenchmarkConfig) -> Result<ModelBenchmarkReport> 
     if hash_file(&config.cohort)? != cohort_sha256 {
         return Err(Error::Benchmark("cohort manifest changed during inference".to_string()));
     }
-    ModelBenchmarkReport::new(
+    let mut report = ModelBenchmarkReport::new(
         config,
         engines.map(|engine| engine.identity),
         expected,
         rows,
         cohort_sha256,
-    )
+    )?;
+    if let Some(plan) = geometry {
+        report.geometry = Some(plan.finish(&report)?);
+        report.schema_version = contract::SCORED_REPORT_SCHEMA_VERSION;
+        report.quality_assessed = true;
+    }
+    Ok(report)
 }
 
 pub fn print_model_table(report: &ModelBenchmarkReport) {
@@ -350,8 +374,8 @@ pub fn print_model_table(report: &ModelBenchmarkReport) {
         report.actual_inference_calls
     );
     eprintln!(
-        "CPU, {} DPI, confidence {}, generic heuristics disabled; quality_assessed=false",
-        report.dpi, report.confidence_threshold
+        "CPU, {} DPI, confidence {}, generic heuristics disabled; quality_assessed={}",
+        report.dpi, report.confidence_threshold, report.quality_assessed
     );
     for model in &report.models {
         eprintln!(

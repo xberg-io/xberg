@@ -9,7 +9,7 @@ on:
       - "tools/**/*.sh"
       - "integrations/scripts/**"
       - ".editorconfig"
-      - "Taskfile.yml"
+      - "mise-tasks/**"
       - ".github/workflows/ci-scripts.yaml"
       - "mise.toml"
       - "mise.lock"
@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 env:
-  # The same versions the Taskfile expects locally, so a green run here means the same tools a
+  # The same versions the mise tasks expect locally, so a green run here means the same tools a
   # developer has. Both are passed explicitly rather than relying on the action defaults: a
   # default only helps the caller who omits it, and omitting it is how a workflow ends up reading
   # as pinned while installing whatever the registry served that morning.
@@ -86,18 +86,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Task
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
 
       - name: Check shared Bats helper provenance
-        run: task test:scripts:lib:check
+        run: mise run test:scripts:lib:check
 
-      # shfmt is not on the runner image and `task lint:shell` invokes it directly, so this job
+      # shfmt is not on the runner image and `mise run lint:shell` invokes it directly, so this job
       # exited 127 -- "executable file not found in $PATH" -- and reported a shell FORMATTING
       # failure while having formatted nothing. It had never once run. Pinned to the version used
-      # locally so a developer's `task lint:shell` and CI cannot disagree about what is clean.
+      # locally so a developer's `mise run lint:shell` and CI cannot disagree about what is clean.
       # ~keep
       - name: Install shfmt
         run: |
@@ -108,4 +108,4 @@ jobs:
         run: |
           command -v shfmt >/dev/null || { echo "shfmt still not on PATH" >&2; exit 1; }
           shfmt --version
-          task lint:shell
+          mise run lint:shell

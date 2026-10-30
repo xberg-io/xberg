@@ -11,10 +11,9 @@
 //! own policy on top without forking the mechanism.
 //!
 //! Like the rest of [`crate::engine`], this is **not** part of the
-//! language-binding surface: `engine` is a bare `pub mod engine;` in `lib.rs`
-//! whose files are not listed in `alef.toml` `sources`, so the binding generator
-//! emits nothing for it. The public types here are also listed in `alef.toml`
-//! `[crates.exclude] types` as belt-and-suspenders.
+//! language-binding surface. Its public types and functions are explicitly
+//! excluded in `alef.toml` `[crates.exclude]`. Add new public items to those
+//! lists so binding generation cannot expose unsupported mechanism internals.
 //!
 //! Submodules are feature-gated to their hard dependencies so default-feature
 //! builds (and any feature subset) still compile:

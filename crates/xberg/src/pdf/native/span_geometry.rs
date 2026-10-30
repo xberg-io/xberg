@@ -77,6 +77,16 @@ pub(crate) fn upright_origin(span: &TextSpan) -> (f32, f32) {
     )
 }
 
+/// Midpoint along the flattened advance axis, projected into page coordinates. ~keep
+pub(crate) fn page_advance_midpoint(span: &TextSpan) -> (f32, f32) {
+    let half_advance = span.bbox.width * 0.5;
+    if is_unrotated(span) {
+        return (span.bbox.x + half_advance, span.bbox.y);
+    }
+    let (sin, cos) = span.rotation_degrees.to_radians().sin_cos();
+    (span.bbox.x + half_advance * cos, span.bbox.y + half_advance * sin)
+}
+
 /// `(start, end)` of the span along its own advance axis.
 ///
 /// Equivalent to `(bbox.x, bbox.x + bbox.width)` for unrotated spans.
@@ -151,6 +161,21 @@ mod tests {
         assert!(!is_ltr_writing_mode(&vertical));
         assert!(!is_ltr_writing_mode(&right_to_left));
         assert!(!is_horizontal_ltr(&right_to_left));
+    }
+
+    #[test]
+    fn should_project_advance_midpoints_into_page_coordinates() {
+        for (rotation, expected) in [
+            (0.0, (120.0, 700.0)),
+            (90.0, (100.0, 720.0)),
+            (180.0, (80.0, 700.0)),
+            (270.0, (100.0, 680.0)),
+        ] {
+            let span = rotated_span(100.0, 700.0, 40.0, 10.0, rotation);
+            let actual = page_advance_midpoint(&span);
+            assert!((actual.0 - expected.0).abs() < 1e-3, "{rotation}: {actual:?}");
+            assert!((actual.1 - expected.1).abs() < 1e-3, "{rotation}: {actual:?}");
+        }
     }
 
     #[test]

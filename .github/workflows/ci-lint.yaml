@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "vendored/**"
       - "crates/**"
       - "packages/**"
       - "e2e/**"
@@ -24,9 +25,8 @@ on:
       - "mise.ci.lock"
       - "package.json"
       - ".github/**"
-      - ".task/**"
+      - "mise-tasks/**"
       - ".gitmodules"
-      - "Taskfile.yml"
       - "alef.toml"
       - "pyproject.toml"
       - "plugin/**"
@@ -56,16 +56,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install Task
+      - name: Install Python and Node
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
-      - name: Install ai-rulez
-        uses: xberg-io/actions/setup-ai-rulez@v1
-        with:
-          ai-rulez-version: "latest"
+          install-args: python node
       - name: Validate AI governance inputs
-        run: task governance:verify
+        run: mise run governance:verify
+      - name: Test that ai-rulez stays unpinned
+        run: mise run governance:test
 
   benchmark-scripts:
     if: github.event.pull_request.draft != true
@@ -76,10 +74,12 @@ jobs:
       UV_PYTHON_PREFERENCE: only-system
     steps:
       - uses: actions/checkout@v7
-      - name: Install Task, Python and uv
+        with:
+          submodules: true
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task python uv
+          install-args: python uv
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -91,9 +91,17 @@ jobs:
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
           restore-keys: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-
       - name: Validate benchmark scripts
-        run: task benchmark:validate:scripts
+        run: mise run benchmark:validate:scripts
       - name: Validate Publish workflow contracts
-        run: task release:test:contracts
+        run: mise run release:test:contracts
+      - name: Test Python archive publication
+        run: mise run python:publish:archive:test
+      - name: Test the layout-annotation importer
+        run: mise run benchmark:validate:layout-annotations
+      - name: Test the fixture generator
+        run: mise run fixtures:test
+      - name: Test the classic OCR cache acceptance harness
+        run: mise run test:classic-ocr-cache:harness
 
   plugin-freshness:
     if: github.event.pull_request.draft != true
@@ -110,6 +118,8 @@ jobs:
         uses: xberg-io/actions/setup-mise@v1
         with:
           install-args: python uv node
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -120,26 +130,19 @@ jobs:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
           restore-keys: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-
-      # The plugin version must track the core crate version (task version:sync keeps it
+      # The plugin version must track the core crate version (mise run version:sync keeps it
       # pinned via sync_integration_versions.py). Guards against a core bump landing
       # without the plugin version following — verify --plugin alone would not catch it. ~keep
       - name: Verify plugin version tracks core
         run: python3 scripts/sync_integration_versions.py --check
       # Byte-verify the ai-rulez-generated coding-agent plugin bundles under plugin/
-      # match plugin/.ai-rulez (BLAKE3 provenance). Runs the latest ai-rulez on purpose: a release
-      # that changes generator output fails here first; run `task plugin:generate` and commit. ~keep
-      - name: Install ai-rulez
-        uses: xberg-io/actions/setup-ai-rulez@v1
-        with:
-          ai-rulez-version: "latest"
+      # match plugin/.ai-rulez (BLAKE3 provenance), with the latest ai-rulez release that also
+      # regenerates them (org ADR-0015). ~keep
       - name: Verify generated plugin bundles are current
         run: |
           ai-rulez verify --plugin
       - name: Verify OpenCode tools and packed Pi resources
-        run: |
-          node --test scripts/tests/opencode-plugin.test.mjs
-          python3 scripts/verify_pi_package.py
-          python3 scripts/tests/test_verify_pi_package.py
+        run: mise run plugin:test
 
       - name: Validate Hermes distribution metadata
         shell: bash
@@ -205,17 +208,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - name: Install Task
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
       # C# DllImport and Java Panama FunctionDescriptor both restate every native signature
       # by hand, and neither restatement is checked at build time, so a wrong declaration
       # compiles clean and misbehaves only when the call runs. GH#1595 shipped that way in
       # BOTH: a six-parameter function declared with three, whose int32_t status was then
       # dereferenced as a pointer. Go is exempt -- cgo type-checks against the header. ~keep
       - name: Verify FFI declaration checker and compare surfaces
-        run: task ffi:verify:declarations
+        run: mise run ffi:verify:declarations
 
   alef-readme-paths:
     if: github.event.pull_request.draft != true
@@ -228,10 +231,10 @@ jobs:
       UV_PYTHON_PREFERENCE: only-system
     steps:
       - uses: actions/checkout@v7
-      - name: Install Task, Python and uv
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task python uv
+          install-args: python uv
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -248,7 +251,7 @@ jobs:
       # previously needed a full ~10-minute `alef all` regen cycle per broken
       # path to discover -- this finds all of them in under a second. ~keep
       - name: Verify alef.toml readme/docs paths resolve
-        run: task alef:verify:readme-paths
+        run: mise run alef:verify:readme-paths
       # GH#1387: the FFI crate selects core features by hand (it cannot use `full`
       # -- cf7fa0533d dropped it to keep libheif/candle out of Swift's zigbuild
       # Linux targets), and that hand list silently lost eight formats. The fix was
@@ -257,9 +260,9 @@ jobs:
       # manifest faithfully generated from a wrong source. This asserts alef.toml
       # AND the generated manifest both carry the formats. ~keep
       - name: Verify the native FFI build still selects every document format
-        run: task alef:verify:ffi-formats
+        run: mise run alef:verify:ffi-formats
       - name: Verify published format counts match the MIME registry
-        run: task supported-counts:verify
+        run: mise run supported-counts:verify
       # GH#1443: per-target feature aggregates in crates/xberg/Cargo.toml (windows-target,
       # formats-no-heic, full-no-heic, macos-intel-target, windows-gnu-target) are hand-maintained
       # supersets/subsets of `full` and silently drift when a feature is added to `full` without
@@ -267,7 +270,7 @@ jobs:
       # `45bbd99088` restored them by hand. Nothing else in CI compiles both sides to compare
       # them, so this only catches it statically, before the next silent regression ships. ~keep
       - name: Verify per-target feature aggregates match `full`
-        run: task verify:feature-parity
+        run: mise run verify:feature-parity
       # Every image failed to build for weeks because `.dockerignore` excludes everything and
       # re-includes an allowlist: a new workspace member gained its Dockerfile `COPY` but no
       # allowlist entry, so buildx aborted with `not found` before compiling. The Docker workflow
@@ -276,14 +279,14 @@ jobs:
       # and every COPYd path survives .dockerignore -- because coverage alone was green
       # throughout the outage. ~keep
       - name: Verify every workspace crate survives .dockerignore
-        run: task verify:docker-crates
+        run: mise run verify:docker-crates
       # docs-site/src/content/docs/changelog.md is a hand-maintained copy of
       # CHANGELOG.md -- nothing generates it and nothing synced it, so it silently
       # fell a full release behind (repo at 1.1.0, published docs still at 1.0.14).
       # Asserts every release section is present AND byte-identical, so neither a
       # missed release nor a one-sided edit can drift again. ~keep
       - name: Verify the docs-site changelog is in sync
-        run: task docs:verify:changelog
+        run: mise run docs:verify:changelog
 
   alef-bindings-freshness:
     if: github.event.pull_request.draft != true
@@ -329,12 +332,12 @@ jobs:
       # Poly's Java formatter runs on the configured JDK. Ubuntu's default JRE is 17, while
       # generated Java is formatted with the repository's Java 25 toolchain; keep verification
       # on that same toolchain so eight wrapped declarations do not oscillate in CI. ~keep
-      - name: Install Task and Java
+      - name: Install Java
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task java
+          install-args: java
       - name: Verify Poly formatter scopes
-        run: task poly:verify:tool-scopes
+        run: mise run poly:verify:tool-scopes
       - name: Setup Rust for Alef metadata
         uses: xberg-io/actions/setup-rust@v1
         with:
@@ -344,7 +347,7 @@ jobs:
           install-llvm-cov: "false"
       # install-alef reads alef.toml's [workspace] alef_version and installs that
       # exact pinned build, so this job doesn't go red every time alef cuts a
-      # release -- same hermeticity guarantee mise.lock gives the Task binary. ~keep
+      # release -- same hermeticity guarantee mise.lock gives the mise tools. ~keep
       - name: Install alef CLI
         uses: xberg-io/actions/install-alef@v1
         # alef is a third-party tool. The job-wide `-D warnings` turns its own
@@ -352,7 +355,7 @@ jobs:
         env:
           RUSTFLAGS: ""
       # Generated Markdown and Rust bindings are committed after the same Poly formatting
-      # pass used by `task alef:generate`. Alef verifies the formatted render when Poly is
+      # pass used by `alef all`. Alef verifies the formatted render when Poly is
       # available; without it this job compared raw backend output and reported false drift. ~keep
       # Poly delegates Java formatting to the executables on PATH. Pin the same formatter chain
       # used for the committed Alef output; google-java-format alone is insufficient because Poly
@@ -389,8 +392,8 @@ jobs:
       - name: Install poly
         uses: Goldziher/poly@v0
         with:
-          version: "0.31.0"
-      # `alef verify` (aliased as `task alef:verify`) is a purpose-built freshness
+          version: "0.31.2"
+      # `alef verify` (aliased as `mise run alef:verify`) is a purpose-built freshness
       # check: it recomputes each generated file's expected hash from the current
       # Rust source, applies the configured formatter to the in-memory render, and
       # compares it to what's committed without writing files. Never run
@@ -402,7 +405,7 @@ jobs:
       # --all-targets` is clean on that tree). With the mask gone it correctly
       # goes red on a stale tree, which is the point. ~keep
       - name: Verify alef-generated bindings are current
-        run: task alef:verify
+        run: mise run alef:verify
       # `alef verify` above compares each generated file's hash to a hash of its own
       # generation inputs, so it is green whenever a regen would reproduce the tree --
       # including when a field was never wired into the generator's field list at all,
@@ -413,7 +416,7 @@ jobs:
       # surface. It does not require a full `alef all --clean` regen or the sibling
       # polyrepo checkouts above. ~keep
       - name: Verify tracked config fields reach every binding surface
-        run: task alef:verify:fields
+        run: mise run alef:verify:fields
       # `alef verify` above already reports schema drift, but only as an informational
       # log line buried in its full-surface output -- it never fails, by upstream design:
       # a version-stamp-only difference still describes the same alef.toml config surface,
@@ -482,10 +485,11 @@ jobs:
           mv .polyrepo-siblings/crawlberg ../crawlberg
           mv .polyrepo-siblings/html-to-markdown ../html-to-markdown
           rmdir .polyrepo-siblings
-      - name: Install Task, Python and uv
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task python uv
+          install-args: python uv
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - name: Install Elixir formatter
         uses: xberg-io/actions/setup-elixir@v1
         with:
@@ -506,6 +510,7 @@ jobs:
       # `[crates.e2e.format] dart` runs `dart format` on e2e/dart during `alef e2e generate`,
       # and alef 0.95.0 fails the run on a formatter exit code instead of deferring it, so
       # this job needs the same SDK the dart e2e leg and the snippet gate below use. ~keep
+      # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
         with:
@@ -530,14 +535,14 @@ jobs:
       - name: Install poly
         uses: Goldziher/poly@v0
         with:
-          version: "0.31.0"
-      # `task e2e:verify` (`alef e2e generate` then `git diff --exit-code e2e/`)
+          version: "0.31.2"
+      # `mise run e2e:verify` (`alef e2e generate` then `git diff --exit-code e2e/`)
       # was previously invoked by nothing -- it was only named in a comment on
       # the alef-bindings-freshness job above as though it ran. Wiring it here
       # fails whenever a fixture changes without the generated e2e suites being
       # regenerated and committed alongside it. ~keep
       - name: Verify generated e2e suites are current
-        run: task e2e:verify
+        run: mise run e2e:verify
 
   docs-snippets:
     if: github.event.pull_request.draft != true
@@ -552,10 +557,10 @@ jobs:
       # `UnsupportedClassVersionError` for every one of the 139 java snippets. 25 matches
       # packages/java/pom.xml `<maven.compiler.release>` and the `validate` job below,
       # which already sets the same version for the same reason. ~keep
-      - name: Install Task and Java
+      - name: Install Java
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task java
+          install-args: java
       - name: Install alef CLI
         uses: xberg-io/actions/install-alef@v1
         # alef is a third-party tool. The job-wide `-D warnings` turns its own
@@ -581,8 +586,8 @@ jobs:
       # but zig's 110 snippets link `../../target/release/libxberg_ffi.so`, which this
       # job never builds, so they report Unavailable regardless of toolchain presence.
       # The step was removed; zig is excluded below alongside go/typescript/kotlin/
-      # swift instead -- see the `~keep` comment on `snippets:all` in
-      # `.task/tools/docs.yml` for the full accounting. ~keep
+      # swift instead -- see the `~keep` comment on `docs:snippets:all` in
+      # `mise-tasks/docs.toml` for the full accounting. ~keep
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
         with:
@@ -592,6 +597,7 @@ jobs:
           # moves with whichever freezed pub picks, so read the error's own
           # "requires SDK version" rather than assuming the previous floor. ~keep
           sdk: "3.13.7"
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - name: Setup Elixir
         uses: xberg-io/actions/setup-elixir@v1
         with:
@@ -607,15 +613,15 @@ jobs:
       # below applies via the reusable workflow's `install-system-deps`. ~keep
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
-      # `task docs:snippets:all` (audit + gaps + validate) is described as the
-      # "canonical docs:snippets gate" in .task/tools/docs.yml, but nothing
+      # `mise run docs:snippets:all` (audit + gaps + validate) is described as the
+      # "canonical docs:snippets gate" in mise-tasks/docs.toml, but nothing
       # invoked it -- a broken or orphaned snippet could land undetected. ~keep
-      # This job never runs `alef build`/`task build`, so `validation_level =
+      # This job never runs `alef build`/`mise run build`, so `validation_level =
       # "compile"` (alef.toml) can only succeed for languages that need no
       # built xberg artifact: c, csharp, dart, elixir, java, php, python,
-      # ruby, rust. `task docs:snippets:all` restricts the compile check
+      # ruby, rust. `mise run docs:snippets:all` restricts the compile check
       # to exactly that set via `--lang` -- see the `~keep` comment on
-      # `snippets:all` in .task/tools/docs.yml for the measured per-language
+      # `docs:snippets:all` in mise-tasks/docs.toml for the measured per-language
       # breakdown and why `--lang`'s fence-tag granularity forces dropping
       # typescript (node+wasm) and kotlin (JVM+android) as whole groups rather
       # than just their broken wasm/android halves.
@@ -635,14 +641,14 @@ jobs:
       # language's native artifact -- not here, where the only fix would be a
       # second, ~1-hour, redundant FFI build per run. ~keep
       - name: Run docs snippets gate
-        run: task docs:snippets:all
+        run: mise run docs:snippets:all
       - name: Report snippet languages not compile-verified in this job
         if: always()
         run: |
           echo "::notice::docs-snippets gate does not compile-verify: go (141 snippets), \
           typescript/node+wasm (124 snippets), kotlin/kotlin_android (104 snippets), \
           swift (110 snippets), zig (110 snippets) -- see the ~keep comment above this step \
-          and in .task/tools/docs.yml:snippets:all for why and where that coverage belongs."
+          and on docs:snippets:all in mise-tasks/docs.toml for why and where that coverage belongs."
 
   validate:
     if: github.event.pull_request.draft != true

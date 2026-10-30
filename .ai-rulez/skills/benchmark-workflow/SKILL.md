@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Benchmark Workflow
-description: "Xberg extraction benchmarks: running, quality scoring, fixtures, ground truth. Use for the Benchmarks workflow or benchmark-harness work."
+description: "Run extraction benchmarks; score quality and manage fixtures or ground truth."
 paths:
   - "tools/benchmark-harness/**"
 x-ai-rulez:

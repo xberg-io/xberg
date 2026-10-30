@@ -36,6 +36,21 @@ pub struct FinalizedOutput {
     pub per_batch_errors: Vec<String>,
 }
 
+/// Opt-in finalization result with strict output and a separate recovery candidate.
+pub struct FinalizationRecovery {
+    /// The unchanged validated and citation-fused finalization result.
+    pub strict: FinalizedOutput,
+    /// Merged parseable responses, explicitly NOT schema-validated or citation-fused.
+    ///
+    /// Required, cross-field and whole-document constraints may remain unsatisfied.
+    /// `None` means no response parsed; `Some(Value::Null)` represents a parsed
+    /// JSON null. A caller must explicitly decide whether to use this candidate.
+    pub unvalidated_candidate: Option<Value>,
+    /// Original responses and all validation errors in original batch order.
+    /// Pointers address their original batches, not positions in the candidate.
+    pub batches: Vec<schema::BatchValidationReport>,
+}
+
 /// The citation-fusion half of a [`merge_and_cite`] call: the extracted context
 /// a merged value is fused against, and the policy governing how.
 pub struct CitationInputs<'a> {
@@ -67,7 +82,41 @@ pub fn merge_and_cite(
     citation_inputs: CitationInputs<'_>,
 ) -> FinalizedOutput {
     let merged = schema::validate_and_merge(raw_responses, schema_value, merge_mode);
+    cite_validated(merged, citation_inputs)
+}
 
+/// Finalize strictly while also returning an explicitly unvalidated recovery candidate.
+///
+/// The `strict` result retains [`merge_and_cite`]'s outcome, validation errors and
+/// citation behavior. Parseable responses are separately aggregated using the
+/// caller's merge mode, including responses that fail schema validation. No
+/// schema is weakened, and no fields are pruned or declared independently valid.
+/// The candidate is never passed to citation fusion.
+///
+/// Candidate merging follows the existing merge modes: object merge considers
+/// object batches, array concatenation considers array batches, and take-first
+/// selects the first parseable response. JSON strings are normalized as in strict
+/// validation. Malformed strings remain in `batches` with parsing errors, but do
+/// not enter the candidate. Instance pointers remain relative to each original
+/// parsed batch; array offsets and overwritten object fields are not remapped to
+/// the merged candidate. Offline schema-reference restrictions remain enforced.
+pub fn finalize_with_recovery(
+    raw_responses: Vec<Value>,
+    schema_value: &Value,
+    merge_mode: MergeMode,
+    citation_inputs: CitationInputs<'_>,
+) -> FinalizationRecovery {
+    let schema::ValidationReport { validated, mut batches } =
+        schema::validate_and_report(raw_responses, schema_value, merge_mode);
+    let unvalidated_candidate = schema::merge_unvalidated_batches(&mut batches, merge_mode);
+    FinalizationRecovery {
+        strict: cite_validated(validated, citation_inputs),
+        unvalidated_candidate,
+        batches,
+    }
+}
+
+fn cite_validated(merged: schema::MergedOutput, citation_inputs: CitationInputs<'_>) -> FinalizedOutput {
     let CitationOutput {
         structured_output,
         structured_output_flat,
@@ -88,6 +137,10 @@ pub fn merge_and_cite(
         per_batch_errors: merged.per_batch_errors,
     }
 }
+
+#[cfg(test)]
+#[path = "finalize_recovery_tests.rs"]
+mod recovery_tests;
 
 #[cfg(test)]
 mod tests {

@@ -557,6 +557,9 @@ type MixedLayoutOutcome = (
 struct MixedOcrPageSelection<'a> {
     ocr: &'a [u32],
     single_block: &'a [u32],
+    /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
+    /// read them from its own native text.
+    native_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
 }
 
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
@@ -620,6 +623,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
         MixedOcrPageSelection {
             ocr: ocr_page_numbers,
             single_block: single_block_page_numbers,
+            native_layers: None,
         },
         content,
         config,
@@ -683,6 +687,30 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     if page_indices.is_empty() {
         return Ok(MixedOcrRun::native(native_text));
     }
+
+    // Pages whose OCR text got the recognition-noise verdict and was not discarded. The caller
+    // decides each page on its OCR text alone and puts the layer first only on a replaced page.
+    let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    // The readable text layers that a page keeps first when its OCR text is judged recognition
+    // noise. A forced page is replaced by definition and keeps none. ~keep
+    let ocr_output_thresholds = config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.quality_thresholds.clone())
+        .unwrap_or_default();
+    let page_layers = match pages.native_layers {
+        Some(layers) => Some(layers),
+        None if all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
+            let layers = super::document::clean_native_page_layers(
+                native_text,
+                boundaries,
+                Some(&ocr_set),
+                &ocr_output_thresholds,
+            );
+            (!layers.is_empty()).then(|| std::sync::Arc::new(layers))
+        }
+        None => None,
+    };
 
     // Layout detection for this mixed OCR route (#665). The full-document OCR routes
     // (`force_ocr`, the OCR-gate fallback) already run layout via `run_ocr_with_layout` ->
@@ -1015,6 +1043,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         known_full_page_scan: crate::pdf::scan_detect::full_page_raster_density(&render_doc, *page_idx)
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
+                        native_page_layers: None,
                     };
                     // See `extract_with_ocr_for_page`'s doc comment on
                     // `points_per_pixel_override`: this call hands the stage a single
@@ -1095,10 +1124,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         mut page_raw_paragraphs,
                         preprocessing,
                         page_ocr_confidences,
+                        noise_verdicts,
                     ) = result;
                     accumulated_llm_usage.extend(usage);
                     ocr_confidence_by_page.extend(page_ocr_confidences);
                     let page_number = (page_idx + 1) as u32;
+                    if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
+                        noise_verdict_pages.insert(page_number);
+                    }
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
@@ -1174,6 +1207,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         known_full_page_scan: crate::pdf::scan_detect::full_page_raster_density(&render_doc, *page_idx)
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
+                        native_page_layers: None,
                     };
                     let points_per_pixel_override = {
                         let (_, page_height_pt) = page_dimensions_pt(&render_doc, *page_idx);
@@ -1228,10 +1262,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         mut page_raw_paragraphs,
                         preprocessing,
                         page_ocr_confidences,
+                        noise_verdicts,
                     ) = result;
                     accumulated_llm_usage.extend(usage);
                     ocr_confidence_by_page.extend(page_ocr_confidences);
                     let page_number = (*page_idx + 1) as u32;
+                    if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
+                        noise_verdict_pages.insert(page_number);
+                    }
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
@@ -1818,11 +1856,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // Pipeline stages already assess their output in `extract_with_ocr_for_page` using the
     // actual producing backend. Assess only the direct single-backend route here to avoid
     // duplicate warnings and guessed pipeline confidence semantics. ~keep
-    let ocr_output_thresholds = config
-        .ocr
-        .as_ref()
-        .and_then(|ocr| ocr.quality_thresholds.clone())
-        .unwrap_or_default();
     if let Some(producing_backend) = backend.as_ref() {
         let confidence_semantics = producing_backend.confidence_semantics();
         let producing_backend_name = producing_backend.name().to_string();
@@ -1850,6 +1883,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 confidence_semantics,
                 confidence,
             );
+            // The verdict decides whether the page keeps its text layer (see below). A page
+            // the noise gate discarded has blank text and keeps the layer already. ~keep
+            if acceptance.verdict.is_some() && !acceptance.discarded {
+                noise_verdict_pages.insert(*page_number);
+            }
             *text = acceptance.content;
         }
     }
@@ -1871,8 +1909,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
-    let accepted_replacements =
+    let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
+    // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
+    // got the noise verdict, now gets its readable text layer first. A page it keeps native
+    // stays as it was. ~keep
+    let mut page_layers_before_noise: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+    if let Some(layers) = page_layers.as_ref() {
+        for page_number in &noise_verdict_pages {
+            if let Some(layer) = layers.get(page_number)
+                && let Some(text) = accepted_replacements.get_mut(page_number)
+                && let Some(missing) = super::document::layer_lines_absent_from_ocr(layer, text)
+            {
+                *text = format!("{missing}\n\n{text}");
+                page_layers_before_noise.insert(*page_number, missing);
+            }
+        }
+    }
     structured_ocr_pages
         .retain(|page, _| accepted_replacements.contains_key(page) || table_only_xobject_recovery_pages.contains(page));
     retain_ocr_formulas_for_accepted_pages(&mut accumulated_formulas, &accepted_replacements);
@@ -1981,6 +2034,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // here rather than beside the repair at the top. ~keep
     if numeric_repair_enabled(config) {
         apply_numeric_repair_to_structured_ocr_pages(&mut structured_ocr_pages);
+    }
+    // The structured page keeps the layer first as well, after the passes above rebuilt it. ~keep
+    for (page_number, layer) in &page_layers_before_noise {
+        if accepted_replacements.contains_key(page_number)
+            && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
+        {
+            super::document::insert_layer_into_document(page_doc, None, layer);
+        }
     }
 
     let result = apply_ocr_page_replacements(native_text, boundaries, &accepted_replacements);
@@ -2107,6 +2168,9 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
     }
     let (_, page_count, _) = open_pdf_for_page_ocr(content)?;
     let page_numbers = (1..=page_count as u32).collect::<Vec<_>>();
+    let native_layers = page_ocr_hints
+        .as_ref()
+        .and_then(|hints| hints.native_page_layers.clone());
     let mut single_block_pages = page_ocr_hints
         .and_then(|hints| hints.single_block_pages)
         .map(|pages| pages.iter().copied().collect::<Vec<_>>())
@@ -2134,6 +2198,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         MixedOcrPageSelection {
             ocr: &page_numbers,
             single_block: &single_block_pages,
+            native_layers,
         },
         content,
         config,
@@ -2253,6 +2318,9 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
 )> {
+    let run_layers = page_ocr_hints
+        .as_ref()
+        .and_then(|hints| hints.native_page_layers.clone());
     let (
         text,
         mean_conf,
@@ -2266,7 +2334,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         _raw_page_paragraphs,
         preprocessing,
         ocr_confidence,
-        _recognition_noise_verdicts,
+        recognition_noise_verdicts,
     ) = Box::pin(extract_with_ocr_for_page(
         content,
         images,
@@ -2282,6 +2350,15 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         None,
     ))
     .await?;
+    let (text, page_texts, doc) = with_run_layers_first(
+        run_layers,
+        &recognition_noise_verdicts,
+        0,
+        text,
+        page_texts,
+        doc,
+        config,
+    );
     Ok((
         text,
         mean_conf,
@@ -2306,6 +2383,10 @@ pub(crate) struct PageOcrHints {
     pub(crate) known_full_page_scan: bool,
     /// One-indexed document page numbers selected by automatic fabricated-map routing.
     pub(crate) single_block_pages: Option<std::sync::Arc<std::collections::HashSet<u32>>>,
+    /// Readable text layers by one-indexed document page, for a whole-document run. After the run
+    /// has chosen its output, a page whose OCR text is judged recognition noise gets its layer
+    /// first.
+    pub(crate) native_page_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -2705,6 +2786,8 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut retry_texts_outside_tables: Vec<Option<String>> = vec![None; total_pages];
     #[allow(unused_mut)]
     let mut collected_tables: Vec<crate::types::Table> = Vec::new();
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+    let mut collected_table_grids = Vec::new();
     let mut all_ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
@@ -3593,15 +3676,25 @@ pub(super) async fn extract_with_ocr_for_page(
                     crate::ocr::layout_assembly::RecognizedTablesOutcome::default()
                 };
 
-                for rt in &recognized_tables.tables {
-                    if !rt.markdown.is_empty() {
-                        // The id is this table's 1-based position in `collected_tables`;
-                        // pages are processed strictly in increasing `page_idx` order
-                        // above, so push order is deterministic document order. ~keep
-                        let table_index = collected_tables.len();
-                        collected_tables.push(recognized_table_to_public_table(rt, document_page_number, table_index));
+                let table_frame = if let Some((pdf, _, _)) = lazy_pdf_render_state.as_ref() {
+                    RecognizedTableFrame::PdfPage {
+                        raster: (ocr_render_width, ocr_render_height),
+                        points: page_dimensions_pt(pdf, page_idx),
                     }
-                }
+                } else if xobject_document.is_some() {
+                    RecognizedTableFrame::DetachedPdfRaster {
+                        height: ocr_render_height,
+                    }
+                } else {
+                    RecognizedTableFrame::ImagePixels
+                };
+                append_recognized_tables(
+                    &recognized_tables,
+                    document_page_number,
+                    table_frame,
+                    &mut collected_tables,
+                    &mut collected_table_grids,
+                );
 
                 if let Some(ref ocr_doc) = ocr_result.ocr_internal_document {
                     // Same lookup as the per-page `page_rotation_degrees` computed above for
@@ -4060,6 +4153,19 @@ pub(super) async fn extract_with_ocr_for_page(
         let mut document = ocr_doc.unwrap_or_else(|| crate::types::internal::InternalDocument::new("pdf"));
         super::document::merge_structured_ocr_pages_into_internal_document(&mut document, &accepted, &public_ocr_pages);
         Some(document)
+    };
+
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+    let ocr_doc = match ocr_doc {
+        Some(mut document) => {
+            crate::types::internal::table_grid::attach_recognized_table_grids(&mut document, &collected_table_grids)
+                .map_err(|error| crate::XbergError::Parsing {
+                    message: "Failed to retain recognized PDF OCR table geometry".to_owned(),
+                    source: Some(Box::new(error)),
+                })?;
+            Some(document)
+        }
+        None => None,
     };
 
     #[cfg(feature = "pdf")]
@@ -4806,6 +4912,7 @@ pub(crate) async fn run_ocr_pipeline(
         _raw_page_paragraphs,
         preprocessing,
         ocr_confidence,
+        _noise_verdicts,
     ) = Box::pin(run_ocr_pipeline_for_page(
         content,
         images,
@@ -4914,7 +5021,8 @@ pub(super) async fn run_ocr_pipeline_for_page(
 
 /// What a pipeline run returns: the text, the tables, the OCR elements, the document, the LLM
 /// usage, the text of each page, the page rasters, the formulas, the bare paragraphs of each
-/// page, the preprocessing metadata and the OCR confidence of each page.
+/// page, the preprocessing metadata, the OCR confidence of each page and the recognition-noise
+/// verdicts of the returned stage.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 type OcrPipelineOutput = (
     String,
@@ -4928,6 +5036,7 @@ type OcrPipelineOutput = (
     Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
+    Vec<OcrPageNoiseVerdict>,
 );
 
 /// Add to `doc` the records that the stages of a pipeline run made for the pages the run
@@ -4967,6 +5076,36 @@ pub(super) fn attach_unread_page_failures(
     merge_ocr_page_failures(&mut retained_doc.ocr_page_failures, unread);
     retained_doc.ocr_page_failures.sort_by_key(|failure| failure.page);
     doc
+}
+
+/// Put the layer first on each noise page of the returned stage of a whole-document run, after
+/// the stage was scored and chosen on its OCR text alone. A run without layers is unchanged.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn with_run_layers_first(
+    layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    verdicts: &[OcrPageNoiseVerdict],
+    page_index_offset: usize,
+    mut text: String,
+    mut page_texts: Vec<String>,
+    mut doc: Option<crate::types::internal::InternalDocument>,
+    config: &ExtractionConfig,
+) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
+    if let Some(layers) = layers {
+        super::document::put_layers_first_in_run(
+            &mut text,
+            &mut page_texts,
+            doc.as_mut(),
+            &layers,
+            verdicts,
+            page_index_offset,
+            config
+                .pages
+                .as_ref()
+                .filter(|pages| pages.insert_page_markers)
+                .map(|pages| pages.marker_format.as_str()),
+        );
+    }
+    (text, page_texts, doc)
 }
 
 /// What a pipeline run gives to each of its stages without a change: the parameters of
@@ -5012,6 +5151,11 @@ async fn run_ocr_pipeline_stages(
     // classical pipelines stay score-based) rather than carried on `OcrPipelineConfig`, so
     // the binding-facing config stays unchanged (#1341).
     let selection = ocr_config.pipeline_selection();
+    // The layers of a whole-document run; a page route hands none and puts them first itself.
+    let run_layers = inputs
+        .page_ocr_hints
+        .as_ref()
+        .and_then(|hints| hints.native_page_layers.clone());
 
     let mut stages = pipeline.stages.clone();
     stages.sort_by_key(|b| std::cmp::Reverse(b.priority));
@@ -5053,6 +5197,7 @@ async fn run_ocr_pipeline_stages(
         Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
         ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
         ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
+        Vec<OcrPageNoiseVerdict>,
     )> = None;
 
     let mut accumulated_usage: Vec<crate::types::LlmUsage> = Vec::new();
@@ -5158,6 +5303,15 @@ async fn run_ocr_pipeline_stages(
                 }
 
                 if score >= pipeline.quality_thresholds.pipeline_min_quality {
+                    let (text, stage_page_texts, stage_doc) = with_run_layers_first(
+                        run_layers,
+                        &stage_recognition_noise_verdicts,
+                        inputs.page_index_offset,
+                        text,
+                        stage_page_texts,
+                        stage_doc,
+                        config,
+                    );
                     // ~keep Attach prior-stage diagnostics before this accepted-stage early
                     // return; otherwise successful fallback silently erases why it ran.
                     let stage_doc =
@@ -5174,6 +5328,7 @@ async fn run_ocr_pipeline_stages(
                         stage_raw_paragraphs,
                         stage_preprocessing,
                         stage_ocr_confidence,
+                        stage_recognition_noise_verdicts,
                     ));
                 }
 
@@ -5213,6 +5368,7 @@ async fn run_ocr_pipeline_stages(
                         stage_raw_paragraphs,
                         stage_preprocessing,
                         stage_ocr_confidence,
+                        stage_recognition_noise_verdicts,
                     ));
                 }
             }
@@ -5244,7 +5400,17 @@ async fn run_ocr_pipeline_stages(
             raw_page_paragraphs,
             preprocessing,
             ocr_confidence,
+            noise_verdicts,
         )) => {
+            let (text, page_texts, doc) = with_run_layers_first(
+                run_layers,
+                &noise_verdicts,
+                inputs.page_index_offset,
+                text,
+                page_texts,
+                doc,
+                config,
+            );
             let threshold = pipeline.quality_thresholds.pipeline_min_quality;
             tracing::warn!(
                 score,
@@ -5293,6 +5459,7 @@ async fn run_ocr_pipeline_stages(
                 raw_page_paragraphs,
                 preprocessing,
                 ocr_confidence,
+                noise_verdicts,
             ))
         }
         None => {
@@ -5327,6 +5494,7 @@ async fn run_ocr_pipeline_stages(
                     Vec::new(),
                     recovery.preprocessing,
                     ahash::AHashMap::new(),
+                    Vec::new(),
                 ));
             }
 
@@ -5833,3 +6001,79 @@ pub(super) fn inject_layout_config_to_backend(
 ))]
 #[path = "tracing_tests.rs"]
 mod tracing_tests;
+
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+#[derive(Clone, Copy)]
+enum RecognizedTableFrame {
+    ImagePixels,
+    DetachedPdfRaster { height: u32 },
+    PdfPage { raster: (u32, u32), points: (f32, f32) },
+}
+
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+impl RecognizedTableFrame {
+    fn place(self, table: &mut crate::types::Table, grid: Option<&mut crate::types::TableGrid>) {
+        let (scale, height, place_table) = match self {
+            Self::ImagePixels => return,
+            Self::DetachedPdfRaster { height } => ((1.0, 1.0), f64::from(height), false),
+            Self::PdfPage { raster, points } if raster.0 != 0 && raster.1 != 0 => (
+                (
+                    f64::from(points.0) / f64::from(raster.0),
+                    f64::from(points.1) / f64::from(raster.1),
+                ),
+                f64::from(points.1),
+                true,
+            ),
+            Self::PdfPage { .. } => return,
+        };
+        let place = |bbox: &mut crate::types::BoundingBox| {
+            let top = bbox.y0;
+            bbox.x0 *= scale.0;
+            bbox.x1 *= scale.0;
+            bbox.y0 = height - bbox.y1 * scale.1;
+            bbox.y1 = height - top * scale.1;
+        };
+        if place_table && let Some(bbox) = table.bounding_box.as_mut() {
+            place(bbox);
+        }
+        // Detached page assembly expects table rectangles in top-left raster pixels, but its
+        // retained cell boxes already share the bottom-left raster frame of document elements.
+        // The page owner later scales those cells and separately scale-flips tables exactly once. ~keep
+        if let Some(grid) = grid {
+            for bbox in grid.cells.iter_mut().filter_map(|cell| cell.bbox.as_mut()) {
+                place(bbox);
+            }
+        }
+    }
+}
+
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+fn append_recognized_tables(
+    outcome: &crate::ocr::layout_assembly::RecognizedTablesOutcome,
+    page_number: u32,
+    frame: RecognizedTableFrame,
+    tables: &mut Vec<crate::types::Table>,
+    grids: &mut Vec<crate::types::internal::table_grid::TableGridSidecar>,
+) {
+    for (index, recognized) in outcome.tables.iter().enumerate() {
+        if recognized.markdown.is_empty() {
+            continue;
+        }
+        let mut sidecar = outcome.sidecar_at(index, page_number);
+        let mut table = sidecar
+            .as_ref()
+            .map(|sidecar| sidecar.table.clone())
+            .unwrap_or_else(|| recognized_table_to_public_table(recognized, page_number, tables.len()));
+        table.table_id = Some(format!("table-{}", tables.len() + 1));
+        frame.place(&mut table, sidecar.as_mut().map(|sidecar| &mut sidecar.grid));
+        if let Some(mut sidecar) = sidecar {
+            sidecar.table = table.clone();
+            grids.push(sidecar);
+        }
+        tables.push(table);
+    }
+}
+
+#[cfg(all(test, feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/recognized_table_grid_tests.rs"]
+mod recognized_table_grid_tests;

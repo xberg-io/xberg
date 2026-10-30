@@ -140,6 +140,51 @@ fn test_gfm_setext_heading() {
 }
 
 #[test]
+fn test_gfm_accepts_complete_yaml_front_matter() {
+    for newline in ["\n", "\r\n"] {
+        let md = [
+            "---",
+            "title: Metadata",
+            "description: |",
+            "  a value",
+            "---",
+            "",
+            "# Body",
+            "",
+        ]
+        .join(newline);
+        assert_eq!(validate_gfm_basics(&md), Vec::<String>::new());
+    }
+}
+
+#[test]
+fn test_gfm_rejects_setext_in_body_after_yaml_front_matter() {
+    let md = "---\ntitle: Metadata\n---\n\nBody\n---\n";
+    assert_eq!(
+        validate_gfm_basics(md),
+        ["line 6: setext heading (--- style), use ATX (# style)"]
+    );
+}
+
+#[test]
+fn test_gfm_does_not_hide_body_after_an_unclosed_front_matter_delimiter() {
+    let md = "---\ntitle: Metadata\n\nBody\n===\n";
+    assert_eq!(
+        validate_gfm_basics(md),
+        ["line 5: setext heading (=== style), use ATX (# style)"]
+    );
+}
+
+#[test]
+fn test_gfm_does_not_treat_a_thematic_break_as_yaml_front_matter() {
+    let md = "---\n\nBody\n---\n";
+    assert_eq!(
+        validate_gfm_basics(md),
+        ["line 4: setext heading (--- style), use ATX (# style)"]
+    );
+}
+
+#[test]
 fn test_gfm_missing_blank_before_heading() {
     let md = "Some text\n# Heading\n";
     let violations = validate_gfm_basics(md);

@@ -139,11 +139,7 @@ impl OcrBoundingGeometry {
     #[cfg(any(
         paddle_ocr,
         feature = "ocr",
-        all(
-            feature = "layout-detection",
-            feature = "pdf",
-            any(feature = "ocr", feature = "ocr-wasm")
-        ),
+        all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")),
         all(test, any(paddle_ocr, feature = "layout-detection", feature = "ocr"))
     ))]
     pub(crate) fn to_aabb(&self) -> (u32, u32, u32, u32) {
@@ -166,11 +162,7 @@ impl OcrBoundingGeometry {
 
     /// Get the center point of the bounding geometry.
     #[cfg(any(
-        all(
-            feature = "layout-detection",
-            feature = "pdf",
-            any(feature = "ocr", feature = "ocr-wasm")
-        ),
+        all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")),
         all(test, feature = "layout-detection")
     ))]
     pub(crate) fn center(&self) -> (f64, f64) {

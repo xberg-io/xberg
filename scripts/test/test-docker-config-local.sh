@@ -607,6 +607,27 @@ test_readonly_mount() {
 ################################################################################
 ################################################################################
 
+test_runtime_notices() {
+  local variant="$1"
+  start_test "Canonical license and third-party notices (variant: $variant)"
+
+  local image notice packaged
+  image="$(get_image_name "$variant")"
+  for notice in LICENSE THIRD_PARTY_LICENSES.md; do
+    packaged="$TEST_TEMP_DIR/${variant}-${notice}"
+    if ! docker run --rm --entrypoint cat "$image" \
+      "/usr/local/share/licenses/xberg/$notice" >"$packaged"; then
+      fail_test "Could not read runtime notice: $notice"
+      return 1
+    fi
+    if ! cmp -s "$DOCKER_DIR/../$notice" "$packaged"; then
+      fail_test "Runtime notice differs from canonical source: $notice"
+      return 1
+    fi
+  done
+  pass_test
+}
+
 run_test_suite() {
   local variant="$1"
 
@@ -619,6 +640,7 @@ run_test_suite() {
 
   TESTED_VARIANTS+=("$variant")
 
+  test_runtime_notices "$variant"
   test_etc_xberg_mount "$variant"
   test_app_config_mount "$variant"
   test_custom_path_with_flag "$variant"

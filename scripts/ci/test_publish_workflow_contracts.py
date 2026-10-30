@@ -409,7 +409,7 @@ def test_swift_dry_run_checks_run_artifact_without_release_mutation() -> None:
 
 def test_glibc_ffi_jobs_build_lzma_statically() -> None:
     jobs_and_actions = {
-        "go-ffi-libraries": "task go:publish:package",
+        "go-ffi-libraries": "mise run go:publish:package",
         "c-ffi-libraries": "xberg-io/actions/build-rust-ffi@v1",
         "java-natives": "xberg-io/actions/build-java-natives@v1",
         "csharp-natives": "xberg-io/actions/build-csharp-natives@v1",
@@ -457,8 +457,8 @@ def test_release_uses_supported_macos_deployment_floor() -> None:
 
 def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
     block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
-    assert "task go:publish:package TARGET=${{ matrix.target }}" in block
-    assert "task go:publish:package:musl TARGET=${{ matrix.target }}" in block
+    assert 'mise run go:publish:package "${{ matrix.target }}"' in block
+    assert 'mise run go:publish:package:musl "${{ matrix.target }}"' in block
     assert "archive-name: xberg-go-${{ matrix.platform }}.tar.gz" not in block
 
     release_script = GO_RELEASE_SCRIPT.read_text()
@@ -507,7 +507,7 @@ def test_macos_unit_tests_reclaim_artifacts_before_libheif() -> None:
     libheif = script.index("cargo test --locked --no-fail-fast -p xberg-libheif", cleanup)
     assert gliner < cleanup < libheif
     cleanup_block = script[cleanup:libheif]
-    assert "task rust:clean" in cleanup_block
+    assert "mise run rust:clean" in cleanup_block
 
 
 def test_xberg_unit_artifacts_are_reclaimed_before_workspace_tests() -> None:
@@ -659,7 +659,7 @@ def test_helm_publish_does_not_depend_on_the_cli_image_manifest() -> None:
 
 
 def test_publish_contracts_run_in_ci() -> None:
-    assert "task release:test:contracts" in CI_WORKFLOW.read_text()
+    assert "mise run release:test:contracts" in CI_WORKFLOW.read_text()
 
 
 def test_system_dependency_changes_trigger_rust_and_e2e_ci() -> None:
@@ -693,7 +693,10 @@ def assert_swift_package_disables_host_extension_symbol_lookup(workflow: str) ->
     setups = re.findall(r"(?ms)^      - uses: xberg-io/actions/setup-rust@[^\n]+\n(.*?)(?=^      - |\Z)", swift)
     assert len(setups) == 1, "one Swift package Rust setup step must be examined"
     settings = re.findall(r'^          macos-dynamic-lookup: "false"$', setups[0], re.MULTILINE)
-    assert settings == ['          macos-dynamic-lookup: "false"'], "Swift package must disable host extension lookup"
+    # Raised explicitly: pytest's assertion rewriting appends its own diff to an `assert` message,
+    # and the callers compare the message exactly.
+    if settings != ['          macos-dynamic-lookup: "false"']:
+        raise AssertionError("Swift package must disable host extension lookup")
 
 
 def test_swift_package_build_preserves_selective_callback_symbol_lookup() -> None:
@@ -801,14 +804,15 @@ def test_csharp_native_build_leaves_rpath_to_generated_ffi_package() -> None:
 def assert_dart_e2e_formatter_bootstrap(workflow: str) -> None:
     freshness = job_block(workflow, "e2e-freshness")
     dart_setup = freshness.index("uses: dart-lang/setup-dart@")
-    verification = freshness.index("run: task e2e:verify")
+    verification = freshness.index("run: mise run e2e:verify")
     for directory, command in [
         ("packages/dart", "dart pub get"),
         ("e2e/dart", "dart pub get --enforce-lockfile"),
     ]:
         pattern = rf"(?m)^        working-directory: {re.escape(directory)}\n        run: {re.escape(command)}$"
         bootstraps = list(re.finditer(pattern, freshness))
-        assert len(bootstraps) == 1, f"one dependency bootstrap must establish {directory}'s language version"
+        if len(bootstraps) != 1:
+            raise AssertionError(f"one dependency bootstrap must establish {directory}'s language version")
         assert dart_setup < bootstraps[0].start() < verification
 
 
@@ -827,38 +831,6 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
 
 
 if __name__ == "__main__":
-    test_swift_package_build_preserves_selective_callback_symbol_lookup()
-    test_dart_e2e_freshness_resolves_package_language_version()
-    test_kotlin_e2e_native_build_uses_thin_lto()
-    test_macos_onnx_action_forwards_rpath_option_only_to_macos()
-    test_csharp_native_build_leaves_rpath_to_generated_ffi_package()
-    test_release_event_guards_cover_initial_actor_and_tag_policy()
-    test_plugin_only_dispatch_skips_every_core_release_job()
-    test_normal_php_retry_preserves_release_and_cancellation_guards()
-    test_partial_release_retries_skip_plugin_distribution_and_announcements()
-    test_php_partial_retry_publishes_packagist_only_after_successful_upload()
-    test_release_finalization_requires_successful_asset_verification()
-    test_pubdev_publish_action_tracks_v1_and_verifies_the_version()
-    test_homebrew_push_rebases_after_concurrent_non_conflicting_push()
-    test_homebrew_push_stops_after_five_rejections()
-    test_homebrew_push_aborts_rebase_conflict_without_force()
-    test_swift_dry_run_checks_run_artifact_without_release_mutation()
-    test_glibc_ffi_jobs_build_lzma_statically()
-    test_go_release_matrix_covers_every_generated_setup_platform()
-    test_release_uses_supported_macos_deployment_floor()
-    test_go_release_packaging_matches_static_and_musl_setup_contracts()
-    test_glibc_native_closures_are_strictly_verified()
-    test_cli_release_enables_metal_only_for_macos_arm64()
-    test_docker_preflight_checks_out_the_resolved_candidate()
-    test_macos_unit_tests_reclaim_artifacts_before_libheif()
-    test_xberg_unit_artifacts_are_reclaimed_before_workspace_tests()
-    test_rust_ci_enables_bundled_oem_regressions_on_every_platform()
-    test_initial_release_checkout_pins_omitted_ref_dry_runs()
-    test_release_retag_skips_boolean_and_string_dry_runs_in_both_channels()
-    test_every_release_zigbuild_consumer_uses_the_verified_tool()
-    test_zigbuild_wiring_gate_rejects_missing_wrong_and_early_installers()
-    test_helm_publish_does_not_depend_on_the_cli_image_manifest()
-    test_swift_static_library_builds_disable_host_extension_symbol_lookup()
-    test_swift_ios_builds_pin_the_deployment_target_to_the_manifest_floor()
-    test_publish_contracts_run_in_ci()
-    test_system_dependency_changes_trigger_rust_and_e2e_ci()
+    for name, test in list(globals().items()):
+        if name.startswith("test_") and callable(test):
+            test()

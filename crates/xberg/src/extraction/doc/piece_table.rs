@@ -3,6 +3,9 @@
 
 use super::*;
 
+#[path = "clx.rs"]
+mod clx;
+
 /// Read a little-endian `u16` at `offset`, or an error naming `what` when `data` is too
 /// short to contain it.
 fn read_u16_checked(data: &[u8], offset: usize, what: &str) -> Result<u16> {
@@ -94,46 +97,22 @@ pub(super) fn extract_text_word97(
 
     let clx = &table_stream[fib.clx_start..fib.clx_start + fib.clx_length];
 
-    if let Some(plc_pcd) = read_piece_table(clx)? {
+    if let Some(piece_table) = clx::read_piece_table(clx, budget)? {
         let scripts = chpx::ScriptIndex::read(word_doc, table_stream, fib.pairs, budget, warnings)?;
         let tables = DocTables {
             lists: papx::ListTables::build(word_doc, table_stream, fib.pairs),
             stories: StoryTables::read(word_doc, table_stream, fib.pairs, &fib.ranges),
             picture_limits,
             scripts,
+            piece_scripts: piece_table.scripts,
             ranges: &fib.ranges,
             total_cp: fib.total_cp,
         };
-        return extract_text_from_piece_table(word_doc, plc_pcd, warnings, &tables, budget);
+        return extract_text_from_piece_table(word_doc, piece_table.plc_pcd, warnings, &tables, budget);
     }
 
     images::warn_unsupported_fallback(picture_limits.is_some(), warnings, "unavailable-piece-table fallback");
     extract_text_fallback(word_doc, fib.ranges.main.len()).map(MainText::text_only)
-}
-
-fn read_piece_table(clx: &[u8]) -> Result<Option<&[u8]>> {
-    let mut pos = 0;
-    while pos < clx.len() {
-        let clxt = clx[pos];
-        if clxt == 0x02 {
-            pos += 1;
-            if pos + 4 > clx.len() {
-                return Err(XbergError::parsing("Pcdt truncated at lcb"));
-            }
-            let _ = u32::from_le_bytes([clx[pos], clx[pos + 1], clx[pos + 2], clx[pos + 3]]) as usize;
-            return Ok(Some(&clx[pos + 4..]));
-        } else if clxt == 0x01 {
-            pos += 1;
-            if pos + 2 > clx.len() {
-                break;
-            }
-            let cb_grpprl = u16::from_le_bytes([clx[pos], clx[pos + 1]]) as usize;
-            pos += 2 + cb_grpprl;
-        } else {
-            break;
-        }
-    }
-    Ok(None)
 }
 
 /// Record that a piece's declared byte range runs past the end of the
@@ -179,6 +158,7 @@ struct DecodedPiece {
     chars: Vec<char>,
     fc_ends: Vec<u32>,
     cp_offsets: Vec<u32>,
+    scripts: Vec<chpx::Script>,
 }
 
 impl DecodedPiece {
@@ -209,6 +189,7 @@ fn decode_piece_chars(
             chars: word_doc[start..end].iter().map(|&b| cp1252_to_char(b)).collect(),
             fc_ends: (start..end).map(|fc| (fc + 1) as u32).collect(),
             cp_offsets: (0..end - start).map(|offset| offset as u32).collect(),
+            scripts: Vec::new(),
         }
     };
 
@@ -252,9 +233,17 @@ fn decode_piece_chars(
                 chars,
                 fc_ends,
                 cp_offsets,
+                scripts: Vec::new(),
             }
         }
     }
+}
+
+#[derive(Default)]
+struct StoryPositions<'a> {
+    fc_ends: Option<&'a mut Vec<u32>>,
+    cps: Option<&'a mut Vec<u32>>,
+    scripts: Option<&'a mut Vec<chpx::Script>>,
 }
 
 /// Select by source UTF16/CP1252 positions, not decoded scalar count; a surrogate
@@ -264,8 +253,7 @@ fn append_range_overlap(
     cp_start: usize,
     range: SubdocRange,
     out: &mut String,
-    out_fc_ends: Option<&mut Vec<u32>>,
-    out_cps: Option<&mut Vec<u32>>,
+    positions: StoryPositions<'_>,
 ) {
     if range.len() == 0 {
         return;
@@ -277,10 +265,13 @@ fn append_range_overlap(
         .cp_offsets
         .partition_point(|&cp| cp_start + (cp as usize) < range.end);
     out.extend(&piece.chars[from..to]);
-    if let Some(out_fcs) = out_fc_ends {
+    if let Some(scripts) = positions.scripts {
+        scripts.extend_from_slice(&piece.scripts[from..to]);
+    }
+    if let Some(out_fcs) = positions.fc_ends {
         out_fcs.extend_from_slice(&piece.fc_ends[from..to]);
     }
-    if let Some(out_cps) = out_cps {
+    if let Some(out_cps) = positions.cps {
         out_cps.extend(
             piece.cp_offsets[from..to]
                 .iter()
@@ -299,6 +290,8 @@ struct PieceTableContext<'a> {
     word_doc: &'a [u8],
     total_cp: usize,
     ranges: &'a SubdocRanges,
+    scripts: &'a chpx::ScriptIndex,
+    piece_scripts: &'a [chpx::ScriptProperty],
 }
 
 /// Process one entry of the piece table (`PlcPcd`), appending its decoded characters to
@@ -346,13 +339,42 @@ fn process_piece(
         return true;
     }
 
-    let piece = decode_piece_chars(ctx.word_doc, fc_raw, char_count, i, warnings);
+    let mut piece = decode_piece_chars(ctx.word_doc, fc_raw, char_count, i, warnings);
     if piece.is_empty() {
         return true;
     }
 
+    let prm = u16::from_le_bytes([plc_pcd[pcd_off + 6], plc_pcd[pcd_off + 7]]);
+    let override_script = piece_script_override(prm, ctx.piece_scripts, warnings);
+    piece.scripts = piece
+        .fc_ends
+        .iter()
+        .map(|&fc| override_script.unwrap_or_else(|| ctx.scripts.at(fc)))
+        .collect();
     append_piece_to_stories(&piece, cp_start, ctx.ranges, text);
     true
+}
+
+fn piece_script_override(
+    prm: u16,
+    groups: &[chpx::ScriptProperty],
+    warnings: &mut Vec<ProcessingWarning>,
+) -> Option<chpx::Script> {
+    if prm & 1 == 0 {
+        return chpx::compact_prm_script(prm);
+    }
+    match groups.get(usize::from(prm >> 1)).copied() {
+        Some(chpx::ScriptProperty::Override(script)) => Some(script),
+        Some(chpx::ScriptProperty::Unchanged) => None,
+        Some(chpx::ScriptProperty::Malformed) | None => {
+            crate::core::diagnostics::push_warning(
+                warnings,
+                DOC_WARNING_SOURCE,
+                "Missing or malformed DOC piece character properties were ignored; text and CHPX formatting were preserved",
+            );
+            None
+        }
+    }
 }
 
 fn read_piece_value(plc: &[u8], offset: usize) -> u32 {
@@ -365,40 +387,54 @@ fn append_piece_to_stories(piece: &DecodedPiece, cp_start: usize, ranges: &Subdo
         cp_start,
         ranges.main,
         &mut text.main,
-        Some(&mut text.main_fc_ends),
-        Some(&mut text.main_cps),
+        StoryPositions {
+            fc_ends: Some(&mut text.main_fc_ends),
+            cps: Some(&mut text.main_cps),
+            scripts: Some(&mut text.main_scripts),
+        },
     );
     append_range_overlap(
         piece,
         cp_start,
         ranges.footnote,
         &mut text.footnote,
-        Some(&mut text.footnote_fc_ends),
-        Some(&mut text.footnote_cps),
+        StoryPositions {
+            cps: Some(&mut text.footnote_cps),
+            scripts: Some(&mut text.footnote_scripts),
+            ..Default::default()
+        },
     );
     append_range_overlap(
         piece,
         cp_start,
         ranges.header,
         &mut text.header,
-        Some(&mut text.header_fc_ends),
-        Some(&mut text.header_cps),
+        StoryPositions {
+            cps: Some(&mut text.header_cps),
+            scripts: Some(&mut text.header_scripts),
+            ..Default::default()
+        },
     );
     append_range_overlap(
         piece,
         cp_start,
         ranges.annotation,
         &mut text.annotation,
-        Some(&mut text.annotation_fc_ends),
-        Some(&mut text.annotation_cps),
+        StoryPositions {
+            cps: Some(&mut text.annotation_cps),
+            scripts: Some(&mut text.annotation_scripts),
+            ..Default::default()
+        },
     );
     append_range_overlap(
         piece,
         cp_start,
         ranges.textbox,
         &mut text.textbox,
-        Some(&mut text.textbox_fc_ends),
-        None,
+        StoryPositions {
+            scripts: Some(&mut text.textbox_scripts),
+            ..Default::default()
+        },
     );
 }
 
@@ -433,6 +469,8 @@ fn extract_text_from_piece_table(
         word_doc,
         total_cp: tables.total_cp,
         ranges,
+        scripts: &tables.scripts,
+        piece_scripts: &tables.piece_scripts,
     };
 
     for i in 0..n {
@@ -462,7 +500,7 @@ fn assemble_main_text(
     let paragraph_context = ParagraphContext {
         lists: &tables.lists,
         picture_limits: tables.picture_limits,
-        scripts: &tables.scripts,
+        scripts: &text.main_scripts,
     };
     let (paragraphs, picture_positions) = split_paragraphs_and_pictures(
         &text.main,
@@ -511,6 +549,7 @@ struct DocTables<'a> {
     lists: papx::ListTables,
     stories: StoryTables,
     scripts: chpx::ScriptIndex,
+    piece_scripts: Vec<chpx::ScriptProperty>,
     ranges: &'a SubdocRanges,
     total_cp: usize,
 }
@@ -609,22 +648,21 @@ fn split_stories(cps: &[u32], start_cp: usize, bounds: &[usize]) -> Vec<std::ops
 
 fn normalize_story(
     raw: &str,
-    fcs: &[u32],
-    scripts: &chpx::ScriptIndex,
+    scripts: &[chpx::Script],
     budget: &mut crate::extractors::security::SecurityBudget,
     kind: DocSubdocumentKind,
 ) -> Result<DocSubdocument> {
-    if raw.chars().count() != fcs.len() {
+    if raw.chars().count() != scripts.len() {
         return Err(XbergError::parsing(
             "DOC subdocument character-property alignment is invalid",
         ));
     }
     let mut visible = String::new();
     let mut properties = Vec::new();
-    for ((character, fc), markup) in raw.chars().zip(fcs).zip(field_markup_mask(raw)) {
+    for ((character, script), markup) in raw.chars().zip(scripts).zip(field_markup_mask(raw)) {
         if !markup {
             visible.push(character);
-            properties.push(scripts.at(*fc));
+            properties.push(*script);
         }
     }
     let (text, annotations) = chpx::normalize(&visible, &properties, budget)?;
@@ -647,8 +685,7 @@ fn collect_subdocuments(
     let mut subdocuments = collect_story_subdocuments(text, tables, warnings, budget)?;
     let textbox = normalize_story(
         &text.textbox,
-        &text.textbox_fc_ends,
-        &tables.scripts,
+        &text.textbox_scripts,
         budget,
         DocSubdocumentKind::TextBox,
     )?;
@@ -666,10 +703,10 @@ fn collect_story_subdocuments(
 ) -> Result<Vec<DocSubdocument>> {
     let ranges = tables.ranges;
     let mut subdocuments = Vec::new();
-    for (raw, fcs, cps, start_cp, bounds, kind, fallback_kind, fallback_warning) in [
+    for (raw, scripts, cps, start_cp, bounds, kind, fallback_kind, fallback_warning) in [
         (
             &text.footnote,
-            &text.footnote_fc_ends,
+            &text.footnote_scripts,
             &text.footnote_cps,
             ranges.footnote.start,
             &tables.stories.footnote,
@@ -679,7 +716,7 @@ fn collect_story_subdocuments(
         ),
         (
             &text.header,
-            &text.header_fc_ends,
+            &text.header_scripts,
             &text.header_cps,
             ranges.header.start,
             &tables.stories.header,
@@ -689,7 +726,7 @@ fn collect_story_subdocuments(
         ),
         (
             &text.annotation,
-            &text.annotation_fc_ends,
+            &text.annotation_scripts,
             &text.annotation_cps,
             ranges.annotation.start,
             &tables.stories.annotation,
@@ -707,7 +744,7 @@ fn collect_story_subdocuments(
             fallback_warning
         };
         let Some(bounds) = bounds.as_ref().filter(|_| positions_valid) else {
-            let whole = normalize_story(raw, fcs, &tables.scripts, budget, fallback_kind)?;
+            let whole = normalize_story(raw, scripts, budget, fallback_kind)?;
             if !whole.text.is_empty() {
                 crate::core::diagnostics::push_warning(warnings, DOC_WARNING_SOURCE, fallback_warning);
                 subdocuments.push(whole);
@@ -725,7 +762,7 @@ fn collect_story_subdocuments(
             let Some(kind) = story_kind else {
                 continue;
             };
-            let story = normalize_story(&raw_story, &fcs[range], &tables.scripts, budget, kind)?;
+            let story = normalize_story(&raw_story, &scripts[range], budget, kind)?;
             if !story.text.is_empty() {
                 subdocuments.push(story);
             }
@@ -756,6 +793,7 @@ mod test_script_offsets {
             chars: vec!['😀', 'A'],
             fc_ends: vec![4, 6],
             cp_offsets: vec![0, 2],
+            scripts: Vec::new(),
         };
         let mut text = String::new();
         let mut fcs = Vec::new();
@@ -765,8 +803,11 @@ mod test_script_offsets {
             10,
             SubdocRange { start: 12, end: 13 },
             &mut text,
-            Some(&mut fcs),
-            Some(&mut cps),
+            StoryPositions {
+                fc_ends: Some(&mut fcs),
+                cps: Some(&mut cps),
+                ..Default::default()
+            },
         );
         assert_eq!(text, "A");
         assert_eq!(fcs, [6]);

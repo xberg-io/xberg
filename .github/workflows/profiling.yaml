@@ -64,15 +64,15 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Install Task
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
 
       - name: Build workspace (native libs + harness with profiling)
         env:
           ENABLE_PROFILING: "true"
-        run: task rust:build:profiling
+        run: mise run rust:build:profiling
 
       - name: Log disk space before artifact upload
         run: scripts/ci/validate/show-disk-space.sh "Disk space before artifact upload"
@@ -152,7 +152,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -224,10 +224,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Python and Task
+      - name: Setup Python
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv task
+          install-args: python uv
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -252,9 +252,6 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Build Python bindings
-        run: task python:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-python
@@ -262,7 +259,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -334,10 +331,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Python and Task
+      - name: Setup Python
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv task
+          install-args: python uv
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -362,9 +359,6 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Build Python bindings
-        run: task python:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-python-async-OLD
@@ -372,7 +366,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -444,10 +438,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Python and Task
+      - name: Setup Python
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv task
+          install-args: python uv
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -472,9 +466,6 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Build Python bindings
-        run: task python:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-python-batch
@@ -482,7 +473,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -549,10 +540,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Node and Task
+      - name: Setup Node
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm task
+          install-args: node pnpm
       - name: Install pnpm workspace dependencies
         shell: bash
         run: pnpm install --no-frozen-lockfile
@@ -571,11 +562,6 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Build Node bindings and install locally
-        env:
-          TARGET: x86_64-unknown-linux-gnu
-        run: task node:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-node
@@ -583,7 +569,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -650,10 +636,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Node and Task
+      - name: Setup Node
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm task
+          install-args: node pnpm
       - name: Install pnpm workspace dependencies
         shell: bash
         run: pnpm install --no-frozen-lockfile
@@ -672,11 +658,6 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Build Node bindings and install locally
-        env:
-          TARGET: x86_64-unknown-linux-gnu
-        run: task node:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-node-batch
@@ -684,7 +665,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -751,10 +732,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Node and Task
+      - name: Setup Node
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm task
+          install-args: node pnpm
       - name: Install pnpm workspace dependencies
         shell: bash
         run: pnpm install --no-frozen-lockfile
@@ -763,7 +744,7 @@ jobs:
         run: pnpm bin >> "$GITHUB_PATH"
 
       - name: Build WASM bindings
-        run: task wasm:build:bindings
+        run: mise run wasm:build:all
 
       - name: Run benchmark
         env:
@@ -772,7 +753,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -839,10 +820,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Node and Task
+      - name: Setup Node
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm task
+          install-args: node pnpm
       - name: Install pnpm workspace dependencies
         shell: bash
         run: pnpm install --no-frozen-lockfile
@@ -851,7 +832,7 @@ jobs:
         run: pnpm bin >> "$GITHUB_PATH"
 
       - name: Build WASM bindings
-        run: task wasm:build:bindings
+        run: mise run wasm:build:all
 
       - name: Run benchmark
         env:
@@ -860,7 +841,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -930,10 +911,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Ruby and Task
+      - name: Setup Ruby
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: ruby task
+          install-args: ruby
 
       - name: Install Bundler
         shell: bash
@@ -954,18 +935,13 @@ jobs:
       - name: Vendor xberg core for Ruby
         run: python3 scripts/ci/ruby/vendor-xberg-core.py
 
-      - name: Build Ruby native gem
-        env:
-          PLATFORM: x86_64-linux
-        run: task ruby:build:bindings
-
       - name: Compile Ruby native extension
         shell: bash
         run: scripts/ci/ruby/compile-extension.sh
 
       - name: Build xberg CLI
         shell: bash
-        run: task rust:cli:build
+        run: mise run rust:cli:build
 
       - name: Run benchmark
         env:
@@ -974,7 +950,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1044,10 +1020,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Ruby and Task
+      - name: Setup Ruby
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: ruby task
+          install-args: ruby
 
       - name: Install Bundler
         shell: bash
@@ -1068,18 +1044,13 @@ jobs:
       - name: Vendor xberg core for Ruby
         run: python3 scripts/ci/ruby/vendor-xberg-core.py
 
-      - name: Build Ruby native gem
-        env:
-          PLATFORM: x86_64-linux
-        run: task ruby:build:bindings
-
       - name: Compile Ruby native extension
         shell: bash
         run: scripts/ci/ruby/compile-extension.sh
 
       - name: Build xberg CLI
         shell: bash
-        run: task rust:cli:build
+        run: mise run rust:cli:build
 
       - name: Run benchmark
         env:
@@ -1088,7 +1059,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1155,10 +1126,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Go and Task
+      - name: Setup Go
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: go task
+          install-args: go
       - name: Cache Go modules and build cache
         uses: actions/cache@v6
         with:
@@ -1180,9 +1151,6 @@ jobs:
         working-directory: packages/go
         run: go mod download
 
-      - name: Build Go bindings
-        run: task go:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-go-sync
@@ -1191,7 +1159,7 @@ jobs:
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
           XBERG_BENCHMARK_DEBUG: "true"
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1258,10 +1226,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Go and Task
+      - name: Setup Go
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: go task
+          install-args: go
       - name: Cache Go modules and build cache
         uses: actions/cache@v6
         with:
@@ -1283,9 +1251,6 @@ jobs:
         working-directory: packages/go
         run: go mod download
 
-      - name: Build Go bindings
-        run: task go:build:bindings
-
       - name: Run benchmark
         env:
           FRAMEWORK: xberg-go-batch
@@ -1294,7 +1259,7 @@ jobs:
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
           XBERG_BENCHMARK_DEBUG: "true"
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1361,10 +1326,10 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
-      - name: Setup Java, Maven and Task
+      - name: Setup Java and Maven
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: java maven task
+          install-args: java maven
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
@@ -1375,7 +1340,7 @@ jobs:
         uses: ./.github/actions/setup-layout-models
 
       - name: Build Java bindings
-        run: task java:build:bindings
+        run: mise run java:build:release
 
       - name: Run benchmark
         env:
@@ -1384,7 +1349,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1451,6 +1416,7 @@ jobs:
           cache-key-prefix: profiling
           use-sccache: true
 
+      # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
@@ -1464,13 +1430,13 @@ jobs:
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
 
-      - name: Install Task
+      - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task
+          install: "false"
 
       - name: Build C# bindings
-        run: task csharp:build:bindings
+        run: mise run csharp:build:release
 
       - name: Run benchmark
         env:
@@ -1479,7 +1445,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: task benchmark:run
+        run: mise run benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()

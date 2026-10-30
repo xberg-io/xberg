@@ -56,6 +56,7 @@ use unicode_normalization::UnicodeNormalization;
 // The structural-sidecar file lives at `src/structural_sidecar.rs`; it is attached ~keep
 // here (rather than in `lib.rs`) via `#[path]` so the crate root stays untouched. The path is
 // relative to this file's directory (`src/quality/`), hence `../`. ~keep
+pub mod geometry;
 #[path = "../structural_sidecar.rs"]
 pub mod structural_sidecar;
 

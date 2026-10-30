@@ -20,11 +20,6 @@ ignore = [
   "RUSTSEC-2026-0177",
   "RUSTSEC-2026-0192",
   "RUSTSEC-2026-0206",
-  # ~keep zip 8.6.0 is pulled only by calamine 0.36.1 and candle-core 0.11.0 (xberg's own zip is 9.0.5).
-  # The advisories concern ZipArchive::extract / ZipStreamReader, which no crate in this workspace calls. #2126
-  "RUSTSEC-2026-0367",
-  "RUSTSEC-2026-0368",
-  "RUSTSEC-2026-0369",
 ]
 
 [licenses]
@@ -102,7 +97,7 @@ skip-tree = []
 unknown-registry = "warn"
 unknown-git = "warn"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+allow-git = ["https://github.com/Goldziher/candle"]
 
 [sources.allow-org]
 github = []

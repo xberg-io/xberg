@@ -1,3 +1,3 @@
 # Concepts
 
-* [Format Specific Extraction](SKILL.md) - Per-format Xberg extractors (Office XML, PDF, archives, ...): parsers, security budgets, metadata helpers. Use when changing or adding one.
+* [Format Specific Extraction](SKILL.md) - Add or change format extractors: parsers, archive budgets and metadata.

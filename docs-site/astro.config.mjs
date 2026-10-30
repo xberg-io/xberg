@@ -44,9 +44,6 @@ export default defineConfig({
           "bindings for 15 languages.",
         githubUrl: "https://github.com/xberg-io/xberg",
         editBaseUrl: "https://github.com/xberg-io/xberg/edit/main/docs-site/",
-        starlight: {
-          favicon: "https://cdn.jsdelivr.net/gh/xberg-io/assets@v1.0.0/docs/app-icon.svg",
-        },
         plugins: [
           starlightLlmsTxt({
             customSets: [
@@ -295,6 +292,10 @@ export default defineConfig({
               },
               { label: "CLI Reference", slug: "reference/cli" },
               { label: "MCP Reference", slug: "reference/mcp" },
+              {
+                label: "Architecture Decisions",
+                slug: "reference/architecture-decisions",
+              },
               {
                 label: "Batch Examples (prototype)",
                 slug: "reference/examples/batch",

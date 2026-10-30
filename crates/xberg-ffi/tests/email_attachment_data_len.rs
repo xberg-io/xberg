@@ -59,7 +59,7 @@ fn email_attachment_data_accessor_must_provide_out_len_in_header() {
          in crates/xberg-ffi/include/xberg.h does not contain the required \
          `out_len` parameter.\n\n\
          Expected something like:\n    uint8_t *xberg_email_attachment_data(..., uintptr_t *out_len);\n\n\
-         Found the old 1-parameter form. Fix requires `task alef:generate` with an \
+         Found the old 1-parameter form. Fix requires `alef all --clean --skip-compile` with an \
          updated alef that handles Option<Bytes> fields for the FFI byte accessor heuristic.\n\n\
          This is the lock-in test for #1059."
     );

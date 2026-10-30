@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "vendored/**"
       - "crates/**"
       - "packages/**"
       - "e2e/**"
@@ -11,7 +12,7 @@ on:
       - "alef.toml"
       - "Cargo.toml"
       - "Cargo.lock"
-      - "Taskfile.yml"
+      - "mise-tasks/**"
       - "pnpm-workspace.yaml"
       - "scripts/ci/wasm/**"
       - "scripts/ci/install-system-deps/**"
@@ -68,6 +69,7 @@ jobs:
         run: |
           hash=$(find \
             Cargo.toml Cargo.lock rust-toolchain.toml \
+            vendored \
             crates/xberg \
             crates/xberg-ffi \
             crates/xberg-cli \
@@ -167,7 +169,7 @@ jobs:
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - lang: java
-            mise-tools: java
+            mise-tools: java maven
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - lang: csharp
@@ -331,11 +333,13 @@ jobs:
         if: matrix.lang == 'wasm'
         uses: xberg-io/actions/install-wasi-sdk@v1
 
-      # Each leg installs Task plus its language toolchain (matrix.mise-tools) from mise.lock. ~keep
-      - name: Install Task and the leg's toolchain
+      # Each leg installs its language toolchain (matrix.mise-tools) from mise.lock; a leg with
+      # none sets up mise alone for `mise run`. ~keep
+      - name: Install mise and the leg's toolchain
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task ${{ matrix.mise-tools }}
+          install: ${{ matrix.mise-tools && 'true' || 'false' }}
+          install-args: ${{ matrix.mise-tools }}
 
       - name: Resolve the mise Python version
         if: matrix.lang == 'python'
@@ -373,6 +377,7 @@ jobs:
           bundle config set frozen true
           bundle install --jobs 4
 
+      # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - name: Setup Android SDK
         if: matrix.lang == 'kotlin-android'
         uses: android-actions/setup-android@v4
@@ -386,12 +391,14 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
+      # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
       - name: Setup .NET
         if: matrix.dotnet-version
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
 
+      # PHP stays on its setup action (toolchain-management rule). ~keep
       - name: Setup PHP
         if: matrix.php-version
         uses: xberg-io/actions/setup-php@v1
@@ -399,6 +406,7 @@ jobs:
           php-version: ${{ matrix.php-version }}
           tools: composer
 
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - name: Setup Elixir
         if: matrix.elixir-version
         uses: xberg-io/actions/setup-elixir@v1
@@ -406,12 +414,14 @@ jobs:
           elixir-version: ${{ matrix.elixir-version }}
           otp-version: ${{ matrix.otp-version }}
 
+      # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
       - name: Setup Dart
         if: matrix.dart-version
         uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.dart-version }}
 
+      # Swift stays on its setup action (toolchain-management rule). ~keep
       - name: Setup Swift
         if: matrix.swift-version
         uses: xberg-io/actions/setup-swift@v1
@@ -436,7 +446,7 @@ jobs:
 
       - name: Install wasm-pack
         if: matrix.lang == 'wasm'
-        run: task demo:dev:setup:wasm-pack
+        run: mise run demo:dev:setup:wasm-pack
 
       - name: Install alef CLI
         uses: xberg-io/actions/install-alef@v1
@@ -484,9 +494,9 @@ jobs:
                 sleep 60
               done ) &
             trap 'kill $!' EXIT
-            timeout --signal=TERM --kill-after=60 100m task kotlin-android:e2e
+            timeout --signal=TERM --kill-after=60 100m mise run kotlin-android:e2e
           else
-            task ${{ matrix.lang }}:e2e
+            mise run ${{ matrix.lang }}:e2e
           fi
         shell: bash
         env:
@@ -529,7 +539,7 @@ jobs:
           # Tee the FULL output (alef + swiftc + swift runtime) to a file so it survives
           # even if the console truncates or the crash report lands only on stderr.
           set -o pipefail
-          task swift:e2e 2>&1 | tee /tmp/swift-crash/e2e-full.log
+          mise run swift:e2e 2>&1 | tee /tmp/swift-crash/e2e-full.log
 
       - name: Capture swift crash backtrace
         if: ${{ matrix.lang == 'swift' && failure() }}

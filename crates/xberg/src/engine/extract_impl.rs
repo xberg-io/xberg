@@ -1276,10 +1276,18 @@ async fn extract_bytes_input_with_layout_pages(
     let (bytes, mime_type) = resolve_owned_bytes_mime(bytes, mime_type, filename.clone(), config).await?;
     let mut cfg = config.clone();
     cfg.source_name.clone_from(&filename);
-    let mut result = Box::pin(crate::core::extractor::extract_bytes_with_layout_pages(
-        &bytes, &mime_type, &cfg, pages,
-    ))
-    .await?;
+    let mut result = match pages {
+        Some(pages) => {
+            Box::pin(crate::core::extractor::extract_bytes_with_layout_pages(
+                &bytes,
+                &mime_type,
+                &cfg,
+                Some(pages),
+            ))
+            .await?
+        }
+        None => Box::pin(crate::core::extractor::extract_bytes(&bytes, &mime_type, &cfg)).await?,
+    };
     annotate_source(
         &mut result,
         "bytes",

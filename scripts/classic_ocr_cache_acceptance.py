@@ -429,7 +429,7 @@ def main() -> int:
     args = parse_args()
     binary = args.xberg_bin.resolve()
     if not binary.is_file():
-        fail(f"xberg binary not found: {binary}; run `task rust:cli:build` first")
+        fail(f"xberg binary not found: {binary}; run `mise run rust:cli:build` first")
     fixture_root = args.fixture_root.resolve()
     if not fixture_root.is_dir():
         fail(f"test_documents not found: {fixture_root}")

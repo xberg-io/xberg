@@ -1,0 +1,67 @@
+# Per-binding build, format, lint, test, dependency and packaging tasks, included from mise.toml
+# [task_config]. Rust core tasks are in rust.toml and e2e suites in e2e.toml. ~keep
+
+# ---- Dependency refreshes (`deps` is the shared toolchains engine, `deps:local` xberg's) -------
+
+# ---- Python ------------------------------------------------------------------------------------
+
+["python:publish:archive:prepare"]
+description = "Validate combined Python artifacts and prepare their public archive release"
+run = "python3 scripts/ci/python_archive_publication.py prepare"
+
+["python:publish:archive:wait"]
+description = "Refresh the central Python index and wait for verified public artifacts"
+run = "python3 scripts/ci/python_archive_publication.py wait"
+
+["python:publish:archive:test"]
+description = "Test Python archive publication and its bounded readiness gate"
+run = "uv run --frozen --only-dev python -m pytest scripts/ci/test_python_archive_publication.py -v"
+
+# ---- Go ----------------------------------------------------------------------------------------
+
+["go:publish:package"]
+description = "Package a versioned Go FFI release archive with static-link metadata"
+usage = '''
+arg "<target>" help="Rust target triple of the built FFI library"
+arg "<version>" help="Release version the archive carries"
+flag "--output-dir <dir>" env="OUTPUT_DIR" default="dist/go-ffi" help="Directory the archive is written to"
+'''
+run = 'bash scripts/ci/package-go-release.sh "$usage_target" "$usage_version" "$usage_output_dir"'
+
+["go:publish:package:musl"]
+description = "Build and package a versioned dynamic Go FFI archive for musl"
+usage = '''
+arg "<target>" help="Rust musl target triple"
+arg "<platform>" help="Release platform name of the archive"
+arg "<version>" help="Release version the archive carries"
+flag "--output-dir <dir>" env="OUTPUT_DIR" default="dist/go-ffi" help="Directory the archive is written to"
+'''
+run = '''
+bash scripts/ci/package-go-musl-release.sh "$usage_target" "$usage_platform" "$usage_version" "$usage_output_dir"
+'''
+
+# ---- PHP, WASM, Java, C# -----------------------------------------------------------------------
+
+["wasm:build:all"]
+description = "Alias for rust:wasm:build:all (build all WASM targets + TS wrapper)"
+depends = ["rust:wasm:build:all"]
+
+["java:build:release"]
+description = "Build the Java binding via Maven (mvn package)"
+dir = "{{config_root}}/packages/java"
+run = "mvn -B -DskipTests package"
+
+["csharp:build:release"]
+description = "Build the C# binding in Release configuration"
+dir = "{{config_root}}/packages/csharp/Xberg"
+run = "dotnet build --configuration Release"
+
+# ---- Dart --------------------------------------------------------------------------------------
+
+["dart:format:context"]
+description = "Resolve Dart package language versions before formatting generated output"
+run = ["cd packages/dart && dart pub get", "cd e2e/dart && dart pub get --enforce-lockfile"]
+
+["dart:setup"]
+description = "Setup Dart binding (codegen + native lib build + post-processing via alef)"
+run = "alef build --lang dart --release"

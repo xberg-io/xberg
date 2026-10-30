@@ -1,0 +1,70 @@
+# Fixture-driven e2e suites, included from mise.toml [task_config]. ~keep
+
+["e2e:verify"]
+description = "Verify generated e2e tests are up to date"
+run = [{ task = "dart:format:context" }, "alef e2e generate --strict", "git diff --exit-code e2e/"]
+
+# A RUSTFLAGS set anywhere in the environment REPLACES .cargo/config.toml's
+# [target.wasm32-unknown-unknown] rustflags outright -- cargo does not merge the two. CI's
+# setup-onnx-runtime action exports a job-wide RUSTFLAGS carrying `-C link-arg=-Wl,-rpath,$ORIGIN`,
+# which rust-lld rejects outright, and the override simultaneously drops the bulk-memory /
+# getrandom_backend / --allow-multiple-definition flags the wasm build needs. Emptying is not
+# enough -- an empty-but-set RUSTFLAGS still wins over the config file -- and
+# CARGO_ENCODED_RUSTFLAGS must go too, since it takes precedence over RUSTFLAGS when present. Unset
+# here rather than in the workflow so every caller inherits it; scripts/ci/wasm/run-crate-tests.sh
+# already had to learn this separately for the other wasm entry point. ~keep
+["wasm:e2e"]
+description = "Run WASM e2e tests (builds wasm-pack bundle first)"
+run = "unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS && alef test --e2e --lang wasm"
+
+["dart:e2e"]
+description = "Run Dart e2e tests"
+run = [{ task = "dart:setup" }, "alef test --e2e --lang dart"]
+
+["rust:e2e"]
+description = "Run Rust e2e tests via alef"
+run = "alef test --e2e --lang rust"
+
+["python:e2e"]
+description = "Run Python e2e tests via Alef"
+run = "alef test --e2e --lang python"
+
+["go:e2e"]
+description = "Run Go e2e tests (builds xberg-ffi first)"
+run = "alef test --e2e --lang go"
+
+["node:e2e"]
+description = "Run Node/TypeScript e2e tests (builds NAPI module first)"
+run = "alef test --e2e --lang node"
+
+["ruby:e2e"]
+description = "Run Ruby e2e tests"
+run = "alef test --e2e --lang ruby"
+
+["php:e2e"]
+description = "Run PHP e2e tests"
+run = "alef test --e2e --lang php"
+
+["elixir:e2e"]
+description = "Run Elixir e2e tests (compiles NIF first)"
+run = "alef test --e2e --lang elixir"
+
+["java:e2e"]
+description = "Run Java e2e tests (builds xberg-ffi first)"
+run = "alef test --e2e --lang java"
+
+["csharp:e2e"]
+description = "Run C# e2e tests (builds xberg-ffi first)"
+run = "alef test --e2e --lang csharp"
+
+["kotlin-android:e2e"]
+description = "Run Kotlin/Android e2e tests"
+run = "alef test --e2e --lang kotlin_android"
+
+["swift:e2e"]
+description = "Run Swift e2e tests"
+run = "alef test --e2e --lang swift"
+
+["zig:e2e"]
+description = "Run Zig e2e tests"
+run = "alef test --e2e --lang zig"

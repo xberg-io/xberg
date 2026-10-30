@@ -1,0 +1,103 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index f94de5a..9c37a28 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -42,9 +42,9 @@ cfg_select! {
+         mod unix;
+         use crate::unix::sys as sys;
+ 
+-        #[cfg(feature = "network")]
++        #[cfg(all(feature = "network", not(target_os = "ios")))]
+         mod network;
+-        #[cfg(feature = "network")]
++        #[cfg(all(feature = "network", not(target_os = "ios")))]
+         use crate::unix::network_helper;
+ 
+         #[cfg(test)]
+@@ -171,7 +171,7 @@ pub fn set_open_files_limit(mut _new_limit: usize) -> bool {
+             // If files are already open, to be sure that the number won't be bigger when those
+             // files are closed, we subtract the current number of opened files to the new
+             // limit.
+-            if remaining_files().fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
++            if remaining_files().try_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                 let _new_limit = _new_limit as isize;
+                 let diff = (max as isize).saturating_sub(remaining);
+                 Some(_new_limit.saturating_sub(diff))
+diff --git a/src/unix/apple/mod.rs b/src/unix/apple/mod.rs
+index 5e189b0..6b27984 100644
+--- a/src/unix/apple/mod.rs
++++ b/src/unix/apple/mod.rs
+@@ -53,6 +53,11 @@ cfg_select! {
+ }
+ cfg_select! {
+     feature = "network" => {
++        #[cfg(target_os = "macos")]
++        pub mod network;
++        // iOS does not expose the route/if_mib APIs used by the macOS implementation.
++        #[cfg(target_os = "ios")]
++        #[path = "../../unknown/network.rs"]
+         pub mod network;
+ 
+         pub(crate) use self::network::{NetworkDataInner, NetworksInner};
+diff --git a/src/unix/linux/process.rs b/src/unix/linux/process.rs
+index 8aa610f..4c0f329 100644
+--- a/src/unix/linux/process.rs
++++ b/src/unix/linux/process.rs
+@@ -1112,7 +1112,7 @@ struct FileCounter(File);
+ impl FileCounter {
+     fn new(f: File) -> Option<Self> {
+         let any_remaining =
+-            remaining_files().fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
++            remaining_files().try_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                 if remaining > 0 {
+                     Some(remaining - 1)
+                 } else {
+diff --git a/src/unix/mod.rs b/src/unix/mod.rs
+index b418283..81c4e74 100644
+--- a/src/unix/mod.rs
++++ b/src/unix/mod.rs
+@@ -50,7 +50,7 @@ cfg_select! {
+     _ => {}
+ }
+ 
+-#[cfg(feature = "network")]
++#[cfg(all(feature = "network", not(target_os = "ios")))]
+ pub(crate) mod network_helper;
+ 
+ cfg_select! {
+diff --git a/tests/network.rs b/tests/network.rs
+index 669a484..6969d62 100644
+--- a/tests/network.rs
++++ b/tests/network.rs
+@@ -7,6 +7,7 @@
+ use sysinfo::Networks;
+ 
+ #[test]
++#[cfg(not(target_os = "ios"))]
+ fn test_networks() {
+     if !sysinfo::IS_SUPPORTED_SYSTEM {
+         return;
+@@ -18,6 +19,7 @@ fn test_networks() {
+ }
+ 
+ #[test]
++#[cfg(not(target_os = "ios"))]
+ fn test_mac_addr() {
+     if !sysinfo::IS_SUPPORTED_SYSTEM {
+         return;
+@@ -29,3 +31,15 @@ fn test_mac_addr() {
+         .iter()
+         .any(|(_, n)| !n.mac_address().is_unspecified());
+ }
++
++#[test]
++#[cfg(target_os = "ios")]
++fn test_networks_remain_empty_on_ios() {
++    let mut networks = Networks::new();
++    assert!(networks.list().is_empty());
++    networks.refresh(false);
++    assert!(networks.list().is_empty());
++    networks.refresh(true);
++    assert!(networks.list().is_empty());
++    assert!(Networks::new_with_refreshed_list().list().is_empty());
++}

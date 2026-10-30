@@ -14,6 +14,7 @@ builtins = [
   "!testing/test-alongside-code",
   "!testing/tdd-workflow",
   "!token-efficiency/output-awareness",
+  "!token-efficiency/task-runner",
   "!ai-governance/explain-reasoning",
   "!security/least-privilege",
   "!security/input-validation",
@@ -114,8 +115,9 @@ ignore_paths = [
 
 [lint.load_budgets]
 # ~keep AR964's 8000-char Codex skill-listing figure is unverified; the counted listing after folding the fallback
-# skills, plus about 5%. Trim skill descriptions to lower it; re-measure on every pin bump.
-codex-skill-listing = 14100
+# skills (11650 on 5.9.2), plus about 12% to stay out of AR964's 10% info band. Trim skill descriptions to
+# lower it; re-measure on every pin bump.
+codex-skill-listing = 13000
 
 [rules]
 # ~keep Glob-scoped rules stay out of AGENTS.md: rule files for Claude, path-gated skills for Codex.

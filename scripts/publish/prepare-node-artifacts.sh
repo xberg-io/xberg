@@ -14,6 +14,7 @@ fi
 rm -rf "$dest_dir/npm"
 mkdir -p "$dest_dir/npm"
 
+prepared_count=0
 shopt -s nullglob
 for pkg in "$artifacts_dir"/*.tar.gz; do
   echo "Unpacking $pkg"
@@ -41,20 +42,27 @@ for pkg in "$artifacts_dir"/*.tar.gz; do
     if [ -d "$dest" ]; then
       file_count=$(find "$dest" -type f | wc -l)
       echo "  ✓ Copied successfully ($file_count files)"
+      prepared_count=$((prepared_count + 1))
     else
-      echo "  ✗ ERROR: Copy failed!"
+      echo "  ✗ ERROR: Copy failed!" >&2
+      exit 1
     fi
   done < <(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -print0)
 
   rm -rf "$tmpdir"
 done
 
+if [ "$prepared_count" -eq 0 ]; then
+  echo "Error: No platform packages were prepared" >&2
+  exit 1
+fi
+
 echo ""
 echo "=== Final npm directory structure ==="
 find "$dest_dir/npm" -type f | sort
 
 if [ -d "$typescript_defs_dir" ]; then
-  cp "$typescript_defs_dir"/index.js "$typescript_defs_dir"/index.d.ts "$dest_dir/" || true
+  cp "$typescript_defs_dir"/index.js "$typescript_defs_dir"/index.d.ts "$dest_dir/"
   echo "TypeScript definitions merged"
 fi
 

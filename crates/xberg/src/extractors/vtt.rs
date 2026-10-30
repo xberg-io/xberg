@@ -96,7 +96,13 @@ fn parse_track(source: &str) -> ParsedTrack {
         if !trailing.is_empty() {
             title = Some(trailing.to_string());
         }
-        1
+        // The header runs on to the first blank line. Lines there, such as the `Kind: captions`
+        // and `Language: en` that YouTube tracks carry, are not cue text.
+        let header_lines = lines[1..]
+            .iter()
+            .take_while(|line| !line.trim().is_empty() && !line.contains(TIMING_ARROW))
+            .count();
+        1 + header_lines
     } else {
         warnings.push(warning("missing WEBVTT signature line; parsing as WebVTT anyway"));
         0
@@ -244,7 +250,14 @@ fn parse_timestamp(value: &str) -> Option<u64> {
         _ => return None,
     };
     let seconds: u64 = seconds.parse().ok()?;
-    Some(hours * MILLIS_PER_HOUR + minutes * MILLIS_PER_MINUTE + seconds * MILLIS_PER_SECOND + millis)
+    // Checked arithmetic: any of the fields can be near u64::MAX and still parse, but the
+    // millisecond total does not fit, and the cue is skipped with a warning rather than
+    // panicking (debug) or wrapping into a bogus timestamp (release).
+    hours
+        .checked_mul(MILLIS_PER_HOUR)?
+        .checked_add(minutes.checked_mul(MILLIS_PER_MINUTE)?)?
+        .checked_add(seconds.checked_mul(MILLIS_PER_SECOND)?)?
+        .checked_add(millis)
 }
 
 /// Format milliseconds back to the canonical `hh:mm:ss.mmm` form.
@@ -319,7 +332,13 @@ fn parse_voice_tag(tag: &str) -> Option<String> {
         rest = &after_dot[end..];
     }
     let name = rest.trim();
-    if name.is_empty() { None } else { Some(name.to_string()) }
+    // The annotation may carry character references, like the cue text: `<v Tom &amp; Jerry>`
+    // names the speaker "Tom & Jerry".
+    if name.is_empty() {
+        None
+    } else {
+        Some(decode_escapes(name))
+    }
 }
 
 /// Decode the character references in a cue payload: the named ones WebVTT lists, `&quot;` and
@@ -575,6 +594,23 @@ mod tests {
         assert_eq!(parse_timestamp("nonsense"), None);
     }
 
+    /// An hours field close to `u64::MAX` parses, but its millisecond product does not fit;
+    /// the timestamp must read as unparsable instead of panicking or wrapping around.
+    #[test]
+    fn should_reject_timestamps_whose_milliseconds_overflow() {
+        assert_eq!(parse_timestamp("18446744073709551615:00:00.000"), None);
+        assert_eq!(parse_timestamp("18446744073709551615:59:59.999"), None);
+        assert_eq!(parse_timestamp("18446744073709551615:59.999"), None);
+        assert_eq!(parse_timestamp("00:18446744073709551615:59.999"), None);
+
+        let parsed = parse_track("WEBVTT\n\n18446744073709551615:00:00.000 --> 18446744073709551615:00:01.000\nHuge\n");
+        assert!(parsed.cues.is_empty());
+        assert_eq!(
+            parsed.warnings.iter().map(|w| w.message.as_ref()).collect::<Vec<_>>(),
+            vec!["cue with an unparsable timing line skipped"]
+        );
+    }
+
     #[test]
     fn should_round_trip_timestamp_formatting() {
         assert_eq!(format_timestamp(3_723_004), "01:02:03.004");
@@ -586,6 +622,14 @@ mod tests {
         let (speaker, text) = strip_cue_tags("<v Roger Bingham>We are <i>here</i> &amp; now");
         assert_eq!(speaker.as_deref(), Some("Roger Bingham"));
         assert_eq!(text, "We are here & now");
+    }
+
+    /// A voice-span annotation may carry character references, like the cue text does.
+    #[test]
+    fn should_decode_references_in_the_speaker_name() {
+        let (speaker, text) = strip_cue_tags("<v Tom &amp; Jerry &#8212; narrators>Hello");
+        assert_eq!(speaker.as_deref(), Some("Tom & Jerry \u{2014} narrators"));
+        assert_eq!(text, "Hello");
     }
 
     #[test]
@@ -691,6 +735,60 @@ mod tests {
             parsed.warnings.iter().map(|w| w.message.as_ref()).collect::<Vec<_>>(),
             vec!["block without a timing line skipped"]
         );
+    }
+
+    #[test]
+    fn should_skip_header_lines_after_the_signature() {
+        let parsed = parse_track("WEBVTT\nKind: captions\nLanguage: en\n\n00:00:01.000 --> 00:00:02.000\nHello\n");
+        assert_eq!(parsed.cues.len(), 1);
+        assert_eq!(parsed.cues[0].text, "Hello");
+        assert!(parsed.warnings.is_empty());
+
+        let parsed = parse_track("WEBVTT\nKind: captions\n\nstray line\n");
+        assert_eq!(parsed.cues.len(), 1);
+        assert_eq!(parsed.cues[0].text, "stray line");
+    }
+
+    #[test]
+    fn should_not_recover_header_metadata_as_untimed_text() {
+        for source in [
+            "WEBVTT\nKind: captions\nLanguage: en\n",
+            "WEBVTT\nKind: captions\nLanguage: en\n\n",
+        ] {
+            let parsed = parse_track(source);
+            assert!(parsed.cues.is_empty(), "header-only track produced cues: {source:?}");
+            assert!(parsed.warnings.is_empty());
+        }
+    }
+
+    #[test]
+    fn should_preserve_a_timing_line_immediately_after_the_signature() {
+        let parsed = parse_track("WEBVTT\n00:00:01.000 --> 00:00:02.500\nHello\n");
+
+        assert_eq!(parsed.cues.len(), 1);
+        assert_eq!(parsed.cues[0].text, "Hello");
+        assert_eq!(parsed.cues[0].start_millis, Some(1_000));
+        assert_eq!(parsed.cues[0].end_millis, Some(2_500));
+        assert!(parsed.warnings.is_empty());
+    }
+
+    #[tokio::test]
+    async fn should_skip_header_metadata_with_a_bom_and_crlf_line_endings() {
+        let source = "\u{feff}WEBVTT - Captions\r\nKind: captions\r\nLanguage: en\r\n\r\n\
+                      00:00:01.000 --> 00:00:02.500\r\nHello\r\n";
+        let document = WebVttExtractor::new()
+            .extract_content(source.as_bytes(), "text/vtt", &ExtractionConfig::default())
+            .await
+            .expect("BOM-prefixed CRLF track should extract");
+
+        assert_eq!(document.elements.len(), 1);
+        assert_eq!(document.elements[0].text, "Hello");
+        assert_eq!(document.metadata.title.as_deref(), Some("Captions"));
+        assert_eq!(
+            document.metadata.additional.get("cue_count"),
+            Some(&serde_json::json!(1))
+        );
+        assert!(document.processing_warnings.is_empty());
     }
 
     /// The recovered text must not be mistaken for a real cue: `cue_attributes` emits no

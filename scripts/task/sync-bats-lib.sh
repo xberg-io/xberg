@@ -2,7 +2,7 @@
 # Vendor the shared Bats helper library from xberg-io/actions.
 #
 # The library is a committed file, not a fetch-at-test-time dependency, for two reasons:
-# `task test:scripts:bats` has to work with no network, and CI must load the same bytes the
+# a local `bats --recursive scripts/tests/bats` run has to work with no network, and CI must load the same bytes the
 # developer loaded. A helper resolved from one place locally and another in CI reintroduces the
 # local-green/CI-red class the library exists to prevent.
 #
@@ -59,7 +59,7 @@ sync)
 --check)
   if ! diff -ru "$destination" "$staging"; then
     echo "::error::${destination} has drifted from ${SOURCE_REPOSITORY}@${ref}." >&2
-    echo "Run 'task test:scripts:lib:sync' to refresh it." >&2
+    echo "Run 'mise run test:scripts:lib:sync' to refresh it." >&2
     exit 1
   fi
   echo "${destination} matches ${SOURCE_REPOSITORY}@${ref}"

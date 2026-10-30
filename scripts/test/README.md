@@ -11,7 +11,8 @@ A comprehensive local Docker testing script that validates all configuration vol
 This is an image integration harness, run by `ci-docker.yaml` through
 `scripts/ci/docker/run-config-tests.sh`. It requires actual built images, Docker and HTTP health
 checks; it stays outside the offline Bats shell contract suite. The shell contracts, including
-Dockerfile tessdata checks, run through `task test:scripts:bats`.
+Dockerfile tessdata checks, run in `ci-scripts.yaml` (locally:
+`BATS_LIB_PATH=scripts/tests/lib bats --recursive scripts/tests/bats`).
 
 #### Purpose
 

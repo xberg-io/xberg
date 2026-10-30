@@ -32,6 +32,8 @@ docker build -f docker/Dockerfile.musl-ffi \
 mkdir -p "$STAGE/lib" "$STAGE/include"
 cp "$BUILD_OUTPUT"/*.so* "$STAGE/lib/"
 cp crates/xberg-ffi/include/xberg.h "$STAGE/include/"
+NOTICE_TOOL="$(cd "$(dirname "$0")" && pwd)/package-notices.py"
+python3 "$NOTICE_TOOL" stage "$STAGE"
 
 ARCHIVE="$OUTPUT_DIR/xberg-go-v$VERSION-$PLATFORM.tar.gz"
 tar -czf "$ARCHIVE" -C "$OUTPUT_DIR" "$(basename "$STAGE")"
@@ -39,3 +41,5 @@ tar -czf "$ARCHIVE" -C "$OUTPUT_DIR" "$(basename "$STAGE")"
 CONTENTS="$(tar -tzf "$ARCHIVE")"
 grep -q "/lib/libxberg_ffi.so$" <<<"$CONTENTS"
 grep -q "/include/xberg.h$" <<<"$CONTENTS"
+
+python3 "$NOTICE_TOOL" verify "$ARCHIVE" "$(basename "$STAGE")"

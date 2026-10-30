@@ -21,9 +21,9 @@ warn() {
 }
 
 if command -v sha256sum &>/dev/null; then
-  HASH_CMD="sha256sum"
+  HASH_CMD=(sha256sum)
 elif command -v shasum &>/dev/null; then
-  HASH_CMD="shasum -a 256"
+  HASH_CMD=(shasum -a 256)
 else
   error "Neither sha256sum nor shasum found in PATH"
 fi
@@ -48,7 +48,7 @@ case "$MODE" in
 files)
   for file in "$@"; do
     if [[ -f "$file" ]]; then
-      $HASH_CMD "$file" >>"$TEMP_HASHES" 2>/dev/null || warn "Failed to hash: $file"
+      "${HASH_CMD[@]}" "$file" >>"$TEMP_HASHES" 2>/dev/null || warn "Failed to hash: $file"
     else
       warn "File not found: $file"
     fi
@@ -65,7 +65,7 @@ dirs)
         ! -path "*/.venv/*" \
         ! -path "*/dist/*" \
         ! -path "*/build/*" \
-        -exec "$HASH_CMD" {} \; >>"$TEMP_HASHES" 2>/dev/null ||
+        -exec "${HASH_CMD[@]}" {} \; >>"$TEMP_HASHES" 2>/dev/null ||
         warn "Failed to hash one or more files under: $dir (cache key may be stale)"
     else
       warn "Directory not found: $dir"
@@ -94,7 +94,7 @@ glob)
           ! -path "*/node_modules/*" \
           ! -path "*/.venv/*" \
           -name "$name_pattern" \
-          -exec "$HASH_CMD" {} \; 2>/dev/null >>"$TEMP_HASHES" ||
+          -exec "${HASH_CMD[@]}" {} \; 2>/dev/null >>"$TEMP_HASHES" ||
           warn "Failed to hash one or more files under: $base_dir (cache key may be stale)"
       else
         warn "Directory not found: $base_dir"
@@ -102,7 +102,7 @@ glob)
     else
       for file in $pattern; do
         if [[ -f "$file" ]]; then
-          $HASH_CMD "$file" >>"$TEMP_HASHES" 2>/dev/null || warn "Failed to hash: $file"
+          "${HASH_CMD[@]}" "$file" >>"$TEMP_HASHES" 2>/dev/null || warn "Failed to hash: $file"
         fi
       done
     fi
@@ -114,7 +114,7 @@ if [[ ! -s "$TEMP_HASHES" ]]; then
   error "No files found matching the provided patterns"
 fi
 
-FINAL_HASH=$(sort "$TEMP_HASHES" | $HASH_CMD | cut -d' ' -f1)
+FINAL_HASH=$(sort "$TEMP_HASHES" | "${HASH_CMD[@]}" | cut -d' ' -f1)
 
 SHORT_HASH="${FINAL_HASH:0:12}"
 

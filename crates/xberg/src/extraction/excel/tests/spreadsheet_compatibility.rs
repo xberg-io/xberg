@@ -135,15 +135,20 @@ fn xls_with_oversized_declared_workbook_stream(stream_len: u64) -> Vec<u8> {
 #[test]
 fn should_reject_xls_stream_larger_than_security_limit_before_parsing() {
     let bytes = xls_with_oversized_declared_workbook_stream(64 * 1024);
+    let configured_limit = bytes.len();
+    assert!(
+        configured_limit < 64 * 1024,
+        "the declared stream must exceed the physical container"
+    );
     let limits = SecurityLimits {
-        max_archive_size: 1024,
+        max_archive_size: configured_limit,
         ..Default::default()
     };
 
     let error = read_excel_bytes(&bytes, ".xls", &limits)
         .expect_err("a declared stream larger than the configured limit must be rejected");
     assert!(
-        error.to_string().contains("65536") && error.to_string().contains("1024"),
+        error.to_string().contains("65536") && error.to_string().contains(&configured_limit.to_string()),
         "the error must report the declared stream size and configured limit: {error}"
     );
 
@@ -153,8 +158,27 @@ fn should_reject_xls_stream_larger_than_security_limit_before_parsing() {
     let file_error = read_excel_file(path.to_str().expect("UTF-8 path"), &limits)
         .expect_err("the file path must enforce the same stream limit");
     assert!(
-        file_error.to_string().contains("65536") && file_error.to_string().contains("1024"),
+        file_error.to_string().contains("65536") && file_error.to_string().contains(&configured_limit.to_string()),
         "the error must report the declared stream size and configured limit: {file_error}"
+    );
+}
+
+#[test]
+fn should_reject_xls_file_larger_than_archive_limit_before_parsing() {
+    let bytes = xls_with_oversized_declared_workbook_stream(4);
+    let limits = SecurityLimits {
+        max_archive_size: bytes.len() - 1,
+        ..Default::default()
+    };
+    let directory = tempfile::tempdir().expect("create temporary directory");
+    let path = directory.path().join("oversized-container.xls");
+    std::fs::write(&path, &bytes).expect("write XLS");
+
+    let error = read_excel_file(path.to_str().expect("UTF-8 path"), &limits)
+        .expect_err("the physical file limit must apply before parsing its workbook stream");
+    assert_eq!(
+        error.to_string(),
+        "Validation error: Spreadsheet file exceeds the configured archive size"
     );
 }
 

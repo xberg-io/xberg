@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Xberg Release
-description: "Xberg release on top of the shared release-workflow: task version:sync to bindings and chart, CI/Publish/Benchmarks readiness. Use before a release."
+description: "Prepare Xberg releases: version sync, generated bindings, chart and CI gates."
 x-ai-rulez:
   kind: skill
   id: xberg-release
@@ -22,10 +22,10 @@ The root `Cargo.toml` `[workspace.package] version` is the one authoritative ver
 `-rc.N` pre-release suffix). Everything else is derived from it — never hand-edit
 a version in a package manifest.
 
-### `task version:sync` runs three steps
+### `mise run version:sync` runs three steps
 
-`task version:sync` (alias `task versions:sync`) runs, in order
-(`.task/tools/version-sync.yml`):
+`mise run version:sync` runs, in order
+(`mise.toml`):
 
 1. `alef sync-versions` — the **alef-managed binding manifests** (their own
    version = core version). Targets are listed in `alef.toml` `[workspace.sync] extra_paths`
@@ -33,13 +33,13 @@ a version in a package manifest.
 2. `python3 scripts/sync_integration_versions.py` — the **integrations** under
    `integrations/`, the Helm chart, and `plugin/.ai-rulez/config.plugins.toml` `[plugin].version`.
    These are NOT alef-managed, so alef never touches them.
-3. `task plugin:generate` — `ai-rulez generate --plugin` (bundles under `plugin/`) plus
+3. `mise run plugin:generate` — `ai-rulez generate --plugin` (bundles under `plugin/`) plus
    `scripts/sync_public_skills.py` (root `skills/`). CI Lint fails on drift in either
-   (`task plugin:verify`).
+   (`mise run plugin:verify`).
 
 Bump/set helpers chain both automatically:
-`task version:bump:major|minor|patch`, `task version:set -- <version>`.
-`task version:check` prints the Cargo version and runs `sync_integration_versions.py --check`,
+`mise run version:bump:major|minor|patch`.
+`mise run version:check` prints the Cargo version and runs `sync_integration_versions.py --check`,
 failing on integration drift. It does not dry-run `alef sync-versions`.
 
 ### Integrations are lockstep with core
@@ -72,7 +72,7 @@ The llama-index dev aggregator (`integrations/python/llama-index/pyproject.toml`
 
 ### Do
 
-- Bump via `task version:bump:*` / `task version:set`, then commit the synced manifests
+- Bump via `mise run version:bump:*`, then commit the synced manifests
   together with the Cargo.toml change (atomic).
 
 ### Don't

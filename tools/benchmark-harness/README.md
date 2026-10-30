@@ -76,7 +76,7 @@ rewriting reviewed text. A changed existing PDF, annotation or sidecar identity
 fails instead of silently replacing frozen evaluation inputs. Sidecars retain
 upstream coordinates; consumers must verify the render-to-annotation transform.
 
-Run `task benchmark:validate:layout-annotations` with the root Python development
+Run `mise run benchmark:validate:layout-annotations` with the root Python development
 environment installed. These importer contract tests use controlled synthetic
 records; they establish annotation preservation, not model quality or export parity.
 No detector evaluator or adoption threshold is implied by a successful import.
@@ -690,11 +690,11 @@ qualification run. `--max-pages` is a per-document limit; pages are 1-indexed in
 
 ```bash
 : "${EXPECTED_PAGES:?set the independently verified limited cohort page count}"
-task benchmark:models -- \
+cargo run --locked -p benchmark-harness -- model-benchmark --fixtures tools/benchmark-harness/fixtures \
   --cohort tools/benchmark-harness/cohorts/layout-pdf-fast.json \
   --model-a rtdetr --model-b pp_doclayout_v3 --max-pages 3 --iterations 1 \
   --expected-pages "$EXPECTED_PAGES" --output /tmp/xberg-layout-detectors.json
-task benchmark:models:validate -- --artifact /tmp/xberg-layout-detectors.json
+cargo run --locked -p benchmark-harness -- model-benchmark-validate --artifact /tmp/xberg-layout-detectors.json
 ```
 
 The runtime resolves and checksum-verifies published model files before timing, records their actual

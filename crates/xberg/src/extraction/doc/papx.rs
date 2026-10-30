@@ -445,6 +445,7 @@ pub(super) struct ParagraphListIndex {
     /// Paragraph style index (`istd`), for every paragraph that carries a
     /// `PAPX` -- not only list-bound ones.
     style_by_end_fc: AHashMap<u32, u16>,
+    style_runs: Vec<(u32, u32, u16)>,
     /// FKP runs whose paragraphs sit in a table, as `(first FC, FC one past
     /// the run, membership)`, sorted by their end. Looked up by range rather
     /// than by the run's end: one run covers every consecutive paragraph that
@@ -486,6 +487,7 @@ impl ParagraphListIndex {
             index.absorb_fkp_page(word_doc, pn);
         }
         index.table_runs.sort_unstable_by_key(|&(_, end, _)| end);
+        index.style_runs.sort_unstable_by_key(|&(_, end, _)| end);
 
         index
     }
@@ -521,6 +523,9 @@ impl ParagraphListIndex {
             // The FKP's rgfc entry i+1 is the FC one past the paragraph's last
             // character, i.e. just past its paragraph mark.
             self.style_by_end_fc.insert(end_fc, istd);
+            if start_fc < end_fc {
+                self.style_runs.push((start_fc, end_fc, istd));
+            }
             if let Some(binding) = list_binding_from_grpprl(grpprl) {
                 self.by_end_fc.insert(end_fc, binding);
             }
@@ -538,6 +543,14 @@ impl ParagraphListIndex {
         let at = self.table_runs.partition_point(|&(_, end, _)| end < end_fc);
         let &(start, _, table) = self.table_runs.get(at)?;
         (start < end_fc).then_some(table)
+    }
+
+    pub(super) fn style_for_character_end(&self, end_fc: u32) -> u16 {
+        let at = self.style_runs.partition_point(|&(_, end, _)| end < end_fc);
+        self.style_runs
+            .get(at)
+            .filter(|&&(start, _, _)| start < end_fc)
+            .map_or(0, |&(_, _, style)| style)
     }
 
     /// Look up the binding for a paragraph whose mark ends at `end_fc`.

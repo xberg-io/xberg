@@ -3,6 +3,7 @@
 
 use super::*;
 
+mod content_limits;
 mod datetime;
 
 /// Permissive `SecurityLimits` for tests that only care about the entry-count
@@ -669,6 +670,16 @@ fn should_warn_when_xlsx_sheet_part_is_missing() {
         "warning must name the failed sheet: {}",
         sheet_warnings[0].message
     );
+
+    let directory = tempfile::tempdir().expect("create temporary directory");
+    let path = directory.path().join("missing-sheet.xlsx");
+    std::fs::write(&path, &bytes).expect("write XLSX");
+    let (file_workbook, file_warnings) =
+        read_excel_file(path.to_str().expect("UTF-8 path"), &test_limits(10_000)).expect("partial workbook must parse");
+    assert_eq!(file_workbook.sheets.len(), 1);
+    assert_eq!(file_workbook.sheets[0].table_cells, workbook.sheets[0].table_cells);
+    assert_eq!(file_warnings.len(), 1);
+    assert!(file_warnings[0].message.contains("Missing"));
 }
 
 /// xberg-io/xberg#222: a sheet whose declared dimensions vastly exceed its
@@ -692,7 +703,15 @@ fn should_warn_when_sheet_declared_dimensions_greatly_exceed_actual_data() {
         &[("xl/worksheets/sheet1.xml", sheet1_xml.to_vec())],
     );
 
-    let (workbook, warnings) = read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000)).expect("workbook must parse");
+    let error = read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000))
+        .expect_err("the default cell limit must reject the oversized bounding range before allocation");
+    assert!(error.to_string().contains("100002") && error.to_string().contains("max_table_cells"));
+    let limits = SecurityLimits {
+        max_table_cells: 100_002,
+        ..test_limits(10_000)
+    };
+    let (workbook, warnings) =
+        read_excel_bytes(&bytes, ".xlsx", &limits).expect("explicitly bounded workbook must parse");
 
     assert_eq!(workbook.sheets.len(), 1);
     assert!(

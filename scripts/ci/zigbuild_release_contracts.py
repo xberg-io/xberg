@@ -54,7 +54,7 @@ def validate_zigbuild_workflow(workflow: str) -> None:
         block = _job_block(workflow, name)
         if (
             "cargo zigbuild" in block
-            or "task go:publish:package TARGET=" in block
+            or 'mise run go:publish:package "' in block
             or "glibc-version:" in block
             or "targets: ${{ matrix.target }}" in block
         ):

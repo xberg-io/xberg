@@ -8,10 +8,10 @@ Everything you need to build, test, and debug Xberg locally. This guide assumes 
 
 ## The Task Runner
 
-Xberg uses [Task](https://taskfile.dev/) for all build and test workflows. One command to bootstrap everything:
+Xberg uses [mise](https://mise.jdx.dev/) for its toolchain and for all build and test workflows (`mise run <task>`; `mise tasks` lists them). One command to bootstrap everything:
 
 ```bash title="Terminal"
-task setup
+mise run setup
 ```
 
 That installs all toolchains and dependencies. Safe to re-run anytime — it's idempotent.
@@ -21,20 +21,18 @@ That installs all toolchains and dependencies. Safe to re-run anytime — it's i
 Top-level tasks operate on the Rust core:
 
 ```bash title="Terminal"
-task build                # Build the Rust core (debug)
-task build:release        # Build the Rust core (release)
-task test                 # Run Rust core tests
-task check                # Lint + format check across the whole repo
+mise run build                # Build the Rust core (debug)
+mise run test                 # Run Rust core tests
+mise run check                # Lint + format check across the whole repo
 ```
 
 The Rust namespace exposes the finer-grained variants:
 
 ```bash title="Terminal"
-task rust:build:dev       # Debug build (faster compile, no optimizations)
-task rust:build:release   # Release build (slow compile, fast binary)
-task rust:test            # Run all Rust tests
-task rust:test:ci         # Same tests, with CI diagnostics (tessdata setup)
-task rust:test:quick      # Fast unit tests only
+mise run rust:build:dev       # Debug build (faster compile, no optimizations)
+mise run rust:build release   # Release build (slow compile, fast binary)
+mise run rust:test            # Run all Rust tests
+mise run rust:test:ci         # Same tests, with CI diagnostics (tessdata setup)
 ```
 
 Language bindings are generated and compiled by Alef, so they do not each get a
@@ -45,12 +43,9 @@ Suites](#end-to-end-test-suites)).
 ### Bulk Operations
 
 ```bash title="Terminal"
-task build:all            # Build core + every binding
-task build:bindings       # Build every binding (via Alef)
-task test:all             # Run all tests (core + bindings)
-task test:bindings        # Run binding test suites only
-task test:cov             # All tests with coverage
-task check                # Lint + format check across the whole repo
+mise run alef:build           # Build every binding (via Alef)
+mise run test:bindings        # Run binding test suites only
+mise run check                # Lint + format check across the whole repo
 ```
 
 ---
@@ -62,7 +57,7 @@ task check                # Lint + format check across the whole repo
 The core lives in `crates/xberg/`. Most changes start here.
 
 ```bash title="Terminal"
-task rust:test
+mise run rust:test
 
 cargo test -p xberg test_pdf_extraction -- --nocapture
 
@@ -74,51 +69,19 @@ RUST_LOG=debug cargo test -p xberg test_name -- --nocapture
 Bindings are generated and compiled by Alef. Build them all, then run their tests:
 
 ```bash title="Terminal"
-task build:bindings       # Compile every binding
-task test:bindings        # Run every binding test suite
+mise run alef:build           # Compile every binding
+mise run test:bindings        # Run every binding test suite
 ```
 
-A few native bindings expose their own unit-test task:
-
-```bash title="Terminal"
-task swift:test
-task zig:test
-task dart:test
-task kotlin-android:test
-```
-
-For all other languages the cross-language check is the e2e suite — `task python:e2e`,
-`task node:e2e`, `task go:e2e`, and so on (see [End-to-end Test
-Suites](#end-to-end-test-suites)).
+Each `mise run <lang>:e2e` task (`alef test --e2e --lang <lang>`) runs that binding's own
+package tests (`[crates.test.<lang>]` in `alef.toml`) before its e2e suite — `mise run python:e2e`,
+`mise run swift:e2e`, and so on (see [End-to-end Test Suites](#end-to-end-test-suites)).
 
 The `RUST_LOG` env var propagates into every binding — the Rust core logs through the
 host process's stderr:
 
 ```bash title="Terminal"
-RUST_LOG=debug task python:e2e
-```
-
-### Testing the live browser demo
-
-The demo at `docs-site/public/demo.html` loads `@xberg-io/xberg-wasm` from a CDN. To test local changes against it, use:
-
-```bash title="Terminal"
-task demo:dev
-```
-
-This builds the Wasm binary and TypeScript dist, patches the demo with local URLs, and starts two servers:
-
-| Server | URL                     | Role                               |
-| ------ | ----------------------- | ---------------------------------- |
-| Docs   | `http://localhost:8001` | Serves the patched `demo-dev.html` |
-| Assets | `http://localhost:9000` | Serves the local Wasm package      |
-
-Open **`http://localhost:8001/demo-dev.html`** — no manual edits needed. The patched file (`docs-site/public/demo-dev.html`) is gitignored and regenerated on every run. The two different ports reproduce the cross-origin setup the CDN creates in production.
-
-To skip the slow Rust build when you've only changed TypeScript:
-
-```bash title="Terminal"
-SKIP_WASM_BUILD=1 task demo:dev
+RUST_LOG=debug mise run python:e2e
 ```
 
 ---
@@ -134,14 +97,15 @@ To change a binding, edit the Rust source, README templates, fixtures, or `alef.
 then regenerate:
 
 ```bash title="Terminal"
-task alef:generate        # Regenerate all Alef-managed output (alef all --clean, formatting via poly, no build)
-task alef:build           # Compile the bindings (same as build:bindings)
-task alef:sync            # Sync the version from Cargo.toml to every manifest
-task alef:verify          # Check that generated output is up to date
+alef all --clean --skip-compile --skip-snippet-validation  # Regenerate all Alef-managed output, no build
+mise run alef:build           # Compile the bindings
+mise run version:sync         # Sync the version from Cargo.toml to every manifest
+mise run alef:verify          # Check that generated output is up to date
 ```
 
-`task alef:generate` regenerates and formats (via `poly`) without compiling. Commit the
-generator inputs and regenerated output together in one change.
+`alef all` regenerates and formats (via `poly`); `--skip-compile` keeps it from compiling.
+Run `mise run dart:format:context` first when the Dart output changes, so `dart format` reads the
+pinned language version. Commit the generator inputs and regenerated output together in one change.
 
 ---
 
@@ -151,40 +115,34 @@ End-to-end tests guarantee that every language binding produces identical result
 
 ### Run end-to-end Tests
 
-Each language runs its suite with `task <lang>:e2e`:
+Each language runs its suite with `mise run <lang>:e2e`:
 
-| Language             | Directory            | Run with                 |
-| -------------------- | -------------------- | ------------------------ |
-| Python               | `e2e/python/`        | `task python:e2e`        |
-| TypeScript / Node.js | `e2e/node/`          | `task node:e2e`          |
-| Rust                 | `e2e/rust/`          | `task rust:e2e`          |
-| Go                   | `e2e/go/`            | `task go:e2e`            |
-| Java                 | `e2e/java/`          | `task java:e2e`          |
-| .NET                 | `e2e/csharp/`        | `task csharp:e2e`        |
-| Ruby                 | `e2e/ruby/`          | `task ruby:e2e`          |
-| PHP                  | `e2e/php/`           | `task php:e2e`           |
-| Elixir               | `e2e/elixir/`        | `task elixir:e2e`        |
-| Swift                | `e2e/swift/`         | `task swift:e2e`         |
-| Zig                  | `e2e/zig/`           | `task zig:e2e`           |
-| Dart                 | `e2e/dart/`          | `task dart:e2e`          |
-| Kotlin / Android     | `e2e/kotlin_android/`| `task kotlin-android:e2e`|
-| WebAssembly          | `e2e/wasm/`          | `task wasm:e2e`          |
-
-Or run one suite by name with `task e2e:lang E2E_LANG=python`.
+| Language             | Directory             | Run with                      |
+| -------------------- | --------------------- | ----------------------------- |
+| Python               | `e2e/python/`         | `mise run python:e2e`         |
+| TypeScript / Node.js | `e2e/node/`           | `mise run node:e2e`           |
+| Rust                 | `e2e/rust/`           | `mise run rust:e2e`           |
+| Go                   | `e2e/go/`             | `mise run go:e2e`             |
+| Java                 | `e2e/java/`           | `mise run java:e2e`           |
+| .NET                 | `e2e/csharp/`         | `mise run csharp:e2e`         |
+| Ruby                 | `e2e/ruby/`           | `mise run ruby:e2e`           |
+| PHP                  | `e2e/php/`            | `mise run php:e2e`            |
+| Elixir               | `e2e/elixir/`         | `mise run elixir:e2e`         |
+| Swift                | `e2e/swift/`          | `mise run swift:e2e`          |
+| Zig                  | `e2e/zig/`            | `mise run zig:e2e`            |
+| Dart                 | `e2e/dart/`           | `mise run dart:e2e`           |
+| Kotlin / Android     | `e2e/kotlin_android/` | `mise run kotlin-android:e2e` |
+| WebAssembly          | `e2e/wasm/`           | `mise run wasm:e2e`           |
 
 ### Regenerate end-to-end Tests
 
 E2E suites are generated from shared fixtures by Alef. Generation is repo-wide, not
-per-language. The canonical tasks are:
+per-language:
 
 ```bash title="Terminal"
-task e2e:generate         # Regenerate all suites from fixtures
-task e2e:build            # Build the bindings the suites link against
-task e2e:test             # Run every suite
-task e2e:all              # Generate, build, and run in one pass
+mise run dart:format:context && alef e2e generate --strict  # Regenerate every suite from fixtures
+mise run e2e:verify           # Regenerate and fail on uncommitted drift (the CI check)
 ```
-
-Verify the checked-in suites are current with `task e2e:verify`.
 
 ---
 
@@ -195,8 +153,8 @@ Measure extraction performance with the benchmark harness in `tools/benchmark-ha
 ### Quick Start
 
 ```bash title="Terminal"
-task benchmark:run FRAMEWORK=xberg MODE=single-file
-task benchmark:run FRAMEWORK=xberg MODE=batch
+FRAMEWORK=xberg MODE=single-file mise run benchmark:run
+FRAMEWORK=xberg MODE=batch mise run benchmark:run
 ```
 
 ### Common Modes
@@ -208,14 +166,9 @@ task benchmark:run FRAMEWORK=xberg MODE=batch
 
 ### With Profiling
 
-Generate flamegraphs to see where time is spent:
-
-```bash title="Terminal"
-task benchmark:profile
-```
-
-This builds with the `profiling` profile (release plus debug symbols) and runs the
-pipeline benchmark. Results appear under `flamegraphs/<sha>/` as interactive SVGs.
+The `profiling.yaml` workflow (manual dispatch) generates flamegraphs of the pipeline benchmark.
+`mise run rust:build:profiling` builds the same `profiling` profile (release plus debug symbols)
+locally.
 
 View live benchmark results at <https://xberg.io/benchmarks>.
 
@@ -224,23 +177,13 @@ View live benchmark results at <https://xberg.io/benchmarks>.
 ## Linting and Pre-commit
 
 ```bash title="Terminal"
-task lint               # Lint all code via poly
-task format             # Format all code via poly
-task check              # Format + lint check, no modifications (CI-equivalent)
+mise run lint               # Lint all code via poly
+mise run format             # Format all code via poly
+mise run check              # Format + lint check, no modifications (CI-equivalent)
 ```
 
 `poly` handles Python (ruff), JS/TS (oxc), TOML, and Markdown directly, so those
-languages have no dedicated lint task. Compiled bindings expose a native linter:
-
-```bash title="Terminal"
-task rust:lint          # cargo fmt + clippy (auto-fix); rust:lint:check for check-only
-task go:lint            # golangci-lint
-task ruby:lint          # rubocop + steep
-task php:lint           # mago
-task csharp:lint        # dotnet format
-task swift:lint         # swift format lint
-task zig:lint           # zig fmt --check
-```
+languages have no dedicated lint task.
 
 The repository uses pre-commit hooks that enforce conventional commit messages, code formatting, and linter rules. If a commit is rejected, the hook output tells you exactly what to fix.
 
@@ -254,15 +197,15 @@ Building the documentation site requires Node.js 22.23.4 or newer; CI uses Node.
 ### Building Locally
 
 ```bash title="Terminal"
-task docs:build         # pnpm install + astro build
-task docs:serve         # pnpm install + astro dev (live reload)
+mise run docs:build         # pnpm install + astro build
+mise run docs:serve         # pnpm install + astro dev (live reload)
 ```
 
 ### How Snippets Work
 
 Documentation examples have two source paths:
 
-- Prefer fixture-backed examples for public APIs shared across languages. Add or update the JSON fixture under `fixtures/`, run `task e2e:generate`, and render its generated snippets with `ApiSnippetGroup`. The generated files under `docs-site/src/snippets-generated/` are Alef output; never edit them directly.
+- Prefer fixture-backed examples for public APIs shared across languages. Add or update the JSON fixture under `fixtures/`, run `mise run dart:format:context && alef e2e generate --strict`, and render its generated snippets with `ApiSnippetGroup`. The generated files under `docs-site/src/snippets-generated/` are Alef output; never edit them directly.
 - Use maintained snippets under `docs-site/src/snippets/` only for examples that do not map to an E2E fixture, such as deployment, server, or language-specific workflows. Import these Markdown files into the relevant `.mdx` page as Astro components.
 
 A fixture-backed example renders every available language without one import per binding:
@@ -294,7 +237,7 @@ docs-site/src/snippets/
 └── cli/              # CLI usage
 ```
 
-When you change a user-facing API, update its fixture and regenerate. When no fixture-backed example is appropriate, update the maintained snippet instead. Use `task docs:snippets:gaps` to find unreferenced snippets or missing language variants, and `task docs:snippets:validate` to syntax-check both generated and maintained snippets.
+When you change a user-facing API, update its fixture and regenerate. When no fixture-backed example is appropriate, update the maintained snippet instead. Use `mise run docs:snippets:gaps` to find unreferenced snippets or missing language variants, and `mise run docs:snippets:all` to audit them and syntax-check both generated and maintained snippets.
 
 ## Debugging
 
@@ -336,8 +279,8 @@ asyncio.run(main())
 Crank up the log level to see what the Rust core is doing:
 
 ```bash title="Terminal"
-RUST_LOG=debug task python:e2e
-RUST_LOG=trace task rust:test
+RUST_LOG=debug mise run python:e2e
+RUST_LOG=trace mise run rust:test
 ```
 
 ---
@@ -364,10 +307,10 @@ changing a binding fires `ci-e2e` and, for mobile, `ci-mobile`.
 Before pushing, run the same checks CI runs:
 
 ```bash title="Terminal"
-task check              # Format + lint (matches ci-lint)
-task rust:test:ci       # Rust tests with CI diagnostics
-task e2e:all            # Generate, build, and run every e2e suite
-task test:cov           # All tests with coverage
+mise run check              # Format + lint (matches ci-lint)
+mise run rust:test:ci       # Rust tests with CI diagnostics
+mise run e2e:verify         # Generated e2e suites are current
+mise run <lang>:e2e         # One e2e suite, as each ci-e2e leg runs it
 ```
 
 ### Other Workflows

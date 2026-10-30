@@ -719,6 +719,8 @@ fn generate_markdown_and_cells(
     (markdown, cells)
 }
 
+const DURATION_PREFIX: &str = "DURATION: ";
+
 /// Convert a Data cell to its string representation.
 ///
 /// This helper function is shared between markdown generation and cell extraction
@@ -744,7 +746,7 @@ fn format_cell_to_string(data: &Data) -> String {
         Data::DateTime(dt) => datetime::format_excel_datetime(dt),
         Data::Error(e) => format!("#ERR: {:?}", e),
         Data::DateTimeIso(s) => s.clone(),
-        Data::DurationIso(s) => format!("DURATION: {}", s),
+        Data::DurationIso(s) => format!("{DURATION_PREFIX}{s}"),
     }
 }
 

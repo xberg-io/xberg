@@ -66,6 +66,7 @@ async fn main() -> Result<()> {
             dpi,
             confidence_threshold,
             expected_pages,
+            geometry_annotations,
             output,
         } => {
             commands::model_benchmark::execute(
@@ -79,6 +80,7 @@ async fn main() -> Result<()> {
                     dpi,
                     confidence_threshold,
                     expected_pages,
+                    geometry_annotations,
                 },
                 output,
             )

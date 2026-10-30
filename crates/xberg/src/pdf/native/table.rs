@@ -23,10 +23,13 @@ use crate::pdf::table_reconstruct::table_to_markdown;
 use crate::types::{BoundingBox, ProcessingWarning, Table};
 use std::collections::HashSet;
 
+pub(crate) mod scripts;
+
 #[derive(Debug)]
 pub(crate) struct NativeTable {
     pub table: Table,
     pub grid: Option<crate::types::TableGrid>,
+    pub scripts: Option<scripts::TableScripts>,
 }
 
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
@@ -153,6 +156,11 @@ pub(crate) fn extract_tables_native(doc: &mut NativeDocument) -> Result<(Vec<Nat
             }
         };
 
+        let source_spans = if extracted.is_empty() {
+            scripts::PageSpans::default()
+        } else {
+            scripts::page_spans(doc, page_idx, &mut warnings)
+        };
         for extracted_table in extracted {
             if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
                 continue;
@@ -181,7 +189,9 @@ pub(crate) fn extract_tables_native(doc: &mut NativeDocument) -> Result<(Vec<Nat
                 y1: (rect.y + rect.height) as f64,
             });
 
+            let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
             all_tables.push(NativeTable {
+                scripts,
                 table: Table {
                     cells,
                     markdown,
@@ -274,6 +284,11 @@ pub(crate) fn extract_tables_bordered(
             }
         };
 
+        let source_spans = if extracted.is_empty() {
+            scripts::PageSpans::default()
+        } else {
+            scripts::page_spans(doc, page_idx, &mut warnings)
+        };
         for extracted_table in extracted {
             if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
                 continue;
@@ -302,7 +317,9 @@ pub(crate) fn extract_tables_bordered(
                 y1: (rect.y + rect.height) as f64,
             });
 
+            let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
             all_tables.push(NativeTable {
+                scripts,
                 table: Table {
                     cells,
                     markdown,

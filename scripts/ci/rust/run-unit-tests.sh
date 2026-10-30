@@ -70,7 +70,7 @@ export XBERG_SKIP_LIVE_HF=1
 # (`benchmark_harness::batch_diagnostic::tests::diagnostic_uses_equivalent_public_extraction_paths`).
 # Every CI workflow already sets this at workflow level (ci-rust.yaml, ci-e2e,
 # ci-gpu, ci-integrations, benchmarks, profiling); this script is the single choke
-# point behind `task rust:test` locally and was the only place missing it, so the
+# point behind `mise run rust:test` locally and was the only place missing it, so the
 # failure reproduced only on developer machines. 16 MiB matches every other stack
 # budget in the repo (core/runtime.rs, xberg-cli, xberg-node, xberg-py, the elixir
 # NIF, html/stack_management.rs). ~keep
@@ -204,13 +204,13 @@ if ! {
   # run covers nothing; they run under Node in the ci-e2e wasm leg. Excluding it also
   # keeps candle out of this build: its xberg dependency is not target-gated, so
   # wasm-target's ner-candle-wasm would pull gemm-f16 in on aarch64 (no fullfp16),
-  # past the --exclude xberg-gliner guard above. Matches every Taskfile path. ~keep
+  # past the --exclude xberg-gliner guard above. Matches every rust:build profile. ~keep
   extra_excludes+=(--exclude xberg-wasm)
   # xberg-pdfium-render: --all-features enables its `bindings` feature, whose build.rs
   # regenerates bindgen output from include/<release>/*.h. That directory ships only
   # `rust-import-wrapper.h`, so the build script deliberately fails with
   # NoHeaderFilesFound rather than silently reusing the checked-in bindings. Every
-  # Taskfile path already carries this exclude (.task/languages/rust.yml:35-44); this
+  # rust:build profile already carries this exclude (mise-tasks/rust/build.sh); this
   # leg was the one place it was missing, so the crate becoming a workspace member
   # would have failed the workspace test run outright. ~keep
   extra_excludes+=(--exclude xberg-pdfium-render)
@@ -292,7 +292,7 @@ if ! {
   # artifacts before the final isolated crate. Linux runners have a separate disk
   # cleanup action and retain their warm artifacts. ~keep
   if [ "$(uname -s)" = "Darwin" ]; then
-    task rust:clean
+    mise run rust:clean
   fi
 
   echo "=== cargo test -p xberg-libheif (default features) ==="

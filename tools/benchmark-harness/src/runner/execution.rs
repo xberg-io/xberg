@@ -340,7 +340,7 @@ fn build_single_benchmark_result(
         pdf_metadata: representative_result.pdf_metadata.clone(),
         ocr_status: representative_result.ocr_status,
         extracted_text: representative_result.extracted_text.clone(),
-        system_load: Some(SystemLoad::capture()),
+        system_load: Some(SystemLoad::capture()?),
     })
 }
 
@@ -454,7 +454,7 @@ fn build_one_batch_file_result(
     all_batch_results: &[Vec<BenchmarkResult>],
     file_idx: usize,
     cold_start_duration: Option<Duration>,
-) -> BenchmarkResult {
+) -> Result<BenchmarkResult> {
     let mut file_iterations = Vec::new();
     for batch in all_batch_results {
         file_iterations.push(&batch[file_idx]);
@@ -496,7 +496,7 @@ fn build_one_batch_file_result(
     framework_capabilities.batch_sample_id = None;
     framework_capabilities.batch_performance_sample = None;
 
-    BenchmarkResult {
+    Ok(BenchmarkResult {
         framework: first_result.framework.clone(),
         output_format: first_result.output_format,
         file_path: first_result.file_path.clone(),
@@ -517,8 +517,8 @@ fn build_one_batch_file_result(
         pdf_metadata: representative_result.pdf_metadata.clone(),
         ocr_status: representative_result.ocr_status,
         extracted_text: representative_result.extracted_text.clone(),
-        system_load: Some(SystemLoad::capture()),
-    }
+        system_load: Some(SystemLoad::capture()?),
+    })
 }
 
 fn summarize_batch_outcomes(file_iterations: &[&BenchmarkResult]) -> (bool, Option<String>, ErrorKind) {
@@ -553,7 +553,7 @@ fn build_batch_benchmark_results(
             &all_batch_results,
             file_idx,
             cold_start_duration,
-        ));
+        )?);
     }
 
     Ok(aggregated_results)
