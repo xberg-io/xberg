@@ -89,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): A scanned page whose text lines run sideways keeps its words.**
+  If sparse-text reading returns low-confidence noise for a page that is one full-page scan, the page is read again with automatic layout. The second read replaces the first only when its quality score is higher and most of its word boxes are taller than wide. A caller-set segmentation mode is never changed. (#2314)
 - **(pdf): Cache Type 3 font-mapping provenance during text extraction.**
   Repeated glyphs retain their fallback markers without rescanning the font for every character. (#2307)
 - **(doc): Preserve superscript and subscript annotations in footnotes and comments.**
