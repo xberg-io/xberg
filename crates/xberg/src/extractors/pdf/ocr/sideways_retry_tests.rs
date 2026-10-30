@@ -8,11 +8,12 @@ use crate::plugins::{ConfidenceSemantics, OcrBackend, OcrBackendType, Plugin};
 use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementConfig, OcrElementLevel};
 
 const SPARSE_PSM: i32 = 11;
+const AUTO_PSM: i32 = 3;
 const NOISY_TEXT: &str = "ab cd ef gh ij kl mn op qr st uv wx";
 const CLEAN_TEXT: &str =
     "The quarterly report lists every invoice number and the matching payment date for each supplier in the region.";
 
-/// Answers by segmentation mode: the sparse-text read gets `sparse`, any other mode gets `auto`.
+/// Answers by segmentation mode: automatic layout gets `auto`, any other mode gets `sparse`.
 struct ModeBackend {
     sparse: ExtractedDocument,
     auto: crate::Result<ExtractedDocument>,
@@ -34,7 +35,7 @@ impl OcrBackend for ModeBackend {
     async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let psm = config.tesseract_config.as_ref().and_then(|tesseract| tesseract.psm);
-        if psm == Some(SPARSE_PSM) {
+        if psm != Some(AUTO_PSM) {
             return Ok(self.sparse.clone());
         }
         *self.last_auto_config.lock().unwrap() = Some(config.clone());
@@ -47,7 +48,7 @@ impl OcrBackend for ModeBackend {
 
 impl Plugin for ModeBackend {
     fn name(&self) -> &str {
-        "mode"
+        "tesseract"
     }
     fn version(&self) -> String {
         "1.0.0".to_string()
@@ -256,4 +257,89 @@ async fn the_warnings_of_the_sparse_read_survive_the_switch() {
             .iter()
             .any(|warning| warning.message.contains("suspected recognition noise"))
     );
+}
+
+/// Restores the built-in backends when a test that replaced them ends.
+struct RestoreBuiltins;
+
+impl Drop for RestoreBuiltins {
+    fn drop(&mut self) {
+        let _ = crate::plugins::clear_ocr_backends();
+        crate::plugins::ensure_ocr_backends_initialized();
+    }
+}
+
+fn install(backend: &Arc<ModeBackend>) -> RestoreBuiltins {
+    crate::plugins::ensure_ocr_backends_initialized();
+    crate::plugins::clear_ocr_backends().unwrap();
+    let restore = RestoreBuiltins;
+    crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+    restore
+}
+
+fn ocr_extraction_config() -> crate::core::config::ExtractionConfig {
+    crate::core::config::ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig::default()),
+        ..Default::default()
+    }
+}
+
+/// The PDF page route reads a page that is one full-page raster through the retry.
+#[cfg(feature = "pdf")]
+#[tokio::test]
+#[serial_test::serial]
+async fn the_mixed_pdf_route_retries_a_noisy_scanned_page() {
+    let backend = backend(read(NOISY_TEXT, 40.0, false), Ok(read(CLEAN_TEXT, 90.0, true)));
+    let _restore = install(&backend);
+    let pdf = crate::pdf::render::build_full_page_raster_pdf((612.0, 792.0), (600, 800), 1.0, 0);
+    let boundaries = vec![crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: 0,
+        page_number: 1,
+    }];
+
+    let result = super::pipeline::extract_mixed_ocr_native("", &boundaries, &[1], &pdf, &ocr_extraction_config(), None)
+        .await
+        .expect("the page route completes");
+
+    assert!(
+        result.0.contains(CLEAN_TEXT),
+        "the page keeps the automatic-layout read: {}",
+        result.0
+    );
+    assert_eq!(backend.calls.load(Ordering::SeqCst), 2);
+}
+
+/// The whole-document route reads a page it knows to be one full-page raster through the retry.
+#[tokio::test]
+#[serial_test::serial]
+async fn the_whole_document_route_retries_a_noisy_scanned_page() {
+    let backend = backend(read(NOISY_TEXT, 40.0, false), Ok(read(CLEAN_TEXT, 90.0, true)));
+    let _restore = install(&backend);
+    let images = [image::DynamicImage::new_rgb8(600, 800)];
+    let hints = super::PageOcrHints {
+        source_dpi: None,
+        known_full_page_scan: true,
+        single_block_pages: None,
+    };
+
+    let result = super::extract_with_ocr_with_page_hints(
+        None,
+        Some(&images),
+        #[cfg(feature = "layout-detection")]
+        None,
+        &ocr_extraction_config(),
+        None,
+        Some(hints),
+    )
+    .await
+    .expect("the whole-document route completes");
+
+    assert!(
+        result.0.contains(CLEAN_TEXT),
+        "the page keeps the automatic-layout read: {}",
+        result.0
+    );
+    assert_eq!(backend.calls.load(Ordering::SeqCst), 2);
 }
