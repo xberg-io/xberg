@@ -240,8 +240,12 @@ pub(super) struct TesseractApiPool {
 
 impl TesseractApiPool {
     pub(super) fn new() -> Arc<Self> {
+        Self::with_capacity(tesseract_api_capacity())
+    }
+
+    pub(super) fn with_capacity(capacity: usize) -> Arc<Self> {
         Arc::new(Self {
-            resources: ResourcePool::new(tesseract_api_capacity()),
+            resources: ResourcePool::new(capacity),
         })
     }
 

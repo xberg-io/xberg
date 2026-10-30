@@ -106,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Repeated multilingual calls avoid reloading dictionaries while preserving quality checks and pool eviction. (#2306)
 
 
+- **(ocr): OCR reads a page in the language of its script, not only in the configured language.**
+  A PDF page that goes to OCR on its own also reads with the language of the script of the document's text layer (for example `khm` for Khmer or `chi_sim` for Chinese), added after the languages you set. An image or scanned page whose first OCR pass is noisy runs Tesseract script detection and, for Chinese, reads again with `chi_sim` added. The extractor adds a language only when every model of the new list is already installed, so it never starts a download. Each cached OCR result is keyed by the languages and the model folder that produced it. The document cache also records which of the `khm`, `chi_sim` and `osd` models are installed, so a result stored before a model arrived is not returned after it. `force_ocr` and `force_ocr_pages` keep the configured languages and run one pass. A Khmer image with no text layer is not detected: add `khm` to `language`. Pages that read again cost one more OCR pass. (GH#2300)
 - **(publish): Inspect the actual Node native binary before packing platform packages.**
   File-size failures now stop publication instead of being hidden by the diagnostic output.
 - **(office): Recover native text from embedded EMF and WMF pictures without raster OCR failures.**

@@ -1415,6 +1415,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
                 let original_config = ocr_config_resolved.clone();
+                let script_second_pass = crate::extractors::image::ocr_chosen_by_extractor(config);
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -1433,6 +1434,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         crate::extractors::image::SparseRetryPolicy {
                             whole_page_raster,
                             allow_standard_retry: false,
+                            script_second_pass,
                         },
                         cancel_token.as_ref(),
                     )
@@ -1584,6 +1586,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     crate::extractors::image::SparseRetryPolicy {
                         whole_page_raster,
                         allow_standard_retry: false,
+                        script_second_pass: crate::extractors::image::ocr_chosen_by_extractor(config),
                     },
                     config.cancel_token.as_ref(),
                 )
@@ -3002,6 +3005,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(not(feature = "pdf"))]
                 let (upright_data, upright_width, upright_height, correction_degrees) =
                     (Arc::clone(image_data), *width, *height, 0u32);
+                let script_second_pass = crate::extractors::image::ocr_chosen_by_extractor(config);
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -3020,6 +3024,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         crate::extractors::image::SparseRetryPolicy {
                             whole_page_raster,
                             allow_standard_retry: false,
+                            script_second_pass,
                         },
                         cancel_token.as_ref(),
                     )
@@ -3150,6 +3155,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             crate::extractors::image::SparseRetryPolicy {
                                 whole_page_raster,
                                 allow_standard_retry: false,
+                                script_second_pass: crate::extractors::image::ocr_chosen_by_extractor(config),
                             },
                             config.cancel_token.as_ref(),
                         )

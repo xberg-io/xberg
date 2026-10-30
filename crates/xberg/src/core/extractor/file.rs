@@ -822,6 +822,17 @@ fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String 
     if let Some(name) = normalized.source_name.as_deref() {
         hasher.update(name.as_bytes());
     }
+    // The result also depends on which OCR models are on disk: a Khmer or Chinese page adds its
+    // language only when the model is installed. A forced request is never adapted.
+    hasher.update(b"\x00read_again_models\x00");
+    #[cfg(feature = "ocr")]
+    if let Some(ocr) = normalized.ocr.as_ref()
+        && crate::extractors::image::ocr_chosen_by_extractor(&normalized)
+    {
+        for present in crate::ocr::processor::validation::read_again_models_on_disk(ocr) {
+            hasher.update(&[u8::from(present)]);
+        }
+    }
     hasher.update(b"\x00tessdata\x00");
     if let Some(ocr) = normalized.ocr.as_ref()
         && let Some(tessdata) = ocr.tessdata_bytes.as_ref()
