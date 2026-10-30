@@ -229,21 +229,22 @@ fn empty_images_fail_before_constructing_invalid_scale_factors() {
 }
 
 #[test]
-fn batch_tensor_construction_preserves_each_original_image_frame() {
+fn singleton_tensor_construction_preserves_each_original_image_frame() {
     let fixtures = [fixture("odd_portrait"), fixture("rotated_portrait")];
     let images = fixtures.map(synthetic_rgb);
-    let (pixels, shapes, scales, dimensions) =
-        PpDocLayoutV3Model::build_batch_tensors(&[&images[0], &images[1]]).expect("model-free tensor construction");
-    assert_eq!(
-        pixels.shape(),
-        &[fixtures.len(), RGB_CHANNELS, INPUT_SIZE as usize, INPUT_SIZE as usize]
-    );
+    let dimensions: Vec<_> = images.iter().map(|image| image.dimensions()).collect();
     assert_eq!(dimensions, vec![(37, 59), (59, 37)]);
-    for (index, fixture) in fixtures.iter().enumerate() {
+    for (image, fixture) in images.iter().zip(fixtures.iter()) {
+        let (pixels, shapes, scales) =
+            PpDocLayoutV3Model::preprocess_single(image).expect("model-free singleton tensor construction");
+        assert_eq!(
+            pixels.shape(),
+            &[1, RGB_CHANNELS, INPUT_SIZE as usize, INPUT_SIZE as usize]
+        );
         let (reference, expected) = read_reference(fixture);
-        assert_eq!(shapes.row(index).as_slice().unwrap(), reference.im_shape);
-        assert_eq!(scales.row(index).as_slice().unwrap(), reference.scale_factor);
-        assert_tensor_matches(fixture.name, pixels.index_axis(Axis(0), index), &expected);
+        assert_eq!(shapes.row(0).as_slice().unwrap(), reference.im_shape);
+        assert_eq!(scales.row(0).as_slice().unwrap(), reference.scale_factor);
+        assert_tensor_matches(fixture.name, pixels.index_axis(Axis(0), 0), &expected);
     }
 }
 

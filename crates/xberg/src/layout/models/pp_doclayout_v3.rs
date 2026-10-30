@@ -80,11 +80,6 @@ const COL_X2: usize = 4;
 /// Column index of y2 (bottom edge) in each detection row.
 const COL_Y2: usize = 5;
 
-/// The three stacked ONNX input tensors [`PpDocLayoutV3Model::build_batch_tensors`] builds
-/// for a batch (pixel data, `im_shape`, `scale_factor`), alongside each image's original
-/// `(width, height)`.
-type BatchTensors = (Array4<f32>, Array2<f32>, Array2<f32>, Vec<(u32, u32)>);
-
 /// PP-DocLayout-V3 layout detection model.
 ///
 /// Uses PaddleDetection DETR architecture with 800 × 800 input. Preprocessing
@@ -336,185 +331,31 @@ impl PpDocLayoutV3Model {
         Ok(detections)
     }
 
-    /// Splits the raw ONNX batch outputs into the flat detection-row buffer
-    /// (`fetch_name_0`) and per-image valid-row counts (`fetch_name_1`). Split out
-    /// of [`Self::run_batch_inference`] purely to shorten that method; the by-name
-    /// match itself is unchanged.
-    fn split_batch_outputs(outputs: &[(String, InferenceTensor)]) -> (Vec<f32>, Vec<i32>) {
-        let mut det_data: Vec<f32> = Vec::new();
-        let mut bbox_num: Vec<i32> = Vec::new();
-
-        for (name, value) in outputs {
-            match (name.as_str(), value) {
-                ("fetch_name_0", InferenceTensor::F32(array)) => {
-                    det_data = array.iter().copied().collect();
-                }
-                ("fetch_name_1", InferenceTensor::I32(array)) => {
-                    bbox_num = array.iter().copied().collect();
-                }
-                _ => {}
-            }
-        }
-
-        (det_data, bbox_num)
-    }
-
-    /// Preprocesses every image in a batch and assembles the three stacked ONNX
-    /// input tensors ([`Array4`] pixel data plus the two [`Array2`] shape/scale
-    /// tensors) alongside each image's original `(width, height)`. Split out of
-    /// [`Self::run_batch_inference`] so that method stays focused on the ONNX
-    /// call and per-image result assembly.
-    fn build_batch_tensors(images: &[&RgbImage]) -> Result<BatchTensors, LayoutError> {
-        let batch = images.len();
-        let ts = INPUT_SIZE as usize;
-        let hw = ts * ts;
-
-        let mut all_pixel_data: Vec<f32> = Vec::with_capacity(batch * 3 * hw);
-        let mut all_im_shape: Vec<f32> = Vec::with_capacity(batch * 2);
-        let mut all_scale_factor: Vec<f32> = Vec::with_capacity(batch * 2);
-        let mut orig_dims: Vec<(u32, u32)> = Vec::with_capacity(batch);
-
-        for img in images {
-            let (pixel_array, im_shape_arr, scale_arr) = Self::preprocess_single(img)?;
-            all_pixel_data.extend_from_slice(
-                pixel_array
-                    .as_slice()
-                    .ok_or_else(|| LayoutError::InvalidOutput("Preprocessed image tensor is not contiguous".into()))?,
-            );
-            all_im_shape.extend_from_slice(
-                im_shape_arr
-                    .as_slice()
-                    .ok_or_else(|| LayoutError::InvalidOutput("im_shape tensor is not contiguous".into()))?,
-            );
-            all_scale_factor.extend_from_slice(
-                scale_arr
-                    .as_slice()
-                    .ok_or_else(|| LayoutError::InvalidOutput("scale_factor tensor is not contiguous".into()))?,
-            );
-            orig_dims.push((img.width(), img.height()));
-        }
-
-        let images_array = Array4::from_shape_vec((batch, 3, ts, ts), all_pixel_data)
-            .map_err(|e| LayoutError::InvalidOutput(format!("Failed to build batch image tensor: {e}")))?;
-        let im_shape_array = Array2::from_shape_vec((batch, 2), all_im_shape)
-            .map_err(|e| LayoutError::InvalidOutput(format!("Failed to build batch im_shape tensor: {e}")))?;
-        let scale_factor_array = Array2::from_shape_vec((batch, 2), all_scale_factor)
-            .map_err(|e| LayoutError::InvalidOutput(format!("Failed to build batch scale_factor tensor: {e}")))?;
-
-        Ok((images_array, im_shape_array, scale_factor_array, orig_dims))
-    }
-
-    /// Slices the flat batch detection buffer back into one [`LayoutDetection`]
-    /// vector per image, using each image's valid-row count and original
-    /// dimensions. Split out of [`Self::run_batch_inference`] purely to shorten
-    /// that method.
-    fn assemble_batch_results(
-        det_data: &[f32],
-        bbox_num: &[i32],
-        orig_dims: &[(u32, u32)],
-        threshold: f32,
-    ) -> Vec<Vec<LayoutDetection>> {
-        let mut results: Vec<Vec<LayoutDetection>> = Vec::with_capacity(orig_dims.len());
-        let mut row_offset: usize = 0;
-
-        for (b, &(orig_w, orig_h)) in orig_dims.iter().enumerate() {
-            let n_valid = bbox_num.get(b).copied().unwrap_or(0).max(0) as usize;
-            let row_end = row_offset + n_valid;
-            let slice_end = row_end.min(det_data.len() / DET_ROW_COLS) * DET_ROW_COLS;
-            let slice_start = row_offset * DET_ROW_COLS;
-
-            let detections = if slice_start < det_data.len() {
-                Self::parse_detections(&det_data[slice_start..slice_end], n_valid, threshold, orig_w, orig_h)
-            } else {
-                Vec::new()
-            };
-
-            tracing::debug!(
-                batch_index = b,
-                n_valid,
-                detections = detections.len(),
-                "PP-DocLayout-V3 batch inference: per-image detections"
-            );
-
-            results.push(detections);
-            row_offset = row_end;
-        }
-
-        results
-    }
-
-    /// Run batched inference over multiple images in a single ONNX call.
+    /// Run requests as ordered single-image forwards.
     ///
-    /// ## Empty-slice contract
-    ///
-    /// Returns `Ok(Vec::new())` immediately when `images` is empty — no ONNX
-    /// session call is made.
+    /// The upstream masked postprocessor supports B1 only; keep that contract
+    /// until exported native batching is qualified separately (#2284).
     pub(crate) fn run_batch_inference(
         &mut self,
         images: &[&RgbImage],
         threshold: f32,
     ) -> Result<Vec<Vec<LayoutDetection>>, LayoutError> {
-        #[cfg(feature = "otel")]
-        let inference_span = crate::telemetry::spans::model_inference_span("pp-doclayout-v3");
-        #[cfg(feature = "otel")]
-        let _inference_guard = inference_span.enter();
-        #[cfg(feature = "otel")]
-        let inference_start = Instant::now();
-
-        if images.is_empty() {
-            return Ok(Vec::new());
+        crate::layout::inference_timings::take();
+        if let Some(empty) = empty_batch_short_circuit(images) {
+            return Ok(empty);
         }
-        let batch = images.len();
-
-        let preprocess_start = Instant::now();
-        let (images_array, im_shape_array, scale_factor_array, orig_dims) = Self::build_batch_tensors(images)?;
-        let preprocess_ms = preprocess_start.elapsed().as_secs_f64() * 1000.0;
-        tracing::debug!(preprocess_ms, batch, "PP-DocLayout-V3 batch preprocessing complete");
-
-        let onnx_start = Instant::now();
-
-        let im_shape_name = self.resolve_input_name("im_shape", 0);
-        let image_name = self.resolve_input_name("image", 1);
-        let scale_factor_name = self.resolve_input_name("scale_factor", 2);
-
-        let outputs = self
-            .session
-            .run(vec![
-                (im_shape_name, InferenceTensor::F32(im_shape_array.into_dyn())),
-                (image_name, InferenceTensor::F32(images_array.into_dyn())),
-                (scale_factor_name, InferenceTensor::F32(scale_factor_array.into_dyn())),
-            ])
-            .map_err(|e| LayoutError::Inference(e.to_string()))?;
-
-        let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
-        tracing::debug!(onnx_ms, batch, "PP-DocLayout-V3 batch ONNX session.run() complete");
-
-        // NOTE: this by-name match is an ORT-only trap — see the identical note on
-        let (det_data, bbox_num) = Self::split_batch_outputs(&outputs);
-
-        if det_data.is_empty() {
-            return Err(LayoutError::InvalidOutput(
-                "fetch_name_0 missing or empty from PP-DocLayout-V3 batch inference".into(),
-            ));
+        let mut results = Vec::with_capacity(images.len());
+        let mut preprocess_ms = 0.0;
+        let mut onnx_ms = 0.0;
+        for image in images {
+            let detections = self.run_inference(image, threshold);
+            let (preprocess, onnx) = crate::layout::inference_timings::take();
+            results.push(detections?);
+            preprocess_ms += preprocess;
+            onnx_ms += onnx;
         }
-
-        crate::layout::inference_timings::set(preprocess_ms / batch as f64, onnx_ms / batch as f64);
-
-        let results = Self::assemble_batch_results(&det_data, &bbox_num, &orig_dims, threshold);
-
-        tracing::debug!(
-            preprocess_ms,
-            onnx_ms,
-            batch,
-            "PP-DocLayout-V3 batch inference breakdown"
-        );
-
-        #[cfg(feature = "otel")]
-        {
-            let total_inference_ms = inference_start.elapsed().as_secs_f64() * 1000.0;
-            tracing::Span::current().record(crate::telemetry::conventions::MODEL_INFERENCE_MS, total_inference_ms);
-        }
-
+        let batch = images.len() as f64;
+        crate::layout::inference_timings::set(preprocess_ms / batch, onnx_ms / batch);
         Ok(results)
     }
 }
@@ -542,14 +383,7 @@ impl LayoutModel for PpDocLayoutV3Model {
         images: &[&RgbImage],
         threshold: Option<f32>,
     ) -> Result<Vec<Vec<LayoutDetection>>, LayoutError> {
-        if let Some(empty) = empty_batch_short_circuit(images) {
-            return Ok(empty);
-        }
-        let t = threshold.unwrap_or(DEFAULT_THRESHOLD);
-        if images.len() == 1 {
-            return self.run_inference(images[0], t).map(|d| vec![d]);
-        }
-        self.run_batch_inference(images, t)
+        self.run_batch_inference(images, threshold.unwrap_or(DEFAULT_THRESHOLD))
     }
 
     fn name(&self) -> &str {
