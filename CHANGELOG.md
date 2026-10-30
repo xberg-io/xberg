@@ -194,6 +194,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Retained furniture keeps its semantic layer without exposing internal rendering markers. (#2304)
 - **(pdf): Retain up to six inferred heading font tiers without flattening semantic subsections.**
   Font-tier lookups stay bounded for documents containing many distinct sizes. (#2305)
+- **(pdf): Keep separate lines apart when text is rebuilt from small word fragments.**
+  The rebuild groups fragments by baseline, scaled to the font size, so tightly set or slightly tilted lines no longer merge into one run. Side-by-side blocks keep their own lines. (#2323)
 - **(ocr): Reuse secondary dictionaries within keyed Tesseract sessions.**
   Repeated multilingual calls avoid reloading dictionaries while preserving quality checks and pool eviction. (#2306)
 

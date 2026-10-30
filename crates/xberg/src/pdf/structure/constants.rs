@@ -30,10 +30,26 @@ pub(crate) const MAX_GLYPH_JITTER_PT: f32 = 5.0;
 /// to accumulate 3 consecutive qualifying resets.
 pub(crate) const MIN_DISORDER_COUNT: usize = 3;
 
-/// y-proximity threshold (pt) for grouping spans into visual lines during
-/// reconstruction. Must be ≥ MAX_GLYPH_JITTER_PT so every span pair
-/// accepted by the detection gate is merged into the same group.
-pub(crate) const COALESCE_THRESHOLD: f32 = 5.0;
+/// How far (in ems of the larger font) a span's baseline may sit from the
+/// baseline its line predicts at that x and still join the line. Half an em
+/// keeps the sinusoidal jitter of glyph-fragmented producers on one line and
+/// stays below the line pitch of ordinary and tightly set text, so two lines
+/// never share a track. The tolerance scales with the font, unlike an
+/// absolute point value, which merges the lines of small type.
+pub(crate) const LINE_BASELINE_BAND_EM: f32 = 0.5;
+
+/// Widest horizontal gap (in ems of the larger font) a span may leave after
+/// the end of a line and still continue it. A wider gap starts a new line, so
+/// side-by-side panels keep their own lines.
+pub(crate) const LINE_MAX_GAP_EM: f32 = 3.0;
+
+/// Horizontal extent (in ems) a line needs before its slope is trusted. A
+/// shorter run has too few points to tell a tilt from jitter.
+pub(crate) const LINE_SLOPE_MIN_RUN_EM: f32 = 4.0;
+
+/// Largest slope (rise over run) a line may take, about 17 degrees. Steeper
+/// runs are not tilted text lines.
+pub(crate) const LINE_MAX_SLOPE: f32 = 0.3;
 
 /// Maximum word count for a paragraph to qualify as a heading.
 pub(super) const MAX_HEADING_WORD_COUNT: usize = 20;

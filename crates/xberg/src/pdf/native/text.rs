@@ -8,11 +8,15 @@ use super::span_geometry::{
 use crate::core::config::{ExtractionConfig, PageConfig};
 use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
-use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, MIN_DISORDER_COUNT};
+use crate::pdf::structure::constants::{
+    LINE_BASELINE_BAND_EM, LINE_MAX_GAP_EM, LINE_MAX_SLOPE, LINE_SLOPE_MIN_RUN_EM, MAX_GLYPH_JITTER_PT,
+    MIN_DISORDER_COUNT,
+};
 use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
 use crate::types::{PageBoundary, PageContent};
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::cmp::Reverse;
+use std::collections::{BTreeSet, BinaryHeap, HashMap};
 use xberg_native_pdf::document::ReadingOrder;
 
 /// Per-page fabricated-mapping character counts `(fabricated, total)`, indexed by zero-based
@@ -501,40 +505,203 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
     false
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Counts `LineTrack::fit` calls so a test can bound the work of the line grouping.
+    static FIT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// One text line under construction: spans in x order that share a baseline.
+///
+/// The baseline may tilt. The slope comes from a least-squares fit over the
+/// spans already in the line, so a tilted block written as horizontal runs
+/// with stepped baselines stays one line, and no angle parameter is needed.
+struct LineTrack<'a> {
+    spans: Vec<&'a xberg_native_pdf::layout::TextSpan>,
+    count: f64,
+    sum_x: f64,
+    sum_y: f64,
+    sum_xx: f64,
+    sum_xy: f64,
+    min_x: f32,
+    max_x: f32,
+    last_x: f32,
+    last_y: f32,
+    end_x: f32,
+    font_size: f32,
+}
+
+impl<'a> LineTrack<'a> {
+    fn new(span: &'a xberg_native_pdf::layout::TextSpan) -> Self {
+        let mut track = Self {
+            spans: Vec::new(),
+            count: 0.0,
+            sum_x: 0.0,
+            sum_y: 0.0,
+            sum_xx: 0.0,
+            sum_xy: 0.0,
+            min_x: span.bbox.x,
+            max_x: span.bbox.x,
+            last_x: span.bbox.x,
+            last_y: span.bbox.y,
+            end_x: f32::NEG_INFINITY,
+            font_size: 0.0,
+        };
+        track.push(span);
+        track
+    }
+
+    fn push(&mut self, span: &'a xberg_native_pdf::layout::TextSpan) {
+        let (x, y) = (f64::from(span.bbox.x), f64::from(span.bbox.y));
+        self.spans.push(span);
+        self.count += 1.0;
+        self.sum_x += x;
+        self.sum_y += y;
+        self.sum_xx += x * x;
+        self.sum_xy += x * y;
+        self.min_x = self.min_x.min(span.bbox.x);
+        self.max_x = self.max_x.max(span.bbox.x);
+        self.last_x = span.bbox.x;
+        self.last_y = span.bbox.y;
+        self.end_x = self.end_x.max(span.bbox.x + span.bbox.width);
+        self.font_size = self.font_size.max(span.font_size);
+    }
+
+    fn slope(&self) -> f32 {
+        if self.max_x - self.min_x < LINE_SLOPE_MIN_RUN_EM * self.font_size.max(1.0) {
+            return 0.0;
+        }
+        let mean_x = self.sum_x / self.count;
+        let variance = self.sum_xx / self.count - mean_x * mean_x;
+        if variance <= f64::EPSILON {
+            return 0.0;
+        }
+        let covariance = self.sum_xy / self.count - mean_x * self.sum_y / self.count;
+        ((covariance / variance) as f32).clamp(-LINE_MAX_SLOPE, LINE_MAX_SLOPE)
+    }
+
+    /// Baseline the line predicts at `x`, continued from its last span.
+    fn predicted_y(&self, x: f32) -> f32 {
+        self.last_y + self.slope() * (x - self.last_x)
+    }
+
+    /// Baseline at the left edge of the line; orders lines top to bottom.
+    fn left_baseline(&self) -> f32 {
+        let mean_x = (self.sum_x / self.count) as f32;
+        let mean_y = (self.sum_y / self.count) as f32;
+        mean_y + self.slope() * (self.min_x - mean_x)
+    }
+
+    /// Whether `span` continues this line: it starts within the allowed gap
+    /// after the line's end and sits within the baseline band, both scaled
+    /// to the larger font. Returns the baseline error when it does.
+    fn fit(&self, span: &xberg_native_pdf::layout::TextSpan) -> Option<f32> {
+        #[cfg(test)]
+        FIT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let em = self.font_size.max(span.font_size).max(1.0);
+        let error = (span.bbox.y - self.predicted_y(span.bbox.x)).abs();
+        (span.bbox.x - self.end_x <= LINE_MAX_GAP_EM * em && error <= LINE_BASELINE_BAND_EM * em).then_some(error)
+    }
+}
+
+/// Integer key that sorts like `f32::total_cmp`, for ordered sets and heaps.
+fn ordered_key(value: f32) -> u32 {
+    let bits = value.to_bits();
+    if bits & 0x8000_0000 != 0 {
+        !bits
+    } else {
+        bits | 0x8000_0000
+    }
+}
+
+/// Group spans into text lines. A span joins the line whose baseline, continued
+/// to the span's x, it overlaps; otherwise it starts a new line. Lines come back
+/// top to bottom, and the spans of each line left to right. Two lines are never
+/// merged by x order, so lines that sit side by side stay apart.
+fn group_spans_into_baseline_lines<'a>(
+    spans: &'a [xberg_native_pdf::layout::TextSpan],
+) -> Vec<Vec<&'a xberg_native_pdf::layout::TextSpan>> {
+    let mut sorted: Vec<&xberg_native_pdf::layout::TextSpan> = spans.iter().collect();
+    sorted.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x).then(b.bbox.y.total_cmp(&a.bbox.y)));
+
+    // Spans arrive in x order, so a track that ends further left than the widest
+    // allowed gap can never take this span or a later one: it leaves the active
+    // set. Among the active tracks, only those whose last baseline lies within
+    // `reach` of the span can fit it, so a span is compared with the nearby
+    // baselines instead of every active track.
+    let max_font = spans.iter().map(|span| span.font_size).fold(1.0_f32, f32::max);
+    let widest_gap = LINE_MAX_GAP_EM * max_font;
+    let max_width = spans.iter().map(|span| span.bbox.width).fold(0.0_f32, f32::max);
+    // A fitting span sits within the band of the predicted baseline, which moves
+    // from the last baseline by at most the largest slope over the largest
+    // distance an active track can have from the span. The factor and the
+    // constant absorb f32 rounding; `fit` still decides every candidate.
+    let reach = (LINE_BASELINE_BAND_EM * max_font + LINE_MAX_SLOPE * (widest_gap + max_width)) * 1.01 + 1.0;
+
+    let mut tracks: Vec<LineTrack> = Vec::new();
+    let mut by_baseline: BTreeSet<(u32, usize)> = BTreeSet::new();
+    let mut by_end: BinaryHeap<Reverse<(u32, usize)>> = BinaryHeap::new();
+    for span in sorted {
+        while let Some(&Reverse((end_key, index))) = by_end.peek() {
+            let track = &tracks[index];
+            if end_key != ordered_key(track.end_x) {
+                by_end.pop();
+            } else if span.bbox.x - track.end_x > widest_gap {
+                by_end.pop();
+                by_baseline.remove(&(ordered_key(track.last_y), index));
+            } else {
+                break;
+            }
+        }
+        let low = (ordered_key(span.bbox.y - reach), 0);
+        let high = (ordered_key(span.bbox.y + reach), usize::MAX);
+        let best = by_baseline
+            .range(low..=high)
+            .filter_map(|&(_, index)| tracks[index].fit(span).map(|error| (index, error)))
+            .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)))
+            .map(|(index, _)| index);
+        let index = match best {
+            Some(index) => {
+                by_baseline.remove(&(ordered_key(tracks[index].last_y), index));
+                tracks[index].push(span);
+                index
+            }
+            None => {
+                tracks.push(LineTrack::new(span));
+                tracks.len() - 1
+            }
+        };
+        by_baseline.insert((ordered_key(tracks[index].last_y), index));
+        by_end.push(Reverse((ordered_key(tracks[index].end_x), index)));
+    }
+
+    tracks.sort_by(|a, b| {
+        b.left_baseline()
+            .total_cmp(&a.left_baseline())
+            .then(a.min_x.total_cmp(&b.min_x))
+    });
+    tracks.into_iter().map(|track| track.spans).collect()
+}
+
 /// Rebuild readable text from a glyph-fragmented span list (issue #962).
 ///
 /// Algorithm:
-/// 1. Sort spans by y-descending (top-of-page first in PDF coordinates).
-/// 2. Group by chained y-proximity: consecutive spans within COALESCE_THRESHOLD pt
-///    of the previous span belong to the same visual line.
-/// 3. Within each group sort by x-ascending (left-to-right reading order).
-/// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
-///    exceeds font_size * 0.5.
+/// 1. Group the spans into lines by baseline (`group_spans_into_baseline_lines`): a span
+///    joins a line when it overlaps the line's baseline band, scaled to the
+///    font size, so lines with small leading or a tilt stay separate.
+/// 2. Order the lines top of the page first; the spans of a line run left to right.
+/// 3. Concatenate each line, inserting a space wherever the x-gap between
+///    adjacent spans exceeds font_size * 0.5.
 fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     if spans.is_empty() {
         return String::new();
     }
 
     let notes = numeric_notes(spans);
-    let mut sorted: Vec<&xberg_native_pdf::layout::TextSpan> = spans.iter().collect();
-    sorted.sort_by(|a, b| b.bbox.y.partial_cmp(&a.bbox.y).unwrap_or(std::cmp::Ordering::Equal));
-
-    let mut groups: Vec<Vec<&xberg_native_pdf::layout::TextSpan>> = Vec::new();
-    for span in sorted {
-        let belongs = groups.last().is_some_and(|g| {
-            let prev_y = g.last().unwrap().bbox.y;
-            (span.bbox.y - prev_y).abs() <= COALESCE_THRESHOLD
-        });
-        if belongs {
-            groups.last_mut().unwrap().push(span);
-        } else {
-            groups.push(vec![span]);
-        }
-    }
+    let groups = group_spans_into_baseline_lines(spans);
 
     let mut result = String::new();
-    for (gi, group) in groups.iter_mut().enumerate() {
-        group.sort_by(|a, b| a.bbox.x.partial_cmp(&b.bbox.x).unwrap_or(std::cmp::Ordering::Equal));
+    for (gi, group) in groups.iter().enumerate() {
         if gi > 0 {
             result.push('\n');
         }
@@ -2957,6 +3124,205 @@ mod tests {
             .collect();
 
         assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    /// Pieces of one line cut every few characters, with the baseline stepping
+    /// by `tan * x` across the line (a tilted block written as horizontal runs).
+    fn stepped_line(text: &str, x0: f32, y0: f32, font_size: f32, tan: f32) -> Vec<TextSpan> {
+        let char_width = font_size * 0.5;
+        let lens = [14usize, 2, 9, 1, 12, 3, 10, 2];
+        let chars: Vec<char> = text.chars().collect();
+        let (mut start, mut k, mut pieces) = (0usize, 0usize, Vec::new());
+        while start < chars.len() {
+            let end = (start + lens[k % lens.len()]).min(chars.len());
+            let piece: String = chars[start..end].iter().collect();
+            let offset = start as f32 * char_width;
+            pieces.push(span_with_width(
+                &piece,
+                x0 + offset,
+                y0 + offset * tan,
+                piece.chars().count() as f32 * char_width,
+                font_size,
+                font_size,
+            ));
+            start = end;
+            k += 1;
+        }
+        pieces
+    }
+
+    fn baseline_lines(text: &str) -> Vec<&str> {
+        text.lines().collect()
+    }
+
+    #[test]
+    fn stepped_baselines_at_small_leading_keep_their_lines() {
+        let rows = [
+            "harbor meadow lantern orchard compass",
+            "thimble granite willow ferry quarry",
+            "pasture beacon cobble saddle marble",
+            "timber anchor bridge cellar dune",
+        ];
+        for (font_size, tan) in [(3.3_f32, 0.052_f32), (10.0, 0.052), (5.0, 0.07)] {
+            let pitch = font_size * 1.3;
+            let mut spans = Vec::new();
+            for (row, text) in rows.iter().enumerate() {
+                spans.extend(stepped_line(text, 60.0, 400.0 - row as f32 * pitch, font_size, tan));
+            }
+            let text = rebuild_text_from_fragmented_spans(&spans);
+            assert_eq!(
+                baseline_lines(&text),
+                rows,
+                "font size {font_size}, tan {tan}: {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn side_by_side_panels_keep_their_own_lines() {
+        let left = ["harbor meadow", "lantern orchard", "compass thimble", "granite willow"];
+        let right = ["ferry quarry", "pasture beacon", "cobble saddle", "marble timber"];
+        for tan in [0.0_f32, 0.05] {
+            let mut spans = Vec::new();
+            for row in 0..4 {
+                let y = 400.0 - row as f32 * 13.0;
+                spans.extend(stepped_line(left[row], 60.0, y, 10.0, tan));
+                spans.extend(stepped_line(right[row], 260.0, y, 10.0, tan));
+            }
+            let text = rebuild_text_from_fragmented_spans(&spans);
+            let lines = baseline_lines(&text);
+            for expected in left.iter().chain(right.iter()) {
+                assert!(
+                    lines.contains(expected),
+                    "tan {tan}: {expected:?} not a line of {text:?}"
+                );
+            }
+            assert_eq!(lines.len(), 8, "tan {tan}: {text:?}");
+        }
+    }
+
+    /// The grouping before the baseline index: every span is compared with every
+    /// track that is still within reach in x. Kept as the oracle for the indexed version.
+    fn group_by_scanning_every_reachable_track(spans: &[TextSpan]) -> Vec<Vec<&TextSpan>> {
+        let mut sorted: Vec<&TextSpan> = spans.iter().collect();
+        sorted.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x).then(b.bbox.y.total_cmp(&a.bbox.y)));
+        let widest_gap = LINE_MAX_GAP_EM * spans.iter().map(|span| span.font_size).fold(1.0_f32, f32::max);
+        let mut tracks: Vec<LineTrack> = Vec::new();
+        let mut reachable: Vec<usize> = Vec::new();
+        for span in sorted {
+            reachable.retain(|&index| span.bbox.x - tracks[index].end_x <= widest_gap);
+            let best = reachable
+                .iter()
+                .filter_map(|&index| tracks[index].fit(span).map(|error| (index, error)))
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(index, _)| index);
+            match best {
+                Some(index) => tracks[index].push(span),
+                None => {
+                    reachable.push(tracks.len());
+                    tracks.push(LineTrack::new(span));
+                }
+            }
+        }
+        tracks.sort_by(|a, b| {
+            b.left_baseline()
+                .total_cmp(&a.left_baseline())
+                .then(a.min_x.total_cmp(&b.min_x))
+        });
+        tracks.into_iter().map(|track| track.spans).collect()
+    }
+
+    fn fit_calls_while<T>(work: impl FnOnce() -> T) -> (T, usize) {
+        FIT_CALLS.with(|calls| calls.set(0));
+        let value = work();
+        (value, FIT_CALLS.with(|calls| calls.get()))
+    }
+
+    #[test]
+    fn many_spans_at_one_x_on_distinct_baselines_group_in_near_linear_work() {
+        // Every span starts at the same x, so the x-gap rule keeps every earlier track
+        // reachable. Comparing each span with all of them costs n*n/2 fits.
+        let count = 4000;
+        for pitch in [20.0_f32, 6.0] {
+            let spans: Vec<TextSpan> = (0..count)
+                .map(|row| span_with_width("ab", 100.0, 20_000.0 - row as f32 * pitch, 12.0, 10.0, 10.0))
+                .collect();
+            let (groups, fits) = fit_calls_while(|| group_spans_into_baseline_lines(&spans));
+            assert_eq!(groups.len(), count, "pitch {pitch}: every baseline is its own line");
+            assert!(
+                fits <= 16 * count,
+                "pitch {pitch}: {fits} fit calls for {count} spans on distinct baselines"
+            );
+        }
+    }
+
+    #[test]
+    fn many_columns_on_one_baseline_group_in_near_linear_work() {
+        // Every span sits on the same baseline but too far right to continue the
+        // previous one, so each starts a line. A track that ends out of reach must
+        // leave the set that the next span is compared with.
+        let count = 4000;
+        let spans: Vec<TextSpan> = (0..count)
+            .map(|column| span_with_width("ab", 20.0 + column as f32 * 200.0, 400.0, 12.0, 10.0, 10.0))
+            .collect();
+        let (groups, fits) = fit_calls_while(|| group_spans_into_baseline_lines(&spans));
+        assert_eq!(groups.len(), count, "every column is its own line");
+        assert!(
+            fits <= 16 * count,
+            "{fits} fit calls for {count} spans in separate columns"
+        );
+    }
+
+    #[test]
+    fn indexed_grouping_equals_the_scan_of_every_reachable_track() {
+        // A fixed pseudo-random page of short runs on tilted and level lines, with
+        // coinciding x values and near-equal baseline errors, so tie-breaks matter.
+        let mut state = 0x2545_f491_u32;
+        let mut next = move |modulus: u32| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (state >> 8) % modulus
+        };
+        for round in 0..40 {
+            let font_size = [4.0_f32, 7.0, 10.0, 12.0][round % 4];
+            let mut spans = Vec::new();
+            for _ in 0..(60 + next(120)) {
+                let x = next(40) as f32 * font_size;
+                let y = 300.0 + next(90) as f32 * font_size * 0.25 + next(2) as f32 * 0.5;
+                let width = (1 + next(6)) as f32 * font_size * 0.5;
+                spans.push(span_with_width("w", x, y, width, font_size, font_size));
+            }
+            let indexed = group_spans_into_baseline_lines(&spans);
+            let scanned = group_by_scanning_every_reachable_track(&spans);
+            let as_ids = |groups: &[Vec<&TextSpan>]| -> Vec<Vec<*const TextSpan>> {
+                groups
+                    .iter()
+                    .map(|group| group.iter().map(|span| *span as *const TextSpan).collect())
+                    .collect()
+            };
+            assert_eq!(as_ids(&indexed), as_ids(&scanned), "round {round}, font {font_size}");
+        }
+    }
+
+    #[test]
+    fn jittering_glyph_spans_stay_on_one_line() {
+        let word = "Hetafbeeldingisnietsaangetroffen";
+        let spans: Vec<TextSpan> = word
+            .chars()
+            .enumerate()
+            .map(|(i, ch)| {
+                let y = 700.0 + (std::f32::consts::TAU * i as f32 / 6.0).sin() * 5.0;
+                span_with_width(&ch.to_string(), 72.0 + i as f32 * 7.0, y, 6.0, 12.0, 12.0)
+            })
+            .collect();
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), word);
+    }
+
+    #[test]
+    fn line_tracks_never_merge_two_lines_that_abut_in_x() {
+        let mut spans = stepped_line("joining interactive", 61.0, 424.0, 3.3, 0.0);
+        spans.extend(stepped_line("collaborative design", 60.0, 419.8, 3.3, 0.0));
+        let text = rebuild_text_from_fragmented_spans(&spans);
+        assert_eq!(baseline_lines(&text), ["joining interactive", "collaborative design"]);
     }
 
     #[test]

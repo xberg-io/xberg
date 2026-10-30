@@ -408,8 +408,8 @@ fn test_5pt_jitter_coalesced() {
 /// must round-trip unchanged — the fragmentation repair path must NOT activate.
 ///
 /// Uses 20 pt y-spacing between single-character spans, which is well above the
-/// MAX_GLYPH_JITTER_PT detection ceiling (5 pt) and above the COALESCE_THRESHOLD
-/// (5 pt), so no same-line x-disorder events can occur and reconstruction is skipped.
+/// MAX_GLYPH_JITTER_PT detection ceiling (5 pt) and above the baseline band of
+/// the line rebuild, so no same-line x-disorder events can occur and reconstruction is skipped.
 /// This guards against false positives on poetry, code columns, and similar layouts.
 #[test]
 fn test_genuine_single_char_lines_not_collapsed() {
