@@ -2322,7 +2322,14 @@ fn insert_formula_document_element(doc: &mut InternalDocument, at: usize, mut el
     doc.elements.insert(at, element);
 }
 
-#[cfg(all(test, feature = "formula-recognition", feature = "layout-detection"))]
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "layout-detection",
+    feature = "ocr",
+    feature = "formula-recognition",
+    feature = "tokio-runtime"
+))]
 pub(crate) async fn recognize_formula_regions_for_test(
     doc: &mut InternalDocument,
     formulas: &mut Vec<crate::types::Formula>,
