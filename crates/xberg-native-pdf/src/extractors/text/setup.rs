@@ -65,11 +65,11 @@ impl<'doc> TextExtractor<'doc> {
             inside_excluded_layer: false,
             inside_placed_pdf: false,
             placed_pdf_keep: false,
-            page_outside_text: None,
-            page_content: Vec::new(),
-            page_resources: None,
-            form_placed_verdicts: 0,
-            form_verdict_depth: 0,
+            placed_hold: 0,
+            placed_hold_groups: 0,
+            span_holds: Vec::new(),
+            char_holds: Vec::new(),
+            form_placed_tags: 0,
             excluded_inks: HashSet::new(),
             inside_excluded_ink: false,
             tj_offset_history: Vec::with_capacity(1000),
@@ -216,6 +216,7 @@ impl<'doc> TextExtractor<'doc> {
     pub fn prepare_for_span_extraction(&mut self) {
         self.extract_spans = true;
         self.spans.clear();
+        self.span_holds.clear();
         self.span_sequence_counter = 0;
     }
 
@@ -237,5 +238,6 @@ impl<'doc> TextExtractor<'doc> {
     /// Clear all extracted characters.
     pub fn clear(&mut self) {
         self.chars.clear();
+        self.char_holds.clear();
     }
 }

@@ -335,7 +335,7 @@ fn test_form_painted_inside_a_placed_scope_is_not_outside_text() {
 }
 
 /// The placed copy sits in a form that then paints the normal body through a form
-/// named only in its own resources. The walk finds the body through those resources,
+/// named only in its own resources. That body is text outside the placed scope,
 /// so the copy is judged a duplicate.
 #[test]
 fn test_body_in_a_form_named_only_by_the_placed_form_counts_as_outside_text() {
@@ -462,6 +462,110 @@ fn test_placed_form_copy_of_a_cached_sibling_form_body_is_suppressed() {
         1,
         "the placed copy next to a cached sibling form body was kept: {second:?}"
     );
+}
+
+/// Thirty lines of a body about `topic`, and the number of times line 7 of it
+/// appears in the text and in the characters of page 1 of `pdf`.
+fn body_line_counts(pdf: Vec<u8>, topic: &str) -> (usize, usize) {
+    let doc = PdfDocument::from_bytes(pdf).expect("parse pdf");
+    let needle = format!("{topic} paragraph number 7 ");
+    let text = doc.extract_text(0).unwrap();
+    let chars: String = doc.extract_chars(0).unwrap().iter().map(|c| c.char).collect();
+    (text.matches(&needle).count(), chars.matches(&needle).count())
+}
+
+fn body_lines(topic: &str) -> Vec<String> {
+    (0..30)
+        .map(|i| format!("{topic} paragraph number {i} about ferry cables"))
+        .collect()
+}
+
+const FULL_BBOX: &str = "[0 0 600 800]";
+
+/// The page paints a visible `/PlacedPDF` body and an ordinary sibling form that
+/// holds the same body outside its small `/BBox`. The sibling's copy is clipped,
+/// so the placed body is the only visible copy and comes back once, in both paint
+/// orders.
+#[test]
+fn test_placed_body_survives_a_clipped_copy_in_a_sibling_form() {
+    let lines = body_lines("Harbor");
+    let placed = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 20, 780));
+    let clipped = text_lines_stream(&lines, 20, 780);
+    for page in ["/Fp Do\n/Fc Do\n", "/Fc Do\n/Fp Do\n"] {
+        let pdf = build_forms_pdf(page, &[("Fp", FULL_BBOX, &placed), ("Fc", "[0 0 100 100]", &clipped)]);
+        assert_eq!(
+            body_line_counts(pdf, "Harbor"),
+            (1, 1),
+            "the visible placed body is not kept once (text, chars) for page {page:?}"
+        );
+    }
+}
+
+/// An enclosing form with a small `/BBox` paints its own copy of the body outside
+/// the box, and a `/PlacedPDF` form whose body sits inside it. The enclosing copy
+/// is clipped, so the placed body comes back once, in both paint orders.
+#[test]
+fn test_placed_body_survives_a_clipped_copy_in_the_enclosing_form() {
+    let lines = body_lines("Quarry");
+    let placed = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 20, 380));
+    let copy = text_lines_stream(&lines, 20, 780);
+    for enclosing in [format!("/Fp Do\n{copy}"), format!("{copy}/Fp Do\n")] {
+        let pdf = build_forms_pdf(
+            "/Fe Do\n",
+            &[("Fe", "[0 0 400 400]", &enclosing), ("Fp", FULL_BBOX, &placed)],
+        );
+        assert_eq!(
+            body_line_counts(pdf, "Quarry"),
+            (1, 1),
+            "the visible placed body is not kept once (text, chars) for enclosing stream {enclosing:?}"
+        );
+    }
+}
+
+/// A form that paints itself twice, then a sibling form with the body, then a
+/// shifted `/PlacedPDF` copy of the body. The self-painting form runs once, so
+/// its note appears once and the later sibling's body still shows that the copy
+/// is a duplicate.
+#[test]
+fn test_self_painting_form_does_not_hide_a_later_sibling_body() {
+    let lines = body_lines("Meadow");
+    let body = text_lines_stream(&lines, 20, 780);
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let looping = format!("{}/Fs Do\n/Fs Do\n", text_lines_stream(&["Looping side note".to_string()], 400, 60));
+    let pdf = build_forms_pdf(
+        "/Fs Do\n/Fb Do\n/Fp Do\n",
+        &[("Fs", FULL_BBOX, &looping), ("Fb", FULL_BBOX, &body), ("Fp", FULL_BBOX, &copy)],
+    );
+    let doc = PdfDocument::from_bytes(pdf.clone()).expect("parse pdf");
+    let text = doc.extract_text(0).unwrap();
+    assert_eq!(text.matches("Looping side note").count(), 1, "self-painting form text: {text:?}");
+    assert_eq!(body_line_counts(pdf, "Meadow"), (1, 1), "body copies (text, chars): {text:?}");
+}
+
+/// Two forms that paint each other twice, then a sibling form with the body, then
+/// a shifted `/PlacedPDF` copy of the body. Each form of the cycle runs once, and
+/// the copy is still judged a duplicate of the later body.
+#[test]
+fn test_mutually_painting_forms_do_not_hide_a_later_sibling_body() {
+    let lines = body_lines("Orchard");
+    let body = text_lines_stream(&lines, 20, 780);
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let first = format!("{}/Ft Do\n/Ft Do\n", text_lines_stream(&["First cycle note".to_string()], 400, 60));
+    let second = format!("{}/Fs Do\n/Fs Do\n", text_lines_stream(&["Second cycle note".to_string()], 400, 40));
+    let pdf = build_forms_pdf(
+        "/Fs Do\n/Fb Do\n/Fp Do\n",
+        &[
+            ("Fs", FULL_BBOX, &first),
+            ("Ft", FULL_BBOX, &second),
+            ("Fb", FULL_BBOX, &body),
+            ("Fp", FULL_BBOX, &copy),
+        ],
+    );
+    let doc = PdfDocument::from_bytes(pdf.clone()).expect("parse pdf");
+    let text = doc.extract_text(0).unwrap();
+    assert_eq!(text.matches("First cycle note").count(), 1, "cycle text: {text:?}");
+    assert_eq!(text.matches("Second cycle note").count(), 1, "cycle text: {text:?}");
+    assert_eq!(body_line_counts(pdf, "Orchard"), (1, 1), "body copies (text, chars): {text:?}");
 }
 
 #[test]

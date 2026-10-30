@@ -361,6 +361,45 @@ pub(super) fn text_lines_stream(lines: &[String], x: i32, top: i32) -> String {
     out
 }
 
+/// Build a one-page PDF whose page paints `page_stream`, with one Form XObject per
+/// `(name, bbox, stream)` entry. The page and every form can paint every form,
+/// and all use Helvetica as `/F1`.
+pub(super) fn build_forms_pdf(page_stream: &str, forms: &[(&str, &str, &str)]) -> Vec<u8> {
+    let xobjects: String = forms
+        .iter()
+        .enumerate()
+        .map(|(i, (name, _, _))| format!("/{name} {} 0 R ", i + 6))
+        .collect();
+    let res = format!("/Resources << /Font << /F1 5 0 R >> /XObject << {xobjects}>> >>");
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R {res} >>"),
+        format!("<< /Length {} >>\nstream\n{page_stream}\nendstream", page_stream.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+    ];
+    for (_, bbox, stream) in forms {
+        objects.push(format!(
+            "<< /Type /XObject /Subtype /Form /BBox {bbox} {res} /Length {} >>\nstream\n{stream}\nendstream",
+            stream.len()
+        ));
+    }
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offs.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref_off = pdf.len();
+    let size = objects.len() + 1;
+    pdf.extend_from_slice(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+    for off in offs {
+        pdf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n").as_bytes());
+    pdf
+}
+
 /// Build a minimal one-page PDF where XObject "Outer" invokes a second
 /// XObject "Inner" (both via the same malformed missing-`cm` `Do` shape
 /// as [`build_xobject_do_with_orphaned_operands_pdf`]), and "Inner" is

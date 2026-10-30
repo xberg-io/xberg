@@ -622,9 +622,7 @@ impl<'doc> TextExtractor<'doc> {
 
         tracing::trace!(target: LOG_TARGET, "PUSH space span with offset_semantic={}", span.offset_semantic);
 
-        if !self.is_content_suppressed() {
-            self.spans.push(span);
-        }
+        self.push_span(span);
 
         // Do NOT advance the text matrix here. The caller drives the
         // matrix forward by the *actual* TJ offset via
@@ -835,9 +833,7 @@ impl<'doc> TextExtractor<'doc> {
                 span.offset_semantic
             );
 
-            if !self.is_content_suppressed() {
-                self.spans.push(span);
-            }
+            self.push_span(span);
         }
         Ok(())
     }
@@ -1030,9 +1026,7 @@ impl<'doc> TextExtractor<'doc> {
                         ]),
                     };
 
-                    if !self.is_content_suppressed() {
-                        self.chars.push(text_char);
-                    }
+                    self.push_char(text_char);
                 }
             }
 

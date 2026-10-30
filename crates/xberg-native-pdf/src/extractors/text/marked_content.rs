@@ -7,124 +7,135 @@
 
 use super::*;
 
-/// Length and bytes of the text-show operands in one `/PlacedPDF` bucket.
-#[derive(Debug, Default, Clone)]
-pub(super) struct PlacedBucket {
-    pub(super) chars: usize,
+/// Text of one hold group, or of the page text that is not held, as the
+/// duplicate measure of `placed_text_kept` reads it.
+#[derive(Default, Clone)]
+struct HeldText {
+    chars: usize,
     txt: Vec<u8>,
+    line_y: Option<f32>,
 }
 
-impl PlacedBucket {
-    /// Add the text of another bucket to this one.
-    fn append(&mut self, other: &PlacedBucket) {
-        self.chars = self.chars.saturating_add(other.chars);
-        self.txt.extend_from_slice(&other.txt);
+impl HeldText {
+    /// Add one span (`line_y` is `None`) or one character on the line at `line_y`.
+    fn add(&mut self, text: &str, line_y: Option<f32>) {
+        if let Some(y) = line_y
+            && self.line_y.is_none_or(|last| (last - y).abs() > 0.01)
+        {
+            self.txt.push(b' ');
+            self.line_y = Some(y);
+        }
+        self.chars += text.chars().filter(|c| !c.is_whitespace()).count();
+        self.txt.extend_from_slice(text.as_bytes());
+        if line_y.is_none() {
+            self.txt.push(b' ');
+        }
     }
 }
 
-/// Text of one content stream, split into placed and non-placed buckets.
-#[derive(Default)]
-pub(super) struct PlacedScan {
-    pub(super) placed: PlacedBucket,
-    other: PlacedBucket,
+/// Push `item` with its hold group. `holds` stays empty until an item is held.
+fn push_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, item: T, hold: u32) {
+    if hold != 0 || !holds.is_empty() {
+        holds.resize(items.len(), 0);
+        holds.push(hold);
+    }
+    items.push(item);
 }
 
-/// State of one walk over the forms that a page paints.
-#[derive(Default)]
-struct OutsideWalk {
-    decodes: u32,
-    other: PlacedBucket,
+/// Keep the items from `start` on that pass `keep`, with their hold groups.
+pub(super) fn retain_held_from<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, start: usize, keep: impl Fn(&T) -> bool) {
+    let added = items.split_off(start);
+    if holds.is_empty() {
+        items.extend(added.into_iter().filter(|item| keep(item)));
+        return;
+    }
+    holds.resize(start + added.len(), 0);
+    let added_holds = holds.split_off(start);
+    for (item, hold) in added.into_iter().zip(added_holds) {
+        if keep(&item) {
+            items.push(item);
+            holds.push(hold);
+        }
+    }
+}
+
+/// Drop each hold group that `placed_text_kept` rejects against the items that
+/// are not held. Kept groups stay in paint position.
+fn settle_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, groups: u32, add: impl Fn(&T, &mut HeldText)) {
+    if holds.is_empty() {
+        return;
+    }
+    holds.resize(items.len(), 0);
+    let mut other = HeldText::default();
+    let mut held = vec![HeldText::default(); groups as usize];
+    for (item, &hold) in items.iter().zip(holds.iter()) {
+        match hold.checked_sub(1).and_then(|g| held.get_mut(g as usize)) {
+            Some(group) => add(item, group),
+            None => add(item, &mut other),
+        }
+    }
+    let kept: Vec<bool> = held
+        .iter()
+        .map(|group| TextExtractor::placed_text_kept(group.chars, &group.txt, other.chars, &other.txt))
+        .collect();
+    let mut index = 0;
+    items.retain(|_| {
+        let hold = holds[index];
+        index += 1;
+        hold.checked_sub(1)
+            .and_then(|g| kept.get(g as usize))
+            .is_none_or(|&keep| keep)
+    });
+    holds.clear();
 }
 
 impl<'doc> TextExtractor<'doc> {
-    /// Decide the placed verdict of a page stream. The page stream and its
-    /// resources are kept for the walk behind `page_outside_text`.
-    pub(super) fn begin_page_placed_scan(&mut self, content_stream: &[u8]) {
+    /// Start the `/PlacedPDF` state of a page: the page verdict from its own
+    /// stream, and no hold groups.
+    pub(super) fn begin_placed_page(&mut self, content_stream: &[u8]) {
         self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
-        self.page_content.clear();
-        self.page_content.extend_from_slice(content_stream);
-        self.page_resources = self.resources.clone();
-        self.page_outside_text = None;
+        self.placed_hold = 0;
+        self.placed_hold_groups = 0;
+        self.span_holds.clear();
+        self.char_holds.clear();
     }
 
-    /// Text the page paints outside any `/PlacedPDF` scope, in its own stream and
-    /// in every form it paints at any depth. The walk reads the streams, not the
-    /// paint order, so a form is judged against a body painted before or after it.
-    /// Built on the first call for a page, because only a form with its own placed
-    /// scope needs it. ~keep
-    pub(super) fn page_outside_text(&mut self) -> &PlacedBucket {
-        if self.page_outside_text.is_none() {
-            let mut walk = OutsideWalk::default();
-            Self::collect_outside_text(
-                self.document,
-                &self.page_content,
-                self.page_resources.as_ref(),
-                false,
-                0,
-                &mut walk,
-            );
-            self.page_outside_text = Some(walk.other);
+    /// Hold group of text emitted now, or 0 when the text is not held.
+    fn current_hold(&self) -> u32 {
+        if self.inside_placed_pdf && !self.placed_pdf_keep {
+            self.placed_hold
+        } else {
+            0
         }
-        self.page_outside_text.get_or_insert_with(PlacedBucket::default)
     }
 
-    /// Add the non-placed text of `stream` and of the forms it paints to `walk`.
-    /// `placed` says whether the stream is painted inside a placed scope. The walk
-    /// keeps the depth and decode limits of `process_xobject`, which also stop a
-    /// form that paints itself.
-    fn collect_outside_text(
-        doc: Option<&crate::document::PdfDocument>,
-        stream: &[u8],
-        resources: Option<&Object>,
-        placed: bool,
-        depth: u32,
-        walk: &mut OutsideWalk,
-    ) {
-        let mut forms: Vec<(String, bool)> = Vec::new();
-        let Some(scan) = Self::scan_text_buckets(stream, placed, |name, inside| forms.push((name.to_owned(), inside)))
-        else {
-            return;
-        };
-        walk.other.append(&scan.other);
-        let (Some(doc), Some(resources)) = (doc, resources) else {
-            return;
-        };
-        if forms.is_empty() || depth >= Self::MAX_XOBJECT_DEPTH {
-            return;
+    /// Emit a span, unless the current state suppresses it.
+    pub(super) fn push_span(&mut self, span: TextSpan) {
+        if !self.is_content_suppressed() {
+            let hold = self.current_hold();
+            push_held(&mut self.spans, &mut self.span_holds, span, hold);
         }
-        let Ok(Some(xobjects)) = Self::xobject_dict_of(doc, resources) else {
-            return;
-        };
-        let Some(xobjects) = xobjects.as_dict() else {
-            return;
-        };
-        for (name, inside) in forms {
-            if walk.decodes >= Self::MAX_XOBJECT_DECODES {
-                return;
-            }
-            let Some(form_ref) = xobjects.get(&name).and_then(Object::as_reference) else {
-                continue;
-            };
-            if !doc.is_form_xobject(form_ref) {
-                continue;
-            }
-            let Ok(form) = doc.load_object(form_ref) else {
-                continue;
-            };
-            let Some(dict) = form.as_dict() else {
-                continue;
-            };
-            if dict.get("Subtype").and_then(|s| s.as_name()) != Some("Form") {
-                continue;
-            }
-            walk.decodes += 1;
-            let Ok(data) = Self::decode_form_stream(doc, &form, form_ref) else {
-                continue;
-            };
-            let own_resources = dict.get("Resources").cloned();
-            let form_resources = own_resources.as_ref().unwrap_or(resources);
-            Self::collect_outside_text(Some(doc), &data, Some(form_resources), inside, depth + 1, walk);
+    }
+
+    /// Emit a character, unless the current state suppresses it.
+    pub(super) fn push_char(&mut self, ch: TextChar) {
+        if !self.is_content_suppressed() {
+            let hold = self.current_hold();
+            push_held(&mut self.chars, &mut self.char_holds, ch, hold);
         }
+    }
+
+    /// Judge each hold group of the page once all its text is known: a group
+    /// stays when `placed_text_kept` accepts it against the page text that is not
+    /// held, after clipping. Paint order does not matter. ~keep
+    pub(super) fn settle_placed_holds(&mut self) {
+        let groups = self.placed_hold_groups;
+        settle_held(&mut self.spans, &mut self.span_holds, groups, |span, text| {
+            text.add(&span.text, None)
+        });
+        settle_held(&mut self.chars, &mut self.char_holds, groups, |ch, text| {
+            text.add(ch.char.encode_utf8(&mut [0; 4]), Some(ch.origin_y))
+        });
     }
 
     /// Update the artifact state based on the marked content stack.
@@ -150,6 +161,11 @@ impl<'doc> TextExtractor<'doc> {
         self.inside_placed_pdf = self.marked_content_stack.iter().any(|ctx| ctx.is_placed_pdf);
     }
 
+    /// Whether a content stream mentions the `/PlacedPDF` tag at all.
+    pub(super) fn has_placed_tag(content_stream: &[u8]) -> bool {
+        content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF")
+    }
+
     /// Whether content emission should be suppressed.
     ///
     /// Returns true when the current graphics/marked-content state means
@@ -161,7 +177,9 @@ impl<'doc> TextExtractor<'doc> {
     /// Note: artifact filtering is handled separately via span metadata and
     /// downstream filtering, so `inside_artifact` is intentionally not checked here.
     pub(super) fn is_content_suppressed(&self) -> bool {
-        self.inside_excluded_layer || self.inside_excluded_ink || (self.inside_placed_pdf && !self.placed_pdf_keep)
+        self.inside_excluded_layer
+            || self.inside_excluded_ink
+            || (self.inside_placed_pdf && !self.placed_pdf_keep && self.placed_hold == 0)
     }
 
     /// Decide whether `/PlacedPDF` text should be kept (not suppressed) for a page.
@@ -185,44 +203,23 @@ impl<'doc> TextExtractor<'doc> {
     ///    (e.g. an InDesign figure that holds the page's labels and body text, as
     ///    on placed floor-plan / marketing spreads) and must be kept.
     ///
-    /// The scan reads the page stream only. `process_xobject` scans each form's
-    /// own stream too, and judges the form's placed text against all the text the
-    /// page paints outside any placed scope (`page_outside_text`). Without that
-    /// text, a duplicate overlay in a form would have nothing to repeat and would
-    /// be kept. ~keep
+    /// The scan reads the page stream only. A form with its own `/PlacedPDF` tag
+    /// holds its placed text instead, judged by `settle_placed_holds`. ~keep
     pub(super) fn placed_pdf_text_dominates(content_stream: &[u8]) -> bool {
-        Self::scan_placed_text(content_stream)
-            .is_some_and(|scan| Self::placed_scan_dominates(&scan.placed, &scan.other))
-    }
-
-    /// Whether a content stream mentions the `/PlacedPDF` tag at all.
-    pub(super) fn has_placed_tag(content_stream: &[u8]) -> bool {
-        content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF")
-    }
-
-    /// Bucket the text-show operands of one content stream by `/PlacedPDF` scope.
-    /// Returns `None` when the stream carries no placed tag or does not parse.
-    pub(super) fn scan_placed_text(content_stream: &[u8]) -> Option<PlacedScan> {
-        // Gate: only streams that actually carry the InDesign tag pay for a parse. ~keep
+        // Gate: only pages that actually carry the InDesign tag pay for a parse. ~keep
         if !Self::has_placed_tag(content_stream) {
-            return None;
+            return false;
         }
-        Self::scan_text_buckets(content_stream, false, |_, _| {})
-    }
-
-    /// The bucketing of `scan_placed_text`, without the tag gate. `placed` says
-    /// whether the stream starts inside a placed scope. `on_form` gets the name of
-    /// each form the stream paints, and whether it is painted inside a placed scope.
-    fn scan_text_buckets(
-        content_stream: &[u8],
-        placed: bool,
-        mut on_form: impl FnMut(&str, bool),
-    ) -> Option<PlacedScan> {
-        let operators = parse_content_stream(content_stream).ok()?;
+        let Ok(operators) = parse_content_stream(content_stream) else {
+            return false;
+        };
 
         let mut placed_stack: Vec<bool> = Vec::new();
-        let mut scan = PlacedScan::default();
-        let inside = |stack: &[bool]| placed || stack.iter().any(|&p| p);
+        let mut placed_chars: usize = 0;
+        let mut other_chars: usize = 0;
+        let mut placed_txt: Vec<u8> = Vec::new();
+        let mut other_txt: Vec<u8> = Vec::new();
+        let inside = |stack: &[bool]| stack.iter().any(|&p| p);
         for op in &operators {
             match op {
                 Operator::BeginMarkedContent { tag } | Operator::BeginMarkedContentDict { tag, .. } => {
@@ -231,40 +228,49 @@ impl<'doc> TextExtractor<'doc> {
                 Operator::EndMarkedContent => {
                     placed_stack.pop();
                 }
-                Operator::Tj { text } | Operator::Quote { text } | Operator::DoubleQuote { text, .. } => {
-                    let bucket = if inside(&placed_stack) {
-                        &mut scan.placed
+                Operator::Tj { text } | Operator::Quote { text } => {
+                    let (chars, txt) = if inside(&placed_stack) {
+                        (&mut placed_chars, &mut placed_txt)
                     } else {
-                        &mut scan.other
+                        (&mut other_chars, &mut other_txt)
                     };
-                    bucket.chars += text.len();
-                    bucket.txt.extend_from_slice(text);
-                    bucket.txt.push(b' ');
+                    *chars += text.len();
+                    txt.extend_from_slice(text);
+                    txt.push(b' ');
+                }
+                Operator::DoubleQuote { text, .. } => {
+                    let (chars, txt) = if inside(&placed_stack) {
+                        (&mut placed_chars, &mut placed_txt)
+                    } else {
+                        (&mut other_chars, &mut other_txt)
+                    };
+                    *chars += text.len();
+                    txt.extend_from_slice(text);
+                    txt.push(b' ');
                 }
                 Operator::TJ { array } => {
-                    let bucket = if inside(&placed_stack) {
-                        &mut scan.placed
+                    let (chars, txt) = if inside(&placed_stack) {
+                        (&mut placed_chars, &mut placed_txt)
                     } else {
-                        &mut scan.other
+                        (&mut other_chars, &mut other_txt)
                     };
                     for e in array {
                         if let TextElement::String(s) = e {
-                            bucket.chars += s.len();
-                            bucket.txt.extend_from_slice(s);
+                            *chars += s.len();
+                            txt.extend_from_slice(s);
                         }
                     }
-                    bucket.txt.push(b' ');
+                    txt.push(b' ');
                 }
-                Operator::Do { name } => on_form(name, inside(&placed_stack)),
                 _ => {}
             }
         }
-        Some(scan)
+        Self::placed_text_kept(placed_chars, &placed_txt, other_chars, &other_txt)
     }
 
-    /// Apply the keep/suppress gates to placed text against the non-placed text
-    /// it is judged with.
-    pub(super) fn placed_scan_dominates(placed: &PlacedBucket, other: &PlacedBucket) -> bool {
+    /// The keep/suppress gates of `placed_pdf_text_dominates`, for placed text
+    /// judged against the non-placed text beside it.
+    fn placed_text_kept(placed_chars: usize, placed_txt: &[u8], other_chars: usize, other_txt: &[u8]) -> bool {
         // A substantial placed body; below this a placed region is treated as a
         // decorative figure, not the page's logical content. ~keep
         const MIN_PLACED_CHARS: usize = 800;
@@ -272,8 +278,6 @@ impl<'doc> TextExtractor<'doc> {
         // majority is also present in the non-placed text (a duplicate overlay). ~keep
         const MAX_DUP_FRACTION: f64 = 0.5;
 
-        let placed_chars = placed.chars;
-        let other_chars = other.chars;
         if placed_chars < MIN_PLACED_CHARS {
             return false;
         }
@@ -284,7 +288,7 @@ impl<'doc> TextExtractor<'doc> {
         // or larger. Keep it unless a majority of the placed words also appear
         // outside (a duplicate overlay). Tokenising here (behind gates 1 and 2)
         // keeps the common single-column path allocation-free. ~keep
-        Self::text_duplication_fraction(&placed.txt, &other.txt) < MAX_DUP_FRACTION
+        Self::text_duplication_fraction(placed_txt, other_txt) < MAX_DUP_FRACTION
     }
 
     /// Fraction of alphanumeric word tokens in `a` (counting repeats) that also

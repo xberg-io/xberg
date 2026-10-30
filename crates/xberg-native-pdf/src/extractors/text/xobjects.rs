@@ -24,8 +24,26 @@ impl<'doc> TextExtractor<'doc> {
             None => return Ok(None),
         };
 
-        let Some(xobject_obj) = Self::xobject_dict_of(doc, &resources)? else {
-            return Ok(None);
+        let resources_obj = if let Some(res_ref) = resources.as_reference() {
+            doc.load_object(res_ref)?
+        } else {
+            resources
+        };
+
+        let resources_dict = match resources_obj.as_dict() {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let xobject_entry = match resources_dict.get("XObject") {
+            Some(xobj) => xobj.clone(),
+            None => return Ok(None),
+        };
+
+        let xobject_obj = if let Some(xobj_ref) = xobject_entry.as_reference() {
+            doc.load_object(xobj_ref)?
+        } else {
+            xobject_entry
         };
 
         let xobject_dict = match xobject_obj.as_dict() {
@@ -39,50 +57,6 @@ impl<'doc> TextExtractor<'doc> {
         }
 
         Ok(self.cached_xobject_refs.get(name).copied().flatten())
-    }
-
-    /// The `/XObject` dictionary of a resources object, with references resolved.
-    pub(super) fn xobject_dict_of(doc: &crate::document::PdfDocument, resources: &Object) -> Result<Option<Object>> {
-        let resources_obj = if let Some(res_ref) = resources.as_reference() {
-            doc.load_object(res_ref)?
-        } else {
-            resources.clone()
-        };
-        let Some(xobject_entry) = resources_obj.as_dict().and_then(|d| d.get("XObject")).cloned() else {
-            return Ok(None);
-        };
-        let xobject_obj = if let Some(xobj_ref) = xobject_entry.as_reference() {
-            doc.load_object(xobj_ref)?
-        } else {
-            xobject_entry
-        };
-        Ok(xobject_obj.as_dict().is_some().then_some(xobject_obj))
-    }
-
-    /// The decoded stream of a Form XObject, through the document's stream cache.
-    pub(super) fn decode_form_stream(
-        doc: &crate::document::PdfDocument,
-        xobject: &Object,
-        xobject_ref: ObjectRef,
-    ) -> Result<Vec<u8>> {
-        let cached_stream = { doc.xobject_stream_cache.lock().unwrap().get(&xobject_ref).cloned() };
-        if let Some(cached) = cached_stream {
-            return Ok(cached.as_ref().clone());
-        }
-        let data = doc.decode_stream_with_encryption(xobject, xobject_ref)?;
-        const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
-        let current = doc
-            .xobject_stream_cache_bytes
-            .load(std::sync::atomic::Ordering::Relaxed);
-        if current + data.len() <= MAX_STREAM_CACHE_BYTES {
-            doc.xobject_stream_cache_bytes
-                .store(current + data.len(), std::sync::atomic::Ordering::Relaxed);
-            doc.xobject_stream_cache
-                .lock()
-                .unwrap()
-                .insert(xobject_ref, std::sync::Arc::new(data.clone()));
-        }
-        Ok(data)
     }
 
     /// Quantize a CTM to 6 millipoint-rounded i64 values so it can be used as
@@ -232,7 +206,9 @@ impl<'doc> TextExtractor<'doc> {
         // `ctm_key` was already computed above for the `processed_xobjects` guard. ~keep
         let spans_cache_key = (xobject_ref, ctm_key);
         let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
-        if self.extract_spans && !has_filters {
+        // A form painted while a group holds placed text runs again: cached spans
+        // carry no hold group. ~keep
+        if self.extract_spans && !has_filters && self.placed_hold == 0 {
             let cached_spans = { doc.xobject_spans_cache.lock().unwrap().get(&spans_cache_key).cloned() };
             if let Some(cached_spans) = cached_spans {
                 if let Some(spans) = cached_spans {
@@ -290,15 +266,34 @@ impl<'doc> TextExtractor<'doc> {
                 }
 
                 self.xobject_decode_count += 1;
-                let stream_data = match Self::decode_form_stream(doc, &xobject, xobject_ref) {
-                    Ok(data) => data,
-                    Err(error) => {
-                        tracing::warn!(target: LOG_TARGET,
-                            error_code = error.telemetry_code(),
-                            error_offset = ?error.telemetry_offset(),
-                            "failed to decode Form XObject stream; skipping"
-                        );
-                        return Ok(());
+                let cached_stream = { doc.xobject_stream_cache.lock().unwrap().get(&xobject_ref).cloned() };
+                let stream_data = if let Some(cached) = cached_stream {
+                    cached.as_ref().clone()
+                } else {
+                    match doc.decode_stream_with_encryption(&xobject, xobject_ref) {
+                        Ok(data) => {
+                            const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
+                            let current = doc
+                                .xobject_stream_cache_bytes
+                                .load(std::sync::atomic::Ordering::Relaxed);
+                            if current + data.len() <= MAX_STREAM_CACHE_BYTES {
+                                doc.xobject_stream_cache_bytes
+                                    .store(current + data.len(), std::sync::atomic::Ordering::Relaxed);
+                                doc.xobject_stream_cache
+                                    .lock()
+                                    .unwrap()
+                                    .insert(xobject_ref, std::sync::Arc::new(data.clone()));
+                            }
+                            data
+                        }
+                        Err(error) => {
+                            tracing::warn!(target: LOG_TARGET,
+                                error_code = error.telemetry_code(),
+                                error_offset = ?error.telemetry_offset(),
+                                "failed to decode Form XObject stream; skipping"
+                            );
+                            return Ok(());
+                        }
                     }
                 };
 
@@ -389,38 +384,26 @@ impl<'doc> TextExtractor<'doc> {
                 self.mcid_scope_stack
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
-                // The page verdict reads the page stream only, which does not hold
-                // the text of the forms it paints. A form that carries its own
-                // /PlacedPDF scope gets its own verdict, counted against all the text
-                // the page paints outside any placed scope, so a body placed inside a
-                // form is not dropped and a duplicate overlay in a form is still
-                // suppressed. A page that already keeps /PlacedPDF text keeps it
-                // inside the form. ~keep
-                let saved_placed_pdf_keep = self.placed_pdf_keep;
-                let form_scan = if saved_placed_pdf_keep {
-                    None
-                } else {
-                    Self::scan_placed_text(&stream_data)
-                };
-                // A form with the tag is kept or dropped by the verdict of the page that
-                // paints it, whether it judges itself or follows the page. ~keep
-                let verdicts_before = self.form_placed_verdicts;
-                if Self::has_placed_tag(&stream_data) {
-                    self.form_placed_verdicts += 1;
+                // The page verdict reads the page stream only. When it drops placed
+                // text, a form with its own /PlacedPDF tag holds its placed text in a
+                // group instead, and the page judges the group once it is done. Forms
+                // the group paints join it. ~keep
+                let has_placed_tag = Self::has_placed_tag(&stream_data);
+                let tags_before = self.form_placed_tags;
+                if has_placed_tag {
+                    self.form_placed_tags += 1;
                 }
-                let form_scan_made = form_scan.is_some();
-                if let Some(scan) = form_scan {
-                    self.form_verdict_depth += 1;
-                    let keep = Self::placed_scan_dominates(&scan.placed, self.page_outside_text());
-                    self.placed_pdf_keep = keep;
+                let opens_hold = has_placed_tag && !self.placed_pdf_keep && self.placed_hold == 0;
+                if opens_hold {
+                    self.placed_hold_groups += 1;
+                    self.placed_hold = self.placed_hold_groups;
                 }
 
                 self.xobject_depth += 1;
                 let parse_result = self.run_content_stream(&stream_data);
                 self.xobject_depth -= 1;
-                self.placed_pdf_keep = saved_placed_pdf_keep;
-                if form_scan_made {
-                    self.form_verdict_depth -= 1;
+                if opens_hold {
+                    self.placed_hold = 0;
                 }
                 // Pop the Form XObject scope pushed before the
                 // content-stream walk. Cleared regardless of parse
@@ -513,15 +496,20 @@ impl<'doc> TextExtractor<'doc> {
                                 let is_page_wrapper = page_area.is_some_and(|pa| clip_area >= 0.6 * pa);
                                 if !is_page_wrapper {
                                     if spans_stray {
-                                        let added = self.spans.split_off(spans_before);
-                                        let kept: Vec<TextSpan> = added.into_iter().filter(|s| inside(s)).collect();
-                                        self.spans.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.spans,
+                                            &mut self.span_holds,
+                                            spans_before,
+                                            inside,
+                                        );
                                     }
                                     if chars_stray {
-                                        let added = self.chars.split_off(chars_before);
-                                        let kept: Vec<TextChar> =
-                                            added.into_iter().filter(|c| inside_bbox(&c.bbox)).collect();
-                                        self.chars.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.chars,
+                                            &mut self.char_holds,
+                                            chars_before,
+                                            |c| inside_bbox(&c.bbox),
+                                        );
                                     }
                                 }
                             }
@@ -540,13 +528,13 @@ impl<'doc> TextExtractor<'doc> {
                 // We still require `has_own_resources` so that font lookups are
                 // self-contained; XObjects that inherit page-level fonts would
                 // produce spans whose glyph mappings depend on caller context. ~keep
-                // A form whose run held a /PlacedPDF tag, or ran inside a form that made a verdict, is not
-                // cached: another page would reuse spans kept or dropped by this page's verdict. ~keep
+                // A form whose run held a /PlacedPDF tag, or ran in a hold group, is not
+                // cached: another page would reuse text judged by this page. ~keep
                 if has_own_resources
                     && self.extract_spans
                     && !has_filters
-                    && self.form_placed_verdicts == verdicts_before
-                    && self.form_verdict_depth == 0
+                    && self.form_placed_tags == tags_before
+                    && self.placed_hold == 0
                 {
                     let new_spans = if self.spans.len() > spans_before {
                         Some(self.spans[spans_before..].to_vec())

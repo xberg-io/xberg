@@ -100,9 +100,7 @@ impl<'doc> TextExtractor<'doc> {
         };
         self.span_sequence_counter += 1;
 
-        if !self.is_content_suppressed() {
-            self.spans.push(span);
-        }
+        self.push_span(span);
         Ok(())
     }
 
