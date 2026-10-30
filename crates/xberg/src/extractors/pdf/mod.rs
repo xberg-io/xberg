@@ -2835,6 +2835,14 @@ impl PdfExtractor {
             &mut ocr_fallback_warnings,
         );
 
+        // A page that goes to OCR on its own reads with the configured languages plus the
+        // language of the document's script. An explicit `force_ocr` or `force_ocr_pages`
+        // request keeps the configured languages: it is not re-decided here (GH#2300). ~keep
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let script_language_config = ocr::config_with_text_layer_language(config, &native_text);
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let auto_ocr_config = script_language_config.as_ref().unwrap_or(config);
+
         // Only formula recognition and VLM regions read the rasters on the native path.
         #[cfg(all(
             feature = "pdf",
@@ -3009,7 +3017,7 @@ impl PdfExtractor {
                             .unwrap_or(&[]),
                     ),
                     content,
-                    config,
+                    auto_ocr_config,
                     layout_pages,
                 )
                 .await
@@ -3214,7 +3222,7 @@ impl PdfExtractor {
                     // this now matches it. ~keep
                     match run_ocr_with_layout_pages(
                         content,
-                        config,
+                        auto_ocr_config,
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
@@ -3308,7 +3316,7 @@ impl PdfExtractor {
                                     .unwrap_or(&[]),
                             ),
                             content,
-                            config,
+                            auto_ocr_config,
                             layout_pages,
                         )
                         .await

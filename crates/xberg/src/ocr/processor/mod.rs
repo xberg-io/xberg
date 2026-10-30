@@ -9,6 +9,8 @@ mod api_pool;
 mod config;
 mod dictionary;
 mod execution;
+#[cfg(not(target_arch = "wasm32"))]
+mod script_detection;
 #[cfg(test)]
 mod secondary_dictionary_benchmark_tests;
 pub(crate) mod validation;
@@ -16,6 +18,8 @@ pub(crate) mod validation;
 pub(crate) use api_pool::tesseract_api_capacity;
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) use execution::{light_page_foreground_mode, lower_mode_mask_has_text_structure};
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use script_detection::page_is_han_script;
 
 use crate::ocr::cache::OcrCache;
 use crate::ocr::error::OcrError;

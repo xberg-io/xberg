@@ -191,6 +191,19 @@ pub mod ocr;
 /// OCR-consuming feature domain. Deliberately ungated — see the module docs.
 pub(crate) mod ocr_metadata_keys;
 
+// Same union as the candle `ocr_result` module that reads the language table, plus the
+// `ocr-pipeline` feature that chooses a Tesseract language from a script. ~keep
+#[cfg(any(
+    feature = "ocr-pipeline",
+    feature = "candle-trocr",
+    feature = "candle-paddleocr-vl",
+    all(
+        not(target_arch = "wasm32"),
+        any(feature = "candle-glm-ocr", feature = "candle-deepseek-ocr")
+    )
+))]
+pub(crate) mod ocr_script;
+
 pub mod doctor;
 
 #[cfg(any(

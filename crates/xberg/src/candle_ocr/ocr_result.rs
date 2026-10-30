@@ -22,6 +22,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use regex::Regex;
 
 use crate::core::config::OcrConfig;
+use crate::ocr_script::{Script, scripts_for_language};
 use crate::types::{ExtractedDocument, FormatMetadata, Formula, Metadata, OcrMetadata, ProcessingWarning, Table};
 
 // Taken from the ungated `crate::ocr_metadata_keys` rather than `crate::ocr`, which is
@@ -272,24 +273,6 @@ const IMPLAUSIBLE_SCRIPT_MIN_FRACTION: f64 = 0.5;
 /// plain-text OCR task (GH#1676).
 const LATEX_LINE_MIN_COMMANDS: usize = 2;
 
-/// A writing system a classified letter can belong to, for the script-plausibility check
-/// in [`filter_implausible_lines`] (GH#1676). Deliberately coarse-grained (code-point
-/// ranges, not a full script database) — enough to catch a CJK/Cyrillic/etc. run in an
-/// English-only document without pulling in a new crate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Script {
-    Latin,
-    Cyrillic,
-    Greek,
-    Arabic,
-    Hebrew,
-    Devanagari,
-    Thai,
-    Han,
-    Kana,
-    Hangul,
-}
-
 /// Classify an already-known-alphabetic character into a [`Script`] by code-point range.
 ///
 /// Returns `None` for a letter outside every range covered here (e.g. Armenian,
@@ -311,32 +294,6 @@ fn classify_char(ch: char) -> Option<Script> {
     }
 }
 
-/// Map a configured OCR language code (ISO 639-1, ISO 639-3, or a Tesseract code) to the
-/// script(s) it is written in, for the script-plausibility allowlist in
-/// [`filter_implausible_lines`] (GH#1676).
-///
-/// Returns `None` for a code this table does not recognize, which the caller treats as
-/// "cannot judge script plausibility for this language list" and disables rule (a)
-/// entirely, rather than risk false positives against a language it cannot map.
-fn script_for_language(lang: &str) -> Option<&'static [Script]> {
-    match lang.trim().to_ascii_lowercase().as_str() {
-        "en" | "eng" | "de" | "deu" | "ger" | "fr" | "fra" | "fre" | "es" | "spa" | "it" | "ita" | "pt" | "por"
-        | "nl" | "nld" | "dut" | "pl" | "pol" | "sv" | "swe" | "tr" | "tur" | "vi" | "vie" | "id" | "ind" => {
-            Some(&[Script::Latin])
-        }
-        "ru" | "rus" | "uk" | "ukr" | "bg" | "bul" | "sr" | "srp" => Some(&[Script::Cyrillic]),
-        "el" | "ell" | "gre" => Some(&[Script::Greek]),
-        "ar" | "ara" | "fa" | "fas" | "per" | "ur" | "urd" => Some(&[Script::Arabic]),
-        "he" | "heb" | "yi" | "yid" => Some(&[Script::Hebrew]),
-        "hi" | "hin" | "mr" | "mar" | "ne" | "nep" => Some(&[Script::Devanagari]),
-        "th" | "tha" => Some(&[Script::Thai]),
-        "zh" | "zho" | "chi" | "chi_sim" | "chi_tra" => Some(&[Script::Han]),
-        "ja" | "jpn" => Some(&[Script::Han, Script::Kana]),
-        "ko" | "kor" => Some(&[Script::Hangul, Script::Han]),
-        _ => None,
-    }
-}
-
 /// Build the script allowlist for [`filter_implausible_lines`] from the configured OCR
 /// language list, or `None` when any configured language is unrecognized (which disables
 /// rule (a) entirely rather than risk false positives against a language it cannot map).
@@ -352,7 +309,7 @@ fn script_for_language(lang: &str) -> Option<&'static [Script]> {
 fn allowed_scripts(config: &OcrConfig) -> Option<Vec<Script>> {
     let mut scripts = vec![Script::Latin];
     for lang in effective_languages(config) {
-        let scripts_for_lang = script_for_language(&lang)?;
+        let scripts_for_lang = scripts_for_language(&lang)?;
         for script in scripts_for_lang {
             if !scripts.contains(script) {
                 scripts.push(*script);
