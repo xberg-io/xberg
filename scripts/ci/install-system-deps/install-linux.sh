@@ -92,6 +92,41 @@ else
   fi
 fi
 
+# The Han second pass test (gh2300_ocr_han_second_pass) reads Chinese. It needs chi_sim next to
+# the packaged models. Pin the file by size and checksum, as the Windows provisioning does. ~keep
+CHI_SIM_URL="https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/chi_sim.traineddata"
+CHI_SIM_SHA256=a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730
+CHI_SIM_SIZE=2469156
+tessdata_dir=""
+for candidate in /usr/share/tesseract-ocr/5/tessdata /usr/share/tesseract-ocr/tessdata /usr/share/tessdata; do
+  if [ -f "$candidate/eng.traineddata" ]; then
+    tessdata_dir="$candidate"
+    break
+  fi
+done
+if [ -z "$tessdata_dir" ]; then
+  echo "::error::No tessdata directory with eng.traineddata found; cannot provision chi_sim."
+  exit 1
+fi
+chi_sim_ok() {
+  [ -f "$tessdata_dir/chi_sim.traineddata" ] &&
+    [ "$(wc -c <"$tessdata_dir/chi_sim.traineddata")" -eq "$CHI_SIM_SIZE" ] &&
+    printf '%s  %s\n' "$CHI_SIM_SHA256" "$tessdata_dir/chi_sim.traineddata" | sha256sum -c - >/dev/null 2>&1
+}
+if chi_sim_ok; then
+  echo "✓ chi_sim.traineddata already provisioned"
+else
+  chi_sim_tmp="$(mktemp)"
+  retry_with_backoff_timeout 300 curl -fsSL -o "$chi_sim_tmp" "$CHI_SIM_URL"
+  sudo install -m 0644 "$chi_sim_tmp" "$tessdata_dir/chi_sim.traineddata"
+  rm -f "$chi_sim_tmp"
+  chi_sim_ok || {
+    echo "::error::chi_sim.traineddata size or checksum mismatch"
+    exit 1
+  }
+  echo "✓ chi_sim.traineddata provisioned in $tessdata_dir"
+fi
+
 # Install PHP dev headers only when no PHP is already active. The php-extension
 # build matrix runs shivammathur/setup-php first (matrix.php), putting phpX.Y and
 # its -dev headers on PATH; apt's unversioned php-cli/php-dev pull Ubuntu Noble's
