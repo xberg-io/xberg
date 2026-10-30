@@ -131,6 +131,7 @@ fn should_capture_two_production_v3_forwards() {
         .expect("valid input manifest");
     validate_inputs(&inputs);
     fs::create_dir(&output).expect("new capture output");
+    let producer = preserve_producer(&output);
     let acceleration = AccelerationConfig {
         provider: ExecutionProviderType::Cpu,
         ..Default::default()
@@ -161,8 +162,10 @@ fn should_capture_two_production_v3_forwards() {
         "backend": "production default ORT", "cpu_threads": 1, "runtime": runtime, "profile": profile,
         "model_sha256": MODEL_SHA256, "source_inputs_sha256": sha256(&root.join("inputs.json")),
         "comparison_contract_sha256": sha256(&root.join("comparison-contract-v1.json")),
-        "executable_sha256": sha256(&std::env::current_exe().expect("test executable")),
-        "sources": source_witness(), "real_forward_passes": rows.len(),
+        "executable_sha256": producer["executable"]["sha256"],
+        "executable_file": producer["executable"]["file"],
+        "producer_manifest_file": "producer/manifest.json",
+        "sources": producer["sources"], "real_forward_passes": rows.len(),
         "input_tensors": rows.len() * TENSORS_PER_FORWARD,
         "output_tensors": rows.len() * TENSORS_PER_FORWARD, "rows": rows});
     fs::write(
@@ -293,7 +296,7 @@ fn profile_witness(output: &Path) -> Value {
         "real_model_runs": forwards, "cpu_kernel_events": providers.len(), "effective_provider": "CPUExecutionProvider"})
 }
 
-fn source_witness() -> Vec<Value> {
+fn source_witness(output: &Path) -> Vec<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     [
         "Cargo.toml",
@@ -315,8 +318,64 @@ fn source_witness() -> Vec<Value> {
         "src/layout/models/pp_doclayout_v3/preprocessing.rs",
     ]
     .iter()
-    .map(|path| json!({"path": path, "sha256": sha256(&root.join(path))}))
+    .enumerate()
+    .map(|(index, path)| {
+        let name = Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("source filename");
+        let file = format!("producer/sources/{index:02}-{name}");
+        let mut artifact = preserve_artifact(&root.join(path), output, &file);
+        artifact["path"] = json!(path);
+        artifact
+    })
     .collect()
+}
+
+fn preserve_producer(output: &Path) -> Value {
+    fs::create_dir(output.join("producer")).expect("new producer artifact directory");
+    fs::create_dir(output.join("producer/sources")).expect("new source artifact directory");
+    let executable = preserve_artifact(
+        &std::env::current_exe().expect("test executable"),
+        output,
+        "producer/executable",
+    );
+    let sources = source_witness(output);
+    assert_eq!(sources.len(), 17, "all producer source artifacts preserved");
+    let producer = json!({"executable": executable, "sources": sources});
+    fs::write(
+        output.join("producer/manifest.json"),
+        serde_json::to_vec_pretty(&producer).expect("producer JSON"),
+    )
+    .expect("producer manifest before model construction");
+    producer
+}
+
+fn preserve_artifact(source: &Path, output: &Path, relative: &str) -> Value {
+    let relative_path = Path::new(relative);
+    assert!(
+        relative_path
+            .components()
+            .all(|part| matches!(part, std::path::Component::Normal(_))),
+        "producer destination must contain only normal relative components"
+    );
+    assert!(!relative.is_empty(), "producer destination must not be empty");
+    let original_hash = sha256(source);
+    let destination = output.join(relative_path);
+    let mut original = fs::File::open(source).expect("original producer artifact");
+    let mut copied = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&destination)
+        .expect("new producer artifact destination");
+    let bytes = std::io::copy(&mut original, &mut copied).expect("complete producer artifact copy");
+    copied.sync_all().expect("persisted producer artifact copy");
+    assert_artifact_hash(&destination, &original_hash, "copied producer artifact identity");
+    assert_artifact_hash(source, &original_hash, "producer artifact unchanged during copy");
+    let mut permissions = original.metadata().expect("producer permissions").permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&destination, permissions).expect("read-only preserved producer artifact");
+    json!({"path": source, "file": relative, "sha256": original_hash, "bytes": bytes})
 }
 
 #[test]
@@ -367,4 +426,44 @@ fn should_reject_changed_png_hash_before_model_construction() {
         "c6ebaf5beb3f43640f8834ec05f20e952af6f7042761bf819b183adf4d1d6add",
         "pinned PNG identity",
     );
+}
+
+#[test]
+fn should_preserve_producer_bytes_after_original_changes() {
+    let root = tempfile::tempdir().expect("producer copy directory");
+    let source = root.path().join("original.rs");
+    fs::write(&source, b"original source").expect("original bytes");
+    let artifact = preserve_artifact(&source, root.path(), "copy.rs");
+    fs::write(&source, b"later source").expect("changed original bytes");
+    assert_eq!(artifact["file"], "copy.rs");
+    assert_eq!(artifact["sha256"], bytes_sha256(b"original source"));
+    assert_eq!(
+        fs::read(root.path().join("copy.rs")).expect("copied bytes"),
+        b"original source"
+    );
+    assert!(
+        fs::metadata(root.path().join("copy.rs"))
+            .expect("copy metadata")
+            .permissions()
+            .readonly()
+    );
+}
+
+#[test]
+#[should_panic(expected = "copied producer artifact identity")]
+fn should_reject_changed_preserved_producer_bytes() {
+    let artifact = tempfile::NamedTempFile::new().expect("copied producer artifact");
+    fs::write(artifact.path(), b"changed producer bytes").expect("changed copy");
+    assert_artifact_hash(
+        artifact.path(),
+        &bytes_sha256(b"original source"),
+        "copied producer artifact identity",
+    );
+}
+
+#[test]
+#[should_panic(expected = "producer destination must contain only normal relative components")]
+fn should_reject_traversal_in_producer_destination() {
+    let root = tempfile::tempdir().expect("producer copy directory");
+    let _ = preserve_artifact(Path::new("unused"), root.path(), "../escaped");
 }
