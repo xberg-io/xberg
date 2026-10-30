@@ -334,6 +334,33 @@ fn test_form_painted_inside_a_placed_scope_is_not_outside_text() {
     );
 }
 
+/// The placed copy sits in a form that then paints the normal body through a form
+/// named only in its own resources. The walk finds the body through those resources,
+/// so the copy is judged a duplicate.
+#[test]
+fn test_body_in_a_form_named_only_by_the_placed_form_counts_as_outside_text() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Nested paragraph number {i} about valley farms"))
+        .collect();
+    let outer = format!(
+        "/PlacedPDF /MC0 BDC\n{}EMC\n/Fm1 Do\n",
+        text_lines_stream(&lines, 29, 771)
+    );
+    let inner = text_lines_stream(&lines, 20, 780);
+    let page = "/Fm0 Do\n".to_string();
+    let pdf = build_two_pages_with_forms_pdf(&page, "", &outer, Some(&inner));
+    // Rename the page's entry for the inner form; the outer form keeps its own. ~keep
+    let text = String::from_utf8_lossy(&pdf).replace("/Fm0 6 0 R /Fm1 9 0 R", "/Fm0 6 0 R /Fx1 9 0 R");
+    let doc = PdfDocument::from_bytes(text.into_bytes()).expect("parse pdf");
+
+    let first = doc.extract_text(0).unwrap();
+    assert_eq!(
+        first.matches("Nested paragraph number 7 ").count(),
+        1,
+        "the placed copy was not judged against the body of its own nested form: {first:?}"
+    );
+}
+
 /// Page 1 holds a copy of the body of a form with a placed scope, so that form is a
 /// duplicate overlay there and its placed scope drops the text of the plain form it
 /// paints. Page 2 paints the plain form directly, so its text must stay. The empty

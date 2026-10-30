@@ -957,8 +957,9 @@ fn test_outside_text_of_one_page_is_not_carried_to_the_next_stream() {
     assert_eq!(extractor.page_outside_text().chars, 1);
 }
 
-/// A one-page PDF whose page paints form `Fm0`, and whose form paints itself.
-fn self_painting_form_pdf(form_stream: &str) -> Vec<u8> {
+/// A one-page PDF whose page paints XObject `Fm0`, with the given dictionary entries
+/// and stream for `Fm0`.
+fn one_xobject_pdf(xobject_entries: &str, form_stream: &str) -> Vec<u8> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offs = Vec::new();
     let page = "/Fm0 Do\n";
@@ -968,7 +969,7 @@ fn self_painting_form_pdf(form_stream: &str) -> Vec<u8> {
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /XObject << /Fm0 5 0 R >> >> >>".to_string(),
         format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
         format!(
-            "<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << /XObject << /Fm0 5 0 R >> >> /Length {} >>\nstream\n{form_stream}\nendstream",
+            "<< /Type /XObject {xobject_entries} /Length {} >>\nstream\n{form_stream}\nendstream",
             form_stream.len()
         ),
     ];
@@ -985,9 +986,10 @@ fn self_painting_form_pdf(form_stream: &str) -> Vec<u8> {
     pdf
 }
 
-/// The outside text that the page walk collects from a form that paints itself.
-fn outside_chars_of_self_painting_form(form_stream: &str) -> usize {
-    let doc = crate::document::PdfDocument::from_bytes(self_painting_form_pdf(form_stream)).expect("parse pdf");
+/// The outside text that the page walk collects from a page that paints `Fm0`.
+fn outside_chars_of_xobject(xobject_entries: &str, form_stream: &str) -> usize {
+    let doc =
+        crate::document::PdfDocument::from_bytes(one_xobject_pdf(xobject_entries, form_stream)).expect("parse pdf");
     let page = doc.load_object(ObjectRef::new(3, 0)).expect("page");
     let resources = page
         .as_dict()
@@ -999,6 +1001,14 @@ fn outside_chars_of_self_painting_form(form_stream: &str) -> usize {
     extractor.set_resources(resources);
     extractor.begin_page_placed_scan(b"/Fm0 Do\n");
     extractor.page_outside_text().chars
+}
+
+/// A form that paints itself.
+fn outside_chars_of_self_painting_form(form_stream: &str) -> usize {
+    outside_chars_of_xobject(
+        "/Subtype /Form /BBox [0 0 600 800] /Resources << /XObject << /Fm0 5 0 R >> >>",
+        form_stream,
+    )
 }
 
 #[test]
@@ -1015,4 +1025,13 @@ fn test_outside_text_walk_stops_at_the_form_decode_limit() {
         outside_chars_of_self_painting_form("BT (ab) Tj ET\n/Fm0 Do\n/Fm0 Do\n"),
         1000
     );
+}
+
+#[test]
+fn test_outside_text_walk_does_not_read_an_image_as_a_content_stream() {
+    // The subtype sits past the bytes that the quick form check reads, so only
+    // the full dictionary shows that the XObject is an image. ~keep
+    let padding = "x".repeat(1100);
+    let entries = format!("/Pad ({padding}) /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8");
+    assert_eq!(outside_chars_of_xobject(&entries, "BT (ab) Tj ET\n"), 0);
 }
