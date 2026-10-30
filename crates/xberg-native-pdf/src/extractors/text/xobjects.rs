@@ -210,6 +210,11 @@ impl<'doc> TextExtractor<'doc> {
             let cached_spans = { doc.xobject_spans_cache.lock().unwrap().get(&spans_cache_key).cloned() };
             if let Some(cached_spans) = cached_spans {
                 if let Some(spans) = cached_spans {
+                    if self.xobject_depth == 0 {
+                        for span in &spans {
+                            self.form_outside_text.add_text(&span.text);
+                        }
+                    }
                     self.spans.extend(spans.iter().cloned());
                 }
                 return Ok(());
@@ -404,12 +409,20 @@ impl<'doc> TextExtractor<'doc> {
                 let form_scan_made = form_scan.is_some();
                 if let Some(scan) = form_scan {
                     self.form_verdict_depth += 1;
-                    self.placed_pdf_keep = Self::placed_scan_dominates(&scan, self.page_outside_text());
+                    let outside = self.outside_text_for_form();
+                    self.placed_pdf_keep = Self::placed_scan_dominates(&scan, &outside);
                 }
 
+                let top_form = self.xobject_depth == 0;
+                if top_form {
+                    self.top_form_spans_start = Some(spans_before);
+                }
                 self.xobject_depth += 1;
                 let parse_result = self.run_content_stream(&stream_data);
                 self.xobject_depth -= 1;
+                if top_form {
+                    self.top_form_spans_start = None;
+                }
                 self.placed_pdf_keep = saved_placed_pdf_keep;
                 if form_scan_made {
                     self.form_verdict_depth -= 1;
@@ -518,6 +531,13 @@ impl<'doc> TextExtractor<'doc> {
                                 }
                             }
                         }
+                    }
+                }
+
+                // The text of a form without a placed tag is outside text for the forms that follow.
+                if top_form && !Self::has_placed_tag(&stream_data) {
+                    for span in self.spans.iter().skip(spans_before) {
+                        self.form_outside_text.add_text(&span.text);
                     }
                 }
 

@@ -212,6 +212,49 @@ fn test_form_kept_under_a_page_verdict_is_not_reused_across_pages() {
     );
 }
 
+/// The page paints its normal body through a form, and then a shifted `/PlacedPDF`
+/// copy of that body through a second form. The page stream holds no text, so the
+/// text of the first form is the outside text that shows the second form is a copy.
+#[test]
+fn test_placed_form_copy_of_a_body_painted_by_a_sibling_form_is_suppressed() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Sibling paragraph number {i} about river locks"))
+        .collect();
+    let body = text_lines_stream(&lines, 20, 780);
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let page = "/Fm1 Do\n/Fm0 Do\n".to_string();
+    let doc =
+        PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &copy, Some(&body))).expect("parse pdf");
+
+    let first = doc.extract_text(0).unwrap();
+    assert_eq!(
+        first.matches("Sibling paragraph number 7 ").count(),
+        1,
+        "the placed copy next to a sibling form body was kept: {first:?}"
+    );
+}
+
+/// The normal body and the shifted `/PlacedPDF` copy sit in one enclosing form, and
+/// the copy is a form that the enclosing form paints after its body.
+#[test]
+fn test_placed_form_copy_of_a_body_painted_by_an_enclosing_form_is_suppressed() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Enclosing paragraph number {i} about canal gates"))
+        .collect();
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let enclosing = format!("{}/Fm1 Do\n", text_lines_stream(&lines, 20, 780));
+    let page = "/Fm0 Do\n".to_string();
+    let doc =
+        PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &enclosing, Some(&copy))).expect("parse pdf");
+
+    let first = doc.extract_text(0).unwrap();
+    assert_eq!(
+        first.matches("Enclosing paragraph number 7 ").count(),
+        1,
+        "the placed copy inside an enclosing form body was kept: {first:?}"
+    );
+}
+
 /// Page 1 paints a form with a placed body, and that form paints a second form
 /// whose text is kept under the first form's verdict. Page 2 paints the second
 /// form directly, next to its own copy of that text, so the form is a duplicate

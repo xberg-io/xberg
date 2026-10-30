@@ -8,10 +8,19 @@
 use super::*;
 
 /// Length and bytes of the text-show operands in one `/PlacedPDF` bucket.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(super) struct PlacedBucket {
     chars: usize,
     txt: Vec<u8>,
+}
+
+impl PlacedBucket {
+    /// Count one more run of text.
+    pub(super) fn add_text(&mut self, text: &str) {
+        self.chars = self.chars.saturating_add(text.len());
+        self.txt.extend_from_slice(text.as_bytes());
+        self.txt.push(b' ');
+    }
 }
 
 /// Text of one content stream, split into placed and non-placed buckets.
@@ -29,6 +38,25 @@ impl<'doc> TextExtractor<'doc> {
         self.page_content.clear();
         self.page_content.extend_from_slice(content_stream);
         self.page_outside_text = None;
+        self.form_outside_text = PlacedBucket::default();
+        self.top_form_spans_start = None;
+    }
+
+    /// Text that counts as outside a form's own `/PlacedPDF` scope: the text the
+    /// page stream paints outside any scope, the text of the forms the page has
+    /// already painted, and the text the enclosing form has painted so far. A page
+    /// that paints its body through a sibling or enclosing form holds that body
+    /// here and not in its own stream.
+    pub(super) fn outside_text_for_form(&mut self) -> PlacedBucket {
+        let mut outside = self.page_outside_text().clone();
+        outside.chars = outside.chars.saturating_add(self.form_outside_text.chars);
+        outside.txt.extend_from_slice(&self.form_outside_text.txt);
+        if let Some(start) = self.top_form_spans_start {
+            for span in self.spans.iter().skip(start) {
+                outside.add_text(&span.text);
+            }
+        }
+        outside
     }
 
     /// Text the page stream paints outside any placed scope. Parsed on the first

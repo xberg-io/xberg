@@ -2250,6 +2250,12 @@ pub struct TextExtractor<'doc> {
     page_outside_text: Option<marked_content::PlacedBucket>,
     /// The page content stream, for the lazy parse behind `page_outside_text`.
     page_content: Vec<u8>,
+    /// Text of the forms without a `/PlacedPDF` tag that the page has painted. It counts
+    /// as outside text for the verdict of a later form.
+    form_outside_text: marked_content::PlacedBucket,
+    /// Index of the first span of the form that the page stream paints now. The text
+    /// of that form so far counts as outside text for a form nested in it.
+    top_form_spans_start: Option<usize>,
     /// Count of forms that carry a `/PlacedPDF` tag. A form whose run moved this
     /// count depends on the verdict of the page, so its spans are not cached.
     form_placed_verdicts: u32,
