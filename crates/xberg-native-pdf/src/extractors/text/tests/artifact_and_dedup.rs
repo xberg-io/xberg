@@ -148,7 +148,7 @@ fn test_placed_pdf_kept_when_it_is_the_whole_page_body() {
     let body = "(This is the full article body typeset inside a placed PDF region) Tj\n".repeat(20);
     let stream = format!("/PlacedPDF BMC\nBT\n{body}ET\nEMC\nBT (Journal vol 1) Tj ET\n");
     assert!(
-        TextExtractor::placed_pdf_text_dominates(stream.as_bytes(), &Default::default()),
+        TextExtractor::placed_pdf_text_dominates(stream.as_bytes()),
         "whole-body /PlacedPDF must be KEPT (not suppressed)"
     );
 }
@@ -161,7 +161,7 @@ fn test_placed_pdf_suppressed_when_minority_overlay() {
     let outside = "(Real published paragraph of the article that lives outside the placed region) Tj\n".repeat(20);
     let stream = format!("BT\n{outside}ET\n/PlacedPDF BMC\nBT (draft galley) Tj ET\nEMC\n");
     assert!(
-        !TextExtractor::placed_pdf_text_dominates(stream.as_bytes(), &Default::default()),
+        !TextExtractor::placed_pdf_text_dominates(stream.as_bytes()),
         "minority-overlay /PlacedPDF must stay suppressed"
     );
 }
@@ -171,7 +171,7 @@ fn test_placed_pdf_coverage_noop_without_tag() {
     // No /PlacedPDF tag anywhere: the pre-scan must short-circuit to false
     // (keep the default suppression state; pay nothing for ordinary pages). ~keep
     let stream = b"BT (ordinary single column page of text) Tj ET\n";
-    assert!(!TextExtractor::placed_pdf_text_dominates(stream, &Default::default()));
+    assert!(!TextExtractor::placed_pdf_text_dominates(stream));
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn test_placed_pdf_kept_when_unique_body_amid_comparable_outside() {
     let outside = "(square footage residence penthouse skyline waterfront) Tj\n".repeat(35);
     let stream = format!("BT\n{outside}ET\n/PlacedPDF /MC0 BDC\nBT\n{placed}ET\nEMC\n");
     assert!(
-        TextExtractor::placed_pdf_text_dominates(stream.as_bytes(), &Default::default()),
+        TextExtractor::placed_pdf_text_dominates(stream.as_bytes()),
         "unique placed body amid comparable outside text must be KEPT"
     );
 }
@@ -200,7 +200,7 @@ fn test_placed_pdf_suppressed_when_large_duplicate_overlay() {
     let body = "(the published paragraph of the real article body content) Tj\n".repeat(30);
     let stream = format!("BT\n{body}ET\n/PlacedPDF /MC0 BDC\nBT\n{body}ET\nEMC\n");
     assert!(
-        !TextExtractor::placed_pdf_text_dominates(stream.as_bytes(), &Default::default()),
+        !TextExtractor::placed_pdf_text_dominates(stream.as_bytes()),
         "a full-size placed DUPLICATE of the outside text must stay suppressed"
     );
 }
@@ -948,14 +948,11 @@ fn test_detect_span_columns_empty() {
 #[test]
 fn test_outside_text_of_one_page_is_not_carried_to_the_next_stream() {
     // An extractor that runs a second stream starts from the outside text of that
-    // stream: the page text and the form text of the first stream are gone.
+    // stream: the outside text of the first stream is gone.
     let mut extractor = TextExtractor::new();
     extractor.begin_page_placed_scan(b"BT (first stream words) Tj ET\n/PlacedPDF BMC\nEMC\n");
-    extractor.form_outside_text.add_text("text of a form of the first stream");
-    extractor.top_form_spans_start = Some(3);
-    assert!(extractor.outside_text_for_form().chars > 40);
+    assert_eq!(extractor.page_outside_text().chars, 18);
 
     extractor.begin_page_placed_scan(b"BT (b) Tj ET\n/PlacedPDF BMC\nEMC\n");
-    assert_eq!(extractor.outside_text_for_form().chars, 1);
-    assert!(extractor.top_form_spans_start.is_none());
+    assert_eq!(extractor.page_outside_text().chars, 1);
 }

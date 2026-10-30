@@ -255,6 +255,61 @@ fn test_placed_form_copy_of_a_body_painted_by_an_enclosing_form_is_suppressed() 
     );
 }
 
+/// The page paints the shifted `/PlacedPDF` copy through a form first, and then the
+/// normal body through a sibling form. The copy is judged against the body that the
+/// page paints after it, so only one copy of the body comes back.
+#[test]
+fn test_placed_form_copy_painted_before_a_sibling_form_body_is_suppressed() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Sibling paragraph number {i} about river locks"))
+        .collect();
+    let body = text_lines_stream(&lines, 20, 780);
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let page = "/Fm0 Do\n/Fm1 Do\n".to_string();
+    let doc =
+        PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &copy, Some(&body))).expect("parse pdf");
+
+    let first = doc.extract_text(0).unwrap();
+    assert_eq!(
+        first.matches("Sibling paragraph number 7 ").count(),
+        1,
+        "the placed copy painted before a sibling form body was kept: {first:?}"
+    );
+    let chars: String = doc.extract_chars(0).unwrap().iter().map(|c| c.char).collect();
+    assert_eq!(
+        chars.matches("Sibling paragraph number 7 ").count(),
+        1,
+        "char layer kept the placed copy painted before a sibling form body: {chars:?}"
+    );
+}
+
+/// The enclosing form paints the shifted `/PlacedPDF` copy first, and then its
+/// normal body. The copy is judged against the body that follows it.
+#[test]
+fn test_placed_form_copy_painted_before_the_enclosing_form_body_is_suppressed() {
+    let lines: Vec<String> = (0..30)
+        .map(|i| format!("Enclosing paragraph number {i} about canal gates"))
+        .collect();
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 771));
+    let enclosing = format!("/Fm1 Do\n{}", text_lines_stream(&lines, 20, 780));
+    let page = "/Fm0 Do\n".to_string();
+    let doc =
+        PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page, "", &enclosing, Some(&copy))).expect("parse pdf");
+
+    let first = doc.extract_text(0).unwrap();
+    assert_eq!(
+        first.matches("Enclosing paragraph number 7 ").count(),
+        1,
+        "the placed copy painted before the enclosing form body was kept: {first:?}"
+    );
+    let chars: String = doc.extract_chars(0).unwrap().iter().map(|c| c.char).collect();
+    assert_eq!(
+        chars.matches("Enclosing paragraph number 7 ").count(),
+        1,
+        "char layer kept the placed copy painted before the enclosing form body: {chars:?}"
+    );
+}
+
 /// Page 1 holds a copy of the body of a form with a placed scope, so that form is a
 /// duplicate overlay there and its placed scope drops the text of the plain form it
 /// paints. Page 2 paints the plain form directly, so its text must stay. The empty
