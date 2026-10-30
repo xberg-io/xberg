@@ -25,7 +25,7 @@ impl HeldText {
             self.txt.push(b' ');
             self.line_y = Some(y);
         }
-        self.chars += text.chars().filter(|c| !c.is_whitespace()).count();
+        self.chars += text.chars().count();
         self.txt.extend_from_slice(text.as_bytes());
         if line_y.is_none() {
             self.txt.push(b' ');

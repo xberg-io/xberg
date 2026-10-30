@@ -384,16 +384,16 @@ impl<'doc> TextExtractor<'doc> {
                 self.mcid_scope_stack
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
-                // The page verdict reads the page stream only. When it drops placed
-                // text, a form with its own /PlacedPDF tag holds its placed text in a
-                // group instead, and the page judges the group once it is done. Forms
-                // the group paints join it. ~keep
+                // The page verdict reads the page stream only. A form with its own
+                // /PlacedPDF tag opens a hold group: when the page verdict drops placed
+                // text, the group holds it instead, and the page judges the group once
+                // it is done. Forms the group paints join it. ~keep
                 let has_placed_tag = Self::has_placed_tag(&stream_data);
                 let tags_before = self.form_placed_tags;
                 if has_placed_tag {
                     self.form_placed_tags += 1;
                 }
-                let opens_hold = has_placed_tag && !self.placed_pdf_keep && self.placed_hold == 0;
+                let opens_hold = has_placed_tag && self.placed_hold == 0;
                 if opens_hold {
                     self.placed_hold_groups += 1;
                     self.placed_hold = self.placed_hold_groups;
@@ -528,14 +528,10 @@ impl<'doc> TextExtractor<'doc> {
                 // We still require `has_own_resources` so that font lookups are
                 // self-contained; XObjects that inherit page-level fonts would
                 // produce spans whose glyph mappings depend on caller context. ~keep
-                // A form whose run held a /PlacedPDF tag, or ran in a hold group, is not
-                // cached: another page would reuse text judged by this page. ~keep
-                if has_own_resources
-                    && self.extract_spans
-                    && !has_filters
-                    && self.form_placed_tags == tags_before
-                    && self.placed_hold == 0
-                {
+                // A form whose run held a /PlacedPDF tag is not cached: a cache hit
+                // skips the hold group, so another page would reuse text judged by
+                // this page. ~keep
+                if has_own_resources && self.extract_spans && !has_filters && self.form_placed_tags == tags_before {
                     let new_spans = if self.spans.len() > spans_before {
                         Some(self.spans[spans_before..].to_vec())
                     } else {

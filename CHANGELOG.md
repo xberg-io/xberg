@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): A page whose body text sits in a form with a `/PlacedPDF` scope returns the body.** The native reader judged the `/PlacedPDF` tag from the page stream only, so a body inside a form was dropped and only the header and footer remained. It now judges each form on its own stream, against all the text the page paints outside any scope in its stream and its forms, in any paint order, so a duplicate overlay in a form is still dropped. A form that carries a `/PlacedPDF` scope is never reused for another page, because the page decides whether its text is kept. (GH#2310)
+- **(pdf): A page whose body text sits in a form with a `/PlacedPDF` scope returns the body.** The native reader judged the `/PlacedPDF` tag from the page stream only, so a body inside a form was dropped and only the header and footer remained. A form with its own `/PlacedPDF` scope now holds its placed text until the page is done. The reader then keeps it unless it repeats the text that the page shows outside any such scope, after clipping, in any paint order. A duplicate overlay in a form is still dropped. (GH#2310)
 - **(pdf): Cache Type 3 font-mapping provenance during text extraction.**
   Repeated glyphs retain their fallback markers without rescanning the font for every character. (#2307)
 - **(doc): Preserve superscript and subscript annotations in footnotes and comments.**

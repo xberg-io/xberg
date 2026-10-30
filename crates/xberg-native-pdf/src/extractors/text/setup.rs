@@ -216,7 +216,6 @@ impl<'doc> TextExtractor<'doc> {
     pub fn prepare_for_span_extraction(&mut self) {
         self.extract_spans = true;
         self.spans.clear();
-        self.span_holds.clear();
         self.span_sequence_counter = 0;
     }
 
@@ -238,6 +237,5 @@ impl<'doc> TextExtractor<'doc> {
     /// Clear all extracted characters.
     pub fn clear(&mut self) {
         self.chars.clear();
-        self.char_holds.clear();
     }
 }

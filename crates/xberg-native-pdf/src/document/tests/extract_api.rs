@@ -568,6 +568,86 @@ fn test_mutually_painting_forms_do_not_hide_a_later_sibling_body() {
     assert_eq!(body_line_counts(pdf, "Orchard"), (1, 1), "body copies (text, chars): {text:?}");
 }
 
+/// The page paints its body inside the box of a form. The form paints text outside
+/// its small `/BBox` first, which is clipped, and then a shifted `/PlacedPDF` copy
+/// of the body. The clip must not move the copy out of its hold group, so the copy
+/// is still dropped.
+#[test]
+fn test_placed_copy_after_clipped_text_in_the_same_form_is_dropped() {
+    let lines = body_lines("Canyon");
+    let stray: Vec<String> = (0..10).map(|i| format!("Stray galley line {i} beyond the box")).collect();
+    let page = format!("{}/Fe Do\n", text_lines_stream(&lines, 20, 380));
+    let enclosing = format!("{}/Fp Do\n", text_lines_stream(&stray, 20, 780));
+    let copy = format!("/PlacedPDF /MC0 BDC\n{}EMC\n", text_lines_stream(&lines, 29, 371));
+    let pdf = build_forms_pdf(&page, &[("Fe", "[0 0 400 400]", &enclosing), ("Fp", FULL_BBOX, &copy)]);
+    assert_eq!(body_line_counts(pdf, "Canyon"), (1, 1), "body copies (text, chars)");
+}
+
+/// A shifted `/PlacedPDF` copy paints the lines of the body in the opposite order.
+/// Each line is one word, so the text and the characters both judge the copy a
+/// duplicate only when they split the copy into its lines.
+#[test]
+fn test_placed_copy_in_another_line_order_is_dropped_in_text_and_chars() {
+    let words: Vec<String> = (0..80).map(|i| format!("Wordform{i:03}")).collect();
+    let (left, right) = words.split_at(40);
+    let body = format!("{}{}", text_lines_stream(left, 20, 780), text_lines_stream(right, 300, 780));
+    let mut reversed_left = left.to_vec();
+    reversed_left.reverse();
+    let mut reversed_right = right.to_vec();
+    reversed_right.reverse();
+    let copy = format!(
+        "/PlacedPDF /MC0 BDC\n{}{}EMC\n",
+        text_lines_stream(&reversed_left, 29, 771),
+        text_lines_stream(&reversed_right, 309, 771)
+    );
+    let page = format!("{body}/Fp Do\n");
+    let doc = PdfDocument::from_bytes(build_forms_pdf(&page, &[("Fp", FULL_BBOX, &copy)])).expect("parse pdf");
+    let text = doc.extract_text(0).unwrap();
+    let chars: String = doc.extract_chars(0).unwrap().iter().map(|c| c.char).collect();
+    assert_eq!(text.matches("Wordform007").count(), 1, "text kept the copy: {text:?}");
+    assert_eq!(chars.matches("Wordform007").count(), 1, "chars kept the copy: {chars:?}");
+}
+
+/// A form keeps its whole body inside one `/PlacedPDF` scope and first paints a
+/// second form with its own small `/PlacedPDF` label. The second form joins the
+/// hold group of the first, so the body after it is still held and kept.
+#[test]
+fn test_placed_form_keeps_its_body_after_a_nested_placed_form() {
+    let lines = body_lines("Glacier");
+    let outer = format!(
+        "/PlacedPDF /MC0 BDC\n/Fi Do\n{}EMC\n",
+        text_lines_stream(&lines, 20, 780)
+    );
+    let inner = format!(
+        "/PlacedPDF /MC1 BDC\n{}EMC\n",
+        text_lines_stream(&["Nested label".to_string()], 400, 60)
+    );
+    let pdf = build_forms_pdf("/Fo Do\n", &[("Fo", FULL_BBOX, &outer), ("Fi", FULL_BBOX, &inner)]);
+    assert_eq!(body_line_counts(pdf, "Glacier"), (1, 1), "body copies (text, chars)");
+}
+
+/// Page 1 paints a plain form, so its spans enter the cache. Page 2 paints its own
+/// body and a `/PlacedPDF` form whose placed scope paints that plain form, which
+/// holds a shifted copy of the body. The copy is held and dropped, not taken from
+/// the cache as kept text.
+#[test]
+fn test_cached_form_painted_in_a_placed_scope_is_still_held() {
+    let lines = body_lines("Lagoon");
+    let copy = text_lines_stream(&lines, 29, 771);
+    let placed = "/PlacedPDF /MC0 BDC\n/Fm1 Do\nEMC\n".to_string();
+    let page_a = "/Fm1 Do\n".to_string();
+    let page_b = format!("{}/Fm0 Do\n", text_lines_stream(&lines, 20, 780));
+    let doc = PdfDocument::from_bytes(build_two_pages_with_forms_pdf(&page_a, &page_b, &placed, Some(&copy)))
+        .expect("parse pdf");
+    doc.extract_text(0).unwrap();
+    let second = doc.extract_text(1).unwrap();
+    assert_eq!(
+        second.matches("Lagoon paragraph number 7 ").count(),
+        1,
+        "page 2 kept the cached copy: {second:?}"
+    );
+}
+
 #[test]
 fn test_get_page_content_data_empty_content() {
     let pdf = build_minimal_pdf(b"");
