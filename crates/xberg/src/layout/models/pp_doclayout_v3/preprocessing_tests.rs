@@ -112,22 +112,19 @@ fn read_reference(fixture: &Fixture) -> (Reference, RgbImage) {
         .into_iter()
         .find(|reference| reference.name == fixture.name)
         .expect("every fixture has an independent reference");
-    assert_eq!(format!("{:x}", Sha256::digest(fixture.png)), reference.png_sha256);
+    assert_eq!(hex::encode(Sha256::digest(fixture.png)), reference.png_sha256);
     let expected = image::load_from_memory(fixture.png)
         .expect("OpenCV-generated PNG")
         .to_rgb8();
     assert_eq!(expected.dimensions(), (INPUT_SIZE, INPUT_SIZE));
     assert_eq!(
-        format!("{:x}", Sha256::digest(expected.as_raw())),
+        hex::encode(Sha256::digest(expected.as_raw())),
         reference.output_rgb_sha256
     );
     let input = synthetic_rgb(fixture);
     assert_eq!(input.dimensions(), (reference.width, reference.height));
     assert_eq!(u8::from(fixture.rotate), reference.clockwise_quarter_turns);
-    assert_eq!(
-        format!("{:x}", Sha256::digest(input.as_raw())),
-        reference.input_rgb_sha256
-    );
+    assert_eq!(hex::encode(Sha256::digest(input.as_raw())), reference.input_rgb_sha256);
     (reference, expected)
 }
 
@@ -187,7 +184,7 @@ fn opencv_reference_manifest_covers_every_frozen_synthetic_case() {
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/layout/pp_doclayout_v3_preprocessing/generate.py"
     ));
-    assert_eq!(format!("{:x}", Sha256::digest(generator)), manifest.generator_sha256);
+    assert_eq!(hex::encode(Sha256::digest(generator)), manifest.generator_sha256);
     for fixture in FIXTURES {
         let (reference, _) = read_reference(fixture);
         if fixture.name == "identity" {
