@@ -104,10 +104,10 @@ mod page_failure_cause_tests;
 mod plausibility_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod recognition_noise_tests;
-#[cfg(all(test, feature = "ocr"))]
-mod tests;
 #[cfg(all(test, feature = "tokio-runtime", feature = "ocr"))]
 mod sideways_retry_tests;
+#[cfg(all(test, feature = "ocr"))]
+mod tests;
 
 #[cfg(all(test, feature = "tokio-runtime", any(feature = "ocr", feature = "ocr-pipeline")))]
 mod raw_transcript_tests;
