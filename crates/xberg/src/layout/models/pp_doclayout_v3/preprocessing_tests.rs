@@ -164,7 +164,7 @@ fn assert_tensor_matches(name: &str, actual: ArrayView3<'_, f32>, expected: &Rgb
 fn assert_single(name: &str) {
     let fixture = fixture(name);
     let (reference, expected) = read_reference(fixture);
-    let (actual, shape, scale) = PpDocLayoutV3Model::preprocess_single(&synthetic_rgb(fixture));
+    let (actual, shape, scale) = PpDocLayoutV3Model::preprocess_single(&synthetic_rgb(fixture)).unwrap();
     assert_eq!(
         actual.shape(),
         &[1, RGB_CHANNELS, INPUT_SIZE as usize, INPUT_SIZE as usize]
@@ -218,6 +218,14 @@ fn saturated_edges_match_opencv_without_intermediate_clipping() {
 #[test]
 fn identity_resize_keeps_the_existing_normalization_contract() {
     assert_single("identity");
+}
+
+#[test]
+fn empty_images_fail_before_constructing_invalid_scale_factors() {
+    for (width, height) in [(0, INPUT_SIZE), (INPUT_SIZE, 0)] {
+        let error = PpDocLayoutV3Model::preprocess_single(&RgbImage::new(width, height)).unwrap_err();
+        assert!(error.to_string().contains("empty image"));
+    }
 }
 
 #[test]

@@ -54,8 +54,9 @@ use ndarray::{Array2, Array4};
 use crate::inference::{InferenceSession, InferenceTensor, default_backend};
 use crate::layout::error::LayoutError;
 use crate::layout::models::LayoutModel;
-use crate::layout::preprocessing;
 use crate::layout::types::{BBox, LayoutClass, LayoutDetection};
+
+mod preprocessing;
 
 /// Default confidence threshold for PP-DocLayout-V3 detections.
 const DEFAULT_THRESHOLD: f32 = 0.5;
@@ -185,8 +186,8 @@ impl PpDocLayoutV3Model {
     /// Returns `(pixel_tensor [1,3,800,800], im_shape [1,2], scale_factor [1,2])`.
     ///
     /// Preprocessing steps:
-    /// 1. Squash-resize to 800 × 800 (preserving content at cost of aspect ratio, matching
-    ///    PaddleDetection's `Resize` with `keep_ratio=False`).
+    /// 1. Fixed-support Keys cubic resize to 800 × 800 with replicated borders,
+    ///    matching PaddleX's `interp=2` and `keep_ratio=False`.
     /// 2. Convert to f32, divide by 255.0 — mean=0 std=1 (no ImageNet normalisation).
     /// 3. Permute HWC → CHW.
     ///
@@ -194,12 +195,12 @@ impl PpDocLayoutV3Model {
     /// the model expects the tensor dimensions here, not the original image size).
     /// `scale_factor` is `[800/orig_h, 800/orig_w]`; the model divides output box coords by
     /// these values to restore original-image pixel coordinates.
-    fn preprocess_single(img: &RgbImage) -> (Array4<f32>, Array2<f32>, Array2<f32>) {
+    fn preprocess_single(img: &RgbImage) -> Result<(Array4<f32>, Array2<f32>, Array2<f32>), LayoutError> {
         let orig_w = img.width() as f32;
         let orig_h = img.height() as f32;
         let ts = INPUT_SIZE;
 
-        let pixel_tensor = preprocessing::preprocess_rescale(img, ts);
+        let pixel_tensor = preprocessing::preprocess_cubic(img, ts)?;
 
         let scale_h = ts as f32 / orig_h;
         let scale_w = ts as f32 / orig_w;
@@ -207,7 +208,7 @@ impl PpDocLayoutV3Model {
         let im_shape = Array2::from_shape_vec((1, 2), vec![ts as f32, ts as f32]).expect("im_shape shape mismatch");
         let scale_factor = Array2::from_shape_vec((1, 2), vec![scale_h, scale_w]).expect("scale_factor shape mismatch");
 
-        (pixel_tensor, im_shape, scale_factor)
+        Ok((pixel_tensor, im_shape, scale_factor))
     }
 
     /// Parse valid detection rows from `fetch_name_0` for a single image.
@@ -267,7 +268,7 @@ impl PpDocLayoutV3Model {
 
         let preprocess_start = Instant::now();
 
-        let (pixel_array, im_shape_array, scale_factor_array) = Self::preprocess_single(img);
+        let (pixel_array, im_shape_array, scale_factor_array) = Self::preprocess_single(img)?;
 
         let preprocess_ms = preprocess_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(preprocess_ms, "PP-DocLayout-V3 preprocessing complete");
@@ -374,7 +375,7 @@ impl PpDocLayoutV3Model {
         let mut orig_dims: Vec<(u32, u32)> = Vec::with_capacity(batch);
 
         for img in images {
-            let (pixel_array, im_shape_arr, scale_arr) = Self::preprocess_single(img);
+            let (pixel_array, im_shape_arr, scale_arr) = Self::preprocess_single(img)?;
             all_pixel_data.extend_from_slice(
                 pixel_array
                     .as_slice()
@@ -752,7 +753,7 @@ mod tests {
     #[test]
     fn preprocess_single_im_shape_is_resized_dimensions_not_original() {
         let img = RgbImage::new(1275, 1650);
-        let (_pixel_tensor, im_shape, _scale_factor) = PpDocLayoutV3Model::preprocess_single(&img);
+        let (_pixel_tensor, im_shape, _scale_factor) = PpDocLayoutV3Model::preprocess_single(&img).unwrap();
         assert_eq!(
             im_shape[[0, 0]],
             INPUT_SIZE as f32,
@@ -768,7 +769,7 @@ mod tests {
     #[test]
     fn preprocess_single_scale_factor_is_resized_over_original() {
         let img = RgbImage::new(1275, 1650);
-        let (_pixel_tensor, _im_shape, scale_factor) = PpDocLayoutV3Model::preprocess_single(&img);
+        let (_pixel_tensor, _im_shape, scale_factor) = PpDocLayoutV3Model::preprocess_single(&img).unwrap();
         let expected_scale_h = INPUT_SIZE as f32 / 1650.0;
         let expected_scale_w = INPUT_SIZE as f32 / 1275.0;
         assert!(
