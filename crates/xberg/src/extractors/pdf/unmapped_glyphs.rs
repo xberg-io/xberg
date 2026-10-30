@@ -2,9 +2,10 @@
 //!
 //! The native extractor keeps one U+FFFD for each Type0 glyph that has no Unicode value, so the
 //! OCR routing gates can count the loss. A page that OCR does not replace must not show the
-//! marker to the caller: this module removes it after the routing decision, keeps every byte
-//! offset that points into the text correct, and builds the warning for a caller who has not
-//! configured OCR. ~keep
+//! marker to the caller. This module replaces each run of markers with one space between the
+//! characters that survive, so that `A<marker>B` and `1<marker>2` do not fuse into `AB` and `12`.
+//! It does this after the routing decision, keeps every byte offset that points into the text
+//! correct, and builds the warning for a document that still lacks characters. ~keep
 
 use crate::core::config::ExtractionConfig;
 use crate::types::internal::InternalDocument;
@@ -13,32 +14,88 @@ use crate::types::{PageBoundary, PageContent, ProcessingWarning, Table};
 /// The marker the native extractor leaves for a glyph without a Unicode value.
 pub(super) const LOST_GLYPH_MARKER: char = '\u{FFFD}';
 
-/// Byte positions of the markers in a text, in order. Maps an offset in the text with the markers
-/// to the same place in the text without them.
-struct MarkerPositions(Vec<usize>);
+/// A run of consecutive markers in a text, and what replaces it. One lost glyph, or several in a
+/// row, stands for characters that exist on the page, so the run leaves a single space between
+/// the characters that survive. Next to whitespace, or at an edge of the text, it leaves nothing.
+struct Run {
+    start: usize,
+    end: usize,
+    replacement: &'static str,
+}
 
-impl MarkerPositions {
+/// The runs of markers in a text, in order. Maps an offset in the text with the markers to the same
+/// place in the text without them.
+struct MarkerRuns(Vec<Run>);
+
+impl MarkerRuns {
     fn of(text: &str) -> Option<Self> {
         Self::outside(text, &[])
     }
 
-    /// The markers that lie outside every protected byte range.
+    /// The runs made of markers that lie outside every protected byte range.
     fn outside(text: &str, protected: &[(usize, usize)]) -> Option<Self> {
-        let positions: Vec<usize> = text
-            .match_indices(LOST_GLYPH_MARKER)
-            .map(|(at, _)| at)
-            .filter(|at| !protected.iter().any(|&(start, end)| (start..end).contains(at)))
-            .collect();
-        (!positions.is_empty()).then_some(Self(positions))
+        let width = LOST_GLYPH_MARKER.len_utf8();
+        let mut runs: Vec<Run> = Vec::new();
+        for (at, _) in text.match_indices(LOST_GLYPH_MARKER) {
+            if protected.iter().any(|&(start, end)| (start..end).contains(&at)) {
+                continue;
+            }
+            match runs.last_mut() {
+                Some(run) if run.end == at => run.end = at + width,
+                _ => runs.push(Run {
+                    start: at,
+                    end: at + width,
+                    replacement: "",
+                }),
+            }
+        }
+        for run in &mut runs {
+            let before = text[..run.start].chars().next_back();
+            let after = text[run.end..].chars().next();
+            if before.is_some_and(|c| !c.is_whitespace()) && after.is_some_and(|c| !c.is_whitespace()) {
+                run.replacement = " ";
+            }
+        }
+        (!runs.is_empty()).then_some(Self(runs))
+    }
+
+    fn count(&self) -> usize {
+        self.0
+            .iter()
+            .map(|run| (run.end - run.start) / LOST_GLYPH_MARKER.len_utf8())
+            .sum()
     }
 
     fn map(&self, offset: usize) -> usize {
-        offset - LOST_GLYPH_MARKER.len_utf8() * self.0.partition_point(|&at| at < offset)
+        let mut removed = 0;
+        for run in &self.0 {
+            if offset >= run.end {
+                removed += run.end - run.start - run.replacement.len();
+            } else {
+                if offset > run.start {
+                    return run.start - removed;
+                }
+                break;
+            }
+        }
+        offset - removed
+    }
+
+    fn apply(&self, text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut from = 0;
+        for run in &self.0 {
+            out.push_str(&text[from..run.start]);
+            out.push_str(run.replacement);
+            from = run.end;
+        }
+        out.push_str(&text[from..]);
+        out
     }
 }
 
 fn without_markers(text: &str) -> String {
-    text.replace(LOST_GLYPH_MARKER, "")
+    MarkerRuns::of(text).map_or_else(|| text.to_string(), |runs| runs.apply(text))
 }
 
 /// Remove the markers that native extraction left in `text`. `boundaries` index `text` by byte and
@@ -52,37 +109,30 @@ pub(super) fn strip_text(text: &mut String, boundaries: Option<&mut Vec<PageBoun
         .filter(|b| ocr_pages.contains(&b.page_number))
         .map(|b| (b.byte_start, b.byte_end))
         .collect();
-    let Some(markers) = MarkerPositions::outside(text, &protected) else {
+    let Some(runs) = MarkerRuns::outside(text, &protected) else {
         return 0;
     };
     for boundary in boundaries.into_iter().flatten() {
-        boundary.byte_start = markers.map(boundary.byte_start);
-        boundary.byte_end = markers.map(boundary.byte_end);
+        boundary.byte_start = runs.map(boundary.byte_start);
+        boundary.byte_end = runs.map(boundary.byte_end);
     }
-    let mut kept = String::with_capacity(text.len());
-    let mut from = 0;
-    for &at in &markers.0 {
-        kept.push_str(&text[from..at]);
-        from = at + LOST_GLYPH_MARKER.len_utf8();
-    }
-    kept.push_str(&text[from..]);
-    *text = kept;
-    markers.0.len()
+    *text = runs.apply(text);
+    runs.count()
 }
 
 /// Remove every marker from the text of the elements of `doc`, with their annotation offsets.
 pub(super) fn strip_document(doc: &mut InternalDocument) -> usize {
     let mut removed = 0;
     for element in &mut doc.elements {
-        let Some(markers) = MarkerPositions::of(&element.text) else {
+        let Some(runs) = MarkerRuns::of(&element.text) else {
             continue;
         };
         for annotation in &mut element.annotations {
-            annotation.start = markers.map(annotation.start as usize) as u32;
-            annotation.end = markers.map(annotation.end as usize) as u32;
+            annotation.start = runs.map(annotation.start as usize) as u32;
+            annotation.end = runs.map(annotation.end as usize) as u32;
         }
-        element.text = without_markers(&element.text);
-        removed += markers.0.len();
+        element.text = runs.apply(&element.text);
+        removed += runs.count();
     }
     for table in &mut doc.tables {
         removed += strip_table(table);
@@ -175,13 +225,32 @@ mod tests {
         let removed = strip_text(&mut text, Some(&mut boundaries), &[]);
 
         assert_eq!(removed, 2);
-        assert_eq!(text, "abcdef");
+        assert_eq!(text, "ab cd ef");
         assert_eq!(
             (boundaries[0].byte_start, boundaries[0].byte_end),
-            (0, 2),
-            "page 1 ends after its own two letters"
+            (0, 3),
+            "page 1 ends after its two letters and the space that stands for the lost glyph"
         );
-        assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (2, 6));
+        assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (3, 8));
+    }
+
+    #[test]
+    fn strip_text_leaves_a_boundary_where_a_glyph_was_lost() {
+        let cases = [
+            ("A\u{FFFD}B", "A B"),
+            ("1\u{FFFD}2", "1 2"),
+            ("A\u{FFFD}\u{FFFD}\u{FFFD}B", "A B"),
+            ("A \u{FFFD}B", "A B"),
+            ("A\u{FFFD} B", "A B"),
+            ("\u{FFFD}A", "A"),
+            ("A\u{FFFD}", "A"),
+            ("A\u{FFFD}\nB", "A\nB"),
+        ];
+        for (before, after) in cases {
+            let mut text = before.to_string();
+            strip_text(&mut text, None, &[]);
+            assert_eq!(text, after, "input {before:?}");
+        }
     }
 
     #[test]
@@ -221,10 +290,10 @@ mod tests {
         let removed = strip_document(&mut doc);
 
         assert_eq!(removed, 1);
-        assert_eq!(doc.elements[0].text, "xyz");
+        assert_eq!(doc.elements[0].text, "x yz");
         assert_eq!(
             (doc.elements[0].annotations[0].start, doc.elements[0].annotations[0].end),
-            (1, 3)
+            (2, 4)
         );
     }
 
@@ -326,9 +395,9 @@ mod tests {
         let removed = strip_text(&mut text, Some(&mut boundaries), &[1]);
 
         assert_eq!(removed, 1, "only the native marker counts as a loss");
-        assert_eq!(text, format!("A{MARK}Bcd"));
+        assert_eq!(text, format!("A{MARK}Bc d"));
         assert_eq!((boundaries[0].byte_start, boundaries[0].byte_end), (0, 5));
-        assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (5, 7));
+        assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (5, 8));
     }
 
     /// A document whose pages each hold a Helvetica line of real words, then a Type0 line whose
@@ -337,7 +406,7 @@ mod tests {
         let to_unicode = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap \
             /CMapName /Test-UCS def /CMapType 2 def \
             1 begincodespacerange <0000> <FFFF> endcodespacerange \
-            2 beginbfchar <0041> <0041> <0044> <0000> endbfchar endcmap end end";
+            5 beginbfchar <0041> <0041> <0042> <0042> <0031> <0031> <0032> <0032> <0044> <0000> endbfchar endcmap end end";
         let first_page_object = 8;
         let kids: Vec<String> = (0..page_texts.len())
             .map(|index| format!("{} 0 R", first_page_object + 2 * index))
@@ -366,7 +435,9 @@ mod tests {
             ),
         ];
         for (index, text) in page_texts.iter().enumerate() {
-            let content = format!("BT /F1 12 Tf 72 700 Td ({text}) Tj /F2 12 Tf 0 -20 Td <00410044> Tj ET\n");
+            let content = format!(
+                "BT /F1 12 Tf 72 700 Td ({text}) Tj /F2 12 Tf 0 -20 Td <00410044> Tj 0 -20 Td <004100440042> Tj 0 -20 Td <003100440032> Tj ET\n"
+            );
             objects.push(format!(
                 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R \
                  /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>",
@@ -443,7 +514,51 @@ mod tests {
         );
     }
 
-    /// With OCR switched off the text keeps its base value, and the caller keeps a signal that
+    /// Native text keeps a boundary where a glyph was lost, so identifiers and numbers do not fuse.
+    async fn assert_lost_glyphs_leave_a_boundary(config: &ExtractionConfig) {
+        let result = extract(config).await;
+
+        assert!(
+            result.content.contains("A B"),
+            "A<lost>B must not fuse: {:?}",
+            result.content
+        );
+        assert!(
+            result.content.contains("1 2"),
+            "1<lost>2 must not fuse: {:?}",
+            result.content
+        );
+        assert!(
+            !result.content.contains("AB") && !result.content.contains("12"),
+            "content: {:?}",
+            result.content
+        );
+        assert!(
+            !result.content.contains(LOST_GLYPH_MARKER),
+            "marker in content: {:?}",
+            result.content
+        );
+    }
+
+    #[tokio::test]
+    async fn native_text_with_lost_glyphs_keeps_a_boundary_without_ocr() {
+        let config = ExtractionConfig {
+            ocr_near_empty_fallback: Some(false),
+            ..ExtractionConfig::default()
+        };
+        assert_lost_glyphs_leave_a_boundary(&config).await;
+    }
+
+    #[tokio::test]
+    async fn native_text_with_lost_glyphs_keeps_a_boundary_with_ocr_off() {
+        let config = ExtractionConfig {
+            disable_ocr: true,
+            ..ExtractionConfig::default()
+        };
+        assert_lost_glyphs_leave_a_boundary(&config).await;
+    }
+
+    /// With OCR switched off the marker leaves the text, and the caller keeps a signal that
     /// glyphs are missing: nothing recovered them.
     #[tokio::test]
     async fn extraction_with_ocr_off_hides_the_marker_and_keeps_the_loss_signal() {
