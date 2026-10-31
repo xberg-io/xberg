@@ -47,10 +47,128 @@ impl ScriptRowCandidate {
 /// Returns at most one relation per raised run and no relation for ambiguous,
 /// nonfinite, incompatible-scope or nonhorizontal geometry. A caller must still
 /// validate semantic ownership before producing script markup or moving text.
+/// A sorted right-edge index limits each query to 64 inspected edges. If that
+/// budget cannot prove a unique nearest base, no relation is returned. Dense or
+/// unrelated rows may therefore omit evidence. Sorting and binary searches cost
+/// O(n log n), with at most 64n edge checks and O(n) storage/output, plus text scans.
 /// The supplied spans and the extractor's legacy snapping policy are unchanged.
 #[must_use]
-pub fn script_row_candidates(_spans: &[TextSpan]) -> Vec<ScriptRowCandidate> {
-    Vec::new()
+pub fn script_row_candidates(spans: &[TextSpan]) -> Vec<ScriptRowCandidate> {
+    let mut edges: Vec<(f64, usize)> = spans
+        .iter()
+        .enumerate()
+        .filter(|(_, span)| row_evidence_geometry_is_valid(span))
+        .map(|(index, span)| (f64::from(span.bbox.right()), index))
+        .collect();
+    edges.sort_unstable_by(|left, right| left.0.total_cmp(&right.0).then(left.1.cmp(&right.1)));
+    spans
+        .iter()
+        .enumerate()
+        .filter(|(_, span)| row_evidence_geometry_is_valid(span))
+        .filter_map(|(script_index, _)| {
+            unique_nearest_row_base(spans, &edges, script_index).map(|base_index| ScriptRowCandidate {
+                base_index,
+                script_index,
+                logical_baseline: spans[base_index].bbox.y,
+            })
+        })
+        .collect()
+}
+
+// Bound work even when thousands of unrelated rows share the same right edge.
+// Exhausting this budget omits evidence instead of guessing a partially searched
+// owner; it is a CPU bound, not a geometric or raw-span-distance cutoff. ~keep
+const ROW_EVIDENCE_EDGE_CHECK_LIMIT: usize = 64;
+
+fn row_evidence_geometry_is_valid(span: &TextSpan) -> bool {
+    let bbox = &span.bbox;
+    [bbox.x, bbox.y, bbox.width, bbox.height, span.font_size, span.text_rise]
+        .iter()
+        .all(|value| value.is_finite())
+        && bbox.right().is_finite()
+        && (bbox.y + bbox.height).is_finite()
+        && bbox.width > 0.0
+        && bbox.height > 0.0
+        && span.font_size > 0.0
+        && span.rotation_degrees.is_finite()
+        && !span.is_rotated()
+        && span.wmode == 0
+        && !span.mirrored
+        && !span.text.trim().is_empty()
+}
+
+fn row_evidence_base_is_eligible(script: &TextSpan, base: &TextSpan) -> bool {
+    // Preserve SnapBaseSearch::base_y_for's finite-input font/X/Y gates. Scope
+    // and frame checks apply only to this read-only evidence, not legacy snap. ~keep
+    let font_size_ratio = 1.15;
+    let max_rise_em = 0.5;
+    let left_slack_em = 0.25;
+    let dy = script.bbox.y - base.bbox.y;
+    let dx = script.bbox.x - base.bbox.right();
+    base.font_size > script.font_size * font_size_ratio
+        && dy >= 0.0
+        && dy <= base.font_size * max_rise_em
+        && dx >= -base.font_size * left_slack_em
+        && dx <= base.font_size
+        && script.mcid_scope == base.mcid_scope
+        && script.page_rotation_applied == base.page_rotation_applied
+}
+
+fn next_nearest_row_edge(edges: &[(f64, usize)], cursor: &mut (usize, usize), script_x: f64) -> Option<(usize, f64)> {
+    let left_distance = cursor
+        .0
+        .checked_sub(1)
+        .map_or(f64::INFINITY, |index| (script_x - edges[index].0).abs());
+    let right_distance = edges
+        .get(cursor.1)
+        .map_or(f64::INFINITY, |edge| (script_x - edge.0).abs());
+    if !left_distance.is_finite() && !right_distance.is_finite() {
+        return None;
+    }
+    if left_distance <= right_distance {
+        cursor.0 -= 1;
+        Some((edges[cursor.0].1, left_distance))
+    } else {
+        let index = cursor.1;
+        cursor.1 += 1;
+        Some((edges[index].1, right_distance))
+    }
+}
+
+fn unique_nearest_row_base(spans: &[TextSpan], edges: &[(f64, usize)], script_index: usize) -> Option<usize> {
+    let script = &spans[script_index];
+    let script_x = f64::from(script.bbox.x);
+    let pivot = edges.partition_point(|edge| edge.0 < script_x);
+    let mut cursor = (pivot, pivot);
+    let mut best: Option<(usize, f64)> = None;
+    for _ in 0..ROW_EVIDENCE_EDGE_CHECK_LIMIT {
+        let Some((base_index, distance)) = next_nearest_row_edge(edges, &mut cursor, script_x) else {
+            return best.map(|(index, _)| index);
+        };
+        // Compare native f32 edges at their coordinate precision, doing distance
+        // arithmetic in f64 so large finite coordinates cannot overflow. Once
+        // the next distance exceeds this band, all remaining edges do too. ~keep
+        let precision = f64::from(f32::EPSILON) * (script_x.abs() + distance).max(1.0);
+        if let Some((index, best_distance)) = best {
+            if distance > best_distance + precision {
+                return Some(index);
+            }
+        }
+        if base_index == script_index || !row_evidence_base_is_eligible(script, &spans[base_index]) {
+            continue;
+        }
+        if best.is_some() {
+            return None;
+        }
+        best = Some((base_index, distance));
+    }
+    // A full index search is complete even if its last entry used the budget.
+    // Otherwise the unseen suffix may still contain a competing candidate. ~keep
+    if cursor.0 == 0 && cursor.1 == edges.len() {
+        best.map(|(index, _)| index)
+    } else {
+        None
+    }
 }
 
 impl<'doc> TextExtractor<'doc> {
