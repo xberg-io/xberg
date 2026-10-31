@@ -219,7 +219,9 @@ impl PpDocLayoutV3Model {
         orig_h: u32,
     ) -> Vec<LayoutDetection> {
         Self::project_detections(
-            rows.chunks_exact(DET_ROW_COLS).take(n_valid).map(ndarray::ArrayView1::from),
+            rows.chunks_exact(DET_ROW_COLS)
+                .take(n_valid)
+                .map(ndarray::ArrayView1::from),
             threshold,
             orig_w,
             orig_h,
