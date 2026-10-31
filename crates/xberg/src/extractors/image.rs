@@ -8434,6 +8434,72 @@ mod han_second_pass_tests {
         assert!(matches!(outcome, HanSecondPass::Kept));
     }
 
+    /// What the English model reads from a drawing: labels, a scale, and dashes for the line art.
+    const LINE_ART_FIRST_PASS: &str = "Lot 12 —— ~ —— EAST ROAD scale 1:500 —— wn North —— ae Plan B";
+    /// The same drawing read with Chinese added: the labels stay Latin, and the dashes and strokes
+    /// come back as a few Han characters.
+    const LINE_ART_RETRY: &str = "Lot 12 一 ~ 一 EAST ROAD scale 1:500 一 人 North 二 ae Plan B";
+
+    /// A line-art page that detection calls Han: the retry is more confident and as long, but its
+    /// letters are mostly Latin, so it does not read as Han text.
+    #[tokio::test]
+    async fn a_line_art_retry_with_a_few_han_characters_keeps_the_first_pass() {
+        let (outcome, backend, _) = run_with(
+            ocr_result(LINE_ART_FIRST_PASS, Some(30.0)),
+            ocr_result(LINE_ART_RETRY, Some(62.0)),
+            true,
+        )
+        .await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(
+            matches!(outcome, HanSecondPass::Kept),
+            "a retry whose letters are mostly Latin must not replace the first pass"
+        );
+    }
+
+    /// A retry that reads no Han character at all is not a Chinese reading of the page, however
+    /// confident and long it is.
+    #[tokio::test]
+    async fn a_retry_without_han_characters_keeps_the_first_pass() {
+        let (outcome, backend, _) = run_with(
+            ocr_result(LINE_ART_FIRST_PASS, Some(30.0)),
+            ocr_result(
+                "Lot 12 EAST ROAD scale 1:500 North Plan B and the river bank path",
+                Some(70.0),
+            ),
+            true,
+        )
+        .await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(
+            matches!(outcome, HanSecondPass::Kept),
+            "a retry with no Han character must not replace the first pass"
+        );
+    }
+
+    /// The Han share is a majority of the letters whose script is known: exactly half keeps the
+    /// first pass, one Han character more reads again, and Chinese text with a few English words
+    /// reads again. Digits and punctuation count for neither side.
+    #[test]
+    fn the_retry_must_be_mostly_han_letters() {
+        let first = ocr_result("ab cd", Some(30.0));
+        let reads = |text: &str| han_retry_reads_better(&first, &ocr_result(text, Some(80.0)));
+        assert!(!reads("今天 ab"), "half Han letters is not a majority");
+        assert!(reads("今天天 ab"), "one Han letter more is a majority");
+        assert!(
+            reads("今天天 ab 12 — : ~ 34"),
+            "digits and punctuation count for neither side"
+        );
+        assert!(
+            reads(&format!("{HAN_SENTENCES} Park Road")),
+            "Chinese with an English name"
+        );
+        assert!(
+            !reads("一 Lot 12 EAST — scale"),
+            "a dash read as a Han stroke among Latin words"
+        );
+    }
+
     fn good_retry() -> Answer {
         Answer::Reads(Box::new(ocr_result(HAN_SENTENCES, Some(88.0))))
     }

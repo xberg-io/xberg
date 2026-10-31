@@ -1056,6 +1056,52 @@ mod cache_key_tests {
         assert_eq!(key_with_prefix(&first), key_with_prefix(&first), "the key is stable");
     }
 
+    /// The Chinese second pass of a page that reads Khmer needs the configured language, `khm` and
+    /// `chi_sim` in one directory. The configured directory holds `chi_sim`, the prefix directory
+    /// holds `khm`; copying `chi_sim` into the prefix directory gives one directory all three while
+    /// each single language still resolves where it did, and the key must change.
+    #[test]
+    #[cfg(feature = "ocr")]
+    fn a_directory_that_gains_khmer_and_chinese_together_changes_the_cache_key() {
+        use crate::core::config::OcrConfig;
+        use crate::ocr::processor::validation::TessdataEnv;
+
+        const LANGUAGE: &str = "cache-key-test-lang";
+        let write = |dir: &tempfile::TempDir, models: &[&str]| {
+            for model in models {
+                std::fs::write(dir.path().join(format!("{model}.traineddata")), b"").expect("write a fake model");
+            }
+        };
+        let configured = tempfile::tempdir().expect("configured tessdata directory");
+        let prefix = tempfile::tempdir().expect("prefix tessdata directory");
+        write(&configured, &[LANGUAGE, "chi_sim"]);
+        write(&prefix, &[LANGUAGE, "khm", "osd"]);
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                language: vec![LANGUAGE.to_string()],
+                tessdata_path: Some(configured.path().to_path_buf()),
+                ..OcrConfig::default()
+            }),
+            ..Default::default()
+        };
+        let env = TessdataEnv {
+            tessdata_prefix: prefix.path().to_str().map(str::to_string),
+            cache_dir: None,
+        };
+        let key = || {
+            let mut hasher = blake3::Hasher::new();
+            super::hash_read_again_models(&mut hasher, &config, &env);
+            hasher.finalize()
+        };
+        let before = key();
+        write(&prefix, &["chi_sim"]);
+        assert_ne!(
+            before,
+            key(),
+            "a directory that now holds khm and chi_sim with the configured language must change the key"
+        );
+    }
+
     #[test]
     #[cfg(feature = "ocr")]
     fn tessdata_bytes_changes_the_cache_key() {
