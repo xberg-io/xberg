@@ -3032,8 +3032,11 @@ jobs:
         # Must equal the `.iOS(.vN)` floor in Package.swift. Unset, rustc links at its iOS default
         # (10.0) while cc/cmake compile for the runner SDK (18.5), and prebuilt ORT objects call
         # ___chkstk_darwin, which libcompiler_rt hides from iOS 7.0-12.1 links (#2146). ~keep
+        # MACOSX_DEPLOYMENT_TARGET likewise equals the `.macOS(.vN)` floor, overriding the
+        # workflow-wide 11.0: the bundled ONNX Runtime prebuilt requires macOS 13.4. ~keep
         env:
           IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
         with:
           crate-name: xberg-swift
           artifact-name: Xberg-rs

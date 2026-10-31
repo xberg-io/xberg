@@ -2743,6 +2743,9 @@ default_features = false
 [crates.swift]
 module_name = "Xberg"
 package_name = "Xberg"
+# The bundled ONNX Runtime (ort-sys prebuilt) requires macOS 13.4. The scaffold writes only the
+# major version into `.macOS(.vN)`, so 14 is the lowest floor that covers it. ~keep
+min_macos_version = "14.0"
 # Mobile uses tract; preset types stay default while native inference flags remain opt-in.
 # The desktop FFI dependency below retains the full native inference surface. ~keep
 excluded_default_features = ["heic", "layout-detection", "reranker", "late-interaction"]
