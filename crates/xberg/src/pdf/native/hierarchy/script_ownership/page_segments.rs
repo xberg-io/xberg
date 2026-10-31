@@ -53,6 +53,18 @@ impl<'a> From<&'a SegmentData> for SegmentProjection<'a> {
 }
 
 impl NativePageSegments {
+    fn from_final_spans(
+        _spans: Vec<xberg_native_pdf::layout::TextSpan>,
+        _mcid_roles: &HashMap<u32, Option<u8>>,
+        _artifacts: super::super::ArtifactRetention,
+        _script_geometry: super::super::ScriptGeometry,
+    ) -> Self {
+        Self {
+            segments: Vec::new(),
+            script_owners: Vec::new(),
+        }
+    }
+
     fn remap_script_owners(&self, retained_segments: &[NativeSegment]) -> Vec<SegmentScriptOwner> {
         let originals = self.unique_originals();
         let survivors = index_survivors(retained_segments, &originals);
@@ -115,3 +127,13 @@ fn index_survivors(
 
 #[cfg(test)]
 mod tests;
+
+fn extract_all_segment_carriers(
+    _document: &mut super::super::NativeDocument,
+    _artifacts: super::super::ArtifactRetention,
+) -> crate::pdf::error::Result<(Vec<NativePageSegments>, bool)> {
+    Ok((Vec::new(), false))
+}
+
+#[cfg(test)]
+mod transport_tests;
