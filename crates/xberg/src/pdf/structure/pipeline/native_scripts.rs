@@ -430,6 +430,9 @@ mod line_tests;
 mod cohort_tests;
 
 #[cfg(test)]
+mod continuity_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::TextSpan;
