@@ -348,19 +348,9 @@ fn bordered_table_extraction_failure_warning(page_number: u32, error: &xberg_nat
     }
 }
 
-/// Owned hierarchy segments produced while detecting heuristic tables.
-///
-/// Structured PDF rendering can consume these segments directly instead of
-/// extracting the same hierarchy a second time.
-pub(crate) struct ExtractedHierarchySegments {
-    pub(crate) pages: Vec<Vec<crate::pdf::hierarchy::SegmentData>>,
-    pub(crate) used_structure_tree: bool,
-}
-
-/// Heuristic tables and the hierarchy segments used to derive them.
+/// Heuristic tables reconstructed from the native text layer.
 pub(crate) struct HeuristicTableExtraction {
     pub(crate) tables: Vec<Table>,
-    pub(crate) hierarchy_segments: ExtractedHierarchySegments,
 }
 
 /// Heuristic table reconstruction for text-layer PDFs without layout hints.
@@ -398,8 +388,7 @@ pub(crate) struct HeuristicTableExtraction {
 /// whose tables aren't drawn with explicit rule lines that xberg_native_pdf's grid
 /// detector can lock onto.
 ///
-/// Returns the detected tables together with ownership of the exact hierarchy
-/// segments used for reconstruction.
+/// Returns the detected tables.
 pub(crate) fn extract_tables_heuristic(
     doc: &mut NativeDocument,
     allow_single_column: bool,
@@ -408,8 +397,8 @@ pub(crate) fn extract_tables_heuristic(
 ) -> Result<HeuristicTableExtraction> {
     use crate::pdf::table_reconstruct::{HocrWord, segments_to_words};
 
-    let (per_page_segments, used_structure_tree) =
-        crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
+    let (per_page_segments, _) = crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts)
+        .map_err(|e| {
             PdfError::TextExtractionFailed(format!(
                 "xberg_native_pdf hierarchy extraction failed for heuristic tables: {e}"
             ))
@@ -496,13 +485,7 @@ pub(crate) fn extract_tables_heuristic(
         }
     }
 
-    Ok(HeuristicTableExtraction {
-        tables,
-        hierarchy_segments: ExtractedHierarchySegments {
-            pages: per_page_segments,
-            used_structure_tree,
-        },
-    })
+    Ok(HeuristicTableExtraction { tables })
 }
 
 fn reconstruct_page_region_tables(
@@ -3356,26 +3339,20 @@ mod tests {
         let page_count = doc.doc.page_count().expect("table fixture page count");
         let extraction =
             extract_tables_heuristic(&mut doc, false, &skip, Default::default()).expect("heuristic must not error");
-        assert_eq!(
-            extraction.hierarchy_segments.pages.len(),
-            page_count,
-            "owned hierarchy segments must preserve one slot per PDF page"
-        );
         let tables = extraction.tables;
-
-        if tables.is_empty() {
-            eprintln!(
-                "extract_tables_heuristic returned 0 tables on table_document.pdf — \
-                 fixture may be borderline for the prose filter; verify manually"
-            );
-            return;
-        }
+        assert!(
+            !tables.is_empty(),
+            "the table fixture must exercise heuristic table reconstruction"
+        );
 
         for t in &tables {
             assert!(t.cells.len() >= 2, "table has fewer than 2 rows: {t:?}");
             assert!(t.cells.iter().any(|r| r.len() >= 2), "no row has 2+ columns: {t:?}");
             assert!(!t.markdown.trim().is_empty(), "markdown is empty: {t:?}");
-            assert!(t.page_number >= 1, "page_number must be 1-indexed: {t:?}");
+            assert!(
+                (1..=page_count).contains(&(t.page_number as usize)),
+                "table page must exist in the source document: {t:?}"
+            );
             assert!(
                 t.markdown.contains("| --- |") || t.markdown.contains("|---|"),
                 "table markdown is missing the header separator row: {:?}",
