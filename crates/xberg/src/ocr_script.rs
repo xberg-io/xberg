@@ -47,6 +47,35 @@ pub(crate) fn scripts_for_language(lang: &str) -> Option<&'static [Script]> {
     }
 }
 
+/// Classify an already-known-alphabetic character into a [`Script`] by code-point range.
+///
+/// Returns `None` for a letter outside every range covered here (e.g. Armenian, Ethiopic, Khmer):
+/// callers count such a letter as evidence for no script.
+#[cfg(any(
+    all(not(target_arch = "wasm32"), feature = "ocr"),
+    feature = "candle-trocr",
+    feature = "candle-paddleocr-vl",
+    all(
+        not(target_arch = "wasm32"),
+        any(feature = "candle-glm-ocr", feature = "candle-deepseek-ocr")
+    )
+))]
+pub(crate) fn script_of_letter(ch: char) -> Option<Script> {
+    match ch as u32 {
+        0x0041..=0x005A | 0x0061..=0x007A | 0x00C0..=0x024F => Some(Script::Latin),
+        0x0370..=0x03FF => Some(Script::Greek),
+        0x0400..=0x04FF => Some(Script::Cyrillic),
+        0x0590..=0x05FF => Some(Script::Hebrew),
+        0x0600..=0x06FF | 0x0750..=0x077F => Some(Script::Arabic),
+        0x0900..=0x097F => Some(Script::Devanagari),
+        0x0E00..=0x0E7F => Some(Script::Thai),
+        0x3040..=0x30FF => Some(Script::Kana),
+        0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF => Some(Script::Han),
+        0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7A3 => Some(Script::Hangul),
+        _ => None,
+    }
+}
+
 /// The Tesseract language that reads a script, for a script no configured language covers.
 ///
 /// Only Khmer and Han have an entry: the two scripts of GH#2300, whose pages come back as Latin

@@ -22,7 +22,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use regex::Regex;
 
 use crate::core::config::OcrConfig;
-use crate::ocr_script::{Script, scripts_for_language};
+use crate::ocr_script::{Script, script_of_letter, scripts_for_language};
 use crate::types::{ExtractedDocument, FormatMetadata, Formula, Metadata, OcrMetadata, ProcessingWarning, Table};
 
 // Taken from the ungated `crate::ocr_metadata_keys` rather than `crate::ocr`, which is
@@ -273,27 +273,6 @@ const IMPLAUSIBLE_SCRIPT_MIN_FRACTION: f64 = 0.5;
 /// plain-text OCR task (GH#1676).
 const LATEX_LINE_MIN_COMMANDS: usize = 2;
 
-/// Classify an already-known-alphabetic character into a [`Script`] by code-point range.
-///
-/// Returns `None` for a letter outside every range covered here (e.g. Armenian,
-/// Ethiopic): such letters are neither counted as evidence of a disallowed script nor as
-/// evidence of an allowed one, so they cannot influence rule (a) either way.
-fn classify_char(ch: char) -> Option<Script> {
-    match ch as u32 {
-        0x0041..=0x005A | 0x0061..=0x007A | 0x00C0..=0x024F => Some(Script::Latin),
-        0x0370..=0x03FF => Some(Script::Greek),
-        0x0400..=0x04FF => Some(Script::Cyrillic),
-        0x0590..=0x05FF => Some(Script::Hebrew),
-        0x0600..=0x06FF | 0x0750..=0x077F => Some(Script::Arabic),
-        0x0900..=0x097F => Some(Script::Devanagari),
-        0x0E00..=0x0E7F => Some(Script::Thai),
-        0x3040..=0x30FF => Some(Script::Kana),
-        0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF => Some(Script::Han),
-        0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7A3 => Some(Script::Hangul),
-        _ => None,
-    }
-}
-
 /// Build the script allowlist for [`filter_implausible_lines`] from the configured OCR
 /// language list, or `None` when any configured language is unrecognized (which disables
 /// rule (a) entirely rather than risk false positives against a language it cannot map).
@@ -325,7 +304,7 @@ fn line_script_counts(line: &str, allowed: &[Script]) -> (usize, usize) {
     let mut disallowed = 0usize;
     let mut classified = 0usize;
     for ch in line.chars().filter(|ch| ch.is_alphabetic()) {
-        if let Some(script) = classify_char(ch) {
+        if let Some(script) = script_of_letter(ch) {
             classified += 1;
             if !allowed.contains(&script) {
                 disallowed += 1;

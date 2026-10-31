@@ -2669,10 +2669,15 @@ async fn read_again_as_han_where(
 }
 
 /// `true` when the Han retry reads the page better than the first pass, judged by Tesseract's mean
-/// confidence, the score that marked the first pass as noisy. The retry must be more confident and
+/// confidence, the score that marked the first pass as noisy. The retry must be more confident,
 /// hold at least as much confidently read text (non-space characters times the confidence), so a
-/// confident fragment never replaces a whole first pass. A retry without a confidence, or with no
-/// text, keeps the first pass.
+/// confident fragment never replaces a whole first pass, and read as Han text: Han characters
+/// must be more than half of its letters. A retry without a confidence, or with no text, keeps the
+/// first pass.
+///
+/// ~keep The Han check exists because script detection can call the line art of an English drawing
+/// or map Han. Reading such a page with Chinese turns dashes and strokes into a few confident Han
+/// characters among the same Latin words, and confidence alone then prefers the retry.
 #[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
 fn han_retry_reads_better(
     first_pass: &crate::types::ExtractedDocument,
@@ -2696,6 +2701,22 @@ fn han_retry_reads_better(
     !retry.content.trim().is_empty()
         && retry_confidence > first_confidence
         && confidently_read(retry, retry_confidence) >= confidently_read(first_pass, first_confidence)
+        && reads_mostly_han(&retry.content)
+}
+
+/// `true` when Han characters are more than half of the letters in `text` whose script is known.
+#[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
+fn reads_mostly_han(text: &str) -> bool {
+    use crate::ocr_script::{Script, script_of_letter};
+
+    let (han, classified) = text
+        .chars()
+        .filter(|c| c.is_alphabetic())
+        .filter_map(script_of_letter)
+        .fold((0usize, 0usize), |(han, classified), script| {
+            (han + usize::from(script == Script::Han), classified + 1)
+        });
+    han * 2 > classified
 }
 
 #[cfg(all(
