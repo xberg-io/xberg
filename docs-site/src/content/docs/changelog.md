@@ -131,6 +131,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep body-size heading evidence within its source text column.** (#2275)
+  Interleaved foreign-column text neither promotes wrapped prose nor hides a genuine heading.
+
 - **(pdf): Preserve native source geometry and complete powers when splitting run-in prose lists.** (#2275)
   Plan from canonical rendered text; retain the original paragraph when a cut cannot preserve whole source spans.
   Carry native preparation lineage through ownerless lines while preserving unproved cached-text list behavior.

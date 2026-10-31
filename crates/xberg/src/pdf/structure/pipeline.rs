@@ -31,6 +31,7 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
+mod heading_context;
 pub(super) mod native_scripts;
 mod run_in_lists;
 
@@ -372,13 +373,19 @@ fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size
     let mut eligibility = Vec::with_capacity(all_pages.len());
     for (page_index, page) in all_pages.iter().enumerate().rev() {
         let mut page_eligibility = Vec::with_capacity(page.len());
-        for paragraph in page.iter().rev() {
+        let mut context = heading_context::HeadingContext::new(page);
+        for (paragraph_index, paragraph) in page.iter().enumerate().rev() {
             let is_candidate = is_body_size_bold_heading_candidate(paragraph, body_font_size);
             let is_explicit_section = is_explicit_numbered_body_size_section(paragraph_text_raw(paragraph).trim());
+            let following_content = if is_explicit_section {
+                next_content
+            } else {
+                context.following(paragraph_index, page_index, next_content)
+            };
             let has_non_finite_geometry = paragraph
                 .block_bbox
                 .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
-                || next_content.is_some_and(|(_, following)| {
+                || following_content.is_some_and(|(_, following)| {
                     following
                         .block_bbox
                         .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
@@ -387,11 +394,13 @@ fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size
                 is_candidate
                     && !has_non_finite_geometry
                     && if is_explicit_section {
-                        !next_content.is_some_and(|(following_page_index, following)| {
+                        !following_content.is_some_and(|(following_page_index, following)| {
                             shares_same_text_row(paragraph, following, page_index == following_page_index)
                         })
                     } else {
-                        next_content.is_some_and(|(following_page_index, following)| {
+                        !next_content.is_some_and(|(following_page_index, following)| {
+                            shares_same_text_row(paragraph, following, page_index == following_page_index)
+                        }) && following_content.is_some_and(|(following_page_index, following)| {
                             opens_aligned_body_block(
                                 paragraph,
                                 following,
@@ -403,6 +412,7 @@ fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size
             );
             if paragraph.word_count > 0 && !paragraph.is_page_furniture {
                 next_content = Some((page_index, paragraph));
+                context.observe_content(paragraph_index, page_index, paragraph);
             }
         }
         page_eligibility.reverse();
