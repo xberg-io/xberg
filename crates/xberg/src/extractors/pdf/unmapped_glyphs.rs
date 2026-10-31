@@ -403,6 +403,25 @@ mod tests {
     /// A document whose pages each hold a Helvetica line of real words, then a Type0 line whose
     /// ToUnicode maps code 0x0041 to "A" and code 0x0044 to NUL (a glyph without a Unicode value).
     fn build_type0_lost_glyph_pdf_pages(page_texts: &[&str]) -> Vec<u8> {
+        let streams: Vec<String> = page_texts
+            .iter()
+            .map(|text| {
+                format!(
+                    "BT /F1 12 Tf 72 700 Td ({text}) Tj /F2 12 Tf 0 -20 Td <00410044> Tj 0 -20 Td <004100440042> Tj 0 -20 Td <003100440032> Tj ET\n"
+                )
+            })
+            .collect();
+        build_pdf_from_streams(&streams)
+    }
+
+    /// One page whose only text is Type0 glyphs without a Unicode value.
+    fn build_all_lost_glyph_pdf() -> Vec<u8> {
+        build_pdf_from_streams(&["BT /F2 12 Tf 72 700 Td <0044004400440044004400440044> Tj ET\n".to_string()])
+    }
+
+    /// A document with one page for each content stream, using the fonts of the lost-glyph fixtures.
+    fn build_pdf_from_streams(streams: &[String]) -> Vec<u8> {
+        let page_texts = streams;
         let to_unicode = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap \
             /CMapName /Test-UCS def /CMapType 2 def \
             1 begincodespacerange <0000> <FFFF> endcodespacerange \
@@ -434,10 +453,7 @@ mod tests {
                 to_unicode.len() + 1
             ),
         ];
-        for (index, text) in page_texts.iter().enumerate() {
-            let content = format!(
-                "BT /F1 12 Tf 72 700 Td ({text}) Tj /F2 12 Tf 0 -20 Td <00410044> Tj 0 -20 Td <004100440042> Tj 0 -20 Td <003100440032> Tj ET\n"
-            );
+        for (index, content) in page_texts.iter().enumerate() {
             objects.push(format!(
                 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R \
                  /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>",
@@ -593,6 +609,7 @@ mod tests {
     #[cfg(feature = "ocr")]
     struct RecordingOcrBackend {
         transcript: &'static str,
+        fail: bool,
         calls: std::sync::atomic::AtomicUsize,
     }
 
@@ -632,6 +649,12 @@ mod tests {
             _config: &OcrConfig,
         ) -> crate::Result<crate::types::ExtractedDocument> {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.fail {
+                return Err(crate::XbergError::Plugin {
+                    message: "stand-in OCR failure".to_string(),
+                    plugin_name: "unmapped-glyphs-recording-ocr".to_string(),
+                });
+            }
             Ok(crate::types::ExtractedDocument {
                 content: self.transcript.to_string(),
                 mime_type: std::borrow::Cow::Borrowed("text/plain"),
@@ -651,6 +674,7 @@ mod tests {
             characters to clear the retention guard for the page that OCR replaces";
         let backend = std::sync::Arc::new(RecordingOcrBackend {
             transcript: TRANSCRIPT,
+            fail: false,
             calls: std::sync::atomic::AtomicUsize::new(0),
         });
         crate::plugins::register_ocr_backend(backend.clone()).expect("the stand-in backend registers");
@@ -711,6 +735,44 @@ mod tests {
                 .any(|w| w.message.contains("no Unicode value")),
             "the native page still reports its loss: {:?}",
             result.processing_warnings
+        );
+    }
+
+    /// A page whose every glyph lost its Unicode value reaches OCR. When the backend fails there is
+    /// no text anywhere, so the caller gets the total-loss error, not a blank successful document.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn failed_ocr_on_a_page_of_only_lost_glyphs_is_a_total_loss_error() {
+        let backend = std::sync::Arc::new(RecordingOcrBackend {
+            transcript: "",
+            fail: true,
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).expect("the stand-in backend registers");
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "unmapped-glyphs-recording-ocr".to_string(),
+                language: vec!["eng".to_string()],
+                ..OcrConfig::default()
+            }),
+            use_cache: false,
+            ..ExtractionConfig::default()
+        };
+
+        let outcome = PdfExtractor::new()
+            .extract_content(&build_all_lost_glyph_pdf(), "application/pdf", &config)
+            .await;
+        let _ = crate::plugins::unregister_ocr_backend("unmapped-glyphs-recording-ocr");
+
+        assert!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst) > 0,
+            "the page of lost glyphs reaches OCR"
+        );
+        assert!(
+            outcome.is_err(),
+            "a failed OCR on a page with no readable text must not become a blank success: {:?}",
+            outcome.map(|d| d.processing_warnings)
         );
     }
 }

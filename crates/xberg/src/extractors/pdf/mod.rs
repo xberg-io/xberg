@@ -214,10 +214,10 @@ fn enforce_page_limit(content: &[u8], config: &ExtractionConfig) -> Result<()> {
 /// propagates the identical error with `?`.
 ///
 /// Whitespace-only counts as nothing: a document yielding `"\n\n  "` is as total a loss as `""`.
-/// ~keep
+/// So does text of only U+FFFD: it is the same predicate that sends the page to OCR. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
-    native_text.trim().is_empty()
+    native_text_holds_no_content(native_text)
 }
 
 #[cfg(feature = "ocr-pipeline")]
@@ -7019,6 +7019,10 @@ mod tests {
         assert!(
             failed_ocr_fallback_is_total_loss("\n\n  \t "),
             "whitespace-only native text is as total a loss as none: it carries no content"
+        );
+        assert!(
+            failed_ocr_fallback_is_total_loss("\u{FFFD}\u{FFFD} \u{FFFD}"),
+            "text of only lost-glyph markers carries no content either"
         );
     }
 
