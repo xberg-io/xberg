@@ -5977,7 +5977,25 @@ pub(super) fn undo_upright_raster_correction(
         return;
     }
     let correction_degrees = correction_degrees as u16;
-    let (processed_width, processed_height) = (f64::from(upright_width), f64::from(upright_height));
+    let processed_dimensions = super::document::processed_ocr_layout_dimensions(&result.metadata);
+    let (processed_width, processed_height) = processed_dimensions.unwrap_or((upright_width, upright_height));
+    if matches!(correction_degrees, 90 | 270)
+        && let Some((width, height)) = processed_dimensions
+    {
+        use crate::ocr_metadata_keys::{
+            OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        };
+        // Geometry and its consumer frame rotate together; preprocessing remains the backend's original record. ~keep
+        result
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), height.into());
+        result
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), width.into());
+    }
+    let (processed_width, processed_height) = (f64::from(processed_width), f64::from(processed_height));
     let undo_point =
         |x: f64, y: f64| undo_auto_rotate_point(x, y, correction_degrees, processed_width, processed_height);
     let undo_bbox = |bbox: &mut crate::types::extraction::BoundingBox| {
