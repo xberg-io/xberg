@@ -387,14 +387,16 @@ fn should_validate_final_source_f489_modulus_owners_and_keep_true_note_distinct_
     ] {
         assert!(!owners.iter().any(|owner| owner.script_witness.original_index == note));
     }
+    let operator = source_anchor(&spans, "The symbol •", 77.029, 184.49, 11.9552);
     assert!(
-        spans.iter().any(|span| span.text.contains('·')),
-        "existing inline-dot recovery retained"
+        !owners
+            .iter()
+            .any(|owner| owner.script_witness.original_index == operator)
     );
     assert!(
         !owners
             .iter()
-            .any(|owner| owner.script_witness.snapshot.text.contains('·'))
+            .any(|owner| owner.script_witness.snapshot.text.contains('•'))
     );
     assert_eq!(fingerprints(&spans), before);
 }
@@ -407,4 +409,101 @@ fn should_reject_leading_or_internal_script_whitespace_2275() {
         assert!(collect_suffix_script_owners(&spans).is_empty());
         assert_eq!(fingerprints(&spans), before);
     }
+}
+
+#[test]
+fn should_find_note_exception_operator_when_power_precedes_its_base_2275() {
+    let mut spans = vec![
+        span("1", 160.1, 704.0, 4.0, 8.0),
+        span("The value is 2", 100.0, 700.0, 60.0, 12.0),
+        span("+ 1", 165.0, 700.0, 20.0, 12.0),
+    ];
+    spans.extend(note_definition("1"));
+    let notes = numeric_notes(&spans);
+    assert!(notes.contains_key("1"));
+    assert!(needs_numeric_script_boundary(&spans[1], &spans[0], &notes, None));
+    assert!(!needs_numeric_script_boundary(
+        &spans[1],
+        &spans[0],
+        &notes,
+        Some(&spans[2])
+    ));
+    assert_native_candidate(&spans, 1, 0);
+    let before = fingerprints(&spans);
+    let owners = collect_suffix_script_owners(&spans);
+    assert_owner(&owners, &spans, 1, 0, 0..1);
+    assert_eq!(fingerprints(&spans), before);
+}
+
+#[test]
+fn should_not_choose_between_ambiguous_equally_positioned_continuation_operators_2275() {
+    let mut spans = vec![
+        span("The value is 2", 100.0, 700.0, 60.0, 12.0),
+        span("1", 160.1, 704.0, 4.0, 8.0),
+        span("+ 1", 165.0, 700.0, 20.0, 12.0),
+        span("- 1", 165.0, 700.0, 20.0, 12.0),
+    ];
+    spans.extend(note_definition("1"));
+    let notes = numeric_notes(&spans);
+    assert!(needs_numeric_script_boundary(&spans[0], &spans[1], &notes, None));
+    for operator in &spans[2..4] {
+        assert!(!needs_numeric_script_boundary(
+            &spans[0],
+            &spans[1],
+            &notes,
+            Some(operator)
+        ));
+    }
+    assert_native_candidate(&spans, 0, 1);
+    let before = fingerprints(&spans);
+    let owners = collect_suffix_script_owners(&spans);
+    assert!(!owners.iter().any(|owner| owner.script_witness.original_index == 1));
+    assert_eq!(fingerprints(&spans), before);
+}
+
+#[test]
+fn should_not_use_an_operator_from_a_different_stream_scope_as_note_exception_2275() {
+    let mut spans = vec![
+        span("The value is 2", 100.0, 700.0, 60.0, 12.0),
+        span("1", 160.1, 704.0, 4.0, 8.0),
+        span("+ 1", 165.0, 700.0, 20.0, 12.0),
+    ];
+    spans[2].mcid_scope = Some(McidScope::Page(1));
+    spans.extend(note_definition("1"));
+    let notes = numeric_notes(&spans);
+    assert!(needs_numeric_script_boundary(&spans[0], &spans[1], &notes, None));
+    assert!(!needs_numeric_script_boundary(
+        &spans[0],
+        &spans[1],
+        &notes,
+        Some(&spans[2])
+    ));
+    assert_native_candidate(&spans, 0, 1);
+    let before = fingerprints(&spans);
+    let owners = collect_suffix_script_owners(&spans);
+    assert!(!owners.iter().any(|owner| owner.script_witness.original_index == 1));
+    assert_eq!(fingerprints(&spans), before);
+}
+
+#[test]
+fn should_not_use_a_wrapped_operator_as_note_exception_2275() {
+    let mut spans = vec![
+        span("The value is 2", 100.0, 700.0, 60.0, 12.0),
+        span("1", 160.1, 704.0, 4.0, 8.0),
+        span("+ 1", 165.0, 686.0, 20.0, 12.0),
+    ];
+    spans.extend(note_definition("1"));
+    let notes = numeric_notes(&spans);
+    assert!(needs_numeric_script_boundary(&spans[0], &spans[1], &notes, None));
+    assert!(needs_numeric_script_boundary(
+        &spans[0],
+        &spans[1],
+        &notes,
+        Some(&spans[2])
+    ));
+    assert_native_candidate(&spans, 0, 1);
+    let before = fingerprints(&spans);
+    let owners = collect_suffix_script_owners(&spans);
+    assert!(!owners.iter().any(|owner| owner.script_witness.original_index == 1));
+    assert_eq!(fingerprints(&spans), before);
 }
