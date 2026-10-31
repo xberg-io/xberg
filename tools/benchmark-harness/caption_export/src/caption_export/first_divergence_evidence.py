@@ -47,6 +47,14 @@ def verify_runtime(plan: dict) -> None:
             )
 
 
+def load_original_helper(path: Path) -> ModuleType:
+    """Load the helper after its original evidence checks have succeeded."""
+    spec = importlib.util.spec_from_file_location("frozen_caption_parity", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def verify_original(plan: dict) -> tuple[ModuleType, dict, dict]:
     """Replay the already frozen source/model/loading gates without rewriting them."""
     require(not sys.flags.optimize, "diagnostic requires original preflight assertions enabled")
@@ -72,9 +80,7 @@ def verify_original(plan: dict) -> tuple[ModuleType, dict, dict]:
         == {"image": 224, "context": 197, "hidden": 768, "vocabulary": 50257, "layers": LAYERS},
         "unsupported original architecture",
     )
-    spec = importlib.util.spec_from_file_location("frozen_caption_parity", directory / "parity.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = load_original_helper(directory / "parity.py")
     module.preflight(original_plan, directory)
     return module, original_plan, previous
 
