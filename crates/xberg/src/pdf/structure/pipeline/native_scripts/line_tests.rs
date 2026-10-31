@@ -227,3 +227,133 @@ fn should_preserve_attachment_local_indices_when_complete_lines_are_cloned_and_m
         );
     }
 }
+
+fn rotated_row_segment(text: &str, advance: f32, baseline: f32, height: f32, role: Option<u8>) -> SegmentData {
+    let rotation_degrees = 90.0_f32;
+    let (sin, cos) = rotation_degrees.to_radians().sin_cos();
+    let x = advance * cos - baseline * sin;
+    let y = advance * sin + baseline * cos;
+    SegmentData {
+        text: text.to_owned(),
+        x,
+        y,
+        width: 8.0,
+        height,
+        font_size: 12.0,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y: y,
+        rotation_degrees,
+        assigned_role: role,
+    }
+}
+
+fn ownerless_rotated_page() -> Vec<SegmentData> {
+    vec![
+        rotated_row_segment("A", 0.0, 100.0, 40.0, Some(1)),
+        rotated_row_segment("B", 20.0, 96.0, 12.0, None),
+        rotated_row_segment("C", 10.0, 88.0, 12.0, None),
+    ]
+}
+
+#[test]
+fn should_preserve_ownerless_rotated_paragraph_order_after_global_row_anchor_is_removed_2275() {
+    let (ordered, index) = order_native_segments(
+        ownerless_rotated_page(),
+        NativeSegmentEvidence {
+            original_indices: vec![0, 1, 2],
+            owners: Vec::new(),
+        },
+    );
+    assert_eq!(
+        ordered.iter().map(|segment| segment.text.as_str()).collect::<Vec<_>>(),
+        ["A", "C", "B"],
+        "the tall global row anchor must make this a causal non-idempotent ordering case"
+    );
+    let legacy = super::super::blocks_to_paragraphs(ordered.clone(), &[], &[]);
+    let actual = super::super::blocks_to_paragraphs_with_native_scripts(ordered, &[], &[], Some(&index));
+    assert_eq!(
+        legacy.len(),
+        2,
+        "heading role removes the tall anchor from the body paragraph"
+    );
+    assert_eq!(actual.len(), legacy.len());
+    let legacy_body = legacy
+        .iter()
+        .find(|paragraph| paragraph.heading_level.is_none())
+        .unwrap();
+    let actual_body = actual
+        .iter()
+        .find(|paragraph| paragraph.heading_level.is_none())
+        .unwrap();
+    assert_eq!(
+        legacy_body
+            .lines
+            .iter()
+            .flat_map(|line| &line.segments)
+            .map(|segment| segment.text.as_str())
+            .collect::<Vec<_>>(),
+        ["C", "B"]
+    );
+    assert_eq!(
+        actual_body
+            .lines
+            .iter()
+            .flat_map(|line| &line.segments)
+            .map(fingerprint)
+            .collect::<Vec<_>>(),
+        legacy_body
+            .lines
+            .iter()
+            .flat_map(|line| &line.segments)
+            .map(fingerprint)
+            .collect::<Vec<_>>(),
+        "ownerless paragraph reconstruction must preserve the existing global reading order"
+    );
+}
+
+#[test]
+fn should_keep_legacy_rotated_subset_order_when_all_supplied_script_witnesses_are_invalid_2275() {
+    let ordered = super::super::order_segments_in_reading_frames(ownerless_rotated_page());
+    assert_eq!(
+        ordered.iter().map(|segment| segment.text.as_str()).collect::<Vec<_>>(),
+        ["A", "C", "B"]
+    );
+    let body: Vec<_> = ordered
+        .iter()
+        .filter(|segment| segment.assigned_role.is_none())
+        .collect();
+    assert_eq!(
+        body.iter().map(|segment| segment.text.as_str()).collect::<Vec<_>>(),
+        ["C", "B"]
+    );
+    let (_, mut evidence) = fixture(false);
+    let mut owner = evidence.owners.remove(0);
+    owner.base_index = 1;
+    owner.script_index = 0;
+    let evidence = NativeSegmentEvidence {
+        original_indices: vec![2, 1],
+        owners: vec![owner],
+    };
+    assert_eq!(evidence.owners.len(), 1, "exercise nonempty supplied evidence");
+    assert!(
+        valid_owners(&body, &evidence).is_empty(),
+        "rotated/current glyphs do not match the source witness"
+    );
+    let legacy = super::super::reconstruct_pdf_lines(&body);
+    let actual = reconstruct_native_lines(&body, &evidence);
+    assert_eq!(
+        actual
+            .iter()
+            .flat_map(|line| &line.segments)
+            .map(fingerprint)
+            .collect::<Vec<_>>(),
+        legacy
+            .iter()
+            .flat_map(|line| &line.segments)
+            .map(fingerprint)
+            .collect::<Vec<_>>(),
+        "the fallback depends on valid owners, not merely a nonempty evidence vector"
+    );
+}
