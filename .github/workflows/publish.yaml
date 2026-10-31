@@ -1285,7 +1285,18 @@ jobs:
         with:
           toolchain: ${{ runner.os == 'Windows' && 'stable-x86_64-pc-windows-gnu' || '' }}
 
+      # Ruby 3.3 is the ABI the release gem ships; mise.ci.toml locks it. ~keep
+      - uses: xberg-io/actions/setup-mise@v1
+        if: runner.os != 'Windows'
+        with:
+          tools: ruby=3.3
+          mise-env: ci
+          config-ref: ${{ github.sha }}
+
+      # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
+      # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
       - uses: ruby/setup-ruby@v1.335.0
+        if: runner.os == 'Windows'
         with:
           ruby-version: "3.3"
           bundler-cache: false
@@ -3985,10 +3996,10 @@ jobs:
           pattern: rubygems-*
           path: dist
 
-      - uses: ruby/setup-ruby@v1.335.0
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          ruby-version: "3.3"
-          bundler-cache: false
+          tools: ruby
+          config-ref: ${{ github.sha }}
 
       - name: Update RubyGems for OIDC trusted publishing
         run: gem update --system
@@ -4361,20 +4372,10 @@ jobs:
             linux-musl-x86_64 linux-musl-aarch64
           lib-name: xberg_ffi
 
-      - uses: actions/setup-java@v6
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-
-      - uses: xberg-io/actions/setup-maven@v1
-        with:
-          version: "3.9.16"
+          tools: java maven
+          config-ref: ${{ github.sha }}
 
       - uses: xberg-io/actions/publish-maven@v1
         with:
@@ -4386,6 +4387,7 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
   publish-kotlin-android:
     name: Publish Kotlin Android (Maven Central via Gradle)
@@ -5327,19 +5329,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
-      - uses: actions/setup-java@v6
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - uses: xberg-io/actions/setup-maven@v1
-        with:
-          version: "3.9.16"
+          tools: java maven
+          config-ref: ${{ github.sha }}
       - name: Wait for core artifact on Maven Central
         if: needs.prepare.outputs.dry_run != 'true'
         env:
@@ -5372,6 +5365,7 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
   publish-integrations-npm:
     name: Publish ${{ matrix.package }} to npm
