@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "vendored/**"
       - "integrations/**"
       - "crates/xberg/**"
       - "crates/xberg-native-pdf/**"
@@ -17,9 +18,8 @@ on:
       - "rust-toolchain.toml"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
-      - "Taskfile.yml"
+      - "mise-tasks/**"
       - ".cargo/config.toml"
-      - ".task/tools/integrations.yml"
       - ".github/actions/install-system-deps/**"
       - ".github/actions/setup-onnx-runtime/**"
       - "scripts/ci/install-system-deps/**"
@@ -69,10 +69,10 @@ jobs:
           cache-key-prefix: ci-integrations-bindings
           use-sccache: "true"
 
-      - name: Install Task, Python, uv, Node, pnpm, Java and Maven
+      - name: Install Python, uv, Node, pnpm, Java and Maven
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task python uv node pnpm java maven
+          install-args: python uv node pnpm java maven
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -94,10 +94,10 @@ jobs:
           strategy: system
 
       - name: Setup native library paths
-        run: task integrations:ci:configure-native-paths
+        run: mise run integrations:ci:configure-native-paths
 
       - name: Build abi3 Python wheel
-        run: task integrations:ci:build:python-binding
+        run: mise run integrations:ci:build:python-binding
 
       - name: Install pnpm workspace dependencies
         shell: bash
@@ -107,10 +107,10 @@ jobs:
         run: pnpm bin >> "$GITHUB_PATH"
 
       - name: Build Node package
-        run: task integrations:ci:build:node-binding
+        run: mise run integrations:ci:build:node-binding
 
       - name: Build and stage Java binding
-        run: task integrations:ci:build:java-binding
+        run: mise run integrations:ci:build:java-binding
 
       - name: Upload Python binding
         uses: actions/upload-artifact@v7
@@ -156,10 +156,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Task, Python and uv
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task python uv
+          install-args: python uv
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -181,7 +181,7 @@ jobs:
           strategy: system
 
       - name: Setup native library paths
-        run: task integrations:ci:configure-native-paths
+        run: mise run integrations:ci:configure-native-paths
 
       - name: Download local Python binding
         uses: actions/download-artifact@v8
@@ -191,8 +191,8 @@ jobs:
 
       - name: Test integrations against local Xberg wheel
         run: >
-          task integrations:ci:test:python-all
-          WHEEL_DIR="${GITHUB_WORKSPACE}/local-xberg"
+          mise run integrations:ci:test:python-all
+          --wheel-dir "${GITHUB_WORKSPACE}/local-xberg"
 
   node:
     name: Node
@@ -203,10 +203,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Task and Node
+      - name: Install Node
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task node
+          install-args: node
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
@@ -218,7 +218,7 @@ jobs:
           strategy: system
 
       - name: Setup native library paths
-        run: task integrations:ci:configure-native-paths
+        run: mise run integrations:ci:configure-native-paths
 
       - name: Cache npm downloads
         uses: actions/cache@v6
@@ -235,8 +235,8 @@ jobs:
 
       - name: Test integrations against local Node binding
         run: >
-          task integrations:ci:test:node-all
-          BINDING_DIR="${GITHUB_WORKSPACE}/local-xberg"
+          mise run integrations:ci:test:node-all
+          --binding-dir "${GITHUB_WORKSPACE}/local-xberg"
 
   java:
     name: Java (spring-ai)
@@ -247,10 +247,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Task, Java and Maven
+      - name: Install Java and Maven
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: task java maven
+          install-args: java maven
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
@@ -262,7 +262,7 @@ jobs:
           strategy: system
 
       - name: Setup native library paths
-        run: task integrations:ci:configure-native-paths
+        run: mise run integrations:ci:configure-native-paths
 
       - name: Cache Maven repository
         uses: actions/cache@v6
@@ -279,5 +279,5 @@ jobs:
 
       - name: Test spring-ai against the local Maven repository
         run: >
-          task integrations:ci:test:java
-          BINDING_DIR="${GITHUB_WORKSPACE}/local-xberg"
+          mise run integrations:ci:test:java
+          --binding-dir "${GITHUB_WORKSPACE}/local-xberg"

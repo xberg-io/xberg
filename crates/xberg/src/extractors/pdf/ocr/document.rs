@@ -110,7 +110,7 @@ pub(super) fn assemble_mixed_ocr_page_document(
 /// Tesseract emits LF, but the VLM backend (`crate::llm::vlm_ocr`) returns the model's
 /// markdown verbatim out of an HTTP JSON body, which routinely carries `\r\n`. Splitting
 /// raw would fold the entire page into a single block element (#316).
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn flat_ocr_page_document(text: &str) -> crate::types::internal::InternalDocument {
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
     use crate::types::ocr_elements::OcrElementLevel;
@@ -131,6 +131,148 @@ pub(super) fn flat_ocr_page_document(text: &str) -> crate::types::internal::Inte
         ));
     }
     doc
+}
+/// The text layer of each page whose layer is readable text, keyed by page number.
+///
+/// A page appears only when it has one valid, non-overlapping boundary and its layer passes the
+/// garble clauses of the native-text gate (`native_layer_is_clean`). A caller keeps such a layer
+/// beside OCR text that the noise verdict rejects. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn clean_native_page_layers(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    pages: Option<&std::collections::HashSet<u32>>,
+    thresholds: &OcrQualityThresholds,
+) -> ahash::AHashMap<u32, String> {
+    let mut page_counts = std::collections::HashMap::new();
+    for boundary in boundaries {
+        *page_counts.entry(boundary.page_number).or_insert(0usize) += 1;
+    }
+    let mut layers = ahash::AHashMap::new();
+    for boundary in boundaries {
+        if page_counts.get(&boundary.page_number) != Some(&1)
+            || pages.is_some_and(|p| !p.contains(&boundary.page_number))
+        {
+            continue;
+        }
+        let Some(layer) = native_text.get(boundary.byte_start..boundary.byte_end) else {
+            continue;
+        };
+        if super::scoring::native_layer_is_clean(layer, thresholds) {
+            layers.insert(boundary.page_number, layer.trim().to_string());
+        }
+    }
+    layers
+}
+/// The lines of a clean text layer that the OCR text does not already hold, or `None` when the
+/// OCR text holds every line. A line is held only when each of its words is a whole word of the
+/// OCR text (letters and digits, lowercase): the letters of a layer word that occur in the OCR
+/// text only across a word boundary are not evidence that the word was read. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn layer_lines_absent_from_ocr(layer: &str, ocr_text: &str) -> Option<String> {
+    fn words(text: &str) -> impl Iterator<Item = String> + '_ {
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_lowercase)
+    }
+    let ocr_words: std::collections::HashSet<String> = words(ocr_text).collect();
+    let kept: Vec<&str> = layer
+        .lines()
+        .map(str::trim)
+        .filter(|line| words(line).any(|word| !ocr_words.contains(&word)))
+        .collect();
+    (!kept.is_empty()).then(|| kept.join("\n"))
+}
+/// Put layer lines first on a structured OCR document, before its first element of `page`
+/// (before the first element when `page` is `None`, or when no element belongs to the page).
+/// Relationships shift by the number of layer elements; the layer holds no table or image. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn insert_layer_into_document(
+    doc: &mut crate::types::internal::InternalDocument,
+    page: Option<u32>,
+    layer: &str,
+) {
+    use crate::types::internal::RelationshipTarget;
+
+    let at = page
+        .and_then(|page| doc.elements.iter().position(|element| element.page == Some(page)))
+        .unwrap_or(0);
+    let mut layer_elements = flat_ocr_page_document(layer).elements;
+    for element in &mut layer_elements {
+        element.page = page;
+    }
+    let shift = layer_elements.len() as u32;
+    let at_u32 = at as u32;
+    for relationship in &mut doc.relationships {
+        if relationship.source >= at_u32 {
+            relationship.source += shift;
+        }
+        if let RelationshipTarget::Index(index) = &mut relationship.target
+            && *index >= at_u32
+        {
+            *index += shift;
+        }
+    }
+    doc.elements.splice(at..at, layer_elements);
+}
+/// For a whole-document OCR run: put the text layer first on every page whose OCR text got the
+/// recognition-noise verdict, in the flat text, the page texts and the structured document. The
+/// run has already scored and chosen its stage on the OCR text alone. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn put_layers_first_in_run(
+    text: &mut String,
+    page_texts: &mut [String],
+    mut doc: Option<&mut crate::types::internal::InternalDocument>,
+    layers: &ahash::AHashMap<u32, String>,
+    verdicts: &[super::scoring::OcrPageNoiseVerdict],
+    page_index_offset: usize,
+    marker_format: Option<&str>,
+) {
+    // The flat text is the page texts joined with a page marker or a blank line, as the run
+    // assembled it. It is rebuilt from the pages, never searched for a page text: identical
+    // pages would match the wrong one.
+    let join = |page_texts: &[String]| -> String {
+        let mut joined = String::new();
+        for (i, page_text) in page_texts.iter().enumerate() {
+            match marker_format {
+                Some(format) => {
+                    joined.push_str(&format.replace("{page_num}", &(page_index_offset + i + 1).to_string()))
+                }
+                None if i > 0 => joined.push_str("\n\n"),
+                None => {}
+            }
+            joined.push_str(page_text);
+        }
+        joined
+    };
+    let flat_is_page_join = join(page_texts) == *text;
+    let mut pages: Vec<u32> = verdicts
+        .iter()
+        .filter(|verdict| !verdict.discarded)
+        .map(|verdict| verdict.page_index as u32 + 1)
+        .collect();
+    pages.sort_unstable();
+    pages.dedup();
+    for page in pages {
+        let Some(layer) = layers.get(&page) else { continue };
+        let Some(local) = (page as usize).checked_sub(page_index_offset + 1) else {
+            continue;
+        };
+        let Some(page_text) = page_texts.get_mut(local) else {
+            continue;
+        };
+        let Some(missing) = layer_lines_absent_from_ocr(layer, page_text) else {
+            continue;
+        };
+        let with_layer = format!("{missing}\n\n{page_text}");
+        *page_text = with_layer;
+        if let Some(doc) = doc.as_deref_mut() {
+            insert_layer_into_document(doc, Some(page), &missing);
+        }
+    }
+    if flat_is_page_join {
+        *text = join(page_texts);
+    }
 }
 /// Attach a page's OCR tables and OCR elements to its structured document.
 ///
@@ -220,7 +362,7 @@ pub(super) fn rescale_ocr_bboxes_to_page_points(
     let scale_y = f64::from(page_height_pt) / f64::from(image_height_px);
 
     if let Some(doc) = doc {
-        rescale_document_bboxes(doc, scale_x, scale_y);
+        rescale_document_bboxes(doc, scale_x, scale_y, tables);
     }
 
     let page_height_pt_f64 = f64::from(page_height_pt);
@@ -257,12 +399,22 @@ pub(super) fn place_public_ocr_bboxes(doc: &mut crate::types::internal::Internal
                     doc,
                     f64::from(raster.0) / f64::from(processed.0),
                     f64::from(raster.1) / f64::from(processed.1),
+                    &[],
                 );
+                // Detached page owners scale-flip table rectangles later; preserve their top-left raster origin. ~keep
+                for bbox in doc.tables.iter_mut().filter_map(|table| table.bounding_box.as_mut()) {
+                    bbox.x0 *= f64::from(raster.0) / f64::from(processed.0);
+                    bbox.x1 *= f64::from(raster.0) / f64::from(processed.0);
+                    bbox.y0 *= f64::from(raster.1) / f64::from(processed.1);
+                    bbox.y1 *= f64::from(raster.1) / f64::from(processed.1);
+                }
             }
             f64::from(raster.1)
         }
         PublicOcrOutputFrame::PdfPage { raster, points } => {
-            rescale_ocr_bboxes_to_page_points(Some(doc), &mut [], raster.0, raster.1, points.0, points.1);
+            let mut tables = std::mem::take(&mut doc.tables);
+            rescale_ocr_bboxes_to_page_points(Some(doc), &mut tables, raster.0, raster.1, points.0, points.1);
+            doc.tables = tables;
             f64::from(points.1)
         }
     };
@@ -276,18 +428,28 @@ fn flip_document_bboxes_to_bottom_left(doc: &mut crate::types::internal::Interna
             flip_bbox_to_bottom_left(bbox, height);
         }
     }
+    crate::types::internal::table_grid::transform_retained_grid_bboxes(doc, &[], |bbox| {
+        flip_bbox_to_bottom_left(bbox, height)
+    });
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn rescale_document_bboxes(doc: &mut crate::types::internal::InternalDocument, scale_x: f64, scale_y: f64) {
-    for element in &mut doc.elements {
-        if let Some(bbox) = element.bbox.as_mut() {
-            bbox.x0 *= scale_x;
-            bbox.x1 *= scale_x;
-            bbox.y0 *= scale_y;
-            bbox.y1 *= scale_y;
-        }
+fn rescale_document_bboxes(
+    doc: &mut crate::types::internal::InternalDocument,
+    scale_x: f64,
+    scale_y: f64,
+    tables: &[crate::types::Table],
+) {
+    let scale = |bbox: &mut crate::types::BoundingBox| {
+        bbox.x0 *= scale_x;
+        bbox.x1 *= scale_x;
+        bbox.y0 *= scale_y;
+        bbox.y1 *= scale_y;
+    };
+    for bbox in doc.elements.iter_mut().filter_map(|element| element.bbox.as_mut()) {
+        scale(bbox);
     }
+    crate::types::internal::table_grid::transform_retained_grid_bboxes(doc, tables, scale);
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -541,8 +703,8 @@ pub(super) fn formula_bbox_to_page_points(
         ));
     }
 }
-/// Flip the bboxes of a document's table elements from a top-left to a bottom-left
-/// origin, in points.
+/// Place table elements at their converted table rectangles, falling back to a
+/// top-left to bottom-left flip when no table rectangle is available.
 ///
 /// `crate::pdf::structure::assembly::push_table_element` copies `Table::bounding_box`
 /// verbatim onto the table's element, so on the pipeline route that element inherits the
@@ -553,13 +715,18 @@ pub(super) fn formula_bbox_to_page_points(
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn flip_table_element_bboxes_to_bottom_left(
     doc: &mut crate::types::internal::InternalDocument,
+    tables: &[crate::types::Table],
     page_height_pt: f32,
 ) {
     let page_height_pt = f64::from(page_height_pt);
     for element in &mut doc.elements {
-        if matches!(element.kind, crate::types::internal::ElementKind::Table { .. })
-            && let Some(bbox) = element.bbox.as_mut()
-        {
+        let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
+            continue;
+        };
+        // Public OCR elements may already be bottom-left; the converted table is authoritative. ~keep
+        if let Some(bbox) = tables.get(table_index as usize).and_then(|table| table.bounding_box) {
+            element.bbox = Some(bbox);
+        } else if let Some(bbox) = element.bbox.as_mut() {
             flip_bbox_to_bottom_left(bbox, page_height_pt);
         }
     }
@@ -608,7 +775,7 @@ pub(super) fn build_pipeline_ocr_page_document(
         page_height_pt,
     );
     if raster_width_px != 0 && raster_height_px != 0 {
-        flip_table_element_bboxes_to_bottom_left(&mut doc, page_height_pt);
+        flip_table_element_bboxes_to_bottom_left(&mut doc, &assembled_tables, page_height_pt);
     }
     doc.tables = assembled_tables;
     rescale_ocr_bboxes_to_page_points(
@@ -2901,3 +3068,7 @@ mod tests {
         assert!(!restructured_document_retains_prose(&pages, &[], &empty));
     }
 }
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "document/table_grid_geometry_tests.rs"]
+mod table_grid_geometry_tests;

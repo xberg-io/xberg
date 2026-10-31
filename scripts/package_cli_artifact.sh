@@ -12,7 +12,7 @@ STAGE="$ROOT/xberg-cli-${TARGET}"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp "$ROOT/target/${TARGET}/release/xberg" "$STAGE/"
-cp "$ROOT/LICENSE" "$STAGE/"
+python3 "$ROOT/scripts/ci/package-notices.py" stage "$STAGE"
 cp "$ROOT/README.md" "$STAGE/"
 
 if [[ -f "$ROOT/target/${TARGET}/release/libpdfium.dylib" ]]; then
@@ -23,4 +23,5 @@ if [[ -f "$ROOT/target/${TARGET}/release/libpdfium.so" ]]; then
 fi
 
 tar -czf "xberg-cli-${TARGET}.tar.gz" -C "$ROOT" "xberg-cli-${TARGET}"
+python3 "$ROOT/scripts/ci/package-notices.py" verify "xberg-cli-${TARGET}.tar.gz" "xberg-cli-${TARGET}"
 rm -rf "$STAGE"

@@ -4,6 +4,20 @@
 lockfile = true
 lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "windows-x64"]
 
+# Task groups live in mise-tasks/*.toml; listing them replaces the default mise-tasks/ scan, so
+# that directory is named too. ~keep
+[task_config]
+includes = [
+  "mise-tasks/shared.toml",
+  "mise-tasks",
+  "mise-tasks/rust.toml",
+  "mise-tasks/bindings.toml",
+  "mise-tasks/e2e.toml",
+  "mise-tasks/docs.toml",
+  "mise-tasks/benchmark.toml",
+  "mise-tasks/integrations.toml",
+]
+
 [tools]
 python = "3.13.18"
 uv = "0.13.6"
@@ -15,11 +29,189 @@ maven = "3.10.0"
 ruby = "3.4.12"
 dotnet = "10.0.403"
 zig = "0.17.0"
-task = "3.54.0"
-"github:Goldziher/poly" = "0.31.0"
-"github:Goldziher/ai-rulez" = "5.8.0"
-"github:xberg-io/alef" = "0.115.5"
+"github:Goldziher/poly" = "0.31.2"
+"github:Goldziher/adrlint" = "0.4.0"
+"github:xberg-io/alef" = "0.115.6"
 cargo-deny = "0.20.2"
 "github:taiki-e/cargo-llvm-cov" = "0.9.1"
 bats = "1.14.0"
 lychee = "0.24.2"
+"github:rustwasm/wasm-pack" = "0.15.0"
+
+[env]
+BATS_LIB_REF = "{{vars.bats_lib_ref}}"
+# The ecosystems whose xberg bodies match the shared engine. rust, python, node, ruby, java and zig
+# carry repository specifics (extra locks, the parking_lot hold, the frozen bundle, mvn without a
+# wrapper, a build.zig.zon with no URL to refresh) and run through mise-tasks/deps/local.sh
+# instead. ~keep
+DEPS_LANGS = "php go csharp elixir dart swift kotlin-android"
+DEPS_PHP_DIR = "."
+DEPS_CSHARP_DIR = "packages/csharp/Xberg"
+
+[vars]
+# The xberg-io/actions revision the vendored Bats helper library was copied from. ~keep
+bats_lib_ref = "793d3a4d37a17009d91cce29f2825eda570d2abd"
+
+# ---- Entry points ------------------------------------------------------------------------------
+
+[tasks.default]
+description = "List available tasks"
+run = "mise tasks ls"
+
+[tasks.setup]
+description = "Install the mise toolchain and all dependencies, and set up the development environment"
+run = [
+  "mise install",
+  { task = "rust:install" },
+  "alef setup",
+  { task = "governance:generate" },
+  { task = "integrations:sync" },
+  { task = "governance:hooks:install" },
+]
+
+[tasks.build]
+description = "Build Rust core library only (debug)"
+run = [{ task = "rust:build:dev" }]
+
+[tasks.test]
+description = "Run Rust core tests"
+run = [{ task = "rust:test" }]
+
+[tasks."test:classic-ocr-cache"]
+description = "Seed and verify the complete classic OCR cache in offline inference"
+depends = ["rust:cli:build"]
+run = "python3 scripts/classic_ocr_cache_acceptance.py"
+
+[tasks."test:classic-ocr-cache:harness"]
+description = "Run fast contract tests for the classic OCR cache acceptance harness"
+run = "uv run --frozen --only-dev python -m pytest -q scripts/test_classic_ocr_cache_acceptance.py"
+
+[tasks.check]
+description = "Run all checks (format + lint, no modifications)"
+run = [{ task = "format:check" }, { task = "lint" }]
+
+[tasks.update]
+description = "Update all dependencies within major versions (minor patches only)"
+run = [{ task = "deps:local update" }, "mise run deps update", { task = "integrations:update" }, "alef update"]
+
+[tasks.upgrade]
+description = "Upgrade all dependencies to latest including breaking changes"
+run = [
+  "rustup update stable",
+  { task = "deps:local upgrade" },
+  "mise run deps upgrade",
+  { task = "integrations:upgrade" },
+  "alef update --latest || true",
+  "gau --update .",
+]
+
+[tasks.clean]
+description = "Remove build artifacts across all languages"
+run = ["cargo clean", "alef clean", "rm -rf coverage.lcov dist/ .alef/"]
+
+[tasks."fixtures:generate"]
+description = "Generate all (or selected) test fixtures + ground-truth sidecars"
+dir = "{{config_root}}/tools/generate_test_fixtures"
+usage = 'arg "[fixture]..." default="all" help="Fixture groups to generate"'
+run = "uv run --locked python -m generate_test_fixtures ${usage_fixture:-all}"
+
+[tasks."fixtures:test"]
+description = "Run the fixture generator's smoke test suite"
+dir = "{{config_root}}/tools/generate_test_fixtures"
+run = "uv run --locked --extra dev pytest -q"
+
+# ---- Verification gates ------------------------------------------------------------------------
+
+[tasks."ffi:verify:declarations"]
+description = "Test the FFI parity checker and compare C# and Java against the C header"
+run = [
+  "python3 -m unittest scripts/ci/test_ffi_declaration_parity.py",
+  "python3 scripts/ci/check-ffi-declaration-parity.py",
+]
+
+[tasks."release:test:contracts"]
+description = "Verify release workflow and packaging contracts"
+run = [
+  "python3 scripts/ci/test_publish_workflow_contracts.py",
+  "python3 scripts/ci/test_php_release_contracts.py",
+  "python3 scripts/ci/test_ios_compiler_runtime.py",
+]
+
+[tasks."poly:verify:tool-scopes"]
+description = "Check external Poly formatters are restricted to their intended languages"
+run = "python3 scripts/ci/check-poly-tool-scopes.py"
+
+[tasks."supported-counts:verify"]
+description = "Test and verify published format counts against the MIME registry"
+run = [
+  "uv run --frozen --only-dev python -m pytest -q scripts/test_sync_supported_counts.py",
+  "python3 scripts/sync_supported_counts.py verify",
+]
+
+[tasks."verify:feature-parity"]
+description = "Check per-target feature aggregates still match `full` (GH#1443)"
+run = "python3 scripts/ci/check-feature-parity.py crates/xberg/Cargo.toml"
+
+[tasks."verify:docker-crates"]
+description = "Check every workspace member is COPYd, real, and survives .dockerignore"
+run = "bash scripts/ci/docker/check-dockerfile-crate-coverage.sh"
+
+# ---- Governance and plugin ---------------------------------------------------------------------
+
+[tasks."governance:test"]
+description = "Test that ai-rulez stays unpinned across mise, CI and release workflows"
+run = "python3 scripts/tests/test_governance_runtime.py"
+
+[tasks."governance:generate"]
+description = "Generate local AI governance files with the latest ai-rulez"
+tools = { node = "26.12.1" }
+run = "npx -y ai-rulez@latest generate"
+
+[tasks."governance:validate"]
+description = "Validate the root AI governance configuration"
+tools = { node = "26.12.1" }
+run = "npx -y ai-rulez@latest validate"
+
+[tasks."plugin:test"]
+description = "Check OpenCode v2 tools and packed Pi resources"
+run = [
+  "node --test scripts/tests/opencode-plugin.test.mjs",
+  "python3 scripts/verify_pi_package.py",
+  "python3 scripts/tests/test_verify_pi_package.py",
+]
+
+# ---- Versions and publishing -------------------------------------------------------------------
+
+[tasks."version:sync"]
+description = "Synchronize package, integration and plugin versions"
+run = [
+  "alef sync-versions",
+  # Integrations are versioned + published in lockstep with core (including rc); alef only syncs
+  # the alef-managed binding manifests, so sync integrations too. This also writes
+  # plugin/.ai-rulez/config.plugins.toml [plugin].version. ~keep
+  "python3 scripts/sync_integration_versions.py",
+  # Public skills must follow the same versioned resources as runtime bundles. ~keep
+  { task = "plugin:generate" },
+]
+
+[tasks."version:check"]
+description = "Check if versions are synchronized (dry-run)"
+run = [{ task = "version:show" }, "python3 scripts/sync_integration_versions.py --check"]
+
+# ---- alef --------------------------------------------------------------------------------------
+
+[tasks."alef:verify"]
+description = "Check Alef-generated files are up to date"
+run = "alef verify --exit-code"
+
+[tasks."alef:verify:readme-paths"]
+description = "Check every alef.toml readme/docs path (templates, snippets) resolves on disk"
+run = "python3 scripts/ci/check-alef-readme-paths.py alef.toml"
+
+[tasks."alef:verify:ffi-formats"]
+description = "Check the native FFI build still selects every document format (GH#1387)"
+run = "python3 scripts/ci/check-ffi-format-features.py alef.toml"
+
+[tasks."alef:verify:fields"]
+description = "Check every tracked config field is named in every generated binding surface (GH#1745)"
+run = "python3 scripts/ci/check-binding-field-coverage.py"

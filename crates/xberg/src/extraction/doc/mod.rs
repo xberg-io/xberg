@@ -17,6 +17,8 @@ mod test_floating_images;
 #[cfg(test)]
 pub(crate) mod test_images;
 #[cfg(all(test, feature = "tokio-runtime"))]
+mod test_prm_scripts;
+#[cfg(all(test, feature = "tokio-runtime"))]
 mod test_scripts;
 
 use crate::error::{Result, XbergError};
@@ -458,20 +460,21 @@ struct SubdocumentText {
     /// Byte offset one past each character in `main`, same length as its char
     /// count. Character properties are addressed by physical source FC. ~keep
     main_fc_ends: Vec<u32>,
+    main_scripts: Vec<chpx::Script>,
     /// CP of each character in `main`, same length as `main_fc_ends`.
     /// Floating pictures are anchored by CP (`PlcSpaMom`). ~keep
     main_cps: Vec<u32>,
     footnote: String,
-    footnote_fc_ends: Vec<u32>,
+    footnote_scripts: Vec<chpx::Script>,
     footnote_cps: Vec<u32>,
     header: String,
-    header_fc_ends: Vec<u32>,
+    header_scripts: Vec<chpx::Script>,
     header_cps: Vec<u32>,
     annotation: String,
-    annotation_fc_ends: Vec<u32>,
+    annotation_scripts: Vec<chpx::Script>,
     annotation_cps: Vec<u32>,
     textbox: String,
-    textbox_fc_ends: Vec<u32>,
+    textbox_scripts: Vec<chpx::Script>,
 }
 
 mod piece_table;
@@ -494,7 +497,7 @@ struct ParagraphBuffer {
 struct ParagraphContext<'a> {
     lists: &'a papx::ListTables,
     picture_limits: Option<&'a crate::extractors::security::SecurityLimits>,
-    scripts: &'a chpx::ScriptIndex,
+    scripts: &'a [chpx::Script],
 }
 
 #[derive(Default)]
@@ -533,11 +536,11 @@ impl ParagraphOutput {
         &mut self,
         value: char,
         is_markup: bool,
-        position: (Option<u32>, Option<u32>),
+        position: (Option<u32>, Option<u32>, chpx::Script),
         context: &ParagraphContext<'_>,
         budget: &mut crate::extractors::security::SecurityBudget,
     ) -> Result<bool> {
-        let (fc_end, cp) = position;
+        let (fc_end, cp, script) = position;
         if value == PARAGRAPH_MARK || value == CELL_MARK {
             let table = fc_end.and_then(|fc| context.lists.table_for_paragraph_end(fc));
             if value == PARAGRAPH_MARK || table.is_some() {
@@ -560,9 +563,7 @@ impl ParagraphOutput {
         }
         if !is_markup {
             self.buffer.raw.push(value);
-            self.buffer
-                .scripts
-                .push(fc_end.map_or(chpx::Script::Normal, |fc| context.scripts.at(fc)));
+            self.buffer.scripts.push(script);
         }
         Ok(true)
     }
@@ -611,7 +612,11 @@ fn split_paragraphs_and_pictures(
         after_last_mark = output.consume(
             c,
             is_markup,
-            (main_fc_ends.get(i).copied(), main_cps.get(i).copied()),
+            (
+                main_fc_ends.get(i).copied(),
+                main_cps.get(i).copied(),
+                context.scripts.get(i).copied().unwrap_or_default(),
+            ),
             context,
             budget,
         )?;

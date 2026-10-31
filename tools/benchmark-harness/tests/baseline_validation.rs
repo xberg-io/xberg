@@ -6,12 +6,12 @@
 //! Test coverage:
 //! - CPU measurement accuracy (>5% for CPU-bound work, not 0.13%)
 //! - Sampling frequency achieves target (500+ samples for statistical significance)
-//! - Variance within tolerance (coefficient of variation <10%)
+//! - Sample timestamps agree with snapshots and independently measured elapsed time
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 
-use benchmark_harness::monitoring::ResourceMonitor;
-use std::time::Duration;
+use benchmark_harness::monitoring::{MemorySnapshot, ResourceMonitor, ResourceSample};
+use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -78,55 +78,41 @@ async fn test_sampling_frequency_achieves_target() {
     );
 }
 
-// The benchmark binary uses Tokio's multi-thread runtime. A current-thread
-// test would make synchronous OS process refreshes contend with the timer it
-// is trying to validate and measure an execution mode the harness never uses. ~keep
+fn sample_timestamps_match_window(samples: &[ResourceSample], snapshots: &[MemorySnapshot], elapsed: Duration) -> bool {
+    samples.len() >= 2
+        && samples.len() == snapshots.len()
+        && samples.last().is_some_and(|sample| sample.timestamp_ms > 0)
+        && samples
+            .windows(2)
+            .all(|pair| pair[0].timestamp_ms <= pair[1].timestamp_ms)
+        && snapshots.windows(2).all(|pair| pair[0].timestamp <= pair[1].timestamp)
+        && samples.iter().zip(snapshots).all(|(sample, snapshot)| {
+            u128::from(sample.timestamp_ms) == snapshot.timestamp.as_millis() && snapshot.timestamp <= elapsed
+        })
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_variance_within_tolerance() {
-    let mut durations = Vec::new();
-
-    for _ in 0..5 {
-        let monitor = ResourceMonitor::new();
-        monitor.start(Duration::from_millis(1)).await;
-
-        let duration = tokio::task::spawn_blocking(|| {
-            let start = std::time::Instant::now();
-            std::thread::sleep(Duration::from_millis(50));
-            start.elapsed()
-        })
-        .await
-        .expect("timed workload task must complete");
-        durations.push(duration);
-
-        monitor.stop().await;
-    }
-
-    let mean_ms: f64 = durations.iter().map(|d| d.as_millis() as f64).sum::<f64>() / durations.len() as f64;
-    let variance: f64 = durations
-        .iter()
-        .map(|d| {
-            let diff = d.as_millis() as f64 - mean_ms;
-            diff * diff
-        })
-        .sum::<f64>()
-        / durations.len() as f64;
-    let std_dev = variance.sqrt();
-    let coefficient_of_variation = (std_dev / mean_ms) * 100.0;
+async fn should_record_aligned_sample_timestamps_within_the_observed_window() {
+    let monitor = ResourceMonitor::new();
+    let start = Instant::now();
+    monitor.start(Duration::from_millis(1)).await;
+    sleep(Duration::from_millis(50)).await;
+    let mut samples = monitor.stop().await;
+    let elapsed = start.elapsed();
+    let mut snapshots = monitor.get_snapshots().await;
 
     assert!(
-        coefficient_of_variation < 30.0,
-        "Variance too high: CV={:.2}% (expected <30%). Infrastructure may still have noise.",
-        coefficient_of_variation
-    );
-    assert!(
-        (mean_ms - 50.0).abs() < 10.0,
-        "Mean duration off target: {:.2}ms (expected ~50ms ±10ms). Check system load.",
-        mean_ms
+        sample_timestamps_match_window(&samples, &snapshots, elapsed),
+        "sample timestamps must be ordered, aligned and within {elapsed:?}: {samples:?}; {snapshots:?}"
     );
 
-    println!(
-        "✓ Variance within tolerance: CV={:.2}% (expected <30%), mean={:.2}ms (expected 50±10ms)",
-        coefficient_of_variation, mean_ms
+    let future = elapsed + Duration::from_millis(1);
+    samples.last_mut().expect("periodic sample").timestamp_ms =
+        u64::try_from(future.as_millis()).expect("test duration fits milliseconds");
+    snapshots.last_mut().expect("periodic snapshot").timestamp = future;
+    assert!(
+        !sample_timestamps_match_window(&samples, &snapshots, elapsed),
+        "aligned timestamps beyond the independently observed window must be rejected"
     );
 }
 

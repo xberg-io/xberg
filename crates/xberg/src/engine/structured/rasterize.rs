@@ -10,6 +10,7 @@
 //! caller concern, layered on top of the returned [`PageImage`] values.
 
 use std::io::Cursor;
+use std::num::NonZeroU32;
 
 use thiserror::Error;
 
@@ -23,6 +24,15 @@ pub struct PageImage {
     pub page_number: u32,
     /// PNG-encoded page bytes.
     pub png_bytes: Vec<u8>,
+}
+
+/// Caller-selected image rendering options. PDF rendering remains DPI-driven.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RasterizeOptions {
+    /// Maximum width or height of image inputs, preserving aspect ratio and
+    /// never enlarging them. `None` retains the original image dimensions.
+    /// The source image must still fit the caller's decoding budget.
+    pub max_image_edge: Option<NonZeroU32>,
 }
 
 /// Errors produced while rendering pages.
@@ -67,6 +77,41 @@ pub async fn pages_for_call_with_security_limits(
     dpi: u32,
     security_limits: &SecurityLimits,
 ) -> Result<Vec<PageImage>, RasterizeError> {
+    pages_for_call_with_options(bytes, mime, mode, dpi, security_limits, RasterizeOptions::default()).await
+}
+
+/// Render pages with an optional caller-selected image size cap.
+///
+/// Image inputs are decoded within `security_limits`, then reduced before PNG
+/// encoding. The resize accounts for both pixel buffers while they coexist;
+/// encoding applies the budget again after the source buffer is released.
+/// Smaller images are unchanged. PDF input and nonvision modes retain their
+/// existing behavior. No model-specific size limit is selected by this API.
+///
+/// A downstream caller can pass its existing `max_page_edge` policy:
+/// ```no_run
+/// # use std::num::NonZeroU32;
+/// # use xberg::engine::structured::rasterize::{PageImage, RasterizeError, RasterizeOptions, pages_for_call_with_options};
+/// # use xberg::extractors::security::SecurityLimits;
+/// # use xberg::heuristics::StructuredCallMode;
+/// # async fn render(bytes: &[u8], max_page_edge: NonZeroU32) -> Result<Vec<PageImage>, RasterizeError> {
+/// let options = RasterizeOptions {
+///     max_image_edge: Some(max_page_edge),
+/// };
+/// pages_for_call_with_options(
+///     bytes, "image/jpeg", StructuredCallMode::VisionOnly, 200,
+///     &SecurityLimits::default(), options,
+/// ).await
+/// # }
+/// ```
+pub async fn pages_for_call_with_options(
+    bytes: &[u8],
+    mime: &str,
+    mode: StructuredCallMode,
+    dpi: u32,
+    security_limits: &SecurityLimits,
+    options: RasterizeOptions,
+) -> Result<Vec<PageImage>, RasterizeError> {
     let pages = match mode {
         StructuredCallMode::Skip | StructuredCallMode::TextOnly | StructuredCallMode::TextOnlyWithVisionFallback => {
             Vec::new()
@@ -77,13 +122,15 @@ pub async fn pages_for_call_with_security_limits(
             let security_limits = security_limits.clone();
             #[cfg(feature = "tokio-runtime")]
             {
-                tokio::task::spawn_blocking(move || render_all_pages(&bytes, &mime, dpi, &security_limits))
-                    .await
-                    .map_err(|e| RasterizeError::Pdf(format!("rasterization task failed: {e}")))??
+                tokio::task::spawn_blocking(move || {
+                    render_all_pages_with_options(&bytes, &mime, dpi, &security_limits, options)
+                })
+                .await
+                .map_err(|e| RasterizeError::Pdf(format!("rasterization task failed: {e}")))??
             }
             #[cfg(not(feature = "tokio-runtime"))]
             {
-                render_all_pages(&bytes, &mime, dpi, &security_limits)?
+                render_all_pages_with_options(&bytes, &mime, dpi, &security_limits, options)?
             }
         }
     };
@@ -103,11 +150,21 @@ pub(crate) fn render_all_pages(
     dpi: u32,
     security_limits: &SecurityLimits,
 ) -> Result<Vec<PageImage>, RasterizeError> {
+    render_all_pages_with_options(bytes, mime, dpi, security_limits, RasterizeOptions::default())
+}
+
+pub(crate) fn render_all_pages_with_options(
+    bytes: &[u8],
+    mime: &str,
+    dpi: u32,
+    security_limits: &SecurityLimits,
+    options: RasterizeOptions,
+) -> Result<Vec<PageImage>, RasterizeError> {
     let mime_lc = mime.to_ascii_lowercase();
     if mime_lc == "application/pdf" {
         render_pdf(bytes, dpi)
     } else if mime_lc.starts_with("image/") {
-        render_image(bytes, security_limits)
+        render_image(bytes, security_limits, options)
     } else {
         Err(RasterizeError::UnsupportedMime(mime.into()))
     }
@@ -135,9 +192,14 @@ fn render_pdf(bytes: &[u8], dpi: u32) -> Result<Vec<PageImage>, RasterizeError> 
     Ok(pages)
 }
 
-fn render_image(bytes: &[u8], security_limits: &SecurityLimits) -> Result<Vec<PageImage>, RasterizeError> {
+fn render_image(
+    bytes: &[u8],
+    security_limits: &SecurityLimits,
+    options: RasterizeOptions,
+) -> Result<Vec<PageImage>, RasterizeError> {
     let img = crate::extraction::image_decode::decode_standard_image_with_security_limits(bytes, security_limits)
         .map_err(|error| RasterizeError::Image(format!("failed to decode image: {error}")))?;
+    let img = resize_image(img, security_limits, options)?;
     const PNG_ENCODE_BYTES_PER_PIXEL: u64 = 4;
     const PNG_ENCODE_FIXED_OVERHEAD_BYTES: u64 = 256 * 1024;
     crate::extraction::image_decode::validate_dynamic_image_additional_live_bytes(
@@ -156,6 +218,42 @@ fn render_image(bytes: &[u8], security_limits: &SecurityLimits) -> Result<Vec<Pa
         page_number: 1,
         png_bytes,
     }])
+}
+
+fn resize_image(
+    image: image::DynamicImage,
+    limits: &SecurityLimits,
+    options: RasterizeOptions,
+) -> Result<image::DynamicImage, RasterizeError> {
+    let Some(edge) = options.max_image_edge.map(NonZeroU32::get) else {
+        return Ok(image);
+    };
+    let longest = image.width().max(image.height());
+    if longest <= edge {
+        return Ok(image);
+    }
+    let scaled = |dimension: u32| {
+        let value = ((u64::from(dimension) * u64::from(edge) + u64::from(longest) / 2) / u64::from(longest)).max(1);
+        u32::try_from(value).map_err(|error| RasterizeError::Image(format!("invalid resized dimension: {error}")))
+    };
+    let (width, height) = (scaled(image.width())?, scaled(image.height())?);
+    let source_bytes = u64::try_from(image.as_bytes().len())
+        .map_err(|error| RasterizeError::Image(format!("image buffer size is not addressable: {error}")))?;
+    let destination_bytes =
+        crate::extraction::image_decode::decoded_byte_count(width, height, u64::from(image.color().bytes_per_pixel()))
+            .map_err(|error| RasterizeError::Image(format!("failed to size resized image: {error}")))?;
+    crate::extraction::image_decode::validate_image_live_bytes(
+        image.width(),
+        image.height(),
+        source_bytes,
+        destination_bytes,
+        limits,
+    )
+    .map_err(|error| RasterizeError::Image(format!("failed to resize image within security budget: {error}")))?;
+
+    // Thumbnail sampling allocates only the destination pixel buffer; the
+    // filtered resize path additionally allocates a full-width float image.
+    Ok(image.thumbnail_exact(width, height))
 }
 
 #[cfg(test)]
@@ -253,3 +351,7 @@ mod tests {
 #[cfg(test)]
 #[path = "rasterize_security_tests.rs"]
 mod security_tests;
+
+#[cfg(test)]
+#[path = "rasterize_options_tests.rs"]
+mod options_tests;

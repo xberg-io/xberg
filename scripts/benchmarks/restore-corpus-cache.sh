@@ -117,7 +117,7 @@ else
       exit 1
     fi
     echo "::error::No reference corpus cache found for content digest ${CACHE_KEY}." >&2
-    echo "::error::A maintainer must run 'task benchmark:corpus:cache:publish' after materializing the reference corpus." >&2
+    echo "::error::A maintainer must run 'scripts/benchmarks/publish-corpus-cache.sh' after materializing the reference corpus." >&2
     exit 1
   fi
 fi

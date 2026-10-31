@@ -84,6 +84,13 @@ if ($null -ne $pdfiumFile) {
 	}
 }
 
+$noticeTool = Join-Path $PSScriptRoot "../../ci/package-notices.py"
+& python3 $noticeTool stage $destDir
+if ($LASTEXITCODE -ne 0) { throw "Canonical notice staging failed" }
+
 Get-ChildItem -Path $destDir | Out-Host
 
 tar -czf ("node-bindings-" + $env:TARGET + ".tar.gz") -C "crates/xberg-node/npm" $platformDir
+
+& python3 $noticeTool verify ("node-bindings-" + $env:TARGET + ".tar.gz") $platformDir
+if ($LASTEXITCODE -ne 0) { throw "Canonical archive notice verification failed" }

@@ -21,10 +21,10 @@ non-redistributable bytes ever entering the public repo.
 1. Materialize the reference cache once (needs the pinned upstream datasets):
    `python tools/benchmark-harness/scripts/build_corpus.py --stage materialize`
    — or restore it from the private bucket (needs GCS access):
-   `task benchmark:corpus:cache:restore`
+   `scripts/benchmarks/restore-corpus-cache.sh`
 2. Ensure the vendor PDFs are present:
    `python3 test_documents/scripts/fetch_corpus.py --include 'pdf/**'`
-3. Run a benchmark, e.g. `task benchmark:local`.
+3. Run a benchmark, e.g. `bash tools/benchmark-harness/scripts/bench_local.sh`.
 
 Verify the corpus resolves before a run:
 `cargo run -p benchmark-harness -- validate-gt --fixtures tools/benchmark-harness/fixtures/pdf/ --strict`
@@ -71,7 +71,7 @@ revision's reference-manifest digest exactly matches the current digest.
 1. Rebuild the corpus: `python tools/benchmark-harness/scripts/build_corpus.py --stage all`
    then `--stage materialize`. Commit the regenerated fixtures + GT + manifest in `test_documents`
    and bump the submodule pin in this repo.
-2. Publish the new content-addressed reference cache: `task benchmark:corpus:cache:publish`
+2. Publish the new content-addressed reference cache: `scripts/benchmarks/publish-corpus-cache.sh`
    (needs write access to the bucket + a locally materialized cache).
 3. Bump `xberg-enterprise`'s `test_documents` pin to the same commit — the enterprise
    `test_documents-pin` drift guard fails until it matches this repo's pin.

@@ -200,12 +200,16 @@ pub(crate) enum Commands {
         #[arg(long)]
         expected_pages: Option<usize>,
 
-        /// Complete detector artifact (timing/counts only, not quality acceptance)
+        /// Hash-bound COCO annotations and explicit label projections; opt-in bbox metrics only
+        #[arg(long)]
+        geometry_annotations: Option<PathBuf>,
+
+        /// Complete detector artifact with optional bbox metrics; not qualification
         #[arg(long, default_value = "benchmark-results/layout-models.json")]
         output: PathBuf,
     },
 
-    /// Validate an existing detector timing/count artifact without running inference
+    /// Validate a saved detector artifact and recompute attached bbox metrics
     ModelBenchmarkValidate {
         #[arg(long)]
         artifact: PathBuf,

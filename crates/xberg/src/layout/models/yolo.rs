@@ -122,82 +122,21 @@ impl YoloModel {
         let shape = &view.0;
         let data = view.1;
 
-        let num_dets = if shape.len() == 3 {
-            shape[1] as usize
-        } else {
-            shape[0] as usize
-        };
-        let cols = if shape.len() == 3 {
-            shape[2] as usize
-        } else if shape.len() == 2 {
-            shape[1] as usize
-        } else {
-            return Err(LayoutError::InvalidOutput(format!(
-                "Unexpected output shape: {shape:?}"
-            )));
-        };
+        let (num_dets, cols) = yolov10_output_dimensions(shape)?;
 
         let scale_x = orig_width as f32 / self.input_width as f32;
         let scale_y = orig_height as f32 / self.input_height as f32;
 
-        let mut detections = Vec::new();
-
-        if cols == 6 {
-            for i in 0..num_dets {
-                let offset = i * 6;
-                let score = data[offset + 4];
-                if score < threshold {
-                    continue;
-                }
-                let class_id = data[offset + 5] as i64;
-                let class = match map_class_id(variant, class_id) {
-                    Some(c) => c,
-                    None => continue,
-                };
-                let bbox = BBox::new(
-                    data[offset] * scale_x,
-                    data[offset + 1] * scale_y,
-                    data[offset + 2] * scale_x,
-                    data[offset + 3] * scale_y,
-                );
-                detections.push(LayoutDetection::new(class, score, bbox));
-            }
+        let mut detections = if cols == 6 {
+            decode_yolov10_corners(variant, data, num_dets, threshold, (scale_x, scale_y))
         } else if cols > 4 {
-            let num_classes = cols - 4;
-            for i in 0..num_dets {
-                let offset = i * cols;
-                let cx = data[offset];
-                let cy = data[offset + 1];
-                let w = data[offset + 2];
-                let h = data[offset + 3];
-
-                let mut best_score = 0.0f32;
-                let mut best_class_idx = 0i64;
-                for c in 0..num_classes {
-                    let s = data[offset + 4 + c];
-                    if s > best_score {
-                        best_score = s;
-                        best_class_idx = c as i64;
-                    }
-                }
-
-                if best_score < threshold {
-                    continue;
-                }
-
-                let class = match map_class_id(variant, best_class_idx) {
-                    Some(c) => c,
-                    None => continue,
-                };
-
-                let x1 = (cx - w / 2.0) * scale_x;
-                let y1 = (cy - h / 2.0) * scale_y;
-                let x2 = (cx + w / 2.0) * scale_x;
-                let y2 = (cy + h / 2.0) * scale_y;
-                detections.push(LayoutDetection::new(class, best_score, BBox::new(x1, y1, x2, y2)));
-            }
-            detections = nms::greedy_nms(detections, NMS_IOU_THRESHOLD);
-        }
+            nms::greedy_nms(
+                decode_yolov10_centers(variant, data, num_dets, cols, threshold, (scale_x, scale_y)),
+                NMS_IOU_THRESHOLD,
+            )
+        } else {
+            Vec::new()
+        };
 
         detections = LayoutDetection::sort_by_confidence_desc(detections);
 
@@ -257,65 +196,9 @@ impl YoloModel {
         };
         let num_classes = cols - 5;
 
-        let strides: &[u32] = &[8, 16, 32];
+        let grids = build_yolox_grid(input_w, input_h, num_anchors)?;
 
-        let mut grids: Vec<(f32, f32, f32)> = Vec::with_capacity(num_anchors);
-        for &stride in strides {
-            let h_size = input_h / stride;
-            let w_size = input_w / stride;
-            for y in 0..h_size {
-                for x in 0..w_size {
-                    grids.push((x as f32, y as f32, stride as f32));
-                }
-            }
-        }
-
-        if grids.len() != num_anchors {
-            return Err(LayoutError::InvalidOutput(format!(
-                "Grid anchor count mismatch: expected {} from strides, got {} from model output",
-                grids.len(),
-                num_anchors
-            )));
-        }
-
-        let mut detections = Vec::new();
-        for (i, &(gx, gy, s)) in grids.iter().enumerate() {
-            let offset = i * cols;
-
-            let cx = (data[offset] + gx) * s;
-            let cy = (data[offset + 1] + gy) * s;
-            let w = data[offset + 2].exp() * s;
-            let h = data[offset + 3].exp() * s;
-
-            let objectness = data[offset + 4];
-
-            let mut best_class_score = 0.0f32;
-            let mut best_class_idx = 0i64;
-            for c in 0..num_classes {
-                let cs = data[offset + 5 + c];
-                if cs > best_class_score {
-                    best_class_score = cs;
-                    best_class_idx = c as i64;
-                }
-            }
-
-            let confidence = objectness * best_class_score;
-            if confidence < threshold {
-                continue;
-            }
-
-            let class = match map_class_id(variant, best_class_idx) {
-                Some(c) => c,
-                None => continue,
-            };
-
-            let x1 = (cx - w / 2.0) / scale;
-            let y1 = (cy - h / 2.0) / scale;
-            let x2 = (cx + w / 2.0) / scale;
-            let y2 = (cy + h / 2.0) / scale;
-
-            detections.push(LayoutDetection::new(class, confidence, BBox::new(x1, y1, x2, y2)));
-        }
+        let mut detections = decode_yolox_anchors(variant, data, (cols, num_classes), &grids, threshold, scale);
 
         detections = nms::greedy_nms(detections, NMS_IOU_THRESHOLD);
 
@@ -323,6 +206,175 @@ impl YoloModel {
 
         Ok(detections)
     }
+}
+
+fn yolov10_output_dimensions(shape: &[i64]) -> Result<(usize, usize), LayoutError> {
+    let num_dets = if shape.len() == 3 {
+        shape[1] as usize
+    } else {
+        shape[0] as usize
+    };
+    let cols = if shape.len() == 3 {
+        shape[2] as usize
+    } else if shape.len() == 2 {
+        shape[1] as usize
+    } else {
+        return Err(LayoutError::InvalidOutput(format!(
+            "Unexpected output shape: {shape:?}"
+        )));
+    };
+
+    Ok((num_dets, cols))
+}
+
+fn decode_yolov10_corners(
+    variant: YoloVariant,
+    data: &[f32],
+    num_dets: usize,
+    threshold: f32,
+    (scale_x, scale_y): (f32, f32),
+) -> Vec<LayoutDetection> {
+    let mut detections = Vec::new();
+    for i in 0..num_dets {
+        let offset = i * 6;
+        let score = data[offset + 4];
+        if score < threshold {
+            continue;
+        }
+        let class_id = data[offset + 5] as i64;
+        let class = match map_class_id(variant, class_id) {
+            Some(c) => c,
+            None => continue,
+        };
+        let bbox = BBox::new(
+            data[offset] * scale_x,
+            data[offset + 1] * scale_y,
+            data[offset + 2] * scale_x,
+            data[offset + 3] * scale_y,
+        );
+        detections.push(LayoutDetection::new(class, score, bbox));
+    }
+    detections
+}
+
+fn decode_yolov10_centers(
+    variant: YoloVariant,
+    data: &[f32],
+    num_dets: usize,
+    cols: usize,
+    threshold: f32,
+    (scale_x, scale_y): (f32, f32),
+) -> Vec<LayoutDetection> {
+    let mut detections = Vec::new();
+    let num_classes = cols - 4;
+    for i in 0..num_dets {
+        let offset = i * cols;
+        let cx = data[offset];
+        let cy = data[offset + 1];
+        let w = data[offset + 2];
+        let h = data[offset + 3];
+
+        let mut best_score = 0.0f32;
+        let mut best_class_idx = 0i64;
+        for c in 0..num_classes {
+            let s = data[offset + 4 + c];
+            if s > best_score {
+                best_score = s;
+                best_class_idx = c as i64;
+            }
+        }
+
+        if best_score < threshold {
+            continue;
+        }
+
+        let class = match map_class_id(variant, best_class_idx) {
+            Some(c) => c,
+            None => continue,
+        };
+
+        let x1 = (cx - w / 2.0) * scale_x;
+        let y1 = (cy - h / 2.0) * scale_y;
+        let x2 = (cx + w / 2.0) * scale_x;
+        let y2 = (cy + h / 2.0) * scale_y;
+        detections.push(LayoutDetection::new(class, best_score, BBox::new(x1, y1, x2, y2)));
+    }
+    detections
+}
+
+fn build_yolox_grid(input_w: u32, input_h: u32, num_anchors: usize) -> Result<Vec<(f32, f32, f32)>, LayoutError> {
+    let strides: &[u32] = &[8, 16, 32];
+
+    let mut grids: Vec<(f32, f32, f32)> = Vec::with_capacity(num_anchors);
+    for &stride in strides {
+        let h_size = input_h / stride;
+        let w_size = input_w / stride;
+        for y in 0..h_size {
+            for x in 0..w_size {
+                grids.push((x as f32, y as f32, stride as f32));
+            }
+        }
+    }
+
+    if grids.len() != num_anchors {
+        return Err(LayoutError::InvalidOutput(format!(
+            "Grid anchor count mismatch: expected {} from strides, got {} from model output",
+            grids.len(),
+            num_anchors
+        )));
+    }
+
+    Ok(grids)
+}
+
+fn decode_yolox_anchors(
+    variant: YoloVariant,
+    data: &[f32],
+    (cols, num_classes): (usize, usize),
+    grids: &[(f32, f32, f32)],
+    threshold: f32,
+    scale: f32,
+) -> Vec<LayoutDetection> {
+    let mut detections = Vec::new();
+    for (i, &(gx, gy, s)) in grids.iter().enumerate() {
+        let offset = i * cols;
+
+        let cx = (data[offset] + gx) * s;
+        let cy = (data[offset + 1] + gy) * s;
+        let w = data[offset + 2].exp() * s;
+        let h = data[offset + 3].exp() * s;
+
+        let objectness = data[offset + 4];
+
+        let mut best_class_score = 0.0f32;
+        let mut best_class_idx = 0i64;
+        for c in 0..num_classes {
+            let cs = data[offset + 5 + c];
+            if cs > best_class_score {
+                best_class_score = cs;
+                best_class_idx = c as i64;
+            }
+        }
+
+        let confidence = objectness * best_class_score;
+        if confidence < threshold {
+            continue;
+        }
+
+        let class = match map_class_id(variant, best_class_idx) {
+            Some(c) => c,
+            None => continue,
+        };
+
+        let x1 = (cx - w / 2.0) / scale;
+        let y1 = (cy - h / 2.0) / scale;
+        let x2 = (cx + w / 2.0) / scale;
+        let y2 = (cy + h / 2.0) / scale;
+
+        detections.push(LayoutDetection::new(class, confidence, BBox::new(x1, y1, x2, y2)));
+    }
+
+    detections
 }
 
 fn map_class_id(variant: YoloVariant, id: i64) -> Option<LayoutClass> {
@@ -345,3 +397,6 @@ impl LayoutModel for YoloModel {
         &self.model_name
     }
 }
+
+#[cfg(test)]
+mod tests;

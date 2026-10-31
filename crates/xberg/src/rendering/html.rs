@@ -1,18 +1,25 @@
 //! Render an `InternalDocument` to HTML5 via comrak.
 
-use comrak::{Arena, format_html};
+use std::fmt::{self, Write};
+
+use comrak::Arena;
+use comrak::html::{ChildRendering, Context, format_document_with_formatter, format_node_default};
+use comrak::nodes::{AstNode, NodeValue};
+use comrak::options::Plugins;
 
 use crate::types::annotations::PdfAnnotation;
 use crate::types::internal::InternalDocument;
 
 use super::common::{annotation_display_text, annotation_type_label, escape_html_text};
-use super::comrak_bridge::build_comrak_ast;
+use super::comrak_bridge::build_html_comrak_ast;
 use super::markdown::comrak_options;
 
 /// Render an `InternalDocument` to HTML5.
 pub(crate) fn render_html(doc: &InternalDocument) -> String {
     let arena = Arena::new();
-    let root = build_comrak_ast(doc, &arena);
+    let root = build_html_comrak_ast(doc, &arena);
+    #[cfg(debug_assertions)]
+    root.validate().expect("comrak HTML AST should be valid");
 
     let mut options = comrak_options();
     options.render.r#unsafe = true;
@@ -20,13 +27,41 @@ pub(crate) fn render_html(doc: &InternalDocument) -> String {
     options.render.full_info_string = true;
 
     let mut output = String::new();
-    format_html(root, &options, &mut output).expect("comrak HTML formatting should not fail");
+    format_document_with_formatter(root, &options, &mut output, &Plugins::default(), format_html_node, ())
+        .expect("comrak HTML formatting should not fail");
 
     if let Some(annotations) = doc.annotations.as_deref() {
         output.push_str(&render_annotations_html(annotations));
     }
 
     output
+}
+
+fn format_html_node<'a>(
+    context: &mut Context<'_, '_, ()>,
+    node: &'a AstNode<'a>,
+    entering: bool,
+) -> Result<ChildRendering, fmt::Error> {
+    let headerless_table = matches!(node.data.borrow().value, NodeValue::Table(_))
+        && node
+            .first_child()
+            .is_some_and(|row| matches!(row.data.borrow().value, NodeValue::TableRow(false)));
+    if !headerless_table {
+        return format_node_default(context, node, entering);
+    }
+    // Comrak opens tbody only after a header, but closes it based on row count.
+    // Headerless tables need one balanced body even when they have a single row. ~keep
+    if entering {
+        format_node_default(context, node, true)?;
+        context.write_str("<tbody>")?;
+    } else {
+        context.cr()?;
+        context.write_str("</tbody>")?;
+        context.lf()?;
+        context.write_str("</table>")?;
+    }
+    context.lf()?;
+    Ok(ChildRendering::HTML)
 }
 
 /// Render the document-level PDF annotations (issue #63) as an HTML section:

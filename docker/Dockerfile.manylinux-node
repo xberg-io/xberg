@@ -118,6 +118,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-node/ crates/xberg-node/

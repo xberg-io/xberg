@@ -63,7 +63,7 @@ if [[ -d "${TARGET_DIR}" ]]; then
   echo "Contents of ${TARGET_DIR}:"
   shopt -s nullglob
   files=("${TARGET_DIR}"/*xberg* "${TARGET_DIR}"/*.dll "${TARGET_DIR}"/*.so "${TARGET_DIR}"/*.dylib)
-  if [[ ${#files[@]} -gt 0 ]]; then
+  if [[ -n "${files[0]+present}" ]]; then
     ls -la "${files[@]}"
   else
     echo "No xberg binaries found"
@@ -76,15 +76,13 @@ fi
 if [[ ! -f "${TARGET_DIR}/${EXT_FILE}" ]]; then
   echo "::error::Extension file not found: ${TARGET_DIR}/${EXT_FILE}" >&2
   echo "Attempting to find alternative file names..."
-  for ext in .dll .so .dylib; do
-    for prefix in libxberg_php xberg_php; do
-      candidate="${TARGET_DIR}/${prefix}${ext}"
-      if [[ -f "$candidate" ]]; then
-        echo "::notice::Found candidate: $candidate"
-        EXT_FILE="${prefix}${ext}"
-        break 2
-      fi
-    done
+  for prefix in libxberg_php xberg_php; do
+    candidate="${TARGET_DIR}/${prefix}.${EXT_SUFFIX}"
+    if [[ -f "$candidate" ]]; then
+      echo "::notice::Found candidate: $candidate"
+      EXT_FILE="${prefix}.${EXT_SUFFIX}"
+      break
+    fi
   done
 
   if [[ ! -f "${TARGET_DIR}/${EXT_FILE}" ]]; then
@@ -106,7 +104,8 @@ cp "${PHP_DIR}/package.xml" "${PKG_DIR}/" || echo "::warning::package.xml not fo
 
 # Copy README and LICENSE
 cp "${PHP_DIR}/README.md" "${PKG_DIR}/" || echo "::warning::README.md not found"
-cp "${PHP_DIR}/LICENSE" "${PKG_DIR}/" || echo "::warning::LICENSE not found"
+NOTICE_TOOL="$(cd "$(dirname "$0")/../../ci" && pwd)/package-notices.py"
+python3 "$NOTICE_TOOL" stage "$PKG_DIR"
 cp "${PHP_DIR}/CHANGELOG.md" "${PKG_DIR}/" || echo "::warning::CHANGELOG.md not found"
 
 cat >"${PKG_DIR}/pie.json" <<EOF
@@ -175,6 +174,8 @@ EOF
 TARBALL_NAME="${PKG_NAME}.tar.gz"
 echo "Creating tarball: ${TARBALL_NAME}"
 tar -czf "${OUTPUT_DIR}/${TARBALL_NAME}" -C "${OUTPUT_DIR}" "${PKG_NAME}"
+
+python3 "$NOTICE_TOOL" verify "${OUTPUT_DIR}/${TARBALL_NAME}" "$PKG_NAME"
 
 cd "${OUTPUT_DIR}"
 if command -v sha256sum &>/dev/null; then

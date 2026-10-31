@@ -22,6 +22,7 @@ use crate::types::internal::{ElementKind, InternalDocument};
 const STUB_CONFIDENCE_THRESHOLD: f32 = 0.41;
 const NO_REGION_CONFIDENCE_THRESHOLD: f32 = 0.43;
 const STUB_LATEX: &str = "\\stub{x^2}";
+const RENDERED_LATEX: &str = "x^{2}+1";
 const OCR_BACKEND: &str = "mixed-ocr-formula-stub";
 const OCR_TEXT: &str = "Automatic OCR replacement text for the scanned second page of this fixture.";
 const REJECTED_OCR_BACKEND: &str = "mixed-ocr-formula-rejected-stub";
@@ -107,6 +108,24 @@ fn install_stub_engine(layout: &LayoutDetectionConfig) {
 fn stub_latex(_crop: &RgbImage) -> Option<String> {
     RECOGNITIONS.fetch_add(1, Ordering::SeqCst);
     Some(STUB_LATEX.to_string())
+}
+
+fn rendered_latex(_crop: &RgbImage) -> Option<String> {
+    RECOGNITIONS.fetch_add(1, Ordering::SeqCst);
+    Some(RENDERED_LATEX.to_string())
+}
+
+fn absent_latex(_crop: &RgbImage) -> Option<String> {
+    RECOGNITIONS.fetch_add(1, Ordering::SeqCst);
+    None
+}
+
+fn install_rendering_stubs(recognizer: fn(&RgbImage) -> Option<String>) -> Stubs {
+    let stubs = Stubs::install();
+    *crate::formula_recognition::STUB_RECOGNIZER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(recognizer);
+    stubs
 }
 
 /// Installs the stub recognizer and the stub OCR backends for one test, and removes them on drop.
@@ -308,10 +327,14 @@ fn recognised_pages(doc: &InternalDocument) -> BTreeSet<u32> {
 
 /// The stub formula on page 2 must cover the scan's dark top-left quarter in PDF points.
 fn assert_formula_on_dark_quarter(doc: &InternalDocument) {
+    assert_formula_bbox_on_dark_quarter(doc, STUB_LATEX);
+}
+
+fn assert_formula_bbox_on_dark_quarter(doc: &InternalDocument, latex: &str) {
     let bbox = doc
         .formulas
         .iter()
-        .find(|formula| formula.page == Some(2) && formula.latex == STUB_LATEX)
+        .find(|formula| formula.page == Some(2) && formula.latex == latex)
         .and_then(|formula| formula.bbox)
         .expect("page 2 carries the recognised formula with a bbox");
     let expected = [0.0, 396.0, 306.0, 792.0];
@@ -629,5 +652,310 @@ async fn mixed_formula_synthesis_preserves_physical_page_order_when_scan_precede
             .filter_map(|formula| formula.page)
             .collect::<Vec<_>>(),
         [1, 2]
+    );
+}
+
+fn assert_rendered_formula_pages(doc: &InternalDocument, expected: &[u32]) {
+    let pages = doc
+        .elements
+        .iter()
+        .filter(|element| matches!(element.kind, ElementKind::Formula) && element.text == RENDERED_LATEX)
+        .map(|element| element.page.expect("recognized formula belongs to a physical page"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        pages, expected,
+        "recognized formulas must be document elements, not only side-channel data"
+    );
+    let result = crate::extraction::derive::derive_extraction_result(doc.clone(), false, OutputFormat::Markdown);
+    assert_eq!(
+        result
+            .formatted_content
+            .as_deref()
+            .expect("rendered Markdown")
+            .matches(RENDERED_LATEX)
+            .count(),
+        expected.len()
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mixed_ocr_unpaired_formulas_are_rendered_once_on_their_page() {
+    let _stubs = install_rendering_stubs(rendered_latex);
+    let layout = layout_config(Some(FormulaModel::LatexOcr), STUB_CONFIDENCE_THRESHOLD);
+    install_stub_engine(&layout);
+    let pdf = native_then_scanned_pdf(0);
+    for route in [Route::Forced, Route::Scanned, Route::GateFallback] {
+        RECOGNITIONS.store(0, Ordering::SeqCst);
+        let doc = extract(&pdf, &config(route, layout.clone(), OCR_BACKEND)).await;
+        assert_eq!(extraction_method(&doc), Some(ExtractionMethod::Mixed));
+        assert_eq!(
+            RECOGNITIONS.load(Ordering::SeqCst),
+            1,
+            "one actual formula recognition per route"
+        );
+        assert_eq!(
+            doc.formulas
+                .iter()
+                .filter(|formula| formula.latex == RENDERED_LATEX)
+                .count(),
+            1,
+            "the successful recognizer answer already reaches the side channel"
+        );
+        assert_formula_bbox_on_dark_quarter(&doc, RENDERED_LATEX);
+        assert_rendered_formula_pages(&doc, &[2]);
+        let element_bbox = doc
+            .elements
+            .iter()
+            .find(|element| element.kind == ElementKind::Formula && element.page == Some(2))
+            .and_then(|element| element.bbox);
+        assert_eq!(
+            element_bbox, doc.formulas[0].bbox,
+            "body geometry must retain the source PDF bbox"
+        );
+        let result = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Markdown);
+        assert!(
+            result
+                .formatted_content
+                .as_deref()
+                .expect("rendered Markdown")
+                .contains(OCR_TEXT),
+            "recognition must retain the original OCR prose"
+        );
+    }
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mixed_ocr_synthesizes_recognized_native_formula_elements() {
+    let _stubs = install_rendering_stubs(rendered_latex);
+    let layout = layout_config(Some(FormulaModel::LatexOcr), STUB_CONFIDENCE_THRESHOLD);
+    install_stub_engine(&layout);
+    let mut config = config(Route::Forced, layout, OCR_BACKEND);
+    config.use_layout_for_markdown = true;
+    let doc = extract(&native_then_scanned_pdf(0), &config).await;
+    assert_eq!(RECOGNITIONS.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        doc.elements
+            .iter()
+            .filter(|element| {
+                element.page == Some(1)
+                    && matches!(element.kind, ElementKind::Formula)
+                    && element.text == RENDERED_LATEX
+            })
+            .count(),
+        1,
+        "a recognized native region must become a document formula"
+    );
+    let result = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Markdown);
+    assert!(
+        result
+            .formatted_content
+            .as_deref()
+            .expect("rendered Markdown")
+            .contains(RENDERED_LATEX)
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn formula_recognition_updates_a_real_paired_element_without_duplication() {
+    use crate::types::internal::{InternalElement, Relationship, RelationshipKind, RelationshipTarget};
+
+    let _stubs = install_rendering_stubs(rendered_latex);
+    let mut doc = InternalDocument::new("pdf");
+    doc.push_element(InternalElement::text(ElementKind::Paragraph, "Original prose", 0).with_page(1));
+    doc.push_element(InternalElement::text(ElementKind::Formula, "old", 0).with_page(1));
+    let bbox = crate::types::BoundingBox {
+        x0: 1.0,
+        y0: 1.0,
+        x1: 10.0,
+        y1: 10.0,
+    };
+    doc.elements[1].bbox = Some(bbox);
+    let old_id = doc.elements[1].id.clone();
+    let relationship = Relationship {
+        source: 0,
+        target: RelationshipTarget::Index(1),
+        kind: RelationshipKind::CrossReference,
+    };
+    doc.push_relationship(relationship.clone());
+    let mut formulas = vec![crate::types::Formula {
+        latex: "old".to_string(),
+        bbox: Some(bbox),
+        page: Some(1),
+    }];
+    let image = RgbImage::new(20, 20);
+    let detection = crate::layout::DetectionResult::new(
+        20,
+        20,
+        vec![LayoutDetection {
+            class_name: LayoutClass::Formula,
+            confidence: 0.9,
+            bbox: BBox {
+                x1: 1.0,
+                y1: 1.0,
+                x2: 10.0,
+                y2: 10.0,
+            },
+        }],
+    );
+    let layout = layout_config(Some(FormulaModel::LatexOcr), STUB_CONFIDENCE_THRESHOLD);
+    crate::extractors::pdf::recognize_formula_regions_for_test(
+        &mut doc,
+        &mut formulas,
+        &[image],
+        &[detection],
+        &layout,
+    )
+    .await;
+    assert_eq!(RECOGNITIONS.load(Ordering::SeqCst), 1);
+    assert_eq!(doc.elements.len(), 2);
+    assert_eq!(doc.elements[0].text, "Original prose");
+    assert_eq!(doc.elements[1].id, old_id);
+    assert_eq!(doc.elements[1].bbox, Some(bbox));
+    assert_eq!(doc.relationships, vec![relationship]);
+    assert_eq!(formulas.len(), 1);
+    assert_eq!(formulas[0].latex, RENDERED_LATEX);
+    assert_rendered_formula_pages(&doc, &[1]);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn formula_recognition_inserts_a_sidechannel_only_formula_before_later_pages() {
+    use crate::types::internal::{InternalElement, Relationship, RelationshipKind, RelationshipTarget};
+
+    let _stubs = install_rendering_stubs(rendered_latex);
+    let mut doc = InternalDocument::new("pdf");
+    doc.push_element(InternalElement::text(ElementKind::Paragraph, "Later source", 0).with_page(2));
+    doc.push_element(InternalElement::text(ElementKind::Paragraph, "Later target", 0).with_page(2));
+    let old_ids: Vec<_> = doc.elements.iter().map(|element| element.id.clone()).collect();
+    doc.push_relationship(Relationship {
+        source: 0,
+        target: RelationshipTarget::Index(1),
+        kind: RelationshipKind::CrossReference,
+    });
+    let mut formulas = vec![crate::types::Formula {
+        latex: "old".to_string(),
+        bbox: None,
+        page: Some(1),
+    }];
+    let detection = crate::layout::DetectionResult::new(
+        20,
+        20,
+        vec![LayoutDetection {
+            class_name: LayoutClass::Formula,
+            confidence: 0.9,
+            bbox: BBox {
+                x1: 1.0,
+                y1: 1.0,
+                x2: 10.0,
+                y2: 10.0,
+            },
+        }],
+    );
+    let layout = layout_config(Some(FormulaModel::LatexOcr), STUB_CONFIDENCE_THRESHOLD);
+    crate::extractors::pdf::recognize_formula_regions_for_test(
+        &mut doc,
+        &mut formulas,
+        &[RgbImage::new(20, 20)],
+        &[detection],
+        &layout,
+    )
+    .await;
+    assert_eq!(RECOGNITIONS.load(Ordering::SeqCst), 1);
+    assert_eq!(formulas.len(), 1);
+    assert_eq!(formulas[0].latex, RENDERED_LATEX);
+    assert_eq!(doc.elements[0].kind, ElementKind::Formula);
+    assert_eq!(doc.elements[0].page, Some(1));
+    let retained: Vec<_> = doc.elements.iter().filter(|element| element.page == Some(2)).collect();
+    assert_eq!(
+        retained.iter().map(|element| element.id.clone()).collect::<Vec<_>>(),
+        old_ids
+    );
+    assert_eq!(retained[0].text, "Later source");
+    assert_eq!(retained[1].text, "Later target");
+    let relationship = &doc.relationships[0];
+    assert_eq!(doc.elements[relationship.source as usize].id, old_ids[0]);
+    let RelationshipTarget::Index(target) = relationship.target else {
+        panic!("indexed target")
+    };
+    assert_eq!(doc.elements[target as usize].id, old_ids[1]);
+    assert_rendered_formula_pages(&doc, &[1]);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mixed_ocr_does_not_render_math_without_a_recognizer_answer() {
+    let _stubs = install_rendering_stubs(absent_latex);
+    let pdf = native_then_scanned_pdf(0);
+    for (formula_model, threshold, calls) in [
+        (Some(FormulaModel::LatexOcr), STUB_CONFIDENCE_THRESHOLD, 1),
+        (None, STUB_CONFIDENCE_THRESHOLD, 0),
+        (Some(FormulaModel::LatexOcr), NO_REGION_CONFIDENCE_THRESHOLD, 0),
+    ] {
+        RECOGNITIONS.store(0, Ordering::SeqCst);
+        let layout = layout_config(formula_model, threshold);
+        install_stub_engine(&layout);
+        let doc = extract(&pdf, &config(Route::Forced, layout, OCR_BACKEND)).await;
+        assert_eq!(extraction_method(&doc), Some(ExtractionMethod::Mixed));
+        assert_eq!(RECOGNITIONS.load(Ordering::SeqCst), calls);
+        assert_rendered_formula_pages(&doc, &[]);
+        let result = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Markdown);
+        assert!(
+            result
+                .formatted_content
+                .as_deref()
+                .expect("rendered Markdown")
+                .contains(OCR_TEXT)
+        );
+    }
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mixed_ocr_recognized_formula_elements_preserve_physical_page_order() {
+    let _stubs = install_rendering_stubs(rendered_latex);
+    let layout = layout_config(Some(FormulaModel::LatexOcr), 0.49);
+    let engine = LayoutEngine {
+        model: Box::new(UnmatchedFormulaRegionModel),
+        config: crate::layout::config_from_extraction(&layout),
+        thread_budget: crate::core::config::concurrency::resolve_thread_budget(None).max(1),
+    };
+    drop(
+        crate::layout::CACHED_ENGINE
+            .take_or_create_matching(|_| false, || Ok::<_, LayoutError>(engine))
+            .expect("pool unmatched-formula engine"),
+    );
+    let mut config = config(Route::Forced, layout, OCR_BACKEND);
+    config.force_ocr_pages = Some(vec![1]);
+    config.use_layout_for_markdown = true;
+    let doc = extract(&scanned_then_native_pdf(), &config).await;
+    assert_eq!(RECOGNITIONS.load(Ordering::SeqCst), 2);
+    assert_rendered_formula_pages(&doc, &[1, 2]);
+    let pages = doc
+        .elements
+        .iter()
+        .filter_map(|element| element.page)
+        .collect::<Vec<_>>();
+    assert!(
+        pages.windows(2).all(|pair| pair[0] <= pair[1]),
+        "formula insertion must retain physical page order"
+    );
+    let result = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Markdown);
+    assert!(
+        result
+            .formatted_content
+            .as_deref()
+            .expect("rendered Markdown")
+            .find(RENDERED_LATEX)
+            .unwrap()
+            < result
+                .formatted_content
+                .as_deref()
+                .expect("rendered Markdown")
+                .find("steady single column prose")
+                .unwrap(),
+        "the first-page formula must render before the second page's native prose"
     );
 }

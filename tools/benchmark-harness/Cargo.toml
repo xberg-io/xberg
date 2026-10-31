@@ -60,6 +60,7 @@ clap = { workspace = true }
 dirs = "7"
 futures = { workspace = true }
 
+image = { workspace = true, features = ["jpeg", "png"] }
 inferno = { version = "0.12.8", default-features = false, features = ["nameattr"], optional = true }
 jsonschema = "0.60"
 libc = { workspace = true }
@@ -74,7 +75,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 shellexpand = "3"
 
-sysinfo = "0.39"
+sysinfo = "0.40"
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tikv-jemalloc-ctl = { version = "0.7", features = ["stats"], optional = true }

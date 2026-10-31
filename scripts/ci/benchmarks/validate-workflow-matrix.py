@@ -99,6 +99,9 @@ def strip_comment(value: str) -> str:
 
 
 def parse_list(lines: list[str], start: int, initial: str) -> tuple[list[str], int]:
+    if not initial and start + 1 < len(lines) and lines[start + 1].strip().startswith("["):
+        start += 1
+        initial = strip_comment(lines[start])
     if initial.startswith("["):
         chunks = [initial]
         while not chunks[-1].rstrip().endswith("]"):

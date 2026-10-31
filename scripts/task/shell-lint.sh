@@ -2,26 +2,25 @@
 set -euo pipefail
 
 mode="${1:-fix}"
-
-files="$(git ls-files '*.sh' || true)"
-if [ -z "$files" ]; then
-  exit 0
-fi
-
 case "$mode" in
-fix)
-  # shellcheck disable=SC2086
-  shfmt -w $files
-  ;;
-check)
-  # shellcheck disable=SC2086
-  shfmt -d $files
-  ;;
+fix) format_flag=-w ;;
+check) format_flag=-d ;;
 *)
   echo "Usage: $0 [fix|check]" >&2
   exit 2
   ;;
 esac
 
-# shellcheck disable=SC2086
-shellcheck $files
+files="$(git ls-files '*.sh')"
+if [ -z "$files" ]; then
+  echo "no tracked shell scripts found; refusing an empty quality check" >&2
+  exit 1
+fi
+
+scripts=()
+while IFS= read -r file; do
+  scripts+=("$file")
+done <<<"$files"
+
+shfmt "$format_flag" "${scripts[@]}"
+shellcheck "${scripts[@]}"

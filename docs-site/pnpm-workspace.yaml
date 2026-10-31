@@ -2,7 +2,7 @@ allowBuilds:
   esbuild: true
   sharp: true
 minimumReleaseAgeExclude:
-  - "@xberg-io/docs-theme@0.4.1"
+  - "@xberg-io/docs-theme@0.4.1 || 0.4.2"
   - "@astrojs/internal-helpers@0.13.0"
   - "@astrojs/markdown-satteri@0.4.4"
   - "@astrojs/prism@4.1.0"

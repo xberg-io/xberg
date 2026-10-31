@@ -7,7 +7,12 @@
 
 use crate::layout::models::tatr::{self, TatrModel};
 use crate::layout::types::{BBox, DetectionResult, LayoutClass, RecognizedTable};
-use crate::types::{OcrElement, OcrElementLevel};
+use crate::types::internal::table_grid::TableGridSidecar;
+use crate::types::{BoundingBox, GridCell, OcrElement, OcrElementLevel, Table, TableGrid};
+
+#[cfg(all(test, feature = "ocr"))]
+#[path = "layout_assembly/metadata_tests.rs"]
+pub(crate) mod metadata_tests;
 
 /// Default confidence threshold for layout detections.
 const MIN_CONFIDENCE: f32 = 0.3;
@@ -25,29 +30,47 @@ const MIN_CELL_ELEMENT_IOW: f32 = 0.2;
 pub(crate) struct RecognizedTablesOutcome {
     pub(crate) tables: Vec<RecognizedTable>,
     pub(crate) unrecognized_table_text: Vec<String>,
+    /// Index-aligned with tables; cell boxes use the same top-left page-image pixels. ~keep
+    pub(crate) grids: Vec<Option<TableGrid>>,
 }
 
-/// Run TATR table recognition for all Table regions in a page.
-///
-/// For each Table detection, crops the page image, runs TATR inference,
-/// matches OCR elements to cells, and produces markdown tables.
-///
-/// Preserved with its original `Vec<RecognizedTable>` signature for the standalone-image OCR
-/// route (`extractors::image`), which has no page-level paragraph stream to fall back into and
-/// so has no use for [`recognize_page_tables_with_fallback`]'s `unrecognized_table_text`.
-pub(crate) fn recognize_page_tables(
-    page_image: &image::RgbImage,
-    detection: &DetectionResult,
-    elements: &[OcrElement],
-    tatr_model: &mut TatrModel,
-) -> Vec<RecognizedTable> {
-    recognize_page_tables_with_fallback(page_image, detection, elements, tatr_model).tables
+impl RecognizedTablesOutcome {
+    pub(crate) fn grid_sidecars(&self, page_number: u32) -> Vec<TableGridSidecar> {
+        (0..self.tables.len())
+            .filter_map(|index| self.sidecar_at(index, page_number))
+            .collect()
+    }
+
+    pub(crate) fn sidecar_at(&self, index: usize, page_number: u32) -> Option<TableGridSidecar> {
+        if self.grids.len() != self.tables.len() {
+            return None;
+        }
+        let recognized = self.tables.get(index)?;
+        let grid = self.grids.get(index)?.as_ref()?.clone();
+        let columns = grid
+            .cells
+            .iter()
+            .any(|cell| cell.row == 0 && cell.is_header)
+            .then(|| recognized.cells.first().cloned())
+            .flatten();
+        let table = Table {
+            cells: recognized.cells.clone(),
+            markdown: recognized.markdown.clone(),
+            page_number,
+            bounding_box: Some(BoundingBox {
+                x0: f64::from(recognized.detection_bbox.x1),
+                y0: f64::from(recognized.detection_bbox.y1),
+                x1: f64::from(recognized.detection_bbox.x2),
+                y1: f64::from(recognized.detection_bbox.y2),
+            }),
+            columns,
+            ..Default::default()
+        };
+        crate::extraction::derive::native_grid_matches_table(&table, &grid).then_some(TableGridSidecar { table, grid })
+    }
 }
 
-/// Same as [`recognize_page_tables`], but also surfaces the reading-order text of `Table`
-/// regions TATR could not structurally reconstruct, so a caller with a page-level paragraph
-/// stream (the PDF OCR pipeline) can fall back to plain text instead of losing that region's OCR
-/// output entirely (xberg-io/xberg#1622).
+/// Recognize detected table regions while retaining private structure metadata and unrecognized OCR text.
 pub(crate) fn recognize_page_tables_with_fallback(
     page_image: &image::RgbImage,
     detection: &DetectionResult,
@@ -62,11 +85,14 @@ pub(crate) fn recognize_page_tables_with_fallback(
         }
 
         match recognize_single_table(page_image, &det.bbox, elements, tatr_model) {
-            TableRegionOutcome::Recognized(cells, markdown) => outcome.tables.push(RecognizedTable {
-                detection_bbox: det.bbox,
-                cells,
-                markdown,
-            }),
+            TableRegionOutcome::Recognized(cells, markdown, grid) => {
+                outcome.tables.push(RecognizedTable {
+                    detection_bbox: det.bbox,
+                    cells,
+                    markdown,
+                });
+                outcome.grids.push(grid);
+            }
             TableRegionOutcome::FallbackText(text) => outcome.unrecognized_table_text.push(text),
             TableRegionOutcome::Empty => {}
         }
@@ -78,8 +104,8 @@ pub(crate) fn recognize_page_tables_with_fallback(
 /// Result of attempting to recognize a single `Table`-classified region.
 #[derive(Debug, Clone, PartialEq)]
 enum TableRegionOutcome {
-    /// TATR reconstructed a valid cell grid: `(cells, markdown)`.
-    Recognized(Vec<Vec<String>>, String),
+    /// TATR reconstructed dense text, its transcript, and validated private grid metadata.
+    Recognized(Vec<Vec<String>>, String, Option<TableGrid>),
     /// TATR could not reconstruct the region's structure, but OCR found text inside it. Carries
     /// that text in reading order so it is not silently discarded (xberg-io/xberg#1622).
     FallbackText(String),
@@ -188,7 +214,8 @@ fn table_region_outcome(
     }
 
     let (cells, markdown) = build_markdown_table(cell_grid, table_elements, offset_x, offset_y, structure);
-    TableRegionOutcome::Recognized(cells, markdown)
+    let grid = structure_grid(&cells, cell_grid, (offset_x, offset_y), structure);
+    TableRegionOutcome::Recognized(cells, markdown, grid)
 }
 
 /// Choose the crop-local bounding box used to widen table columns to the
@@ -327,6 +354,68 @@ fn merge_spanning_cells(grid: &mut [Vec<String>], spans: &[(usize, usize, usize,
         }
         grid[row_start][col_start] = combined.join(" ");
     }
+}
+
+type CellSpanPlan = Vec<Vec<Option<(usize, usize)>>>;
+
+fn structure_grid(
+    dense: &[Vec<String>],
+    boxes: &[Vec<tatr::CellBBox>],
+    offset: (f32, f32),
+    structure: &tatr::TableStructure,
+) -> Option<TableGrid> {
+    let plan = structure_span_plan(dense, &structure.spans)?;
+    let mut cells = Vec::new();
+    for (row, columns) in plan.iter().enumerate() {
+        for (col, span) in columns.iter().enumerate() {
+            let Some((height, width)) = *span else { continue };
+            let first = boxes.get(row)?.get(col)?;
+            let last = boxes.get(row + height - 1)?.get(col + width - 1)?;
+            cells.push(GridCell {
+                content: dense[row][col].clone(),
+                row: row as u32,
+                col: col as u32,
+                row_span: height as u32,
+                col_span: width as u32,
+                is_header: row < structure.header_row_count,
+                bbox: Some(BoundingBox {
+                    x0: f64::from(first.x1 + offset.0),
+                    y0: f64::from(first.y1 + offset.1),
+                    x1: f64::from(last.x2 + offset.0),
+                    y1: f64::from(last.y2 + offset.1),
+                }),
+                heading_level: None,
+                style_name: None,
+            });
+        }
+    }
+    Some(TableGrid {
+        rows: dense.len() as u32,
+        cols: dense.first()?.len() as u32,
+        cells,
+    })
+}
+
+fn structure_span_plan(dense: &[Vec<String>], spans: &[(usize, usize, usize, usize)]) -> Option<CellSpanPlan> {
+    let cols = dense.first()?.len();
+    let mut plan = vec![vec![Some((1, 1)); cols]; dense.len()];
+    for &(row_start, row_end, col_start, col_end) in spans {
+        if row_start >= row_end || col_start >= col_end || row_end > dense.len() || col_end > cols {
+            return None;
+        }
+        for row in row_start..row_end {
+            for col in col_start..col_end {
+                if plan[row][col] != Some((1, 1))
+                    || ((row, col) != (row_start, col_start) && !dense[row][col].is_empty())
+                {
+                    return None;
+                }
+                plan[row][col] = None;
+            }
+        }
+        plan[row_start][col_start] = Some((row_end - row_start, col_end - col_start));
+    }
+    Some(plan)
 }
 
 type PositionedElement<'a> = (&'a OcrElement, f32, f32);
@@ -842,16 +931,18 @@ mod tests {
 
         let outcome = table_region_outcome(&grid, &element_refs, 0.0, 0.0, &no_structure());
 
+        let TableRegionOutcome::Recognized(cells, markdown, grid) = outcome else {
+            panic!("recognized table");
+        };
         assert_eq!(
-            outcome,
-            TableRegionOutcome::Recognized(
-                vec![
-                    vec!["one".to_string(), "two".to_string()],
-                    vec!["three".to_string(), "four".to_string()]
-                ],
-                "| one | two |\n| --- | --- |\n| three | four |".to_string()
-            )
+            cells,
+            vec![
+                vec!["one".to_string(), "two".to_string()],
+                vec!["three".to_string(), "four".to_string()]
+            ]
         );
+        assert_eq!(markdown, "| one | two |\n| --- | --- |\n| three | four |");
+        assert!(grid.is_some());
     }
 
     #[test]

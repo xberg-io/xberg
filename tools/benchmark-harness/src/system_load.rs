@@ -38,17 +38,20 @@ pub struct SystemLoad {
 impl SystemLoad {
     /// Capture the current system load.
     ///
-    /// On platforms without a load average (e.g. Windows) `sysinfo` reports
-    /// zeros; the core counts are still populated.
-    pub fn capture() -> Self {
-        let avg = sysinfo::System::load_average();
-        Self {
+    /// Returns an error when the operating system cannot supply a load average.
+    pub fn capture() -> crate::Result<Self> {
+        Self::from_average(sysinfo::System::load_average())
+    }
+
+    fn from_average(average: Result<sysinfo::LoadAvg, sysinfo::Error>) -> crate::Result<Self> {
+        let avg = average.map_err(|error| crate::Error::Benchmark(format!("capture system load: {error}")))?;
+        Ok(Self {
             load_avg_1m: avg.one,
             load_avg_5m: avg.five,
             load_avg_15m: avg.fifteen,
             logical_cores: num_cpus::get(),
             physical_cores: num_cpus::get_physical(),
-        }
+        })
     }
 
     /// 1-minute load normalized by logical core count.
@@ -116,8 +119,14 @@ mod tests {
 
     #[test]
     fn should_capture_populated_core_counts() {
-        let load = SystemLoad::capture();
+        let load = SystemLoad::capture().expect("host system load must be available");
         assert!(load.logical_cores >= 1);
         assert!(load.physical_cores >= 1);
+    }
+
+    #[test]
+    fn should_report_unavailable_load_instead_of_recording_an_idle_host() {
+        let error = SystemLoad::from_average(Err(sysinfo::Error::Unsupported)).unwrap_err();
+        assert_eq!(error.to_string(), "Benchmark error: capture system load: unsupported");
     }
 }

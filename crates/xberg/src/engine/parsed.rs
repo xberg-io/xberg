@@ -21,7 +21,9 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use crate::Result;
-use crate::engine::structured::rasterize::{PageImage, RasterizeError, render_all_pages};
+use crate::engine::structured::rasterize::{
+    PageImage, RasterizeError, RasterizeOptions, render_all_pages, render_all_pages_with_options,
+};
 use crate::extractors::security::SecurityLimits;
 
 /// MIME type reported for PDF documents.
@@ -37,9 +39,8 @@ pub struct ParsedDocument {
     page_count: u32,
     source: Arc<[u8]>,
     security_limits: SecurityLimits,
-    /// Memoized `(dpi, pages)` from the last render. A render at a different DPI
-    /// replaces it (a single operation renders at one DPI).
-    rendered: Mutex<Option<(u32, Vec<PageImage>)>>,
+    /// Memoized pages for the last DPI and image size options.
+    rendered: Mutex<Option<(u32, RasterizeOptions, Vec<PageImage>)>>,
 }
 
 impl ParsedDocument {
@@ -101,14 +102,35 @@ impl ParsedDocument {
     ///
     /// Propagates [`RasterizeError`] from the underlying renderer.
     pub fn rendered_pages(&self, dpi: u32) -> std::result::Result<Vec<PageImage>, RasterizeError> {
+        self.rendered_pages_with_options(dpi, RasterizeOptions::default())
+    }
+
+    /// Render with caller-selected image sizing, memoizing by both DPI and options.
+    ///
+    /// `RasterizeOptions::default()` retains the legacy full-resolution image
+    /// behavior. The memo's captured security limits apply to every render.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`RasterizeError`] from the underlying renderer.
+    pub fn rendered_pages_with_options(
+        &self,
+        dpi: u32,
+        options: RasterizeOptions,
+    ) -> std::result::Result<Vec<PageImage>, RasterizeError> {
         let mut guard = self.rendered.lock();
-        if let Some((cached_dpi, pages)) = guard.as_ref()
+        if let Some((cached_dpi, cached_options, pages)) = guard.as_ref()
             && *cached_dpi == dpi
+            && *cached_options == options
         {
             return Ok(pages.clone());
         }
-        let pages = render_all_pages(&self.source, &self.mime_type, dpi, &self.security_limits)?;
-        *guard = Some((dpi, pages.clone()));
+        let pages = if options == RasterizeOptions::default() {
+            render_all_pages(&self.source, &self.mime_type, dpi, &self.security_limits)?
+        } else {
+            render_all_pages_with_options(&self.source, &self.mime_type, dpi, &self.security_limits, options)?
+        };
+        *guard = Some((dpi, options, pages.clone()));
         Ok(pages)
     }
 }

@@ -9,11 +9,11 @@ Please begin by reading our AI section below, followed by the getting started gu
 Make sure to have [Git](https://git-scm.com/), [rustup](https://rustup.rs/) and [mise](https://mise.jdx.dev/getting-started.html)
 installed, with mise [activated](https://mise.jdx.dev/getting-started.html#activate-mise) in your shell. rustup installs
 the Rust version pinned in `rust-toolchain.toml`; mise installs every other tool at the version pinned in `mise.toml`
-(Task, Python, uv, Node.js, pnpm, Go, Java, Maven, Ruby, .NET, Zig, poly, ai-rulez, alef and the rest).
+(Python, uv, Node.js, pnpm, Go, Java, Maven, Ruby, .NET, Zig, poly, ai-rulez, alef and the rest).
 
 ```bash
 mise install
-task setup
+mise run setup
 ```
 
 This installs the toolchain, the dependencies, and the pre-commit hooks via `poly`.
@@ -38,16 +38,20 @@ This installs the toolchain, the dependencies, and the pre-commit hooks via `pol
 
 ## Quick reference
 
-| Command       | What it does                                    |
-| ------------- | ----------------------------------------------- |
-| `task setup`  | Install all dependencies (idempotent)           |
-| `task build`  | Build all language bindings                     |
-| `task test`   | Run all test suites                             |
-| `task lint`   | Run all linters (with auto-fix)                 |
-| `task format` | Format all code                                 |
-| `task check`  | Combined lint + format check (no modifications) |
+| Command           | What it does                                    |
+| ----------------- | ----------------------------------------------- |
+| `mise run setup`  | Install all dependencies (idempotent)           |
+| `mise run build`  | Build all language bindings                     |
+| `mise run test`   | Run all test suites                             |
+| `mise run lint`   | Run all linters (with auto-fix)                 |
+| `mise run format` | Format all code                                 |
+| `mise run check`  | Combined lint + format check (no modifications) |
 
-For language-specific commands, use the namespace pattern: `task rust:test`, `task python:build`, `task node:format`, etc.
+For language-specific commands, use the namespace pattern: `mise run rust:test`, `mise run python:e2e`, `mise run swift:e2e`, etc.
+
+When you change the classic OCR model catalog or the cache code behind `xberg cache seed-classic-ocr`, run
+`mise run test:classic-ocr-cache`. It builds the CLI, downloads every pinned PaddleOCR and Sceptre artifact, and
+verifies inference with the network off. CI does not run it, because it needs the network and the full model set.
 
 For the complete development workflow, build profiles, coding standards, and PR guidelines, see the full [Contributing Guide](https://docs.xberg.io/contributing/).
 
@@ -87,11 +91,11 @@ plugin settings live separately in `config.plugins.toml`.
 ```sh
 ai-rulez validate --no-local
 ai-rulez generate --no-local --strict-config
-task governance:check
+mise run governance:check
 ```
 
 The final command checks the materialized local governance files, including ignored harness
-outputs. Installing governance hooks requires Python 3.11 or newer. Run `task governance:hooks:install` to install the repository's reviewed Poly hooks.
+outputs. Installing governance hooks requires Python 3.11 or newer. Run `mise run governance:hooks:install` to install the repository's reviewed Poly hooks.
 The hooks validate staged sources and verify shipped plugin artifacts where present; CI also
 validates the authored content. Shared convention modules come from `xberg-io/agent-conventions`;
 Git credentials are needed when an included repository requires access.

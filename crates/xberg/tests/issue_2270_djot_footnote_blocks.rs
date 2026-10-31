@@ -147,3 +147,30 @@ async fn should_keep_adjacent_footnote_text_apart_in_public_markdown_output() {
     let text = markdown_footnote_text(&result.content);
     assert_eq!(text, "para one para two", "{}", result.content);
 }
+
+#[tokio::test]
+async fn should_render_a_nested_table_caption_once_inside_its_footnote() {
+    let config = ExtractionConfig {
+        output_format: xberg::core::config::OutputFormat::Markdown,
+        use_cache: false,
+        ..Default::default()
+    };
+    let input = xberg::ExtractInput::from_bytes(
+        b"Text[^n].\n\n[^n]: intro\n\n    | a |\n\n    ^ cap one\n    cap two\n".to_vec(),
+        "text/djot",
+        None,
+    );
+    let mut output = xberg::extract(input, &config)
+        .await
+        .expect("public extraction succeeds");
+    assert_eq!(output.errors.len(), 0);
+    assert_eq!(output.results.len(), 1);
+    let result = output.results.remove(0);
+    assert_eq!(markdown_footnote_text(&result.content), "intro cap one cap two");
+    assert_eq!(
+        result.content.matches("cap one cap two").count(),
+        1,
+        "{}",
+        result.content
+    );
+}

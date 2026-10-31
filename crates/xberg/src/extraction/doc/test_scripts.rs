@@ -18,7 +18,7 @@ pub(super) fn script_doc(runs: &[(&str, u8)], compressed: bool) -> Vec<u8> {
     story_script_doc(runs, compressed, None)
 }
 
-fn story_script_doc(runs: &[(&str, u8)], compressed: bool, footnotes: Option<(u32, &[u32])>) -> Vec<u8> {
+pub(super) fn story_script_doc(runs: &[(&str, u8)], compressed: bool, footnotes: Option<(u32, &[u32])>) -> Vec<u8> {
     assert!(!runs.is_empty() && runs.len() <= 32);
     let text: String = runs.iter().map(|(text, _)| *text).collect();
     let bytes: Vec<u8> = if compressed {
@@ -333,3 +333,6 @@ async fn assert_subdocument_script_output(bytes: &[u8], prefix: &str, config: &E
     assert!(!plain.results[0].content.contains(['^', '~']));
     assert!(plain.results[0].content.contains(&format!("{prefix}109/l")));
 }
+
+#[path = "test_style_scripts.rs"]
+mod style_scripts;

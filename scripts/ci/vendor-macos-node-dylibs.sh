@@ -29,11 +29,12 @@ is_vendorable() {
 # install id (LC_ID_DYLIB) — for a .node the id is often a CI build path that
 # must never be vendored. ~keep
 deps_of() {
-  local self_id
-  self_id="$(otool -D "$1" | tail -n +2 | head -1 | sed 's/^[[:space:]]*//')"
+  local self_id load_commands
+  self_id="$(otool -D "$1" | tail -n +2 | head -1 | sed 's/^[[:space:]]*//')" || return 1
+  load_commands="$(otool -L "$1")" || return 1
   # Drop the header (line 1) and exclude the binary's own id. `|| true` keeps a
   # binary with no vendorable deps from failing the pipeline under `set -e`. ~keep
-  otool -L "$1" | tail -n +2 | sed 's/^[[:space:]]*//; s/ (compatibility.*//' |
+  printf '%s\n' "$load_commands" | tail -n +2 | sed 's/^[[:space:]]*//; s/ (compatibility.*//' |
     grep -vxF -e "$self_id" || true
 }
 
@@ -52,15 +53,15 @@ resign() {
     }
 }
 
-declare -A seen
 queue=()
+found=0
 for node in "$DIR"/*.node; do
   [ -e "$node" ] || continue
   base="$(basename "$node")"
   queue+=("$base")
-  seen["$base"]=1
+  found=1
 done
-[ ${#queue[@]} -gt 0 ] || {
+[ "$found" -gt 0 ] || {
   echo "::error::no .node in $DIR to vendor for"
   exit 1
 }
@@ -75,6 +76,10 @@ while [ $i -lt ${#queue[@]} ]; do
     continue
   }
   changed=0
+  dependencies="$(deps_of "$target")" || {
+    echo "::error::failed to inspect dependencies of $target" >&2
+    exit 1
+  }
   while IFS= read -r dep; do
     [ -n "$dep" ] || continue
     is_vendorable "$dep" || continue
@@ -95,11 +100,10 @@ while [ $i -lt ${#queue[@]} ]; do
     fi
     install_name_tool -change "$dep" "@loader_path/$b" "$target"
     changed=1
-    if [ -z "${seen[$b]:-}" ]; then
-      seen["$b"]=1
+    if ! printf '%s\n' "${queue[@]}" | grep -xF "$b" >/dev/null; then
       queue+=("$b")
     fi
-  done < <(deps_of "$target")
+  done <<<"$dependencies"
   case "$bin" in
   *.dylib)
     install_name_tool -id "@loader_path/$bin" "$target"
@@ -112,12 +116,16 @@ done
 leaks=0
 for f in "$DIR"/*.node "$DIR"/*.dylib; do
   [ -e "$f" ] || continue
+  dependencies="$(deps_of "$f")" || {
+    echo "::error::failed to inspect final closure of $f" >&2
+    exit 1
+  }
   while IFS= read -r dep; do
     is_vendorable "$dep" && {
       echo "::error::unvendored dep $(basename "$f") -> $dep"
       leaks=$((leaks + 1))
     }
-  done < <(deps_of "$f")
+  done <<<"$dependencies"
 done
 [ $leaks -eq 0 ] || {
   echo "::error::$leaks unvendored absolute deps remain"

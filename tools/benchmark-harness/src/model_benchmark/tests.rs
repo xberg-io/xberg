@@ -1,6 +1,9 @@
 use super::*;
 use xberg::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
 
+#[path = "input_tests.rs"]
+mod inputs;
+
 fn identity(detector: Detector, digest: char) -> ModelIdentity {
     ModelIdentity {
         detector,
@@ -52,6 +55,7 @@ fn report() -> ModelBenchmarkReport {
     ModelBenchmarkReport {
         schema_version: 2,
         quality_assessed: false,
+        geometry: None,
         xberg_build_id: "bounded-contract-test".to_string(),
         cohort_sha256: "e".repeat(64),
         expected_documents: BTreeMap::from([(
@@ -389,3 +393,34 @@ fn should_reject_saved_artifacts_without_paired_resource_evidence() {
         "Benchmark error: unsupported detector report contract"
     );
 }
+
+#[test]
+fn should_reject_a_changed_paired_execution_order() {
+    let mut report = report();
+    report.rows[0].a_first = false;
+    assert_eq!(
+        report.validate().unwrap_err().to_string(),
+        "Benchmark error: detector paired execution order mismatch"
+    );
+}
+
+#[test]
+fn should_require_alternating_execution_order_across_repetitions() {
+    let mut report = report();
+    report.iterations = 2;
+    report.expected_inference_calls = 4;
+    report.actual_inference_calls = 4;
+    let mut second = report.rows[0].clone();
+    second.iteration = 2;
+    second.a_first = false;
+    report.rows.push(second);
+    report.validate().unwrap();
+    report.rows[1].a_first = true;
+    assert_eq!(
+        report.validate().unwrap_err().to_string(),
+        "Benchmark error: detector paired execution order mismatch"
+    );
+}
+
+#[path = "geometry_tests.rs"]
+mod geometry_scoring;

@@ -85,10 +85,11 @@ runs:
 
         echo "=== Computing Xberg Dependency Hash ==="
 
-        # Hash every workspace crate because xberg reaches sibling path crates transitively; an
+        # Hash workspace and patched crates because xberg reaches path dependencies transitively; an
         # exact dependency subset would be easy to under-approximate as workspace edges evolve. ~keep
         XBERG_HASH=$(scripts/ci/cache/compute-hash.sh --dirs \
           "crates" \
+          "vendored" \
           2>&1 | grep "^[a-f0-9]*$")
 
         if [[ -z "$XBERG_HASH" ]]; then

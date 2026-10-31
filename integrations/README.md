@@ -27,15 +27,15 @@ lockstep with the core `xberg` release (including `-rc.N` pre-releases).
 ## Versioning
 
 Never hand-edit an integration's `version` or its `xberg` dependency pin. The root
-`Cargo.toml` version is the single source of truth; `task version:sync` propagates it
+`Cargo.toml` version is the single source of truth; `mise run version:sync` propagates it
 to every integration via `scripts/sync_integration_versions.py`. See the
 `xberg-release` skill under `.ai-rulez/skills/`.
 
 ## Dependencies
 
-`task integrations:sync` installs all Python integration dependencies;
-`task integrations:update` / `task integrations:upgrade` refresh their lock files.
-These are wired into the repo-level `task setup` / `update` / `upgrade`.
+`mise run integrations:sync` installs all Python integration dependencies;
+`mise run integrations:update` / `mise run integrations:upgrade` refresh their lock files.
+These are wired into the repo-level `mise run setup` / `update` / `upgrade`.
 
 ## CI & publishing
 

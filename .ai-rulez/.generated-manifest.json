@@ -1,6 +1,7 @@
 {
   "version": "1",
   "files": [
+    ".agents/skills/adr-authoring/SKILL.md",
     ".agents/skills/agent-coordination/SKILL.md",
     ".agents/skills/alef-generated-bindings/SKILL.md",
     ".agents/skills/alef/SKILL.md",
@@ -30,6 +31,8 @@
     ".agents/skills/iterate/SKILL.md",
     ".agents/skills/iterate/agents/openai.yaml",
     ".agents/skills/mime-detection-routing/SKILL.md",
+    ".agents/skills/mise-tasks/SKILL.md",
+    ".agents/skills/mise-toolchains/SKILL.md",
     ".agents/skills/ocr-pipeline-and-quality/SKILL.md",
     ".agents/skills/owasp-quick-reference/SKILL.md",
     ".agents/skills/parallelize/SKILL.md",
@@ -43,8 +46,6 @@
     ".agents/skills/scoped-crates-xberg-src/SKILL.md",
     ".agents/skills/scoped-root/SKILL.md",
     ".agents/skills/skill-authoring/SKILL.md",
-    ".agents/skills/task-runner/SKILL.md",
-    ".agents/skills/taskfile-structure/SKILL.md",
     ".agents/skills/tdd-workflow/SKILL.md",
     ".agents/skills/test-corpus/SKILL.md",
     ".agents/skills/testing-conventions/SKILL.md",
@@ -84,6 +85,7 @@
     ".claude/rules/shell.md",
     ".claude/rules/typescript.md",
     ".claude/settings.json",
+    ".claude/skills/adr-authoring/SKILL.md",
     ".claude/skills/agent-coordination/SKILL.md",
     ".claude/skills/alef-generated-bindings/SKILL.md",
     ".claude/skills/alef/SKILL.md",
@@ -112,6 +114,8 @@
     ".claude/skills/incremental-approach/SKILL.md",
     ".claude/skills/iterate/SKILL.md",
     ".claude/skills/mime-detection-routing/SKILL.md",
+    ".claude/skills/mise-tasks/SKILL.md",
+    ".claude/skills/mise-toolchains/SKILL.md",
     ".claude/skills/ocr-pipeline-and-quality/SKILL.md",
     ".claude/skills/owasp-quick-reference/SKILL.md",
     ".claude/skills/parallelize/SKILL.md",
@@ -122,8 +126,6 @@
     ".claude/skills/release-workflow/SKILL.md",
     ".claude/skills/scoop-distribution/SKILL.md",
     ".claude/skills/skill-authoring/SKILL.md",
-    ".claude/skills/task-runner/SKILL.md",
-    ".claude/skills/taskfile-structure/SKILL.md",
     ".claude/skills/tdd-workflow/SKILL.md",
     ".claude/skills/test-corpus/SKILL.md",
     ".claude/skills/testing-conventions/SKILL.md",
@@ -165,6 +167,10 @@
     ".codex/config.toml": [
       [
         "mcp_servers",
+        "ai-rulez"
+      ],
+      [
+        "mcp_servers",
         "playwright"
       ]
     ],
@@ -179,6 +185,10 @@
       ]
     ],
     "opencode.json": [
+      [
+        "mcp",
+        "ai-rulez"
+      ],
       [
         "mcp",
         "playwright"

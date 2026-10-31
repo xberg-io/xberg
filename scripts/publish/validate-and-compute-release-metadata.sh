@@ -130,10 +130,8 @@ set_all_targets() {
   release_c_ffi=true
 }
 
-mapfile -t requested_targets < <(echo "$targets_value" | tr ',' '\n')
-
 processed_any=false
-for raw_target in "${requested_targets[@]}"; do
+while IFS= read -r raw_target; do
   trimmed=$(echo "$raw_target" | tr '[:upper:]' '[:lower:]' | xargs)
   if [[ -z "$trimmed" ]]; then
     continue
@@ -207,7 +205,7 @@ for raw_target in "${requested_targets[@]}"; do
     exit 1
     ;;
   esac
-done
+done < <(printf '%s\n' "$targets_value" | tr ',' '\n')
 
 if [[ "$release_homebrew" == "true" ]]; then
   release_cli=true
@@ -233,9 +231,14 @@ if [[ "$release_php" == "true" ]]; then enabled_targets+=("php"); fi
 if [[ "$release_elixir" == "true" ]]; then enabled_targets+=("elixir"); fi
 if [[ "$release_c_ffi" == "true" ]]; then enabled_targets+=("c-ffi"); fi
 
-if [[ ${#enabled_targets[@]} -eq 14 ]]; then
+enabled_count=0
+if [[ -n "${enabled_targets[0]+present}" ]]; then
+  enabled_count=${#enabled_targets[@]}
+fi
+
+if [[ "$enabled_count" -eq 14 ]]; then
   release_targets_summary="all"
-elif [[ ${#enabled_targets[@]} -eq 0 ]]; then
+elif [[ "$enabled_count" -eq 0 ]]; then
   release_targets_summary="none"
 else
   release_targets_summary=$(
@@ -245,7 +248,7 @@ else
 fi
 
 release_any="false"
-if [[ ${#enabled_targets[@]} -gt 0 ]]; then
+if [[ "$enabled_count" -gt 0 ]]; then
   release_any="true"
 fi
 

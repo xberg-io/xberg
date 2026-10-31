@@ -82,16 +82,93 @@ require_no_cli_build() {
   fi
 }
 
-require_exact_harness_build() {
-  local action="$1"
-  local expected="cargo build --locked --manifest-path tools/benchmark-harness/Cargo.toml --bin benchmark-harness \$BUILD_ARG"
-  local command_count
+extract_action_runs() {
+  awk '
+    {
+      indent = match($0, /[^ ]/) - 1
+      if (in_run && ($0 ~ /^[[:space:]]*$/ || indent > run_indent)) {
+        if (folded) printf "%s ", $0; else print
+        next
+      }
+      if (in_run && folded) print ""
+      in_run = 0
+      if ($0 !~ /^[[:space:]]+run:/) next
+      printf "%c", 30
+      value = $0
+      sub(/^[[:space:]]+run:[[:space:]]*/, "", value)
+      if (value ~ /^[|>][0-9+-]*([[:space:]]*#.*)?$/) {
+        in_run = 1; run_indent = indent; folded = substr(value, 1, 1) == ">"
+        next
+      }
+      quote = substr(value, 1, 1)
+      if (quote == sprintf("%c", 34) || quote == sprintf("%c", 39)) {
+        sub(/[[:space:]]+#.*$/, "", value)
+        if (substr(value, length(value), 1) != quote) exit 1
+        value = substr(value, 2, length(value) - 2)
+      }
+      print value
+    }
+  '
+}
 
-  command_count="$(grep -Foc "$expected" <<<"$action" || true)"
-  if [[ "$command_count" -ne 2 ]]; then
-    echo "benchmark workflow validation failed: harness cache must build only the uploaded benchmark-harness binary"
-    exit 1
-  fi
+require_exact_harness_build() {
+  local scripts
+  scripts="$(extract_action_runs <<<"$1")"
+  python3 - "$scripts" <<'PYTHON'
+import re
+import shlex
+import sys
+
+
+def normalize(words):
+    prefixes = {"if", "!", "then", "do", "else", "elif", "env", "exec", "command", "-i", "--ignore-environment", "--"}
+    environment = False
+    while words:
+        if words[0] == "env":
+            environment = True
+            words = words[1:]
+        elif environment and words[0].startswith("--unset="):
+            words = words[1:]
+        elif words[0] in {"-u", "--unset"}:
+            words = words[2:]
+        elif words[0] in prefixes or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
+            words = words[1:]
+        elif environment and words[0].startswith("-"):
+            raise ValueError("unsupported env option in benchmark build command")
+        else:
+            break
+    return words
+
+
+def cargo_builds(scripts):
+    builds = []
+    for script in scripts.split(chr(30)):
+        lexer = shlex.shlex(script.replace("\\\n", ""), posix=True, punctuation_chars=";&|()\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        words = []
+        for token in [*lexer, "\n"]:
+            if token.strip(";&|()\n"):
+                words.append(token)
+                continue
+            words = normalize(words)
+            if words and words[0] == "cargo" and "build" in words[1:]:
+                builds.append(words)
+            words = []
+    return builds
+
+
+expected = ["cargo", "build", "--locked", "--manifest-path", "tools/benchmark-harness/Cargo.toml",
+            "--bin", "benchmark-harness", "$BUILD_ARG"]
+try:
+    valid = cargo_builds(sys.argv[1]) == [expected]
+except ValueError:
+    valid = False
+if not valid:
+    sys.exit(
+        "benchmark workflow validation failed: harness cache must build only the uploaded benchmark-harness binary"
+    )
+PYTHON
 }
 
 require_step() {
@@ -120,7 +197,7 @@ require_exact_input "$setup_rust_inputs" disable-cache '"false"' \
   "setup Rust must retain the coarse Cargo target cache"
 require_exact_cli_build "$setup_job" \
   "setup must build exactly one all-feature CLI for benchmark size measurement"
-require_step "$swap_step" '^[[:space:]]+run: task benchmark:setup:swap$' \
+require_step "$swap_step" '^[[:space:]]+run: mise run benchmark:setup:swap$' \
   "setup must provision swap through the benchmark task before the all-feature release link"
 swap_line="$(grep -nF -- '- name: Provision swap for all-feature release link' <<<"$setup_job" | cut -d: -f1)"
 cli_build_line="$(grep -nF -- '- name: Build xberg-cli (release, all features + Sceptre tract diagnostic)' <<<"$setup_job" | cut -d: -f1)"

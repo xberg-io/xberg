@@ -1,0 +1,68 @@
+# Rust core tasks, included from mise.toml [task_config]. ~keep
+
+["rust:check:tesseract-dynamic"]
+description = "Verify OCR links host Tesseract without touching the vendor cache"
+depends = ["os:require linux"]
+run = "bash scripts/ci/rust/check-tesseract-dynamic.sh"
+
+["rust:check:libheif-runtime"]
+description = "Verify real v1_19 Rust decoding against the selected system runtime"
+depends = ["os:require linux"]
+run = "bash scripts/ci/rust/check-libheif-runtime.sh"
+
+["rust:build:dev"]
+description = "Build all Rust crates in debug mode"
+run = [{ task = "rust:build", args = ["dev"] }]
+
+["rust:build:profiling"]
+description = "Build all Rust crates with profiling features (for flamegraph generation)"
+env = { ENABLE_PROFILING = "true", RUSTFLAGS = "-g" }
+run = [
+  "cargo build --locked --workspace --release --features full,profiling,api,mcp,otel --exclude xberg-php --exclude xberg-node --exclude xberg-wasm",
+  "cargo build --locked --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling",
+]
+
+["rust:cli:build"]
+description = "Build CLI binary"
+usage = 'flag "--target <triple>" env="TARGET" help="Cross-compile for this target triple"'
+run = 'cargo build --locked --release --package xberg-cli ${usage_target:+--target "$usage_target"}'
+
+# The workspace `[profile.release]` targets native throughput (`opt-level = 3`); on wasm32 that
+# costs ~12 MB of `code` section and pushes the bundle over jsDelivr's 50 MiB per-file cap.
+# Mirrors the same override in .github/workflows/publish.yaml's build-wasm-package step so a local
+# build measures the artifact publish actually ships. ~keep
+["rust:wasm:build:all"]
+description = "Build all WASM targets (web/bundler/nodejs/deno) plus the TypeScript wrapper"
+dir = "{{config_root}}/crates/xberg-wasm"
+env = { CARGO_PROFILE_RELEASE_OPT_LEVEL = "z" }
+run = "pnpm run build:all"
+
+["rust:test"]
+description = "Run all Rust tests"
+depends = ["os:require linux darwin"]
+run = "bash scripts/ci/rust/run-unit-tests.sh"
+
+["rust:test:ci"]
+description = "Run Rust tests in CI mode with tessdata setup"
+depends = ["os:require linux darwin"]
+env = { CARGO_TERM_COLOR = "always" }
+run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
+
+["rust:test:mime"]
+description = "Verify MIME declaration handling without tree-sitter"
+depends = ["os:require linux darwin"]
+run = "bash scripts/ci/rust/run-mime-tests.sh"
+
+["rust:test:vlm-auto-gate"]
+description = "Verify native VLM layout restoration without formula recognition"
+depends = ["os:require linux darwin"]
+run = "bash scripts/ci/rust/run-vlm-auto-gate-tests.sh"
+
+["rust:lint:feature"]
+description = "Lint the library with one standalone feature enabled"
+usage = 'arg "<feature>" env="FEATURE" help="The single library feature to enable"'
+run = 'cargo clippy --locked -p xberg --lib --no-default-features --features "$usage_feature" -- -D warnings'
+
+["rust:lint:email"]
+description = "Lint all targets with only the email feature enabled"
+run = "cargo clippy --locked -p xberg --no-default-features --features email --all-targets -- -D warnings"

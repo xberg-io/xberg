@@ -1,0 +1,45 @@
+# Documentation site and snippet tasks, included from mise.toml [task_config]. ~keep
+
+["docs:verify:changelog"]
+description = "Check the docs-site changelog carries every release section from CHANGELOG.md"
+run = "python3 scripts/ci/check-changelog-sync.py"
+
+# --strict fails the run when a language's validator reports Unavailable (or Skip/Downgraded)
+# instead of silently passing. Without it, a language whose toolchain isn't on the runner's PATH
+# (TypeScriptValidator::is_available() etc. do a global `which`, never node_modules/.bin) is
+# dropped from the gate with no signal in the exit code -- only visible by reading the printed
+# summary line.
+#
+# `--lang` is deliberately scoped to c,csharp,dart,elixir,java,php,python,ruby,rust -- the subset
+# alef.toml's `validation_level = "compile"` can actually satisfy on a runner that never builds
+# xberg. Measured on job 33026516229 (2026-08-27): go 141/141 FAIL (`cannot find -lxberg_ffi` --
+# packages/go/.lib is gitignored build output this job never populates); typescript/wasm 115
+# Unavailable + 5 FAIL (`Cannot find module '@xberg-io/xberg-wasm'` -- unbuilt wasm-pack package)
+# plus typescript/node itself passing 104/104; kotlin_android 104 Unavailable (`unresolved
+# reference 'io'` -- no Android/Gradle build here) plus plain kotlin/JVM passing 98/104; swift
+# 110/110 Unavailable (no Swift toolchain installed in this job at all). zig's 110 snippets were
+# also Unavailable on that run, but because no zig toolchain was on the runner at all -- that was
+# misread as "zig needs no built artifact" and it was kept in this list. A `Setup Zig` step was
+# later added (ci-lint.yaml), and with the toolchain present the real blocker surfaced:
+# `packages/zig/build.zig` links `../../target/release/libxberg_ffi.so`, which this job never
+# builds, so all 110 snippets report Unavailable regardless. zig moved out of this set for the
+# same reason go/typescript/kotlin/swift are excluded: it needs a built native artifact this job
+# does not produce. `--lang` filters by fence tag, which cannot separate typescript's node session
+# from its wasm session, or kotlin's JVM session from kotlin_android -- so excluding the broken
+# session (wasm, kotlin_android) also drops its currently-passing sibling (node, kotlin/JVM) from
+# THIS gate. Those two are not re-verified anywhere else yet; that is a real, currently-open
+# coverage gap, not a design choice -- see `docs-snippets gate` in ci-lint.yaml for the fuller
+# accounting and the closure plan (compile-level validation for go/typescript/kotlin/swift/zig
+# belongs in ci-e2e.yaml's per-language matrix legs, where each language's native/wasm/JVM
+# artifact is already built -- not duplicated here as a second, redundant, ~1-hour FFI build).
+#
+# audit and gaps stay unrestricted -- both are cross-language questions (an unreferenced snippet
+# or a missing language variant cannot be judged from a subset) and need no build artifacts to
+# answer. ~keep
+["docs:snippets:all"]
+description = "Run audit + gaps + validate (canonical docs:snippets gate)"
+run = [
+  { task = "docs:snippets:audit" },
+  { task = "docs:snippets:gaps" },
+  "alef snippets check --strict --lang c,csharp,dart,elixir,java,php,python,ruby,rust",
+]

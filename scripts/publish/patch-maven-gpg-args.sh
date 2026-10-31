@@ -10,7 +10,18 @@ if [ ! -f "$pom_file" ]; then
 fi
 
 if grep -q '<arg>--pinentry-mode</arg>' "$pom_file"; then
-  sed -i 's/<arg>--pinentry-mode<\/arg>\s*<arg>loopback<\/arg>/<arg>--pinentry-mode=loopback<\/arg>/g' "$pom_file"
+  python3 - "$pom_file" <<'PYTHON'
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+path.write_text(re.sub(
+    r"<arg>--pinentry-mode</arg>\s*<arg>loopback</arg>",
+    "<arg>--pinentry-mode=loopback</arg>",
+    path.read_text(),
+))
+PYTHON
   echo "Patched legacy GPG pinentry argument format in $pom_file"
 else
   echo "No legacy GPG arguments found in $pom_file"

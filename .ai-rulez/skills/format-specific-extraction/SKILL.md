@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Format Specific Extraction
-description: "Per-format Xberg extractors (Office XML, PDF, archives, ...): parsers, security budgets, metadata helpers. Use when changing or adding one."
+description: "Add or change format extractors: parsers, archive budgets and metadata."
 paths:
   - "crates/xberg/src/extractors/**"
   - "crates/xberg/src/extraction/**"

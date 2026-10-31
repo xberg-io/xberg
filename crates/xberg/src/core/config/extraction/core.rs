@@ -662,7 +662,10 @@ impl Default for ExtractionConfig {
 
 impl ExtractionConfig {
     /// Resolve layout acceleration, preferring an explicit nested setting.
-    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    #[cfg(all(
+        feature = "layout-detection",
+        any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+    ))]
     pub(crate) fn resolved_layout_acceleration(&self) -> Option<&AccelerationConfig> {
         self.layout
             .as_ref()

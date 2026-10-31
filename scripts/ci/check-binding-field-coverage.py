@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Guard against a config field that is silently absent from every generated binding.
 
-GH#1745. `task alef:verify` (`alef verify --exit-code`) is a freshness check: it
+GH#1745. `mise run alef:verify` (`alef verify --exit-code`) is a freshness check: it
 recomputes each generated file's expected hash from a hash of its own generation
 inputs and compares that to what is committed. It is green whenever a fresh
 regeneration WOULD reproduce the committed tree -- and it is equally green when a
@@ -27,7 +27,7 @@ could already appear in the surface for an unrelated reason, in which case the c
 would not catch that specific field missing for that specific language. It is
 deliberately the coarse, cheap check the issue names as an alternative to a full
 regen-and-diff; it exists to catch the exact defect class described above, not to
-replace `task alef:verify` or a full regeneration.
+replace `mise run alef:verify` or a full regeneration.
 
 Fields marked `#[serde(skip)]` (e.g. `ExtractionConfig::cancel_token`,
 `ExtractionConfig::source_name`, `OcrConfig::tessdata_bytes`) never reach the wire

@@ -1,5 +1,5 @@
 # =============================================================================
-# .dockerignore — Docker builds only need Cargo.toml, Cargo.lock, and crates/
+# .dockerignore — Docker builds need Cargo manifests, crates, and local patches.
 # Exclude everything else to minimize context and speed up builds.
 # =============================================================================
 
@@ -9,6 +9,10 @@
 # Allow only what Docker builds need
 !Cargo.toml
 !Cargo.lock
+!LICENSE
+!THIRD_PARTY_LICENSES.md
+!vendored/
+!vendored/sysinfo/
 !crates/xberg/
 !crates/xberg-gliner/
 !crates/xberg-cli/

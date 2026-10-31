@@ -1,0 +1,44 @@
+name: ADRs
+
+on:
+  pull_request:
+    paths:
+      - "adrs/**"
+      - "adrlint.lock"
+      - ".adrlint.toml"
+      - "mise.toml"
+      - "mise.lock"
+      - ".github/workflows/adrs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "adrs/**"
+      - "adrlint.lock"
+      - ".adrlint.toml"
+      - "mise.toml"
+      - "mise.lock"
+      - ".github/workflows/adrs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adrlint:
+    name: Decision log
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: github:Goldziher/adrlint
+      - name: Lint, format-check and lock-check the log
+        run: |
+          set -euo pipefail
+          adrlint lint --format github
+          summary=$(adrlint lint 2>&1)
+          echo "$summary"
+          checked=$(sed -nE 's/.* in ([0-9]+) files? checked.*/\1/p' <<<"$summary")
+          [ "${checked:-0}" -gt 0 ] || { echo "::error::adrlint checked no ADR files"; exit 1; }
+          adrlint format --check
+          adrlint lock --check

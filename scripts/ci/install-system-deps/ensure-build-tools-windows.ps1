@@ -12,7 +12,13 @@ function Test-BuildToolVersion {
 function Ensure-BuildTool {
   param([string]$Package, [string]$Executable, [string]$Version)
   if (-not (Test-BuildToolVersion -Executable $Executable -Version $Version)) {
-    if (-not (Retry-Command { choco upgrade -y $Package --version=$Version --allow-downgrade --no-progress } -MaxAttempts 3)) {
+    if (-not (Retry-Command {
+      choco upgrade -y $Package --version=$Version --allow-downgrade --no-progress
+      if ($LASTEXITCODE -ne 0) { throw "Failed to install $Package $Version with exit $LASTEXITCODE" }
+      if (-not (Test-BuildToolVersion -Executable $Executable -Version $Version)) {
+        throw "$Executable does not report required version $Version after installation"
+      }
+    } -MaxAttempts 3)) {
       throw "Failed to install $Package $Version"
     }
   }

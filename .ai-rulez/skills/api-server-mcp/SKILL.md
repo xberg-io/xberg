@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Api Server Mcp
-description: "Xberg REST API server (axum routes, middleware, cache endpoints) and MCP surface. Use when changing an endpoint, server startup or MCP tools."
+description: "Change REST routes, middleware, cache endpoints, server startup or MCP tools."
 paths:
   - "crates/xberg/src/api/**"
   - "crates/xberg/src/mcp/**"

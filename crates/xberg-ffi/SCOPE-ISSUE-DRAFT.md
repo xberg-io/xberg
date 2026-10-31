@@ -44,7 +44,7 @@ Each type keeps **only**: `*_from_json`, `*_to_json`, `*_free`, and `*_default` 
 2. Delete accessors in `lib.rs` and helper modules under `crates/xberg-ffi/src/config/`.
 3. Regenerate `include/xberg.h` via `cbindgen`; verify CI freshness check passes.
 4. Bump FFI major for the unified extraction ABI cleanup.
-5. Run `task test:e2e` across Go/Java/C# bindings to verify behavioral parity.
+5. Run `mise run go:e2e`, `mise run java:e2e` and `mise run csharp:e2e` to verify behavioral parity.
 
 ## Risk / scope
 

@@ -10,7 +10,10 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 
+#[path = "cross_format_parity/front_matter.rs"]
+mod front_matter;
 mod helpers;
+use front_matter::markdown_body_start;
 use helpers::extract_uri_document_blocking;
 
 use helpers::{get_test_file_path, test_documents_available};
@@ -277,15 +280,16 @@ fn decode_numeric_entities(text: &str) -> String {
 fn validate_gfm_basics(markdown: &str) -> Vec<String> {
     let mut violations = Vec::new();
     let lines: Vec<&str> = markdown.lines().collect();
+    let body_start = markdown_body_start(&lines);
 
-    for (i, line) in lines.iter().enumerate() {
+    for (i, line) in lines.iter().enumerate().skip(body_start) {
         let line_num = i + 1;
 
         if line.ends_with(' ') || line.ends_with('\t') {
             violations.push(format!("line {}: trailing whitespace", line_num));
         }
 
-        if i > 0 {
+        if i > body_start {
             let prev = lines[i - 1].trim();
             if !prev.is_empty() && (line.chars().all(|c| c == '=') && line.len() >= 2) {
                 violations.push(format!(
@@ -301,7 +305,7 @@ fn validate_gfm_basics(markdown: &str) -> Vec<String> {
             }
         }
 
-        if line.starts_with('#') && i > 0 && !lines[i - 1].trim().is_empty() {
+        if line.starts_with('#') && i > body_start && !lines[i - 1].trim().is_empty() {
             violations.push(format!("line {}: missing blank line before heading", line_num));
         }
 
@@ -320,7 +324,7 @@ fn validate_gfm_basics(markdown: &str) -> Vec<String> {
     }
 
     let mut in_fenced_block = false;
-    for (i, line) in lines.iter().enumerate() {
+    for (i, line) in lines.iter().enumerate().skip(body_start) {
         let trimmed = line.trim();
         if trimmed.starts_with("```") {
             in_fenced_block = !in_fenced_block;
@@ -340,7 +344,7 @@ fn validate_gfm_basics(markdown: &str) -> Vec<String> {
     }
 
     let mut in_code = false;
-    for (i, line) in lines.iter().enumerate() {
+    for (i, line) in lines.iter().enumerate().skip(body_start) {
         if line.trim().starts_with("```") {
             in_code = !in_code;
             continue;
@@ -351,7 +355,8 @@ fn validate_gfm_basics(markdown: &str) -> Vec<String> {
 
         let trimmed = line.trim();
         if trimmed.starts_with('|') && trimmed.ends_with('|') && trimmed.len() > 2 && !is_table_separator(trimmed) {
-            let is_first_table_row = i == 0 || lines[i - 1].trim().is_empty() || !lines[i - 1].trim().starts_with('|');
+            let is_first_table_row =
+                i == body_start || lines[i - 1].trim().is_empty() || !lines[i - 1].trim().starts_with('|');
             if is_first_table_row && (i + 1 >= lines.len() || !is_table_separator(lines[i + 1].trim())) {
                 violations.push(format!(
                     "line {}: pipe table header row not followed by separator row",

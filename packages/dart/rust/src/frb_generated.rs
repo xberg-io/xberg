@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 617887772;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -401557053;
 
 // Section: executor
 
@@ -11359,40 +11359,6 @@ fn wire__crate__extract_with_external_redaction_impl(
                             api_max_findings,
                         )
                         .await?;
-                        std::result::Result::Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-#[cfg(all(feature = "pdf", feature = "layout-detection"))]
-fn wire__crate__extract_with_layout_pages_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "extract_with_layout_pages",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_)
-            };
-            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_input = <crate::ExtractInput>::sse_decode(&mut deserializer);
-            let api_config = <crate::ExtractionConfig>::sse_decode(&mut deserializer);
-            let api_pages = <Vec<i64>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::extract_with_layout_pages(api_input, api_config, api_pages).await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -26997,57 +26963,55 @@ fn pde_ffi_dispatcher_primary_impl(
         384 => wire__crate__extract_batch_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "redaction")]
         385 => wire__crate__extract_with_external_redaction_impl(port, ptr, rust_vec_len, data_len),
-        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        386 => wire__crate__extract_with_layout_pages_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "markdown-footnotes")]
-        387 => wire__crate__find_unmarked_claims_impl(port, ptr, rust_vec_len, data_len),
-        388 => wire__crate__list_document_extractors_impl(port, ptr, rust_vec_len, data_len),
-        389 => wire__crate__list_embedding_backends_impl(port, ptr, rust_vec_len, data_len),
-        390 => wire__crate__list_ocr_backend_capabilities_impl(port, ptr, rust_vec_len, data_len),
-        391 => wire__crate__list_ocr_backend_capabilities_for_impl(port, ptr, rust_vec_len, data_len),
-        392 => wire__crate__list_ocr_backends_impl(port, ptr, rust_vec_len, data_len),
-        393 => wire__crate__list_post_processors_impl(port, ptr, rust_vec_len, data_len),
-        394 => wire__crate__list_renderers_impl(port, ptr, rust_vec_len, data_len),
-        395 => wire__crate__list_reranker_backends_impl(port, ptr, rust_vec_len, data_len),
-        396 => wire__crate__list_supported_formats_impl(port, ptr, rust_vec_len, data_len),
-        397 => wire__crate__list_tokenizer_backends_impl(port, ptr, rust_vec_len, data_len),
-        398 => wire__crate__list_validators_impl(port, ptr, rust_vec_len, data_len),
+        386 => wire__crate__find_unmarked_claims_impl(port, ptr, rust_vec_len, data_len),
+        387 => wire__crate__list_document_extractors_impl(port, ptr, rust_vec_len, data_len),
+        388 => wire__crate__list_embedding_backends_impl(port, ptr, rust_vec_len, data_len),
+        389 => wire__crate__list_ocr_backend_capabilities_impl(port, ptr, rust_vec_len, data_len),
+        390 => wire__crate__list_ocr_backend_capabilities_for_impl(port, ptr, rust_vec_len, data_len),
+        391 => wire__crate__list_ocr_backends_impl(port, ptr, rust_vec_len, data_len),
+        392 => wire__crate__list_post_processors_impl(port, ptr, rust_vec_len, data_len),
+        393 => wire__crate__list_renderers_impl(port, ptr, rust_vec_len, data_len),
+        394 => wire__crate__list_reranker_backends_impl(port, ptr, rust_vec_len, data_len),
+        395 => wire__crate__list_supported_formats_impl(port, ptr, rust_vec_len, data_len),
+        396 => wire__crate__list_tokenizer_backends_impl(port, ptr, rust_vec_len, data_len),
+        397 => wire__crate__list_validators_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "url-ingestion")]
-        399 => wire__crate__map_url_impl(port, ptr, rust_vec_len, data_len),
+        398 => wire__crate__map_url_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(any(
             any(feature = "late-interaction-presets", feature = "late-interaction"),
             feature = "late-interaction-presets"
         ))]
-        400 => wire__crate__max_sim_rank_impl(port, ptr, rust_vec_len, data_len),
+        399 => wire__crate__max_sim_rank_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(any(
             any(feature = "late-interaction-presets", feature = "late-interaction"),
             feature = "late-interaction-presets"
         ))]
-        401 => wire__crate__max_sim_score_impl(port, ptr, rust_vec_len, data_len),
-        402 => wire__crate__ocr_backend_supports_language_impl(port, ptr, rust_vec_len, data_len),
-        403 => wire__crate__ocr_backend_supports_language_for_impl(port, ptr, rust_vec_len, data_len),
+        400 => wire__crate__max_sim_score_impl(port, ptr, rust_vec_len, data_len),
+        401 => wire__crate__ocr_backend_supports_language_impl(port, ptr, rust_vec_len, data_len),
+        402 => wire__crate__ocr_backend_supports_language_for_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "pdf")]
-        404 => wire__crate__pdf_page_count_impl(port, ptr, rust_vec_len, data_len),
+        403 => wire__crate__pdf_page_count_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "redaction")]
-        405 => wire__crate__redact_external_impl(port, ptr, rust_vec_len, data_len),
-        406 => wire__crate__register_document_extractor_impl(port, ptr, rust_vec_len, data_len),
-        407 => wire__crate__register_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
-        408 => wire__crate__register_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
-        409 => wire__crate__register_post_processor_impl(port, ptr, rust_vec_len, data_len),
-        410 => wire__crate__register_renderer_impl(port, ptr, rust_vec_len, data_len),
-        411 => wire__crate__register_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
-        412 => wire__crate__register_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
-        413 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
-        414 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
-        415 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
-        416 => wire__crate__unregister_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
-        417 => wire__crate__unregister_post_processor_impl(port, ptr, rust_vec_len, data_len),
-        418 => wire__crate__unregister_renderer_impl(port, ptr, rust_vec_len, data_len),
-        419 => wire__crate__unregister_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
-        420 => wire__crate__unregister_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
-        421 => wire__crate__unregister_validator_impl(port, ptr, rust_vec_len, data_len),
+        404 => wire__crate__redact_external_impl(port, ptr, rust_vec_len, data_len),
+        405 => wire__crate__register_document_extractor_impl(port, ptr, rust_vec_len, data_len),
+        406 => wire__crate__register_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
+        407 => wire__crate__register_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
+        408 => wire__crate__register_post_processor_impl(port, ptr, rust_vec_len, data_len),
+        409 => wire__crate__register_renderer_impl(port, ptr, rust_vec_len, data_len),
+        410 => wire__crate__register_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
+        411 => wire__crate__register_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
+        412 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
+        413 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
+        414 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
+        415 => wire__crate__unregister_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
+        416 => wire__crate__unregister_post_processor_impl(port, ptr, rust_vec_len, data_len),
+        417 => wire__crate__unregister_renderer_impl(port, ptr, rust_vec_len, data_len),
+        418 => wire__crate__unregister_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
+        419 => wire__crate__unregister_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
+        420 => wire__crate__unregister_validator_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "markdown-footnotes")]
-        422 => wire__crate__verify_excerpt_impl(port, ptr, rust_vec_len, data_len),
+        421 => wire__crate__verify_excerpt_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

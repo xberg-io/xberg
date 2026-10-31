@@ -25,6 +25,10 @@ int main(int argc, char **argv) {
 C
 read -r -a heif_flags <<<"$(pkg-config --cflags --libs libheif)"
 cc "$log_dir/heif-abi.c" "${heif_flags[@]}" -Wl,-rpath,/usr/local/lib -o "$log_dir/heif-abi"
+if [ ! -x "$log_dir/heif-abi" ]; then
+  echo 'C runtime probe was not produced as an executable' >&2
+  exit 1
+fi
 ldd "$log_dir/heif-abi" | tee "$log_dir/heif-abi-linkage.txt"
 grep -Eq 'libheif.so.1 => /usr/local/lib/libheif.so.1' "$log_dir/heif-abi-linkage.txt"
 "$log_dir/heif-abi" "$expected_version"

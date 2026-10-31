@@ -6,6 +6,10 @@ use crate::Result;
 use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::types::{PageBoundary, PageContent, PdfAnnotation};
 
+#[cfg(test)]
+#[path = "extraction/native_table_metadata_tests.rs"]
+mod native_table_metadata_tests;
+
 #[cfg(feature = "pdf")]
 use crate::types::Table;
 
@@ -43,9 +47,14 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
     pub(crate) page_config: Option<&'a crate::core::config::PageConfig>,
 }
 
+type NativeTableMetadata = (
+    Option<crate::types::TableGrid>,
+    Option<crate::pdf::native::table::scripts::TableScripts>,
+);
+
 type TableExtractionResult = (
     Vec<Table>,
-    Vec<Option<crate::types::TableGrid>>,
+    Vec<NativeTableMetadata>,
     Option<crate::pdf::native::table::ExtractedHierarchySegments>,
     Vec<crate::types::ProcessingWarning>,
 );
@@ -62,25 +71,43 @@ fn anchor_images_as_ocr_text(document: &mut crate::types::internal::InternalDocu
 fn attach_native_table_grids(
     document: &mut crate::types::internal::InternalDocument,
     tables: &[Table],
-    grids: &[Option<crate::types::TableGrid>],
+    grids: &[NativeTableMetadata],
 ) -> Result<()> {
+    let sidecars: Vec<_> = tables
+        .iter()
+        .zip(grids)
+        .filter_map(|(table, (grid, _))| {
+            grid.as_ref()
+                .map(|grid| crate::pdf::structure::table_grid::TableGridSidecar {
+                    table: table.clone(),
+                    grid: grid.clone(),
+                })
+        })
+        .collect();
+    crate::pdf::structure::table_grid::attach_table_grids(document, &sidecars)
+        .map_err(|error| crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}")))?;
     for element in &mut document.elements {
         let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
             continue;
         };
         let index = table_index as usize;
-        let Some((table, grid)) = tables.get(index).zip(grids.get(index).and_then(Option::as_ref)) else {
+        let Some((table, (_, scripts))) = tables.get(index).zip(grids.get(index)) else {
             continue;
         };
-        if !crate::extraction::derive::native_grid_matches_table(table, grid) {
-            continue;
+        if let Some(scripts) = scripts
+            && scripts.cells == table.cells
+            && document
+                .tables
+                .get(index)
+                .is_some_and(|current| current.cells == scripts.cells)
+        {
+            let encoded = serde_json::to_string(&scripts.annotations)
+                .map_err(|error| crate::XbergError::parsing(format!("Failed to retain PDF table scripts: {error}")))?;
+            element.attributes.get_or_insert_with(Default::default).insert(
+                crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE.to_string(),
+                encoded,
+            );
         }
-        let encoded = serde_json::to_string(grid)
-            .map_err(|error| crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}")))?;
-        element
-            .attributes
-            .get_or_insert_with(Default::default)
-            .insert(crate::types::internal::NATIVE_TABLE_GRID_ATTRIBUTE.to_string(), encoded);
     }
     Ok(())
 }
@@ -605,7 +632,7 @@ pub(crate) fn extract_all_from_native_document(
                 warnings.extend(bordered_warnings);
                 let (mut combined, mut native_grids): (Vec<_>, Vec<_>) = extracted_tables
                     .into_iter()
-                    .map(|entry| (entry.table, entry.grid))
+                    .map(|entry| (entry.table, (entry.grid, entry.scripts)))
                     .unzip();
                 let covered_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
                 let hierarchy_segments = match crate::pdf::native::table::extract_tables_heuristic(
@@ -615,7 +642,7 @@ pub(crate) fn extract_all_from_native_document(
                     artifacts,
                 ) {
                     Ok(extraction) => {
-                        native_grids.resize_with(combined.len() + extraction.tables.len(), || None);
+                        native_grids.resize_with(combined.len() + extraction.tables.len(), || (None, None));
                         combined.extend(extraction.tables);
                         let mut hierarchy_segments = extraction.hierarchy_segments;
                         if retain_hierarchy_segments {

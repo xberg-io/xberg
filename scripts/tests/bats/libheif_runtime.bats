@@ -117,9 +117,9 @@ SH
 
 @test "libheif runtime harness should_reject_a_missing_compiled_C_probe" {
 	export MOCK_MISSING_PROBE=true
-	run -127 bash "$QUALIFIER_ROOT/scripts/ci/rust/check-libheif-runtime.sh"
-	xberg_assert_status 127
-	xberg_assert_output_contains 'heif-abi: No such file or directory'
+	run bash "$QUALIFIER_ROOT/scripts/ci/rust/check-libheif-runtime.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'C runtime probe was not produced as an executable'
 	[ ! -f "$QUALIFIER_ROOT/python-qualifier-call" ]
 }
 

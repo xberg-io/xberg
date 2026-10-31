@@ -2787,11 +2787,7 @@ fn encode_rgb_as_png(rgb_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>
     Ok(png.into_inner())
 }
 
-#[cfg(all(
-    feature = "layout-detection",
-    feature = "pdf",
-    any(feature = "ocr", feature = "ocr-wasm")
-))]
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
 fn uses_tatr_image_table_recognition(table_model: crate::core::config::layout::TableModel) -> bool {
     use crate::core::config::layout::TableModel;
 
@@ -2805,32 +2801,31 @@ fn uses_tatr_image_table_recognition(table_model: crate::core::config::layout::T
     }
 }
 
-#[cfg(all(
-    feature = "layout-detection",
-    feature = "pdf",
-    any(feature = "ocr", feature = "ocr-wasm")
-))]
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
 async fn recognize_cached_image_tables(
     whole_image_doc: &InternalDocument,
     rgb: &std::sync::Arc<image::RgbImage>,
     detections: &[crate::layout::LayoutDetection],
     config: &ExtractionConfig,
-) -> (Vec<crate::RecognizedTable>, Option<crate::types::ProcessingWarning>) {
+) -> (
+    crate::ocr::layout_assembly::RecognizedTablesOutcome,
+    Option<crate::types::ProcessingWarning>,
+) {
     let Some(layout_config) = config.layout.as_ref() else {
-        return (Vec::new(), None);
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
     };
     if !uses_tatr_image_table_recognition(layout_config.table_model) {
-        return (Vec::new(), None);
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
     }
     let Some(source_elements) = whole_image_doc.prebuilt_ocr_elements.as_ref() else {
-        return (Vec::new(), None);
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
     };
     let Some(transform) = whole_image_ocr_coordinate_transform(whole_image_doc, rgb.width(), rgb.height()) else {
-        return (Vec::new(), None);
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
     };
     let Some(elements) = transformed_ocr_elements(source_elements, transform, crate::types::OcrElementLevel::Word)
     else {
-        return (Vec::new(), None);
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
     };
 
     let page_image = std::sync::Arc::clone(rgb);
@@ -2846,7 +2841,7 @@ async fn recognize_cached_image_tables(
         .any(|detection| detection.class_name == crate::layout::LayoutClass::Table);
     let recognized = tokio::task::spawn_blocking(move || {
         let mut model = crate::layout::take_or_create_tatr(acceleration.as_ref(), thread_budget)?;
-        Some(crate::ocr::layout_assembly::recognize_page_tables(
+        Some(crate::ocr::layout_assembly::recognize_page_tables_with_fallback(
             &page_image,
             &detection,
             &elements,
@@ -2857,12 +2852,12 @@ async fn recognize_cached_image_tables(
     match recognized {
         Ok(Some(tables)) => (tables, None),
         Ok(None) => (
-            Vec::new(),
+            crate::ocr::layout_assembly::RecognizedTablesOutcome::default(),
             has_table_region.then(|| crate::layout::table_model_unavailable_warning("image_tables", "TATR")),
         ),
         Err(error) => {
             tracing::warn!(%error, "Image table recognition worker failed; retaining OCR fallback");
-            (Vec::new(), None)
+            (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None)
         }
     }
 }
@@ -3367,6 +3362,7 @@ impl ImageExtractor {
                 source_dpi,
                 known_full_page_scan: true,
                 single_block_pages: None,
+                native_page_layers: None,
             }),
         ))
         .await?;
@@ -3474,20 +3470,24 @@ impl ImageExtractor {
         config: &ExtractionConfig,
         preparation: LayoutOcrPreparation,
     ) -> Result<InternalDocument> {
-        #[cfg(feature = "pdf")]
         let (recognized_tables, table_warning) = match &preparation {
             LayoutOcrPreparation::Detected {
                 whole_image_result: Ok(whole_image_doc),
                 rgb,
                 detections,
             } => recognize_cached_image_tables(whole_image_doc, rgb, detections, config).await,
-            _ => (Vec::new(), None),
+            _ => (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None),
         };
-        #[cfg(not(feature = "pdf"))]
-        let (recognized_tables, table_warning) = (Vec::new(), None::<crate::types::ProcessingWarning>);
+        let table_grids = recognized_tables.grid_sidecars(1);
         let mut doc = self
-            .complete_layout_ocr_inner(content, mime_type, config, preparation, recognized_tables)
+            .complete_layout_ocr_inner(content, mime_type, config, preparation, recognized_tables.tables)
             .await?;
+        crate::types::internal::table_grid::attach_recognized_table_grids(&mut doc, &table_grids).map_err(|error| {
+            crate::XbergError::Parsing {
+                message: "Failed to retain recognized image table geometry".to_owned(),
+                source: Some(Box::new(error)),
+            }
+        })?;
         if let Some(warning) = table_warning {
             crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
         }
@@ -4079,6 +4079,10 @@ impl InternalDocumentExtractor for ImageExtractor {
         50
     }
 }
+
+#[cfg(all(test, feature = "layout-detection", feature = "ocr"))]
+#[path = "image_table_grid_metadata_tests.rs"]
+mod image_table_grid_metadata_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]

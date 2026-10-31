@@ -37,6 +37,7 @@ ENV ORT_STRATEGY=system
 ENV RUSTFLAGS="-C target-feature=-crt-static"
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-ffi/ crates/xberg-ffi/

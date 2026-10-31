@@ -23,7 +23,8 @@ done
 # The point of this script is that nothing is left resolving through @rpath, which
 # a JNI library loaded out of a JAR cannot satisfy. Nothing verified that before,
 # so a failed rewrite surfaced as an UnsatisfiedLinkError for users instead.
-residual="$(otool -L "$ffi" | tail -n +2 | awk '{print $1}' |
+load_commands="$(otool -L "$ffi")"
+residual="$(printf '%s\n' "$load_commands" | tail -n +2 | awk '{print $1}' |
   grep -E '^@rpath/(libpdfium|libonnxruntime)' || true)"
 if [ -n "$residual" ]; then
   echo "error: $ffi still resolves these through @rpath after rewriting:" >&2

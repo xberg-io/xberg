@@ -351,17 +351,23 @@ impl ResourceMonitor {
 
         let pid = self.pid;
         let prepared = tokio::task::spawn_blocking(move || {
-            let mut system = System::new();
+            let mut system = System::new().map_err(|error| format!("initialize process monitoring: {error}"))?;
             let refresh_kind = ProcessRefreshKind::nothing().with_memory().with_cpu();
 
             system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
             let baseline_rss = collect_process_tree_memory(pid, &system);
 
-            (PreparedSampler { system, refresh_kind }, baseline_rss)
+            Ok::<_, String>((PreparedSampler { system, refresh_kind }, baseline_rss))
         })
-        .await;
-        let Ok((prepared, baseline_rss)) = prepared else {
-            return;
+        .await
+        .map_err(|error| format!("prepare process monitoring: {error}"))
+        .and_then(std::convert::identity);
+        let (prepared, baseline_rss) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                tracing::warn!(%error, "Resource monitoring could not start");
+                return;
+            }
         };
 
         *self.baseline_memory_bytes.lock().await = baseline_rss;
@@ -445,8 +451,9 @@ impl ResourceMonitor {
     /// Useful as a fallback when the background sampler collects zero samples
     /// (e.g., sub-millisecond extractions that complete before the first sample).
     /// Performs two refreshes with a 50ms gap to get a valid CPU delta.
-    pub fn snapshot_current_memory(&self) -> ResourceSample {
-        let mut system = System::new();
+    pub fn snapshot_current_memory(&self) -> crate::Result<ResourceSample> {
+        let mut system = System::new()
+            .map_err(|error| crate::Error::Benchmark(format!("initialize process memory snapshot: {error}")))?;
         let refresh_kind = ProcessRefreshKind::nothing().with_memory().with_cpu();
 
         system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
@@ -459,13 +466,13 @@ impl ResourceMonitor {
         let tree_cpu = collect_process_tree_cpu(self.pid, &system);
         let normalized_cpu_percent = tree_cpu / cpu_count;
 
-        ResourceSample {
+        Ok(ResourceSample {
             memory_bytes: tree_memory,
             vm_size_bytes: tree_vm,
             page_faults: 0,
             cpu_percent: normalized_cpu_percent,
             timestamp_ms: 0,
-        }
+        })
     }
 
     /// Stop monitoring and return collected samples

@@ -119,6 +119,7 @@ RUN mkdir -p /build/onnxruntime && \
     rm /build/onnxruntime.tgz
 
 COPY Cargo.toml Cargo.lock ./
+COPY vendored/sysinfo/ vendored/sysinfo/
 COPY crates/xberg/ crates/xberg/
 COPY crates/xberg-gliner/ crates/xberg-gliner/
 COPY crates/xberg-cli/ crates/xberg-cli/
@@ -208,6 +209,7 @@ COPY --from=builder /build/pdfium/lib/libpdfium.so /usr/local/lib/
 RUN ldconfig
 
 COPY --from=builder /build/xberg /usr/local/bin/xberg
+COPY LICENSE THIRD_PARTY_LICENSES.md /usr/local/share/licenses/xberg/
 RUN chmod +x /usr/local/bin/xberg
 
 RUN groupadd -r xberg && \
