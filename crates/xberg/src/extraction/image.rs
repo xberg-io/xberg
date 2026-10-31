@@ -22,6 +22,9 @@ mod bounded_jpeg;
 
 #[cfg(feature = "ocr")]
 pub(crate) use bounded_jpeg::{decode_oversized_jpeg, load_image_for_ocr_with_scale};
+#[cfg(feature = "ocr")]
+#[doc(hidden)]
+pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
 
 #[cfg(feature = "ocr")]
 pub(crate) struct DecodedOcrImage {

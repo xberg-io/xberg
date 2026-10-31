@@ -134,6 +134,22 @@ fn decode_if_needed(
     decode(bytes, &frame, scale).map(Some)
 }
 
+/// The admitted peak bound of a reduced decode at `denominator`, for the allocation test in
+/// `tests/bounded_jpeg_peak.rs`.
+#[doc(hidden)]
+pub fn reduced_decode_bound(bytes: &[u8], denominator: u8) -> Option<u64> {
+    let frame = read_frame(bytes)?;
+    reduced_peak(&frame, reduced_scale(&frame, denominator), bytes.len() as u64)
+}
+
+/// Decode `bytes` at `denominator` through the reduced decoder and return the output size, for
+/// the allocation test in `tests/bounded_jpeg_peak.rs`.
+#[doc(hidden)]
+pub fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<(u32, u32)> {
+    let frame = read_frame(bytes).ok_or_else(|| XbergError::parsing("The JPEG has no readable frame header"))?;
+    decode(bytes, &frame, reduced_scale(&frame, denominator)).map(|decoded| decoded.image.dimensions())
+}
+
 fn full_decode_peak(frame: &Frame, encoded: u64) -> Result<u64> {
     // The full decoder holds the decoded raster and, for grayscale, its RGB conversion. ~keep
     let channels = if frame.sampling.len() == 3 {
