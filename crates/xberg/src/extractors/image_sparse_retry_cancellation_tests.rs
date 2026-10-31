@@ -86,10 +86,26 @@ impl OcrBackend for SequenceBackend {
 }
 
 async fn run_retry(fallback: Fallback, cancel_in_fallback: bool) -> crate::Result<ExtractedDocument> {
-    let original = OcrConfig::default();
+    run_retry_with(OcrConfig::default(), fallback, cancel_in_fallback).await
+}
+
+/// An implicit strong-RTL language takes the RTL retry branch instead of the standard one.
+fn rtl_config() -> OcrConfig {
+    OcrConfig {
+        language: vec!["ara".into()],
+        ..Default::default()
+    }
+}
+
+async fn run_retry_with(
+    original: OcrConfig,
+    fallback: Fallback,
+    cancel_in_fallback: bool,
+) -> crate::Result<ExtractedDocument> {
     let mut effective = original.clone();
     apply_default_whole_image_tesseract_psm(&mut effective);
-    assert!(should_retry_sparse_image_ocr(&original, &document("primary", 0.1)));
+    let rtl = should_retry_sparse_rtl_ocr(&original, &effective, &document("primary", 0.1));
+    assert!(rtl || should_retry_sparse_image_ocr(&original, &document("primary", 0.1)));
     let token = CancellationToken::new();
     let backend = Arc::new(SequenceBackend {
         token: token.clone(),
@@ -116,10 +132,14 @@ async fn run_retry(fallback: Fallback, cancel_in_fallback: bool) -> crate::Resul
     .await;
     let expected = vec![
         effective.tesseract_config.as_ref().and_then(|value| value.psm),
-        sparse_image_ocr_fallback_config(&effective)
-            .tesseract_config
-            .unwrap()
-            .psm,
+        if rtl {
+            rtl_sparse_image_ocr_fallback_config(&effective)
+        } else {
+            sparse_image_ocr_fallback_config(&effective)
+        }
+        .tesseract_config
+        .unwrap()
+        .psm,
     ];
     assert_ne!(
         expected[0], expected[1],
@@ -179,4 +199,25 @@ async fn should_propagate_backend_cancellation_even_when_caller_token_is_not_can
         run_retry(Fallback::Cancelled, false).await,
         Err(crate::XbergError::Cancelled)
     ));
+}
+
+#[tokio::test]
+async fn should_return_cancelled_when_rtl_fallback_returns_robust_text_after_cancellation() {
+    assert!(matches!(
+        run_retry_with(rtl_config(), Fallback::Robust, true).await,
+        Err(crate::XbergError::Cancelled)
+    ));
+}
+
+#[tokio::test]
+async fn should_keep_an_rtl_retry_result_when_not_cancelled() {
+    assert!(run_retry_with(rtl_config(), Fallback::Robust, false).await.is_ok());
+}
+
+#[test]
+fn should_take_the_rtl_retry_branch_for_the_rtl_config() {
+    let original = rtl_config();
+    let mut effective = original.clone();
+    apply_default_whole_image_tesseract_psm(&mut effective);
+    assert!(should_retry_sparse_rtl_ocr(&original, &effective, &document("primary", 0.1)));
 }
