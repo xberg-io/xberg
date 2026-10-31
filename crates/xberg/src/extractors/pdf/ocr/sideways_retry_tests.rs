@@ -425,6 +425,7 @@ async fn the_whole_document_route_retries_a_noisy_scanned_page() {
         source_dpi: None,
         known_full_page_scan: true,
         single_block_pages: None,
+        native_page_layers: None,
     };
 
     let result = super::extract_with_ocr_with_page_hints(
