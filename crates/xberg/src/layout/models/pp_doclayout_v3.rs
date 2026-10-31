@@ -227,7 +227,7 @@ impl PpDocLayoutV3Model {
     }
 
     fn project_detections<'a>(
-        rows: impl Iterator<Item = ndarray::ArrayView1<'a, f32>>>,
+        rows: impl Iterator<Item = ndarray::ArrayView1<'a, f32>>,
         threshold: f32,
         orig_w: u32,
         orig_h: u32,
