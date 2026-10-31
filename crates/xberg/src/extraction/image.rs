@@ -17,6 +17,20 @@ use std::collections::HashMap;
 #[cfg(feature = "ocr")]
 use std::io::Cursor;
 
+#[cfg(feature = "ocr")]
+mod bounded_jpeg;
+
+#[cfg(feature = "ocr")]
+pub(crate) use bounded_jpeg::load_image_for_ocr_with_scale;
+
+#[cfg(feature = "ocr")]
+pub(crate) struct DecodedOcrImage {
+    pub image: image::RgbImage,
+    pub original_width: u32,
+    pub original_height: u32,
+    pub scale_denominator: u8,
+}
+
 /// JP2 file signature: 12-byte box starting with length 0x0000000C and type "jP  "
 const JP2_MAGIC: &[u8] = &[0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20];
 
@@ -462,7 +476,7 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
 /// for all other formats.
 #[cfg(feature = "ocr")]
 pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) -> Result<image::DynamicImage> {
-    decode_image_to_rgb8_with_security_limits(image_bytes, limits).map(image::DynamicImage::ImageRgb8)
+    load_image_for_ocr_with_scale(image_bytes, limits).map(|decoded| image::DynamicImage::ImageRgb8(decoded.image))
 }
 
 /// Meters-per-inch, used to convert a PNG `pHYs` pixels-per-metre density into DPI.

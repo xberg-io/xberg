@@ -131,6 +131,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Decode oversized baseline JPEG scans at a bounded IDCT scale.** (#2339)
+  Three-component 8-bit scans use checked input, metadata, plane and output budgets; fitting images keep their dimensions.
+
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
 
