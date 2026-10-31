@@ -37,8 +37,47 @@ def metric_applicability(result: dict, options: dict) -> dict:
     return {"grits_con": True, "table_record_match": not options.get("trm_unsupported", False)}
 
 
+def _model_failure(text: str, source: str | None = None) -> bool:
+    """Require model context, not renderer wording such as 'layout is preserved'."""
+    model = source in {"layout", "pdf_tables", "native_pdf_layout", "layout-ocr"} or any(
+        token in text
+        for token in (
+            "tatr",
+            "rtdetr",
+            "rt-detr",
+            "table model",
+            "onnx",
+            "inference",
+            "layout detection",
+            "layout model",
+            "layout engine",
+            "layout runner",
+            "layout_runner",
+            "layout-for-markdown",
+            "layout-based table recognition",
+            "layout region plan",
+            "xberg::layout:",
+        )
+    )
+    failure = any(
+        token in text
+        for token in (
+            "unavailable",
+            "not available",
+            "failed",
+            "skipped",
+            "fallback",
+            "not compiled",
+            "unsupported",
+            "could not be loaded",
+            "could not be prepared",
+        )
+    )
+    return model and failure
+
+
 def validate_diagnostics(result: dict, stderr: str, arm: str) -> None:
-    """Reject actual SDK model fallback diagnostics in model arms."""
+    """Reject actual model fallbacks while leaving other SDK warnings in their artifacts."""
     if arm == "native_html":
         return
     warnings = result.get("processing_warnings", [])
@@ -46,23 +85,10 @@ def validate_diagnostics(result: dict, stderr: str, arm: str) -> None:
         raise ValueError("invalid SDK processing warnings")
     for warning in warnings:
         text = f"{warning['source']} {warning['message']}".lower()
-        if any(token in text for token in ("layout", "tatr", "table model", "onnx", "inference")):
+        if _model_failure(text, str(warning["source"]).lower()):
             raise ValueError(f"model fallback diagnostic: {text}")
     for line in stderr.lower().splitlines():
-        model = any(token in line for token in ("layout", "tatr", "rtdetr", "rt-detr", "table model", "onnx"))
-        failure = any(
-            token in line
-            for token in (
-                "unavailable",
-                "not available",
-                "failed",
-                "skipped",
-                "fallback",
-                "not compiled",
-                "unsupported",
-            )
-        )
-        if model and failure:
+        if _model_failure(line):
             raise ValueError(f"model fallback diagnostic: {line}")
 
 

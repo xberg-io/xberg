@@ -129,6 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(benchmarks): Distinguish ParseBench renderer warnings from model failures.** (#2332)
+  Retain renderer diagnostics while rejecting genuine model and table-recognition fallbacks.
+
 - **(pdf): Retry detached pages from bounded embedded JPEG/JP2 bytes after raster OCR fails.** (#2339)
   Recovery preserves page numbers, cancellation and original source image identities.
 

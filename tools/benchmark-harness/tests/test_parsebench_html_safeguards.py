@@ -24,6 +24,30 @@ def _invocation():
     }
 
 
+def _renderer_glyph_warning():
+    return {
+        "source": "pdf-render",
+        "message": (
+            "Page 1 rendering could not paint one or more glyphs and continued anyway "
+            "(advance-only, so layout is preserved but the glyph ink is missing): "
+            "font 'redacted' painted nothing for 1 glyph(s) while advancing the cursor; "
+            "first was code 0x1164 (glyph 4452): no outline. "
+            "The page renders with a gap that reads as whitespace downstream. "
+            "Reported once per font per page."
+        ),
+    }
+
+
+def _word_geometry_fallback_warning():
+    return {
+        "source": "ocr",
+        "message": (
+            "OCR word geometry could not be mapped onto the rendered page, so layout-based "
+            "table recognition was skipped for a page; its text is reported as paragraphs instead."
+        ),
+    }
+
+
 class SafeguardsTest(unittest.TestCase):
     """Prevent mutable producers and degraded model runs from qualifying."""
 
@@ -162,6 +186,123 @@ class SafeguardsTest(unittest.TestCase):
         """A tracing-only failed model load is not hidden by valid JSON."""
         with self.assertRaisesRegex(ValueError, "model fallback"):
             _safeguards().validate_diagnostics({}, "TATR model unavailable: missing model", "forced_ocr_layout_html")
+
+    def test_diagnostic_scope_renderer_layout_preservation_is_not_model_fallback(self):
+        """Retain the actual sanitized renderer warning without relabeling its layout phrase."""
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm):
+                result = {"processing_warnings": [_renderer_glyph_warning()]}
+                assert _safeguards().validate_diagnostics(result, "", arm) is None
+                assert result == {"processing_warnings": [_renderer_glyph_warning()]}
+
+    def test_diagnostic_scope_word_geometry_table_fallback_remains_rejected(self):
+        """A successful SDK payload can still skip the model arm's table-recognition route."""
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm):
+                result = {"processing_warnings": [_word_geometry_fallback_warning()]}
+                with self.assertRaisesRegex(ValueError, "model fallback diagnostic: ocr ocr word geometry"):
+                    _safeguards().validate_diagnostics(result, "", arm)
+
+    def test_diagnostic_scope_renderer_warning_cannot_hide_table_fallback(self):
+        """An unrelated earlier warning must not bypass a later genuine SDK fallback."""
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm):
+                result = {"processing_warnings": [_renderer_glyph_warning(), _word_geometry_fallback_warning()]}
+                with self.assertRaisesRegex(ValueError, "model fallback diagnostic: ocr ocr word geometry"):
+                    _safeguards().validate_diagnostics(result, "", arm)
+
+    def test_diagnostic_scope_renderer_warning_cannot_hide_stderr_model_failure(self):
+        """Model unavailability must be caught in stderr after unrelated SDK warnings."""
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm):
+                result = {"processing_warnings": [_renderer_glyph_warning()]}
+                with self.assertRaisesRegex(ValueError, "model fallback diagnostic: tatr model unavailable"):
+                    _safeguards().validate_diagnostics(result, "TATR model unavailable: missing model", arm)
+
+    def test_diagnostic_scope_table_model_that_could_not_be_loaded_is_rejected(self):
+        """The native structure emitter reports a failed model checkout without stderr."""
+        result = {
+            "processing_warnings": [
+                {
+                    "source": "pdf_tables",
+                    "message": (
+                        "layout detection found table regions but the TATR table model could not be loaded for a "
+                        "page; its tables were read from the page text"
+                    ),
+                }
+            ]
+        }
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm), self.assertRaisesRegex(ValueError, "model fallback diagnostic: pdf_tables"):
+                _safeguards().validate_diagnostics(result, "", arm)
+
+    def test_diagnostic_scope_page_not_prepared_for_layout_analysis_is_rejected(self):
+        """The layout runner reports an unanalyzed placeholder page without model wording."""
+        result = {
+            "processing_warnings": [
+                {
+                    "source": "layout",
+                    "message": (
+                        "layout: 1 page(s) could not be prepared for layout analysis and were treated as empty: "
+                        "page 2 failed to render: invalid page"
+                    ),
+                }
+            ]
+        }
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm), self.assertRaisesRegex(ValueError, "model fallback diagnostic: layout"):
+                _safeguards().validate_diagnostics(result, "", arm)
+
+    def test_diagnostic_scope_omitted_layout_segments_cannot_use_unsorted_fallback(self):
+        """An incomplete model-layout plan is a fallback even when all segments are appended."""
+        stderr = "layout region plan omitted segments; appending an unsorted fallback group"
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with (
+                self.subTest(arm=arm),
+                self.assertRaisesRegex(ValueError, "model fallback diagnostic: layout region plan"),
+            ):
+                _safeguards().validate_diagnostics({}, stderr, arm)
+
+    def test_diagnostic_scope_slanext_failure_targets_keep_previous_rejection(self):
+        """Preserve existing model-target coverage beyond the frozen TATR configuration."""
+        diagnostics = (
+            "WARN xberg::layout: SLANeXT model unavailable: invalid model",
+            (
+                "WARN xberg::layout::models::slanet: SLANeXT: platform EP failed (initialization error), "
+                "retrying with CPU-only"
+            ),
+        )
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            for stderr in diagnostics:
+                with (
+                    self.subTest(arm=arm, stderr=stderr),
+                    self.assertRaisesRegex(ValueError, "model fallback diagnostic: warn xberg::layout"),
+                ):
+                    _safeguards().validate_diagnostics({}, stderr, arm)
+
+    def test_diagnostic_scope_table_classifier_target_keeps_previous_rejection(self):
+        """A known model component remains a failure without a TATR name in its message."""
+        stderr = "WARN xberg::layout: Table classifier unavailable: invalid model"
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with (
+                self.subTest(arm=arm),
+                self.assertRaisesRegex(ValueError, "model fallback diagnostic: warn xberg::layout"),
+            ):
+                _safeguards().validate_diagnostics({}, stderr, arm)
+
+    def test_diagnostic_scope_layout_ocr_fallback_keeps_previous_rejection(self):
+        """Keep the image-layout warning contract without asserting a frozen PDF observation."""
+        result = {
+            "processing_warnings": [
+                {
+                    "source": "layout-ocr",
+                    "message": "Layout-region OCR failed after whole-image OCR succeeded; retained whole-image output",
+                }
+            ]
+        }
+        for arm in ("layout_tatr_html", "forced_ocr_layout_html"):
+            with self.subTest(arm=arm), self.assertRaisesRegex(ValueError, "model fallback diagnostic: layout-ocr"):
+                _safeguards().validate_diagnostics(result, "", arm)
 
     def test_wrong_feature_build_is_rejected(self):
         """A build lacking layout detection cannot qualify a layout arm."""
