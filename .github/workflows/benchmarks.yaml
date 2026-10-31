@@ -3,11 +3,6 @@ name: Benchmarks
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Optional branch or commit (defaults to the dispatched revision)"
-        required: false
-        default: ""
-        type: string
       timeout:
         description: "Timeout per document in seconds"
         required: false
@@ -56,16 +51,12 @@ jobs:
       id-token: write
     outputs:
       artifact-name: benchmarks-target
-      source-sha: ${{ steps.source-revision.outputs.sha }}
+      source-sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.branch || github.sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
-      - name: Pin benchmark source revision
-        id: source-revision
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
 
@@ -196,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.branch || github.sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       - name: Free disk space
@@ -368,8 +359,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -523,8 +513,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -615,7 +604,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       - name: Free disk space
@@ -721,8 +710,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -852,8 +840,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -962,8 +949,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1073,8 +1059,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1167,8 +1152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1258,8 +1242,6 @@ jobs:
     # Intentionally NOT `needs: setup`: prefetching MinerU weights only needs the
     # repo (scripts + fixtures), not the built harness, so it runs concurrently
     # with the FFI/harness build from the first stage instead of waiting for it.
-    # Checks out the same ref setup resolves (its later source-sha pin is only
-    # needed by jobs that must match the benchmarked binary's exact revision).
     if: >-
       ${{ github.ref == 'refs/heads/main' && (!cancelled()) }}
     runs-on: ubuntu-24.04-arm
@@ -1274,7 +1256,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.branch || github.sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       - name: Free disk space
@@ -1407,8 +1389,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1560,8 +1541,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1670,7 +1650,7 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha || github.sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       # validate-artifacts/consolidate resolve each fixture's ground_truth_file, which

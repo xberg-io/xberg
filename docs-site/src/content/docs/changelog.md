@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ci): Restrict CI and governance validation to `main`.**
   Skip jobs for other branches and tags, including manual dispatches, and remove pull-request validation triggers.
+  Pin benchmark source checkouts to the dispatched main revision.
 
 - **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
   Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
