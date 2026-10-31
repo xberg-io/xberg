@@ -12,7 +12,7 @@ use super::{
     INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM, INLINE_SCRIPT_MIN_FONT_RATIO,
 };
 use crate::pdf::native::span_geometry::{has_same_rotation, is_horizontal_ltr};
-use crate::pdf::native::text::{needs_numeric_script_boundary, numeric_notes};
+use crate::pdf::native::text::numeric_notes;
 use crate::types::document_structure::AnnotationKind;
 
 #[derive(Debug, Clone)]
@@ -32,13 +32,115 @@ struct NativeScriptOwner {
 
 // Keep explicit text rise inside the native row candidate's half-em domain. ~keep
 const ROW_CANDIDATE_MAX_SHIFT_EM: f32 = 0.5;
+const MAX_CONTINUATION_PROBES: usize = 64;
+
+struct BaseFacts {
+    supported: bool,
+    numbered_prose: bool,
+}
+
+impl BaseFacts {
+    fn from_span(span: &TextSpan) -> Self {
+        let numbered_prose = !span.text.ends_with(char::is_whitespace)
+            && span
+                .text
+                .trim_end()
+                .rsplit_once(char::is_whitespace)
+                .is_some_and(|(prose, number)| {
+                    prose.chars().any(char::is_alphabetic) && number.bytes().all(|character| character.is_ascii_digit())
+                });
+        Self {
+            supported: span.text.is_ascii() && span.text.bytes().any(|character| character.is_ascii_alphanumeric()),
+            numbered_prose,
+        }
+    }
+}
+
+struct ContinuationIndex {
+    starts: Vec<(f64, usize)>,
+}
+
+impl ContinuationIndex {
+    fn new(spans: &[TextSpan]) -> Self {
+        let mut starts: Vec<_> = spans
+            .iter()
+            .enumerate()
+            .filter(|(_, span)| {
+                span.text.trim_start().starts_with(['+', '-', '−', '×', '÷', '=', '^'])
+                    && valid_continuation_geometry(span)
+            })
+            .map(|(index, span)| (f64::from(span.bbox.x), index))
+            .collect();
+        starts.sort_unstable_by(|left, right| left.0.total_cmp(&right.0).then(left.1.cmp(&right.1)));
+        Self { starts }
+    }
+
+    fn has_unique_operator(&self, spans: &[TextSpan], base: &TextSpan, script: &TextSpan) -> bool {
+        let Some(base_baseline) = effective_baseline(base) else {
+            return false;
+        };
+        let right = f64::from(script.bbox.right());
+        let radius = f64::from(base.font_size);
+        let precision = f64::from(f32::EPSILON) * right.abs().max(1.0);
+        let start = self.starts.partition_point(|entry| entry.0 < right - precision);
+        let end = self.starts.partition_point(|entry| entry.0 <= right + radius);
+        // An incomplete neighborhood cannot establish a unique continuation. ~keep
+        if end - start > MAX_CONTINUATION_PROBES {
+            return false;
+        }
+        // Rank compatible operators by distance from the script's right edge;
+        // source-coordinate precision ties cannot prove a unique expression. ~keep
+        let mut best = f64::INFINITY;
+        let mut tied = false;
+        for &(x, index) in &self.starts[start..end] {
+            let next = &spans[index];
+            let Some(next_baseline) = effective_baseline(next) else {
+                continue;
+            };
+            if std::ptr::eq(next, base)
+                || std::ptr::eq(next, script)
+                || !owner_roles_are_compatible(base, next)
+                || (next_baseline - base_baseline).abs() > base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
+            {
+                continue;
+            }
+            let distance = (x - right).abs();
+            if distance + precision < best {
+                best = distance;
+                tied = false;
+            } else if (distance - best).abs() <= precision {
+                tied = true;
+            }
+        }
+        best.is_finite() && !tied
+    }
+}
+
+fn valid_continuation_geometry(span: &TextSpan) -> bool {
+    [
+        span.bbox.x,
+        span.bbox.y,
+        span.bbox.width,
+        span.bbox.height,
+        span.bbox.right(),
+        span.bbox.bottom(),
+        span.font_size,
+        span.text_rise,
+        span.rotation_degrees,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+        && span.bbox.width > 0.0
+        && span.bbox.height > 0.0
+        && span.font_size > 0.0
+        && !span.mirrored
+        && effective_baseline(span).is_some()
+}
 
 fn collect_suffix_script_owners(spans: &[TextSpan]) -> Vec<NativeScriptOwner> {
     let notes = numeric_notes(spans);
-    let supported_bases: Vec<bool> = spans
-        .iter()
-        .map(|span| span.text.is_ascii() && span.text.bytes().any(|character| character.is_ascii_alphanumeric()))
-        .collect();
+    let base_facts: Vec<_> = spans.iter().map(BaseFacts::from_span).collect();
+    let continuations = ContinuationIndex::new(spans);
     let mut snapshots = HashMap::new();
     script_row_candidates(spans)
         .into_iter()
@@ -47,8 +149,10 @@ fn collect_suffix_script_owners(spans: &[TextSpan]) -> Vec<NativeScriptOwner> {
             let script_index = candidate.script_index();
             let base = &spans[base_index];
             let script = &spans[script_index];
-            let script_byte_range = suffix_script_range(base, script, supported_bases[base_index])?;
-            if is_numeric_note_reference(base, script, &notes, spans.get(script_index + 1)) {
+            let script_byte_range = suffix_script_range(base, script, base_facts[base_index].supported)?;
+            if is_numeric_note_reference(base, script, &notes, &base_facts[base_index])
+                && !continuations.has_unique_operator(spans, base, script)
+            {
                 return None;
             }
             Some(NativeScriptOwner {
@@ -114,22 +218,22 @@ fn is_numeric_note_reference(
     base: &TextSpan,
     script: &TextSpan,
     notes: &HashMap<&str, &TextSpan>,
-    following: Option<&TextSpan>,
+    facts: &BaseFacts,
 ) -> bool {
-    let text = script.text.trim_end();
-    if !notes.contains_key(text) {
+    let Some(note) = notes.get(script.text.trim_end()) else {
+        return false;
+    };
+    if !facts.numbered_prose
+        || note.font_size >= base.font_size * 0.9
+        || base.bbox.y - note.bbox.y < base.font_size * 1.5
+        || (script.font_size >= base.font_size * 0.8 && script.text_rise.abs() < 0.10)
+    {
         return false;
     }
-    if text.len() == script.text.len() {
-        return needs_numeric_script_boundary(base, script, notes, following);
-    }
-    // A comparison view lets the existing note lookup see the marker number;
-    // witnesses retain the complete source text and every original glyph field. ~keep
-    let comparison = TextSpan {
-        text: text.to_owned(),
-        ..script.clone()
-    };
-    needs_numeric_script_boundary(base, &comparison, notes, following)
+    let gap = script.bbox.x - base.bbox.right();
+    gap >= -0.1 * base.font_size
+        && gap <= 0.25 * base.font_size
+        && (base.bbox.y - script.bbox.y).abs() <= base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
 }
 
 fn span_witness(spans: &[TextSpan], index: usize, snapshots: &mut HashMap<usize, Arc<TextSpan>>) -> NativeSpanWitness {
