@@ -3282,12 +3282,6 @@ pub(super) async fn extract_with_ocr_for_page(
             if let Some(metadata) = ocr_result.metadata.image_preprocessing.clone() {
                 preprocessing_by_page.insert(document_page_number, metadata);
             }
-            // #1575: capture once, from the first page that has any -- see this function's
-            // `backend_additional_metadata` declaration for why a single representative page
-            // is the right granularity here.
-            if backend_additional_metadata.is_none() && !ocr_result.metadata.additional.is_empty() {
-                backend_additional_metadata = Some(ocr_result.metadata.additional.clone());
-            }
             crate::core::diagnostics::dedup_extend_warnings(
                 &mut backend_page_warnings,
                 std::mem::take(&mut ocr_result.processing_warnings),
@@ -3296,6 +3290,12 @@ pub(super) async fn extract_with_ocr_for_page(
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
                 undo_upright_raster_correction(&mut ocr_result, correction_degrees, upright_width, upright_height);
+            }
+            // #1575: capture once, from the first page that has any -- see this function's
+            // `backend_additional_metadata` declaration for why a single representative page
+            // is the right granularity here.
+            if backend_additional_metadata.is_none() && !ocr_result.metadata.additional.is_empty() {
+                backend_additional_metadata = Some(ocr_result.metadata.additional.clone());
             }
             #[cfg(feature = "layout-detection")]
             let _height = encoded_batch[offset].3;

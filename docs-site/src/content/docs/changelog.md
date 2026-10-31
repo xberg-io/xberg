@@ -145,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
   Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
