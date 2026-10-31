@@ -2602,7 +2602,9 @@ async fn read_again_as_han(
 
 /// [`read_again_as_han`] with the script detection given as an argument. `is_han` receives the
 /// language list of the second pass and runs only for a noisy first pass. A cancelled token returns
-/// [`crate::XbergError::Cancelled`] before detection, before the retry, and after each await.
+/// [`crate::XbergError::Cancelled`] before detection, before the retry, and after each await. The
+/// detection worker checks the token when it starts, so a detection queued behind a busy blocking
+/// pool does not run after a cancel.
 #[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
 async fn read_again_as_han_where(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
@@ -2643,9 +2645,18 @@ async fn read_again_as_han_where(
     let mut han_config = config.clone();
     push_language(&mut han_config, HAN_LANGUAGE);
     let han_languages = han_config.effective_tesseract_language();
-    let is_han = tokio::task::spawn_blocking(move || is_han(&han_languages))
-        .await
-        .unwrap_or(false);
+    let worker_token = cancel_token.cloned();
+    let is_han = tokio::task::spawn_blocking(move || {
+        if worker_token
+            .as_ref()
+            .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+        {
+            return false;
+        }
+        is_han(&han_languages)
+    })
+    .await
+    .unwrap_or(false);
     check_cancelled()?;
     if !is_han {
         return Ok(HanSecondPass::Kept);
