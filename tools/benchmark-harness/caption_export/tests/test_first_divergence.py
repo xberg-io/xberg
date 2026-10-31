@@ -24,11 +24,11 @@ ORIGINAL = {
 
 def diagnostic(monkeypatch):
     root = Path(__file__).resolve().parents[1]
-    monkeypatch.syspath_prepend(str(root.parent))
+    monkeypatch.syspath_prepend(str(root / "src"))
     try:
-        module = importlib.import_module("caption_onnx.first_divergence")
+        module = importlib.import_module("caption_export.first_divergence")
     except ModuleNotFoundError as error:
-        if error.name in {"caption_onnx", "caption_onnx.first_divergence"}:
+        if error.name in {"caption_export", "caption_export.first_divergence"}:
             pytest.fail("first-divergence diagnostic feature is not implemented", pytrace=False)
         raise
     assert Path(module.__file__).resolve().is_relative_to(root), "exercise this checkout's actual diagnostic"
