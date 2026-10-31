@@ -133,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
   Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.

@@ -3226,7 +3226,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                            backend,
+                            &backend,
                             upright_data,
                             &ocr_config_owned,
                             config_for_page.as_ref(),
