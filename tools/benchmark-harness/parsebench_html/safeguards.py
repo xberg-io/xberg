@@ -117,3 +117,43 @@ def verify_bound_files(assets: list[dict]) -> None:
     for asset in assets:
         if _digest(Path(asset["file"])) != asset["sha256"]:
             raise ValueError(f"bound artifact changed: {asset['file']}")
+
+
+def _runtime_source_files(root: Path, imported: list[str]) -> dict[str, Path]:
+    root = root.resolve()
+    files = {str(path.relative_to(root)): path for path in sorted(root.rglob("*.py"))}
+    if not {"runner.py", "contracts.py", "safeguards.py", "official.py"} <= files.keys():
+        raise ValueError("incomplete runtime source inventory")
+    for path in [*files.values(), *(Path(name) for name in imported)]:
+        resolved = path.resolve()
+        if not resolved.is_relative_to(root) or str(resolved.relative_to(root)) not in files:
+            raise ValueError("imported runtime source does not match runner package")
+    return files
+
+
+def runtime_source_pins(root: Path, imported: list[str]) -> dict:
+    """Bind the complete own Python inventory and the modules actually imported by the runner."""
+    files = _runtime_source_files(root, imported)
+    return {"version": 1, "files": {name: _digest(path) for name, path in files.items()}}
+
+
+def verify_runtime_source_pins(root: Path, pins: dict | None, imported: list[str]) -> None:
+    """Require a fresh source-bound plan before any extraction can execute."""
+    if not isinstance(pins, dict) or pins.get("version") != 1 or not pins.get("files"):
+        raise ValueError("frozen plan lacks supported runtime source pins; refreeze before execution")
+    expected = pins["files"]
+    if not isinstance(expected, dict):
+        raise ValueError("invalid runtime source pins; refreeze before execution")
+    files = {str(path.relative_to(root)): path for path in sorted(root.rglob("*.py"))}
+    if set(expected) != set(files):
+        raise ValueError("runtime source inventory changed; refreeze before execution")
+    files = _runtime_source_files(root, imported)
+    for name, path in files.items():
+        _verify_runtime_source(name, path, expected[name])
+
+
+def _verify_runtime_source(name: str, path: Path, digest: str) -> None:
+    try:
+        verify_bound_files([{"file": str(path), "sha256": digest}])
+    except (OSError, ValueError) as error:
+        raise ValueError(f"runtime source changed: {name}; refreeze before execution") from error
