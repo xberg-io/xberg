@@ -947,6 +947,20 @@ pub(super) fn ocr_recognition_noise_decision(
         fragmented_noise,
     }
 }
+/// Whether a page's text carries the recognition-noise verdict: the same test
+/// [`accept_or_reject_ocr_page`] applies, without its diagnostics or its discard.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn page_carries_noise_verdict(
+    content: &str,
+    thresholds: &OcrQualityThresholds,
+    semantics: crate::plugins::ConfidenceSemantics,
+    confidence: Option<f64>,
+    dict_invalid_word_ratio: Option<f64>,
+) -> bool {
+    !content.trim().is_empty()
+        && (ocr_recognition_noise_decision(content, thresholds, semantics, confidence).suspected()
+            || is_dictionary_invalid_noise(dict_invalid_word_ratio, thresholds))
+}
 /// Tesseract's mean confidence for a page, 0-100, if the backend reported one.
 ///
 /// Written by `perform_ocr` from `api.mean_text_conf()`. Backends that do not report it

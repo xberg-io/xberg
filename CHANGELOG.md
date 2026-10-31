@@ -129,6 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): A scanned page whose text lines run sideways keeps its words.**
+  If sparse-text reading returns low-confidence noise for a page that is one full-page scan, the page is read again with automatic layout. The second read replaces the first only when its quality score is higher and most of its word boxes are taller than wide. A caller-set segmentation mode is never changed. (#2314)
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
 

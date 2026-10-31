@@ -1453,6 +1453,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
                 let original_config = ocr_config_resolved.clone();
+                let noise_thresholds = super::sideways_retry::noise_thresholds(config);
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -1463,15 +1464,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    let result = super::sideways_retry::read_whole_page_raster(
                         &backend_clone,
                         upright_data,
                         &original_config,
                         &config_clone,
-                        crate::extractors::image::SparseRetryPolicy {
-                            whole_page_raster,
-                            allow_standard_retry: false,
-                        },
+                        whole_page_raster,
+                        &noise_thresholds,
                         cancel_token.as_ref(),
                     )
                     .await;
@@ -1614,15 +1613,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                 };
                 #[cfg(not(target_arch = "wasm32"))]
-                let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                let noise_thresholds = super::sideways_retry::noise_thresholds(config);
+                #[cfg(not(target_arch = "wasm32"))]
+                let result = super::sideways_retry::read_whole_page_raster(
                     backend,
                     upright_data,
                     &ocr_config_resolved,
                     config_for_page.as_ref(),
-                    crate::extractors::image::SparseRetryPolicy {
-                        whole_page_raster,
-                        allow_standard_retry: false,
-                    },
+                    whole_page_raster,
+                    &noise_thresholds,
                     config.cancel_token.as_ref(),
                 )
                 .await;
@@ -3071,6 +3070,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 )
                 .into_owned();
                 let original_config = ocr_config_owned.clone();
+                let noise_thresholds = super::sideways_retry::noise_thresholds(config);
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
                 #[cfg(feature = "pdf")]
@@ -3095,15 +3095,13 @@ pub(super) async fn extract_with_ocr_for_page(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    let result = super::sideways_retry::read_whole_page_raster(
                         &backend_clone,
                         upright_data,
                         &original_config,
                         &config_clone,
-                        crate::extractors::image::SparseRetryPolicy {
-                            whole_page_raster,
-                            allow_standard_retry: false,
-                        },
+                        whole_page_raster,
+                        &noise_thresholds,
                         cancel_token.as_ref(),
                     )
                     .await;
@@ -3225,15 +3223,14 @@ pub(super) async fn extract_with_ocr_for_page(
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                        let noise_thresholds = super::sideways_retry::noise_thresholds(config);
+                        super::sideways_retry::read_whole_page_raster(
                             backend,
                             upright_data,
                             &ocr_config_owned,
                             config_for_page.as_ref(),
-                            crate::extractors::image::SparseRetryPolicy {
-                                whole_page_raster,
-                                allow_standard_retry: false,
-                            },
+                            whole_page_raster,
+                            &noise_thresholds,
                             config.cancel_token.as_ref(),
                         )
                         .await
