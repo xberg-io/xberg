@@ -71,3 +71,18 @@ fn lossless_jpeg_reports_the_size_limit_and_the_lossless_reason() {
         "{message}"
     );
 }
+
+#[test]
+fn metadata_probe_admits_an_oversized_baseline_jpeg_that_ocr_can_reduce() {
+    let bytes = jpeg_with_frame_marker(0xc0);
+    let metadata = crate::extraction::image::extract_image_metadata_with_security_limits(
+        &bytes,
+        &SecurityLimits {
+            max_content_size: BUDGET,
+            ..Default::default()
+        },
+    )
+    .expect("the metadata probe must not reject a JPEG that the OCR path decodes at a reduced size");
+    assert_eq!((metadata.width, metadata.height), (WIDTH, HEIGHT));
+    assert_eq!(metadata.format, "JPEG");
+}
