@@ -7269,3 +7269,6 @@ mod tests;
 
 #[cfg(test)]
 mod list_marker_tests;
+
+#[cfg(test)]
+mod heading_column_tests;
