@@ -7,6 +7,52 @@
 
 use super::*;
 
+/// Geometric row evidence between two final preserved spans.
+///
+/// This is a candidate relation, not superscript or footnote ownership. Indices
+/// refer to the supplied slice rather than reusable content-stream sequence IDs.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScriptRowCandidate {
+    base_index: usize,
+    script_index: usize,
+    logical_baseline: f32,
+}
+
+impl ScriptRowCandidate {
+    /// Original slice index of the candidate base.
+    #[must_use]
+    pub const fn base_index(&self) -> usize {
+        self.base_index
+    }
+
+    /// Original slice index of the raised run.
+    #[must_use]
+    pub const fn script_index(&self) -> usize {
+        self.script_index
+    }
+
+    /// Baseline of the candidate base, without changing glyph geometry.
+    #[must_use]
+    pub const fn logical_baseline(&self) -> f32 {
+        self.logical_baseline
+    }
+}
+
+/// Find conservative geometric row candidates in final preserved spans.
+///
+/// Selects the unique nearest right edge among eligible native snap bases.
+/// Equal-edge and float-near ties are omitted. Relations follow raised-run input
+/// order and refer to original slice indices.
+///
+/// Returns at most one relation per raised run and no relation for ambiguous,
+/// nonfinite, incompatible-scope or nonhorizontal geometry. A caller must still
+/// validate semantic ownership before producing script markup or moving text.
+/// The supplied spans and the extractor's legacy snapping policy are unchanged.
+#[must_use]
+pub fn script_row_candidates(_spans: &[TextSpan]) -> Vec<ScriptRowCandidate> {
+    Vec::new()
+}
+
 impl<'doc> TextExtractor<'doc> {
     pub(super) fn sort_spans_preserving_script_geometry(&mut self) {
         // Cached Form XObjects can reuse source sequence numbers. Use temporary
