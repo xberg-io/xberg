@@ -2371,6 +2371,10 @@ fn convert_extracted_table(
 }
 
 #[cfg(test)]
+#[path = "table/header_metadata_tests.rs"]
+mod header_metadata_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
