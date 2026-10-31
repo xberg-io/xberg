@@ -846,9 +846,10 @@ fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String 
     hex::encode(&hash.as_bytes()[..16])
 }
 
-/// Hash which OCR models decide a read-again for `config`. The result depends on them: a Khmer or
-/// Chinese page adds its language only when the model is installed. A forced request is never
-/// adapted, so it hashes nothing here.
+/// Hash which OCR models decide a read-again for `config`, and the directory of each. The result
+/// depends on both: a Khmer or Chinese page adds its language only when the model is installed,
+/// and the OCR runs with the models of that directory. A forced request is never adapted, so it
+/// hashes nothing here.
 #[cfg(feature = "ocr")]
 fn hash_read_again_models(
     hasher: &mut blake3::Hasher,
@@ -861,8 +862,17 @@ fn hash_read_again_models(
     if !crate::extractors::image::ocr_chosen_by_extractor(config) {
         return;
     }
-    for present in crate::ocr::processor::validation::read_again_models_on_disk(ocr, tessdata_env) {
-        hasher.update(&[u8::from(present)]);
+    for dir in crate::ocr::processor::validation::read_again_model_dirs(ocr, tessdata_env) {
+        match dir {
+            Some(dir) => {
+                hasher.update(&[1]);
+                hasher.update(&(dir.len() as u64).to_le_bytes());
+                hasher.update(dir.as_bytes());
+            }
+            None => {
+                hasher.update(&[0]);
+            }
+        }
     }
 }
 

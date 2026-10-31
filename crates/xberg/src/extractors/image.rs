@@ -2525,7 +2525,7 @@ async fn read_again_as_han_where(
         .process_image_owned(std::sync::Arc::clone(image_bytes), &han_config)
         .await
     {
-        Ok(document) if !document.content.trim().is_empty() => Ok(HanSecondPass::Read {
+        Ok(document) if han_retry_reads_better(first_pass, &document) => Ok(HanSecondPass::Read {
             document: Box::new(document),
             config: Box::new(han_config),
         }),
@@ -2536,6 +2536,36 @@ async fn read_again_as_han_where(
             Ok(HanSecondPass::Kept)
         }
     }
+}
+
+/// `true` when the Han retry reads the page better than the first pass, judged by Tesseract's mean
+/// confidence, the score that marked the first pass as noisy. The retry must be more confident and
+/// hold at least as much confidently read text (non-space characters times the confidence), so a
+/// confident fragment never replaces a whole first pass. A retry without a confidence, or with no
+/// text, keeps the first pass.
+#[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
+fn han_retry_reads_better(
+    first_pass: &crate::types::ExtractedDocument,
+    retry: &crate::types::ExtractedDocument,
+) -> bool {
+    fn confidence(document: &crate::types::ExtractedDocument) -> Option<f64> {
+        document
+            .metadata
+            .additional
+            .get("mean_text_conf")
+            .and_then(serde_json::Value::as_f64)
+            .filter(|mean| *mean >= 0.0)
+    }
+    fn confidently_read(document: &crate::types::ExtractedDocument, confidence: f64) -> f64 {
+        document.content.chars().filter(|c| !c.is_whitespace()).count() as f64 * confidence
+    }
+    let Some(retry_confidence) = confidence(retry) else {
+        return false;
+    };
+    let first_confidence = confidence(first_pass).unwrap_or(0.0);
+    !retry.content.trim().is_empty()
+        && retry_confidence > first_confidence
+        && confidently_read(retry, retry_confidence) >= confidently_read(first_pass, first_confidence)
 }
 
 #[cfg(all(
