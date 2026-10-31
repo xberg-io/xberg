@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Locate decoder divergence with hash-bound, ordered tensor diagnostics.** (#2336)
+  Preserve failed caption qualification and frozen tolerances while checking unchanged graph outputs and mask behavior.
+
 - **(benchmarks): Export hash-verified local caption sources with an offline CLI.** (#2336)
   Preserve source notices and provenance, normalize native companions, and validate fresh no-cache ONNX bundles.
 

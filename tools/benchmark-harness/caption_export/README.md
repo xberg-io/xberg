@@ -51,3 +51,48 @@ still requires real export and numerical parity, SDK end-to-end checks, artifact
 and license review, and publication approval. Its Apache-2.0 model-card metadata
 does not substitute for an independently reviewed redistribution package; no
 caption-quality or default-inventory claim follows from export validation.
+
+
+## Decoder first-divergence diagnostic
+
+The separate diagnostic observes existing exported tensors. It does not re-export
+weights, change tolerances, qualify a failed bundle or select additional data.
+Freeze a plan before running it, using the project environment and this checkout's
+`src` on `PYTHONPATH`:
+
+```bash
+python -m caption_export.first_divergence_plan \
+  --original /absolute/path/to/frozen-original-parity-directory \
+  --plan /absolute/path/to/new-diagnostic-plan.json
+
+python -m caption_export.first_divergence_run \
+  --plan /absolute/path/to/new-diagnostic-plan.json \
+  --plan-sha256 FULL_SHA_PRINTED_BY_FREEZE \
+  --output /absolute/path/to/new-diagnostic-output
+```
+
+The plan pins the actual checkout's complete Python package and the original
+`plan.json`, `parity.py` and failed `result.json`. The runner reuses that pinned
+probe's exact source/checkpoint, package-version, installed-source, loading and
+24 legacy mask-buffer checks before loading weights. It verifies those inputs
+again on completion. An imported package from another checkout fails. Output
+must be new and outside the immutable source, bundle, receipts and package.
+Failures retain an explicitly incomplete receipt; retry in a new directory.
+
+This protocol is fixed to the existing zero-image development input and token
+prefixes T=1 and T=2. Both sessions use CPU, sequential execution, one thread and
+`ORT_DISABLE_ALL`; the original ALL-optimization qualification remains unchanged.
+The original decoder must reproduce T1 passing and T2 failing at `atol=1e-5`,
+`rtol=1e-4`. The fifteen taps are embedding output, twelve block outputs, final
+normalization and logits. Norm scopes must be unique; a new protobuf exposes
+existing values without changing graph nodes or initializers. Thirty comparisons
+must contain exactly 183,027 finite FP32 elements. First literal-byte divergence
+and first tolerance failure are reported separately in architecture order.
+
+Two controls require instrumented and original ORT logits to be bit-identical;
+two more require default HF and the export wrapper's explicit mask to agree
+bit-for-bit. Poisoned-value and missing-stage controls must fail for their exact
+intended reasons. The receipt preserves the original six failed prefixes and
+`qualified=false`, even if all diagnostic comparisons agree. Successful command
+execution means this bounded diagnostic completed, not numerical qualification,
+caption quality, performance, SDK readiness or permission to publish weights.
