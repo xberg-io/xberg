@@ -194,3 +194,16 @@ fn should_reject_a_resize_even_when_dimension_clamping_returns_the_input_size() 
         "{message}"
     );
 }
+
+#[test]
+fn should_name_the_unknown_source_dpi_and_the_limit_when_a_reduced_image_needs_a_resize() {
+    let error = prepare(&jpeg(WIDTH, HEIGHT), None, REDUCED_BUDGET, true)
+        .err()
+        .expect("an unknown source DPI cannot prove that the reduced image needs no resize")
+        .to_string();
+    assert!(error.contains("its source DPI is unknown"), "{error}");
+    assert!(
+        error.ends_with("Raise security_limits.max_content_size"),
+        "an unknown source DPI has no other remedy: {error}"
+    );
+}

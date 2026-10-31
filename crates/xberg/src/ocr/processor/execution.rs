@@ -1012,14 +1012,16 @@ fn prepare_encoded_ocr_image(
     {
         let dpi_config = ocr_dpi_config(preprocessing, images);
         if dpi.is_none_or(|dpi| normalization_requires_resize(width, height, &dpi_config, dpi)) {
-            let remedy = dpi.map_or_else(
-                || "set the source DPI of the image".to_owned(),
-                |dpi| format!("set target_dpi to {}", dpi.round()),
+            // No public setting gives the source DPI of a standalone image, so an unknown DPI
+            // leaves only the limit as the remedy. ~keep
+            let (reason, remedy) = dpi.map_or_else(
+                || (", and its source DPI is unknown, so", String::new()),
+                |dpi| (", and", format!(", or set target_dpi to {}", dpi.round())),
             );
             return Err(crate::XbergError::validation(format!(
-                "The image exceeds security_limits.max_content_size ({} bytes) at its source resolution, and a \
+                "The image exceeds security_limits.max_content_size ({} bytes) at its source resolution{reason} a \
                  reduced-size image cannot be resized to target_dpi {} within that limit. Raise \
-                 security_limits.max_content_size, or {remedy}",
+                 security_limits.max_content_size{remedy}",
                 limits.max_content_size, dpi_config.target_dpi,
             )));
         }
