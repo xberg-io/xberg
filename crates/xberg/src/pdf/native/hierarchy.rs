@@ -1415,6 +1415,10 @@ fn walk_struct_elem_resolved(
 }
 
 #[cfg(test)]
+#[path = "inline_dot_row_tests.rs"]
+mod inline_dot_row_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::document::ReadingOrder;
     use xberg_native_pdf::geometry::Rect;
