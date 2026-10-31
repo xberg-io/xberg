@@ -40,7 +40,7 @@ EXPECTED_TEXT="XBERG MUSL SMOKE 490"
 [ -f "$NATIVE_EX" ] || die "generated Xberg.Native module missing: $NATIVE_EX"
 find "$NATIVE_DIR" -maxdepth 1 -name 'libxberg_nif.so' | grep -q . || die "no libxberg_nif.so found under $NATIVE_DIR"
 
-# alpine:3.21 matches docker/Dockerfile.musl-rustler's build image, so this is
+# alpine:3.24.3 matches docker/Dockerfile.musl-rustler's build image, so this is
 # the same musl libc family the NIF was cross-compiled for. The whole
 # directory is mounted (not just libxberg_nif.so) so the vendored ONNX
 # Runtime / image-codec closure Dockerfile.musl-rustler now bundles beside it
@@ -56,7 +56,7 @@ docker run --rm \
   -e XBERG_NIF_PATH="/native/libxberg_nif" \
   -e XBERG_NATIVE_EX="/smoke/native.ex" \
   -e EXPECTED_TEXT="$EXPECTED_TEXT" \
-  alpine:3.21 sh -euc '
+  alpine:3.24.3 sh -euc '
     apk add --no-cache elixir >/dev/null
     # The vendored libonnxruntime.so.1 comes from Alpine edge (the builder stage of
     # docker/Dockerfile.musl-rustler upgrades libstdc++ to 15.2.0 before compiling)

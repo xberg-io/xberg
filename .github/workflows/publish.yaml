@@ -980,14 +980,14 @@ jobs:
               arch: x86_64,
               napi_arch: x64,
               target: x86_64-unknown-linux-gnu,
-              image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.26-1@sha256:e0adf18521ad35192df733a6c62d35df7801957d24e0470238aacecfab2188a3,
+              image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf,
             }
           - {
               os: ubuntu-24.04-arm,
               arch: aarch64,
               napi_arch: arm64,
               target: aarch64-unknown-linux-gnu,
-              image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.26-1@sha256:a3e02308c822fb6ce0d12248b0c941817ba5e1a1bc9e7bb5929f29c50eaa40a9,
+              image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f,
             }
     steps:
       - uses: actions/checkout@v7
@@ -2671,12 +2671,12 @@ jobs:
           - os: ubuntu-latest
             label: linux-x86_64
             target: x86_64-unknown-linux-gnu
-            image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.26-1@sha256:e0adf18521ad35192df733a6c62d35df7801957d24e0470238aacecfab2188a3
+            image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf
             nif: "2.16"
           - os: ubuntu-24.04-arm
             label: linux-aarch64
             target: aarch64-unknown-linux-gnu
-            image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.26-1@sha256:a3e02308c822fb6ce0d12248b0c941817ba5e1a1bc9e7bb5929f29c50eaa40a9
+            image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f
             nif: "2.16"
     steps:
       - uses: actions/checkout@v7

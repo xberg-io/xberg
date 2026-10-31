@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
+  Email extraction uses read-only parser views while retaining attachment limits, nested-message
+  payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
+
+- **(rust): Upgrade parking_lot to 0.13 and refresh compatible dependencies.**
+  Public registry accessors now return parking_lot 0.13 lock types. ZIP advances to 9.2 and
+  HTML conversion, encoding and 7z dependencies receive their latest compatible fixes.
+
 - **(ci): Restrict CI and governance validation to `main`.**
   Skip jobs for other branches and tags, including manual dispatches, and remove pull-request validation triggers.
   Pin benchmark source checkouts to the dispatched main revision.
@@ -132,6 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
+
+- **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
+  Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
 - **(pdf): Preserve native table header roles through grid conversion.** (#2332)
   Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
