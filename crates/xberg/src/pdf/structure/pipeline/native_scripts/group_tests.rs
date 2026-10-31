@@ -361,3 +361,50 @@ fn should_preserve_calibrated_gaps_around_lowercase_display_equation_with_native
     assert!(projected[2].1.is_empty());
     assert_eq!(paragraphs[2].lines.len(), 1);
 }
+
+#[test]
+fn should_preserve_source_gap_when_consecutive_paragraphs_advance_upward_2275() {
+    let (segments, _) = evidence(
+        vec![
+            span("the displayed expression (4.3)", 80.0, 679.0, 200.0, 12.0),
+            span("Within both steps", 80.0, 714.0, 200.0, 12.0),
+        ],
+        0,
+    );
+    let gaps = super::super::compute_paragraph_gap_ys(&segments);
+    assert_eq!(gaps, [702.5], "existing calibration observes the actual source gap");
+    let mut paragraphs = super::super::blocks_to_paragraphs(segments.clone(), &[], &gaps);
+    assert_eq!(paragraphs.len(), 2, "ordinary grouping retains the upward gap");
+    assert_eq!(paragraphs[0].lines[0].baseline_y, 679.0);
+    assert_eq!(paragraphs[1].lines[0].baseline_y, 714.0);
+    let before: Vec<_> = paragraphs.iter().map(|paragraph| format!("{paragraph:?}")).collect();
+    let mut legacy = paragraphs.clone();
+    super::super::merge_continuation_paragraphs(&mut legacy);
+    assert_eq!(legacy.len(), 1, "generic merger accepts the absolute thirty-five-point advance");
+    super::super::merge_continuation_paragraphs_at_source_gaps(&mut paragraphs, &gaps);
+    assert_eq!(
+        paragraphs.len(),
+        2,
+        "source gaps protect both directions of stream-order advance"
+    );
+    assert_eq!(
+        project(&paragraphs[0]),
+        ("the displayed expression (4.3)".to_owned(), vec![])
+    );
+    assert_eq!(project(&paragraphs[1]), ("Within both steps".to_owned(), vec![]));
+    let after: Vec<_> = paragraphs.iter().map(|paragraph| format!("{paragraph:?}")).collect();
+    assert_eq!(
+        after, before,
+        "paragraph metadata and every source glyph remain unchanged"
+    );
+    let glyphs: Vec<_> = paragraphs
+        .iter()
+        .flat_map(|paragraph| &paragraph.lines)
+        .flat_map(|line| &line.segments)
+        .map(super::line_tests::fingerprint)
+        .collect();
+    assert_eq!(
+        glyphs,
+        segments.iter().map(super::line_tests::fingerprint).collect::<Vec<_>>()
+    );
+}
