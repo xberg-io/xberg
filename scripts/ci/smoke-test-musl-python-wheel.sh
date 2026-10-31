@@ -31,8 +31,8 @@ EXPECTED_TEXT="XBERG MUSL SMOKE 490"
 WHEEL_DIR="$(cd "$(dirname "$WHEEL")" && pwd)"
 WHEEL_NAME="$(basename "$WHEEL")"
 
-# alpine:3.22 matches docker/Dockerfile.musl-python's build image, so this is
-# the same musl libc family (and roughly the same Python 3.12) the wheel was
+# alpine:3.24.3 matches docker/Dockerfile.musl-python's build image, so this is
+# the same musl libc family (and the same Alpine python3) the wheel was
 # cross-compiled for.
 docker run --rm \
   -v "$WHEEL_DIR/$WHEEL_NAME:/wheel/$WHEEL_NAME:ro" \
@@ -40,7 +40,7 @@ docker run --rm \
   -v "$SMOKE_SCRIPT:/smoke_test_python_wheel.py:ro" \
   -e WHEEL_NAME="$WHEEL_NAME" \
   -e EXPECTED_TEXT="$EXPECTED_TEXT" \
-  alpine:3.22 sh -euc '
+  alpine:3.24.3 sh -euc '
     apk add --no-cache python3 py3-pip >/dev/null
     python3 -m venv /venv
     /venv/bin/pip install --no-cache-dir --quiet "/wheel/${WHEEL_NAME}"
