@@ -18,6 +18,9 @@ use super::span_geometry::{has_same_rotation, is_horizontal_ltr, upright_advance
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
+#[cfg(test)]
+mod script_ownership;
+
 const COLUMN_BRIDGE_FRACTION: f32 = 0.6;
 const MIN_COLUMN_GUTTER_PTS: f32 = 8.0;
 const MIN_COLUMN_SIDE_SPANS: usize = 2;
