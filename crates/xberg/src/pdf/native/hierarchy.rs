@@ -50,6 +50,8 @@ const INLINE_SCRIPT_SAME_BASELINE_TOLERANCE_EM: f32 = 0.02;
 const INLINE_SCRIPT_MAX_CHARS: usize = 4;
 const INLINE_SCRIPT_MIN_WIDTH_COVERAGE: f32 = 0.7;
 const INLINE_SCRIPT_MAX_WIDTH_COVERAGE: f32 = 1.3;
+// Centered operators can cross baseline bands; compare centers at the structure path's half-point inline precision. ~keep
+const INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ScriptGeometry {
@@ -400,6 +402,7 @@ fn reorder_page_reading_order(
 ) {
     let Some(gutter_x) = two_up_gutter(spans, page_width, page_height) else {
         reorder_single_page_reading_order(spans, page_width, page_height, page_index);
+        preserve_inline_prose_symbol_order(spans);
         return;
     };
     let (mut left, mut right): (Vec<_>, Vec<_>) = spans
@@ -411,6 +414,7 @@ fn reorder_page_reading_order(
     reorder_single_page_reading_order(&mut right, page_width - gutter_x, page_height, page_index);
     spans.extend(left);
     spans.extend(right);
+    preserve_inline_prose_symbol_order(spans);
 }
 
 /// Reorder one page's spans into reading order for the element-based
@@ -518,7 +522,7 @@ fn rejoin_inline_scripts_inner(
     }
 
     if by_base.is_empty() {
-        return spans;
+        return rejoin_inline_prose_symbols(spans);
     }
 
     let mut repaired = Vec::with_capacity(spans.len());
@@ -531,7 +535,150 @@ fn rejoin_inline_scripts_inner(
             None => repaired.push(span.clone()),
         }
     }
-    repaired
+    rejoin_inline_prose_symbols(repaired)
+}
+
+fn inline_symbol_center(span: &xberg_native_pdf::layout::TextSpan) -> Option<f32> {
+    if !has_valid_span_geometry(span)
+        || !is_horizontal_ltr(span)
+        || span.artifact_type.is_some()
+        || span.text.trim().is_empty()
+    {
+        return None;
+    }
+    let center = span.bbox.y + span.text_rise * span.font_size + span.bbox.height * 0.5;
+    center.is_finite().then_some(center)
+}
+
+fn same_inline_prose_style(
+    left: &xberg_native_pdf::layout::TextSpan,
+    right: &xberg_native_pdf::layout::TextSpan,
+) -> bool {
+    left.font_name == right.font_name
+        && left.font_size == right.font_size
+        && left.font_weight == right.font_weight
+        && left.is_italic == right.is_italic
+        && left.color == right.color
+        && !left.is_monospace
+        && !right.is_monospace
+        && left.mcid_scope == right.mcid_scope
+        && ((left.bbox.y + left.text_rise * left.font_size) - (right.bbox.y + right.text_rise * right.font_size)).abs()
+            <= INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS
+}
+
+fn is_two_sided_inline_prose_symbol(
+    left: &xberg_native_pdf::layout::TextSpan,
+    symbol: &xberg_native_pdf::layout::TextSpan,
+    right: &xberg_native_pdf::layout::TextSpan,
+) -> bool {
+    if !matches!(symbol.text.as_str(), "•" | "·")
+        || !same_inline_prose_style(left, right)
+        || symbol.mcid_scope != left.mcid_scope
+        || symbol.font_weight != left.font_weight
+        || symbol.is_italic != left.is_italic
+        || symbol.color != left.color
+        || !left.text.ends_with(char::is_whitespace)
+        || !right.text.starts_with(char::is_alphabetic)
+    {
+        return false;
+    }
+    let left_gap = symbol.bbox.x - (left.bbox.x + left.bbox.width);
+    let right_gap = right.bbox.x - (symbol.bbox.x + symbol.bbox.width);
+    let gaps = 0.0..=symbol.bbox.width;
+    gaps.contains(&left_gap) && gaps.contains(&right_gap) && prose_like(&format!("{} {}", left.text, right.text), 0, 2)
+}
+
+fn collect_inline_prose_symbol_pairs(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    row: &mut [usize],
+    pairs: &mut Vec<(usize, usize)>,
+) {
+    row.sort_by(|&left, &right| spans[left].bbox.x.total_cmp(&spans[right].bbox.x));
+    for (position, triple) in row.windows(3).enumerate() {
+        let [left, symbol, right] = [triple[0], triple[1], triple[2]];
+        let overlaps_left = position.checked_sub(1).is_some_and(|previous| {
+            let previous = &spans[row[previous]];
+            previous.bbox.x + previous.bbox.width > spans[left].bbox.x
+        });
+        let overlaps_right = row
+            .get(position + 3)
+            .is_some_and(|&next| spans[next].bbox.x < spans[right].bbox.x + spans[right].bbox.width);
+        if left < right
+            && !overlaps_left
+            && !overlaps_right
+            && is_two_sided_inline_prose_symbol(&spans[left], &spans[symbol], &spans[right])
+        {
+            pairs.push((left, symbol));
+        }
+    }
+}
+
+fn inline_prose_symbol_pairs(spans: &[xberg_native_pdf::layout::TextSpan]) -> Vec<(usize, usize)> {
+    let mut centers: Vec<_> = spans
+        .iter()
+        .enumerate()
+        .filter_map(|(index, span)| inline_symbol_center(span).map(|center| (index, center)))
+        .collect();
+    centers.sort_by(|left, right| right.1.total_cmp(&left.1));
+    let mut pairs = Vec::new();
+    let mut row = Vec::new();
+    let mut anchor = f32::NAN;
+    for (index, center) in centers {
+        if !row.is_empty() && (anchor - center).abs() > INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS {
+            collect_inline_prose_symbol_pairs(spans, &mut row, &mut pairs);
+            row.clear();
+        }
+        if row.is_empty() {
+            anchor = center;
+        }
+        row.push(index);
+    }
+    collect_inline_prose_symbol_pairs(spans, &mut row, &mut pairs);
+    pairs
+}
+
+fn preserve_inline_prose_symbol_order(spans: &mut Vec<xberg_native_pdf::layout::TextSpan>) {
+    let pairs = inline_prose_symbol_pairs(spans);
+    if pairs.iter().all(|&(left, symbol)| left + 1 == symbol) {
+        return;
+    }
+    let symbols: std::collections::HashSet<_> = pairs.iter().map(|&(_, symbol)| symbol).collect();
+    let after_left: HashMap<_, _> = pairs.into_iter().collect();
+    let mut slots: Vec<_> = spans.drain(..).map(Some).collect();
+    for index in 0..slots.len() {
+        if symbols.contains(&index) {
+            continue;
+        }
+        spans.push(slots[index].take().expect("unconsumed source span"));
+        if let Some(&symbol) = after_left.get(&index) {
+            spans.push(slots[symbol].take().expect("unique inline symbol"));
+        }
+    }
+}
+
+// Script ownership must consume the original character geometry before an ordinary operator is folded into prose. ~keep
+fn rejoin_inline_prose_symbols(
+    spans: Vec<xberg_native_pdf::layout::TextSpan>,
+) -> Vec<xberg_native_pdf::layout::TextSpan> {
+    let pairs = inline_prose_symbol_pairs(&spans);
+    if pairs.is_empty() {
+        return spans;
+    }
+    let symbols: std::collections::HashSet<_> = pairs.iter().map(|&(_, symbol)| symbol).collect();
+    let after_left: HashMap<_, _> = pairs.into_iter().collect();
+    let mut slots: Vec<_> = spans.into_iter().map(Some).collect();
+    let mut joined = Vec::with_capacity(slots.len() - symbols.len());
+    for index in 0..slots.len() {
+        if symbols.contains(&index) {
+            continue;
+        }
+        let mut span = slots[index].take().expect("unconsumed source span");
+        if let Some(&symbol) = after_left.get(&index) {
+            append_span_text(&mut span, slots[symbol].as_ref().expect("unique inline symbol"));
+        }
+        joined.push(span);
+    }
+    joined
 }
 
 fn find_inline_script_base(
@@ -1413,6 +1560,10 @@ fn walk_struct_elem_resolved(
         walk_struct_kids(doc, k_obj, page_id_map, effective_page, by_page, depth + 1);
     }
 }
+
+#[cfg(test)]
+#[path = "inline_dot_row_tests.rs"]
+mod inline_dot_row_tests;
 
 #[cfg(test)]
 mod tests {
