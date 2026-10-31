@@ -31,9 +31,14 @@ fn should_keep_aes_inline_multiplication_dot_as_ordinary_prose_2275() {
         ..Default::default()
     };
     let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
-    let normalized = result.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = result
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('•', "·");
     assert!(
-        normalized.contains("The symbol • denotes multiplication"),
+        normalized.contains("The symbol · denotes multiplication"),
         "the inline glyph must remain between its own prose neighbors: {}",
         result.content
     );
@@ -41,17 +46,21 @@ fn should_keep_aes_inline_multiplication_dot_as_ordinary_prose_2275() {
         result
             .content
             .lines()
-            .all(|line| !matches!(line.trim(), "-" | "*" | "+" | "•")),
+            .all(|line| !matches!(line.trim(), "-" | "*" | "+" | "•" | "·")),
         "the inline dot must not create an empty list: {}",
         result.content
     );
     assert!(normalized.contains("Algebra [4]."), "retain the actual footnote body");
     let document = result.document.expect("requested public document structure");
     let node = document.nodes.iter().find(|node| {
-        matches!(&node.content, NodeContent::Paragraph { text } if text.contains("The symbol") && text.contains('•') && text.contains("denotes multiplication"))
+        matches!(&node.content, NodeContent::Paragraph { text } if text.contains("The symbol") && text.contains(['•', '·']) && text.contains("denotes multiplication"))
     }).expect("the multiplication dot belongs to a prose node");
     let text = node.content.text().unwrap();
-    let dot = u32::try_from(text.find('•').unwrap()).unwrap();
+    let dot = u32::try_from(
+        text.find(['•', '·'])
+            .expect("actual ordinary multiplication-dot witness"),
+    )
+    .unwrap();
     assert!(
         node.annotations.iter().all(|annotation| {
             !matches!(annotation.kind, AnnotationKind::Superscript | AnnotationKind::Subscript)
