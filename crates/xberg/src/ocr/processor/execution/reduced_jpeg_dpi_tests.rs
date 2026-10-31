@@ -45,6 +45,7 @@ fn prepare(bytes: &[u8], dpi: Option<f64>, budget: usize, preprocess: bool) -> c
         },
         &config,
         Some(&images),
+        false,
     )
 }
 
@@ -108,4 +109,34 @@ fn should_reject_300_dpi_render_normalization_that_would_restore_over_budget_pix
         error.to_string().contains("security_limits.max_content_size"),
         "{error}"
     );
+}
+
+#[test]
+fn should_reject_even_a_downsize_when_reduced_decode_would_need_convolution_scratch() {
+    let bytes = jpeg(WIDTH, HEIGHT);
+    let config = TesseractConfig {
+        source_dpi: Some(1200.0),
+        preprocessing: Some(ImagePreprocessingConfig {
+            target_dpi: 150,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let images = ImageExtractionConfig {
+        auto_adjust_dpi: false,
+        ..Default::default()
+    };
+    let error = prepare_encoded_ocr_image(
+        &bytes,
+        &SecurityLimits {
+            max_content_size: REDUCED_BUDGET,
+            ..Default::default()
+        },
+        &config,
+        Some(&images),
+        false,
+    )
+    .err()
+    .expect("a smaller output still requires unaudited convolution scratch");
+    assert!(error.to_string().contains("unbudgeted resize buffers"), "{error}");
 }
