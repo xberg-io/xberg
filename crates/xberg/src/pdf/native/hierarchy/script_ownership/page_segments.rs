@@ -12,7 +12,7 @@ struct NativeSegment {
     segment: SegmentData,
 }
 
-struct NativePageSegments {
+pub(crate) struct NativePageSegments {
     segments: Vec<NativeSegment>,
     script_owners: Vec<NativeScriptOwner>,
 }
@@ -53,6 +53,19 @@ impl<'a> From<&'a SegmentData> for SegmentProjection<'a> {
 }
 
 impl NativePageSegments {
+    pub(crate) fn segments(&self) -> impl Iterator<Item = &SegmentData> {
+        self.segments.iter().map(|record| &record.segment)
+    }
+
+    pub(crate) fn retain_segments(&mut self, mut keep: impl FnMut(&SegmentData) -> bool) {
+        self.segments.retain(|record| keep(&record.segment));
+        self.script_owners = self
+            .remap_script_owners(&self.segments)
+            .into_iter()
+            .map(|owner| owner.source)
+            .collect();
+    }
+
     fn from_final_spans(
         spans: Vec<xberg_native_pdf::layout::TextSpan>,
         mcid_roles: &HashMap<u32, Option<u8>>,
@@ -176,7 +189,7 @@ fn index_survivors(
 #[cfg(test)]
 mod tests;
 
-fn extract_all_segment_carriers(
+pub(crate) fn extract_all_segment_carriers(
     document: &mut super::super::NativeDocument,
     artifacts: super::super::ArtifactRetention,
 ) -> crate::pdf::error::Result<(Vec<NativePageSegments>, bool)> {

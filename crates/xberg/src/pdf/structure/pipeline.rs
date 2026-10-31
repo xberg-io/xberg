@@ -3474,9 +3474,38 @@ pub(crate) fn extract_document_structure_from_segments(
     build_document_structure(all_page_segments, config)
 }
 
+pub(crate) fn extract_document_structure_from_native_pages(
+    pages: Vec<crate::pdf::native::hierarchy::script_ownership::page_segments::NativePageSegments>,
+    config: SegmentStructureConfig<'_>,
+) -> Result<crate::types::internal::InternalDocument> {
+    let segments = pages.iter().map(|page| page.segments().cloned().collect()).collect();
+    build_document_structure_with_native_pages(
+        segments,
+        config,
+        Some(pages),
+        #[cfg(feature = "layout-detection")]
+        TABLE_MODEL_LOADERS,
+    )
+}
+
 fn build_document_structure(
+    all_page_segments: Vec<Vec<SegmentData>>,
+    config: SegmentStructureConfig<'_>,
+    #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
+) -> Result<crate::types::internal::InternalDocument> {
+    build_document_structure_with_native_pages(
+        all_page_segments,
+        config,
+        None,
+        #[cfg(feature = "layout-detection")]
+        loaders,
+    )
+}
+
+fn build_document_structure_with_native_pages(
     mut all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
+    _native_pages: Option<Vec<crate::pdf::native::hierarchy::script_ownership::page_segments::NativePageSegments>>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
 ) -> Result<crate::types::internal::InternalDocument> {
     let SegmentStructureConfig {

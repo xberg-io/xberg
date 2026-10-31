@@ -249,8 +249,7 @@ fn span_witness(spans: &[TextSpan], index: usize, snapshots: &mut HashMap<usize,
     }
 }
 
-#[cfg(test)]
-mod page_segments;
+pub(crate) mod page_segments;
 
 #[cfg(test)]
 mod tests;
