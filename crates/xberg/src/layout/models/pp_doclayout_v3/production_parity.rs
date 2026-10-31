@@ -467,3 +467,47 @@ fn should_reject_traversal_in_producer_destination() {
     let root = tempfile::tempdir().expect("producer copy directory");
     let _ = preserve_artifact(Path::new("unused"), root.path(), "../escaped");
 }
+
+#[test]
+fn should_preserve_the_executed_output_validator_source_in_the_producer_inventory() {
+    let output = tempfile::tempdir().expect("source-only producer directory");
+    fs::create_dir_all(output.path().join("producer/sources")).expect("source artifact directory");
+    let sources = source_witness(output.path());
+    let validator_path = "src/layout/models/pp_doclayout_v3/output.rs";
+    let validators = sources
+        .iter()
+        .filter(|source| source["path"] == validator_path)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        validators.len(),
+        1,
+        "exactly one executed output-validator source must be preserved"
+    );
+    let validator = validators[0];
+    let executed_source = include_bytes!("output.rs");
+    assert!(
+        !executed_source.is_empty(),
+        "the compiled validator source must be nonempty"
+    );
+    assert_eq!(validator["sha256"], bytes_sha256(executed_source));
+    assert_eq!(validator["bytes"], json!(executed_source.len()));
+    let preserved = output
+        .path()
+        .join(validator["file"].as_str().expect("validator artifact filename"));
+    assert_eq!(
+        fs::read(&preserved).expect("preserved output validator bytes"),
+        executed_source.as_slice(),
+        "source witness must preserve the same validator source compiled into this test"
+    );
+    assert!(
+        fs::metadata(preserved)
+            .expect("validator artifact metadata")
+            .permissions()
+            .readonly()
+    );
+    assert_eq!(
+        sources.len(),
+        18,
+        "complete producer source inventory including output validation"
+    );
+}
