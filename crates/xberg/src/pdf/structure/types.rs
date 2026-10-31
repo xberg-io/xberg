@@ -17,13 +17,33 @@ pub(crate) struct PdfLine {
 
 impl PdfLine {
     pub(crate) fn prepend_segment(&mut self, segment: SegmentData) {
+        for owner in &mut self.native_scripts {
+            owner.base_index += 1;
+            owner.script_index += 1;
+        }
         self.segments.insert(0, segment);
     }
 
     pub(crate) fn valid_native_scripts(
         &self,
     ) -> Vec<&crate::pdf::native::hierarchy::script_ownership::page_segments::SegmentScriptOwner> {
-        Vec::new()
+        let mut endpoints = std::collections::HashMap::new();
+        self.native_scripts
+            .iter()
+            .filter(|owner| {
+                [(owner.base_index, false), (owner.script_index, true)]
+                    .into_iter()
+                    .all(|(index, script)| {
+                        *endpoints
+                            .entry((index, owner.original_index(script)))
+                            .or_insert_with(|| {
+                                self.segments
+                                    .get(index)
+                                    .is_some_and(|segment| owner.endpoint_matches(segment, script))
+                            })
+                    })
+            })
+            .collect()
     }
 }
 

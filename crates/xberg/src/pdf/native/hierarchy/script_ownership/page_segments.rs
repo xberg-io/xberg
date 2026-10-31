@@ -22,9 +22,48 @@ pub(crate) struct SegmentScriptOwner {
     pub(crate) base_index: usize,
     pub(crate) script_index: usize,
     source: NativeScriptOwner,
+    assigned_roles: [Option<u8>; 2],
 }
 
 impl SegmentScriptOwner {
+    pub(crate) fn original_index(&self, script: bool) -> usize {
+        if script {
+            self.source.script_witness.original_index
+        } else {
+            self.source.base_witness.original_index
+        }
+    }
+
+    pub(crate) fn endpoint_matches(&self, segment: &SegmentData, script: bool) -> bool {
+        let witness = if script {
+            &self.source.script_witness
+        } else {
+            &self.source.base_witness
+        };
+        let snapshot = &witness.snapshot;
+        let baseline = snapshot.bbox.y + snapshot.text_rise * snapshot.font_size;
+        let expected = SegmentProjection {
+            text: &snapshot.text,
+            geometry: [
+                snapshot.bbox.x,
+                baseline,
+                snapshot.bbox.width,
+                snapshot.bbox.height,
+                snapshot.font_size,
+                baseline,
+                snapshot.rotation_degrees,
+            ]
+            .map(f32::to_bits),
+            style: [
+                snapshot.font_weight == xberg_native_pdf::layout::text_block::FontWeight::Bold,
+                snapshot.is_italic,
+                snapshot.is_monospace,
+            ],
+            assigned_role: self.assigned_roles[usize::from(script)],
+        };
+        SegmentProjection::from(segment) == expected
+    }
+
     pub(crate) fn kind(&self) -> crate::types::document_structure::AnnotationKind {
         self.source.kind.clone()
     }
@@ -147,6 +186,10 @@ impl NativePageSegments {
                     base_index,
                     script_index,
                     source: owner.clone(),
+                    assigned_roles: [
+                        retained_segments[base_index].segment.assigned_role,
+                        retained_segments[script_index].segment.assigned_role,
+                    ],
                 })
             })
             .collect()

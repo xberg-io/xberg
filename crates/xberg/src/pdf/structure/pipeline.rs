@@ -1032,6 +1032,7 @@ fn regular_layout_hints(hints: &[LayoutHint]) -> Vec<LayoutHint> {
         .collect()
 }
 
+#[cfg(any(test, feature = "layout-detection"))]
 fn segments_to_paragraphs(
     segments: Vec<SegmentData>,
     heading_map: &[(f32, Option<u8>)],
@@ -1046,10 +1047,19 @@ fn segments_to_paragraphs_with_native_scripts(
     heading_map: &[(f32, Option<u8>)],
     paragraph_gap_ys: &[f32],
     witnesses: &TextRepairWitnesses,
-    _native_scripts: Option<native_scripts::NativeSegmentEvidence>,
+    native_scripts: Option<native_scripts::NativeSegmentEvidence>,
 ) -> Vec<PdfParagraph> {
-    let segments = order_segments_in_reading_frames(segments);
-    let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
+    let mut paragraphs = match native_scripts {
+        Some(evidence) => {
+            let (segments, index) = native_scripts::order_native_segments(segments, evidence);
+            blocks_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, Some(&index))
+        }
+        None => blocks_to_paragraphs(
+            order_segments_in_reading_frames(segments),
+            heading_map,
+            paragraph_gap_ys,
+        ),
+    };
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
     merge_continuation_paragraphs(&mut paragraphs);
@@ -1445,14 +1455,18 @@ pub(super) fn accepts_detached_list_marker(
 /// Repair reading order inside maximal rotated runs without touching upright
 /// stream order or moving content across a rotation boundary.
 fn order_segments_in_reading_frames(segments: Vec<SegmentData>) -> Vec<SegmentData> {
-    if segments.iter().all(SegmentData::is_unrotated) {
+    order_segment_records(segments, |segment| segment)
+}
+
+fn order_segment_records<T>(segments: Vec<T>, project: impl Fn(&T) -> &SegmentData + Copy) -> Vec<T> {
+    if segments.iter().all(|record| project(record).is_unrotated()) {
         return segments;
     }
 
-    let mut groups: Vec<Vec<SegmentData>> = Vec::new();
+    let mut groups: Vec<Vec<T>> = Vec::new();
     for segment in segments {
         match groups.last_mut() {
-            Some(group) if group[0].has_same_rotation(&segment) => group.push(segment),
+            Some(group) if project(&group[0]).has_same_rotation(project(&segment)) => group.push(segment),
             _ => groups.push(vec![segment]),
         }
     }
@@ -1460,17 +1474,19 @@ fn order_segments_in_reading_frames(segments: Vec<SegmentData>) -> Vec<SegmentDa
     groups
         .into_iter()
         .flat_map(|group| {
-            if group[0].is_unrotated() {
+            if project(&group[0]).is_unrotated() {
                 group
             } else {
-                order_rotated_segment_group(group)
+                order_rotated_segment_records(group, project)
             }
         })
         .collect()
 }
 
-fn order_rotated_segment_group(mut segments: Vec<SegmentData>) -> Vec<SegmentData> {
+fn order_rotated_segment_records<T>(mut segments: Vec<T>, project: impl Fn(&T) -> &SegmentData + Copy) -> Vec<T> {
     segments.sort_by(|first, second| {
+        let first = project(first);
+        let second = project(second);
         second
             .upright_baseline()
             .total_cmp(&first.upright_baseline())
@@ -1482,10 +1498,11 @@ fn order_rotated_segment_group(mut segments: Vec<SegmentData>) -> Vec<SegmentDat
             })
     });
 
-    let mut visual_lines: Vec<Vec<SegmentData>> = Vec::new();
+    let mut visual_lines: Vec<Vec<T>> = Vec::new();
     for segment in segments {
         let belongs_to_last_line = visual_lines.last().is_some_and(|line| {
-            let anchor = &line[0];
+            let anchor = project(&line[0]);
+            let segment = project(&segment);
             let tolerance = anchor.height.max(segment.height).max(anchor.font_size * 0.5) * 0.5;
             (anchor.upright_baseline() - segment.upright_baseline()).abs() <= tolerance
         });
@@ -1500,10 +1517,10 @@ fn order_rotated_segment_group(mut segments: Vec<SegmentData>) -> Vec<SegmentDat
 
     for line in &mut visual_lines {
         line.sort_by(|first, second| {
-            first
+            project(first)
                 .upright_advance_extent()
                 .0
-                .total_cmp(&second.upright_advance_extent().0)
+                .total_cmp(&project(second).upright_advance_extent().0)
         });
     }
     visual_lines.into_iter().flatten().collect()
@@ -2151,6 +2168,15 @@ fn blocks_to_paragraphs(
     heading_map: &[(f32, Option<u8>)],
     paragraph_gap_ys: &[f32],
 ) -> Vec<PdfParagraph> {
+    blocks_to_paragraphs_with_native_scripts(lines, heading_map, paragraph_gap_ys, None)
+}
+
+fn blocks_to_paragraphs_with_native_scripts(
+    lines: Vec<SegmentData>,
+    heading_map: &[(f32, Option<u8>)],
+    paragraph_gap_ys: &[f32],
+    native_scripts: Option<&native_scripts::NativeScriptIndex>,
+) -> Vec<PdfParagraph> {
     if lines.is_empty() {
         return Vec::new();
     }
@@ -2161,16 +2187,21 @@ fn blocks_to_paragraphs(
 
     let mut paragraphs: Vec<PdfParagraph> = Vec::new();
     let mut current_lines: Vec<&SegmentData> = Vec::new();
+    let mut current_indices = Vec::new();
     let mut current_is_single_visual_line = true;
     let mut prev_idx = 0usize;
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
 
     for (line_idx, line) in lines.iter().enumerate() {
-        let is_row_script = visual_row.as_ref().is_some_and(|row| row.carries_script(line));
-        let should_break = if current_lines.is_empty() {
+        let is_native_script = !current_lines.is_empty()
+            && native_scripts.is_some_and(|scripts| scripts.base_for(line_idx) == Some(scripts.row_for(prev_idx)));
+        let is_row_script = is_native_script || visual_row.as_ref().is_some_and(|row| row.carries_script(line));
+        let should_break = if current_lines.is_empty() || is_native_script {
             false
         } else {
-            let prev = current_lines.last().unwrap();
+            let prev = native_scripts
+                .and_then(|scripts| scripts.base_for(prev_idx))
+                .map_or(*current_lines.last().unwrap(), |index| &lines[index]);
             // The look-back exists because a subscript is not always adjacent to its base in segment
             // order. Its baseline is below the row's, and the upstream row-band sort keys on top-y,
             // so a cell further right on the row can be emitted between the two: on GH#1617's
@@ -2181,7 +2212,7 @@ fn blocks_to_paragraphs(
             let font_reference = visual_row
                 .as_ref()
                 .filter(|row| row.carries_script(prev))
-                .map_or(*prev, |row| row.anchor);
+                .map_or(prev, |row| row.anchor);
             let font_change = (line.font_size - font_reference.font_size).abs() > 1.5
                 && !is_row_script
                 && !is_inline_style_transition(
@@ -2357,10 +2388,13 @@ fn blocks_to_paragraphs(
         };
 
         if should_break && !current_lines.is_empty() {
-            if let Some(para) = finalize_paragraph(&current_lines, heading_map, &gap_info) {
+            if let Some(para) =
+                finalize_paragraph_in_context(&current_lines, &current_indices, native_scripts, heading_map, &gap_info)
+            {
                 paragraphs.push(para);
             }
             current_lines.clear();
+            current_indices.clear();
             current_is_single_visual_line = true;
             visual_row = None;
         }
@@ -2378,15 +2412,18 @@ fn blocks_to_paragraphs(
             visual_row = Some(ParagraphVisualRow::new(line));
         }
         if let Some(first) = current_lines.first() {
-            current_is_single_visual_line &= line.has_same_rotation(first)
-                && (line.upright_baseline() - first.upright_baseline()).abs() <= INLINE_STYLE_BASELINE_TOLERANCE;
+            current_is_single_visual_line &= is_native_script
+                || (line.has_same_rotation(first)
+                    && (line.upright_baseline() - first.upright_baseline()).abs() <= INLINE_STYLE_BASELINE_TOLERANCE);
         }
         current_lines.push(line);
+        current_indices.push(line_idx);
         prev_idx = line_idx;
     }
 
     if !current_lines.is_empty()
-        && let Some(para) = finalize_paragraph(&current_lines, heading_map, &gap_info)
+        && let Some(para) =
+            finalize_paragraph_in_context(&current_lines, &current_indices, native_scripts, heading_map, &gap_info)
     {
         paragraphs.push(para);
     }
@@ -2901,15 +2938,15 @@ fn heading_style_carries_capital_opener(prev: &SegmentData, line: &SegmentData, 
         )
 }
 
+const MAX_LINE_TOLERANCE_PT: f32 = 3.0;
+const LINE_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
+
 /// Reconstruct PdfLine objects from a flat list of SegmentData, grouping by baseline_y.
 ///
 /// This preserves inline formatting information (is_bold, is_italic, is_monospace)
 /// at the segment level so that the assembly layer can emit properly annotated markdown
 /// with bold/italic emphasis.
 fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine> {
-    const MAX_LINE_TOLERANCE_PT: f32 = 3.0;
-    const LINE_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
-
     fn finish_line(mut segments: Vec<SegmentData>, baseline_y: f32) -> super::types::PdfLine {
         let contains_rtl = segments.iter().any(|segment| {
             segment
@@ -2921,23 +2958,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
             segments.sort_by(|a, b| a.upright_advance_extent().0.total_cmp(&b.upright_advance_extent().0));
         }
 
-        let dominant_font_size = segments.iter().map(|s| s.font_size).fold(0.0, |a, b| {
-            if a > 0.0 && b > a / 2.0 && b < a * 2.0 {
-                (a + b) / 2.0
-            } else {
-                a.max(b)
-            }
-        });
-        let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
-        let is_monospace = segments.iter().all(|s| s.is_monospace);
-        super::types::PdfLine {
-            native_scripts: Vec::new(),
-            segments,
-            baseline_y,
-            dominant_font_size,
-            is_bold,
-            is_monospace,
-        }
+        make_pdf_line(segments, baseline_y)
     }
 
     if segments.is_empty() {
@@ -2976,7 +2997,26 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
     lines
 }
 
-/// Build a PdfParagraph from a group of consecutive lines with compatible font properties.
+fn make_pdf_line(segments: Vec<SegmentData>, baseline_y: f32) -> super::types::PdfLine {
+    let dominant_font_size = segments.iter().map(|s| s.font_size).fold(0.0, |a, b| {
+        if a > 0.0 && b > a / 2.0 && b < a * 2.0 {
+            (a + b) / 2.0
+        } else {
+            a.max(b)
+        }
+    });
+    let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
+    let is_monospace = segments.iter().all(|s| s.is_monospace);
+    super::types::PdfLine {
+        native_scripts: Vec::new(),
+        segments,
+        baseline_y,
+        dominant_font_size,
+        is_bold,
+        is_monospace,
+    }
+}
+
 fn paragraph_text(lines: &[&SegmentData]) -> String {
     if lines.iter().all(|segment| segment.is_unrotated()) {
         return lines
@@ -3015,10 +3055,34 @@ fn paragraph_text(lines: &[&SegmentData]) -> String {
     text
 }
 
+fn finalize_paragraph_in_context(
+    lines: &[&SegmentData],
+    indices: &[usize],
+    native_scripts: Option<&native_scripts::NativeScriptIndex>,
+    heading_map: &[(f32, Option<u8>)],
+    gap_info: &super::classify::GapInfo,
+) -> Option<PdfParagraph> {
+    match native_scripts {
+        Some(index) => {
+            finalize_paragraph_with_native_scripts(lines, heading_map, gap_info, Some(&index.subset(indices)))
+        }
+        None => finalize_paragraph(lines, heading_map, gap_info),
+    }
+}
+
 fn finalize_paragraph(
     lines: &[&SegmentData],
     heading_map: &[(f32, Option<u8>)],
     gap_info: &super::classify::GapInfo,
+) -> Option<PdfParagraph> {
+    finalize_paragraph_with_native_scripts(lines, heading_map, gap_info, None)
+}
+
+fn finalize_paragraph_with_native_scripts(
+    lines: &[&SegmentData],
+    heading_map: &[(f32, Option<u8>)],
+    gap_info: &super::classify::GapInfo,
+    native_scripts: Option<&native_scripts::NativeSegmentEvidence>,
 ) -> Option<PdfParagraph> {
     if lines.is_empty() {
         return None;
@@ -3039,7 +3103,10 @@ fn finalize_paragraph(
         .skip(1)
         .any(|line| line.is_bold != first.is_bold || line.is_italic != first.is_italic);
 
-    let reconstructed_lines = reconstruct_pdf_lines(lines);
+    let reconstructed_lines = match native_scripts {
+        Some(evidence) => native_scripts::reconstruct_native_lines(lines, evidence),
+        None => reconstruct_pdf_lines(lines),
+    };
     let starts_with_split_list_marker = lines.get(1).is_some_and(|body| {
         is_bare_list_marker(&first.text)
             && body.has_same_rotation(first)
@@ -3495,6 +3562,7 @@ const TABLE_MODEL_LOADERS: TableModelLoaders = TableModelLoaders {
 };
 
 #[cfg(feature = "layout-detection")]
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn extract_document_structure_from_segments(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
@@ -3503,6 +3571,7 @@ pub(crate) fn extract_document_structure_from_segments(
 }
 
 #[cfg(not(feature = "layout-detection"))]
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn extract_document_structure_from_segments(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
@@ -3524,6 +3593,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     )
 }
 
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 fn build_document_structure(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,

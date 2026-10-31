@@ -985,9 +985,63 @@ fn segment_script_kind(segments: &[&crate::pdf::hierarchy::SegmentData], index: 
         })
 }
 
+struct NativeScriptLocation<'a> {
+    base_index: usize,
+    owner: &'a crate::pdf::native::hierarchy::script_ownership::page_segments::SegmentScriptOwner,
+}
+
+fn native_script_locations(para: &PdfParagraph) -> std::collections::HashMap<usize, NativeScriptLocation<'_>> {
+    let mut locations = std::collections::HashMap::new();
+    let mut offset = 0;
+    for line in &para.lines {
+        for owner in line.valid_native_scripts() {
+            locations.insert(
+                offset + owner.script_index,
+                NativeScriptLocation {
+                    base_index: offset + owner.base_index,
+                    owner,
+                },
+            );
+        }
+        offset += line.segments.len();
+    }
+    locations
+}
+
+fn resolved_script_kind(
+    segments: &[&crate::pdf::hierarchy::SegmentData],
+    index: usize,
+    native: &std::collections::HashMap<usize, NativeScriptLocation<'_>>,
+) -> Option<AnnotationKind> {
+    native
+        .get(&index)
+        .map(|location| location.owner.kind())
+        .or_else(|| segment_script_kind(segments, index))
+}
+
+fn native_annotated_segments_need_space(
+    segments: &[&crate::pdf::hierarchy::SegmentData],
+    previous_index: usize,
+    previous_word: &str,
+    next_index: usize,
+    next_word: &str,
+    native: &std::collections::HashMap<usize, NativeScriptLocation<'_>>,
+) -> bool {
+    let previous = segments[previous_index];
+    let next = segments[next_index];
+    if native
+        .get(&next_index)
+        .is_some_and(|location| location.base_index == previous_index)
+    {
+        return previous.text.ends_with(char::is_whitespace) || next.text.starts_with(char::is_whitespace);
+    }
+    annotated_segments_need_space(previous, previous_word, next, next_word)
+}
+
 fn paragraph_has_scripts(para: &PdfParagraph) -> bool {
     let segments: Vec<_> = para.lines.iter().flat_map(|line| &line.segments).collect();
-    (0..segments.len()).any(|index| segment_script_kind(&segments, index).is_some())
+    !native_script_locations(para).is_empty()
+        || (0..segments.len()).any(|index| segment_script_kind(&segments, index).is_some())
 }
 
 /// Extract plain text and inline annotations (bold/italic) from a paragraph.
@@ -1004,6 +1058,7 @@ pub(super) fn extract_text_and_annotations(
         return (String::new(), Vec::new());
     }
 
+    let native_scripts = native_script_locations(para);
     let mut text = String::new();
     let mut annotations = Vec::new();
     let mut i = 0;
@@ -1011,13 +1066,13 @@ pub(super) fn extract_text_and_annotations(
     while i < all_segments.len() {
         let bold = all_segments[i].is_bold;
         let italic = all_segments[i].is_italic;
-        let script = segment_script_kind(&all_segments, i);
+        let script = resolved_script_kind(&all_segments, i, &native_scripts);
 
         let run_start = i;
         while i < all_segments.len()
             && all_segments[i].is_bold == bold
             && all_segments[i].is_italic == italic
-            && segment_script_kind(&all_segments, i) == script
+            && resolved_script_kind(&all_segments, i, &native_scripts) == script
         {
             i += 1;
         }
@@ -1025,7 +1080,10 @@ pub(super) fn extract_text_and_annotations(
         let mut run_words: Vec<(&str, usize)> = Vec::new();
         for (seg_offset, seg) in all_segments[run_start..i].iter().enumerate() {
             let seg_idx = run_start + seg_offset;
-            for word in seg.text.split_whitespace() {
+            let run_text = native_scripts
+                .get(&seg_idx)
+                .map_or(seg.text.as_str(), |location| &seg.text[location.owner.byte_range()]);
+            for word in run_text.split_whitespace() {
                 run_words.push((word, seg_idx));
             }
         }
@@ -1042,7 +1100,14 @@ pub(super) fn extract_text_and_annotations(
                 }
                 LineBreakHyphen::KeepHyphen => {}
                 LineBreakHyphen::NotApplicable => {
-                    if annotated_segments_need_space(prev_seg, prev_last, next_seg, next_first) {
+                    if native_annotated_segments_need_space(
+                        &all_segments,
+                        run_start - 1,
+                        prev_last,
+                        run_start,
+                        next_first,
+                        &native_scripts,
+                    ) {
                         text.push(' ');
                     }
                 }
@@ -1070,11 +1135,13 @@ pub(super) fn extract_text_and_annotations(
                             if needs_space_between(prev, word) {
                                 text.push(' ');
                             }
-                        } else if annotated_segments_need_space(
-                            all_segments[prev_seg_idx],
+                        } else if native_annotated_segments_need_space(
+                            &all_segments,
+                            prev_seg_idx,
                             prev,
-                            all_segments[seg_idx],
+                            seg_idx,
                             word,
+                            &native_scripts,
                         ) {
                             text.push(' ');
                         }
