@@ -18,7 +18,7 @@ fn baseline_jpeg() -> Vec<u8> {
         .expect("encode a small real baseline JPEG");
     assert!(bytes.windows(2).any(|marker| marker == [0xff, 0xc0]));
     assert!(bytes.len() < LOWER_BUDGET);
-    assert!(FULL_RGB_BYTES > HIGHER_BUDGET);
+    const { assert!(FULL_RGB_BYTES > HIGHER_BUDGET) };
     bytes
 }
 
