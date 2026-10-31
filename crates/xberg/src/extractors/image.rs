@@ -3943,6 +3943,10 @@ mod image_table_grid_metadata_tests;
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
 
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr-pipeline"))]
+#[path = "image_sparse_retry_cancellation_tests.rs"]
+mod image_sparse_retry_cancellation_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
