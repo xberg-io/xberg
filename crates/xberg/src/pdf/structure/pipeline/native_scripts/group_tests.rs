@@ -181,7 +181,7 @@ fn should_keep_a_proven_power_and_ordinary_wrapped_line_in_the_same_paragraph_22
         let legacy_body: Vec<_> = legacy
             .iter()
             .map(project)
-            .filter(|(text, _)| text.contains("The expression"))
+            .filter(|(text, _)| text.contains("continues"))
             .collect();
         assert_eq!(legacy_body.len(), 1);
         assert!(
