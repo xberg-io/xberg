@@ -583,6 +583,8 @@ jobs:
         include:
           - name: pdf
             features: pdf
+          - name: pdf-ocr-pipeline
+            features: pdf,ocr-pipeline
           - name: no-ort-target
             features: no-ort-target
           - name: formats-no-heic
