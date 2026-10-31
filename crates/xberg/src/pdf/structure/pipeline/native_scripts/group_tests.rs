@@ -246,3 +246,118 @@ fn should_preserve_unrelated_same_row_semantic_groups_on_a_page_with_a_native_po
         assert_eq!(body[0].heading_level, None);
     }
 }
+
+#[test]
+fn should_preserve_calibrated_gaps_around_lowercase_display_equation_with_native_powers_2275() {
+    let spans = vec![
+        span("8 ", 190.0, 746.9568, 4.0, 8.0),
+        span("The field ", 80.0, 742.0, 80.0, 12.0),
+        span("GF(2", 160.0, 742.0, 30.0, 12.0),
+        span(") is used", 194.0, 742.0, 80.0, 12.0),
+        span("with ordinary wrapped prose", 80.0, 728.0, 400.0, 12.0),
+        span("and the following polynomial:", 80.0, 714.0, 400.0, 12.0),
+        span("8 ", 290.0, 683.9568, 4.0, 8.0),
+        span("4 ", 314.0, 683.9568, 4.0, 8.0),
+        span("3 ", 338.0, 683.9568, 4.0, 8.0),
+        span("m(x) = ", 240.0, 679.0, 40.0, 12.0),
+        span("x", 280.0, 679.0, 10.0, 12.0),
+        span("+", 294.0, 679.0, 10.0, 12.0),
+        span("x", 304.0, 679.0, 10.0, 12.0),
+        span("+", 318.0, 679.0, 10.0, 12.0),
+        span("x", 328.0, 679.0, 10.0, 12.0),
+        span("+ x + 1.", 342.0, 679.0, 90.0, 12.0),
+        span("(4.3)", 510.0, 679.0, 25.0, 12.0),
+        span("Within both steps, coefficients are reduced.", 80.0, 652.0, 400.0, 12.0),
+    ];
+    let (segments, evidence) = evidence(spans, 4);
+    let refs: Vec<_> = segments.iter().collect();
+    let scripts: std::collections::HashSet<_> = accepted_owners(&refs, &evidence)
+        .iter()
+        .map(|owner| owner.script_index)
+        .collect();
+    assert_eq!(
+        scripts.len(),
+        4,
+        "calibration excludes only accepted source script endpoints"
+    );
+    let ordinary: Vec<_> = segments
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !scripts.contains(index))
+        .map(|(_, segment)| segment.clone())
+        .collect();
+    let trusted_gaps = super::super::compute_paragraph_gap_ys(&ordinary);
+    assert_eq!(
+        trusted_gaps,
+        [702.5, 671.5],
+        "existing page-leading algorithm distinguishes both display gaps"
+    );
+    let raw_gaps = super::super::compute_paragraph_gap_ys(&segments);
+    let duplicate = NativeSegmentEvidence {
+        original_indices: evidence.original_indices.clone(),
+        owners: evidence.owners.clone(),
+    };
+    let (ordered, index) = order_native_paragraph_segments(segments.clone(), duplicate, &raw_gaps);
+    let grouped = super::super::blocks_to_paragraphs_with_native_scripts(ordered, &[], &raw_gaps, Some(&index));
+    let display: Vec<_> = grouped
+        .iter()
+        .map(project)
+        .filter(|(text, _)| text.contains("m(x)"))
+        .collect();
+    assert_eq!(display.len(), 1);
+    assert_eq!(
+        display[0].1,
+        ["8", "4", "3"],
+        "source-owned display powers are correct before continuation merging"
+    );
+    assert!(!display[0].0.contains("The field"));
+    assert!(!display[0].0.contains("Within both steps"));
+    let mut legacy_merge = grouped;
+    super::super::merge_continuation_paragraphs(&mut legacy_merge);
+    assert_eq!(
+        legacy_merge.len(),
+        1,
+        "unchanged continuation rules reproduce both unwanted display merges"
+    );
+    let mut before: Vec<_> = segments.iter().map(super::line_tests::fingerprint).collect();
+    let paragraphs = super::super::segments_to_paragraphs_with_native_scripts(
+        segments,
+        &[],
+        &raw_gaps,
+        &Default::default(),
+        Some(evidence),
+    );
+    let mut after: Vec<_> = paragraphs
+        .iter()
+        .flat_map(|paragraph| &paragraph.lines)
+        .flat_map(|line| &line.segments)
+        .map(super::line_tests::fingerprint)
+        .collect();
+    before.sort();
+    after.sort();
+    assert_eq!(
+        after, before,
+        "continuation merging retains every native glyph projection"
+    );
+    assert_eq!(
+        paragraphs.len(),
+        3,
+        "display gaps survive lowercase and nonterminal equation-number merge signals"
+    );
+    let projected: Vec<_> = paragraphs.iter().map(project).collect();
+    assert!(projected[0].0.starts_with("The field"));
+    assert!(projected[0].0.ends_with("polynomial:"));
+    assert_eq!(projected[0].1, ["8"]);
+    assert_eq!(
+        paragraphs[0].lines.len(),
+        3,
+        "ordinary fourteen-point wraps stay one paragraph"
+    );
+    assert!(projected[1].0.starts_with("m(x)"));
+    assert!(projected[1].0.ends_with("(4.3)"));
+    assert_eq!(projected[1].1, ["8", "4", "3"]);
+    assert_eq!(paragraphs[1].lines.len(), 1);
+    assert!(projected[2].0.starts_with("Within both steps"));
+    assert!(projected[2].1.is_empty());
+    assert_eq!(paragraphs[2].lines.len(), 1);
+}
