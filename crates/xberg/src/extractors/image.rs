@@ -2497,19 +2497,29 @@ async fn read_again_as_han(
 }
 
 /// [`read_again_as_han`] with the script detection given as an argument. `is_han` receives the
-/// language list of the second pass and runs only for a noisy first pass.
+/// language list of the second pass and runs only for a noisy first pass. A cancelled token returns
+/// [`crate::XbergError::Cancelled`] before detection, before the retry, and after each await.
 #[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
 async fn read_again_as_han_where(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
     image_bytes: &std::sync::Arc<Vec<u8>>,
     config: &crate::core::config::OcrConfig,
     first_pass: &crate::types::ExtractedDocument,
-    _cancel_token: Option<&crate::cancellation::CancellationToken>,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
     is_han: impl FnOnce(&[String]) -> bool + Send + 'static,
 ) -> crate::Result<HanSecondPass> {
     use crate::ocr_script::{Script, languages_are_wildcard, languages_cover_script, push_language};
 
+    let check_cancelled = || {
+        if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+            Err(crate::XbergError::Cancelled)
+        } else {
+            Ok(())
+        }
+    };
+
     const HAN_LANGUAGE: &str = "chi_sim";
+    check_cancelled()?;
     if backend.name() != "tesseract" {
         return Ok(HanSecondPass::Kept);
     }
@@ -2532,12 +2542,14 @@ async fn read_again_as_han_where(
     let is_han = tokio::task::spawn_blocking(move || is_han(&han_languages))
         .await
         .unwrap_or(false);
+    check_cancelled()?;
     if !is_han {
         return Ok(HanSecondPass::Kept);
     }
     let retry = backend
         .process_image_owned(std::sync::Arc::clone(image_bytes), &han_config)
         .await;
+    check_cancelled()?;
     match retry {
         Ok(document) if han_retry_reads_better(first_pass, &document) => Ok(HanSecondPass::Read {
             document: Box::new(document),
