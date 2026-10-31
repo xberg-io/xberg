@@ -721,7 +721,7 @@ fn test_utf16_base64_with_a_stray_character_is_decoded() {
 }
 
 /// An attached message nested deeper than `mail-parser` parses base64 messages is decoded but
-/// not parsed, and flagged `is_encoding_problem` too. Its contents are decoded already.
+/// not parsed, and flagged `NESTING_LIMIT`. Its contents are decoded already.
 #[test]
 fn test_attached_message_decoded_by_mail_parser_is_not_decoded_again() {
     use base64::Engine as _;
@@ -738,13 +738,14 @@ fn test_attached_message_decoded_by_mail_parser_is_not_decoded_again() {
         );
     }
 
-    type OwnedPart<'a> = (&'a mail_parser::Message<'a>, &'a mail_parser::MessagePart<'a>);
-    fn flagged_decoded_parts<'a>(message: &'a mail_parser::Message<'a>, out: &mut Vec<OwnedPart<'a>>) {
-        for part in &message.parts {
-            match &part.body {
-                mail_parser::PartType::Message(nested) => flagged_decoded_parts(nested, out),
-                _ if part.is_encoding_problem && part.encoding == mail_parser::Encoding::Base64 => {
-                    out.push((message, part))
+    fn flagged_decoded_parts<'a>(message: mail_parser::MessageRef<'a>, out: &mut Vec<mail_parser::MessagePart<'a>>) {
+        for part in message.parts() {
+            match part.kind() {
+                mail_parser::PartKind::Message(nested) => flagged_decoded_parts(nested, out),
+                _ if part.flags().contains(mail_parser::PartFlags::NESTING_LIMIT)
+                    && part.encoding() == mail_parser::Encoding::Base64 =>
+                {
+                    out.push(part)
                 }
                 _ => {}
             }
@@ -752,20 +753,20 @@ fn test_attached_message_decoded_by_mail_parser_is_not_decoded_again() {
     }
     let parsed = mail_parser::MessageParser::default().parse(message.as_bytes()).unwrap();
     let mut flagged = Vec::new();
-    flagged_decoded_parts(&parsed, &mut flagged);
+    flagged_decoded_parts(parsed.root(), &mut flagged);
 
     assert_eq!(
         flagged.len(),
         1,
         "expected the innermost message to be decoded but not parsed"
     );
-    let (owner, part) = flagged[0];
+    let part = flagged[0];
     assert!(
-        part.contents().starts_with(b"From: inner@example.com"),
+        part.decoded().starts_with(b"From: inner@example.com"),
         "got {:?}",
-        String::from_utf8_lossy(part.contents())
+        String::from_utf8_lossy(part.decoded().as_ref())
     );
-    assert_eq!(recover_base64_contents(owner, part), None);
+    assert_eq!(recover_base64_contents(&part), None);
 }
 
 /// The base64 of this PDF has a `>` in its last line, and after it one symbol is left on its own,

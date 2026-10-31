@@ -1,5 +1,5 @@
 # =============================================================================
-ARG MANYLINUX_IMAGE=quay.io/pypa/manylinux_2_28_x86_64:2026.10.26-1@sha256:e0adf18521ad35192df733a6c62d35df7801957d24e0470238aacecfab2188a3
+ARG MANYLINUX_IMAGE=quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf
 FROM ${MANYLINUX_IMAGE} AS builder
 
 ARG CARGO_BUILD_JOBS=1

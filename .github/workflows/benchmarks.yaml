@@ -123,6 +123,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_BENCHMARK_SA }}
 
+      # gcloud stays on its setup action: it consumes the auth step's workload-identity credentials. ~keep
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
@@ -216,6 +217,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_BENCHMARK_SA }}
 
+      # gcloud stays on its setup action: it consumes the auth step's workload-identity credentials. ~keep
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
