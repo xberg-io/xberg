@@ -1051,7 +1051,8 @@ fn segments_to_paragraphs_with_native_scripts(
 ) -> Vec<PdfParagraph> {
     let mut paragraphs = match native_scripts {
         Some(evidence) => {
-            let (segments, index) = native_scripts::order_native_segments(segments, evidence);
+            let (segments, index) =
+                native_scripts::order_native_paragraph_segments(segments, evidence, paragraph_gap_ys);
             blocks_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, Some(&index))
         }
         None => blocks_to_paragraphs(
@@ -2177,15 +2178,38 @@ fn blocks_to_paragraphs_with_native_scripts(
     paragraph_gap_ys: &[f32],
     native_scripts: Option<&native_scripts::NativeScriptIndex>,
 ) -> Vec<PdfParagraph> {
+    let gap_info = super::classify::precompute_gap_info(heading_map);
+    let groups = paragraph_segment_groups(&lines, paragraph_gap_ys, native_scripts);
+    let paragraphs: Vec<_> = groups
+        .into_iter()
+        .filter_map(|indices| {
+            let segments: Vec<_> = indices.iter().map(|&index| &lines[index]).collect();
+            finalize_paragraph_in_context(&segments, &indices, native_scripts, heading_map, &gap_info)
+        })
+        .collect();
+    tracing::debug!(
+        input_lines = lines.len(),
+        output_paragraphs = paragraphs.len(),
+        headings = paragraphs.iter().filter(|p| p.heading_level.is_some()).count(),
+        lists = paragraphs.iter().filter(|p| p.is_list_item).count(),
+        "blocks_to_paragraphs complete"
+    );
+    paragraphs
+}
+
+fn paragraph_segment_groups(
+    lines: &[SegmentData],
+    paragraph_gap_ys: &[f32],
+    native_scripts: Option<&native_scripts::NativeScriptIndex>,
+) -> Vec<Vec<usize>> {
     if lines.is_empty() {
         return Vec::new();
     }
 
-    let gap_info = super::classify::precompute_gap_info(heading_map);
-    let visual_line_texts = visual_line_texts(&lines);
-    let column_corridor = page_column_corridor(&lines);
+    let visual_line_texts = visual_line_texts(lines);
+    let column_corridor = page_column_corridor(lines);
 
-    let mut paragraphs: Vec<PdfParagraph> = Vec::new();
+    let mut groups = Vec::new();
     let mut current_lines: Vec<&SegmentData> = Vec::new();
     let mut current_indices = Vec::new();
     let mut current_is_single_visual_line = true;
@@ -2198,6 +2222,8 @@ fn blocks_to_paragraphs_with_native_scripts(
         let is_row_script = is_native_script || visual_row.as_ref().is_some_and(|row| row.carries_script(line));
         let should_break = if current_lines.is_empty() || is_native_script {
             false
+        } else if native_scripts.is_some_and(|scripts| scripts.crosses_ordinary_group(prev_idx, line_idx)) {
+            true
         } else {
             let prev = native_scripts
                 .and_then(|scripts| scripts.base_for(prev_idx))
@@ -2326,9 +2352,9 @@ fn blocks_to_paragraphs_with_native_scripts(
                 (current_is_single_visual_line
                     && super::classify::is_numbered_section_heading(&visual_line_texts[prev_idx])
                     && (heading_wraps_onto(prev, line)
-                        || heading_continuation_at_margin(heading_start, prev, line, &lines, line_idx)))
+                        || heading_continuation_at_margin(heading_start, prev, line, lines, line_idx)))
                     || (heading_wrap_chain_open
-                        && heading_continuation_at_margin(heading_start, prev, line, &lines, line_idx))
+                        && heading_continuation_at_margin(heading_start, prev, line, lines, line_idx))
                     || heading_continuation_is_hanging_indent(heading_start, prev, line)
             });
             let follows_section = starts_new_line
@@ -2388,13 +2414,8 @@ fn blocks_to_paragraphs_with_native_scripts(
         };
 
         if should_break && !current_lines.is_empty() {
-            if let Some(para) =
-                finalize_paragraph_in_context(&current_lines, &current_indices, native_scripts, heading_map, &gap_info)
-            {
-                paragraphs.push(para);
-            }
+            groups.push(std::mem::take(&mut current_indices));
             current_lines.clear();
-            current_indices.clear();
             current_is_single_visual_line = true;
             visual_row = None;
         }
@@ -2421,22 +2442,10 @@ fn blocks_to_paragraphs_with_native_scripts(
         prev_idx = line_idx;
     }
 
-    if !current_lines.is_empty()
-        && let Some(para) =
-            finalize_paragraph_in_context(&current_lines, &current_indices, native_scripts, heading_map, &gap_info)
-    {
-        paragraphs.push(para);
+    if !current_indices.is_empty() {
+        groups.push(current_indices);
     }
-
-    tracing::debug!(
-        input_lines = lines.len(),
-        output_paragraphs = paragraphs.len(),
-        headings = paragraphs.iter().filter(|p| p.heading_level.is_some()).count(),
-        lists = paragraphs.iter().filter(|p| p.is_list_item).count(),
-        "blocks_to_paragraphs complete"
-    );
-
-    paragraphs
+    groups
 }
 
 /// Whether a style transition is an inline run on the same visual line.

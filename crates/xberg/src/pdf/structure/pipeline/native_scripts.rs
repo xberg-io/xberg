@@ -37,6 +37,7 @@ pub(super) fn prepare_segments(
 pub(super) struct NativeScriptIndex {
     original_indices: Vec<usize>,
     by_script: std::collections::HashMap<usize, SegmentScriptOwner>,
+    ordinary_groups: Option<Vec<usize>>,
 }
 
 impl NativeScriptIndex {
@@ -46,6 +47,15 @@ impl NativeScriptIndex {
 
     pub(super) fn row_for(&self, index: usize) -> usize {
         self.base_for(index).unwrap_or(index)
+    }
+
+    pub(super) fn crosses_ordinary_group(&self, previous: usize, current: usize) -> bool {
+        self.ordinary_groups.as_ref().is_some_and(|groups| {
+            groups
+                .get(previous)
+                .zip(groups.get(current))
+                .is_some_and(|(left, right)| left != right)
+        })
     }
 
     pub(super) fn subset(&self, indices: &[usize]) -> NativeSegmentEvidence {
@@ -73,9 +83,26 @@ impl NativeScriptIndex {
     }
 }
 
+#[cfg(test)]
 pub(super) fn order_native_segments(
     segments: Vec<SegmentData>,
     evidence: NativeSegmentEvidence,
+) -> (Vec<SegmentData>, NativeScriptIndex) {
+    order_native_segments_inner(segments, evidence, None)
+}
+
+pub(super) fn order_native_paragraph_segments(
+    segments: Vec<SegmentData>,
+    evidence: NativeSegmentEvidence,
+    paragraph_gap_ys: &[f32],
+) -> (Vec<SegmentData>, NativeScriptIndex) {
+    order_native_segments_inner(segments, evidence, Some(paragraph_gap_ys))
+}
+
+fn order_native_segments_inner(
+    segments: Vec<SegmentData>,
+    evidence: NativeSegmentEvidence,
+    paragraph_gap_ys: Option<&[f32]>,
 ) -> (Vec<SegmentData>, NativeScriptIndex) {
     if evidence.original_indices.len() != segments.len() {
         return (
@@ -83,25 +110,117 @@ pub(super) fn order_native_segments(
             NativeScriptIndex {
                 original_indices: Vec::new(),
                 by_script: std::collections::HashMap::new(),
+                ordinary_groups: None,
             },
         );
     }
     let refs: Vec<_> = segments.iter().collect();
-    let (order, owners) = plan_native_order(&refs, &evidence);
-    let original_indices = order.iter().map(|&index| evidence.original_indices[index]).collect();
+    let owners = accepted_owners(&refs, &evidence).into_iter().cloned().collect();
+    let records = super::order_segment_records(segments.into_iter().enumerate().collect(), |record| &record.1);
+    let legacy_order: Vec<_> = records.iter().map(|(index, _)| *index).collect();
+    let owners = remap_owner_positions(owners, &legacy_order);
+    let original_indices: Vec<_> = legacy_order
+        .iter()
+        .map(|&index| evidence.original_indices[index])
+        .collect();
+    let segments: Vec<_> = records.into_iter().map(|(_, segment)| segment).collect();
+    let groups = paragraph_gap_ys
+        .filter(|_| !owners.is_empty())
+        .map(|gaps| ordinary_group_labels(&segments, &owners, gaps));
+    let owner_refs: Vec<_> = owners.iter().collect();
+    let order = place_suffixes_after_owners(&(0..segments.len()).collect::<Vec<_>>(), &owner_refs);
+    apply_native_order(segments, original_indices, owners, groups, order)
+}
+
+fn remap_owner_positions(owners: Vec<SegmentScriptOwner>, order: &[usize]) -> Vec<SegmentScriptOwner> {
+    let positions: std::collections::HashMap<_, _> = order
+        .iter()
+        .enumerate()
+        .map(|(position, &index)| (index, position))
+        .collect();
+    owners
+        .into_iter()
+        .map(|mut owner| {
+            owner.base_index = positions[&owner.base_index];
+            owner.script_index = positions[&owner.script_index];
+            owner
+        })
+        .collect()
+}
+
+fn apply_native_order(
+    segments: Vec<SegmentData>,
+    original_indices: Vec<usize>,
+    owners: Vec<SegmentScriptOwner>,
+    groups: Option<Vec<usize>>,
+    order: Vec<usize>,
+) -> (Vec<SegmentData>, NativeScriptIndex) {
+    let valid = order.len() == segments.len()
+        && order.iter().copied().collect::<std::collections::HashSet<_>>().len() == segments.len();
+    let (order, owners, groups) = if valid {
+        (order, owners, groups)
+    } else {
+        ((0..segments.len()).collect(), Vec::new(), None)
+    };
+    let owners = remap_owner_positions(owners, &order);
+    let index = NativeScriptIndex {
+        original_indices: order.iter().map(|&index| original_indices[index]).collect(),
+        by_script: owners.into_iter().map(|owner| (owner.script_index, owner)).collect(),
+        ordinary_groups: groups.map(|groups| order.iter().map(|&index| groups[index]).collect()),
+    };
     let mut slots: Vec<_> = segments.into_iter().map(Some).collect();
     let segments = order
         .into_iter()
         .map(|index| slots[index].take().expect("source permutation visits each slot once"))
         .collect();
-    let by_script = owners.into_iter().map(|owner| (owner.script_index, owner)).collect();
-    (
-        segments,
-        NativeScriptIndex {
-            original_indices,
-            by_script,
-        },
-    )
+    (segments, index)
+}
+
+fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner], gaps: &[f32]) -> Vec<usize> {
+    let groups = super::paragraph_segment_groups(segments, gaps, None);
+    let mut labels = vec![0; segments.len()];
+    for (group, indices) in groups.iter().enumerate() {
+        for &index in indices {
+            labels[index] = group;
+        }
+    }
+    let scripts: std::collections::HashMap<_, _> = owners.iter().map(|owner| (owner.script_index, owner)).collect();
+    let mut representatives: Vec<_> = (0..groups.len()).collect();
+    let mut previous: Option<usize> = None;
+    let mut bridge_base = None;
+    for (index, segment) in segments.iter().enumerate() {
+        if let Some(owner) = scripts.get(&index) {
+            if previous.is_some_and(|previous| same_ordinary_row(&segments[previous], &segments[owner.base_index])) {
+                bridge_base = Some(owner.base_index);
+            }
+            continue;
+        }
+        if let Some(previous) = previous
+            && bridge_base.is_some_and(|base| same_ordinary_row(segment, &segments[base]))
+            && same_ordinary_row(segment, &segments[previous])
+        {
+            // Legacy groups are contiguous before suffix placement. An earlier
+            // ordinary group's representative is already final in this pass. ~keep
+            representatives[labels[index]] = representatives[labels[previous]];
+        }
+        previous = Some(index);
+        bridge_base = None;
+    }
+    for label in &mut labels {
+        *label = representatives[*label];
+    }
+    // A script can share its old group with unrelated glyphs. Transfer only
+    // that endpoint; merging the old group would move unrelated rows too. ~keep
+    for owner in owners {
+        labels[owner.script_index] = labels[owner.base_index];
+    }
+    labels
+}
+
+fn same_ordinary_row(left: &SegmentData, right: &SegmentData) -> bool {
+    left.has_same_rotation(right)
+        && left.assigned_role == right.assigned_role
+        && (left.upright_baseline() - right.upright_baseline()).abs() <= super::INLINE_STYLE_BASELINE_TOLERANCE
 }
 
 fn valid_owners<'a>(segments: &[&SegmentData], evidence: &'a NativeSegmentEvidence) -> Vec<&'a SegmentScriptOwner> {
@@ -142,13 +261,6 @@ fn accepted_owners<'a>(segments: &[&SegmentData], evidence: &'a NativeSegmentEvi
         .into_iter()
         .filter(|owner| !scripts.contains(&owner.base_index) && script_counts[&owner.script_index] == 1)
         .collect()
-}
-
-fn plan_native_order(
-    segments: &[&SegmentData],
-    evidence: &NativeSegmentEvidence,
-) -> (Vec<usize>, Vec<SegmentScriptOwner>) {
-    plan_native_order_with_owners(segments, accepted_owners(segments, evidence))
 }
 
 fn plan_native_order_with_owners(

@@ -201,3 +201,48 @@ fn should_keep_a_proven_power_and_ordinary_wrapped_line_in_the_same_paragraph_22
         assert_eq!(powers, ["4"]);
     }
 }
+
+#[test]
+fn should_preserve_unrelated_same_row_semantic_groups_on_a_page_with_a_native_power_2275() {
+    let mut heading = span("Separate heading", 80.0, 670.0, 90.0, 12.0);
+    heading.mcid = Some(7);
+    let page = NativePageSegments::from_final_spans(
+        vec![
+            span("x", 100.0, 700.0, 10.0, 12.0),
+            span("4 ", 110.0, 704.9568, 4.0, 8.0),
+            span(".", 114.0, 700.0, 4.0, 12.0),
+            heading,
+            span("Independent body.", 180.0, 670.0, 100.0, 12.0),
+        ],
+        &std::collections::HashMap::from([(7, Some(1))]),
+        ArtifactRetention::default(),
+        ScriptGeometry::Preserve,
+    );
+    let segments = page.segments().cloned().collect();
+    let (segments, evidence) = prepare_segments(segments, page, &[]);
+    let evidence = evidence.expect("source carrier");
+    assert_eq!(
+        evidence.owners.len(),
+        1,
+        "the page must actually carry accepted source proof"
+    );
+    let refs: Vec<_> = segments.iter().collect();
+    assert_eq!(accepted_owners(&refs, &evidence).len(), 1);
+    let legacy = super::super::segments_to_paragraphs(segments.clone(), &[], &[], &Default::default());
+    for paragraphs in [&legacy, &group(segments, evidence)] {
+        let heading: Vec<_> = paragraphs
+            .iter()
+            .filter(|paragraph| project(paragraph).0.contains("Separate heading"))
+            .collect();
+        let body: Vec<_> = paragraphs
+            .iter()
+            .filter(|paragraph| project(paragraph).0.contains("Independent body."))
+            .collect();
+        assert_eq!(heading.len(), 1);
+        assert_eq!(body.len(), 1);
+        assert!(!project(heading[0]).0.contains("Independent body."));
+        assert!(!project(body[0]).0.contains("Separate heading"));
+        assert_eq!(heading[0].heading_level, Some(1));
+        assert_eq!(body[0].heading_level, None);
+    }
+}
