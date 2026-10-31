@@ -89,6 +89,10 @@ class _Index:
         if node.op_type == "Identity":
             require(len(node.input) == 1 and not attributes, "unsupported reshape Identity")
             return self.shape(node.input[0], source, visited)
+        if node.op_type == "Slice":
+            return self._slice_shape(node, source, visited)
+        if node.op_type == "Squeeze":
+            return self._squeeze_shape(node, source, visited)
         if node.op_type == "Unsqueeze":
             require(len(node.input) == 2 and not attributes, "unsupported reshape Unsqueeze")
             values = self.shape(node.input[0], source, visited)
@@ -108,6 +112,50 @@ class _Index:
             "unsupported reshape Gather index",
         )
         return [values[index] for index in indices]
+
+    def _parameter(self, name: str, role: str) -> list[int]:
+        tensor = self.initializers.get(name)
+        if tensor is None:
+            node = self.producers.get(name)
+            require(
+                node is not None
+                and node.op_type == "Constant"
+                and not node.input
+                and len(node.attribute) == 1
+                and node.attribute[0].name == "value"
+                and node.attribute[0].type == onnx.AttributeProto.TENSOR,
+                f"unsupported {role} parameter interface",
+            )
+            tensor = node.attribute[0].t
+        require(list(tensor.dims) == [1], f"unsupported {role} parameter rank/size")
+        return _integers(tensor)
+
+    def _slice_shape(self, node: onnx.NodeProto, source: str, visited: set[str]) -> list[object]:
+        require(
+            len(node.input) in (4, 5) and len(node.output) == 1 and not node.attribute,
+            "unsupported Slice input interface",
+        )
+        parent = self.producers.get(node.input[0])
+        require(parent is not None and parent.op_type == "Shape", "unsupported Slice shape source")
+        values = self.shape(node.input[0], source, visited)
+        start, end, axis = (self._parameter(name, "Slice") for name in node.input[1:4])
+        require(axis == [0], "unsupported Slice axis")
+        step = self._parameter(node.input[4], "Slice") if len(node.input) == 5 else [1]
+        require(step == [1], "unsupported Slice step")
+        result = values[start[0] : end[0]]
+        require(len(result) == 1, "unsupported Slice singleton length")
+        return result
+
+    def _squeeze_shape(self, node: onnx.NodeProto, source: str, visited: set[str]) -> list[object]:
+        require(
+            len(node.input) == 2 and len(node.output) == 1 and not node.attribute, "unsupported Squeeze input interface"
+        )
+        parent = self.producers.get(node.input[0])
+        require(parent is not None and parent.op_type == "Slice", "unsupported Squeeze input source")
+        values = self.shape(node.input[0], source, visited)
+        require(self._parameter(node.input[1], "Squeeze") == [0], "unsupported Squeeze axis")
+        require(len(values) == 1, "unsupported Squeeze singleton size")
+        return values
 
 
 def _conv(index: _Index, stage: str, scope: str, input_width: int, output_width: int) -> tuple[str, str]:
