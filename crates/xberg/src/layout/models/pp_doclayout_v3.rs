@@ -29,15 +29,14 @@
 //! ## Outputs (3)
 //! - `fetch_name_0` — `[N_total, 7]` f32: detection rows in PaddleDetection NMS format.
 //!                    Empirically confirmed column layout:
-//!                    `[class_id(f32), score(f32), x1, y1, x2, y2, _unused]`
+//!                    `[class_id(f32), score(f32), x1, y1, x2, y2, raw_rank]`
 //!                    where class_id ∈ 0..24 (25-class taxonomy, see below) and
 //!                    coordinates are in original image pixel space.
-//!                    For a batch of B images the rows are stored sequentially;
-//!                    `fetch_name_1[b]` tells how many valid rows image `b` contributes.
-//! - `fetch_name_1` — `[batch]` i32: per-image detection count (bbox_num).  Use this to
-//!                    slice valid rows from `fetch_name_0` — rows beyond `sum(bbox_num[0..b])`
-//!                    for image `b` are padding.
-//! - `fetch_name_2` — `[N_total, 200, 200]` i32: segmentation mask grid — ignored here.
+//!                    The validated private view preserves zero-based ranks and source-row identity;
+//!                    the legacy public projection still returns confidence-sorted boxes.
+//! - `fetch_name_1` — `[1]` i32: singleton top-k row count, before confidence filtering.
+//! - `fetch_name_2` — `[N_total, 200, 200]` i32: binary full-canvas masks paired with the same rows.
+//!                    Shape/value validation precedes projection; public detections omit masks.
 //!
 //! ## 25-class taxonomy (index → canonical name)
 //! 0 abstract, 1 algorithm, 2 aside_text, 3 chart, 4 content, 5 display_formula,
@@ -56,6 +55,7 @@ use crate::layout::error::LayoutError;
 use crate::layout::models::LayoutModel;
 use crate::layout::types::{BBox, LayoutClass, LayoutDetection};
 
+mod output;
 mod preprocessing;
 
 /// Default confidence threshold for PP-DocLayout-V3 detections.
@@ -210,6 +210,7 @@ impl PpDocLayoutV3Model {
     ///
     /// `rows` is the flat slice covering exactly `n_valid` rows × `DET_ROW_COLS` columns.
     /// Coordinates are already in original-image pixel space (unscaled by the model).
+    #[cfg(test)]
     fn parse_detections(
         rows: &[f32],
         n_valid: usize,
@@ -217,35 +218,38 @@ impl PpDocLayoutV3Model {
         orig_w: u32,
         orig_h: u32,
     ) -> Vec<LayoutDetection> {
+        Self::project_detections(
+            rows.chunks_exact(DET_ROW_COLS).take(n_valid).map(ndarray::ArrayView1::from),
+            threshold,
+            orig_w,
+            orig_h,
+        )
+    }
+
+    fn project_detections<'a>(
+        rows: impl Iterator<Item = ndarray::ArrayView1<'a, f32>>>,
+        threshold: f32,
+        orig_w: u32,
+        orig_h: u32,
+    ) -> Vec<LayoutDetection> {
         let max_w = orig_w as f32;
         let max_h = orig_h as f32;
         let mut detections = Vec::new();
-
-        for i in 0..n_valid {
-            let base = i * DET_ROW_COLS;
-            if base + DET_ROW_COLS > rows.len() {
-                break;
-            }
-
-            let score = rows[base + COL_SCORE];
+        for row in rows {
+            let score = row[COL_SCORE];
             if score < threshold {
                 continue;
             }
-
-            let class_id = rows[base + COL_CLASS] as i64;
-            let class = match Self::class_from_id(class_id) {
-                Some(c) => c,
+            let class = match Self::class_from_id(row[COL_CLASS] as i64) {
+                Some(class) => class,
                 None => continue,
             };
-
-            let x1 = rows[base + COL_X1].clamp(0.0, max_w);
-            let y1 = rows[base + COL_Y1].clamp(0.0, max_h);
-            let x2 = rows[base + COL_X2].clamp(0.0, max_w);
-            let y2 = rows[base + COL_Y2].clamp(0.0, max_h);
-
+            let x1 = row[COL_X1].clamp(0.0, max_w);
+            let y1 = row[COL_Y1].clamp(0.0, max_h);
+            let x2 = row[COL_X2].clamp(0.0, max_w);
+            let y2 = row[COL_Y2].clamp(0.0, max_h);
             detections.push(LayoutDetection::new(class, score, BBox::new(x1, y1, x2, y2)));
         }
-
         LayoutDetection::sort_by_confidence_desc(detections)
     }
 
@@ -286,31 +290,14 @@ impl PpDocLayoutV3Model {
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, "PP-DocLayout-V3 ONNX session.run() complete");
 
-        // NOTE (issue #1275, Phase 5 probe): this match is BY NAME
-        let mut det_data: Vec<f32> = Vec::new();
-        let mut bbox_num: Vec<i32> = Vec::new();
-
-        for (name, value) in &outputs {
-            match (name.as_str(), value) {
-                ("fetch_name_0", InferenceTensor::F32(array)) => {
-                    det_data = array.iter().copied().collect();
-                }
-                ("fetch_name_1", InferenceTensor::I32(array)) => {
-                    bbox_num = array.iter().copied().collect();
-                }
-                _ => {}
-            }
-        }
-
-        if det_data.is_empty() {
-            return Err(LayoutError::InvalidOutput(
-                "fetch_name_0 missing or empty from PP-DocLayout-V3".into(),
-            ));
-        }
-
-        let n_valid = bbox_num.first().copied().unwrap_or(0).max(0) as usize;
-
-        let detections = Self::parse_detections(&det_data, n_valid, threshold, orig_w, orig_h);
+        let validated = output::ValidatedOutput::from_outputs(&outputs)?;
+        let n_valid = validated.count();
+        let detections = Self::project_detections(
+            validated.rows().map(|(_source_row, row, _mask)| row),
+            threshold,
+            orig_w,
+            orig_h,
+        );
 
         crate::layout::inference_timings::set(preprocess_ms, onnx_ms);
 

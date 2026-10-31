@@ -112,6 +112,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(layout): Validate PP-DocLayoutV3 rank-bearing rows and paired binary masks before projection.** (#2284)
+  Reject malformed names, tensor shapes and counts while retaining legacy public detection ordering.
+
 - **(rendering): Honor table header metadata in HTML and preserve headerless data rows.** (#2332)
 - **(development): Keep generated skill summaries within Claude and Codex context budgets.**
 - **(ci): Refresh governance server tracking for ai-rulez 5.9.3 validation.**
