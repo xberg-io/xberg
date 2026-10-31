@@ -346,6 +346,9 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
 }
 
 #[cfg(test)]
+mod standard_inline_html_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::types::internal_builder::InternalDocumentBuilder;
