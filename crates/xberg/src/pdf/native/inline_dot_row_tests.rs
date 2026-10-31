@@ -140,7 +140,9 @@ fn measured_inline_dot_stays_ordinary_inside_its_prose() {
         doc.elements
             .iter()
             .any(|element| element.text.contains("The symbol • denotes multiplication")
-                && !matches!(element.kind, ElementKind::ListItem { .. }))
+                && !matches!(element.kind, ElementKind::ListItem { .. })),
+        "actual measured inline elements: {:?}",
+        doc.elements
     );
     assert_no_scripted_dot(&doc);
 }
@@ -151,10 +153,14 @@ fn measured_leading_bullet_remains_a_real_list_item() {
         span("•", 139.619, 185.52, 4.4832, 8.9664),
         span("Genuine list content.", 147.96, 184.49, 115.0, 11.9552),
     ]);
-    assert!(doc.elements.iter().any(
-        |element| matches!(element.kind, ElementKind::ListItem { ordered: false })
-            && element.text.contains("Genuine list content.")
-    ));
+    assert!(
+        doc.elements.iter().any(
+            |element| matches!(element.kind, ElementKind::ListItem { ordered: false })
+                && element.text.contains("Genuine list content.")
+        ),
+        "actual leading bullet elements: {:?}",
+        doc.elements
+    );
 }
 
 #[test]
@@ -185,10 +191,14 @@ fn a_bullet_in_another_column_does_not_gain_a_left_prose_owner() {
         span("•", 400.0, 185.52, 4.4832, 8.9664),
         span("Right column list content.", 408.341, 184.49, 125.0, 11.9552),
     ]);
-    assert!(doc.elements.iter().any(
-        |element| matches!(element.kind, ElementKind::ListItem { ordered: false })
-            && element.text.contains("Right column list content.")
-    ));
+    assert!(
+        doc.elements.iter().any(
+            |element| matches!(element.kind, ElementKind::ListItem { ordered: false })
+                && element.text.contains("Right column list content.")
+        ),
+        "actual separated-column elements: {:?}",
+        doc.elements
+    );
     assert!(
         !doc.elements
             .iter()
