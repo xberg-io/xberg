@@ -111,3 +111,6 @@ mod tests;
 
 #[cfg(all(test, feature = "tokio-runtime", any(feature = "ocr", feature = "ocr-pipeline")))]
 mod raw_transcript_tests;
+
+#[cfg(all(test, feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod combined_rotation_tests;
