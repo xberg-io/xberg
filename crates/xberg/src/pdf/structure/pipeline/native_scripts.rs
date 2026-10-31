@@ -527,6 +527,9 @@ mod ownerless_list_tests;
 mod source_origin_tests;
 
 #[cfg(test)]
+mod continuation_boundary_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::TextSpan;
