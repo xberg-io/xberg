@@ -25,29 +25,34 @@ fn span(text: &str, x: f32, y: f32, width: f32, font_size: f32) -> TextSpan {
 }
 
 fn spans(owned: bool, spaced: bool, outside: bool) -> Vec<TextSpan> {
-    let (four, six, digit_width) = if spaced { ("4 ", " 6", 10.0) } else { ("4", "6", 6.0) };
+    let (four, six, zero, hundredths, digit_width) = if spaced {
+        ("4 ", " 6", "0 ", " 01", 10.0)
+    } else {
+        ("4", "6", "0", "01", 6.0)
+    };
+    let mut source = if owned {
+        vec![
+            span("é lists the source measurements x", 42.0, 700.0, 180.0, 12.0),
+            span("2", 222.0, 704.9568, 4.0, 8.0),
+            span(":", 226.0, 700.0, 3.0, 12.0),
+        ]
+    } else {
+        vec![span("é lists the source measurements:", 42.0, 700.0, 187.0, 12.0)]
+    };
     let dot = 309.0 + digit_width;
-    let mut source = vec![
-        span("é lists the source measurements x", 42.0, 700.0, 180.0, 12.0),
-        span(
-            "2",
-            222.0,
-            if owned { 704.9568 } else { 700.0 },
-            4.0,
-            if owned { 8.0 } else { 12.0 },
-        ),
-        span(":", 226.0, 700.0, 3.0, 12.0),
+    let second_dot = 472.0 + digit_width;
+    source.extend([
         span("read sample ", 237.0, 700.0, 72.0, 12.0),
         span(four, 309.0, 700.0, digit_width, 12.0),
         span(".", dot, 700.0, 3.0, 12.0),
         span(six, dot + 3.0, 700.0, digit_width, 12.0),
         span(" seconds;", dot + 3.0 + digit_width, 700.0, 52.0, 12.0),
         span("keep sample ", 400.0, 700.0, 72.0, 12.0),
-        span("0", 472.0, 700.0, 6.0, 12.0),
-        span(".", 478.0, 700.0, 3.0, 12.0),
-        span("01", 481.0, 700.0, 12.0, 12.0),
-        span(" second.", 493.0, 700.0, 52.0, 12.0),
-    ];
+        span(zero, 472.0, 700.0, digit_width, 12.0),
+        span(".", second_dot, 700.0, 3.0, 12.0),
+        span(hundredths, second_dot + 3.0, 700.0, digit_width + 6.0, 12.0),
+        span(" second.", second_dot + 9.0 + digit_width, 700.0, 52.0, 12.0),
+    ]);
     if outside {
         source.extend([
             span("The context retains a source power x", 42.0, 760.0, 210.0, 12.0),
@@ -87,7 +92,7 @@ fn source_paragraphs(owned: bool, spaced: bool, outside: bool) -> Vec<PdfParagra
     let (segments, evidence) = prepare_segments(projected, page, &[]);
     let evidence = evidence.expect("actual page-local source carrier");
     assert_eq!(evidence.owners.len(), usize::from(owned) + usize::from(outside));
-    assert_eq!(segments.len(), 13 + 2 * usize::from(outside));
+    assert_eq!(segments.len(), 11 + 2 * usize::from(owned) + 2 * usize::from(outside));
     let mut original: Vec<_> = segments.iter().map(super::line_tests::fingerprint).collect();
     original.sort();
     let gaps = super::super::compute_paragraph_gap_ys(&segments);
@@ -128,7 +133,7 @@ fn canonical_source(paragraphs: &[PdfParagraph], owned: bool, spaced: bool) -> S
     let canonical = extract_text_and_annotations(selected[0], &witnesses);
     let ledger = extract_text_with_source_ranges(selected[0], &witnesses);
     assert_eq!((&ledger.text, &ledger.annotations), (&canonical.0, &canonical.1));
-    assert_eq!(ledger.segment_ranges.len(), 13);
+    assert_eq!(ledger.segment_ranges.len(), 11 + 2 * usize::from(owned));
     assert!(
         ledger
             .segment_ranges
@@ -140,7 +145,7 @@ fn canonical_source(paragraphs: &[PdfParagraph], owned: bool, spaced: bool) -> S
     let prefix = ledger.text.get(first.clone()).expect("real UTF8 source byte range");
     assert!(prefix.starts_with('é') && first.end > prefix.chars().count());
     let expected = if spaced {
-        "read sample 4 . 6 seconds; keep sample 0.01 second."
+        "read sample 4 . 6 seconds; keep sample 0 . 01 second."
     } else {
         "read sample 4.6 seconds; keep sample 0.01 second."
     };
@@ -174,7 +179,14 @@ fn assert_split_text(document: &InternalDocument, canonical: &str, spaced: bool,
             "read sample 4.6 seconds;"
         }
     );
-    assert_eq!(items[1].text, "keep sample 0.01 second.");
+    assert_eq!(
+        items[1].text,
+        if spaced {
+            "keep sample 0 . 01 second."
+        } else {
+            "keep sample 0.01 second."
+        }
+    );
     let lead: Vec<_> = document
         .elements
         .iter()
