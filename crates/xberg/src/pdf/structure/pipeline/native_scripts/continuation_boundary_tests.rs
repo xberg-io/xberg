@@ -22,13 +22,13 @@ fn span(text: &str, x: f32, baseline: f32, width: f32, font: f32) -> TextSpan {
     }
 }
 
-fn source(rows: Vec<TextSpan>) -> (Vec<SegmentData>, NativeSegmentEvidence, usize) {
+fn source(rows: Vec<TextSpan>, context_font: f32) -> (Vec<SegmentData>, NativeSegmentEvidence, usize) {
     let mut spans = vec![
         span("x", 80.0, 800.0, 10.0, BODY_FONT),
         span("4 ", 90.0, 804.9568, 4.0, 8.0),
         span(".", 94.0, 800.0, 4.0, BODY_FONT),
-        span("a", 80.0, 750.0, 8.0, BODY_FONT),
-        span("b", 80.0, 742.0, 8.0, BODY_FONT),
+        span("a", 80.0, 750.0, 8.0, context_font),
+        span("b", 80.0, 742.0, 8.0, context_font),
     ];
     let start = spans.len();
     spans.extend(rows);
@@ -42,6 +42,12 @@ fn source(rows: Vec<TextSpan>) -> (Vec<SegmentData>, NativeSegmentEvidence, usiz
     let (segments, evidence) = prepare_segments(page.segments().cloned().collect(), page, &[]);
     let evidence = evidence.expect("actual native preparation must succeed");
     assert_eq!(segments.len(), expected_records);
+    let bands = super::super::paragraph_line_bands(segments.iter());
+    assert_eq!(
+        super::super::median_line_height(&bands),
+        Some(context_font),
+        "actual physical-band median matches the source body calibration"
+    );
     assert_eq!(
         evidence.owners.len(),
         1,
@@ -100,7 +106,11 @@ fn assert_source_preserved(before: &[SegmentData], after: &[PdfParagraph]) {
 }
 
 fn extract(rows: Vec<TextSpan>, boundary: (usize, usize)) -> Vec<PdfParagraph> {
-    let (segments, evidence, start) = source(rows);
+    extract_with_context_font(rows, boundary, BODY_FONT)
+}
+
+fn extract_with_context_font(rows: Vec<TextSpan>, boundary: (usize, usize), context_font: f32) -> Vec<PdfParagraph> {
+    let (segments, evidence, start) = source(rows, context_font);
     let source_ids = [
         evidence.original_indices[start + boundary.0],
         evidence.original_indices[start + boundary.1],
@@ -198,7 +208,7 @@ fn should_keep_aligned_five_value_source_rows_as_distinct_paragraphs_2275() {
             rows.push(span(value, 80.0 + column as f32 * 36.0, baseline, 24.0, 9.5));
         }
     }
-    let output = extract(rows, (0, first.len()));
+    let output = extract_with_context_font(rows, (0, first.len()), 9.5);
     for values in [first, second] {
         let row = paragraph_for(&output, values[0]);
         for value in values {
