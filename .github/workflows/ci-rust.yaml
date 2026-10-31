@@ -124,20 +124,20 @@ jobs:
         shell: bash
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: mise run rust:lint:workspace
         shell: bash
 
       - name: Clippy full ORT surface (layout + OCR + ML)
-        run: cargo clippy --locked -p xberg --features full --all-targets -- -D warnings
+        run: mise run rust:lint:features full
         shell: bash
 
       - name: Clippy no-ORT tract engine
-        run: cargo clippy --locked -p xberg --no-default-features --features "ocr,auto-rotate-tract" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features "ocr,auto-rotate-tract"
         shell: bash
 
       # actually exercises the `#[allow(dead_code)]` markers on hf_client /
       - name: Clippy no-ORT tract layout
-        run: cargo clippy --locked -p xberg --no-default-features --features "layout-tract" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features layout-tract
         shell: bash
 
       # `formula-recognition` is opt-in and excluded from `full`, so no other cell
@@ -145,7 +145,7 @@ jobs:
       # broader or narrower than their callers' (layout + ocr-pipeline without any
       # OCR backend). ~keep
       - name: Clippy formula recognition cell
-        run: cargo clippy --locked -p xberg --no-default-features --features "formula-recognition,pdf" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features "formula-recognition,pdf"
         shell: bash
 
       # `candle-glm-ocr` is the only OCR backend that turns on `layout-detection`, so this
@@ -153,7 +153,7 @@ jobs:
       # pdf-only callers. Skipped on Linux aarch64 for the same candle reason as below. ~keep
       - name: Clippy GLM-OCR single backend
         if: matrix.os != 'ubuntu-24.04-arm'
-        run: cargo clippy --locked -p xberg --no-default-features --features "tokio-runtime,ocr,candle-glm-ocr" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features "tokio-runtime,ocr,candle-glm-ocr"
         shell: bash
 
       # `cargo clippy --workspace` above lints xberg-candle-ocr too, but only at its
@@ -167,7 +167,7 @@ jobs:
       # baseline lacks (matches the doctest and unit-test gating for this crate).
       - name: Clippy candle-ocr model surface
         if: matrix.os != 'ubuntu-24.04-arm'
-        run: cargo clippy --locked -p xberg-candle-ocr --features "trocr,paddleocr-vl,glm-ocr,deepseek-ocr" --all-targets -- -D warnings
+        run: mise run rust:lint:features -p xberg-candle-ocr "trocr,paddleocr-vl,glm-ocr,deepseek-ocr"
         shell: bash
 
       # The clippy feature matrix leaves several incompatible copies of the dependency graph in
