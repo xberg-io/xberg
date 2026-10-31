@@ -43,11 +43,17 @@ def checks_out_main_source(step: dict[str, object]) -> bool:
     return inputs.get("ref", "") in {"", "${{ github.sha }}"}
 
 
+# Workflows that queue a new run behind the running one instead of cancelling it.
+QUEUED_WORKFLOWS = {
+    "ci-gpu": "a dispatch-only multi-job GPU run is too expensive to cancel mid-flight",
+}
+
+
 def keeps_latest_ci_run(concurrency: object, workflow: str) -> bool:
-    """Cancel superseded runs within one workflow's stable ref group."""
+    """Cancel superseded runs within one workflow's stable ref group, or queue them for named exceptions."""
     return (
         isinstance(concurrency, dict)
-        and concurrency.get("cancel-in-progress") is True
+        and concurrency.get("cancel-in-progress") is (workflow not in QUEUED_WORKFLOWS)
         and concurrency.get("group") == f"{workflow}-${{{{ github.ref }}}}"
     )
 
@@ -62,7 +68,7 @@ class MainOnlyCiTests(unittest.TestCase):
             workflow = yaml.safe_load(path.read_text())
             with self.subTest(workflow=path.name):
                 assert keeps_latest_ci_run(workflow.get("concurrency"), path.stem), (
-                    f"{path}: require a stable workflow-ref group with cancellation enabled"
+                    f"{path}: require a stable workflow-ref group with the expected cancellation"
                 )
             for name, job in workflow["jobs"].items():
                 with self.subTest(workflow=path.name, job=name):
@@ -73,6 +79,13 @@ class MainOnlyCiTests(unittest.TestCase):
 
     def test_accepts_stable_workflow_ref_group_with_cancellation(self) -> None:
         assert keeps_latest_ci_run({"group": "ci-rust-${{ github.ref }}", "cancel-in-progress": True}, "ci-rust")
+
+    def test_queued_workflows_never_cancel_an_in_flight_run(self) -> None:
+        for workflow in QUEUED_WORKFLOWS:
+            with self.subTest(workflow=workflow):
+                group = f"{workflow}-${{{{ github.ref }}}}"
+                assert keeps_latest_ci_run({"group": group, "cancel-in-progress": False}, workflow)
+                assert not keeps_latest_ci_run({"group": group, "cancel-in-progress": True}, workflow)
 
     def test_rejects_missing_concurrency_and_disabled_cancellation(self) -> None:
         assert not keeps_latest_ci_run(None, "ci-rust")
