@@ -90,6 +90,27 @@ print("OCR source helper copies: expected=12 actual=12")
 PYTHON
 }
 
+@test "Docker manylinux builders should_take_English_tessdata_from_AppStream_tesseract_only" {
+	python3 - "$REPO_ROOT" <<'PYTHON'
+from pathlib import Path
+import re
+import sys
+root = Path(sys.argv[1])
+count = 0
+for variant in ("manylinux-node", "manylinux-rustler"):
+    text = (root / "docker" / f"Dockerfile.{variant}").read_text()
+    installs = re.findall(r"dnf -y install \\\n((?:\s+[^\n]*\\\n)+)", text)
+    assert len(installs) == 1, (variant, len(installs))
+    packages = installs[0].split()
+    assert "tesseract" in packages, variant
+    assert not any(p.startswith("tesseract-langpack") for p in packages), variant
+    assert "OCR_TESSDATA_DIR=/usr/share/tesseract/tessdata" in text, variant
+    count += 1
+assert count == 2, count
+print("manylinux tessdata sources: expected=2 actual=2")
+PYTHON
+}
+
 @test "Docker builders should_default_to_one_Cargo_job_and_allow_build_arg_overrides" {
 	python3 - "$REPO_ROOT" <<'PYTHON'
 from pathlib import Path

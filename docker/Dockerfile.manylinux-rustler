@@ -20,12 +20,15 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN dnf -y install epel-release || \
     dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+# AppStream's tesseract ships eng.traineddata, the build-time tessdata build-ocr-linux.sh
+# verifies. EPEL's tesseract-langpack-eng ships a different eng.traineddata at the same path,
+# so installing it beside the tesseract it requires fails the dnf transaction. ~keep
 RUN dnf -y install \
         cmake make pkgconfig git file curl \
         openssl-devel \
         libpng-devel libjpeg-turbo-devel libtiff-devel zlib-devel \
         giflib-devel libwebp-devel openjpeg2-devel libarchive-devel libcurl-devel \
-        tesseract-langpack-eng \
+        tesseract \
         nasm && \
     dnf clean all
 
