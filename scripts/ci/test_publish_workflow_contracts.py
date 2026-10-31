@@ -851,12 +851,6 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
 
 
-if __name__ == "__main__":
-    for name, test in list(globals().items()):
-        if name.startswith("test_") and callable(test):
-            test()
-
-
 def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
     workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
     feature = r'--features "?(\$\{\{ matrix\.(\w+) \}\}|[^"\s]+)'
@@ -877,3 +871,9 @@ def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
                 assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
                 checked += 1
     assert checked > 0
+
+
+if __name__ == "__main__":
+    for name, test in list(globals().items()):
+        if name.startswith("test_") and callable(test):
+            test()
