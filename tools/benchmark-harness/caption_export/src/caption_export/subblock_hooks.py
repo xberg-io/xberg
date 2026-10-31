@@ -1,4 +1,4 @@
-"""Observe real first-block module inputs/outputs without replacing forwards."""
+"""Observe a selected decoder block without replacing its forwards."""
 
 import importlib
 from collections.abc import Callable
@@ -6,7 +6,7 @@ from collections.abc import Callable
 import numpy as np
 
 from .first_divergence_evidence import require
-from .subblock import MULTIPLIERS, STAGES
+from .subblock import MULTIPLIERS, STAGES, validate_block
 
 POINTS = (
     ("ln_1", "pre"),
@@ -28,12 +28,14 @@ POINTS = (
 )
 
 
-def _points(model: object) -> list:
+def _points(model: object, block_index: int) -> list:
     transformer = model.decoder.transformer
-    require(len(transformer.h) > 0, "missing first GPT2 block")
+    layers = model.decoder.config.n_layer
+    validate_block(block_index, layers)
+    require(len(transformer.h) == layers, "decoder module and configured layer counts differ")
     result = []
     for stage, (path, phase) in zip(STAGES, POINTS, strict=True):
-        module = transformer.h[0]
+        module = transformer.h[block_index]
         for part in path.split(".") if path else ():
             module = getattr(module, part, None)
         require(
@@ -65,13 +67,13 @@ def _inputs(ids: np.ndarray, context: np.ndarray) -> None:
     )
 
 
-def capture_native(model: object, input_ids: np.ndarray, context: np.ndarray) -> dict:
+def capture_native(model: object, input_ids: np.ndarray, context: np.ndarray, *, block_index: int = 0) -> dict:
     """Run one ordinary wrapper call and record exactly sixteen nonempty seams."""
     torch = importlib.import_module("torch")
 
     _inputs(input_ids, context)
     require(all(not module.training for module in model.modules()), "all reference modules must be eval")
-    points = _points(model)
+    points = _points(model, block_index)
     hidden = model.decoder.config.n_embd
     widths = dict(zip(STAGES, (hidden * value for value in MULTIPLIERS), strict=True))
     captures, calls, handles = {}, {}, []

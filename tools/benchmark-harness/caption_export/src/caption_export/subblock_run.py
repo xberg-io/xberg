@@ -1,4 +1,4 @@
-"""Run only the frozen first-block diagnostic; never re-export or qualify."""
+"""Run only the frozen selected-block diagnostic; never re-export or qualify."""
 
 import argparse
 import hashlib
@@ -15,13 +15,22 @@ from .assets import digest, read_json
 from .first_divergence import ATOL, RTOL, compare_tensor
 from .first_divergence_evidence import require
 from .first_divergence_run import frozen_inputs, offline_environment, session
-from .subblock import MULTIPLIERS, STAGES, compare_taps, instrument_graph, resolve_taps, summarize, validate_controls
+from .subblock import (
+    MULTIPLIERS,
+    STAGES,
+    case_lengths,
+    compare_taps,
+    instrument_graph,
+    resolve_taps,
+    summarize,
+    validate_controls,
+)
 from .subblock_hooks import capture_native
-from .subblock_plan import EXPECTED_CONTROLS, EXPECTED_COUNTS, PROTOCOL, verify_destination, verify_plan
+from .subblock_plan import PROTOCOL, verify_destination, verify_plan
 
 
 def _reference_code(model: object, plan: dict) -> dict:
-    block = model.decoder.transformer.h[0]
+    block = model.decoder.transformer.h[plan["protocol"].get("block_index", 0)]
     result = {}
     for name, forward in (("gpt2", block.forward), ("conv1d", block.attn.c_attn.forward)):
         actual = inspect.getsourcefile(forward)
@@ -35,17 +44,18 @@ def _reference_code(model: object, plan: dict) -> dict:
     return result
 
 
-def _prepare_graph(original_plan: dict, previous: dict, output: Path) -> tuple:
+def _prepare_graph(original_plan: dict, previous: dict, output: Path, *, block_index: int = 0) -> tuple:
     source = Path(original_plan["bundle"]) / "model/decoder.onnx"
     graph = onnx.load(source, load_external_data=False)
     require(
         not any(tensor.data_location == onnx.TensorProto.EXTERNAL for tensor in _get_all_tensors(graph)),
         "external diagnostic tensors unsupported",
     )
-    taps = resolve_taps(graph)
+    taps = resolve_taps(graph, block_index=block_index, layer_count=original_plan["geometry"]["layers"])
     anchors = {tap["stage"]: tap["tensor"] for tap in previous["taps"]}
+    incoming = "embedding" if block_index == 0 else f"block.{block_index - 1}"
     require(
-        taps[0]["tensor"] == anchors["embedding"] and taps[-1]["tensor"] == anchors["block.0"],
+        taps[0]["tensor"] == anchors[incoming] and taps[-1]["tensor"] == anchors[f"block.{block_index}"],
         "subblock anchors differ from the prior diagnostic",
     )
     diagnostic = instrument_graph(graph, taps)
@@ -62,21 +72,23 @@ def _prepare_graph(original_plan: dict, previous: dict, output: Path) -> tuple:
 
 
 def _negative_controls(expected: dict, actual: dict) -> list[dict]:
+    length = expected["mlp_fc"].shape[1]
+    coordinate = (0, length - 1, 3)
     poisoned = {name: value.copy() for name, value in expected.items()}
-    poisoned["mlp_fc"][0, 1, 3] += np.float32(1.0)
-    rows = compare_taps(expected, poisoned, prefix_length=2)
+    poisoned["mlp_fc"][coordinate] += np.float32(1.0)
+    rows = compare_taps(expected, poisoned, prefix_length=length)
     failed = [row for row in rows if not row["passed"]]
     require(
         len(failed) == 1
         and failed[0]["stage"] == "mlp_fc"
         and failed[0]["failed_elements"] == 1
-        and failed[0]["first_failed_index"] == [0, 1, 3],
+        and failed[0]["first_failed_index"] == list(coordinate),
         "poisoned stage failed for the wrong reason",
     )
     missing = dict(actual)
     del missing["cross_query"]
     try:
-        compare_taps(expected, missing, prefix_length=2)
+        compare_taps(expected, missing, prefix_length=length)
     except ValueError as error:
         require("missing" in str(error), "missing stage failed for the wrong reason")
         return [{"control": "poisoned_element", **failed[0]}, {"control": "missing_stage", "error": str(error)}]
@@ -84,11 +96,19 @@ def _negative_controls(expected: dict, actual: dict) -> list[dict]:
 
 
 def _case(
-    probe: object, graph: object, tapped: object, taps: list[dict], *, prefix: np.ndarray, context: np.ndarray
+    probe: object,
+    graph: object,
+    tapped: object,
+    taps: list[dict],
+    *,
+    prefix: np.ndarray,
+    context: np.ndarray,
+    block_index: int = 0,
+    include_negatives: bool = False,
 ) -> dict:
     wrapper = importlib.import_module("caption_export.wrappers").Decoder(probe.model)
     unhooked = wrapper(probe.torch.from_numpy(prefix), probe.torch.from_numpy(context)).numpy().copy()
-    capture = capture_native(probe.model, prefix, context)
+    capture = capture_native(probe.model, prefix, context, block_index=block_index)
     native = probe.native_decoder(prefix, context)
     feed = {"input_ids": prefix, "encoder_hidden_states": context}
     original_logits = graph.run(["logits"], feed)[0]
@@ -113,12 +133,13 @@ def _case(
             "ort_observer": compare_tensor(original_logits, values[-1], atol=ATOL, rtol=RTOL),
         },
     }
-    if length == 2:
+    if include_negatives:
         result["negative_controls"] = _negative_controls(capture["captures"], actual)
     return result
 
 
 def _counts(cases: list[dict], taps: list[dict]) -> dict:
+    case_lengths([case["case"] for case in cases])
     hooks = {sum(case["hook_calls"].values()) for case in cases}
     require(len(hooks) == 1, "native hook counts differ between cases")
     return {
@@ -128,44 +149,70 @@ def _counts(cases: list[dict], taps: list[dict]) -> dict:
         "hooks_per_case": hooks.pop(),
         "ort_stage_outlets": len(taps),
         "ort_total_outlets_including_observer_logits": len(taps) + 1,
-        "stage_elements_T1": sum(row["compared_elements"] for row in cases[0]["comparisons"]),
-        "stage_elements_T2": sum(row["compared_elements"] for row in cases[1]["comparisons"]),
+        "stage_elements_T1": sum(
+            row["compared_elements"] for case in cases if case["case"] == "zeros_t1" for row in case["comparisons"]
+        ),
+        "stage_elements_T2": sum(
+            row["compared_elements"] for case in cases if case["case"] == "zeros_t2" for row in case["comparisons"]
+        ),
     }
+
+
+def _observe_cases(
+    probe: object, graph: object, tapped: object, taps: list, *, original_result: dict, protocol: dict
+) -> list:
+    lengths = case_lengths(protocol["cases"])
+    ids, pixels = frozen_inputs(original_result)
+    with probe.torch.inference_mode():
+        context = probe.model.encoder(
+            pixel_values=probe.torch.from_numpy(pixels), return_dict=True
+        ).last_hidden_state.numpy()
+        probe.tensor(context, (1, 197, 768))
+        require(
+            hashlib.sha256(context.tobytes()).hexdigest() == PROTOCOL["context_sha256"],
+            "frozen context SHA changed",
+        )
+        return [
+            _case(
+                probe,
+                graph,
+                tapped,
+                taps,
+                prefix=ids[:, :length].copy(),
+                context=context,
+                block_index=protocol.get("block_index", 0),
+                include_negatives=length == lengths[-1],
+            )
+            for length in lengths
+        ]
 
 
 def execute(
     plan: dict, output: Path, base: object, original_plan: dict, *, original_result: dict, previous: dict
 ) -> dict:
-    """Use one existing reference and two unchanged-optimization CPU sessions."""
+    """Use one existing reference and only the frozen block and case selections."""
     probe = base.Probe(original_plan, {})
     probe.load_reference()
-    require(len(probe.model.decoder.transformer.h) == 12, "unsupported reference decoder layer count")
+    layers = original_plan["geometry"]["layers"]
+    require(
+        len(probe.model.decoder.transformer.h) == probe.model.decoder.config.n_layer == layers,
+        "reference decoder layer count differs from original metadata",
+    )
+    protocol = plan["protocol"]
     implementations = _reference_code(probe.model, plan)
-    diagnostic_graph, taps = _prepare_graph(original_plan, previous, output)
+    diagnostic_graph, taps = _prepare_graph(original_plan, previous, output, block_index=protocol.get("block_index", 0))
     graph = session(probe.ort, Path(original_plan["bundle"]) / "model/decoder.onnx", ["logits"])
     tapped = session(probe.ort, diagnostic_graph, [*[tap["tensor"] for tap in taps], "logits"])
     try:
-        ids, pixels = frozen_inputs(original_result)
-        with probe.torch.inference_mode():
-            context = probe.model.encoder(
-                pixel_values=probe.torch.from_numpy(pixels), return_dict=True
-            ).last_hidden_state.numpy()
-            probe.tensor(context, (1, 197, 768))
-            require(
-                hashlib.sha256(context.tobytes()).hexdigest() == PROTOCOL["context_sha256"],
-                "frozen context SHA changed",
-            )
-            cases = [
-                _case(probe, graph, tapped, taps, prefix=ids[:, :length].copy(), context=context) for length in (1, 2)
-            ]
+        cases = _observe_cases(probe, graph, tapped, taps, original_result=original_result, protocol=protocol)
     finally:
         del graph, tapped
     controls = {name: [case["controls"][name] for case in cases] for name in ("mask", "hf_observer", "ort_observer")}
-    validate_controls(controls)
-    summary = summarize(cases, original_result=original_result)
+    validate_controls(controls, expected_cases=len(protocol["cases"]))
+    summary = summarize(cases, original_result=original_result, case_names=protocol["cases"])
     counts = _counts(cases, taps)
-    require(counts == EXPECTED_COUNTS, "subblock actual counts differ from prospective protocol")
-    negatives = cases[1]["negative_controls"]
+    require(counts == plan["expected_counts"], "subblock actual counts differ from prospective protocol")
+    negatives = cases[-1]["negative_controls"]
     actual_controls = {
         "HF_default_mask_vs_wrapper_mask_bit_equal": len(controls["mask"]),
         "unhooked_HF_vs_hooked_wrapper_logits_bit_equal": len(controls["hf_observer"]),
@@ -173,7 +220,7 @@ def execute(
         "poisoned_element_correct_failure": sum(row["control"] == "poisoned_element" for row in negatives),
         "missing_stage_correct_rejection": sum(row["control"] == "missing_stage" for row in negatives),
     }
-    require(actual_controls == EXPECTED_CONTROLS, "subblock actual controls differ from prospective protocol")
+    require(actual_controls == plan["expected_controls"], "subblock actual controls differ from prospective protocol")
     return {
         **summary,
         "stage_comparison_counts": summary["actual_counts"],
@@ -208,7 +255,7 @@ def main() -> int:
         "qualified": False,
         "diagnostic_complete": False,
         "plan_sha256": arguments.plan_sha256,
-        "protocol": PROTOCOL,
+        "protocol": plan["protocol"],
         "original_result": copy_original(original_result),
     }
     try:

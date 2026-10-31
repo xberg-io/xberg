@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Freeze caption decoder diagnostics for a selected block and original prefix cases.** (#2336)
+  Validate model layer bounds, final-block anchors and exact work counts while retaining failed qualification.
+
 - **(benchmarks): Inspect caption decoder sub-blocks with a separate hash-bound diagnostic.** (#2336)
   Require paired observer controls and exact work counts while preserving failed qualification and frozen tolerances.
 

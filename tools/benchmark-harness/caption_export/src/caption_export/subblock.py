@@ -1,4 +1,4 @@
-"""Resolve existing first-block values without exporting or qualifying a model."""
+"""Resolve existing decoder-block values without exporting or qualifying a model."""
 
 import copy
 import re
@@ -31,8 +31,26 @@ STAGES = (
     "block_output",
 )
 MULTIPLIERS = (1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1)
-COUNTS = {"cases": 2, "stages": 32, "compared_elements": 55296}
-SCOPE = "/decoder/transformer/h.0"
+
+
+def validate_block(block_index: int, layer_count: int | None) -> None:
+    """Require explicit metadata bounds for every nondefault graph selection."""
+    require(type(block_index) is int and block_index >= 0, "invalid decoder block index")
+    if layer_count is None:
+        require(block_index == 0, "selected block requires decoder layer metadata")
+    else:
+        require(type(layer_count) is int and layer_count > 0, "invalid decoder layer count")
+        require(block_index < layer_count, "selected block outside decoder layer bounds")
+
+
+def case_lengths(case_names: list[str] | None = None) -> list[int]:
+    """Select a nonempty ordered subset of the two original zero-image cases."""
+    names = ["zeros_t1", "zeros_t2"] if case_names is None else case_names
+    require(type(names) is list and bool(names), "empty or invalid subblock case selection")
+    allowed = {"zeros_t1": 1, "zeros_t2": 2}
+    require(all(type(name) is str and name in allowed for name in names), "unknown subblock case selection")
+    require(names == [name for name in allowed if name in names], "duplicate or unordered subblock cases")
+    return [allowed[name] for name in names]
 
 
 def _one(nodes: list[onnx.NodeProto], stage: str, role: str) -> onnx.NodeProto:
@@ -206,16 +224,21 @@ def _conv(index: _Index, stage: str, scope: str, input_width: int, output_width:
         raise ValueError(f"{stage}: {error}") from error
 
 
-def resolve_taps(model: onnx.ModelProto, *, hidden_size: int = 768) -> list[dict]:
+def resolve_taps(
+    model: onnx.ModelProto, *, hidden_size: int = 768, block_index: int = 0, layer_count: int | None = None
+) -> list[dict]:
     """Resolve the fixed sixteen seams from unique operators and linked edges."""
     require(type(hidden_size) is int and hidden_size > 0, "positive hidden width required")
+    validate_block(block_index, layer_count)
+    scope = f"/decoder/transformer/h.{block_index}"
     require([output.name for output in model.graph.output] == ["logits"], "original outlets must be exactly logits")
     index = _Index(model)
     norms = {
-        stage: unique_norm(model, f"{SCOPE}/{name}", stage)
+        stage: unique_norm(model, f"{scope}/{name}", stage)
         for stage, name in (("ln1", "ln_1"), ("cross_norm", "ln_cross_attn"), ("ln2", "ln_2"))
     }
-    next_norm = unique_norm(model, "/decoder/transformer/h.1/ln_1", "block_output")
+    following = "ln_f" if layer_count is not None and block_index == layer_count - 1 else f"h.{block_index + 1}/ln_1"
+    next_norm = unique_norm(model, f"/decoder/transformer/{following}", "block_output")
     tensors = {
         "block_input": norms["ln1"].input[0],
         "ln1": norms["ln1"].output[0],
@@ -234,7 +257,7 @@ def resolve_taps(model: onnx.ModelProto, *, hidden_size: int = 768) -> list[dict
         ("mlp_projection", "mlp/c_proj", 4, 1, "mlp_activation"),
     ]
     for stage, path, incoming, outgoing, pre in operations:
-        source, tensors[stage] = _conv(index, stage, f"{SCOPE}/{path}", hidden_size * incoming, hidden_size * outgoing)
+        source, tensors[stage] = _conv(index, stage, f"{scope}/{path}", hidden_size * incoming, hidden_size * outgoing)
         if pre:
             tensors[pre] = source
     taps = [
@@ -282,20 +305,30 @@ def compare_taps(expected: dict, actual: dict, *, prefix_length: int) -> list[di
     return compare_existing(expected, actual, order=STAGES)
 
 
-def summarize(cases: list[dict], *, original_result: dict) -> dict:
+def summarize(cases: list[dict], *, original_result: dict, case_names: list[str] | None = None) -> dict:
     """Count only subblock pairs; the immutable original qualification stays failed."""
-    require([case["case"] for case in cases] == ["zeros_t1", "zeros_t2"], "subblock case inventory changed")
-    result = summarize_existing(cases, original_result=original_result, expected_cases=2, expected_stages=STAGES)
-    require(result["actual_counts"] == COUNTS, "subblock element counts differ from frozen protocol")
+    lengths = case_lengths(case_names)
+    names = [f"zeros_t{length}" for length in lengths]
+    require([case["case"] for case in cases] == names, "subblock case inventory changed")
+    result = summarize_existing(
+        cases, original_result=original_result, expected_cases=len(names), expected_stages=STAGES
+    )
+    expected = {
+        "cases": len(names),
+        "stages": len(names) * len(STAGES),
+        "compared_elements": sum(lengths) * sum(MULTIPLIERS) * 768,
+    }
+    require(result["actual_counts"] == expected, "subblock element counts differ from frozen protocol")
     return result
 
 
-def validate_controls(controls: dict) -> dict:
-    """Require two literal bit-equal comparisons for every separate observer class."""
+def validate_controls(controls: dict, *, expected_cases: int = 2) -> dict:
+    """Require one literal bit-equal comparison per selected case and observer class."""
+    require(type(expected_cases) is int and expected_cases in (1, 2), "invalid observer case count")
     names = ("mask", "hf_observer", "ort_observer")
     require(set(controls) == set(names), "observer control classes changed")
     for name in names:
-        require(len(controls[name]) == 2, f"{name}: observer control count mismatch")
+        require(len(controls[name]) == expected_cases, f"{name}: observer control count mismatch")
         for row in controls[name]:
             require(
                 type(row.get("compared_elements")) is int
@@ -305,4 +338,4 @@ def validate_controls(controls: dict) -> dict:
                 and row.get("bitwise_equal") is True,
                 f"{name}: observer is not bit equal",
             )
-    return dict.fromkeys(names, 2)
+    return dict.fromkeys(names, expected_cases)

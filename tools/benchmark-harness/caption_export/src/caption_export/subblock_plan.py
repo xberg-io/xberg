@@ -10,7 +10,7 @@ from pathlib import Path
 from .assets import digest, read_json
 from .first_divergence_evidence import require, verify_original, verify_output, verify_runtime
 from .first_divergence_plan import freeze_plan as freeze_original_evidence
-from .subblock import MULTIPLIERS, STAGES
+from .subblock import MULTIPLIERS, STAGES, case_lengths, validate_block
 
 PROTOCOL = {
     "atol": 1e-5,
@@ -50,6 +50,50 @@ PRIOR_COUNTS = {"cases": 2, "stages": 30, "compared_elements": 183027}
 PRIOR_CONTROLS = {"mask": 2, "negative": 2, "observer": 2}
 
 
+def selection_counts(protocol: dict) -> tuple[dict, dict]:
+    """Validate selection without changing any frozen numerical or runtime policy."""
+    lengths = case_lengths(protocol.get("cases"))
+    block = protocol.get("block_index", 0)
+    require(type(block) is int and block >= 0, "invalid decoder block selection")
+    expected = copy.deepcopy(PROTOCOL)
+    expected.update(cases=[f"zeros_t{length}" for length in lengths], prefix_lengths=lengths)
+    if "block_index" in protocol:
+        expected["block_index"] = block
+    require(protocol == expected, "unsupported subblock protocol or case prefix selection")
+    require(all(type(length) is int for length in protocol["prefix_lengths"]), "invalid case prefix metadata")
+    elements = sum(MULTIPLIERS) * PROTOCOL["hidden"]
+    counts = {
+        **EXPECTED_COUNTS,
+        "cases": len(lengths),
+        "paired_stage_comparisons": len(lengths) * len(STAGES),
+        "compared_stage_elements": sum(lengths) * elements,
+        "stage_elements_T1": elements if 1 in lengths else 0,
+        "stage_elements_T2": 2 * elements if 2 in lengths else 0,
+    }
+    controls = {
+        name: 1 if name in {"missing_stage_correct_rejection", "poisoned_element_correct_failure"} else len(lengths)
+        for name in EXPECTED_CONTROLS
+    }
+    return counts, controls
+
+
+def _protocol_counts(data: dict) -> None:
+    counts, controls = selection_counts(data["protocol"])
+    require(
+        data["expected_counts"] == counts
+        and data["expected_controls"] == controls
+        and all(
+            type(value) is int for value in (*data["expected_counts"].values(), *data["expected_controls"].values())
+        ),
+        "subblock protocol counts changed",
+    )
+
+
+def _layer_bounds(protocol: dict, original_plan: dict) -> None:
+    layers = original_plan["geometry"]["layers"]
+    validate_block(protocol.get("block_index", 0), layers)
+
+
 def _verify_file(pin: dict, label: str) -> Path:
     path = Path(pin["path"])
     require(path.is_file() and not path.is_symlink(), f"missing regular {label} file")
@@ -60,11 +104,8 @@ def _verify_file(pin: dict, label: str) -> Path:
 def _prospective(path: Path, checksum: str) -> dict:
     require(path.is_file() and not path.is_symlink() and digest(path) == checksum, "prospective SHA mismatch")
     data = read_json(path)
-    require(data["version"] == 1 and data["protocol"] == PROTOCOL, "unsupported subblock protocol")
-    require(
-        data["expected_counts"] == EXPECTED_COUNTS and data["expected_controls"] == EXPECTED_CONTROLS,
-        "subblock protocol counts changed",
-    )
+    require(data["version"] == 1, "unsupported subblock protocol version")
+    _protocol_counts(data)
     stages = data["stages"]
     require([stage["stage"] for stage in stages] == list(STAGES), "subblock stage inventory changed")
     require(
@@ -118,6 +159,7 @@ def _prior(pin: dict) -> dict:
 def freeze_plan(prospective: Path, prospective_sha256: str, original: Path) -> dict:
     """Pin source and old receipts without importing the original helper or model."""
     data = _prospective(prospective, prospective_sha256)
+    _layer_bounds(data["protocol"], read_json(original / "plan.json"))
     _prior(data["authorized_receipt"])
     original_evidence = freeze_original_evidence(original)
     conv = Path(importlib.metadata.distribution("transformers").locate_file("transformers/pytorch_utils.py"))
@@ -127,9 +169,9 @@ def freeze_plan(prospective: Path, prospective_sha256: str, original: Path) -> d
         "source_root": original_evidence["source_root"],
         "runtime_sources": dict(original_evidence["runtime_sources"]),
         "prospective": {"path": str(prospective.resolve()), "sha256": prospective_sha256},
-        "protocol": copy.deepcopy(PROTOCOL),
-        "expected_counts": dict(EXPECTED_COUNTS),
-        "expected_controls": dict(EXPECTED_CONTROLS),
+        "protocol": copy.deepcopy(data["protocol"]),
+        "expected_counts": dict(data["expected_counts"]),
+        "expected_controls": dict(data["expected_controls"]),
         "prior_receipt": copy.deepcopy(data["authorized_receipt"]),
         "dependency_sources": {
             "gpt2": copy.deepcopy(data["gpt2_source"]),
@@ -142,13 +184,11 @@ def freeze_plan(prospective: Path, prospective_sha256: str, original: Path) -> d
 
 def verify_plan(plan: dict) -> tuple:
     """Validate the new execution protocol before the strict original-evidence view."""
-    require(plan["version"] == 1 and plan["protocol"] == PROTOCOL, "unsupported subblock execution protocol")
-    require(
-        plan["expected_counts"] == EXPECTED_COUNTS and plan["expected_controls"] == EXPECTED_CONTROLS,
-        "subblock execution counts changed",
-    )
+    require(plan["version"] == 1, "unsupported subblock execution protocol version")
+    _protocol_counts(plan)
     verify_runtime(plan)
     data = _prospective(Path(plan["prospective"]["path"]), plan["prospective"]["sha256"])
+    require(plan["protocol"] == data["protocol"], "execution case/block selection differs from prospective pin")
     require(plan["prior_receipt"] == data["authorized_receipt"], "prior receipt differs from prospective pin")
     require(
         set(plan["dependency_sources"]) == {"gpt2", "conv1d"}
@@ -164,6 +204,7 @@ def verify_plan(plan: dict) -> tuple:
     )
     previous = _prior(plan["prior_receipt"])
     base, original_plan, original_result = verify_original(evidence)
+    _layer_bounds(plan["protocol"], original_plan)
     require(previous["original_result"] == original_result, "prior diagnostic original result changed")
     return base, original_plan, original_result, previous
 
