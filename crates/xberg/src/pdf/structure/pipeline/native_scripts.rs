@@ -7,6 +7,23 @@ use crate::pdf::native::hierarchy::script_ownership::page_segments::{
 
 use super::{TableCoverage, filter_segments_by_table_bboxes, segment_survives_table_filter};
 
+mod paragraph_gaps;
+pub(super) use paragraph_gaps::NativeParagraphGaps;
+
+struct OrdinaryGroups {
+    original: Vec<usize>,
+    repaired: Vec<usize>,
+}
+
+impl OrdinaryGroups {
+    fn remap(self, order: &[usize]) -> Self {
+        Self {
+            original: order.iter().map(|&index| self.original[index]).collect(),
+            repaired: order.iter().map(|&index| self.repaired[index]).collect(),
+        }
+    }
+}
+
 pub(super) struct NativeSegmentEvidence {
     pub(super) original_indices: Vec<usize>,
     pub(super) owners: Vec<SegmentScriptOwner>,
@@ -39,24 +56,13 @@ pub(super) fn prepare_segments(
 pub(super) struct NativeScriptIndex {
     original_indices: Vec<usize>,
     by_script: std::collections::HashMap<usize, SegmentScriptOwner>,
-    ordinary_groups: Option<Vec<usize>>,
+    ordinary_groups: Option<OrdinaryGroups>,
+    continuation_gaps: Option<NativeParagraphGaps>,
 }
 
 impl NativeScriptIndex {
-    pub(super) fn ordinary_paragraph_gaps(&self, segments: &[SegmentData]) -> Vec<f32> {
-        // Gap values carry no frame tag; mixed rotations retain the existing merger. ~keep
-        if self.by_script.is_empty() || !segments.iter().all(SegmentData::is_unrotated) {
-            return Vec::new();
-        }
-        let ordinary: Vec<_> = segments
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| !self.by_script.contains_key(index))
-            .map(|(_, segment)| segment.clone())
-            .collect();
-        let mut gaps = super::compute_paragraph_gap_ys(&ordinary);
-        gaps.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
-        gaps
+    pub(super) fn into_continuation_gaps(self) -> Option<NativeParagraphGaps> {
+        self.continuation_gaps
     }
 
     pub(super) fn base_for(&self, index: usize) -> Option<usize> {
@@ -67,13 +73,35 @@ impl NativeScriptIndex {
         self.base_for(index).unwrap_or(index)
     }
 
-    pub(super) fn crosses_ordinary_group(&self, previous: usize, current: usize) -> bool {
-        self.ordinary_groups.as_ref().is_some_and(|groups| {
-            groups
-                .get(previous)
-                .zip(groups.get(current))
-                .is_some_and(|(left, right)| left != right)
-        })
+    pub(super) fn crosses_ordinary_group(&self, previous: usize, current: usize, segments: &[SegmentData]) -> bool {
+        let Some(groups) = &self.ordinary_groups else {
+            return false;
+        };
+        let differs = groups
+            .repaired
+            .get(previous)
+            .zip(groups.repaired.get(current))
+            .is_some_and(|(left, right)| left != right);
+        if !differs {
+            return false;
+        }
+        let originally_together = groups
+            .original
+            .get(previous)
+            .zip(groups.original.get(current))
+            .is_some_and(|(left, right)| left == right);
+        if !originally_together || self.by_script.contains_key(&previous) || self.by_script.contains_key(&current) {
+            return true;
+        }
+        let continues = segments
+            .get(previous)
+            .zip(segments.get(current))
+            .is_some_and(|(left, right)| {
+                self.continuation_gaps.as_ref().is_some_and(|gaps| {
+                    !gaps.crosses_rows(left, right) && super::super::paragraphs::source_rows_continue(left, right)
+                })
+            });
+        !continues
     }
 
     pub(super) fn subset(&self, indices: &[usize]) -> NativeSegmentEvidence {
@@ -132,6 +160,7 @@ fn order_native_segments_inner(
                 original_indices: Vec::new(),
                 by_script: std::collections::HashMap::new(),
                 ordinary_groups: None,
+                continuation_gaps: None,
             },
         );
     }
@@ -173,7 +202,7 @@ fn apply_native_order(
     segments: Vec<SegmentData>,
     original_indices: Vec<usize>,
     owners: Vec<SegmentScriptOwner>,
-    groups: Option<Vec<usize>>,
+    groups: Option<OrdinaryGroups>,
     order: Vec<usize>,
 ) -> (Vec<SegmentData>, NativeScriptIndex) {
     let valid = order.len() == segments.len()
@@ -184,20 +213,29 @@ fn apply_native_order(
         ((0..segments.len()).collect(), Vec::new(), None)
     };
     let owners = remap_owner_positions(owners, &order);
-    let index = NativeScriptIndex {
-        original_indices: order.iter().map(|&index| original_indices[index]).collect(),
-        by_script: owners.into_iter().map(|owner| (owner.script_index, owner)).collect(),
-        ordinary_groups: groups.map(|groups| order.iter().map(|&index| groups[index]).collect()),
-    };
+    let original_indices = order.iter().map(|&index| original_indices[index]).collect();
+    let by_script = owners.into_iter().map(|owner| (owner.script_index, owner)).collect();
+    let ordinary_groups = groups.map(|groups| groups.remap(&order));
     let mut slots: Vec<_> = segments.into_iter().map(Some).collect();
-    let segments = order
+    let segments: Vec<_> = order
         .into_iter()
         .map(|index| slots[index].take().expect("source permutation visits each slot once"))
         .collect();
-    (segments, index)
+    let continuation_gaps = ordinary_groups
+        .as_ref()
+        .and_then(|_| NativeParagraphGaps::new(&segments, &by_script));
+    (
+        segments,
+        NativeScriptIndex {
+            original_indices,
+            by_script,
+            ordinary_groups,
+            continuation_gaps,
+        },
+    )
 }
 
-fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner], gaps: &[f32]) -> Vec<usize> {
+fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner], gaps: &[f32]) -> OrdinaryGroups {
     let groups = super::paragraph_segment_groups(segments, gaps, None);
     let mut labels = vec![0; segments.len()];
     for (group, indices) in groups.iter().enumerate() {
@@ -205,6 +243,7 @@ fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner]
             labels[index] = group;
         }
     }
+    let original = labels.clone();
     let scripts: std::collections::HashMap<_, _> = owners.iter().map(|owner| (owner.script_index, owner)).collect();
     let mut previous: Option<usize> = None;
     let mut repaired_row: Option<(usize, usize)> = None;
@@ -233,7 +272,10 @@ fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner]
     for owner in owners {
         labels[owner.script_index] = labels[owner.base_index];
     }
-    labels
+    OrdinaryGroups {
+        original,
+        repaired: labels,
+    }
 }
 
 fn same_ordinary_row(left: &SegmentData, right: &SegmentData) -> bool {

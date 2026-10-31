@@ -131,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep ordinary wrapped prose together around native scripts.** (#2275)
+  Calibrate paragraph gaps within their source columns and preserve ordinary continuation across inline row repairs.
+  Keep genuine blank gaps and separately displayed equations as paragraph boundaries.
+
 - **(pdf): Keep split fractional and compound superscripts attached as complete native runs.** (#2275)
   Preserve each glyph witness and discard the whole ownership proof if any run member is filtered or changed.
   Match complete numeric note labels and retain whole script ranges across independent italic and bold styles.

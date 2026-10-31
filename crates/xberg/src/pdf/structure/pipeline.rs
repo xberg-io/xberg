@@ -1053,11 +1053,9 @@ fn segments_to_paragraphs_with_native_scripts(
         Some(evidence) => {
             let (segments, index) =
                 native_scripts::order_native_paragraph_segments(segments, evidence, paragraph_gap_ys);
-            let gaps = index.ordinary_paragraph_gaps(&segments);
-            (
-                blocks_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, Some(&index)),
-                gaps,
-            )
+            let paragraphs =
+                blocks_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, Some(&index));
+            (paragraphs, index.into_continuation_gaps())
         }
         None => (
             blocks_to_paragraphs(
@@ -1065,27 +1063,37 @@ fn segments_to_paragraphs_with_native_scripts(
                 heading_map,
                 paragraph_gap_ys,
             ),
-            Vec::new(),
+            None,
         ),
     };
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
-    merge_continuation_paragraphs_at_source_gaps(&mut paragraphs, &native_gaps);
+    if let Some(gaps) = native_gaps {
+        gaps.merge(&mut paragraphs);
+    } else {
+        merge_continuation_paragraphs(&mut paragraphs);
+    }
     synchronize_paragraph_text_metadata(&mut paragraphs);
     paragraphs
 }
 
+#[cfg(test)]
 fn merge_continuation_paragraphs_at_source_gaps(paragraphs: &mut Vec<PdfParagraph>, gaps: &[f32]) {
-    if gaps.is_empty() {
-        merge_continuation_paragraphs(paragraphs);
-        return;
-    }
+    merge_continuation_paragraphs_by_boundary(paragraphs, |previous, next| {
+        paragraphs_cross_source_gap(previous, next, gaps)
+    });
+}
+
+fn merge_continuation_paragraphs_by_boundary(
+    paragraphs: &mut Vec<PdfParagraph>,
+    crosses_boundary: impl Fn(&PdfParagraph, &PdfParagraph) -> bool,
+) {
     let mut merged = Vec::with_capacity(paragraphs.len());
     let mut group = Vec::new();
     for paragraph in std::mem::take(paragraphs) {
         if group
             .last()
-            .is_some_and(|previous| paragraphs_cross_source_gap(previous, &paragraph, gaps))
+            .is_some_and(|previous| crosses_boundary(previous, &paragraph))
         {
             merge_continuation_paragraphs(&mut group);
             merged.append(&mut group);
@@ -1101,8 +1109,12 @@ fn paragraphs_cross_source_gap(previous: &PdfParagraph, next: &PdfParagraph, gap
     let Some((previous, next)) = previous.lines.last().zip(next.lines.first()) else {
         return false;
     };
-    let lower = previous.baseline_y.min(next.baseline_y);
-    let upper = previous.baseline_y.max(next.baseline_y);
+    baselines_cross_source_gap(previous.baseline_y, next.baseline_y, gaps)
+}
+
+fn baselines_cross_source_gap(previous: f32, next: f32, gaps: &[f32]) -> bool {
+    let lower = previous.min(next);
+    let upper = previous.max(next);
     let below = gaps.partition_point(|gap| *gap <= lower);
     gaps.get(below).is_some_and(|gap| *gap < upper)
 }
@@ -1934,20 +1946,19 @@ struct LineBand {
 }
 
 fn compute_paragraph_gap_ys_in_shared_frame(segments: &[SegmentData]) -> Vec<f32> {
-    if segments.len() < 2 {
-        return Vec::new();
-    }
+    paragraph_gaps_from_bands(&paragraph_line_bands(segments.iter()), body_leading)
+}
 
-    let mut order: Vec<usize> = (0..segments.len()).collect();
-    order.sort_by(|&a, &b| {
-        paragraph_gap_axis(&segments[b])
-            .partial_cmp(&paragraph_gap_axis(&segments[a]))
+fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> Vec<LineBand> {
+    let mut order: Vec<_> = segments.collect();
+    order.sort_by(|a, b| {
+        paragraph_gap_axis(b)
+            .partial_cmp(&paragraph_gap_axis(a))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     let mut lines: Vec<LineBand> = Vec::new();
-    for &i in &order {
-        let seg = &segments[i];
+    for seg in order {
         let (bottom, top) = if seg.is_unrotated() {
             (seg.y, seg.y + seg.height)
         } else {
@@ -1971,6 +1982,10 @@ fn compute_paragraph_gap_ys_in_shared_frame(segments: &[SegmentData]) -> Vec<f32
             }),
         }
     }
+    lines
+}
+
+fn paragraph_gaps_from_bands(lines: &[LineBand], leading: fn(&[LineBand], f32) -> f32) -> Vec<f32> {
     if lines.len() < 2 {
         return Vec::new();
     }
@@ -1979,7 +1994,7 @@ fn compute_paragraph_gap_ys_in_shared_frame(segments: &[SegmentData]) -> Vec<f32
     heights.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let median_height = heights[heights.len() / 2];
     let gap_threshold = median_height * PARAGRAPH_GAP_HEIGHT_FACTOR;
-    let advance_threshold = body_leading(&lines, median_height) * PARAGRAPH_BREAK_LEADING_MULTIPLE;
+    let advance_threshold = leading(lines, median_height) * PARAGRAPH_BREAK_LEADING_MULTIPLE;
 
     let mut gap_ys = Vec::new();
     for pair in lines.windows(2) {
@@ -2094,8 +2109,11 @@ const PARAGRAPH_FULL_WIDTH_FURNITURE_FRACTION: f32 = 0.55;
 /// not to be a real column gutter can only leave two segments un-merged, never wrongly
 /// merge or reorder anything. ~keep
 fn page_column_corridor(lines: &[SegmentData]) -> Option<(f32, f32)> {
+    page_column_corridor_for_segments(lines.iter())
+}
+
+fn page_column_corridor_for_segments<'a>(lines: impl Iterator<Item = &'a SegmentData>) -> Option<(f32, f32)> {
     let mut extents: Vec<(f32, f32)> = lines
-        .iter()
         .filter(|line| !line.text.trim().is_empty())
         .map(SegmentData::upright_advance_extent)
         .filter(|&(left, right)| left.is_finite() && right.is_finite() && right > left)
@@ -2261,7 +2279,7 @@ fn paragraph_segment_groups(
         let is_row_script = is_native_script || visual_row.as_ref().is_some_and(|row| row.carries_script(line));
         let should_break = if current_lines.is_empty() || is_native_script {
             false
-        } else if native_scripts.is_some_and(|scripts| scripts.crosses_ordinary_group(prev_idx, line_idx)) {
+        } else if native_scripts.is_some_and(|scripts| scripts.crosses_ordinary_group(prev_idx, line_idx, lines)) {
             true
         } else {
             let prev = native_scripts
