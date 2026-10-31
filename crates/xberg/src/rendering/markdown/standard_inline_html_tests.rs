@@ -61,8 +61,8 @@ fn superscript_escapes_source_html_and_ampersands() {
         commonmark_html(&markdown, false),
         "<p><sup>&lt;img src=x&gt; &amp; &lt;u&gt;Y&lt;/u&gt;</sup></p>\n"
     );
-    assert!(!markdown.contains("<img"));
-    assert!(!markdown.contains("<u>Y"));
+    assert_eq!(document.elements[0].text, source);
+    assert_eq!(document.elements[0].annotations, [superscript(0, source.len() as u32)]);
 }
 
 #[test]
