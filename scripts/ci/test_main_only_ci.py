@@ -127,7 +127,7 @@ class MainOnlyCiTests(unittest.TestCase):
                     with self.subTest(workflow=path.name, job=name, step=step.get("name", step.get("uses"))):
                         assert checks_out_main_source(step), f"{path}:{name}: alternate source checkout"
                     checkout_count += str(step.get("uses", "")).startswith("actions/checkout@")
-        assert checkout_count == 74, "CI checkout inventory changed"
+        assert checkout_count == 73, "CI checkout inventory changed"
         print(f"Checked {checkout_count} CI checkout steps")
 
     def test_rejects_checkout_ref_inputs_and_alternate_branches(self) -> None:

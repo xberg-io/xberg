@@ -3,11 +3,11 @@ version = 1
 [[sources]]
 id = "ai-rulez"
 source = "https://github.com/Goldziher/ai-rulez.git"
-revision = "8dd59ae052ee9ffbcc371dc0ee1d14e1e9a0a515"
-path = "cache://hook-sources/a028197e1e7ffd465c27caaca41da62d/8dd59ae052ee9ffbcc371dc0ee1d14e1e9a0a515"
+revision = "c8a37902133493513170011db3cd4ae6384f9b91"
+path = "cache://hook-sources/a028197e1e7ffd465c27caaca41da62d/c8a37902133493513170011db3cd4ae6384f9b91"
 
 [[sources]]
 id = "adrlint"
 source = "https://github.com/Goldziher/adrlint.git"
-revision = "81affa97b5d1bc6930f0ed4a7faa252e7296fb56"
-path = "cache://hook-sources/87f17bc04cb735c06ccfa44452e81ef2/81affa97b5d1bc6930f0ed4a7faa252e7296fb56"
+revision = "a4fc1b972267792a7ee8fb2d84ea55d2e9c17c7b"
+path = "cache://hook-sources/87f17bc04cb735c06ccfa44452e81ef2/a4fc1b972267792a7ee8fb2d84ea55d2e9c17c7b"

@@ -68,39 +68,39 @@ backend = "core:dotnet"
 specifiers = ["10.0.403"]
 
 [[tools."github:Goldziher/adrlint"]]
-version = "0.4.0"
+version = "0.4.1"
 backend = "github:Goldziher/adrlint"
-specifiers = ["0.4.0"]
+specifiers = ["0.4.1"]
 
 [tools."github:Goldziher/adrlint"."platforms.linux-arm64"]
-checksum = "sha256:9d44d0bf43e8157701eb7753a127c52620eae0f72c9aaf3789a59246ef868257"
+checksum = "sha256:5d9be05a1428929ee2d38c477bc02c6fffba8b4b85b2d331af5e8901c8f5daf4"
 checksum_source = "mise-versions"
-url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.0/adrlint-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/691413287"
+url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.1/adrlint-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/694607565"
 
 [tools."github:Goldziher/adrlint"."platforms.linux-x64"]
-checksum = "sha256:c5501f76d93eb8f9af20331993fe0c340cac18cd3bd69a3f43ce319f1d64044d"
+checksum = "sha256:b4f5e750e63e048ef9b3d87fb548896d1cfad28c7a31d2f9a2aaa2c576dd62ff"
 checksum_source = "mise-versions"
-url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.0/adrlint-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/691402758"
+url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.1/adrlint-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/694609754"
 
 [tools."github:Goldziher/adrlint"."platforms.macos-arm64"]
-checksum = "sha256:0af336220136cb7beb8356ac2f6a2ef6a8597aee710eea5338986b9e62141f5d"
+checksum = "sha256:537ef92801ef55e579e854f51292a716740fd550f977ce29e06b7b2699a12464"
 checksum_source = "mise-versions"
-url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.0/adrlint-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/691374859"
+url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.1/adrlint-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/694606868"
 
 [tools."github:Goldziher/adrlint"."platforms.macos-x64"]
-checksum = "sha256:3b5f7015fc18c43f8ca2b969d6a34b44b154d593c95725d91d23e9c6c1daac26"
+checksum = "sha256:545bd519417e00269debfef80f60ed94ffdfaf8a1ce71f9b94d8b264f736bd99"
 checksum_source = "mise-versions"
-url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.0/adrlint-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/691369467"
+url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.1/adrlint-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/694609215"
 
 [tools."github:Goldziher/adrlint"."platforms.windows-x64"]
-checksum = "sha256:27294ccbd2e46951ad049533fa402a06d1ff347243114014b72d84f72352d9f1"
+checksum = "sha256:ce930e745bb6e9dc8b9f998c5de152224f42eb010e35de6d49d3c6e9180263cb"
 checksum_source = "mise-versions"
-url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.0/adrlint-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/691369065"
+url = "https://github.com/Goldziher/adrlint/releases/download/v0.4.1/adrlint-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/Goldziher/adrlint/releases/assets/694609927"
 
 [[tools."github:Goldziher/poly"]]
 version = "0.31.2"
@@ -208,39 +208,39 @@ url_api = "https://api.github.com/repos/taiki-e/cargo-llvm-cov/releases/assets/5
 provenance = "github-attestations"
 
 [[tools."github:xberg-io/alef"]]
-version = "0.115.6"
+version = "0.115.9"
 backend = "github:xberg-io/alef"
-specifiers = ["0.115.6"]
+specifiers = ["0.115.9"]
 
 [tools."github:xberg-io/alef"."platforms.linux-arm64"]
-checksum = "sha256:75db216fbd2f77223bd3e9da766568b690750b83c96cf8e5b85dd0ec0a0f51e6"
+checksum = "sha256:642ea831cd4a0d4deb34593732b517d27ab9132210e50a8352c68a1947123576"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.115.6/alef-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/689148047"
+url = "https://github.com/xberg-io/alef/releases/download/v0.115.9/alef-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/694493538"
 
 [tools."github:xberg-io/alef"."platforms.linux-x64"]
-checksum = "sha256:7afe7c07487675564767c9e2491b55519f038a76042fb0f37fec0e655ae1208c"
+checksum = "sha256:c2c1de9480e4f0ee446b9434c7b13ac2933992c1a6065cc699fd639688c5d905"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.115.6/alef-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/689148338"
+url = "https://github.com/xberg-io/alef/releases/download/v0.115.9/alef-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/694493781"
 
 [tools."github:xberg-io/alef"."platforms.macos-arm64"]
-checksum = "sha256:add33a47a77cd74e633ff61622b95cfdda9716900e54c5cf7b3abd86e82539a4"
+checksum = "sha256:35953427bae381d9c98ea66f15a4163ec5ac948d55837d8028791ab9cd4a72f2"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.115.6/alef-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/689147967"
+url = "https://github.com/xberg-io/alef/releases/download/v0.115.9/alef-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/694493488"
 
 [tools."github:xberg-io/alef"."platforms.macos-x64"]
-checksum = "sha256:5decd67421b1523d262efe543c2222de8d7999c42bf6abb5ab9f384fd5662153"
+checksum = "sha256:388af202db4e400a7f18a408c6b8d69a649ee6c415648d21cffff13e33b7be4b"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.115.6/alef-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/689148153"
+url = "https://github.com/xberg-io/alef/releases/download/v0.115.9/alef-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/694493637"
 
 [tools."github:xberg-io/alef"."platforms.windows-x64"]
-checksum = "sha256:69d70f1bee04285a197e15a7d9a8dba0ad2a0687d0c29f8d397c0c44c65e5a60"
+checksum = "sha256:e28f75d41e29734ca28e6f4bf4d74aa65735478c96f8a860798627b326c26f52"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.115.6/alef-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/689148261"
+url = "https://github.com/xberg-io/alef/releases/download/v0.115.9/alef-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/694493713"
 
 [[tools.go]]
 version = "1.27.3"
