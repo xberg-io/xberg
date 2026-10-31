@@ -208,17 +208,21 @@ fn unannotated_carets_and_html_like_text_remain_literal() {
 #[test]
 fn subscript_and_explicit_math_keep_their_existing_markdown_policy() {
     let document = paragraph(
-        "H2O x^2",
+        "H2O $x^2$",
         vec![
             subscript(1, 2),
             TextAnnotation {
                 start: 4,
-                end: 7,
+                end: 9,
                 kind: AnnotationKind::math(false),
             },
         ],
     );
 
+    assert!(crate::rendering::common::valid_math_annotation(
+        &document.elements[0].text,
+        &document.elements[0].annotations[1],
+    ));
     assert_eq!(render_markdown(&document), "H~2~O $`x^2`$\n");
 }
 
