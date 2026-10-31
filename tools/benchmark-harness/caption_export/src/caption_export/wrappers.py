@@ -24,9 +24,15 @@ class Decoder(torch.nn.Module):
 
     def forward(self, input_ids: torch.Tensor, encoder_hidden_states: torch.Tensor) -> torch.Tensor:
         """Return full-prefix logits with caching explicitly disabled."""
+        # A prepared 4D mask bypasses Transformers' packed-position torch.diff, unsupported by legacy ONNX. ~keep
+        positions = torch.arange(input_ids.shape[1], device=input_ids.device)
+        future = positions.unsqueeze(0) > positions.unsqueeze(1)
+        mask = torch.zeros_like(future, dtype=encoder_hidden_states.dtype)
+        mask = mask.masked_fill(future, torch.finfo(encoder_hidden_states.dtype).min)
         return self.decoder(
             input_ids=input_ids,
             encoder_hidden_states=encoder_hidden_states,
+            attention_mask=mask.unsqueeze(0).unsqueeze(0),
             use_cache=False,
             return_dict=True,
         ).logits
