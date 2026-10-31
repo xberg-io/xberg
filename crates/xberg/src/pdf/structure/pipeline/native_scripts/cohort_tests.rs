@@ -166,3 +166,94 @@ fn should_not_absorb_an_ordinary_baseline_operator_into_a_native_power_2275() {
         );
     }
 }
+
+fn numbered_prose_reference(split: bool, with_definition: bool) -> NativePageSegments {
+    let span = |text: &str, x, y, width, font_size| TextSpan {
+        text: text.to_owned(),
+        bbox: Rect::new(x, y, width, font_size),
+        font_size,
+        mcid_scope: Some(McidScope::Page(0)),
+        ..Default::default()
+    };
+    let mut spans = vec![span("Section 4", 100.0, 700.0, 60.0, 12.0)];
+    if split {
+        spans.push(span("1", 160.1, 704.0, 4.0, 8.0));
+        spans.push(span("2", 164.1, 704.0, 4.0, 8.0));
+    } else {
+        spans.push(span("12", 160.1, 704.0, 8.0, 8.0));
+    }
+    if with_definition {
+        spans.push(span("12", 100.0, 20.0, 8.0, 6.0));
+        spans.push(span("A supporting note", 109.0, 20.0, 60.0, 8.0));
+    }
+    page(spans)
+}
+
+#[test]
+fn should_reject_a_confirmed_split_numeric_note_as_a_complete_native_run_2275() {
+    let owners = |carrier: NativePageSegments| {
+        let segments = carrier.segments().cloned().collect();
+        prepare_segments(segments, carrier, &[]).1.unwrap().owners
+    };
+    assert_eq!(owners(numbered_prose_reference(true, false)).len(), 2);
+    assert!(
+        owners(numbered_prose_reference(false, true)).is_empty(),
+        "the coalesced marker must exercise the existing confirmed-note exclusion"
+    );
+    assert!(
+        owners(numbered_prose_reference(true, true)).is_empty(),
+        "split 1/2 glyphs reference the same confirmed note12 and must not become a power"
+    );
+}
+
+#[test]
+fn should_annotate_one_complete_mixed_style_native_run_and_keep_its_italic_ranges_2275() {
+    let mut spans = source_cohort(false);
+    spans[0].is_italic = true;
+    spans[2].is_italic = true;
+    let carrier = page(spans);
+    let segments = carrier.segments().cloned().collect();
+    let (segments, evidence) = prepare_segments(segments, carrier, &[]);
+    let evidence = evidence.unwrap();
+    assert_eq!(
+        evidence.owners.len(),
+        3,
+        "all three exact source members have native proof"
+    );
+    let mut before: Vec<_> = segments.iter().map(super::line_tests::fingerprint).collect();
+    let paragraphs = super::super::segments_to_paragraphs_with_native_scripts(
+        segments,
+        &[],
+        &[],
+        &Default::default(),
+        Some(evidence),
+    );
+    assert_eq!(paragraphs.len(), 1);
+    let mut after: Vec<_> = paragraphs[0]
+        .lines
+        .iter()
+        .flat_map(|line| &line.segments)
+        .map(super::line_tests::fingerprint)
+        .collect();
+    before.sort();
+    after.sort();
+    assert_eq!(
+        before, after,
+        "native glyph geometry and separate italic styles must survive"
+    );
+    let (text, annotations) = extract_text_and_annotations(&paragraphs[0], &Default::default());
+    assert_eq!(text, "ns−t");
+    let ranges = |kind| {
+        annotations
+            .iter()
+            .filter(|annotation| annotation.kind == kind)
+            .map(|annotation| (annotation.start, annotation.end))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ranges(AnnotationKind::Italic), [(1, 2), (5, 6)]);
+    assert_eq!(
+        ranges(AnnotationKind::Superscript),
+        [(1, 6)],
+        "one proved cohort needs a whole UTF-8 power range across its ordinary style boundaries"
+    );
+}
