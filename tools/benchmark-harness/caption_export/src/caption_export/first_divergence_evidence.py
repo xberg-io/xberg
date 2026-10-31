@@ -1,5 +1,6 @@
 """Hash-bound inputs and source isolation for the prospective tap diagnostic."""
 
+import hashlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -47,11 +48,15 @@ def verify_runtime(plan: dict) -> None:
             )
 
 
-def load_original_helper(path: Path) -> ModuleType:
-    """Load the helper after its original evidence checks have succeeded."""
+def load_original_helper(path: Path, *, expected_sha256: str | None = None) -> ModuleType:
+    """Execute source directly, binding the exact bytes when called by the frozen runner."""
+    source = path.read_bytes()
+    if expected_sha256 is not None:
+        require(hashlib.sha256(source).hexdigest() == expected_sha256, "original helper source checksum mismatch")
     spec = importlib.util.spec_from_file_location("frozen_caption_parity", path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Execute verified source without consuming unpinned caches or writing into immutable evidence. ~keep
+    exec(compile(source, str(path), "exec", dont_inherit=True), module.__dict__)  # noqa: S102
     return module
 
 
@@ -80,7 +85,7 @@ def verify_original(plan: dict) -> tuple[ModuleType, dict, dict]:
         == {"image": 224, "context": 197, "hidden": 768, "vocabulary": 50257, "layers": LAYERS},
         "unsupported original architecture",
     )
-    module = load_original_helper(directory / "parity.py")
+    module = load_original_helper(directory / "parity.py", expected_sha256=plan["original_files"]["parity.py"])
     module.preflight(original_plan, directory)
     return module, original_plan, previous
 
