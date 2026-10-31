@@ -92,8 +92,13 @@ pub(crate) fn tesseract_language_for_script(script: Script) -> Option<&'static s
     }
 }
 
+// ~keep The image route (`ocr`) and the PDF text-layer route (`pdf` with `ocr-pipeline`) call the
+// three language-list helpers below. A candle-only build has `ocr-pipeline` and neither route.
 /// `true` when one of `languages` reads `script`.
-#[cfg(feature = "ocr-pipeline")]
+#[cfg(any(
+    all(not(target_arch = "wasm32"), feature = "ocr"),
+    all(feature = "pdf", feature = "ocr-pipeline")
+))]
 pub(crate) fn languages_cover_script<S: AsRef<str>>(languages: &[S], script: Script) -> bool {
     languages
         .iter()
@@ -101,7 +106,10 @@ pub(crate) fn languages_cover_script<S: AsRef<str>>(languages: &[S], script: Scr
 }
 
 /// `true` when the language list is the `all` wildcard, which already reads every script.
-#[cfg(feature = "ocr-pipeline")]
+#[cfg(any(
+    all(not(target_arch = "wasm32"), feature = "ocr"),
+    all(feature = "pdf", feature = "ocr-pipeline")
+))]
 pub(crate) fn languages_are_wildcard<S: AsRef<str>>(languages: &[S]) -> bool {
     languages
         .iter()
@@ -110,7 +118,10 @@ pub(crate) fn languages_are_wildcard<S: AsRef<str>>(languages: &[S]) -> bool {
 
 /// Add `language` to whichever language field Tesseract reads, leaving the other field and the
 /// precedence between the two as they are.
-#[cfg(feature = "ocr-pipeline")]
+#[cfg(any(
+    all(not(target_arch = "wasm32"), feature = "ocr"),
+    all(feature = "pdf", feature = "ocr-pipeline")
+))]
 pub(crate) fn push_language(ocr: &mut crate::core::config::OcrConfig, language: &str) {
     let default = [crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()];
     if ocr.language != default {
@@ -126,7 +137,13 @@ pub(crate) fn push_language(ocr: &mut crate::core::config::OcrConfig, language: 
     ocr.language.push(language.to_string());
 }
 
-#[cfg(all(test, feature = "ocr-pipeline"))]
+#[cfg(all(
+    test,
+    any(
+        all(not(target_arch = "wasm32"), feature = "ocr"),
+        all(feature = "pdf", feature = "ocr-pipeline")
+    )
+))]
 mod tests {
     use super::*;
 
