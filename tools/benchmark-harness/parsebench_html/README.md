@@ -59,6 +59,20 @@ Each arm has an absolute `config` and the exact canonical `argv` array `["extrac
 
 The freeze step copies executable, configs, ORT library, and provenance artifacts into content-addressed read-only files beside the frozen plan. It verifies source/copy hash agreement, checks executable/config/ORT hashes before and after every invocation, and hashes model bytes, evaluator Python sources, dependency lock, and stage manifest. It verifies a clean evaluator checkout. Configurations must request HTML and explicitly disable both extraction and Tesseract cache. Model arms require `layout.strategy="always"`, `layout.table_model="tatr"`, `layout.acceleration.provider="cpu"`, and a positive `concurrency.max_threads`. The native `layout_tatr_html` arm also requires `use_layout_for_markdown=true`: despite its name, this opt-in activates the native PDF layout route for HTML output too; its default is false. The forced OCR arm uses its independent OCR layout route and does not require this native-path opt-in. There is no `native_pdf` layout field in the current schema. The operator must review model and arm configuration identities before freezing.
 
+New frozen plans also include `runtime_sources` version 1: the relative path and SHA-256 of every `.py` file
+in the runner's own package, including any package initializer, entry point, or nested helper. The runner verifies
+that its imported contract, evaluator adapter, and guard modules come from that package. It checks source bytes
+and the complete inventory before execution, before every CLI invocation, after case processing, and at finalization.
+Changing the runner or guard, deleting a helper, or adding a Python module requires a new freeze. Run the five
+source-pinning controls with the pinned offline evaluator environment using
+`python -m unittest discover -s tools/benchmark-harness/tests -p 'test_parsebench_html_runtime_pins.py'`;
+they require five collected tests and no skips. Their unchanged-source positive control reaches the subprocess
+boundary exactly once; changed-source controls reach it zero times without extracting a document.
+
+Plans created before source pinning remain readable for artifact audits, but `run` rejects them with an explicit
+refreeze error. Preserve those plans and results. Create a new plan and output directory under the current
+harness; do not add pins to an old frozen plan or relabel its historical run as source-protected.
+
 The runner rehashes the scheduled PDF, oracle, runtime model paths, dependency lock, and evaluator source files before/after extraction and after scoring. Finalization revalidates the entire corpus and plan, records final integrity explicitly, and fails if anything changed. Repeated hashing adds harness overhead; report native extraction latency from the saved CLI envelope separately from total sweep duration. These boundary checks detect ordinary concurrent mutation; they are not a claim of adversarial atomic isolation.
 
 ```sh

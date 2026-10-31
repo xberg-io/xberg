@@ -13,16 +13,32 @@ from official import evaluate
 from parse_bench.evaluation.evaluators import parse as upstream_parse
 from safeguards import (
     metric_applicability,
+    runtime_source_pins,
     snapshot,
     validate_build,
     validate_diagnostics,
     validate_invocation,
     verify_bound_files,
+    verify_runtime_source_pins,
 )
 
 
 def _write(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _runtime_imports() -> list[str]:
+    return [
+        __file__,
+        read_stage.__code__.co_filename,
+        evaluate.__code__.co_filename,
+        validate_diagnostics.__code__.co_filename,
+        verify_runtime_source_pins.__code__.co_filename,
+    ]
+
+
+def _verify_runtime_sources(pins: dict | None) -> None:
+    verify_runtime_source_pins(Path(__file__).resolve().parent, pins, _runtime_imports())
 
 
 def _freeze_environment(binary: dict, assets: Path, role: str) -> None:
@@ -89,6 +105,7 @@ def _freeze_binary(binary: dict, assets: Path, role: str) -> None:
 
 def freeze(root: Path, specification: Path, destination: Path) -> None:
     """Bind every invocation to immutable inputs before native extraction."""
+    pins = runtime_source_pins(Path(__file__).resolve().parent, _runtime_imports())
     stage = read_stage(root)
     spec = json.loads(specification.read_text(encoding="utf-8"))
     if destination.exists():
@@ -120,15 +137,18 @@ def freeze(root: Path, specification: Path, destination: Path) -> None:
         requirements_lock=str(lock),
         requirements_sha256=sha256(lock),
     )
+    spec["runtime_sources"] = pins
     spec["stage_sha256"] = sha256(root / "stage.json")
     spec["cases"] = schedule(stage["records"], list(ROLES), list(ARMS))
     if len(spec["cases"]) != 3018:
         raise ValueError("expected exactly 3018 cases")
+    _verify_runtime_sources(pins)
     _write(destination, spec)
     destination.chmod(0o444)
 
 
 def _verify_plan(root: Path, plan: dict) -> dict:
+    _verify_runtime_sources(plan.get("runtime_sources"))
     if not Path(upstream_parse.__file__).resolve().is_relative_to(Path(plan["evaluator_root"])):
         raise ValueError("imported evaluator does not match frozen checkout")
     if sha256(root / "stage.json") != plan["stage_sha256"]:
@@ -167,6 +187,7 @@ def _verify_producer(binary: dict) -> None:
 
 
 def _verify_case_assets(root: Path, record: dict, plan: dict) -> None:
+    _verify_runtime_sources(plan.get("runtime_sources"))
     verified_file(root, record["pdf"])
     verified_file(root, record["oracle"])
     assets = [*plan["models"], {"file": plan["requirements_lock"], "sha256": plan["requirements_sha256"]}]
@@ -177,7 +198,16 @@ def _verify_case_assets(root: Path, record: dict, plan: dict) -> None:
     verify_bound_files(assets)
 
 
-def _invoke(root: Path, record: dict, binary: dict, arm: str, output: Path, *, timeout: float) -> str:
+def _invoke(
+    root: Path,
+    record: dict,
+    binary: dict,
+    arm: str,
+    output: Path,
+    *,
+    timeout: float,
+    runtime_sources: dict | None = None,
+) -> str:
     _verify_producer(binary)
     invocation = binary["arms"][arm]
     with tempfile.TemporaryDirectory(prefix="parsebench-cache-") as temporary:
@@ -191,6 +221,8 @@ def _invoke(root: Path, record: dict, binary: dict, arm: str, output: Path, *, t
         environment.update(binary["environment"])
         environment.update(XDG_CACHE_HOME=temporary, XBERG_CACHE_DIR=temporary, TMPDIR=temporary)
         environment["LLAMACLOUD_BENCH_LLM_NORMALIZATION"] = "off"
+        if runtime_sources is not None:
+            _verify_runtime_sources(runtime_sources)
         try:
             completed = subprocess.run(argv, capture_output=True, timeout=timeout, env=environment, check=False)
         finally:
@@ -230,7 +262,13 @@ def run(root: Path, plan_path: Path, output: Path, timeout: float) -> None:
         try:
             _verify_case_assets(root, records[case["record_id"]], plan)
             prediction = _invoke(
-                root, records[case["record_id"]], plan[case["role"]], case["arm"], destination, timeout=timeout
+                root,
+                records[case["record_id"]],
+                plan[case["role"]],
+                case["arm"],
+                destination,
+                timeout=timeout,
+                runtime_sources=plan["runtime_sources"],
             )
             _verify_case_assets(root, records[case["record_id"]], plan)
             row["prediction"] = {
