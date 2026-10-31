@@ -38,6 +38,7 @@ fn assert_names_the_limit(message: &str) {
         message.contains(&format!("max_content_size ({BUDGET} bytes)")),
         "{message}"
     );
+    assert!(message.contains("Raise security_limits.max_content_size"), "{message}");
     let required: usize = message
         .split(" require ")
         .nth(1)
@@ -51,14 +52,22 @@ fn assert_names_the_limit(message: &str) {
 }
 
 #[test]
-fn progressive_jpeg_reports_the_size_limit() {
+fn progressive_jpeg_reports_the_size_limit_and_the_progressive_reason() {
     let message = message(&jpeg_with_frame_marker(0xc2));
     assert_names_the_limit(&message);
+    assert!(
+        message.contains("a progressive JPEG keeps full-resolution coefficients"),
+        "{message}"
+    );
     assert!(!message.contains("frame"), "{message}");
 }
 
 #[test]
-fn lossless_jpeg_reports_the_size_limit() {
+fn lossless_jpeg_reports_the_size_limit_and_the_lossless_reason() {
     let message = message(&jpeg_with_frame_marker(0xc3));
     assert_names_the_limit(&message);
+    assert!(
+        message.contains("lossless or arithmetic-coded JPEG cannot be decoded at a reduced size"),
+        "{message}"
+    );
 }

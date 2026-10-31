@@ -82,16 +82,26 @@ fn decode_if_needed(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<Deco
     if full_peak <= maximum {
         return Ok(None);
     }
-    let too_large = || image_dimension_error(frame.width, frame.height, full_peak, maximum);
-    if frame.process == Process::Other || !matches!(frame.sampling.len(), 1 | 3) {
-        return Err(too_large());
+    let reject = |reason: &str| reduced_decode_error(&frame, full_peak, maximum, reason);
+    match (frame.process, frame.sampling.len()) {
+        (Process::Other, _) => {
+            return Err(reject(
+                "a lossless or arithmetic-coded JPEG cannot be decoded at a reduced size",
+            ));
+        }
+        (_, 1 | 3) => {}
+        _ => return Err(reject("a CMYK JPEG cannot be decoded at a reduced size")),
     }
     let Some(scale) = DENOMINATORS
         .iter()
         .map(|&denominator| reduced_scale(&frame, denominator))
         .find(|&scale| reduced_peak(&frame, scale, encoded).is_some_and(|peak| peak <= maximum))
     else {
-        return Err(too_large());
+        return Err(reject(if frame.process == Process::Progressive {
+            "a progressive JPEG keeps full-resolution coefficients, so even a 1/8 reduced decode does not fit"
+        } else {
+            "even a 1/8 reduced decode does not fit"
+        }));
     };
     decode(bytes, &frame, scale).map(Some)
 }
@@ -162,7 +172,7 @@ fn decode(bytes: &[u8], frame: &Frame, scale: ReducedScale) -> Result<DecodedOcr
         |error: jpeg_decoder::Error| XbergError::parsing(format!("The JPEG image could not be decoded: {error}"));
     let mut decoder = jpeg_decoder::Decoder::new(bytes);
     let requested = |value: u32| {
-        u16::try_from(value).map_err(|_| image_dimension_error(frame.width, frame.height, u64::MAX, u64::MAX))
+        u16::try_from(value).map_err(|_| reduced_decode_error(frame, u64::MAX, u64::MAX, "the JPEG is too large"))
     };
     let actual = decoder
         .scale(requested(scale.width)?, requested(scale.height)?)
@@ -189,6 +199,14 @@ fn decode(bytes: &[u8], frame: &Frame, scale: ReducedScale) -> Result<DecodedOcr
         original_height: frame.height,
         scale_denominator: scale.denominator,
     })
+}
+
+fn reduced_decode_error(frame: &Frame, full_peak: u64, maximum: u64, reason: &str) -> XbergError {
+    let base = image_dimension_error(frame.width, frame.height, full_peak, maximum);
+    XbergError::Validation {
+        message: format!("{base}; {reason}. Raise security_limits.max_content_size to OCR this image"),
+        source: None,
+    }
 }
 
 /// Read the frame header (dimensions, coding process, sampling factors). `None` when the
