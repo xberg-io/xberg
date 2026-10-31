@@ -7911,6 +7911,7 @@ mod han_second_pass_tests {
     struct CountingBackend {
         calls: AtomicUsize,
         languages: std::sync::Mutex<Vec<String>>,
+        retry: ExtractedDocument,
     }
 
     #[async_trait::async_trait]
@@ -7924,10 +7925,7 @@ mod han_second_pass_tests {
         async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             *self.languages.lock().unwrap() = config.language.clone();
-            Ok(ExtractedDocument {
-                content: "second pass".to_string(),
-                ..Default::default()
-            })
+            Ok(self.retry.clone())
         }
     }
 
@@ -7946,38 +7944,62 @@ mod han_second_pass_tests {
         }
     }
 
-    fn first_pass(mean_confidence: f64) -> ExtractedDocument {
-        let mut document = ExtractedDocument::default();
-        document
-            .metadata
-            .additional
-            .insert("mean_text_conf".into(), serde_json::json!(mean_confidence));
+    /// An OCR result with `content` and Tesseract's mean confidence, when it reported one.
+    fn ocr_result(content: &str, mean_confidence: Option<f64>) -> ExtractedDocument {
+        let mut document = ExtractedDocument {
+            content: content.to_string(),
+            ..Default::default()
+        };
+        if let Some(mean) = mean_confidence {
+            document
+                .metadata
+                .additional
+                .insert("mean_text_conf".into(), serde_json::json!(mean));
+        }
         document
     }
 
+    /// Latin noise of the kind the English model reads from a Chinese page.
+    const LATIN_NOISE: &str = "Hi BE AF tH Ee FA oe ii BI AE Hl Ze";
+    /// Four Chinese sentences, the kind the second pass reads from the same page.
+    const HAN_SENTENCES: &str = "今天天气很好。我们去公园散步。河边的树很高。孩子们在草地上玩。";
+
+    fn first_pass(mean_confidence: f64) -> ExtractedDocument {
+        ocr_result(LATIN_NOISE, Some(mean_confidence))
+    }
+
     /// Run the second pass with a detection that answers `page_is_han` and counts its calls.
+    /// The backend answers every call with `retry`.
     /// Returns the outcome, the calls of the backend, and the calls of the detection.
-    async fn run(mean_confidence: f64, page_is_han: bool) -> (HanSecondPass, Arc<CountingBackend>, usize) {
+    async fn run_with(
+        first: ExtractedDocument,
+        retry: ExtractedDocument,
+        page_is_han: bool,
+    ) -> (HanSecondPass, Arc<CountingBackend>, usize) {
         let counting = Arc::new(CountingBackend {
             calls: AtomicUsize::new(0),
             languages: std::sync::Mutex::new(Vec::new()),
+            retry,
         });
         let backend: Arc<dyn OcrBackend> = counting.clone();
         let detections = Arc::new(AtomicUsize::new(0));
         let seen = Arc::clone(&detections);
-        let outcome = read_again_as_han_where(
-            &backend,
-            &Arc::new(vec![1]),
-            &OcrConfig::default(),
-            &first_pass(mean_confidence),
-            move |_| {
-                seen.fetch_add(1, Ordering::SeqCst);
-                page_is_han
-            },
-        )
+        let outcome = read_again_as_han_where(&backend, &Arc::new(vec![1]), &OcrConfig::default(), &first, move |_| {
+            seen.fetch_add(1, Ordering::SeqCst);
+            page_is_han
+        })
         .await
         .expect("the second pass does not error");
         (outcome, counting, detections.load(Ordering::SeqCst))
+    }
+
+    async fn run(mean_confidence: f64, page_is_han: bool) -> (HanSecondPass, Arc<CountingBackend>, usize) {
+        run_with(
+            first_pass(mean_confidence),
+            ocr_result(HAN_SENTENCES, Some(88.0)),
+            page_is_han,
+        )
+        .await
     }
 
     #[tokio::test]
@@ -8003,5 +8025,34 @@ mod han_second_pass_tests {
         assert_eq!(detections, 1);
         assert_eq!(backend.calls.load(Ordering::SeqCst), 1);
         assert_eq!(*backend.languages.lock().unwrap(), ["eng", "chi_sim"]);
+    }
+
+    /// The retry is read and nonempty, but Tesseract is less sure of it than of the first pass.
+    #[tokio::test]
+    async fn a_nonempty_retry_with_lower_confidence_keeps_the_first_pass() {
+        let (outcome, backend, _) = run_with(first_pass(40.0), ocr_result(HAN_SENTENCES, Some(25.0)), true).await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(
+            matches!(outcome, HanSecondPass::Kept),
+            "a retry that reads worse must not replace the first pass"
+        );
+    }
+
+    /// The retry is confident but holds only a fragment of the page.
+    #[tokio::test]
+    async fn a_truncated_retry_keeps_the_first_pass() {
+        let (outcome, backend, _) = run_with(first_pass(40.0), ocr_result("今天", Some(92.0)), true).await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(
+            matches!(outcome, HanSecondPass::Kept),
+            "a confident fragment must not replace a whole first pass"
+        );
+    }
+
+    /// A retry with no confidence cannot be compared, so the first pass stands.
+    #[tokio::test]
+    async fn a_retry_without_confidence_keeps_the_first_pass() {
+        let (outcome, _, _) = run_with(first_pass(40.0), ocr_result(HAN_SENTENCES, None), true).await;
+        assert!(matches!(outcome, HanSecondPass::Kept));
     }
 }
