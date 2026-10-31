@@ -3991,6 +3991,17 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # Only the mise config, so setup-mise installs the locked Ruby. ~keep
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            mise.toml
+            mise*.lock
+            mise-tasks
+
       - uses: actions/download-artifact@v8
         with:
           pattern: rubygems-*
@@ -3999,7 +4010,6 @@ jobs:
       - uses: xberg-io/actions/setup-mise@v1
         with:
           tools: ruby
-          config-ref: ${{ github.sha }}
 
       - name: Update RubyGems for OIDC trusted publishing
         run: gem update --system
