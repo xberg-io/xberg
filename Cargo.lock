@@ -6509,6 +6509,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
+name = "oxiarc-core"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7105e98c1e12eb2d8a4e003419455b13747f5b31d02740f451f5413491d1cf84"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "oxiarc-jpeg"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ced146f375e36f693f120ad867f554b29ad826cf72b42a509c7d653de830a219"
+dependencies = [
+ "oxiarc-core",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "page_size"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11540,6 +11559,7 @@ dependencies = [
  "org",
  "ort",
  "outlook-pst",
+ "oxiarc-jpeg",
  "parking_lot",
  "pastey 0.2.3",
  "prometheus",

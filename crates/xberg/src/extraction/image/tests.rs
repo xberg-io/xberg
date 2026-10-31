@@ -5,6 +5,14 @@
 #[path = "tests/tagged_tiff_source_dpi_tests.rs"]
 mod tagged_tiff_source_dpi_tests;
 
+#[cfg(feature = "ocr")]
+#[path = "tests/bounded_ocr_jpeg_tests.rs"]
+mod bounded_ocr_jpeg_tests;
+
+#[cfg(feature = "ocr")]
+#[path = "tests/bounded_ocr_jpeg_guard_tests.rs"]
+mod bounded_ocr_jpeg_guard_tests;
+
 use super::*;
 use image::{ImageBuffer, ImageFormat, Rgb, RgbImage};
 use std::io::Cursor;

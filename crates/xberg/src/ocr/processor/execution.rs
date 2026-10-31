@@ -966,6 +966,74 @@ const RGB_CHANNEL_MAX: f64 = u8::MAX as f64;
 /// Number of channels in an RGB pixel.
 const RGB_CHANNEL_COUNT: usize = 3;
 
+#[cfg(test)]
+mod reduced_jpeg_dpi_tests;
+
+fn prepare_encoded_ocr_image(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    config: &TesseractConfig,
+    images: Option<&crate::core::config::ImageExtractionConfig>,
+    ci_debug_enabled: bool,
+) -> crate::Result<PreparedOcrImage> {
+    let decoded = crate::extraction::image::load_image_for_ocr_with_scale(bytes, limits)?;
+    let dpi = resolve_known_source_dpi(
+        config.source_dpi,
+        bytes,
+        decoded.original_width,
+        decoded.original_height,
+    )
+    .map(|dpi| dpi / f64::from(decoded.scale_denominator));
+    let (width, height) = decoded.image.dimensions();
+    log_ci_debug(ci_debug_enabled, "image", || {
+        format!("dimensions={width}x{height} color_type=RGB8")
+    });
+    if decoded.scale_denominator != 1 {
+        validate_reduced_image_normalization(&decoded.image, config, images, dpi, limits)?;
+    }
+    Ok(prepare_ocr_image(
+        decoded.image.into_raw(),
+        width,
+        height,
+        config.preprocessing.as_ref(),
+        images,
+        ci_debug_enabled,
+        dpi,
+        config.known_full_page_scan,
+    ))
+}
+
+fn validate_reduced_image_normalization(
+    image: &image::RgbImage,
+    config: &TesseractConfig,
+    images: Option<&crate::core::config::ImageExtractionConfig>,
+    dpi: Option<f64>,
+    limits: &SecurityLimits,
+) -> crate::Result<()> {
+    let (width, height) = image.dimensions();
+    if config.preprocessing.is_none()
+        && !config.known_full_page_scan
+        && !should_apply_default_preprocessing(image.as_raw(), width, height)
+    {
+        return Ok(());
+    }
+    let preprocessing = config.preprocessing.clone().unwrap_or_default();
+    let dpi_config = crate::types::ImageDpiConfig {
+        target_dpi: preprocessing.target_dpi,
+        ..images.map(Into::into).unwrap_or_default()
+    };
+    // The decoder budget does not cover convolution scratch. Keep the existing DPI policy,
+    // but reject a required resize before it can allocate outside the admitted buffers. ~keep
+    if dpi.is_none_or(|dpi| crate::image::preprocessing::normalization_requires_resize(width, height, &dpi_config, dpi))
+    {
+        return Err(crate::XbergError::validation(format!(
+            "Reduced JPEG DPI normalization requires unbudgeted resize buffers under security_limits.max_content_size {}",
+            limits.max_content_size,
+        )));
+    }
+    Ok(())
+}
+
 struct PreparedOcrImage {
     data: Vec<u8>,
     width: u32,
@@ -1814,30 +1882,10 @@ pub(super) fn perform_ocr(
     });
 
     let security_limits = security_limits_for_ocr(config, extraction_config);
-    let rgb_image = {
-        let img = crate::extraction::image::load_image_for_ocr(image_bytes, &security_limits)
-            .map_err(|e| OcrError::ImageProcessingFailed(e.to_string()))?;
-        img.into_rgb8()
-    };
-    let (orig_width, orig_height) = rgb_image.dimensions();
-    let rgb_data = rgb_image.into_raw();
-
-    log_ci_debug(ci_debug_enabled, "image", || {
-        format!("dimensions={}x{} color_type=RGB8", orig_width, orig_height)
-    });
-
     let images_config = extraction_config.and_then(|extraction_config| extraction_config.images.as_ref());
-    let known_source_dpi = resolve_known_source_dpi(config.source_dpi, image_bytes, orig_width, orig_height);
-    let prepared_image = prepare_ocr_image(
-        rgb_data,
-        orig_width,
-        orig_height,
-        config.preprocessing.as_ref(),
-        images_config,
-        ci_debug_enabled,
-        known_source_dpi,
-        config.known_full_page_scan,
-    );
+    let prepared_image =
+        prepare_encoded_ocr_image(image_bytes, &security_limits, config, images_config, ci_debug_enabled)
+            .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut image_data = prepared_image.data;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
