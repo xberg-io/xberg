@@ -129,15 +129,7 @@ fn valid_owners<'a>(segments: &[&SegmentData], evidence: &'a NativeSegmentEviden
         .collect()
 }
 
-fn plan_native_order(
-    segments: &[&SegmentData],
-    evidence: &NativeSegmentEvidence,
-) -> (Vec<usize>, Vec<SegmentScriptOwner>) {
-    let records = segments.iter().copied().enumerate().collect();
-    let ordered: Vec<_> = super::order_segment_records(records, |record| record.1)
-        .into_iter()
-        .map(|(index, _)| index)
-        .collect();
+fn accepted_owners<'a>(segments: &[&SegmentData], evidence: &'a NativeSegmentEvidence) -> Vec<&'a SegmentScriptOwner> {
     let owners = valid_owners(segments, evidence);
     let scripts: std::collections::HashSet<_> = owners.iter().map(|owner| owner.script_index).collect();
     let mut script_counts = std::collections::HashMap::new();
@@ -146,9 +138,27 @@ fn plan_native_order(
     }
     // A nested script chain needs a stronger ownership representation. Keep its
     // original order instead of claiming a partially supported attachment. ~keep
-    let owners: Vec<_> = owners
+    owners
         .into_iter()
         .filter(|owner| !scripts.contains(&owner.base_index) && script_counts[&owner.script_index] == 1)
+        .collect()
+}
+
+fn plan_native_order(
+    segments: &[&SegmentData],
+    evidence: &NativeSegmentEvidence,
+) -> (Vec<usize>, Vec<SegmentScriptOwner>) {
+    plan_native_order_with_owners(segments, accepted_owners(segments, evidence))
+}
+
+fn plan_native_order_with_owners(
+    segments: &[&SegmentData],
+    owners: Vec<&SegmentScriptOwner>,
+) -> (Vec<usize>, Vec<SegmentScriptOwner>) {
+    let records = segments.iter().copied().enumerate().collect();
+    let ordered: Vec<_> = super::order_segment_records(records, |record| record.1)
+        .into_iter()
+        .map(|(index, _)| index)
         .collect();
     let order = place_suffixes_after_owners(&ordered, &owners);
     if order.len() != segments.len()
@@ -194,7 +204,14 @@ pub(super) fn reconstruct_native_lines(
     segments: &[&SegmentData],
     evidence: &NativeSegmentEvidence,
 ) -> Vec<crate::pdf::structure::types::PdfLine> {
-    let (order, owners) = plan_native_order(segments, evidence);
+    let owners = accepted_owners(segments, evidence);
+    if owners.is_empty() {
+        return super::reconstruct_pdf_lines(segments);
+    }
+    let (order, owners) = plan_native_order_with_owners(segments, owners);
+    if owners.is_empty() {
+        return super::reconstruct_pdf_lines(segments);
+    }
     let ordered: Vec<_> = order.iter().map(|&index| segments[index]).collect();
     let by_script: std::collections::HashMap<_, _> =
         owners.into_iter().map(|owner| (owner.script_index, owner)).collect();
