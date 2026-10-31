@@ -456,6 +456,77 @@ fn test_extract_type0_multibyte_character_extraction() {
     assert_eq!(chars[1].char, '文');
 }
 
+/// A Type0 font whose ToUnicode CMap covers only some codes: the glyphs without a Unicode
+/// value stay in the span text as U+FFFD, so the OCR routing gates can count them.
+#[test]
+fn type0_glyphs_without_unicode_keep_a_replacement_character() {
+    let mut extractor = TextExtractor::new();
+    let mut font = create_test_font();
+    font.subtype = "Type0".to_string();
+    font.encoding = Encoding::Identity;
+    font.to_unicode = Some(LazyCMap::new(type0_partial_to_unicode()));
+    extractor.add_font("F1".to_string(), font);
+
+    let stream = b"BT /F1 12 Tf 0 0 Td <004100420043> Tj ET";
+    let spans = extractor.extract_text_spans(stream).unwrap();
+    let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+
+    assert_eq!(text, "A\u{FFFD}\u{FFFD}");
+}
+
+/// A ToUnicode target that is a bare control character is the same loss as a missing entry.
+#[test]
+fn type0_nul_to_unicode_target_keeps_a_replacement_character() {
+    let mut extractor = TextExtractor::new();
+    let mut font = create_test_font();
+    font.subtype = "Type0".to_string();
+    font.encoding = Encoding::Identity;
+    font.to_unicode = Some(LazyCMap::new(type0_partial_to_unicode()));
+    extractor.add_font("F1".to_string(), font);
+
+    let stream = b"BT /F1 12 Tf 0 0 Td <0044> Tj ET";
+    let spans = extractor.extract_text_spans(stream).unwrap();
+    let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+
+    assert_eq!(text, "\u{FFFD}");
+}
+
+/// Control: a simple font keeps dropping a glyph that maps to NUL, so only Type0 text changes.
+#[test]
+fn simple_font_unmapped_glyph_is_still_dropped() {
+    let mut extractor = TextExtractor::new();
+    let mut font = create_test_font();
+    font.encoding = Encoding::Custom(HashMap::new());
+    font.to_unicode = Some(LazyCMap::new(type0_partial_to_unicode()));
+    extractor.add_font("F1".to_string(), font);
+
+    let stream = b"BT /F1 12 Tf 0 0 Td <44> Tj ET";
+    let spans = extractor.extract_text_spans(stream).unwrap();
+    let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+
+    assert_eq!(text, "", "simple font text changed");
+}
+
+/// ToUnicode CMap: code 0x0041 maps to "A", code 0x0044 maps to NUL, other codes have no entry.
+fn type0_partial_to_unicode() -> Vec<u8> {
+    b"
+        /CIDInit /ProcSet findresource begin
+        12 dict begin
+        begincmap
+        /CMapName /Test-UCS def
+        /CMapType 2 def
+        1 begincodespacerange <0000> <FFFF> endcodespacerange
+        2 beginbfchar
+        <0041> <0041>
+        <0044> <0000>
+        endbfchar
+        endcmap
+        end
+        end
+    "
+    .to_vec()
+}
+
 #[test]
 fn test_extract_color() {
     let mut extractor = TextExtractor::new();

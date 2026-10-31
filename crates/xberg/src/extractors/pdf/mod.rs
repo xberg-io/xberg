@@ -18,6 +18,7 @@ pub(crate) mod reading_order;
 mod region_vlm;
 #[cfg(feature = "pdf")]
 pub(crate) mod rotation;
+mod unmapped_glyphs;
 
 use crate::Result;
 use crate::core::config::ExtractionConfig;
@@ -213,10 +214,10 @@ fn enforce_page_limit(content: &[u8], config: &ExtractionConfig) -> Result<()> {
 /// propagates the identical error with `?`.
 ///
 /// Whitespace-only counts as nothing: a document yielding `"\n\n  "` is as total a loss as `""`.
-/// ~keep
+/// So does text of only U+FFFD: it is the same predicate that sends the page to OCR. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
-    native_text.trim().is_empty()
+    native_text_holds_no_content(native_text)
 }
 
 #[cfg(feature = "ocr-pipeline")]
@@ -869,6 +870,14 @@ fn scanned_page_quality_gate_enabled(config: &ExtractionConfig) -> bool {
         .unwrap_or(config.ocr.is_some())
 }
 
+/// True when the native text is blank or holds only U+FFFD. The extractor keeps one U+FFFD for
+/// each Type0 glyph without a Unicode value, so a page that lost every glyph reads as U+FFFD
+/// and must count as absent text. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn native_text_holds_no_content(native_text: &str) -> bool {
+    native_text.chars().all(|c| c.is_whitespace() || c == '\u{FFFD}')
+}
+
 /// Whether the `Auto` near-empty fallback branch runs for this document.
 ///
 /// `ExtractionConfig::ocr_near_empty_fallback` is the caller's explicit answer:
@@ -886,7 +895,9 @@ fn near_empty_ocr_fallback_applies(config: &ExtractionConfig, native_text: &str)
     match config.ocr_near_empty_fallback {
         Some(false) => false,
         Some(true) => config.ocr.is_some() || automatic_ocr_backend_is_registered(),
-        None => config.ocr.is_some() || (native_text.trim().is_empty() && automatic_ocr_backend_is_registered()),
+        None => {
+            config.ocr.is_some() || (native_text_holds_no_content(native_text) && automatic_ocr_backend_is_registered())
+        }
     }
 }
 
@@ -2731,7 +2742,7 @@ impl PdfExtractor {
             mut tables,
             mut page_contents,
             mut boundaries,
-            pre_rendered_doc,
+            mut pre_rendered_doc,
             _has_font_encoding_issues,
             annotation_text_fallback,
             pdf_annotations,
@@ -3398,6 +3409,19 @@ impl PdfExtractor {
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
         let (mut text, extraction_method) = (native_text, ExtractionMethod::Native);
 
+        // The routing gates above have read the lost-glyph markers. Pages that stay native must not
+        // show them, so remove them from every native structure before any later step reads it.
+        // The text itself, which carries byte offsets, follows once its page boundaries are known. ~keep
+        for page in page_contents.iter_mut().flatten() {
+            unmapped_glyphs::strip_page(page);
+        }
+        for table in &mut tables {
+            unmapped_glyphs::strip_table(table);
+        }
+        if let Some(native_doc) = pre_rendered_doc.as_mut() {
+            unmapped_glyphs::strip_document(native_doc);
+        }
+
         #[cfg(all(
             feature = "pdf",
             feature = "layout-detection",
@@ -3524,7 +3548,7 @@ impl PdfExtractor {
         // already shifted every later offset, so re-map before handing them to the document
         // selector or page tagging would attribute content to the wrong page. ~keep
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let selector_boundaries = if annotation_fallback_applied {
+        let mut selector_boundaries = if annotation_fallback_applied {
             boundaries.clone()
         } else {
             boundaries_for_ocr_output(
@@ -3535,9 +3559,32 @@ impl PdfExtractor {
                 ocr_page_texts.as_deref(),
             )
         };
+        // OCR text replaces the native text on a fully OCR-read document; any other text is native.
+        let lost_glyphs = if extraction_method == ExtractionMethod::Ocr {
+            0
+        } else {
+            #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+            let page_boundaries = selector_boundaries.as_mut();
+            #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
+            let page_boundaries = boundaries.as_mut();
+            #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+            let ocr_pages: Vec<u32> = ocr_results_map
+                .iter()
+                .flat_map(|replaced| replaced.keys().copied())
+                .collect();
+            #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
+            let ocr_pages: Vec<u32> = Vec::new();
+            unmapped_glyphs::strip_text(&mut text, page_boundaries, &ocr_pages)
+        };
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if let Some(ref mut page_structure) = pdf_metadata.page_structure {
             page_structure.boundaries = selector_boundaries.clone();
+        }
+        #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
+        if lost_glyphs > 0
+            && let Some(ref mut page_structure) = pdf_metadata.page_structure
+        {
+            page_structure.boundaries = boundaries.clone();
         }
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let (mut doc, document_origin, document_is_structured) = select_pdf_document(
@@ -3583,6 +3630,9 @@ impl PdfExtractor {
         );
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         doc.ocr_page_failures.append(&mut ocr_page_failures);
+        if let Some(warning) = unmapped_glyphs::lost_glyph_warning(lost_glyphs, config) {
+            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
+        }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         crate::core::diagnostics::dedup_extend_warnings(
@@ -6970,6 +7020,10 @@ mod tests {
             failed_ocr_fallback_is_total_loss("\n\n  \t "),
             "whitespace-only native text is as total a loss as none: it carries no content"
         );
+        assert!(
+            failed_ocr_fallback_is_total_loss("\u{FFFD}\u{FFFD} \u{FFFD}"),
+            "text of only lost-glyph markers carries no content either"
+        );
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -7556,6 +7610,66 @@ mod tests {
             automatic_ocr_backend_is_registered(),
             "without a block, genuinely absent native text reaches OCR iff a backend is registered"
         );
+    }
+
+    /// Text made only of U+FFFD holds no content: every glyph of the page lost its Unicode value.
+    /// Without an `ocr` block the fallback must treat it like empty text, or a page that is
+    /// fully undecodable stops reaching OCR once the extractor keeps the U+FFFD. A page with
+    /// real text beside the U+FFFD stays native.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    #[serial_test::serial]
+    fn near_empty_fallback_treats_undecodable_only_text_as_absent_text() {
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+        use std::sync::Arc;
+
+        struct StandInBackend(String);
+        impl Plugin for StandInBackend {
+            fn name(&self) -> &str {
+                &self.0
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+        #[async_trait::async_trait]
+        impl OcrBackend for StandInBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(
+                &self,
+                _: &[u8],
+                _: &crate::core::config::OcrConfig,
+            ) -> crate::Result<crate::types::ExtractedDocument> {
+                Ok(crate::types::ExtractedDocument::default())
+            }
+        }
+
+        let name = crate::core::config::OcrConfig::default().backend;
+        let registered_here = !automatic_ocr_backend_is_registered()
+            && crate::plugins::register_ocr_backend(Arc::new(StandInBackend(name.clone()))).is_ok();
+        let without_block = ExtractionConfig::default();
+
+        let lost = near_empty_ocr_fallback_applies(&without_block, "\u{FFFD}\u{FFFD} \n\u{FFFD}");
+        let mixed = near_empty_ocr_fallback_applies(&without_block, "A real word \u{FFFD}");
+        let backend_present = automatic_ocr_backend_is_registered();
+        if registered_here {
+            crate::plugins::unregister_ocr_backend(&name).unwrap();
+        }
+
+        assert!(backend_present, "the test needs an automatic backend to be registered");
+        assert!(lost, "text of only U+FFFD reaches OCR like empty text");
+        assert!(!mixed, "text with real words beside U+FFFD stays native");
     }
 
     /// Switched on, the fallback stops requiring *completely* empty text -- that is the whole

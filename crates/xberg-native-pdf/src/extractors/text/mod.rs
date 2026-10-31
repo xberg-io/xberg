@@ -2039,7 +2039,9 @@ impl TjBuffer {
             bytes,
             font,
             DecodePolicy {
-                preserve_unmapped: preserve_unmapped_glyphs(),
+                // A Type0 glyph with no Unicode value stays as U+FFFD, so the routing gates
+                // that count U+FFFD see the loss. A simple font keeps its historical drop. ~keep
+                preserve_unmapped: preserve_unmapped_glyphs() || font.is_some_and(|f| f.subtype == "Type0"),
                 decompose_ligatures: false,
                 question_mark_for_invalid: true,
             },

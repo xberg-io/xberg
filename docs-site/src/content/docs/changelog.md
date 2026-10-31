@@ -131,6 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Route pages with Type 0 glyphs that have no Unicode value to OCR.**
+  The extractor now counts each such glyph, so the OCR fallback sees the loss instead of a clean page of surviving characters. A page that stays native shows no replacement character, and a replacement character in OCR output stays. A document that still lacks glyphs after extraction carries a warning. The warning names the `ocr` setting when the caller has not set it. (#2299, #2309)
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
 
