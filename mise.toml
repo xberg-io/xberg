@@ -36,6 +36,7 @@ cargo-deny = "0.20.2"
 "github:taiki-e/cargo-llvm-cov" = "0.9.1"
 bats = "1.14.0"
 lychee = "0.24.2"
+helm = "4.3.1"
 "github:rustwasm/wasm-pack" = "0.15.0"
 
 [env]
