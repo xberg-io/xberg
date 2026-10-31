@@ -4,7 +4,7 @@
 
 #![cfg(feature = "archives")]
 
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Read, Write};
 use xberg::core::config::ExtractionConfig;
 use xberg::{ExtractedDocument, FormatMetadata, SecurityLimits};
 use zip::ZipArchive;
@@ -175,9 +175,14 @@ async fn should_preserve_healthy_members_when_a_compression_method_is_unsupporte
         bytes[offset..offset + 2].copy_from_slice(&u16::MAX.to_le_bytes());
     }
     let mut archive = ZipArchive::new(Cursor::new(&bytes)).expect("valid fixture archive");
+    let mut member = archive.by_name("secret.txt").expect("ZIP opens the lazy member reader");
+    let error = member
+        .read_to_end(&mut Vec::new())
+        .expect_err("unsupported compression must fail when the member is read");
+    assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
     assert!(matches!(
-        archive.by_name("secret.txt"),
-        Err(ZipError::CompressionMethodNotSupported(u16::MAX))
+        error.get_ref().and_then(|error| error.downcast_ref::<ZipError>()),
+        Some(ZipError::CompressionMethodNotSupported(u16::MAX))
     ));
 
     let result = extract_bytes_document(&bytes, "application/zip", &ExtractionConfig::default())
