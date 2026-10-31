@@ -45,6 +45,7 @@ def checks_out_main_source(step: dict[str, object]) -> bool:
 
 # Workflows that queue a new run behind the running one instead of cancelling it.
 QUEUED_WORKFLOWS = {
+    "ci-docs": "a cancelled run can abandon a GitHub Pages deployment partway",
     "ci-gpu": "a dispatch-only multi-job GPU run is too expensive to cancel mid-flight",
 }
 
