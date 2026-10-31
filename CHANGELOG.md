@@ -131,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep split fractional and compound superscripts attached as complete native runs.** (#2275)
   Preserve each glyph witness and discard the whole ownership proof if any run member is filtered or changed.
+  Match complete numeric note labels and retain whole script ranges across independent italic and bold styles.
 
 - **(pdf): Preserve word boundaries when rebuilding fragmented native text.** (#2275)
   Reuse the established inline gap policy while preserving source whitespace and numeric script boundaries.

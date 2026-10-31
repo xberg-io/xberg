@@ -1019,6 +1019,50 @@ fn resolved_script_kind(
         .or_else(|| segment_script_kind(segments, index))
 }
 
+fn same_native_run(
+    native: &std::collections::HashMap<usize, NativeScriptLocation<'_>>,
+    previous: usize,
+    next: usize,
+) -> bool {
+    match (native.get(&previous), native.get(&next)) {
+        (Some(left), Some(right)) => left.owner.shares_run_with(right.owner),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn append_script_annotation(
+    annotations: &mut Vec<TextAnnotation>,
+    kind: AnnotationKind,
+    bytes: std::ops::Range<usize>,
+    segments: std::ops::Range<usize>,
+    native: &std::collections::HashMap<usize, NativeScriptLocation<'_>>,
+    previous: Option<(usize, usize)>,
+) -> Option<(usize, usize)> {
+    let preceding = previous.and_then(|(segment, index)| {
+        let annotation = annotations.get(index)?;
+        (segment + 1 == segments.start
+            && native.contains_key(&segment)
+            && same_native_run(native, segment, segments.start)
+            && annotation.end as usize == bytes.start
+            && annotation.kind == kind)
+            .then_some(index)
+    });
+    let index = if let Some(index) = preceding {
+        annotations[index].end = bytes.end as u32;
+        index
+    } else {
+        let index = annotations.len();
+        annotations.push(TextAnnotation {
+            start: bytes.start as u32,
+            end: bytes.end as u32,
+            kind,
+        });
+        index
+    };
+    native.get(&(segments.end - 1)).map(|_| (segments.end - 1, index))
+}
+
 fn native_annotated_segments_need_space(
     segments: &[&crate::pdf::hierarchy::SegmentData],
     previous_index: usize,
@@ -1032,6 +1076,7 @@ fn native_annotated_segments_need_space(
     if native
         .get(&next_index)
         .is_some_and(|location| location.base_index == previous_index)
+        || (native.contains_key(&previous_index) && same_native_run(native, previous_index, next_index))
     {
         return previous.text.ends_with(char::is_whitespace) || next.text.starts_with(char::is_whitespace);
     }
@@ -1062,6 +1107,7 @@ pub(super) fn extract_text_and_annotations(
     let mut text = String::new();
     let mut annotations = Vec::new();
     let mut i = 0;
+    let mut native_annotation = None;
 
     while i < all_segments.len() {
         let bold = all_segments[i].is_bold;
@@ -1073,6 +1119,7 @@ pub(super) fn extract_text_and_annotations(
             && all_segments[i].is_bold == bold
             && all_segments[i].is_italic == italic
             && resolved_script_kind(&all_segments, i, &native_scripts) == script
+            && same_native_run(&native_scripts, run_start, i)
         {
             i += 1;
         }
@@ -1152,14 +1199,18 @@ pub(super) fn extract_text_and_annotations(
         }
 
         let span_end = text.len();
+        let previous_native_annotation = native_annotation.take();
 
         if span_start < span_end {
             if let Some(kind) = script {
-                annotations.push(TextAnnotation {
-                    start: span_start as u32,
-                    end: span_end as u32,
+                native_annotation = append_script_annotation(
+                    &mut annotations,
                     kind,
-                });
+                    span_start..span_end,
+                    run_start..i,
+                    &native_scripts,
+                    previous_native_annotation,
+                );
             }
             if bold {
                 annotations.push(TextAnnotation {

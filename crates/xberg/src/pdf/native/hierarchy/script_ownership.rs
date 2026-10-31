@@ -161,8 +161,9 @@ fn collect_suffix_script_owners(spans: &[TextSpan]) -> Vec<NativeScriptOwner> {
         };
         let base = &spans[base_index];
         let first = &spans[members[0]];
-        if is_numeric_note_reference(base, first, &notes, &base_facts[base_index])
-            && !continuations.has_unique_operator(spans, base, first)
+        let label: String = members.iter().map(|&index| spans[index].text.trim_end()).collect();
+        if is_numeric_note_reference(base, first, &label, &notes, &base_facts[base_index])
+            && !continuations.has_unique_operator(spans, base, &spans[*members.last().expect("complete run")])
         {
             continue;
         }
@@ -240,10 +241,11 @@ fn raised_member_geometry(base: &TextSpan, script: &TextSpan) -> bool {
 fn is_numeric_note_reference(
     base: &TextSpan,
     script: &TextSpan,
+    label: &str,
     notes: &HashMap<&str, &TextSpan>,
     facts: &BaseFacts,
 ) -> bool {
-    let Some(note) = notes.get(script.text.trim_end()) else {
+    let Some(note) = notes.get(label) else {
         return false;
     };
     if !facts.numbered_prose
