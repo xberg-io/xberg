@@ -26,8 +26,10 @@ run_validation() {
 }
 
 @test "benchmark workflow guard should reject the legacy mutable branch override" {
-	rewrite_fixture 's/ref: \${{ github\.sha }}/ref: ${{ github.event.inputs.branch || github.sha }}/' workflow.yaml
+	rewrite_fixture 's/^\( *\)ref: \${{ github\.sha }}$/\1ref: ${{ github.event.inputs.branch || github.sha }}/' workflow.yaml
 	[ "$(grep -Fc '          ref: ${{ github.event.inputs.branch || github.sha }}' workflow.yaml)" -eq 14 ]
+	[ "$(grep -Fc 'github.event.inputs.branch' workflow.yaml)" -eq 14 ]
+	[ "$(grep -Fc 'config-ref: ${{ github.sha }}' workflow.yaml)" -eq 9 ]
 	run_validation
 	xberg_assert_status 1
 	xberg_assert_output_contains 'standalone harness validation must check out the immutable workflow revision'
