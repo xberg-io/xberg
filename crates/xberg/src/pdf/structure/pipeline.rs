@@ -1101,8 +1101,10 @@ fn paragraphs_cross_source_gap(previous: &PdfParagraph, next: &PdfParagraph, gap
     let Some((previous, next)) = previous.lines.last().zip(next.lines.first()) else {
         return false;
     };
-    let below = gaps.partition_point(|gap| *gap <= next.baseline_y);
-    gaps.get(below).is_some_and(|gap| *gap < previous.baseline_y)
+    let lower = previous.baseline_y.min(next.baseline_y);
+    let upper = previous.baseline_y.max(next.baseline_y);
+    let below = gaps.partition_point(|gap| *gap <= lower);
+    gaps.get(below).is_some_and(|gap| *gap < upper)
 }
 
 /// Master switch for [`reattach_detached_list_markers`].
