@@ -8547,6 +8547,56 @@ mod han_second_pass_tests {
         assert_eq!(backend.calls.load(Ordering::SeqCst), 0, "no OCR pass after a cancel");
     }
 
+    /// The runtime has one blocking thread, and the test holds it. The second pass queues its
+    /// detection behind it, the token is cancelled, and the thread is released: the queued
+    /// detection must not start, and no retry runs.
+    #[test]
+    fn a_cancel_while_detection_is_queued_starts_no_detection() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .enable_time()
+            .build()
+            .expect("a runtime with one blocking thread");
+        runtime.block_on(async {
+            let (release, released) = std::sync::mpsc::channel::<()>();
+            let (busy, is_busy) = tokio::sync::oneshot::channel::<()>();
+            let blocker = tokio::task::spawn_blocking(move || {
+                busy.send(()).expect("the test waits for the blocking thread");
+                released.recv().expect("the test releases the blocking thread");
+            });
+            is_busy.await.expect("the one blocking thread is held");
+
+            let token = CancellationToken::new();
+            let counting = backend(good_retry(), None);
+            let backend: Arc<dyn OcrBackend> = counting.clone();
+            let detections = Arc::new(AtomicUsize::new(0));
+            let seen = Arc::clone(&detections);
+            let image = Arc::new(vec![1]);
+            let config = OcrConfig::default();
+            let first = first_pass(20.0);
+            let second_pass = read_again_as_han_where(&backend, &image, &config, &first, Some(&token), move |_| {
+                seen.fetch_add(1, Ordering::SeqCst);
+                true
+            });
+            tokio::pin!(second_pass);
+            let queued = tokio::time::timeout(std::time::Duration::from_millis(50), &mut second_pass).await;
+            assert!(queued.is_err(), "the detection waits for the held blocking thread");
+
+            token.cancel();
+            release.send(()).expect("the blocking thread is waiting");
+            let outcome = second_pass.await;
+            blocker.await.expect("the blocking thread ends");
+
+            assert!(is_cancelled(&outcome));
+            assert_eq!(
+                detections.load(Ordering::SeqCst),
+                0,
+                "a queued detection must not start after a cancel"
+            );
+            assert_eq!(counting.calls.load(Ordering::SeqCst), 0, "no retry after a cancel");
+        });
+    }
+
     #[tokio::test]
     async fn a_cancel_during_a_retry_that_would_be_accepted_returns_cancelled() {
         let (outcome, backend, _) = run_cancelled(first_pass(20.0), good_retry(), true, CancelAt::InRetry).await;
