@@ -482,6 +482,9 @@ mod column_scope_tests;
 mod pitch_confidence_tests;
 
 #[cfg(test)]
+mod run_in_list_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::TextSpan;
