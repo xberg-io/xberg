@@ -476,7 +476,8 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
 /// for all other formats.
 #[cfg(feature = "ocr")]
 pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) -> Result<image::DynamicImage> {
-    load_image_for_ocr_with_scale(image_bytes, limits).map(|decoded| image::DynamicImage::ImageRgb8(decoded.image))
+    load_image_for_ocr_with_scale(image_bytes, limits, |_| true)
+        .map(|decoded| image::DynamicImage::ImageRgb8(decoded.image))
 }
 
 /// Meters-per-inch, used to convert a PNG `pHYs` pixels-per-metre density into DPI.

@@ -58,6 +58,15 @@ fn should_keep_the_quarter_decode_when_1200_dpi_already_reaches_300_dpi() {
     assert_eq!(prepared.data.len(), 128 * 64 * 3);
 }
 
+// ~keep At 350 KiB the half decode fits but leaves 600 DPI, which would need a resize; the
+// quarter decode meets 300 DPI. A higher limit must not turn the 128 KiB success into an error.
+#[test]
+fn should_keep_the_quarter_decode_when_a_higher_limit_also_fits_the_half_decode() {
+    let prepared = prepare(&jpeg(WIDTH, HEIGHT), Some(1200.0), 350 * 1024, true).unwrap();
+    assert_eq!((prepared.width, prepared.height), (128, 64));
+    assert_eq!(prepared.source_dpi, 300);
+}
+
 #[test]
 fn should_preserve_nominal_density_despite_ceil_rounded_reduced_dimensions() {
     let prepared = prepare(&jpeg(513, 257), Some(1200.0), REDUCED_BUDGET, true).unwrap();
@@ -113,7 +122,7 @@ fn should_reject_300_dpi_render_normalization_that_would_restore_over_budget_pix
 }
 
 #[test]
-fn should_reject_even_a_downsize_when_reduced_decode_would_need_convolution_scratch() {
+fn should_choose_the_eighth_decode_that_meets_a_150_dpi_target_without_a_resize() {
     let bytes = jpeg(WIDTH, HEIGHT);
     let config = TesseractConfig {
         source_dpi: Some(1200.0),
@@ -127,7 +136,7 @@ fn should_reject_even_a_downsize_when_reduced_decode_would_need_convolution_scra
         auto_adjust_dpi: false,
         ..Default::default()
     };
-    let error = prepare_encoded_ocr_image(
+    let prepared = prepare_encoded_ocr_image(
         &bytes,
         &SecurityLimits {
             max_content_size: REDUCED_BUDGET,
@@ -137,9 +146,9 @@ fn should_reject_even_a_downsize_when_reduced_decode_would_need_convolution_scra
         Some(&images),
         false,
     )
-    .err()
-    .expect("a smaller output still requires unaudited convolution scratch");
-    assert!(error.to_string().contains("unbudgeted resize buffers"), "{error}");
+    .unwrap();
+    assert_eq!((prepared.width, prepared.height), (64, 32));
+    assert_eq!(prepared.source_dpi, 150);
 }
 
 #[test]

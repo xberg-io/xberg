@@ -979,14 +979,23 @@ fn prepare_encoded_ocr_image(
     ci_debug_enabled: bool,
 ) -> crate::Result<PreparedOcrImage> {
     use crate::image::preprocessing::normalization_requires_resize;
-    let decoded = crate::extraction::image::load_image_for_ocr_with_scale(bytes, limits)?;
-    let dpi = resolve_known_source_dpi(
-        config.source_dpi,
-        bytes,
-        decoded.original_width,
-        decoded.original_height,
-    )
-    .map(|dpi| dpi / f64::from(decoded.scale_denominator));
+    let source_dpi = |width, height| resolve_known_source_dpi(config.source_dpi, bytes, width, height);
+    // A reduced decode cannot be resized within the limit, so prefer a scale that already meets
+    // the DPI target of the preprocessing that would run. ~keep
+    let planned_preprocessing = config.preprocessing.clone().unwrap_or_default();
+    let planned_dpi = ocr_dpi_config(&planned_preprocessing, images);
+    let decoded = crate::extraction::image::load_image_for_ocr_with_scale(bytes, limits, |scale| {
+        source_dpi(scale.original_width, scale.original_height).is_some_and(|dpi| {
+            !normalization_requires_resize(
+                scale.width,
+                scale.height,
+                &planned_dpi,
+                dpi / f64::from(scale.denominator),
+            )
+        })
+    })?;
+    let dpi = source_dpi(decoded.original_width, decoded.original_height)
+        .map(|dpi| dpi / f64::from(decoded.scale_denominator));
     let (width, height) = decoded.image.dimensions();
     log_ci_debug(ci_debug_enabled, "image", || {
         format!("dimensions={width}x{height} color_type=RGB8")

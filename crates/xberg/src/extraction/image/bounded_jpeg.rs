@@ -24,9 +24,11 @@ const DENOMINATORS: [u8; 3] = [2, 4, 8];
 const COEFFICIENT_BYTES: u64 = 64 * 2;
 const RGB_CHANNELS: u64 = 3;
 
-/// One reduced-decode choice.
+/// One reduced-decode choice, offered to the caller's acceptance check before decoding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ReducedScale {
+    pub original_width: u32,
+    pub original_height: u32,
     pub width: u32,
     pub height: u32,
     pub denominator: u8,
@@ -48,9 +50,14 @@ struct Frame {
 }
 
 /// Decode a JPEG for OCR. A JPEG whose full RGB raster does not fit the limit is decoded at
-/// the finest IDCT scale that fits.
-pub(crate) fn load_image_for_ocr_with_scale(image_bytes: &[u8], limits: &SecurityLimits) -> Result<DecodedOcrImage> {
-    if let Some(decoded) = decode_oversized_jpeg(image_bytes, limits)? {
+/// the finest IDCT scale that fits and that `accept` approves; when no fitting scale is
+/// approved, the finest fitting scale is used.
+pub(crate) fn load_image_for_ocr_with_scale(
+    image_bytes: &[u8],
+    limits: &SecurityLimits,
+    accept: impl Fn(ReducedScale) -> bool,
+) -> Result<DecodedOcrImage> {
+    if let Some(decoded) = decode_oversized_jpeg(image_bytes, limits, accept)? {
         return Ok(decoded);
     }
     let image = decode_image_to_rgb8_with_security_limits(image_bytes, limits)?;
@@ -64,15 +71,23 @@ pub(crate) fn load_image_for_ocr_with_scale(image_bytes: &[u8], limits: &Securit
 
 /// Decode a JPEG at a reduced size when its full RGB raster does not fit the limit; `None` for
 /// any other input, which the full decoder then takes.
-pub(crate) fn decode_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<DecodedOcrImage>> {
+pub(crate) fn decode_oversized_jpeg(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    accept: impl Fn(ReducedScale) -> bool,
+) -> Result<Option<DecodedOcrImage>> {
     if !bytes.starts_with(&[0xff, 0xd8]) {
         return Ok(None);
     }
     validate_encoded_image_input(bytes, limits)?;
-    decode_if_needed(bytes, limits)
+    decode_if_needed(bytes, limits, accept)
 }
 
-fn decode_if_needed(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<DecodedOcrImage>> {
+fn decode_if_needed(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    accept: impl Fn(ReducedScale) -> bool,
+) -> Result<Option<DecodedOcrImage>> {
     let Some(frame) = read_frame(bytes) else {
         return Ok(None);
     };
@@ -92,10 +107,20 @@ fn decode_if_needed(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<Deco
         (_, 1 | 3) => {}
         _ => return Err(reject("a CMYK JPEG cannot be decoded at a reduced size")),
     }
-    let Some(scale) = DENOMINATORS
+    let fitting: Vec<ReducedScale> = DENOMINATORS
         .iter()
-        .map(|&denominator| reduced_scale(&frame, denominator))
-        .find(|&scale| reduced_peak(&frame, scale, encoded).is_some_and(|peak| peak <= maximum))
+        .filter_map(|&denominator| {
+            let scale = reduced_scale(&frame, denominator);
+            reduced_peak(&frame, scale, encoded)
+                .is_some_and(|peak| peak <= maximum)
+                .then_some(scale)
+        })
+        .collect();
+    let Some(scale) = fitting
+        .iter()
+        .copied()
+        .find(|&scale| accept(scale))
+        .or(fitting.first().copied())
     else {
         return Err(reject(if frame.process == Process::Progressive {
             "a progressive JPEG keeps full-resolution coefficients, so even a 1/8 reduced decode does not fit"
@@ -121,6 +146,8 @@ fn full_decode_peak(frame: &Frame, encoded: u64) -> Result<u64> {
 fn reduced_scale(frame: &Frame, denominator: u8) -> ReducedScale {
     let d = u32::from(denominator);
     ReducedScale {
+        original_width: frame.width,
+        original_height: frame.height,
         width: frame.width.div_ceil(d),
         height: frame.height.div_ceil(d),
         denominator,

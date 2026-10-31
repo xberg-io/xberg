@@ -1,4 +1,4 @@
-use super::{Process, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
+use super::{Process, ReducedScale, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
 use crate::extractors::security::SecurityLimits;
 
 const WIDTH: u32 = 512;
@@ -43,18 +43,29 @@ fn should_read_the_frame_header_of_a_baseline_jpeg() {
 fn should_choose_the_finest_scale_at_an_inclusive_limit() {
     let bytes = rgb();
     let half = peak(&bytes, 2);
-    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(half as usize)).unwrap();
+    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(half as usize), |_| true).unwrap();
     assert_eq!(decoded.scale_denominator, 2);
-    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(half as usize - 1)).unwrap();
+    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(half as usize - 1), |_| true).unwrap();
     assert_eq!(decoded.scale_denominator, 4);
     assert_eq!(decoded.image.dimensions(), (WIDTH / 4, HEIGHT / 4));
     assert_eq!((decoded.original_width, decoded.original_height), (WIDTH, HEIGHT));
 }
 
 #[test]
+fn should_prefer_the_finest_accepted_scale_and_fall_back_to_the_finest_fitting_one() {
+    let bytes = rgb();
+    let budget = limits(peak(&bytes, 2) as usize);
+    let quarter_only = |scale: ReducedScale| scale.denominator == 4;
+    let decoded = load_image_for_ocr_with_scale(&bytes, &budget, quarter_only).unwrap();
+    assert_eq!(decoded.scale_denominator, 4);
+    let decoded = load_image_for_ocr_with_scale(&bytes, &budget, |_| false).unwrap();
+    assert_eq!(decoded.scale_denominator, 2);
+}
+
+#[test]
 fn should_keep_a_fitting_jpeg_at_its_original_size() {
     let bytes = rgb();
-    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(16 * 1024 * 1024)).unwrap();
+    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(16 * 1024 * 1024), |_| false).unwrap();
     assert_eq!(decoded.scale_denominator, 1);
     assert_eq!(decoded.image.dimensions(), (WIDTH, HEIGHT));
 }
@@ -65,7 +76,7 @@ fn should_decode_an_oversized_grayscale_jpeg_at_a_reduced_size_as_rgb() {
     assert_eq!(read_frame(&bytes).unwrap().sampling.len(), 1);
     // The full decoder needs the gray raster and its RGB copy: 4 bytes per pixel.
     let budget = WIDTH as usize * HEIGHT as usize * 4 - 1;
-    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(budget)).unwrap();
+    let decoded = load_image_for_ocr_with_scale(&bytes, &limits(budget), |_| true).unwrap();
     assert_eq!(decoded.scale_denominator, 2);
     assert_eq!(decoded.image.dimensions(), (WIDTH / 2, HEIGHT / 2));
 }
