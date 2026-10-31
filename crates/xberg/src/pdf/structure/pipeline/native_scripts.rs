@@ -133,7 +133,11 @@ fn plan_native_order(
     segments: &[&SegmentData],
     evidence: &NativeSegmentEvidence,
 ) -> (Vec<usize>, Vec<SegmentScriptOwner>) {
-    let ordered = super::order_segment_records((0..segments.len()).collect(), |index| segments[*index]);
+    let records = segments.iter().copied().enumerate().collect();
+    let ordered: Vec<_> = super::order_segment_records(records, |record| record.1)
+        .into_iter()
+        .map(|(index, _)| index)
+        .collect();
     let owners = valid_owners(segments, evidence);
     let scripts: std::collections::HashSet<_> = owners.iter().map(|owner| owner.script_index).collect();
     let mut script_counts = std::collections::HashMap::new();
