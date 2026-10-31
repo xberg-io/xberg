@@ -4315,6 +4315,7 @@ fn heuristic_segment(text: &str, baseline_y: f32, width: f32, is_monospace: bool
 fn process_heuristic_segments(segments: Vec<SegmentData>) -> Vec<PdfParagraph> {
     process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: segments,
@@ -4349,6 +4350,7 @@ fn empty_or_ineligible_layout_hints_use_legacy_page_processing() {
     let process = |page_hints| {
         process_single_page(
             PageInput {
+                native_page: None,
                 page_index: 0,
                 struct_paragraphs: None,
                 heuristic_segments: segments.clone(),
@@ -4430,6 +4432,7 @@ fn page_width_reaches_layout_reading_order_graph() {
     let process = |page_width_pts, table_bboxes, _has_emitted_table| {
         let mut pages = vec![process_single_page(
             PageInput {
+                native_page: None,
                 page_index: 0,
                 struct_paragraphs: None,
                 heuristic_segments: segments.clone(),
@@ -4508,6 +4511,7 @@ fn stacked_layout_groups_preserve_native_paragraph_assembly() {
     ];
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: segments,
@@ -4539,6 +4543,7 @@ fn bboxless_emitted_table_page_preserves_native_semantics_and_layout_class() {
     let paragraph_gap_ys = compute_paragraph_gap_ys(std::slice::from_ref(&segment));
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: vec![segment],
@@ -4578,6 +4583,7 @@ fn emitted_table_page_annotates_caption_without_overriding_native_semantics() {
     let segment = heuristic_segment("Source: annual filing", 100.0, 220.0, false);
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: vec![segment],
@@ -4675,6 +4681,7 @@ fn test_structure_tree_page_runs_text_repair_before_assembly() {
 
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: Some(paragraphs),
             heuristic_segments: Vec::new(),
@@ -4716,6 +4723,7 @@ fn assigned_sal_heading_survives_merge_when_layout_confirms_it() {
 
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: vec![body, annotation],
@@ -6303,6 +6311,7 @@ fn should_classify_untagged_bold_body_size_paragraphs_on_tagged_pages() {
 
     let classified = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: Some(paragraphs),
             heuristic_segments: Vec::new(),
@@ -7133,6 +7142,7 @@ fn seg_heuristic(text: &str, font_size: f32, baseline_y: f32) -> SegmentData {
 fn test_heuristic_path_merges_font_split_continuation() {
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: vec![
@@ -7189,6 +7199,7 @@ fn test_heuristic_path_merges_font_split_continuation() {
 fn test_heuristic_path_does_not_merge_terminated_sentences() {
     let output = process_single_page(
         PageInput {
+            native_page: None,
             page_index: 0,
             struct_paragraphs: None,
             heuristic_segments: vec![

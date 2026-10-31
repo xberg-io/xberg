@@ -7,9 +7,9 @@ use crate::pdf::hierarchy::SegmentData;
 use super::NativeScriptOwner;
 
 #[derive(Debug, Clone)]
-struct NativeSegment {
-    original_index: usize,
-    segment: SegmentData,
+pub(crate) struct NativeSegment {
+    pub(crate) original_index: usize,
+    pub(crate) segment: SegmentData,
 }
 
 pub(crate) struct NativePageSegments {
@@ -18,9 +18,9 @@ pub(crate) struct NativePageSegments {
 }
 
 #[derive(Debug)]
-struct SegmentScriptOwner {
-    base_index: usize,
-    script_index: usize,
+pub(crate) struct SegmentScriptOwner {
+    pub(crate) base_index: usize,
+    pub(crate) script_index: usize,
     source: NativeScriptOwner,
 }
 
@@ -66,7 +66,25 @@ impl NativePageSegments {
             .collect();
     }
 
-    fn from_final_spans(
+    pub(crate) fn projected_records(
+        &self,
+        segments: Vec<SegmentData>,
+    ) -> std::result::Result<Vec<NativeSegment>, Vec<SegmentData>> {
+        if segments.len() != self.segments.len() {
+            return Err(segments);
+        }
+        Ok(self
+            .segments
+            .iter()
+            .zip(segments)
+            .map(|(source, segment)| NativeSegment {
+                original_index: source.original_index,
+                segment,
+            })
+            .collect())
+    }
+
+    pub(crate) fn from_final_spans(
         spans: Vec<xberg_native_pdf::layout::TextSpan>,
         mcid_roles: &HashMap<u32, Option<u8>>,
         artifacts: super::super::ArtifactRetention,
@@ -103,7 +121,7 @@ impl NativePageSegments {
         }
     }
 
-    fn remap_script_owners(&self, retained_segments: &[NativeSegment]) -> Vec<SegmentScriptOwner> {
+    pub(crate) fn remap_script_owners(&self, retained_segments: &[NativeSegment]) -> Vec<SegmentScriptOwner> {
         let originals = self.unique_originals();
         let survivors = index_survivors(retained_segments, &originals);
         self.script_owners

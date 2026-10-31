@@ -31,6 +31,8 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
+mod native_scripts;
+
 const SPARSE_REPEATED_TIER_MIN_PAGES: usize = 2;
 const SPARSE_FONT_TIER_CLUSTER_COUNT: usize = 2;
 const MIN_BODY_SIZE_BOLD_SIGNALS: usize = 3;
@@ -673,6 +675,7 @@ struct PageInput {
     struct_paragraphs: Option<Vec<PdfParagraph>>,
     /// Segments from heuristic extraction (non-empty only when `struct_paragraphs` is `None`).
     heuristic_segments: Vec<SegmentData>,
+    native_page: Option<crate::pdf::native::hierarchy::script_ownership::page_segments::NativePageSegments>,
     /// Layout hints for this page, if layout detection was run.
     page_hints: Option<Vec<LayoutHint>>,
     /// Footprint and cell text of tables successfully extracted for this page.
@@ -721,6 +724,7 @@ fn process_single_page(
         page_index: i,
         struct_paragraphs,
         heuristic_segments,
+        native_page,
         page_hints,
         table_bboxes,
         preserve_native_semantics,
@@ -780,7 +784,10 @@ fn process_single_page(
             has_layout_hints = page_hints.is_some(),
             "process_single_page: heuristic path"
         );
-        let page_segments = filter_segments_by_table_bboxes(page_segments, &table_bboxes);
+        let (page_segments, native_scripts) = match native_page {
+            Some(page) => native_scripts::prepare_segments(page_segments, page, &table_bboxes),
+            None => (filter_segments_by_table_bboxes(page_segments, &table_bboxes), None),
+        };
         #[cfg(feature = "layout-detection")]
         let mut paragraphs = if let Some(ref hints) = page_hints {
             let wrapper_ownership = wrapper_ownership_by_hint(hints, &hint_validations);
@@ -804,16 +811,34 @@ fn process_single_page(
                     },
                 )
             } else {
-                let mut paragraphs = segments_to_paragraphs(page_segments, heading_map, &paragraph_gap_ys, witnesses);
+                let mut paragraphs = segments_to_paragraphs_with_native_scripts(
+                    page_segments,
+                    heading_map,
+                    &paragraph_gap_ys,
+                    witnesses,
+                    native_scripts,
+                );
                 let classification_hints = regular_layout_hints(hints);
                 super::layout_classify::annotate_layout_classes(&mut paragraphs, &classification_hints, 0.5, 0.2);
                 paragraphs
             }
         } else {
-            segments_to_paragraphs(page_segments, heading_map, &paragraph_gap_ys, witnesses)
+            segments_to_paragraphs_with_native_scripts(
+                page_segments,
+                heading_map,
+                &paragraph_gap_ys,
+                witnesses,
+                native_scripts,
+            )
         };
         #[cfg(not(feature = "layout-detection"))]
-        let mut paragraphs = segments_to_paragraphs(page_segments, heading_map, &paragraph_gap_ys, witnesses);
+        let mut paragraphs = segments_to_paragraphs_with_native_scripts(
+            page_segments,
+            heading_map,
+            &paragraph_gap_ys,
+            witnesses,
+            native_scripts,
+        );
         tracing::debug!(
             page = i,
             paragraphs = paragraphs.len(),
@@ -1012,6 +1037,16 @@ fn segments_to_paragraphs(
     heading_map: &[(f32, Option<u8>)],
     paragraph_gap_ys: &[f32],
     witnesses: &TextRepairWitnesses,
+) -> Vec<PdfParagraph> {
+    segments_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, witnesses, None)
+}
+
+fn segments_to_paragraphs_with_native_scripts(
+    segments: Vec<SegmentData>,
+    heading_map: &[(f32, Option<u8>)],
+    paragraph_gap_ys: &[f32],
+    witnesses: &TextRepairWitnesses,
+    _native_scripts: Option<native_scripts::NativeSegmentEvidence>,
 ) -> Vec<PdfParagraph> {
     let segments = order_segments_in_reading_frames(segments);
     let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
@@ -3505,7 +3540,7 @@ fn build_document_structure(
 fn build_document_structure_with_native_pages(
     mut all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
-    _native_pages: Option<Vec<crate::pdf::native::hierarchy::script_ownership::page_segments::NativePageSegments>>,
+    native_pages: Option<Vec<crate::pdf::native::hierarchy::script_ownership::page_segments::NativePageSegments>>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
 ) -> Result<crate::types::internal::InternalDocument> {
     let SegmentStructureConfig {
@@ -3538,6 +3573,10 @@ fn build_document_structure_with_native_pages(
         session_thread_budget,
     } = config;
     let page_count = all_page_segments.len();
+    let mut native_pages = native_pages
+        .filter(|pages| pages.len() == page_count)
+        .map(|pages| pages.into_iter().map(Some).collect::<Vec<_>>())
+        .unwrap_or_default();
     tracing::debug!(
         page_count,
         used_structure_tree,
@@ -3993,6 +4032,7 @@ fn build_document_structure_with_native_pages(
                 page_index: i,
                 struct_paragraphs: None,
                 heuristic_segments,
+                native_page: native_pages.get_mut(i).and_then(Option::take),
                 // Native paragraphs are fully refined without layout semantic
                 // annotations. Geometry is projected after semantic refinement.
                 page_hints: None,
@@ -5157,26 +5197,28 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
     }
     segments
         .into_iter()
-        .filter(|seg| {
-            let seg_area = seg.width * seg.height;
-            let seg_text = seg.text.trim();
-            if seg_area <= 0.0 || seg_text.is_empty() {
-                return true;
-            }
-            !tables.iter().any(|table| {
-                let bb = &table.bbox;
-                let inter_left = seg.x.max(bb.x0 as f32);
-                let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
-                let inter_bottom = seg.y.max(bb.y0 as f32);
-                let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
-                if inter_left >= inter_right || inter_bottom >= inter_top {
-                    return false;
-                }
-                let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-                inter_area / seg_area >= 0.5 && table.carries(seg_text)
-            })
-        })
+        .filter(|segment| segment_survives_table_filter(segment, tables))
         .collect()
+}
+
+fn segment_survives_table_filter(seg: &SegmentData, tables: &[TableCoverage]) -> bool {
+    let seg_area = seg.width * seg.height;
+    let seg_text = seg.text.trim();
+    if seg_area <= 0.0 || seg_text.is_empty() {
+        return true;
+    }
+    !tables.iter().any(|table| {
+        let bb = &table.bbox;
+        let inter_left = seg.x.max(bb.x0 as f32);
+        let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
+        let inter_bottom = seg.y.max(bb.y0 as f32);
+        let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
+        if inter_left >= inter_right || inter_bottom >= inter_top {
+            return false;
+        }
+        let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+        inter_area / seg_area >= 0.5 && table.carries(seg_text)
+    })
 }
 
 /// Apply all 5 text repair passes in a single traversal over a segment's text.

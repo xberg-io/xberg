@@ -56,7 +56,7 @@ const INLINE_SCRIPT_MAX_WIDTH_COVERAGE: f32 = 1.3;
 const INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ScriptGeometry {
+pub(crate) enum ScriptGeometry {
     Flatten,
     Preserve,
 }
