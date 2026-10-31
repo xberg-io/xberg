@@ -1097,6 +1097,70 @@ pub(super) fn extract_text_and_annotations(
     para: &PdfParagraph,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> (String, Vec<TextAnnotation>) {
+    render_text_and_annotations(para, hyphen_witnesses, None)
+}
+
+pub(super) struct ParagraphRenderProjection {
+    pub text: String,
+    pub annotations: Vec<TextAnnotation>,
+    pub segment_ranges: Vec<std::ops::Range<usize>>,
+}
+
+struct SourceRenderRanges {
+    ranges: Vec<Option<std::ops::Range<usize>>>,
+    last_segment: Option<usize>,
+}
+
+impl SourceRenderRanges {
+    fn record(&mut self, segment: usize, start: usize, end: usize) {
+        self.ranges[segment].get_or_insert(start..end).end = end;
+        self.last_segment = Some(segment);
+    }
+
+    fn truncate(&mut self, end: usize) {
+        if let Some(index) = self.last_segment {
+            if let Some(range) = self.ranges[index].as_mut() {
+                range.end = end;
+            }
+        }
+    }
+
+    fn finish(self) -> Vec<std::ops::Range<usize>> {
+        let mut previous_end = 0;
+        self.ranges
+            .into_iter()
+            .map(|range| {
+                let range = range.unwrap_or(previous_end..previous_end);
+                previous_end = range.end;
+                range
+            })
+            .collect()
+    }
+}
+
+/// Observe canonical emitted bytes without changing glyphs or allocating a ledger on ordinary assembly paths.
+pub(super) fn extract_text_with_source_ranges(
+    para: &PdfParagraph,
+    hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+) -> ParagraphRenderProjection {
+    let count = para.lines.iter().map(|line| line.segments.len()).sum();
+    let mut sources = SourceRenderRanges {
+        ranges: vec![None; count],
+        last_segment: None,
+    };
+    let (text, annotations) = render_text_and_annotations(para, hyphen_witnesses, Some(&mut sources));
+    ParagraphRenderProjection {
+        text,
+        annotations,
+        segment_ranges: sources.finish(),
+    }
+}
+
+fn render_text_and_annotations(
+    para: &PdfParagraph,
+    hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+    mut sources: Option<&mut SourceRenderRanges>,
+) -> (String, Vec<TextAnnotation>) {
     let all_segments: Vec<&crate::pdf::hierarchy::SegmentData> = para.lines.iter().flat_map(|l| &l.segments).collect();
 
     if all_segments.is_empty() {
@@ -1144,6 +1208,9 @@ pub(super) fn extract_text_and_annotations(
             match classify_line_break_hyphen(prev_last, next_first, prev_seg, next_seg, hyphen_witnesses) {
                 LineBreakHyphen::Weld => {
                     text.pop();
+                    if let Some(sources) = sources.as_deref_mut() {
+                        sources.truncate(text.len());
+                    }
                 }
                 LineBreakHyphen::KeepHyphen => {}
                 LineBreakHyphen::NotApplicable => {
@@ -1175,6 +1242,9 @@ pub(super) fn extract_text_and_annotations(
                 ) {
                     LineBreakHyphen::Weld => {
                         text.pop();
+                        if let Some(sources) = sources.as_deref_mut() {
+                            sources.truncate(text.len());
+                        }
                     }
                     LineBreakHyphen::KeepHyphen => {}
                     LineBreakHyphen::NotApplicable => {
@@ -1195,7 +1265,11 @@ pub(super) fn extract_text_and_annotations(
                     }
                 }
             }
+            let start = text.len();
             text.push_str(word);
+            if let Some(sources) = sources.as_deref_mut() {
+                sources.record(seg_idx, start, text.len());
+            }
         }
 
         let span_end = text.len();

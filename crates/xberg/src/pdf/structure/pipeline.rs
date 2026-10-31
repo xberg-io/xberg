@@ -32,6 +32,7 @@ use super::text_repair::{
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
 mod native_scripts;
+mod run_in_lists;
 
 const SPARSE_REPEATED_TIER_MIN_PAGES: usize = 2;
 const SPARSE_FONT_TIER_CLUSTER_COUNT: usize = 2;
@@ -4262,7 +4263,7 @@ fn build_document_structure_with_native_pages(
     refine_heading_hierarchy(&mut all_page_paragraphs);
     demote_unnumbered_subsections(&mut all_page_paragraphs);
     demote_heading_runs(&mut all_page_paragraphs);
-    split_colon_semicolon_run_in_lists(&mut all_page_paragraphs);
+    run_in_lists::split_with_witnesses(&mut all_page_paragraphs, &witnesses.hyphens);
 
     if !used_structure_tree {
         classify_running_margin_regions(
@@ -7169,125 +7170,9 @@ fn is_dedup_candidate(p: &PdfParagraph) -> bool {
         && p.caption_for.is_none()
 }
 
-/// Minimum word count for the lead sentence before a run-in list's anchor
-/// colon; guards against matching short labels (`"Note:"`, abbreviations)
-/// that happen to be followed by a semicolon elsewhere in the text.
-const RUN_IN_LIST_MIN_LEAD_WORDS: usize = 4;
-/// Minimum semicolon-delimited clauses required to call a colon-introduced
-/// run a "list" — a single clause is just a qualified sentence, not an
-/// enumeration.
-const RUN_IN_LIST_MIN_ITEMS: usize = 2;
-/// Minimum word count per clause; guards against matching stray short
-/// fragments (e.g. an abbreviation followed by `;`) as list items.
-const RUN_IN_LIST_MIN_ITEM_WORDS: usize = 3;
-
-/// Split a colon-introduced, semicolon-delimited "run-in" list — a prose
-/// convention common in legal/contract text, e.g. "...is authorised to
-/// exclude subscription rights: to exclude fractional amounts...; where the
-/// new shares...;" — out of a single assembled paragraph into a lead
-/// paragraph plus one list-item paragraph per clause.
-///
-/// These enumerations are frequently rendered with no distinguishing
-/// indentation or line break from the surrounding prose (the source document
-/// never used a real list, just semicolon-separated clauses within one
-/// paragraph flow), so geometry-based list detection
-/// (`classify::detect_indentation_based_lists`) never sees them — that pass
-/// only promotes paragraphs already indented relative to the page's modal
-/// left margin. This pass instead recognizes the enumeration from paragraph
-/// text alone, after normal paragraph assembly, and works for both the
-/// heuristic and structure-tree paragraph paths via [`paragraph_text_raw`].
-///
-/// xberg-io/xberg#1301.
+#[cfg(test)]
 fn split_colon_semicolon_run_in_lists(all_page_paragraphs: &mut [Vec<PdfParagraph>]) {
-    for page_paragraphs in all_page_paragraphs.iter_mut() {
-        let mut index = 0;
-        while index < page_paragraphs.len() {
-            match try_split_run_in_list(&page_paragraphs[index]) {
-                Some(replacement) => {
-                    let inserted = replacement.len();
-                    page_paragraphs.splice(index..=index, replacement);
-                    index += inserted;
-                }
-                None => index += 1,
-            }
-        }
-    }
-}
-
-/// Attempt to split one paragraph into a lead paragraph plus run-in list
-/// items. Returns `None` when the paragraph does not match the pattern, in
-/// which case it is left untouched.
-fn try_split_run_in_list(para: &PdfParagraph) -> Option<Vec<PdfParagraph>> {
-    if para.heading_level.is_some()
-        || para.is_list_item
-        || para.is_code_block
-        || para.is_formula
-        || para.is_page_furniture
-    {
-        return None;
-    }
-
-    let normalized: String = paragraph_text_raw(para)
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let colon_byte = normalized.rfind(':')?;
-    let lead = normalized[..=colon_byte].trim();
-    if lead.split_whitespace().count() < RUN_IN_LIST_MIN_LEAD_WORDS {
-        return None;
-    }
-
-    let tail = normalized[colon_byte + 1..].trim_start();
-    if tail.is_empty() {
-        return None;
-    }
-
-    let items: Vec<&str> = tail
-        .split_inclusive(';')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .collect();
-    if items.len() < RUN_IN_LIST_MIN_ITEMS || !items.iter().all(|item| is_probable_run_in_list_item(item)) {
-        return None;
-    }
-
-    let mut split = Vec::with_capacity(items.len() + 1);
-    split.push(run_in_list_fragment(para, lead.to_string(), false));
-    for item in items {
-        split.push(run_in_list_fragment(para, item.to_string(), true));
-    }
-    Some(split)
-}
-
-/// Whether one semicolon-delimited clause reads as a genuine list item:
-/// substantial (several words), a lowercase continuation of the lead
-/// sentence (real clauses read as "to exclude...", "where...", not a new
-/// capitalized sentence), and clause-terminated.
-fn is_probable_run_in_list_item(item: &str) -> bool {
-    item.split_whitespace().count() >= RUN_IN_LIST_MIN_ITEM_WORDS
-        && item.chars().next().is_some_and(char::is_lowercase)
-        && matches!(item.chars().last(), Some(';' | '.'))
-}
-
-/// Build one split-off fragment, inheriting the source paragraph's
-/// non-textual attributes (font size, boldness, page association, etc.).
-fn run_in_list_fragment(source: &PdfParagraph, text: String, is_list_item: bool) -> PdfParagraph {
-    let word_count = text.split_whitespace().count();
-    PdfParagraph {
-        text,
-        lines: Vec::new(),
-        heading_level: None,
-        is_list_item,
-        is_code_block: false,
-        is_formula: false,
-        layout_class: if is_list_item {
-            Some(super::types::LayoutHintClass::ListItem)
-        } else {
-            source.layout_class
-        },
-        word_count,
-        ..source.clone()
-    }
+    run_in_lists::split_with_witnesses(all_page_paragraphs, &HyphenWitnesses::default());
 }
 
 fn apply_text_repair_to_structure_tree_paragraphs(
