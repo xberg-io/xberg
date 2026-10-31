@@ -41,6 +41,22 @@ pub(super) struct NativeScriptIndex {
 }
 
 impl NativeScriptIndex {
+    pub(super) fn ordinary_paragraph_gaps(&self, segments: &[SegmentData]) -> Vec<f32> {
+        // Gap values carry no frame tag; mixed rotations retain the existing merger. ~keep
+        if self.by_script.is_empty() || !segments.iter().all(SegmentData::is_unrotated) {
+            return Vec::new();
+        }
+        let ordinary: Vec<_> = segments
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !self.by_script.contains_key(index))
+            .map(|(_, segment)| segment.clone())
+            .collect();
+        let mut gaps = super::compute_paragraph_gap_ys(&ordinary);
+        gaps.sort_by(|left, right| crate::utils::safe_float_cmp(*left, *right));
+        gaps
+    }
+
     pub(super) fn base_for(&self, index: usize) -> Option<usize> {
         self.by_script.get(&index).map(|owner| owner.base_index)
     }

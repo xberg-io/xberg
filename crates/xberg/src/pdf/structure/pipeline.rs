@@ -1049,23 +1049,60 @@ fn segments_to_paragraphs_with_native_scripts(
     witnesses: &TextRepairWitnesses,
     native_scripts: Option<native_scripts::NativeSegmentEvidence>,
 ) -> Vec<PdfParagraph> {
-    let mut paragraphs = match native_scripts {
+    let (mut paragraphs, native_gaps) = match native_scripts {
         Some(evidence) => {
             let (segments, index) =
                 native_scripts::order_native_paragraph_segments(segments, evidence, paragraph_gap_ys);
-            blocks_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, Some(&index))
+            let gaps = index.ordinary_paragraph_gaps(&segments);
+            (
+                blocks_to_paragraphs_with_native_scripts(segments, heading_map, paragraph_gap_ys, Some(&index)),
+                gaps,
+            )
         }
-        None => blocks_to_paragraphs(
-            order_segments_in_reading_frames(segments),
-            heading_map,
-            paragraph_gap_ys,
+        None => (
+            blocks_to_paragraphs(
+                order_segments_in_reading_frames(segments),
+                heading_map,
+                paragraph_gap_ys,
+            ),
+            Vec::new(),
         ),
     };
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
-    merge_continuation_paragraphs(&mut paragraphs);
+    merge_continuation_paragraphs_at_source_gaps(&mut paragraphs, &native_gaps);
     synchronize_paragraph_text_metadata(&mut paragraphs);
     paragraphs
+}
+
+fn merge_continuation_paragraphs_at_source_gaps(paragraphs: &mut Vec<PdfParagraph>, gaps: &[f32]) {
+    if gaps.is_empty() {
+        merge_continuation_paragraphs(paragraphs);
+        return;
+    }
+    let mut merged = Vec::with_capacity(paragraphs.len());
+    let mut group = Vec::new();
+    for paragraph in std::mem::take(paragraphs) {
+        if group
+            .last()
+            .is_some_and(|previous| paragraphs_cross_source_gap(previous, &paragraph, gaps))
+        {
+            merge_continuation_paragraphs(&mut group);
+            merged.append(&mut group);
+        }
+        group.push(paragraph);
+    }
+    merge_continuation_paragraphs(&mut group);
+    merged.append(&mut group);
+    *paragraphs = merged;
+}
+
+fn paragraphs_cross_source_gap(previous: &PdfParagraph, next: &PdfParagraph, gaps: &[f32]) -> bool {
+    let Some((previous, next)) = previous.lines.last().zip(next.lines.first()) else {
+        return false;
+    };
+    let below = gaps.partition_point(|gap| *gap <= next.baseline_y);
+    gaps.get(below).is_some_and(|gap| *gap < previous.baseline_y)
 }
 
 /// Master switch for [`reattach_detached_list_markers`].
