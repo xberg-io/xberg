@@ -48,6 +48,8 @@ struct Frame {
     width: u32,
     height: u32,
     process: Process,
+    /// Bits per sample.
+    precision: u8,
     /// Horizontal and vertical sampling factor of each component.
     sampling: Vec<(u8, u8)>,
 }
@@ -101,14 +103,23 @@ fn decode_if_needed(
         return Ok(None);
     }
     let reject = |reason: &str| reduced_decode_error(&frame, full_peak, maximum, reason);
-    match (frame.process, frame.sampling.len()) {
-        (Process::Other, _) => {
-            return Err(reject(
-                "a lossless or arithmetic-coded JPEG cannot be decoded at a reduced size",
-            ));
-        }
-        (_, 1 | 3) => {}
-        _ => return Err(reject("a CMYK JPEG cannot be decoded at a reduced size")),
+    if frame.process == Process::Other {
+        return Err(reject(
+            "a lossless, hierarchical or arithmetic-coded JPEG cannot be decoded at a reduced size",
+        ));
+    }
+    if frame.precision != 8 {
+        return Err(reject(&format!(
+            "a JPEG with {}-bit samples cannot be decoded at a reduced size; only 8-bit samples can",
+            frame.precision
+        )));
+    }
+    let components = frame.sampling.len();
+    if !matches!(components, 1 | 3) {
+        return Err(reject(&format!(
+            "a JPEG with {components} color components cannot be decoded at a reduced size; only 1 (grayscale) \
+             and 3 (color) can"
+        )));
     }
     let fitting: Vec<ReducedScale> = DENOMINATORS
         .iter()
@@ -274,7 +285,7 @@ fn reduced_decode_error(frame: &Frame, full_peak: u64, maximum: u64, reason: &st
     }
 }
 
-/// Read the frame header (dimensions, coding process, sampling factors). `None` when the
+/// Read the frame header (dimensions, coding process, sample precision, sampling factors). `None` when the
 /// bytes have no readable frame header; the full decoder then reports the problem.
 fn read_frame(bytes: &[u8]) -> Option<Frame> {
     let mut position = 2;
@@ -311,6 +322,7 @@ fn read_frame(bytes: &[u8]) -> Option<Frame> {
             {
                 return None;
             }
+            let precision = *payload.first()?;
             let process = match marker {
                 0xc0 | 0xc1 => Process::Sequential,
                 0xc2 => Process::Progressive,
@@ -320,6 +332,7 @@ fn read_frame(bytes: &[u8]) -> Option<Frame> {
                 width,
                 height,
                 process,
+                precision,
                 sampling,
             });
         }

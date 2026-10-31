@@ -67,7 +67,43 @@ fn lossless_jpeg_reports_the_size_limit_and_the_lossless_reason() {
     let message = message(&jpeg_with_frame_marker(0xc3));
     assert_names_the_limit(&message);
     assert!(
-        message.contains("lossless or arithmetic-coded JPEG cannot be decoded at a reduced size"),
+        message.contains("lossless, hierarchical or arithmetic-coded JPEG cannot be decoded at a reduced size"),
+        "{message}"
+    );
+}
+
+#[test]
+fn hierarchical_jpeg_reports_the_size_limit_and_the_hierarchical_reason() {
+    let message = message(&jpeg_with_frame_marker(0xc5));
+    assert_names_the_limit(&message);
+    assert!(message.contains("hierarchical"), "{message}");
+}
+
+#[test]
+fn twelve_bit_jpeg_reports_the_size_limit_and_the_sample_precision() {
+    let mut bytes = jpeg_with_frame_marker(0xc1);
+    let sof = bytes.windows(2).position(|pair| pair == [0xff, 0xc1]).unwrap();
+    // The precision byte follows the marker and the two-byte segment length.
+    bytes[sof + 4] = 12;
+    let message = message(&bytes);
+    assert_names_the_limit(&message);
+    assert!(
+        message.contains("a JPEG with 12-bit samples cannot be decoded at a reduced size"),
+        "{message}"
+    );
+}
+
+#[test]
+fn cmyk_jpeg_reports_the_size_limit_and_the_component_count() {
+    let pixels = vec![120u8; WIDTH as usize * HEIGHT as usize * 4];
+    let mut bytes = Vec::new();
+    jpeg_encoder::Encoder::new(&mut bytes, 90)
+        .encode(&pixels, WIDTH as u16, HEIGHT as u16, jpeg_encoder::ColorType::Cmyk)
+        .unwrap();
+    let message = message(&bytes);
+    assert_names_the_limit(&message);
+    assert!(
+        message.contains("a JPEG with 4 color components cannot be decoded at a reduced size"),
         "{message}"
     );
 }
