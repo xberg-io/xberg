@@ -1024,8 +1024,7 @@ fn validate_reduced_image_normalization(
     };
     // The decoder budget does not cover convolution scratch. Keep the existing DPI policy,
     // but reject a required resize before it can allocate outside the admitted buffers. ~keep
-    if dpi.is_none()
-        || crate::image::preprocessing::normalized_image_dimensions(width, height, &dpi_config, dpi) != (width, height)
+    if dpi.is_none_or(|dpi| crate::image::preprocessing::normalization_requires_resize(width, height, &dpi_config, dpi))
     {
         return Err(crate::XbergError::validation(format!(
             "Reduced JPEG DPI normalization requires unbudgeted resize buffers under security_limits.max_content_size {}",

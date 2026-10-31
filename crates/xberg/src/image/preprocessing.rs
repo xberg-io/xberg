@@ -112,30 +112,13 @@ pub(crate) fn normalize_image_dpi_owned(
     }
 
     let current_dpi = current_dpi.unwrap_or_else(|| unknown_raster_dpi(&rgb_data, width, height, config.target_dpi));
-    let original_dpi = (current_dpi, current_dpi);
-    let (target_dpi, auto_adjusted, calculated_dpi) = calculate_target_dpi(
-        width as u32,
-        height as u32,
-        current_dpi,
-        config,
-        MAX_NORMALIZE_MEMORY_MB,
-    );
-
-    let scale_factor = f64::from(target_dpi) / current_dpi;
-    let plan = DpiPlan {
-        original_dpi,
-        target_dpi,
-        scale_factor,
-        auto_adjusted,
-        calculated_dpi,
-    };
-
-    if !needs_resize(width as u32, height as u32, scale_factor, config) {
+    let plan = DpiPlan::new(width as u32, height as u32, config, current_dpi);
+    if !plan.requires_resize(width as u32, height as u32, config) {
         return Ok(create_skip_result(rgb_data, width, height, config, &plan));
     }
 
     let (new_width, new_height, final_scale, dimension_clamped) =
-        calculate_new_dimensions(width as u32, height as u32, scale_factor, config);
+        calculate_new_dimensions(width as u32, height as u32, plan.scale_factor, config);
 
     // The resize path records the clamped scale where the skip path records the unclamped one.
     let plan = DpiPlan {
@@ -163,13 +146,22 @@ pub(crate) fn normalized_image_dimensions(
     current_dpi: Option<f64>,
 ) -> (u32, u32) {
     let current_dpi = current_dpi.unwrap_or(PDF_POINTS_PER_INCH);
-    let (target_dpi, _, _) = calculate_target_dpi(width, height, current_dpi, config, MAX_NORMALIZE_MEMORY_MB);
-    let scale_factor = f64::from(target_dpi) / current_dpi;
-    if !needs_resize(width, height, scale_factor, config) {
+    let plan = DpiPlan::new(width, height, config, current_dpi);
+    if !plan.requires_resize(width, height, config) {
         return (width, height);
     }
-    let (new_width, new_height, _, _) = calculate_new_dimensions(width, height, scale_factor, config);
+    let (new_width, new_height, _, _) = calculate_new_dimensions(width, height, plan.scale_factor, config);
     (new_width, new_height)
+}
+
+#[cfg(feature = "ocr")]
+pub(crate) fn normalization_requires_resize(
+    width: u32,
+    height: u32,
+    config: &ExtractionConfig,
+    current_dpi: f64,
+) -> bool {
+    DpiPlan::new(width, height, config, current_dpi).requires_resize(width, height, config)
 }
 
 /// The resolution to assume for a raster whose own is unknown, chosen so that its glyphs reach
@@ -196,6 +188,24 @@ struct DpiPlan {
     scale_factor: f64,
     auto_adjusted: bool,
     calculated_dpi: Option<i32>,
+}
+
+impl DpiPlan {
+    fn new(width: u32, height: u32, config: &ExtractionConfig, current_dpi: f64) -> Self {
+        let (target_dpi, auto_adjusted, calculated_dpi) =
+            calculate_target_dpi(width, height, current_dpi, config, MAX_NORMALIZE_MEMORY_MB);
+        Self {
+            original_dpi: (current_dpi, current_dpi),
+            target_dpi,
+            scale_factor: f64::from(target_dpi) / current_dpi,
+            auto_adjusted,
+            calculated_dpi,
+        }
+    }
+
+    fn requires_resize(&self, width: u32, height: u32, config: &ExtractionConfig) -> bool {
+        needs_resize(width, height, self.scale_factor, config)
+    }
 }
 
 /// Calculate target DPI based on configuration
