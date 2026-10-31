@@ -1937,19 +1937,54 @@ fn compute_paragraph_gap_ys(segments: &[SegmentData]) -> Vec<f32> {
 }
 
 /// One visual line of a page, as clustered by [`compute_paragraph_gap_ys_in_shared_frame`].
-struct LineBand {
+struct LineBand<'a> {
     top: f32,
     bottom: f32,
     height: f32,
     monospace: bool,
     anchor_y: f32,
+    source: LineBandSource<'a>,
+}
+
+/// Borrowed row edges expose style and text during calibration without replacing source projections.
+struct LineBandSource<'a> {
+    first: &'a SegmentData,
+    last: &'a SegmentData,
+    ordinary: bool,
+}
+
+impl<'a> LineBandSource<'a> {
+    fn new(segment: &'a SegmentData) -> Self {
+        let mut source = Self {
+            first: segment,
+            last: segment,
+            ordinary: true,
+        };
+        source.include(segment);
+        source
+    }
+
+    fn include(&mut self, segment: &'a SegmentData) {
+        let (left, right) = segment.upright_advance_extent();
+        self.ordinary &= segment.assigned_role.is_none()
+            && !segment.is_monospace
+            && left.is_finite()
+            && right.is_finite()
+            && right >= left;
+        if left < self.first.upright_advance_extent().0 {
+            self.first = segment;
+        }
+        if right > self.last.upright_advance_extent().1 {
+            self.last = segment;
+        }
+    }
 }
 
 fn compute_paragraph_gap_ys_in_shared_frame(segments: &[SegmentData]) -> Vec<f32> {
     paragraph_gaps_from_bands(&paragraph_line_bands(segments.iter()), body_leading)
 }
 
-fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> Vec<LineBand> {
+fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> Vec<LineBand<'a>> {
     let mut order: Vec<_> = segments.collect();
     order.sort_by(|a, b| {
         paragraph_gap_axis(b)
@@ -1957,7 +1992,7 @@ fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> 
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let mut lines: Vec<LineBand> = Vec::new();
+    let mut lines: Vec<LineBand<'a>> = Vec::new();
     for seg in order {
         let (bottom, top) = if seg.is_unrotated() {
             (seg.y, seg.y + seg.height)
@@ -1972,6 +2007,7 @@ fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> 
                 line.bottom = line.bottom.min(bottom);
                 line.height = line.height.max(seg.height);
                 line.monospace &= seg.is_monospace;
+                line.source.include(seg);
             }
             _ => lines.push(LineBand {
                 top,
@@ -1979,22 +2015,34 @@ fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> 
                 height: seg.height,
                 monospace: seg.is_monospace,
                 anchor_y: baseline,
+                source: LineBandSource::new(seg),
             }),
         }
     }
     lines
 }
 
-fn paragraph_gaps_from_bands(lines: &[LineBand], leading: impl FnOnce(&[LineBand], f32) -> f32) -> Vec<f32> {
+fn paragraph_gaps_from_bands<'a>(
+    lines: &[LineBand<'a>],
+    leading: impl FnOnce(&[LineBand<'a>], f32) -> f32,
+) -> Vec<f32> {
     if lines.len() < 2 {
         return Vec::new();
     }
 
-    let mut heights: Vec<f32> = lines.iter().map(|l| l.height).collect();
+    let median_height = median_line_height(lines).expect("at least two physical line bands");
+    paragraph_gaps_with_leading(lines, median_height, leading(lines, median_height))
+}
+
+fn median_line_height(lines: &[LineBand<'_>]) -> Option<f32> {
+    let mut heights: Vec<f32> = lines.iter().map(|line| line.height).collect();
     heights.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let median_height = heights[heights.len() / 2];
+    heights.get(heights.len() / 2).copied()
+}
+
+fn paragraph_gaps_with_leading(lines: &[LineBand<'_>], median_height: f32, leading: f32) -> Vec<f32> {
     let gap_threshold = median_height * PARAGRAPH_GAP_HEIGHT_FACTOR;
-    let advance_threshold = leading(lines, median_height) * PARAGRAPH_BREAK_LEADING_MULTIPLE;
+    let advance_threshold = leading * PARAGRAPH_BREAK_LEADING_MULTIPLE;
 
     let mut gap_ys = Vec::new();
     for pair in lines.windows(2) {
@@ -2019,7 +2067,7 @@ fn paragraph_gaps_from_bands(lines: &[LineBand], leading: impl FnOnce(&[LineBand
 /// wrapped line at all (stacked accents, a subscript resolved onto its own
 /// band) and must not be allowed to shrink the estimate and split every
 /// ordinary line on the page.
-fn body_leading(lines: &[LineBand], median_height: f32) -> f32 {
+fn body_leading(lines: &[LineBand<'_>], median_height: f32) -> f32 {
     let tightest = lines
         .windows(2)
         .map(|pair| pair[0].anchor_y - pair[1].anchor_y)

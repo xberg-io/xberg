@@ -1,8 +1,6 @@
 use super::{SegmentData, SegmentScriptOwner};
 use crate::pdf::structure::types::PdfParagraph;
 
-const MIN_SUPPORTED_BODY_LINE_COUNT: usize = 3;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Scope {
     Page,
@@ -32,32 +30,39 @@ impl NativeParagraphGaps {
             .map(|(_, segment)| segment)
             .collect();
         let corridor = super::super::page_column_corridor_for_segments(ordinary.iter().copied());
-        let (page, page_leading) = calibrated_gaps(ordinary.iter().copied(), None);
         let mut plan = Self {
             corridor,
-            page,
+            page: Vec::new(),
             left: Vec::new(),
             right: Vec::new(),
         };
-        if corridor.is_some() {
-            plan.left = calibrated_gaps(
-                ordinary
-                    .iter()
-                    .copied()
-                    .filter(|s| plan.segment_scope(s) != Scope::Right),
-                page_leading,
-            )
-            .0;
-            plan.right = calibrated_gaps(
-                ordinary
-                    .iter()
-                    .copied()
-                    .filter(|s| plan.segment_scope(s) != Scope::Left),
-                page_leading,
-            )
-            .0;
-        }
+        let inherited = plan.calibrate_columns(&ordinary);
+        plan.page = ColumnBands::new(ordinary.iter().copied(), Scope::Page, corridor).gaps(inherited);
         Some(plan)
+    }
+
+    fn calibrate_columns(&mut self, ordinary: &[&SegmentData]) -> Option<f32> {
+        self.corridor?;
+        let left = ColumnBands::new(
+            ordinary
+                .iter()
+                .copied()
+                .filter(|s| self.segment_scope(s) != Scope::Right),
+            Scope::Left,
+            self.corridor,
+        );
+        let right = ColumnBands::new(
+            ordinary
+                .iter()
+                .copied()
+                .filter(|s| self.segment_scope(s) != Scope::Left),
+            Scope::Right,
+            self.corridor,
+        );
+        let inherited = minimum_pitch(left.pitch.minimum, right.pitch.minimum);
+        self.left = left.gaps(inherited);
+        self.right = right.gaps(inherited);
+        inherited
     }
 
     pub(super) fn crosses_rows(&self, previous: &SegmentData, next: &SegmentData) -> bool {
@@ -79,17 +84,7 @@ impl NativeParagraphGaps {
     }
 
     fn segment_scope(&self, segment: &SegmentData) -> Scope {
-        let Some((left, right)) = self.corridor else {
-            return Scope::Page;
-        };
-        let (start, end) = segment.upright_advance_extent();
-        if end <= left {
-            Scope::Left
-        } else if start >= right {
-            Scope::Right
-        } else {
-            Scope::Page
-        }
+        segment_scope(segment, self.corridor)
     }
 
     fn paragraph_scope(&self, paragraph: &PdfParagraph) -> Scope {
@@ -131,44 +126,148 @@ fn boundary_scope(previous: Scope, next: Scope) -> Option<Scope> {
     }
 }
 
-fn calibrated_gaps<'a>(
-    segments: impl Iterator<Item = &'a SegmentData>,
-    fallback_leading: Option<f32>,
-) -> (Vec<f32>, Option<f32>) {
-    let bands = super::super::paragraph_line_bands(segments);
-    let mut observed_leading = None;
-    let mut gaps = super::super::paragraph_gaps_from_bands(&bands, |lines, median_height| {
-        let conservative = ordinary_body_leading(lines, median_height);
-        // Page evidence may tighten an isolated local gap, never enlarge it. ~keep
-        let inherited = fallback_leading.map_or(conservative, |page| page.min(conservative));
-        let leading = supported_body_leading(lines, median_height)
-            .unwrap_or(inherited)
-            .max(median_height);
-        observed_leading = Some(leading);
-        leading
-    });
-    gaps.sort_by(f32::total_cmp);
-    (gaps, observed_leading)
+fn segment_scope(segment: &SegmentData, corridor: Option<(f32, f32)>) -> Scope {
+    extent_scope(segment.upright_advance_extent(), corridor)
 }
 
-fn supported_body_leading(lines: &[super::super::LineBand], median_height: f32) -> Option<f32> {
-    // Two agreeing advances distinguish repeated physical rows from an isolated paragraph gap. ~keep
-    lines
-        .windows(MIN_SUPPORTED_BODY_LINE_COUNT)
-        .filter_map(|run| {
-            let first = run[0].anchor_y - run[1].anchor_y;
-            let next = run[1].anchor_y - run[2].anchor_y;
-            (first.is_finite()
-                && next.is_finite()
-                && first >= median_height
-                && next >= median_height
-                && (first - next).abs() <= super::super::INLINE_STYLE_BASELINE_TOLERANCE)
-                .then_some(first.min(next))
-        })
-        .min_by(f32::total_cmp)
+fn extent_scope((start, end): (f32, f32), corridor: Option<(f32, f32)>) -> Scope {
+    let Some((left, right)) = corridor else {
+        return Scope::Page;
+    };
+    if end <= left {
+        Scope::Left
+    } else if start >= right {
+        Scope::Right
+    } else {
+        Scope::Page
+    }
 }
 
-fn ordinary_body_leading(lines: &[super::super::LineBand], median_height: f32) -> f32 {
+#[derive(Clone, Copy, Default)]
+struct BodyPitch {
+    minimum: Option<f32>,
+    repeated: bool,
+}
+
+struct ColumnBands<'a> {
+    lines: Vec<super::super::LineBand<'a>>,
+    median_height: Option<f32>,
+    pitch: BodyPitch,
+}
+
+impl<'a> ColumnBands<'a> {
+    fn new(segments: impl Iterator<Item = &'a SegmentData>, scope: Scope, corridor: Option<(f32, f32)>) -> Self {
+        let lines = super::super::paragraph_line_bands(segments);
+        let median_height = super::super::median_line_height(&lines);
+        let pitch = median_height.map_or_else(BodyPitch::default, |height| body_pitch(&lines, height, scope, corridor));
+        Self {
+            lines,
+            median_height,
+            pitch,
+        }
+    }
+
+    fn gaps(self, inherited: Option<f32>) -> Vec<f32> {
+        let Some(height) = self.median_height else {
+            return Vec::new();
+        };
+        let observed = self
+            .pitch
+            .minimum
+            .unwrap_or_else(|| ordinary_body_leading(&self.lines, height));
+        // Foreign evidence can tighten sparse columns, but never replace a smaller body observation. ~keep
+        let leading = if self.pitch.repeated {
+            observed
+        } else {
+            minimum_pitch(Some(observed), inherited).unwrap_or(observed)
+        };
+        let mut gaps = super::super::paragraph_gaps_with_leading(&self.lines, height, leading.max(height));
+        gaps.sort_by(f32::total_cmp);
+        gaps
+    }
+}
+
+fn minimum_pitch(left: Option<f32>, right: Option<f32>) -> Option<f32> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (left, right) => left.or(right),
+    }
+}
+
+fn body_pair_continues(pair: &[super::super::LineBand<'_>], scope: Scope, corridor: Option<(f32, f32)>) -> bool {
+    pair.iter().all(|line| {
+        line.source.ordinary
+            && extent_scope(
+                (
+                    line.source.first.upright_advance_extent().0,
+                    line.source.last.upright_advance_extent().1,
+                ),
+                corridor,
+            ) == scope
+    }) && super::super::super::paragraphs::source_rows_continue(pair[0].source.last, pair[1].source.first)
+}
+
+fn body_frame(lines: &[super::super::LineBand<'_>], scope: Scope, corridor: Option<(f32, f32)>) -> Option<(f32, f32)> {
+    let mut left = f32::INFINITY;
+    let mut right = f32::NEG_INFINITY;
+    for pair in lines
+        .windows(2)
+        .filter(|pair| body_pair_continues(pair, scope, corridor))
+    {
+        for line in pair {
+            left = left.min(line.source.first.upright_advance_extent().0);
+            right = right.max(line.source.last.upright_advance_extent().1);
+        }
+    }
+    (left.is_finite() && right.is_finite() && right > left).then_some((left, right))
+}
+
+fn body_pitch(
+    lines: &[super::super::LineBand<'_>],
+    median_height: f32,
+    scope: Scope,
+    corridor: Option<(f32, f32)>,
+) -> BodyPitch {
+    let Some(frame) = body_frame(lines, scope, corridor) else {
+        return BodyPitch::default();
+    };
+    let mut pitch = BodyPitch::default();
+    let mut previous: Option<f32> = None;
+    for pair in lines.windows(2) {
+        let advance = body_advance(pair, median_height, scope, corridor, frame);
+        if let Some(advance) = advance {
+            pitch.minimum = minimum_pitch(pitch.minimum, Some(advance));
+            pitch.repeated |= previous
+                .is_some_and(|previous| (previous - advance).abs() <= super::super::INLINE_STYLE_BASELINE_TOLERANCE);
+        }
+        // An unqualified physical pair breaks consecutive support. ~keep
+        previous = advance;
+    }
+    pitch
+}
+
+fn body_advance(
+    pair: &[super::super::LineBand<'_>],
+    median_height: f32,
+    scope: Scope,
+    corridor: Option<(f32, f32)>,
+    frame: (f32, f32),
+) -> Option<f32> {
+    let upper = &pair[0].source;
+    let lower = &pair[1].source;
+    let advance = pair[0].anchor_y - pair[1].anchor_y;
+    let left_delta = (upper.first.upright_advance_extent().0 - lower.first.upright_advance_extent().0).abs();
+    let tolerance = super::super::HEADING_HANGING_INDENT_LEFT_EDGE_TOLERANCE_FONT_FACTOR
+        * upper.first.font_size.max(lower.first.font_size).max(1.0);
+    (advance.is_finite()
+        && advance >= median_height
+        && body_pair_continues(pair, scope, corridor)
+        && super::super::heading_fills_column(upper.last, frame.1)
+        && left_delta <= tolerance)
+        .then_some(advance)
+}
+
+fn ordinary_body_leading(lines: &[super::super::LineBand<'_>], median_height: f32) -> f32 {
     // Fraction bars and stacked glyphs produce sub-line advances, not body pitch. ~keep
     let leading = lines
         .windows(2)
