@@ -180,11 +180,33 @@ def test_freeze_cli_binds_new_sources_and_keeps_evidence_protocol_separate(monke
 
 
 def test_freeze_checks_prospective_sha_before_loading_original_helper(monkeypatch, evidence):
+    from caption_export.first_divergence_evidence import load_original_helper
+
     prospective, original, _ = evidence
+    activity = original.parent / "helper-activity.txt"
+    helper = original / "parity.py"
+    instrumented = helper.read_text().replace(
+        "    PREFLIGHT_CALLS += 1\n", "    PREFLIGHT_CALLS += 1\n    _observe('preflight')\n"
+    )
+    instrumented += (
+        "from pathlib import Path\n"
+        f"_ACTIVITY = Path({str(activity)!r})\n"
+        "def _observe(event):\n"
+        "    previous = _ACTIVITY.read_text() if _ACTIVITY.exists() else ''\n"
+        "    _ACTIVITY.write_text(previous + event + '\\n')\n"
+        "_observe('load')\n"
+    )
+    helper.write_text(instrumented)
+    control = load_original_helper(helper, expected_sha256=checksum(helper))
+    control.preflight(json.loads((original / "plan.json").read_text()), original)
+    assert activity.read_text().splitlines() == ["load", "preflight"]
+    assert control.PREFLIGHT_CALLS == 1
+    activity.unlink()
     before = hashes(original)
     api = feature(monkeypatch, "subblock_plan", ("freeze_plan",))
     with pytest.raises(ValueError, match=r"(?i)prospective.*(sha|checksum)"):
         api.freeze_plan(prospective, "0" * 64, original)
+    assert not activity.exists(), "reject wrong prospective SHA before loading or invoking the original helper"
     assert hashes(original) == before
 
 
