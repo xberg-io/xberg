@@ -54,14 +54,39 @@ impl<'a> From<&'a SegmentData> for SegmentProjection<'a> {
 
 impl NativePageSegments {
     fn from_final_spans(
-        _spans: Vec<xberg_native_pdf::layout::TextSpan>,
-        _mcid_roles: &HashMap<u32, Option<u8>>,
-        _artifacts: super::super::ArtifactRetention,
-        _script_geometry: super::super::ScriptGeometry,
+        spans: Vec<xberg_native_pdf::layout::TextSpan>,
+        mcid_roles: &HashMap<u32, Option<u8>>,
+        artifacts: super::super::ArtifactRetention,
+        script_geometry: super::super::ScriptGeometry,
     ) -> Self {
+        let script_owners = super::collect_suffix_script_owners(&spans);
+        let segments = project_native_segments(spans, mcid_roles, artifacts, script_geometry);
+        let originals = Self {
+            segments,
+            script_owners,
+        };
+        let segments = super::super::dedupe_indexed_redrawn_segments(
+            originals
+                .segments
+                .iter()
+                .map(|record| (record.original_index, record.segment.clone())),
+        )
+        .into_iter()
+        .map(|(original_index, segment)| NativeSegment {
+            original_index,
+            segment,
+        })
+        .collect::<Vec<_>>();
+        // Validate against the full projection inventory before redraws collapse
+        // ambiguous sources or merge styles into a surviving endpoint. ~keep
+        let script_owners = originals
+            .remap_script_owners(&segments)
+            .into_iter()
+            .map(|owner| owner.source)
+            .collect();
         Self {
-            segments: Vec::new(),
-            script_owners: Vec::new(),
+            segments,
+            script_owners,
         }
     }
 
@@ -105,6 +130,29 @@ impl NativePageSegments {
     }
 }
 
+fn project_native_segments(
+    spans: Vec<xberg_native_pdf::layout::TextSpan>,
+    mcid_roles: &HashMap<u32, Option<u8>>,
+    artifacts: super::super::ArtifactRetention,
+    script_geometry: super::super::ScriptGeometry,
+) -> Vec<NativeSegment> {
+    spans
+        .into_iter()
+        .enumerate()
+        .filter(|(_, span)| {
+            !span.text.trim().is_empty()
+                && span
+                    .artifact_type
+                    .as_ref()
+                    .is_none_or(|artifact| artifacts.keeps(artifact))
+        })
+        .map(|(original_index, span)| NativeSegment {
+            original_index,
+            segment: super::super::project_final_span(span, mcid_roles, script_geometry),
+        })
+        .collect()
+}
+
 fn index_survivors(
     retained: &[NativeSegment],
     originals: &HashMap<usize, Option<&NativeSegment>>,
@@ -129,10 +177,46 @@ fn index_survivors(
 mod tests;
 
 fn extract_all_segment_carriers(
-    _document: &mut super::super::NativeDocument,
-    _artifacts: super::super::ArtifactRetention,
+    document: &mut super::super::NativeDocument,
+    artifacts: super::super::ArtifactRetention,
 ) -> crate::pdf::error::Result<(Vec<NativePageSegments>, bool)> {
-    Ok((Vec::new(), false))
+    use super::super::ScriptGeometry;
+
+    let (pages, used_tree) = super::super::extract_pages_with_structure_tree(
+        document,
+        artifacts,
+        ScriptGeometry::Preserve,
+        extract_page_carrier,
+        |page| {
+            page.segments
+                .iter()
+                .filter(|record| record.segment.assigned_role.is_some())
+                .count()
+        },
+    )?;
+    if used_tree && !pages.is_empty() {
+        return Ok((pages, true));
+    }
+    let page_count = document.doc.page_count().map_err(|error| {
+        crate::pdf::error::PdfError::TextExtractionFailed(format!(
+            "xberg_native_pdf: failed to get page count: {error}"
+        ))
+    })?;
+    let pages = (0..page_count)
+        .map(|index| extract_page_carrier(document, index, &HashMap::new(), artifacts, ScriptGeometry::Preserve))
+        .collect::<crate::pdf::error::Result<Vec<_>>>()?;
+    Ok((pages, false))
+}
+
+fn extract_page_carrier(
+    document: &mut super::super::NativeDocument,
+    page_index: usize,
+    roles: &HashMap<u32, Option<u8>>,
+    artifacts: super::super::ArtifactRetention,
+    geometry: super::super::ScriptGeometry,
+) -> crate::pdf::error::Result<NativePageSegments> {
+    let spans = super::super::extract_final_spans_from_page(document, page_index, geometry)?;
+    Ok(NativePageSegments::from_final_spans(spans, roles, artifacts, geometry))
 }
 
 #[cfg(test)]
