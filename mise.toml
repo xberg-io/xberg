@@ -122,6 +122,10 @@ run = "uv run --locked --extra dev pytest -q"
 
 # ---- Verification gates ------------------------------------------------------------------------
 
+[tasks."ci:verify:main-only"]
+description = "Reject CI jobs and PR triggers that allow non-main execution"
+run = "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_main_only_ci.py"
+
 [tasks."ffi:verify:declarations"]
 description = "Test the FFI parity checker and compare C# and Java against the C header"
 run = [

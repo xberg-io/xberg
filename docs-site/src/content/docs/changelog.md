@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(ci): Restrict CI and governance validation to `main`.**
+  Skip jobs for other branches and tags, including manual dispatches, and remove pull-request validation triggers.
+
 - **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
   Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
 - **(dependencies): Update Liter LLM to 2.4.2 and refresh Rust dependency locks.**
