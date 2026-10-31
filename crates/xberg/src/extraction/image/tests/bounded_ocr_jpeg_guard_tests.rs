@@ -80,3 +80,28 @@ fn retained_metadata_copies_count_toward_the_reduced_decode_budget() {
         "{error}"
     );
 }
+
+#[test]
+fn restart_intervals_cannot_enable_unaccounted_parallel_reduced_buffers() {
+    let options = oxiarc_jpeg::EncodeOptions {
+        restart_interval: oxiarc_jpeg::RestartInterval::McuRows(1),
+        ..Default::default()
+    };
+    let pixels = vec![180; usize::from(WIDTH) * usize::from(HEIGHT) * 3];
+    let bytes = oxiarc_jpeg::encode_to_vec_with_options(&pixels, WIDTH, HEIGHT, oxiarc_jpeg::InputColor::Rgb, &options)
+        .unwrap();
+    assert_valid(&bytes);
+    assert!(bytes.windows(2).any(|marker| marker == [0xff, 0xdd]));
+    assert!(bytes.windows(2).any(|marker| marker == [0xff, 0xd0]));
+    let error = load_image_for_ocr(
+        &bytes,
+        &SecurityLimits {
+            max_content_size: BUDGET,
+            ..Default::default()
+        },
+    )
+    .err()
+    .expect("reduced decoding must reject restart intervals before feature-unified Rayon can allocate bands");
+    assert!(matches!(error, XbergError::Validation { .. }));
+    assert!(error.to_string().contains("restart intervals"), "{error}");
+}
