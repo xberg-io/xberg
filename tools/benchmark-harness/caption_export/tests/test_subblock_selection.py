@@ -144,6 +144,8 @@ def test_hooks_observe_selected_real_gpt2_block_and_remove_all_handles(monkeypat
     prototype = model.decoder.transformer.h[0]
     model.decoder.transformer.h = torch.nn.ModuleList([prototype, *[copy.deepcopy(prototype) for _ in range(11)]])
     model.decoder.config.n_layer = model.config.decoder.n_layer = 12
+    model.eval()
+    assert all(not module.training for module in model.modules())
     ids, context, native = native_logits(model, pixels, 2)
     assert len(model.decoder.transformer.h) == model.decoder.config.n_layer == 12
     state = module_state(model)
