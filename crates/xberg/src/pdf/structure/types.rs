@@ -6,6 +6,7 @@ use crate::pdf::hierarchy::SegmentData;
 #[derive(Debug, Clone)]
 pub(crate) struct PdfLine {
     pub segments: Vec<SegmentData>,
+    pub native_source_origin: Option<super::pipeline::native_scripts::NativeSourceOrigin>,
     pub native_scripts: Vec<crate::pdf::native::hierarchy::script_ownership::page_segments::SegmentScriptOwner>,
     pub baseline_y: f32,
     #[allow(dead_code)]
@@ -17,6 +18,7 @@ pub(crate) struct PdfLine {
 
 impl PdfLine {
     pub(crate) fn prepend_segment(&mut self, segment: SegmentData) {
+        self.native_source_origin = None;
         for owner in &mut self.native_scripts {
             owner.base_index += 1;
             owner.script_index += 1;

@@ -131,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Preserve native source geometry and complete powers when splitting run-in prose lists.** (#2275)
   Plan from canonical rendered text; retain the original paragraph when a cut cannot preserve whole source spans.
+  Carry native preparation lineage through ownerless lines while preserving unproved cached-text list behavior.
 
 - **(pdf): Keep ordinary wrapped prose together around native scripts.** (#2275)
   Calibrate paragraph gaps within their source columns and preserve ordinary continuation across inline row repairs.

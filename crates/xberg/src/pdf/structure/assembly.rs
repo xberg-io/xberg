@@ -1669,6 +1669,7 @@ mod tests {
 
     fn make_paragraph_at(text: &str, heading_level: Option<u8>, baseline_y: f32) -> PdfParagraph {
         let lines = vec![PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y,
@@ -2563,6 +2564,7 @@ mod tests {
     #[test]
     fn test_bold_list_annotation_is_shifted_after_unicode_bullet() {
         let lines = vec![PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![bold_segment("• Bold item")],
             baseline_y: 700.0,
@@ -2639,6 +2641,7 @@ mod tests {
     #[test]
     fn split_ordered_marker_and_body_render_as_one_clean_item() {
         let lines = vec![PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![plain_segment("I."), plain_segment("Split body")],
             baseline_y: 700.0,
@@ -2672,6 +2675,7 @@ mod tests {
         ];
 
         let line = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -2760,6 +2764,7 @@ mod tests {
         let segments = vec![bold_segment("This"), bold_segment(" is"), bold_segment(" bold")];
 
         let line = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -2825,6 +2830,7 @@ mod tests {
             .split_whitespace()
             .enumerate()
             .map(|(i, word)| PdfLine {
+                native_source_origin: None,
                 native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     text: word.to_string(),
@@ -2948,6 +2954,7 @@ mod tests {
     fn suspended_hyphen_across_style_run_boundary_is_not_welded() {
         let segments = vec![plain_segment("CV- "), bold_segment("en boiler")];
         let line = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -2972,6 +2979,7 @@ mod tests {
             plain_segment("en installatiewerkzaamheden"),
         ];
         let line = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -2999,6 +3007,7 @@ mod tests {
             ("a cost-", "effective option", "a cost-effective option"),
         ] {
             let first = PdfLine {
+                native_source_origin: None,
                 native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     baseline_y: 700.0,
@@ -3010,6 +3019,7 @@ mod tests {
                 is_monospace: false,
             };
             let second = PdfLine {
+                native_source_origin: None,
                 native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     baseline_y: 685.0,
@@ -3033,6 +3043,7 @@ mod tests {
     #[test]
     fn a_genuine_wrap_hyphen_at_a_line_break_is_still_joined() {
         let first = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 700.0,
@@ -3044,6 +3055,7 @@ mod tests {
             is_monospace: false,
         };
         let second = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 685.0,
@@ -3067,6 +3079,7 @@ mod tests {
     fn suspended_hyphen_is_not_welded_in_list_item_plain_join() {
         let segments = vec![plain_segment("montage- "), plain_segment("en installatiehandleiding")];
         let line = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -3094,6 +3107,7 @@ mod tests {
     #[test]
     fn genuine_line_wrap_hyphen_still_joins_across_visual_line_break() {
         let line1 = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 700.0,
@@ -3105,6 +3119,7 @@ mod tests {
             is_monospace: false,
         };
         let line2 = PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 686.0,

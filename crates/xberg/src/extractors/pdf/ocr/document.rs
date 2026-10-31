@@ -2980,6 +2980,7 @@ mod tests {
             assigned_role: None,
         };
         let line = crate::pdf::structure::types::PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments: vec![segment],
             baseline_y: 0.0,

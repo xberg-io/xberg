@@ -66,7 +66,12 @@ fn try_split(source: &PdfParagraph, witnesses: &HyphenWitnesses) -> Option<ListR
     {
         return None;
     }
-    if source.lines.iter().any(|line| !line.segments.is_empty()) {
+    let source_backed = source.lines.iter().any(|line| !line.segments.is_empty())
+        && source
+            .lines
+            .iter()
+            .all(|line| line.segments.is_empty() || line.native_source_origin.is_some());
+    if source_backed || source.lines.iter().any(|line| !line.valid_native_scripts().is_empty()) {
         let rendered = extract_text_with_source_ranges(source, witnesses);
         let ranges = list_ranges(&rendered.text)?;
         return project_native_list(source, &rendered, &ranges, witnesses);
@@ -171,6 +176,7 @@ fn source_fragments(segments: &[Range<usize>], ranges: &[Range<usize>]) -> Optio
 fn empty_line(source: &PdfLine) -> PdfLine {
     PdfLine {
         segments: Vec::new(),
+        native_source_origin: source.native_source_origin,
         native_scripts: Vec::new(),
         baseline_y: source.baseline_y,
         dominant_font_size: source.dominant_font_size,

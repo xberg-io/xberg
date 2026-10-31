@@ -1813,6 +1813,7 @@ fn make_ocr_pdf_line(
         assigned_role: None,
     };
     types::PdfLine {
+        native_source_origin: None,
         native_scripts: Vec::new(),
         segments: vec![segment],
         baseline_y,

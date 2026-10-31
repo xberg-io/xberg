@@ -649,6 +649,7 @@ mod tests {
 
     fn make_line_at(segments: Vec<SegmentData>, baseline_y: f32) -> PdfLine {
         PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y,

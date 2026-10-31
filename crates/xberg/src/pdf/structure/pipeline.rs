@@ -31,7 +31,7 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
-mod native_scripts;
+pub(super) mod native_scripts;
 mod run_in_lists;
 
 const SPARSE_REPEATED_TIER_MIN_PAGES: usize = 2;
@@ -1370,10 +1370,16 @@ pub(super) fn reattach_detached_list_markers(paragraphs: &mut Vec<PdfParagraph>,
         else {
             continue;
         };
+        let marker_origin = paragraphs[*marker_index]
+            .lines
+            .first()
+            .and_then(|line| line.native_source_origin);
         let marker_bbox = paragraphs[*marker_index].block_bbox;
         let body = &mut paragraphs[*body_index];
         if let Some(line) = body.lines.first_mut() {
+            let origin = line.native_source_origin.and(marker_origin);
             line.prepend_segment(marker_segment);
+            line.native_source_origin = origin;
         }
         body.is_list_item = true;
         body.block_bbox = match (body.block_bbox, marker_bbox) {
@@ -3123,6 +3129,7 @@ fn make_pdf_line(segments: Vec<SegmentData>, baseline_y: f32) -> super::types::P
     let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
     let is_monospace = segments.iter().all(|s| s.is_monospace);
     super::types::PdfLine {
+        native_source_origin: None,
         native_scripts: Vec::new(),
         segments,
         baseline_y,

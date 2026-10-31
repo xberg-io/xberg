@@ -66,6 +66,7 @@ fn line_with_proof() -> PdfLine {
     let (segments, evidence) = fixture(false);
     PdfLine {
         segments,
+        native_source_origin: None,
         native_scripts: evidence.owners,
         baseline_y: 700.0,
         dominant_font_size: 12.0,
@@ -262,6 +263,7 @@ fn should_preserve_ownerless_rotated_paragraph_order_after_global_row_anchor_is_
     let (ordered, index) = order_native_segments(
         ownerless_rotated_page(),
         NativeSegmentEvidence {
+            origin: None,
             original_indices: vec![0, 1, 2],
             owners: Vec::new(),
         },
@@ -333,6 +335,7 @@ fn should_keep_legacy_rotated_subset_order_when_all_supplied_script_witnesses_ar
     owner.base_index = 1;
     owner.script_index = 0;
     let evidence = NativeSegmentEvidence {
+        origin: None,
         original_indices: vec![2, 1],
         owners: vec![owner],
     };

@@ -2218,6 +2218,7 @@ mod tests {
             .collect();
 
         let lines = vec![super::super::types::PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -2371,6 +2372,7 @@ mod tests {
             .collect();
 
         let lines = vec![super::super::types::PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -2757,6 +2759,7 @@ mod tests {
             assigned_role: None,
         }];
         let lines = vec![super::super::types::PdfLine {
+            native_source_origin: None,
             native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
@@ -3581,6 +3584,7 @@ mod tests {
     fn make_line_paragraph(line_count: usize, is_monospace: bool) -> PdfParagraph {
         let lines: Vec<super::super::types::PdfLine> = (0..line_count)
             .map(|i| super::super::types::PdfLine {
+                native_source_origin: None,
                 native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     text: format!("line{i}"),

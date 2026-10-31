@@ -24,7 +24,15 @@ impl OrdinaryGroups {
     }
 }
 
+/// Preparation passed the native page's count-checked ordinal projection.
+/// This records lineage, not an immutable segment-content witness.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct NativeSourceOrigin {
+    _private: (),
+}
+
 pub(super) struct NativeSegmentEvidence {
+    origin: Option<NativeSourceOrigin>,
     pub(super) original_indices: Vec<usize>,
     pub(super) owners: Vec<SegmentScriptOwner>,
 }
@@ -47,6 +55,7 @@ pub(super) fn prepare_segments(
     (
         segments,
         Some(NativeSegmentEvidence {
+            origin: Some(NativeSourceOrigin { _private: () }),
             original_indices,
             owners,
         }),
@@ -54,6 +63,7 @@ pub(super) fn prepare_segments(
 }
 
 pub(super) struct NativeScriptIndex {
+    origin: Option<NativeSourceOrigin>,
     original_indices: Vec<usize>,
     by_script: std::collections::HashMap<usize, SegmentScriptOwner>,
     ordinary_groups: Option<OrdinaryGroups>,
@@ -119,11 +129,13 @@ impl NativeScriptIndex {
                 Some(owner)
             })
             .collect();
+        let original_indices: Vec<_> = indices
+            .iter()
+            .filter_map(|&index| self.original_indices.get(index).copied())
+            .collect();
         NativeSegmentEvidence {
-            original_indices: indices
-                .iter()
-                .filter_map(|&index| self.original_indices.get(index).copied())
-                .collect(),
+            origin: self.origin.filter(|_| original_indices.len() == indices.len()),
+            original_indices,
             owners: complete_script_runs(owners.iter().collect())
                 .into_iter()
                 .cloned()
@@ -157,6 +169,7 @@ fn order_native_segments_inner(
         return (
             super::order_segments_in_reading_frames(segments),
             NativeScriptIndex {
+                origin: None,
                 original_indices: Vec::new(),
                 by_script: std::collections::HashMap::new(),
                 ordinary_groups: None,
@@ -179,7 +192,7 @@ fn order_native_segments_inner(
         .map(|gaps| ordinary_group_labels(&segments, &owners, gaps));
     let owner_refs: Vec<_> = owners.iter().collect();
     let order = place_suffixes_after_owners(&(0..segments.len()).collect::<Vec<_>>(), &owner_refs);
-    apply_native_order(segments, original_indices, owners, groups, order)
+    apply_native_order(segments, original_indices, owners, groups, order, evidence.origin)
 }
 
 fn remap_owner_positions(owners: Vec<SegmentScriptOwner>, order: &[usize]) -> Vec<SegmentScriptOwner> {
@@ -204,6 +217,7 @@ fn apply_native_order(
     owners: Vec<SegmentScriptOwner>,
     groups: Option<OrdinaryGroups>,
     order: Vec<usize>,
+    origin: Option<NativeSourceOrigin>,
 ) -> (Vec<SegmentData>, NativeScriptIndex) {
     let valid = order.len() == segments.len()
         && order.iter().copied().collect::<std::collections::HashSet<_>>().len() == segments.len();
@@ -227,6 +241,7 @@ fn apply_native_order(
     (
         segments,
         NativeScriptIndex {
+            origin,
             original_indices,
             by_script,
             ordinary_groups,
@@ -379,13 +394,16 @@ pub(super) fn reconstruct_native_lines(
     segments: &[&SegmentData],
     evidence: &NativeSegmentEvidence,
 ) -> Vec<crate::pdf::structure::types::PdfLine> {
+    let origin = evidence
+        .origin
+        .filter(|_| evidence.original_indices.len() == segments.len());
     let owners = accepted_owners(segments, evidence);
     if owners.is_empty() {
-        return super::reconstruct_pdf_lines(segments);
+        return legacy_native_lines(segments, origin);
     }
     let (order, owners) = plan_native_order_with_owners(segments, owners);
     if owners.is_empty() {
-        return super::reconstruct_pdf_lines(segments);
+        return legacy_native_lines(segments, origin);
     }
     let ordered: Vec<_> = order.iter().map(|&index| segments[index]).collect();
     let by_script: std::collections::HashMap<_, _> =
@@ -408,7 +426,12 @@ pub(super) fn reconstruct_native_lines(
             && ((segment.rotation_degrees - rotation).abs() > f32::EPSILON
                 || (logical_baseline - baseline).abs() > tolerance)
         {
-            lines.push(finish_native_line(std::mem::take(&mut current), baseline, &by_script));
+            lines.push(finish_native_line(
+                std::mem::take(&mut current),
+                baseline,
+                &by_script,
+                origin,
+            ));
         }
         if current.is_empty() {
             baseline = logical_baseline;
@@ -420,7 +443,18 @@ pub(super) fn reconstruct_native_lines(
         current.push((index, (*segment).clone()));
     }
     if !current.is_empty() {
-        lines.push(finish_native_line(current, baseline, &by_script));
+        lines.push(finish_native_line(current, baseline, &by_script, origin));
+    }
+    lines
+}
+
+fn legacy_native_lines(
+    segments: &[&SegmentData],
+    origin: Option<NativeSourceOrigin>,
+) -> Vec<crate::pdf::structure::types::PdfLine> {
+    let mut lines = super::reconstruct_pdf_lines(segments);
+    for line in &mut lines {
+        line.native_source_origin = origin;
     }
     lines
 }
@@ -429,6 +463,7 @@ fn finish_native_line(
     mut records: Vec<(usize, SegmentData)>,
     baseline: f32,
     owners: &std::collections::HashMap<usize, SegmentScriptOwner>,
+    origin: Option<NativeSourceOrigin>,
 ) -> crate::pdf::structure::types::PdfLine {
     if !records.iter().any(|(_, segment)| {
         segment
@@ -459,6 +494,7 @@ fn finish_native_line(
         .collect();
     let mut line = super::make_pdf_line(records.into_iter().map(|(_, segment)| segment).collect(), baseline);
     line.native_scripts = native_scripts;
+    line.native_source_origin = origin;
     line
 }
 

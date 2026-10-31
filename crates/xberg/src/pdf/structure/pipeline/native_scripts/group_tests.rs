@@ -294,6 +294,7 @@ fn should_preserve_calibrated_gaps_around_lowercase_display_equation_with_native
     );
     let raw_gaps = super::super::compute_paragraph_gap_ys(&segments);
     let duplicate = NativeSegmentEvidence {
+        origin: evidence.origin,
         original_indices: evidence.original_indices.clone(),
         owners: evidence.owners.clone(),
     };
