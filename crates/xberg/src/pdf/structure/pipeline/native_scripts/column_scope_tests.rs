@@ -33,7 +33,56 @@ fn carrier(spans: Vec<TextSpan>) -> (Vec<SegmentData>, NativeSegmentEvidence) {
         1,
         "exactly one real accepted native source owner"
     );
+    dump_calibration(&segments, &evidence);
     (segments, evidence)
+}
+
+fn sorted_lookup_gaps(mut gaps: Vec<f32>) -> Vec<f32> {
+    // Source-gap lookup uses partition_point; production calibrated_gaps sorts its output too. ~keep
+    gaps.sort_by(f32::total_cmp);
+    gaps
+}
+
+fn dump_calibration(segments: &[SegmentData], evidence: &NativeSegmentEvidence) {
+    assert!(segments.len() <= 32, "bound diagnostic rows for these small fixtures");
+    let scripts: std::collections::HashSet<_> = evidence.owners.iter().map(|owner| owner.script_index).collect();
+    let ordinary: Vec<_> = segments
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !scripts.contains(i))
+        .map(|(_, s)| s)
+        .collect();
+    let bands = super::super::paragraph_line_bands(ordinary.iter().copied());
+    let mut heights: Vec<_> = bands.iter().map(|b| b.height).collect();
+    heights.sort_by(f32::total_cmp);
+    let median = heights[heights.len() / 2];
+    let raw_gaps = super::super::paragraph_gaps_from_bands(&bands, super::super::body_leading);
+    let sources: Vec<_> = segments
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            serde_json::json!({
+                "text": s.text.chars().take(80).collect::<String>(), "y": s.y, "baseline": s.upright_baseline(),
+                "height": s.height, "font_size": s.font_size, "monospace": s.is_monospace,
+                "extent": s.upright_advance_extent(), "excluded_script": scripts.contains(&i)
+            })
+        })
+        .collect();
+    let band_values: Vec<_> = bands
+        .iter()
+        .map(|b| (b.anchor_y, b.bottom, b.top, b.height, b.monospace))
+        .collect();
+    let advances: Vec<_> = bands.windows(2).map(|p| p[0].anchor_y - p[1].anchor_y).collect();
+    eprintln!(
+        "column_scope_source_calibration={}",
+        serde_json::json!({
+            "source_count": segments.len(), "owner_count": evidence.owners.len(), "sources": sources,
+            "bands_anchor_bottom_top_height_monospace": band_values, "median_height": median,
+            "baseline_advances": advances, "legacy_body_leading": super::super::body_leading(&bands, median),
+            "corridor": super::super::page_column_corridor_for_segments(ordinary.iter().copied()),
+            "raw_gaps": raw_gaps, "sorted_gaps": sorted_lookup_gaps(raw_gaps.clone())
+        })
+    );
 }
 
 fn paragraph_index(paragraphs: &[PdfParagraph], text: &str) -> usize {
@@ -99,12 +148,15 @@ fn should_preserve_sparse_column_boundary_without_learning_its_gap_as_pitch_2275
         .filter(|(index, _)| !scripts.contains(index))
         .map(|(_, segment)| segment);
     let previous_bands = super::super::paragraph_line_bands(ordinary);
-    let previous_gaps = super::super::paragraph_gaps_from_bands(&previous_bands, super::super::body_leading);
+    let previous_gaps = sorted_lookup_gaps(super::super::paragraph_gaps_from_bands(
+        &previous_bands,
+        super::super::body_leading,
+    ));
     assert!(
         super::super::baselines_cross_source_gap(700.0, 678.0, &previous_gaps),
         "the previous ordinary page calibration preserves this boundary using real 12pt context"
     );
-    let gaps = super::super::compute_paragraph_gap_ys(&segments);
+    let gaps = sorted_lookup_gaps(super::super::compute_paragraph_gap_ys(&segments));
     let (segments, index) = order_native_paragraph_segments(segments, evidence, &gaps);
     let initial: Vec<_> = segments.iter().map(super::line_tests::fingerprint).collect();
     let source_pair: Vec<_> = segments
@@ -152,7 +204,7 @@ fn should_keep_a_gutter_crossing_source_script_in_its_ordinary_column_2275() {
         span("second normal right row", 315.0, 640.0, 250.0, 10.0),
         span("ter 3", 315.0, 566.8379, 20.0, 10.0),
     ]);
-    let gaps = super::super::compute_paragraph_gap_ys(&segments);
+    let gaps = sorted_lookup_gaps(super::super::compute_paragraph_gap_ys(&segments));
     let (segments, index) = order_native_paragraph_segments(segments, evidence, &gaps);
     assert_eq!(index.by_script.len(), 1);
     let owner = index.by_script.values().next().unwrap();
@@ -174,7 +226,10 @@ fn should_keep_a_gutter_crossing_source_script_in_its_ordinary_column_2275() {
         "actual raised source ink protrudes into the corridor"
     );
     let old_bands = super::super::paragraph_line_bands(ordinary.iter().copied());
-    let old_page_gaps = super::super::paragraph_gaps_from_bands(&old_bands, super::super::body_leading);
+    let old_page_gaps = sorted_lookup_gaps(super::super::paragraph_gaps_from_bands(
+        &old_bands,
+        super::super::body_leading,
+    ));
     assert!(
         super::super::baselines_cross_source_gap(base.upright_baseline(), next.upright_baseline(), &old_page_gaps),
         "the foreign-column band provides a real global marker, not a manually injected gap"
@@ -185,7 +240,10 @@ fn should_keep_a_gutter_crossing_source_script_in_its_ordinary_column_2275() {
             .copied()
             .filter(|s| s.upright_advance_extent().1 <= corridor.0),
     );
-    let left_gaps = super::super::paragraph_gaps_from_bands(&left_bands, super::super::body_leading);
+    let left_gaps = sorted_lookup_gaps(super::super::paragraph_gaps_from_bands(
+        &left_bands,
+        super::super::body_leading,
+    ));
     assert!(
         !super::super::baselines_cross_source_gap(base.upright_baseline(), next.upright_baseline(), &left_gaps),
         "the same ordinary endpoints have no column-local source gap"
@@ -239,7 +297,7 @@ fn should_not_learn_full_height_stacked_band_advances_as_ordinary_body_pitch_227
         advance >= 12.0 && advance < 12.4,
         "nonbody source pitch passes the one-line-height filter"
     );
-    let gaps = super::super::compute_paragraph_gap_ys(&segments);
+    let gaps = sorted_lookup_gaps(super::super::compute_paragraph_gap_ys(&segments));
     assert!(
         super::super::baselines_cross_source_gap(700.0, 680.8, &gaps),
         "the actual coarse calibration exposes the false ordinary-wrap marker"
