@@ -44,7 +44,7 @@ fn fixture(script_first: bool) -> (Vec<SegmentData>, NativeSegmentEvidence) {
     (segments, evidence)
 }
 
-fn fingerprint(segment: &SegmentData) -> (String, [u32; 7], [bool; 3], Option<u8>) {
+pub(super) fn fingerprint(segment: &SegmentData) -> (String, [u32; 7], [bool; 3], Option<u8>) {
     (
         segment.text.clone(),
         [

@@ -288,6 +288,9 @@ fn finish_native_line(
 }
 
 #[cfg(test)]
+mod group_tests;
+
+#[cfg(test)]
 mod line_tests;
 
 #[cfg(test)]
