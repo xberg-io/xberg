@@ -2,7 +2,7 @@
 
 mod helpers;
 
-use helpers::{extract_bytes_document_blocking, get_test_file_path};
+use helpers::{extract_bytes_document_blocking, extract_uri_document_blocking, get_test_file_path};
 use sha2::{Digest, Sha256};
 use xberg::core::config::{ExtractionConfig, OutputFormat, PdfBackend, PdfConfig};
 use xberg::types::document_structure::{AnnotationKind, DocumentStructure};
@@ -149,4 +149,37 @@ fn should_preserve_polynomial_prose_word_boundaries_on_series_page_2275() {
         "source conclusion keeps prose and inline variable boundaries: {text}"
     );
     assert_eq!(result.content.matches("Multiply numerator and denominator").count(), 1);
+}
+
+#[test]
+fn should_retain_derivative_coefficients_with_canonical_snapshot_uri_defaults_2275() {
+    let path = get_test_file_path("pdf/regression_pages/gutenberg-33283-p265.pdf");
+    let bytes = std::fs::read(&path).expect("mandatory visually inspected derivative source");
+    assert!(bytes.starts_with(b"%PDF-"));
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "805a2818d433265d910a3a5ae18732aed4ffecf980290079b5b04dde71a0b211",
+        "exact source shared with the structured byte-path positive control"
+    );
+    let config = ExtractionConfig {
+        disable_ocr: true,
+        use_cache: false,
+        enable_quality_processing: false,
+        output_format: OutputFormat::Markdown,
+        ..Default::default()
+    };
+    assert!(
+        config.pdf_options.is_none(),
+        "canonical snapshot leaves PDF options implicit"
+    );
+    let result = extract_uri_document_blocking(&path, Some("application/pdf"), &config)
+        .expect("canonical snapshot URI extraction");
+    assert!(result.content.contains("Exercises IV."));
+    for coefficient in ["3240", "1944"] {
+        assert_eq!(
+            result.content.matches(coefficient).count(),
+            1,
+            "canonical snapshot defaults retain source derivative coefficient {coefficient}"
+        );
+    }
 }
