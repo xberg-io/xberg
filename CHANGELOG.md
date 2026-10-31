@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
+
 - **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
   Email extraction uses read-only parser views while retaining attachment limits, nested-message
   payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
