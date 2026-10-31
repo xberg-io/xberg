@@ -45,6 +45,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
+  Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
+
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
+
+- **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
+  Email extraction uses read-only parser views while retaining attachment limits, nested-message
+  payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
+
+- **(rust): Upgrade parking_lot to 0.13 and refresh compatible dependencies.**
+  Public registry accessors now return parking_lot 0.13 lock types. ZIP advances to 9.2 and
+  HTML conversion, encoding and 7z dependencies receive their latest compatible fixes.
+
+- **(ci): Restrict CI and governance validation to `main`.**
+  Skip jobs for other branches and tags, including manual dispatches, and remove pull-request validation triggers.
+  Pin benchmark source checkouts to the dispatched main revision.
+
 - **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
   Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
 - **(dependencies): Update Liter LLM to 2.4.2 and refresh Rust dependency locks.**
@@ -133,6 +151,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Three-component 8-bit scans use checked input, metadata, plane and output budgets; fitting images keep their dimensions.
   Reduced fallback requires one interleaved scan without restart intervals and color markers before the frame.
   Tesseract retains the original density at the nominal decode scale; required DPI resizes fail before allocating unbudgeted convolution buffers.
+
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
+
+- **(swift): The Swift package requires macOS 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+
+- **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
+  Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.
+
+- **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
+  Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.

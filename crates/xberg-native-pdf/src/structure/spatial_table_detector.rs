@@ -1434,7 +1434,7 @@ fn has_split_modal_column_groups(grid: &GridStructure, most_common_count: usize)
         active_columns |= mask;
         let mut bits = mask;
         while bits != 0 {
-            let bit = bits & bits.wrapping_neg();
+            let bit = bits.isolate_lowest_one();
             let col = bit.trailing_zeros() as usize;
             adjacency[col] |= mask;
             bits &= !bit;
@@ -1445,12 +1445,12 @@ fn has_split_modal_column_groups(grid: &GridStructure, most_common_count: usize)
     let mut significant_components = 0usize;
 
     while remaining != 0 {
-        let seed_bit = remaining & remaining.wrapping_neg();
+        let seed_bit = remaining.isolate_lowest_one();
         let mut component: u128 = 0;
         let mut frontier: u128 = seed_bit;
 
         while frontier != 0 {
-            let bit = frontier & frontier.wrapping_neg();
+            let bit = frontier.isolate_lowest_one();
             frontier &= !bit;
 
             if component & bit != 0 {

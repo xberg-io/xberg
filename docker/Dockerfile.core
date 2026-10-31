@@ -1,6 +1,6 @@
 # =============================================================================
 # =============================================================================
-FROM rust:1.99.1-trixie@sha256:931c2c0531a8b143e044f0f3914dfe802f15bb3d1955f0b657e9359327ac2ffc AS builder
+FROM rust:1.99.1-trixie@sha256:09027f873d45b8ecd1dc86f1fa13b7a62b875c961f017a0e331267b350430137 AS builder
 
 ARG CARGO_BUILD_JOBS=1
 
@@ -149,7 +149,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp target/release/xberg /build/xberg && \
     strip /build/xberg
 
-FROM debian:trixie-20261020-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
 LABEL org.opencontainers.image.source="https://github.com/xberg-io/xberg"
 LABEL org.opencontainers.image.description="Xberg document intelligence - core variant"

@@ -26,7 +26,8 @@ env:
 jobs:
   python-wheel-smoke:
     name: Build + smoke-test Python wheel (${{ matrix.os }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

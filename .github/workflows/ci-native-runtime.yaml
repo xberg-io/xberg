@@ -36,7 +36,11 @@ jobs:
         with:
           install: "false"
           config-ref: ${{ github.sha }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-native-runtime-${{ matrix.version }}
+          use-sccache: "true"
+          install-llvm-cov: "false"
       - name: Fetch actual decoder fixtures
         uses: xberg-io/actions/fetch-test-documents@v1
         with:

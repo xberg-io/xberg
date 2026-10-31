@@ -32,6 +32,7 @@ env:
 
 jobs:
   bats:
+    if: github.ref == 'refs/heads/main'
     name: Bats on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -58,6 +59,7 @@ jobs:
             --print-output-on-failure
 
   pester:
+    if: github.ref == 'refs/heads/main'
     name: Pester on windows-latest
     # windows-latest only. These scripts exist to run on Windows, and the path semantics their
     # assertions depend on -- backslash separators, case-insensitive comparison -- only differ
@@ -81,6 +83,7 @@ jobs:
           version: ${{ env.PESTER_VERSION }}
 
   format:
+    if: github.ref == 'refs/heads/main'
     name: Shell formatting
     runs-on: ubuntu-latest
     steps:

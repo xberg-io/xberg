@@ -5,7 +5,7 @@ description: Extract a document locally with Xberg
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 Content-Hash: blake3:3d695d0525269a1935328e6568418a562cac9ba7a64c6e8121d5136dc93b36e3
-Source-Hash: blake3:a6076da32e6bfe3750e87d00b1c57c1dafffe1958ab6f8b6768e4a94fae3b20a
+Source-Hash: blake3:4a90223a333b0f963ae8cdec4f38db88b769132c5dd1b7f39a7fe8e84f57f83e
 Schema-Version: v1
 -->
 

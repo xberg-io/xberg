@@ -31,7 +31,7 @@ func resolvedStaticLib(_ name: String) -> String {
 let package = Package(
   name: "Xberg",
   platforms: [
-    .macOS(.v13),
+    .macOS(.v14),
     .iOS(.v16),
   ],
   products: [

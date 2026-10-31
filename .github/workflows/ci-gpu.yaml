@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     name: "Build ORT test binary"
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -64,6 +65,7 @@ jobs:
           retention-days: 1
 
   gpu-tests:
+    if: github.ref == 'refs/heads/main'
     name: "GPU Tests: ONNX/ORT (paddle-ocr, layout, embeddings)"
     needs: build
     runs-on: runner-gpu-l4
@@ -118,6 +120,7 @@ jobs:
           TEST_DOCUMENTS_DIR: ${{ github.workspace }}/test_documents
 
   build-candle:
+    if: github.ref == 'refs/heads/main'
     name: "Build Candle (${{ matrix.model.name }})"
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -201,6 +204,7 @@ jobs:
           retention-days: 1
 
   candle-gpu-tests:
+    if: github.ref == 'refs/heads/main'
     name: "GPU Tests: Candle VLM-OCR (${{ matrix.model.name }})"
     needs: build-candle
     runs-on: runner-gpu-l4

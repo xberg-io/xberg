@@ -30,12 +30,13 @@ ruby = "3.4.12"
 dotnet = "10.0.403"
 zig = "0.17.0"
 "github:Goldziher/poly" = "0.31.2"
-"github:Goldziher/adrlint" = "0.4.0"
-"github:xberg-io/alef" = "0.115.6"
+"github:Goldziher/adrlint" = "0.4.1"
+"github:xberg-io/alef" = "0.115.9"
 cargo-deny = "0.20.2"
 "github:taiki-e/cargo-llvm-cov" = "0.9.1"
 bats = "1.14.0"
 lychee = "0.24.2"
+helm = "4.3.1"
 "github:rustwasm/wasm-pack" = "0.15.0"
 
 [env]
@@ -121,6 +122,10 @@ dir = "{{config_root}}/tools/generate_test_fixtures"
 run = "uv run --locked --extra dev pytest -q"
 
 # ---- Verification gates ------------------------------------------------------------------------
+
+[tasks."ci:verify:main-only"]
+description = "Reject CI jobs and PR triggers that allow non-main execution"
+run = "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_main_only_ci.py"
 
 [tasks."ffi:verify:declarations"]
 description = "Test the FFI parity checker and compare C# and Java against the C header"

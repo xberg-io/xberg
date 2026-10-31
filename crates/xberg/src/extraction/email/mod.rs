@@ -30,7 +30,6 @@ use crate::text::utf8_validation;
 use crate::text::windows_codepage::encoding_for_windows_codepage;
 use crate::types::{EmailAttachment, EmailExtractionResult, ProcessingWarning};
 use bytes::Bytes;
-use mail_parser::MimeHeaders;
 use regex::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -350,6 +349,12 @@ pub(crate) use rtf::{decompress_rtf_compressed, strip_rtf_to_plain_text};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod address_tests;
+
+#[cfg(test)]
+mod leniency_tests;
 
 #[cfg(test)]
 mod base64_tests;
