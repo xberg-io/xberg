@@ -1,4 +1,4 @@
-use oxiarc_jpeg::{AppSegment, Component, DecodeOptions, FrameHeader, Metadata, ScanHeader, TableSet};
+use oxiarc_jpeg::{AdobeHeader, AppSegment, Component, DecodeOptions, FrameHeader, JfifHeader, ScanHeader, TableSet};
 
 use super::headers::Header;
 
@@ -56,6 +56,22 @@ fn table_bytes() -> Option<u64> {
     ])
 }
 
+fn metadata_state_bytes() -> Option<u64> {
+    // Metadata is private in the pinned decoder. Its eight fields have alignment
+    // no greater than usize; reserve one full alignment unit per field. ~keep
+    let fields = [
+        size_of::<Option<JfifHeader>>() as u64,
+        size_of::<Option<AdobeHeader>>() as u64,
+        size_of::<bool>() as u64,
+        size_of::<Option<Vec<u8>>>() as u64,
+        size_of::<Option<Vec<u8>>>() as u64,
+        size_of::<Vec<Vec<u8>>>() as u64,
+        size_of::<Vec<AppSegment>>() as u64,
+        size_of::<Vec<(u8, u8, Vec<u8>)>>() as u64,
+    ];
+    sum(&fields)?.checked_add((fields.len() as u64).checked_mul(std::mem::align_of::<usize>() as u64)?)
+}
+
 fn bookkeeping_bytes() -> Option<u64> {
     let component = sum(&[
         size_of::<Component>() as u64,
@@ -68,7 +84,7 @@ fn bookkeeping_bytes() -> Option<u64> {
     sum(&[
         component.checked_mul(COMPONENTS)?,
         size_of::<FrameHeader>() as u64,
-        size_of::<Metadata>() as u64,
+        metadata_state_bytes()?,
         size_of::<ScanHeader>() as u64,
         size_of::<DecodeOptions>() as u64,
     ])
