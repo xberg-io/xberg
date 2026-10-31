@@ -187,5 +187,10 @@ fn should_reject_a_resize_even_when_dimension_clamping_returns_the_input_size() 
     )
     .err()
     .expect("equal final dimensions do not mean the convolution resize is skipped");
-    assert!(error.to_string().contains("unbudgeted resize buffers"), "{error}");
+    let message = error.to_string();
+    assert!(message.contains("cannot be resized to target_dpi 600"), "{message}");
+    assert!(
+        message.contains("Raise security_limits.max_content_size, or set target_dpi to 300"),
+        "{message}"
+    );
 }

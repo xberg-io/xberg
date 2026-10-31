@@ -1012,9 +1012,15 @@ fn prepare_encoded_ocr_image(
     {
         let dpi_config = ocr_dpi_config(preprocessing, images);
         if dpi.is_none_or(|dpi| normalization_requires_resize(width, height, &dpi_config, dpi)) {
+            let remedy = dpi.map_or_else(
+                || "set the source DPI of the image".to_owned(),
+                |dpi| format!("set target_dpi to {}", dpi.round()),
+            );
             return Err(crate::XbergError::validation(format!(
-                "Reduced JPEG DPI normalization requires unbudgeted resize buffers under security_limits.max_content_size {}",
-                limits.max_content_size,
+                "The image exceeds security_limits.max_content_size ({} bytes) at its source resolution, and a \
+                 reduced-size image cannot be resized to target_dpi {} within that limit. Raise \
+                 security_limits.max_content_size, or {remedy}",
+                limits.max_content_size, dpi_config.target_dpi,
             )));
         }
     }
