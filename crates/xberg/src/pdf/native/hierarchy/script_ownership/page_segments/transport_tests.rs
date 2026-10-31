@@ -31,7 +31,11 @@ fn source(name: &str, sha: &str) -> NativeDocument {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../test_documents/pdf/regression_pages/{name}.pdf"));
     let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("mandatory source {}: {error}", path.display()));
-    assert_eq!(format!("{:x}", Sha256::digest(&bytes)), sha);
+    let actual_sha256 = Sha256::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert_eq!(actual_sha256, sha);
     assert!(bytes.starts_with(b"%PDF-"));
     let document = NativeDocument::open_bytes(&bytes).expect("open SHA-bound source");
     assert_eq!(document.doc.page_count().expect("source page count"), 1);
