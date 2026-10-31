@@ -316,6 +316,7 @@ fn source_witness(output: &Path) -> Vec<Value> {
         "src/layout/models/pp_doclayout_v3.rs",
         "src/layout/models/pp_doclayout_v3/production_parity.rs",
         "src/layout/models/pp_doclayout_v3/preprocessing.rs",
+        "src/layout/models/pp_doclayout_v3/output.rs",
     ]
     .iter()
     .enumerate()
@@ -341,7 +342,7 @@ fn preserve_producer(output: &Path) -> Value {
         "producer/executable",
     );
     let sources = source_witness(output);
-    assert_eq!(sources.len(), 17, "all producer source artifacts preserved");
+    assert_eq!(sources.len(), 18, "all producer source artifacts preserved");
     let producer = json!({"executable": executable, "sources": sources});
     fs::write(
         output.join("producer/manifest.json"),
