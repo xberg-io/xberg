@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
+  Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
+
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
+
 - **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
   Email extraction uses read-only parser views while retaining attachment limits, nested-message
   payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
@@ -146,6 +152,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
   Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
   Publish normalized representative-page metadata while retaining its original orientation provenance.
+
+- **(swift): The Swift package requires macOS 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+
+- **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
+  Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
