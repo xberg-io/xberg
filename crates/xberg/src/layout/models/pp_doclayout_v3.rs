@@ -400,6 +400,10 @@ mod preprocessing_tests;
 mod batch_contract_tests;
 
 #[cfg(test)]
+#[path = "pp_doclayout_v3/output_contract_tests.rs"]
+mod output_contract_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
