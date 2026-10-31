@@ -201,6 +201,10 @@ fn apply_header_segment(value: &Segment<'_>, header: &mut Option<Header>) -> Res
         // Refuse that path before entering the pinned decoder, regardless of its features. ~keep
         0xdd if value.payload == [0, 0] => {}
         0xdd => return Err(invalid("JPEG restart intervals are unsupported in reduced decoding")),
+        // The pinned decoder fixes color interpretation at SOF, before reading these markers. ~keep
+        0xe0 | 0xee if header.is_some() => {
+            return Err(invalid("color marker after frame is unsupported in reduced decoding"));
+        }
         0xe0..=0xef | 0xfe => {}
         _ => return Err(invalid("unsupported marker in reduced baseline JPEG")),
     }
