@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: adrs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   adrlint:
     if: github.ref == 'refs/heads/main'
