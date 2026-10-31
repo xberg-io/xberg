@@ -185,29 +185,27 @@ fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner]
         }
     }
     let scripts: std::collections::HashMap<_, _> = owners.iter().map(|owner| (owner.script_index, owner)).collect();
-    let mut representatives: Vec<_> = (0..groups.len()).collect();
     let mut previous: Option<usize> = None;
-    let mut bridge_base = None;
+    let mut repaired_row: Option<(usize, usize)> = None;
     for (index, segment) in segments.iter().enumerate() {
         if let Some(owner) = scripts.get(&index) {
-            if previous.is_some_and(|previous| same_ordinary_row(&segments[previous], &segments[owner.base_index])) {
-                bridge_base = Some(owner.base_index);
+            if let Some(previous) = previous
+                && same_ordinary_row(&segments[previous], &segments[owner.base_index])
+            {
+                repaired_row = Some((owner.base_index, labels[previous]));
             }
             continue;
         }
-        if let Some(previous) = previous
-            && bridge_base.is_some_and(|base| same_ordinary_row(segment, &segments[base]))
-            && same_ordinary_row(segment, &segments[previous])
-        {
-            // Legacy groups are contiguous before suffix placement. An earlier
-            // ordinary group's representative is already final in this pass. ~keep
-            representatives[labels[index]] = representatives[labels[previous]];
+        if let Some((base, label)) = repaired_row {
+            if same_ordinary_row(segment, &segments[base]) {
+                // One legacy group can contain this row's suffix and the next
+                // row's prefix. Repair only endpoints on the accepted base row. ~keep
+                labels[index] = label;
+            } else {
+                repaired_row = None;
+            }
         }
         previous = Some(index);
-        bridge_base = None;
-    }
-    for label in &mut labels {
-        *label = representatives[*label];
     }
     // A script can share its old group with unrelated glyphs. Transfer only
     // that endpoint; merging the old group would move unrelated rows too. ~keep
