@@ -53,7 +53,7 @@ impl NativeScriptIndex {
             .map(|(_, segment)| segment.clone())
             .collect();
         let mut gaps = super::compute_paragraph_gap_ys(&ordinary);
-        gaps.sort_by(|left, right| crate::utils::safe_float_cmp(*left, *right));
+        gaps.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
         gaps
     }
 
