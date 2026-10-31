@@ -23,7 +23,7 @@ dev = [
   "pytest-mock>=3.17.0",
   "pytest-rerunfailures>=16.7",
   "pytest-timeout>=2.4.0",
-  "ruff==0.17.2",
+  "ruff==0.17.3",
   "types-pillow>=10.2.0.20240822",
   "types-psutil>=7.2.2.20260906",
   "validate-pyproject>=0.27",
@@ -43,7 +43,7 @@ dev = [
 # against the default docling resolves to before assuming the adapter is at fault. ~keep
 bench-docling = ["docling-jobkit==3.9.1", "easyocr>=1.7.2", "transformers>=5.10.0"]
 bench-markitdown = ["markitdown[all]==0.1.9"]
-bench-mineru = ["mineru==4.0.12", "onnxruntime", "transformers>=5.10.0"]
+bench-mineru = ["mineru==4.1.3", "onnxruntime", "transformers>=5.10.0"]
 # paddlepaddle==3.3.1 ships no manylinux aarch64 wheel for any CPython version (checked
 # against every cp39-cp313 build on PyPI), so it carries an explicit platform exclusion
 # below rather than leaving `tool.uv.environments` to reject the whole linux/aarch64 split
@@ -60,7 +60,7 @@ bench-paddleocr-python = [
   "setuptools>=84.0.0; python_version < '3.14'",
 ]
 bench-pymupdf4llm = ["pillow>=12.3.0", "pymupdf==2.0", "pymupdf-layout==2.0", "pymupdf4llm==2.0"]
-bench-rapidocr = ["numpy>=2.0", "onnxruntime==1.31.0", "pillow>=12.3.0", "pymupdf==2.0", "rapidocr==3.10.0"]
+bench-rapidocr = ["numpy>=2.0", "onnxruntime==1.31.1", "pillow>=12.3.0", "pymupdf==2.0", "rapidocr==3.10.0"]
 bench-unstructured = ["unstructured[docx,pdf,pptx,xlsx,md,odt,rtf,epub,org,rst]==0.27.34", "transformers>=5.10.0"]
 
 [tool.uv]

@@ -149,6 +149,7 @@ jobs:
         with:
           cosign-release: v2.6.5
 
+      # oras stays on its setup action: the toolchains baseline carries no oras tool. ~keep
       - name: Install oras
         if: steps.meta.outputs.dry_run != 'true'
         uses: oras-project/setup-oras@v2
