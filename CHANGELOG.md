@@ -133,6 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
+
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
 
