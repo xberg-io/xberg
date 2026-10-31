@@ -822,6 +822,13 @@ fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String 
     if let Some(name) = normalized.source_name.as_deref() {
         hasher.update(name.as_bytes());
     }
+    hasher.update(b"\x00read_again_models\x00");
+    #[cfg(feature = "ocr")]
+    hash_read_again_models(
+        &mut hasher,
+        &normalized,
+        &crate::ocr::processor::validation::TessdataEnv::from_process(),
+    );
     hasher.update(b"\x00tessdata\x00");
     if let Some(ocr) = normalized.ocr.as_ref()
         && let Some(tessdata) = ocr.tessdata_bytes.as_ref()
@@ -837,6 +844,36 @@ fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String 
 
     let hash = hasher.finalize();
     hex::encode(&hash.as_bytes()[..16])
+}
+
+/// Hash which OCR models decide a read-again for `config`, and the directory of each. The result
+/// depends on both: a Khmer or Chinese page adds its language only when the model is installed,
+/// and the OCR runs with the models of that directory. A forced request is never adapted, so it
+/// hashes nothing here.
+#[cfg(feature = "ocr")]
+fn hash_read_again_models(
+    hasher: &mut blake3::Hasher,
+    config: &ExtractionConfig,
+    tessdata_env: &crate::ocr::processor::validation::TessdataEnv,
+) {
+    let Some(ocr) = config.ocr.as_ref() else {
+        return;
+    };
+    if !crate::extractors::image::ocr_chosen_by_extractor(config) {
+        return;
+    }
+    for dir in crate::ocr::processor::validation::read_again_model_dirs(ocr, tessdata_env) {
+        match dir {
+            Some(dir) => {
+                hasher.update(&[1]);
+                hasher.update(&(dir.len() as u64).to_le_bytes());
+                hasher.update(dir.as_bytes());
+            }
+            None => {
+                hasher.update(&[0]);
+            }
+        }
+    }
 }
 
 /// Get or initialize the global extraction cache.
@@ -963,6 +1000,48 @@ mod cache_key_tests {
             hash_extraction_config(&b, "text/x-source-code"),
             "source_name (serde-skipped) must be part of the cache key"
         );
+    }
+
+    /// Every read-again model is available in both search chains, from a different directory in
+    /// each. The configured language is a made-up name, so no directory outside the test can hold
+    /// the whole list, and the first match is always a test directory.
+    #[test]
+    #[cfg(feature = "ocr")]
+    fn the_directory_of_a_read_again_model_changes_the_cache_key() {
+        use crate::core::config::OcrConfig;
+        use crate::ocr::processor::validation::TessdataEnv;
+
+        const LANGUAGE: &str = "cache-key-test-lang";
+        let model_dir = || {
+            let dir = tempfile::tempdir().expect("tessdata directory");
+            for model in [LANGUAGE, "khm", "chi_sim", "osd"] {
+                std::fs::write(dir.path().join(format!("{model}.traineddata")), b"").expect("write a fake model");
+            }
+            dir
+        };
+        let (first, second) = (model_dir(), model_dir());
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                language: vec![LANGUAGE.to_string()],
+                ..OcrConfig::default()
+            }),
+            ..Default::default()
+        };
+        let key_with_prefix = |dir: &tempfile::TempDir| {
+            let env = TessdataEnv {
+                tessdata_prefix: dir.path().to_str().map(str::to_string),
+                cache_dir: None,
+            };
+            let mut hasher = blake3::Hasher::new();
+            super::hash_read_again_models(&mut hasher, &config, &env);
+            hasher.finalize()
+        };
+        assert_ne!(
+            key_with_prefix(&first),
+            key_with_prefix(&second),
+            "the same models in another directory must change the cache key"
+        );
+        assert_eq!(key_with_prefix(&first), key_with_prefix(&first), "the key is stable");
     }
 
     #[test]

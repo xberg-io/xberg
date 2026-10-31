@@ -159,6 +159,47 @@ pub(crate) fn existing_tessdata_dir_for(
         .find(|dir| all_languages_exist(dir, languages).unwrap_or(false))
 }
 
+/// The Tesseract data set that holds the orientation and script model.
+pub(crate) const OSD_LANGUAGE: &str = "osd";
+
+/// `true` when a directory of the tessdata search chain holds every configured language of `ocr`
+/// and `language`. Nothing is downloaded: a list that is not on disk keeps the configured
+/// languages, so a caller that never asked for the language keeps its offline behaviour.
+#[cfg(feature = "pdf")]
+pub(crate) fn read_again_languages_are_on_disk(ocr: &crate::core::config::OcrConfig, language: &str) -> bool {
+    read_again_languages_dir_in(ocr, language, &TessdataEnv::from_process()).is_some()
+}
+
+/// The directory of the tessdata search chain that holds every configured language of `ocr` and
+/// `language`, or `None` when no directory does.
+fn read_again_languages_dir_in(
+    ocr: &crate::core::config::OcrConfig,
+    language: &str,
+    tessdata_env: &TessdataEnv,
+) -> Option<String> {
+    let mut languages = ocr.effective_tesseract_language();
+    languages.push(language.to_string());
+    existing_tessdata_dir_for(&languages, ocr.tessdata_path.as_deref(), tessdata_env)
+}
+
+/// The languages a page can be read again with: Khmer and Chinese.
+const READ_AGAIN_LANGUAGES: [&str; 2] = ["khm", "chi_sim"];
+
+/// The directory each model that decides a read-again resolves to for `ocr`, or `None` when no
+/// directory of the search chain holds it: each read-again language with the whole configured
+/// list, then the script model. The extraction result depends on both the answer and the
+/// directory, so the document cache key holds them.
+pub(crate) fn read_again_model_dirs(
+    ocr: &crate::core::config::OcrConfig,
+    tessdata_env: &TessdataEnv,
+) -> [Option<String>; 3] {
+    let [khmer, chinese] =
+        READ_AGAIN_LANGUAGES.map(|language| read_again_languages_dir_in(ocr, language, tessdata_env));
+    let script_model =
+        existing_tessdata_dir_for(&[OSD_LANGUAGE.to_string()], ocr.tessdata_path.as_deref(), tessdata_env);
+    [khmer, chinese, script_model]
+}
+
 /// Candidate tessdata directories in the resolver's priority order:
 /// `override_path` (`OcrConfig.tessdata_path`), `TESSDATA_PREFIX`,
 /// `XBERG_CACHE_DIR/tessdata`, the xberg cache base, then system paths.
@@ -365,6 +406,22 @@ pub(super) fn strip_control_characters(text: &str) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_osd_model_is_found_in_a_later_directory_than_the_recognition_language() {
+        let cache = tempfile::tempdir().unwrap();
+        let system = tempfile::tempdir().unwrap();
+        std::fs::write(cache.path().join("eng.traineddata"), b"").unwrap();
+        std::fs::write(system.path().join("eng.traineddata"), b"").unwrap();
+        std::fs::write(system.path().join("osd.traineddata"), b"").unwrap();
+        let env = TessdataEnv {
+            tessdata_prefix: system.path().to_str().map(str::to_string),
+            cache_dir: None,
+        };
+        // The first directory of the chain has the language and no model; the second has both.
+        let found = existing_tessdata_dir_for(&["osd".to_string()], Some(cache.path()), &env);
+        assert_eq!(found.as_deref(), system.path().to_str());
+    }
 
     #[test]
     fn test_resolve_all_installed_languages_success() {
