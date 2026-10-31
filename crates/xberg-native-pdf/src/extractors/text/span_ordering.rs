@@ -91,7 +91,7 @@ fn row_evidence_geometry_is_valid(span: &TextSpan) -> bool {
         && bbox.height > 0.0
         && span.font_size > 0.0
         && span.rotation_degrees.is_finite()
-        && !span.is_rotated()
+        && span.rotation_degrees == 0.0
         && span.wmode == 0
         && !span.mirrored
         && !span.text.trim().is_empty()
