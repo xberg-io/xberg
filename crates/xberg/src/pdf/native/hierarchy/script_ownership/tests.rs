@@ -507,3 +507,35 @@ fn should_not_use_a_wrapped_operator_as_note_exception_2275() {
     assert!(!owners.iter().any(|owner| owner.script_witness.original_index == 1));
     assert_eq!(fingerprints(&spans), before);
 }
+
+#[test]
+fn should_omit_cross_binade_ulp_tied_continuation_operators_2275() {
+    let operator_x = 16.0_f32;
+    let adjacent_x = f32::from_bits(operator_x.to_bits() + 1);
+    let mut spans = vec![
+        span("The value is 2", -56.0, 700.0, 60.0, 12.0),
+        span("1", 4.0, 704.0, 4.0, 8.0),
+        span("+ 1", operator_x, 700.0, 20.0, 12.0),
+        span("- 1", adjacent_x, 700.0, 20.0, 12.0),
+    ];
+    spans.extend(note_definition("1"));
+    assert_eq!(spans[1].bbox.right(), 8.0);
+    assert!(adjacent_x - operator_x > f32::EPSILON * spans[1].bbox.right());
+    assert!(adjacent_x - operator_x <= f32::EPSILON * adjacent_x);
+    let notes = numeric_notes(&spans);
+    assert!(notes.contains_key("1"));
+    assert!(needs_numeric_script_boundary(&spans[0], &spans[1], &notes, None));
+    for operator in &spans[2..4] {
+        assert!(!needs_numeric_script_boundary(
+            &spans[0],
+            &spans[1],
+            &notes,
+            Some(operator)
+        ));
+    }
+    assert_native_candidate(&spans, 0, 1);
+    let before = fingerprints(&spans);
+    let owners = collect_suffix_script_owners(&spans);
+    assert!(!owners.iter().any(|owner| owner.script_witness.original_index == 1));
+    assert_eq!(fingerprints(&spans), before);
+}
