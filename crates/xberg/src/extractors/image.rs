@@ -2485,10 +2485,13 @@ pub(crate) async fn process_whole_image_ocr_with_sparse_retry(
     } else {
         sparse_image_ocr_fallback_config(effective_config.as_ref())
     };
-    let fallback = match backend
+    let fallback_result = backend
         .process_image_owned(std::sync::Arc::clone(&image_bytes), &fallback_config)
-        .await
-    {
+        .await;
+    if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    let fallback = match fallback_result {
         Ok(fallback) => fallback,
         Err(error @ crate::XbergError::Cancelled) => return Err(error),
         Err(error) => {
@@ -3942,6 +3945,10 @@ mod image_table_grid_metadata_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr-pipeline"))]
+#[path = "image_sparse_retry_cancellation_tests.rs"]
+mod image_sparse_retry_cancellation_tests;
 
 #[cfg(test)]
 mod tests {
