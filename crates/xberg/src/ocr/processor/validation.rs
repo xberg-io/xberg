@@ -166,9 +166,19 @@ pub(crate) const OSD_LANGUAGE: &str = "osd";
 /// and `language`. Nothing is downloaded: a list that is not on disk keeps the configured
 /// languages, so a caller that never asked for the language keeps its offline behaviour.
 pub(crate) fn read_again_languages_are_on_disk(ocr: &crate::core::config::OcrConfig, language: &str) -> bool {
+    read_again_languages_dir_in(ocr, language, &TessdataEnv::from_process()).is_some()
+}
+
+/// The directory of the tessdata search chain that holds every configured language of `ocr` and
+/// `language`, or `None` when no directory does.
+fn read_again_languages_dir_in(
+    ocr: &crate::core::config::OcrConfig,
+    language: &str,
+    tessdata_env: &TessdataEnv,
+) -> Option<String> {
     let mut languages = ocr.effective_tesseract_language();
     languages.push(language.to_string());
-    existing_tessdata_dir_for(&languages, ocr.tessdata_path.as_deref(), &TessdataEnv::from_process()).is_some()
+    existing_tessdata_dir_for(&languages, ocr.tessdata_path.as_deref(), tessdata_env)
 }
 
 /// The languages a page can be read again with: Khmer and Chinese.
@@ -177,14 +187,11 @@ const READ_AGAIN_LANGUAGES: [&str; 2] = ["khm", "chi_sim"];
 /// Which models that decide a read-again are on disk for `ocr`: each read-again language with the
 /// whole configured list, then the script model. The extraction result depends on this answer, so
 /// the document cache key holds it: a result cached before a model arrived is not returned after.
-pub(crate) fn read_again_models_on_disk(ocr: &crate::core::config::OcrConfig) -> [bool; 3] {
-    let [khmer, chinese] = READ_AGAIN_LANGUAGES.map(|language| read_again_languages_are_on_disk(ocr, language));
-    let script_model = existing_tessdata_dir_for(
-        &[OSD_LANGUAGE.to_string()],
-        ocr.tessdata_path.as_deref(),
-        &TessdataEnv::from_process(),
-    )
-    .is_some();
+pub(crate) fn read_again_models_on_disk(ocr: &crate::core::config::OcrConfig, tessdata_env: &TessdataEnv) -> [bool; 3] {
+    let [khmer, chinese] =
+        READ_AGAIN_LANGUAGES.map(|language| read_again_languages_dir_in(ocr, language, tessdata_env).is_some());
+    let script_model =
+        existing_tessdata_dir_for(&[OSD_LANGUAGE.to_string()], ocr.tessdata_path.as_deref(), tessdata_env).is_some();
     [khmer, chinese, script_model]
 }
 

@@ -314,36 +314,94 @@ fn record_file_calls(path: &std::path::Path, config: &ExtractionConfig) -> Vec<R
     calls.lock().expect("calls lock").clone()
 }
 
+/// Sets `TESSDATA_PREFIX` for the life of the guard, and restores the old value on drop.
+struct TessdataPrefix(Option<std::ffi::OsString>);
+
+impl TessdataPrefix {
+    #[allow(unsafe_code)]
+    fn set(path: &std::path::Path) -> Self {
+        let old = std::env::var_os("TESSDATA_PREFIX");
+        // SAFETY: the test is serial, so no other thread of this binary reads the environment now.
+        unsafe { std::env::set_var("TESSDATA_PREFIX", path) };
+        Self(old)
+    }
+}
+
+impl Drop for TessdataPrefix {
+    #[allow(unsafe_code)]
+    fn drop(&mut self) {
+        // SAFETY: as in `set`.
+        unsafe {
+            match &self.0 {
+                Some(old) => std::env::set_var("TESSDATA_PREFIX", old),
+                None => std::env::remove_var("TESSDATA_PREFIX"),
+            }
+        }
+    }
+}
+
 /// The result of an extraction depends on the models on disk: a Khmer layer adds `khm` only when
-/// the model is installed. A result cached while the model was missing must not be returned after
-/// the model arrives, with the same file and the same configuration.
+/// a directory of the search chain holds it with the configured languages. A cached result must
+/// not be returned after that answer or its directory changes, with the same file and the same
+/// configuration.
+///
+/// The search chain is hermetic. The configured language is a valid code that Tesseract ships no
+/// model for, which only the two test directories hold, so no directory outside the test can hold
+/// the whole list. The two test
+/// directories are the first two of the chain: the configured tessdata path, then
+/// `TESSDATA_PREFIX`.
 #[test]
 #[serial_test::serial]
-fn a_cached_result_is_not_returned_after_the_script_model_arrives() {
-    let tessdata = tempfile::tempdir().expect("tessdata directory");
-    std::fs::write(tessdata.path().join("eng.traineddata"), b"").expect("write a fake model");
+fn a_cached_result_is_not_returned_after_the_script_model_arrives_or_moves() {
+    const LANGUAGE: &str = "abq";
+    let install = |dir: &std::path::Path, model: &str| {
+        std::fs::write(dir.join(format!("{model}.traineddata")), b"").expect("write a fake model");
+    };
+    let configured = tempfile::tempdir().expect("configured tessdata directory");
+    let prefix = tempfile::tempdir().expect("prefix tessdata directory");
+    install(configured.path(), LANGUAGE);
+    install(prefix.path(), LANGUAGE);
+    let _prefix = TessdataPrefix::set(prefix.path());
+
     let files = tempfile::tempdir().expect("fixture directory");
     let pdf_path = files.path().join("khmer-layer.pdf");
     std::fs::write(&pdf_path, two_page_pdf(KHMER_FIRST)).expect("write the fixture");
-    let mut config = config_with(OcrConfig::default());
-    config.ocr.as_mut().expect("ocr block").tessdata_path = Some(tessdata.path().to_path_buf());
-    config.use_cache = true;
-    config.cache_namespace = Some(format!("gh2300-cache-transition-{}", std::process::id()));
+    let ocr = OcrConfig {
+        language: vec![LANGUAGE.to_string()],
+        tessdata_path: Some(configured.path().to_path_buf()),
+        ..Default::default()
+    };
+    let config = ExtractionConfig {
+        ocr: Some(ocr),
+        ocr_embedded_images: Some(false),
+        use_cache: true,
+        cache_namespace: Some(format!("gh2300-cache-transition-{}", std::process::id())),
+        ..Default::default()
+    };
 
-    let before = record_file_calls(&pdf_path, &config);
-    assert!(!before.is_empty(), "the picture page must reach the OCR backend");
-    if before.iter().any(|call| call.ocr.iter().any(|l| l == "khm")) {
-        // The model is installed outside the test directory, so the transition cannot be observed.
-        return;
+    let without_model = record_file_calls(&pdf_path, &config);
+    assert!(!without_model.is_empty(), "the picture page must reach the OCR backend");
+    for call in &without_model {
+        assert_eq!(call.ocr, [LANGUAGE], "no directory holds the Khmer model yet");
     }
 
-    std::fs::write(tessdata.path().join("khm.traineddata"), b"").expect("install the Khmer model");
-    let after = record_file_calls(&pdf_path, &config);
+    install(prefix.path(), "khm");
+    let model_arrived = record_file_calls(&pdf_path, &config);
     assert!(
-        !after.is_empty(),
+        !model_arrived.is_empty(),
         "the cached result of the run without the model was returned after the model arrived"
     );
-    for call in &after {
-        assert_eq!(call.ocr, ["eng", "khm"]);
+    for call in &model_arrived {
+        assert_eq!(call.ocr, [LANGUAGE, "khm"]);
+    }
+
+    install(configured.path(), "khm");
+    let model_moved = record_file_calls(&pdf_path, &config);
+    assert!(
+        !model_moved.is_empty(),
+        "the cached result of the prefix directory was returned after the model moved to the configured one"
+    );
+    for call in &model_moved {
+        assert_eq!(call.ocr, [LANGUAGE, "khm"]);
     }
 }
