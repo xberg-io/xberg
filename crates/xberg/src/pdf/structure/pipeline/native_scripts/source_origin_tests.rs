@@ -19,24 +19,36 @@ enum Route {
 }
 
 fn source(route: Route) -> PdfParagraph {
-    let page = NativePageSegments::from_final_spans(
-        vec![TextSpan {
-            text: TEXT.to_owned(),
-            bbox: Rect::new(42.0, 700.0, 600.0, 12.0),
+    let mut spans = vec![TextSpan {
+        text: TEXT.to_owned(),
+        bbox: Rect::new(42.0, 700.0, 600.0, 12.0),
+        font_size: 12.0,
+        font_name: "source-origin-font".to_owned(),
+        mcid_scope: Some(McidScope::Page(0)),
+        ..Default::default()
+    }];
+    if matches!(route, Route::RejectedProjection) {
+        spans.push(TextSpan {
+            text: "extra source record".to_owned(),
+            bbox: Rect::new(42.0, 660.0, 120.0, 12.0),
             font_size: 12.0,
             font_name: "source-origin-font".to_owned(),
             mcid_scope: Some(McidScope::Page(0)),
             ..Default::default()
-        }],
+        });
+    }
+    let page = NativePageSegments::from_final_spans(
+        spans,
         &Default::default(),
         ArtifactRetention::default(),
         ScriptGeometry::Preserve,
     );
     let mut segments: Vec<_> = page.segments().cloned().collect();
-    assert_eq!(segments.len(), 1, "one actual whole native source record");
     if matches!(route, Route::RejectedProjection) {
-        segments[0].width += 1.0;
+        assert_eq!(segments.len(), 2, "real carrier has one additional source record");
+        assert_eq!(segments.pop().unwrap().text, "extra source record");
     }
+    assert_eq!(segments.len(), 1, "one actual whole native source record retained");
     let (segments, evidence) = match route {
         Route::Unproved => (segments, None),
         _ => prepare_segments(segments, page, &[]),
@@ -172,8 +184,8 @@ fn should_split_unproved_cached_text_with_identical_source_geometry_2275() {
 fn should_not_promote_a_rejected_native_projection_to_verified_list_source_2275() {
     let paragraph = source(Route::RejectedProjection);
     assert_eq!(
-        paragraph.lines[0].segments[0].width, 601.0,
-        "current fallback data was not dropped"
+        paragraph.lines[0].segments[0].width, 600.0,
+        "current count-mismatch fallback record was not dropped"
     );
     let mut pages = vec![vec![paragraph]];
     super::super::run_in_lists::split_with_witnesses(&mut pages, &Default::default());
