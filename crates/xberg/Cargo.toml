@@ -249,6 +249,7 @@ ocr = [
     "dep:nom-exif",
     "dep:hayro-jpeg2000",
     "dep:hayro-jbig2",
+    "dep:oxiarc-jpeg",
     "dep:ureq",
     "html",
 ]
@@ -1434,6 +1435,7 @@ org = { version = "0.3", optional = true }
 # matching CUDA/TensorRT-enabled ONNX Runtime build. `ort_discovery.rs` #[cfg]-gates the
 # corresponding EP construction code to match.
 ort = { version = "=2.0.0-rc.14", default-features = false, features = ["std", "ndarray", "api-18"], optional = true }
+oxiarc-jpeg = { workspace = true, optional = true }
 outlook-pst = { version = "1.2.0", optional = true }
 parking_lot = { workspace = true }
 pastey = "0.2"
