@@ -132,6 +132,8 @@ jobs:
       - name: Publish chart
         uses: xberg-io/actions/publish-helm-chart@v1
         with:
+          # publish-helm-chart installs its own helm, at latest unless told; keep it on the mise.toml pin. ~keep
+          helm-version: v4.3.1
           chart-path: charts/xberg
           version: ${{ steps.meta.outputs.version }}
           registry: oci://ghcr.io/xberg-io/charts
