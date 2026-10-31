@@ -149,6 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
+
 - **(swift): The Swift package requires macOS 14.**
   The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
 
