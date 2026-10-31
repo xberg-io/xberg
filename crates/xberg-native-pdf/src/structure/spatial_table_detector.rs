@@ -9806,3 +9806,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "spatial_table_detector/header_inference_tests.rs"]
+mod header_inference_tests;
