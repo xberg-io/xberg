@@ -181,7 +181,8 @@ fn validate_entropy_end(bytes: &[u8], mut position: usize) -> Result<()> {
             position += 1;
         }
         match bytes.get(position) {
-            Some(0x00 | 0xd0..=0xd7) => position += 1,
+            Some(0x00) => position += 1,
+            Some(0xd0..=0xd7) => return Err(invalid("JPEG restart intervals are unsupported in reduced decoding")),
             Some(0xd9) => return Ok(()),
             Some(_) => return Err(invalid("reduced decoding requires a single baseline JPEG scan")),
             None => break,
@@ -196,7 +197,10 @@ fn apply_header_segment(value: &Segment<'_>, header: &mut Option<Header>) -> Res
         marker if is_frame(marker) => return Err(invalid("reduced decoding supports only one baseline JPEG frame")),
         0xc4 => validate_huffman(value.payload)?,
         0xdb => validate_quantization(value.payload)?,
-        0xdd if value.payload.len() == 2 => {}
+        // A unified downstream Rayon feature only allocates bands for nonzero DRI.
+        // Refuse that path before entering the pinned decoder, regardless of its features. ~keep
+        0xdd if value.payload == [0, 0] => {}
+        0xdd => return Err(invalid("JPEG restart intervals are unsupported in reduced decoding")),
         0xe0..=0xef | 0xfe => {}
         _ => return Err(invalid("unsupported marker in reduced baseline JPEG")),
     }
