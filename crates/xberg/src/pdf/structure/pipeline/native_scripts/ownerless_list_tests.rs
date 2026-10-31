@@ -9,7 +9,7 @@ use crate::pdf::structure::assembly::{
 };
 use crate::pdf::structure::types::PdfParagraph;
 use crate::types::document_structure::AnnotationKind;
-use crate::types::internal::InternalDocument;
+use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
 type Fingerprint = (String, [u32; 7], [bool; 3], Option<u8>);
 
@@ -32,7 +32,8 @@ fn spans(owned: bool, spaced: bool, outside: bool) -> Vec<TextSpan> {
     };
     let mut source = if owned {
         vec![
-            span("é lists the source measurements x", 42.0, 700.0, 180.0, 12.0),
+            span("é lists the source measurements ", 42.0, 700.0, 170.0, 12.0),
+            span("x", 214.0, 700.0, 8.0, 12.0),
             span("2", 222.0, 704.9568, 4.0, 8.0),
             span(":", 226.0, 700.0, 3.0, 12.0),
         ]
@@ -92,7 +93,7 @@ fn source_paragraphs(owned: bool, spaced: bool, outside: bool) -> Vec<PdfParagra
     let (segments, evidence) = prepare_segments(projected, page, &[]);
     let evidence = evidence.expect("actual page-local source carrier");
     assert_eq!(evidence.owners.len(), usize::from(owned) + usize::from(outside));
-    assert_eq!(segments.len(), 11 + 2 * usize::from(owned) + 2 * usize::from(outside));
+    assert_eq!(segments.len(), 11 + 3 * usize::from(owned) + 2 * usize::from(outside));
     let mut original: Vec<_> = segments.iter().map(super::line_tests::fingerprint).collect();
     original.sort();
     let gaps = super::super::compute_paragraph_gap_ys(&segments);
@@ -133,7 +134,7 @@ fn canonical_source(paragraphs: &[PdfParagraph], owned: bool, spaced: bool) -> S
     let canonical = extract_text_and_annotations(selected[0], &witnesses);
     let ledger = extract_text_with_source_ranges(selected[0], &witnesses);
     assert_eq!((&ledger.text, &ledger.annotations), (&canonical.0, &canonical.1));
-    assert_eq!(ledger.segment_ranges.len(), 11 + 2 * usize::from(owned));
+    assert_eq!(ledger.segment_ranges.len(), 11 + 3 * usize::from(owned));
     assert!(
         ledger
             .segment_ranges
@@ -163,12 +164,68 @@ fn canonical_source(paragraphs: &[PdfParagraph], owned: bool, spaced: bool) -> S
     canonical.0
 }
 
-fn assert_split_text(document: &InternalDocument, canonical: &str, spaced: bool, outside: bool) {
-    assert_eq!(document.elements.len(), 3 + usize::from(outside));
-    let items: Vec<_> = document
+fn assert_semantic_elements(document: &InternalDocument, outside: bool) -> Vec<&InternalElement> {
+    let shape: Vec<_> = document
         .elements
         .iter()
-        .filter(|element| element.text.starts_with("read sample") || element.text.starts_with("keep sample"))
+        .map(|element| (&element.kind, element.text.as_str()))
+        .collect();
+    let empty: Vec<_> = document
+        .elements
+        .iter()
+        .filter(|element| element.text.is_empty())
+        .collect();
+    assert_eq!(empty.len(), 2, "actual list container shape: {shape:?}");
+    assert!(
+        empty
+            .iter()
+            .all(|element| matches!(element.kind, ElementKind::ListStart { .. } | ElementKind::ListEnd)),
+        "unexpected empty source element: {shape:?}"
+    );
+    assert_eq!(
+        document
+            .elements
+            .iter()
+            .filter(|element| matches!(element.kind, ElementKind::ListStart { .. }))
+            .count(),
+        1,
+        "actual source list start: {shape:?}"
+    );
+    assert_eq!(
+        document
+            .elements
+            .iter()
+            .filter(|element| element.kind == ElementKind::ListEnd)
+            .count(),
+        1,
+        "actual source list end: {shape:?}"
+    );
+    let semantic: Vec<_> = document
+        .elements
+        .iter()
+        .filter(|element| !element.text.is_empty())
+        .collect();
+    assert_eq!(
+        semantic.len(),
+        3 + usize::from(outside),
+        "lead, two clauses, and optional separate context: {shape:?}"
+    );
+    if outside {
+        let context: Vec<_> = semantic
+            .iter()
+            .filter(|element| element.text.starts_with("The context"))
+            .collect();
+        assert_eq!(context.len(), 1, "actual distinct source context: {shape:?}");
+        assert_eq!(context[0].text, "The context retains a source power x2");
+    }
+    semantic
+}
+
+fn assert_split_text(document: &InternalDocument, canonical: &str, spaced: bool, outside: bool) {
+    let semantic = assert_semantic_elements(document, outside);
+    let items: Vec<_> = semantic
+        .iter()
+        .filter(|element| matches!(element.kind, ElementKind::ListItem { .. }))
         .collect();
     assert_eq!(items.len(), 2, "actual two source clauses rendered");
     assert_eq!(
