@@ -4384,7 +4384,7 @@ jobs:
 
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          tools: java maven
+          tools: maven
           config-ref: ${{ github.sha }}
 
       - uses: xberg-io/actions/publish-maven@v1
@@ -5341,7 +5341,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          tools: java maven
+          tools: maven
           config-ref: ${{ github.sha }}
       - name: Wait for core artifact on Maven Central
         if: needs.prepare.outputs.dry_run != 'true'
