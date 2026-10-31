@@ -6189,3 +6189,7 @@ mod recognized_table_grid_tests;
 ))]
 #[path = "memory_recovery_tests.rs"]
 mod memory_recovery_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/upright_processed_geometry_tests.rs"]
+mod upright_processed_geometry_tests;
