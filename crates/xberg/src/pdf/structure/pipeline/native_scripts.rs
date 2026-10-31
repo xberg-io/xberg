@@ -478,6 +478,10 @@ mod continuity_tests;
 mod column_scope_tests;
 
 #[cfg(test)]
+#[path = "native_scripts/pitch_confidence_tests.rs"]
+mod pitch_confidence_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::TextSpan;
