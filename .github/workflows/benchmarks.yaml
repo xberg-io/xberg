@@ -3,11 +3,6 @@ name: Benchmarks
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Optional branch or commit (defaults to the dispatched revision)"
-        required: false
-        default: ""
-        type: string
       timeout:
         description: "Timeout per document in seconds"
         required: false
@@ -44,6 +39,7 @@ defaults:
 
 jobs:
   setup:
+    if: github.ref == 'refs/heads/main'
     name: Build harness + native libs
     runs-on: ubuntu-24.04-arm
     env:
@@ -55,16 +51,12 @@ jobs:
       id-token: write
     outputs:
       artifact-name: benchmarks-target
-      source-sha: ${{ steps.source-revision.outputs.sha }}
+      source-sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.branch || github.sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
-      - name: Pin benchmark source revision
-        id: source-revision
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
 
@@ -185,6 +177,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
   validate-harness:
+    if: github.ref == 'refs/heads/main'
     name: Validate benchmark harness
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -194,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.branch || github.sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       - name: Free disk space
@@ -254,6 +247,7 @@ jobs:
           --test fixture_validation --test aggregate_schema
 
   prefetch-tika:
+    if: github.ref == 'refs/heads/main'
     name: Prefetch Apache Tika
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
@@ -277,6 +271,7 @@ jobs:
           retention-days: 7
 
   bench-rust:
+    if: github.ref == 'refs/heads/main'
     name: bench-rust (${{ matrix.pipeline }}, ${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: setup
     # Previously split heavy pipelines (layout/paddle/sceptre) onto runner-large-arm64 and
@@ -364,8 +359,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -504,6 +498,7 @@ jobs:
   # Pdfium is part of the native cohort's pinned release contract, so the `bench-` prefix keeps
   # these required cells visible to the workflow/contract validator and aggregation gate. ~keep
   bench-pdfium:
+    if: github.ref == 'refs/heads/main'
     name: pdfium-benchmark (baseline, ${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
@@ -518,8 +513,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -595,6 +589,7 @@ jobs:
           retention-days: 30
 
   sceptre-structured-diagnostic:
+    if: github.ref == 'refs/heads/main'
     name: sceptre structured-image diagnostic (${{ matrix.pipeline }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
@@ -609,7 +604,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       - name: Free disk space
@@ -686,7 +681,8 @@ jobs:
   bench-docling:
     name: docling (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
-    if: ${{ needs.setup.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -714,8 +710,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -822,7 +817,8 @@ jobs:
   bench-markitdown:
     name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
-    if: ${{ needs.setup.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -844,8 +840,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -924,7 +919,8 @@ jobs:
   bench-unstructured:
     name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
-    if: ${{ needs.setup.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -953,8 +949,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1038,7 +1033,8 @@ jobs:
   bench-tika:
     name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust, prefetch-tika]
-    if: ${{ needs.setup.result == 'success' && needs.prefetch-tika.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && needs.prefetch-tika.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
@@ -1063,8 +1059,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1133,7 +1128,8 @@ jobs:
   bench-pymupdf4llm:
     name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
-    if: ${{ needs.setup.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1156,8 +1152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1247,9 +1242,8 @@ jobs:
     # Intentionally NOT `needs: setup`: prefetching MinerU weights only needs the
     # repo (scripts + fixtures), not the built harness, so it runs concurrently
     # with the FFI/harness build from the first stage instead of waiting for it.
-    # Checks out the same ref setup resolves (its later source-sha pin is only
-    # needed by jobs that must match the benchmarked binary's exact revision).
-    if: ${{ !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (!cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1262,7 +1256,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.branch || github.sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       - name: Free disk space
@@ -1372,7 +1366,8 @@ jobs:
   bench-mineru:
     name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust, prefetch-mineru-models]
-    if: ${{ needs.setup.result == 'success' && needs.prefetch-mineru-models.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && needs.prefetch-mineru-models.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1394,8 +1389,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1532,7 +1526,8 @@ jobs:
   bench-liteparse:
     name: liteparse (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
-    if: ${{ needs.setup.result == 'success' && !cancelled() }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
@@ -1546,8 +1541,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha }}
-
+          ref: ${{ github.sha }}
           submodules: recursive
       - name: Free disk space
         uses: xberg-io/actions/free-disk-space-linux@v1
@@ -1639,7 +1633,8 @@ jobs:
     # MinerU prefetch is a HARD gate: if it fails, do not publish a partial
     # baseline -- skip aggregation so the whole run fails. Other frameworks stay
     # soft (always() tolerates their failures); only prefetch is mandatory.
-    if: ${{ always() && !cancelled() && needs.prefetch-mineru-models.result == 'success' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (always() && !cancelled() && needs.prefetch-mineru-models.result == 'success') }}
     steps:
       - name: Create GitHub App token (if credentials available)
         id: app-token
@@ -1655,7 +1650,7 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.setup.outputs.source-sha || github.sha }}
+          ref: ${{ github.sha }}
           submodules: recursive
 
       # validate-artifacts/consolidate resolve each fixture's ground_truth_file, which

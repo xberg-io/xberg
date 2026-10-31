@@ -27,7 +27,8 @@ permissions:
 jobs:
   docker:
     name: Docker (${{ matrix.variant }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
