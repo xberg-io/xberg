@@ -2473,13 +2473,26 @@ async fn read_again_as_han(
     image_bytes: &std::sync::Arc<Vec<u8>>,
     config: &crate::core::config::OcrConfig,
     first_pass: &crate::types::ExtractedDocument,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> crate::Result<HanSecondPass> {
     let bytes = std::sync::Arc::clone(image_bytes);
     let tessdata_override = config.tessdata_path.clone();
     let security_limits = config.security_limits.clone().unwrap_or_default();
-    read_again_as_han_where(backend, image_bytes, config, first_pass, move |han_languages| {
-        crate::ocr::processor::page_is_han_script(&bytes, han_languages, tessdata_override.as_deref(), &security_limits)
-    })
+    read_again_as_han_where(
+        backend,
+        image_bytes,
+        config,
+        first_pass,
+        cancel_token,
+        move |han_languages| {
+            crate::ocr::processor::page_is_han_script(
+                &bytes,
+                han_languages,
+                tessdata_override.as_deref(),
+                &security_limits,
+            )
+        },
+    )
     .await
 }
 
@@ -2491,6 +2504,7 @@ async fn read_again_as_han_where(
     image_bytes: &std::sync::Arc<Vec<u8>>,
     config: &crate::core::config::OcrConfig,
     first_pass: &crate::types::ExtractedDocument,
+    _cancel_token: Option<&crate::cancellation::CancellationToken>,
     is_han: impl FnOnce(&[String]) -> bool + Send + 'static,
 ) -> crate::Result<HanSecondPass> {
     use crate::ocr_script::{Script, languages_are_wildcard, languages_cover_script, push_language};
@@ -2521,10 +2535,10 @@ async fn read_again_as_han_where(
     if !is_han {
         return Ok(HanSecondPass::Kept);
     }
-    match backend
+    let retry = backend
         .process_image_owned(std::sync::Arc::clone(image_bytes), &han_config)
-        .await
-    {
+        .await;
+    match retry {
         Ok(document) if han_retry_reads_better(first_pass, &document) => Ok(HanSecondPass::Read {
             document: Box::new(document),
             config: Box::new(han_config),
@@ -2599,7 +2613,7 @@ pub(crate) async fn process_whole_image_ocr_with_sparse_retry(
         .await?;
     #[cfg(feature = "ocr")]
     let effective_config = if script_second_pass {
-        match read_again_as_han(backend, &image_bytes, effective_config.as_ref(), &primary).await? {
+        match read_again_as_han(backend, &image_bytes, effective_config.as_ref(), &primary, cancel_token).await? {
             HanSecondPass::Kept => effective_config,
             HanSecondPass::Read { document, config } => {
                 primary = *document;
@@ -7935,17 +7949,26 @@ mod tests {
 #[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr"))]
 mod han_second_pass_tests {
     use super::*;
+    use crate::cancellation::CancellationToken;
     use crate::core::config::OcrConfig;
     use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
     use crate::types::ExtractedDocument;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    /// What the backend answers to every call.
+    enum Answer {
+        Reads(Box<ExtractedDocument>),
+        Fails,
+    }
+
     /// A backend named like the Tesseract one that counts its calls and records the languages.
+    /// When `cancel_on_call` holds a token, each call cancels it before it answers.
     struct CountingBackend {
         calls: AtomicUsize,
         languages: std::sync::Mutex<Vec<String>>,
-        retry: ExtractedDocument,
+        answer: Answer,
+        cancel_on_call: Option<CancellationToken>,
     }
 
     #[async_trait::async_trait]
@@ -7959,7 +7982,13 @@ mod han_second_pass_tests {
         async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             *self.languages.lock().unwrap() = config.language.clone();
-            Ok(self.retry.clone())
+            if let Some(token) = &self.cancel_on_call {
+                token.cancel();
+            }
+            match &self.answer {
+                Answer::Reads(document) => Ok(document.as_ref().clone()),
+                Answer::Fails => Err(crate::XbergError::Other("retry failed".to_string())),
+            }
         }
     }
 
@@ -8002,29 +8031,68 @@ mod han_second_pass_tests {
         ocr_result(LATIN_NOISE, Some(mean_confidence))
     }
 
-    /// Run the second pass with a detection that answers `page_is_han` and counts its calls.
-    /// The backend answers every call with `retry`.
-    /// Returns the outcome, the calls of the backend, and the calls of the detection.
+    /// When the test cancels the caller's token.
+    #[derive(Clone, Copy, PartialEq)]
+    enum CancelAt {
+        Never,
+        Before,
+        InDetection,
+        InRetry,
+    }
+
+    fn backend(answer: Answer, cancel_on_call: Option<CancellationToken>) -> Arc<CountingBackend> {
+        Arc::new(CountingBackend {
+            calls: AtomicUsize::new(0),
+            languages: std::sync::Mutex::new(Vec::new()),
+            answer,
+            cancel_on_call,
+        })
+    }
+
+    /// Run the second pass with a detection that answers `page_is_han` and counts its calls, and a
+    /// token cancelled at `cancel_at`. Returns the outcome, the backend, and the detection calls.
+    async fn run_cancelled(
+        first: ExtractedDocument,
+        answer: Answer,
+        page_is_han: bool,
+        cancel_at: CancelAt,
+    ) -> (crate::Result<HanSecondPass>, Arc<CountingBackend>, usize) {
+        let token = CancellationToken::new();
+        if cancel_at == CancelAt::Before {
+            token.cancel();
+        }
+        let counting = backend(answer, (cancel_at == CancelAt::InRetry).then(|| token.clone()));
+        let backend: Arc<dyn OcrBackend> = counting.clone();
+        let detections = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&detections);
+        let detection_token = token.clone();
+        let outcome = read_again_as_han_where(
+            &backend,
+            &Arc::new(vec![1]),
+            &OcrConfig::default(),
+            &first,
+            Some(&token),
+            move |_| {
+                seen.fetch_add(1, Ordering::SeqCst);
+                if cancel_at == CancelAt::InDetection {
+                    detection_token.cancel();
+                }
+                page_is_han
+            },
+        )
+        .await;
+        (outcome, counting, detections.load(Ordering::SeqCst))
+    }
+
+    /// [`run_cancelled`] with a token nobody cancels.
     async fn run_with(
         first: ExtractedDocument,
         retry: ExtractedDocument,
         page_is_han: bool,
     ) -> (HanSecondPass, Arc<CountingBackend>, usize) {
-        let counting = Arc::new(CountingBackend {
-            calls: AtomicUsize::new(0),
-            languages: std::sync::Mutex::new(Vec::new()),
-            retry,
-        });
-        let backend: Arc<dyn OcrBackend> = counting.clone();
-        let detections = Arc::new(AtomicUsize::new(0));
-        let seen = Arc::clone(&detections);
-        let outcome = read_again_as_han_where(&backend, &Arc::new(vec![1]), &OcrConfig::default(), &first, move |_| {
-            seen.fetch_add(1, Ordering::SeqCst);
-            page_is_han
-        })
-        .await
-        .expect("the second pass does not error");
-        (outcome, counting, detections.load(Ordering::SeqCst))
+        let (outcome, backend, detections) =
+            run_cancelled(first, Answer::Reads(Box::new(retry)), page_is_han, CancelAt::Never).await;
+        (outcome.expect("the second pass does not error"), backend, detections)
     }
 
     async fn run(mean_confidence: f64, page_is_han: bool) -> (HanSecondPass, Arc<CountingBackend>, usize) {
@@ -8088,5 +8156,93 @@ mod han_second_pass_tests {
     async fn a_retry_without_confidence_keeps_the_first_pass() {
         let (outcome, _, _) = run_with(first_pass(40.0), ocr_result(HAN_SENTENCES, None), true).await;
         assert!(matches!(outcome, HanSecondPass::Kept));
+    }
+
+    fn good_retry() -> Answer {
+        Answer::Reads(Box::new(ocr_result(HAN_SENTENCES, Some(88.0))))
+    }
+
+    fn is_cancelled(outcome: &crate::Result<HanSecondPass>) -> bool {
+        matches!(outcome, Err(crate::XbergError::Cancelled))
+    }
+
+    #[tokio::test]
+    async fn a_token_cancelled_before_the_second_pass_skips_detection() {
+        let (outcome, backend, detections) =
+            run_cancelled(first_pass(20.0), good_retry(), true, CancelAt::Before).await;
+        assert!(is_cancelled(&outcome));
+        assert_eq!(detections, 0, "no detection after a cancel");
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_cancel_during_detection_starts_no_retry() {
+        let (outcome, backend, detections) =
+            run_cancelled(first_pass(20.0), good_retry(), true, CancelAt::InDetection).await;
+        assert!(is_cancelled(&outcome));
+        assert_eq!(detections, 1);
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 0, "no OCR pass after a cancel");
+    }
+
+    #[tokio::test]
+    async fn a_cancel_during_a_retry_that_would_be_accepted_returns_cancelled() {
+        let (outcome, backend, _) = run_cancelled(first_pass(20.0), good_retry(), true, CancelAt::InRetry).await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(is_cancelled(&outcome));
+    }
+
+    #[tokio::test]
+    async fn a_cancel_during_a_retry_that_would_be_rejected_returns_cancelled() {
+        let worse = Answer::Reads(Box::new(ocr_result(HAN_SENTENCES, Some(10.0))));
+        let (outcome, backend, _) = run_cancelled(first_pass(20.0), worse, true, CancelAt::InRetry).await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(is_cancelled(&outcome));
+    }
+
+    #[tokio::test]
+    async fn a_cancel_during_a_retry_that_fails_returns_cancelled() {
+        let (outcome, backend, _) = run_cancelled(first_pass(20.0), Answer::Fails, true, CancelAt::InRetry).await;
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1, "the retry ran");
+        assert!(is_cancelled(&outcome));
+    }
+
+    /// The control: the same cases with a token nobody cancels read again, keep, and keep.
+    #[tokio::test]
+    async fn an_uncancelled_token_changes_no_outcome() {
+        let (accepted, _, _) = run_cancelled(first_pass(20.0), good_retry(), true, CancelAt::Never).await;
+        assert!(matches!(accepted, Ok(HanSecondPass::Read { .. })));
+        let worse = Answer::Reads(Box::new(ocr_result(HAN_SENTENCES, Some(10.0))));
+        let (rejected, _, _) = run_cancelled(first_pass(20.0), worse, true, CancelAt::Never).await;
+        assert!(matches!(rejected, Ok(HanSecondPass::Kept)));
+        let (failed, _, _) = run_cancelled(first_pass(20.0), Answer::Fails, true, CancelAt::Never).await;
+        assert!(matches!(failed, Ok(HanSecondPass::Kept)));
+    }
+
+    /// The image pipeline passes its token to the second pass: a cancel that lands during the first
+    /// OCR pass of a noisy page returns cancelled, not the first pass.
+    #[tokio::test]
+    async fn the_image_pipeline_returns_cancelled_when_the_first_pass_is_cancelled() {
+        let token = CancellationToken::new();
+        let counting = backend(Answer::Reads(Box::new(first_pass(20.0))), Some(token.clone()));
+        let backend: Arc<dyn OcrBackend> = counting.clone();
+        let config = OcrConfig::default();
+        let outcome = process_whole_image_ocr_with_sparse_retry(
+            &backend,
+            Arc::new(vec![1]),
+            &config,
+            &config,
+            SparseRetryPolicy {
+                whole_page_raster: false,
+                allow_standard_retry: false,
+                script_second_pass: true,
+            },
+            Some(&token),
+        )
+        .await;
+        assert_eq!(counting.calls.load(Ordering::SeqCst), 1, "only the first pass ran");
+        assert!(
+            matches!(outcome, Err(crate::XbergError::Cancelled)),
+            "a cancelled page must not return its first pass"
+        );
     }
 }
