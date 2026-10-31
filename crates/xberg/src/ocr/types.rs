@@ -176,7 +176,7 @@ pub struct TesseractConfig {
     /// already runs the scan-detection density check to decide the page's default PSM. Every
     /// other caller leaves it `false`.
     ///
-    /// `false` means "unknown, judge from the pixels": `prepare_ocr_image` then falls back to
+    /// `false` means "unknown, judge from the pixels": `ocr_preprocessing_decision` then falls back to
     /// `should_apply_default_preprocessing`'s brightness heuristic, as it always has. `true`
     /// skips that heuristic and applies the default preprocessing (resample, binarisation,
     /// deskew) unconditionally -- a known scan page must not lose it just because shaded table
