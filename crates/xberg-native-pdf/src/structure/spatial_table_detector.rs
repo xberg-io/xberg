@@ -3108,6 +3108,9 @@ fn detect_tables_from_intersections(
     if BUCKET_TABLE_GRID_IN_ROTATED_FRAME {
         tables = tables.into_iter().map(reorient_table_to_rotated_frame).collect();
     }
+    for table in &mut tables {
+        infer_intersection_header(table);
+    }
 
     tables
 }
@@ -3513,10 +3516,8 @@ fn dominant_table_rotation_quadrant(table: &Table) -> f32 {
 /// Cell content (text, spans, bbox, mcids) moves as-is — only its (row, col)
 /// slot in the grid changes; a cell's `bbox` remains the true physical
 /// location of its content on the page, and `table.bbox` (a physical union
-/// over all cells) is untouched. `has_header` is passed through unexamined:
-/// this pipeline never sets it (see `assign_spans_to_intersection_grid`),
-/// so there is nothing here to re-derive for a header *row* that no longer
-/// exists after a transpose.
+/// over all cells) is untouched. Header inference runs after this projection,
+/// so it sees the caller-visible logical rows rather than the page-space grid.
 fn reorient_table_to_rotated_frame(table: Table) -> Table {
     // Only called when `BUCKET_TABLE_GRID_IN_ROTATED_FRAME` is `true` (see
     // `detect_tables_from_intersections`); the gate lives at that call site
@@ -4899,23 +4900,53 @@ fn detect_header_row(grid: &GridStructure, spans: &[TextSpan]) -> Option<usize> 
                 .flat_map(|cell| cell.iter().filter_map(|&idx| spans.get(idx)))
         })
         .collect();
-    if data_row_spans.is_empty() {
-        return None;
+    header_style_contrasts(&first_row_spans, &data_row_spans).then_some(0)
+}
+
+fn header_style_contrasts(first_row_spans: &[&TextSpan], data_row_spans: &[&TextSpan]) -> bool {
+    if first_row_spans.is_empty() || data_row_spans.is_empty() {
+        return false;
     }
     let first_row_bold_ratio =
         first_row_spans.iter().filter(|s| s.font_weight.is_bold()).count() as f32 / first_row_spans.len() as f32;
     let data_bold_ratio =
         data_row_spans.iter().filter(|s| s.font_weight.is_bold()).count() as f32 / data_row_spans.len() as f32;
     if first_row_bold_ratio > 0.5 && data_bold_ratio < 0.3 {
-        return Some(0);
+        return true;
     }
     let first_row_avg_size: f32 =
         first_row_spans.iter().map(|s| s.font_size).sum::<f32>() / first_row_spans.len() as f32;
     let data_avg_size: f32 = data_row_spans.iter().map(|s| s.font_size).sum::<f32>() / data_row_spans.len() as f32;
-    if first_row_avg_size > data_avg_size + 1.5 {
-        return Some(0);
+    first_row_avg_size > data_avg_size + 1.5
+}
+
+fn infer_intersection_header(table: &mut Table) {
+    if table.rows.len() < 2
+        || table.has_header
+        || table
+            .rows
+            .iter()
+            .any(|row| row.is_header || row.cells.iter().any(|cell| cell.is_header))
+    {
+        return;
     }
-    None
+    let first = &table.rows[0];
+    if first.cells.iter().filter(|cell| !cell.text.trim().is_empty()).count() < 2 {
+        return;
+    }
+    let first_spans = first.cells.iter().flat_map(|cell| &cell.spans).collect::<Vec<_>>();
+    let body_spans = table.rows[1..]
+        .iter()
+        .flat_map(|row| row.cells.iter().flat_map(|cell| &cell.spans))
+        .collect::<Vec<_>>();
+    if !header_style_contrasts(&first_spans, &body_spans) {
+        return;
+    }
+    table.has_header = true;
+    table.rows[0].is_header = true;
+    for cell in &mut table.rows[0].cells {
+        cell.is_header = true;
+    }
 }
 
 #[cfg(test)]
@@ -9806,3 +9837,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "spatial_table_detector/header_inference_tests.rs"]
+mod header_inference_tests;

@@ -32,6 +32,40 @@ pub(crate) struct NativeTable {
     pub scripts: Option<scripts::TableScripts>,
 }
 
+fn finish_extracted_table(
+    extracted_table: &xberg_native_pdf::structure::table_extractor::Table,
+    page_number: u32,
+    source_spans: &scripts::PageSpans,
+    cells: Vec<Vec<String>>,
+    markdown: String,
+    grid: Option<crate::types::TableGrid>,
+) -> NativeTable {
+    let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
+        x0: rect.x as f64,
+        y0: rect.y as f64,
+        x1: (rect.x + rect.width) as f64,
+        y1: (rect.y + rect.height) as f64,
+    });
+    let scripts = scripts::capture(extracted_table, &cells, source_spans);
+    let columns = extracted_table
+        .rows
+        .first()
+        .filter(|row| row.is_header)
+        .and_then(|_| cells.first().cloned());
+    NativeTable {
+        scripts,
+        table: Table {
+            cells,
+            markdown,
+            page_number,
+            bounding_box,
+            columns,
+            ..Default::default()
+        },
+        grid,
+    }
+}
+
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
 fn table_region_key(table: &Table) -> Option<(u32, [u64; 4])> {
     let bbox = table.bounding_box?;
@@ -182,25 +216,14 @@ pub(crate) fn extract_tables_native(doc: &mut NativeDocument) -> Result<(Vec<Nat
                 continue;
             }
 
-            let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
-                x0: rect.x as f64,
-                y0: rect.y as f64,
-                x1: (rect.x + rect.width) as f64,
-                y1: (rect.y + rect.height) as f64,
-            });
-
-            let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
-            all_tables.push(NativeTable {
-                scripts,
-                table: Table {
-                    cells,
-                    markdown,
-                    page_number,
-                    bounding_box,
-                    ..Default::default()
-                },
+            all_tables.push(finish_extracted_table(
+                &extracted_table,
+                page_number,
+                &source_spans,
+                cells,
+                markdown,
                 grid,
-            });
+            ));
         }
     }
 
@@ -310,25 +333,14 @@ pub(crate) fn extract_tables_bordered(
                 continue;
             }
 
-            let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
-                x0: rect.x as f64,
-                y0: rect.y as f64,
-                x1: (rect.x + rect.width) as f64,
-                y1: (rect.y + rect.height) as f64,
-            });
-
-            let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
-            all_tables.push(NativeTable {
-                scripts,
-                table: Table {
-                    cells,
-                    markdown,
-                    page_number,
-                    bounding_box,
-                    ..Default::default()
-                },
+            all_tables.push(finish_extracted_table(
+                &extracted_table,
+                page_number,
+                &source_spans,
+                cells,
+                markdown,
                 grid,
-            });
+            ));
         }
     }
 
@@ -5428,3 +5440,7 @@ mod tests {
 
 #[cfg(test)]
 mod ruled_tier_tests;
+
+#[cfg(test)]
+#[path = "table/header_inference_tests.rs"]
+mod header_inference_tests;
