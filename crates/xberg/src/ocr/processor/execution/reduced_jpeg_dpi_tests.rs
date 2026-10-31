@@ -140,3 +140,42 @@ fn should_reject_even_a_downsize_when_reduced_decode_would_need_convolution_scra
     .expect("a smaller output still requires unaudited convolution scratch");
     assert!(error.to_string().contains("unbudgeted resize buffers"), "{error}");
 }
+
+#[test]
+fn should_reject_a_resize_even_when_dimension_clamping_returns_the_input_size() {
+    let bytes = jpeg(WIDTH, HEIGHT);
+    let config = TesseractConfig {
+        source_dpi: Some(1200.0),
+        preprocessing: Some(ImagePreprocessingConfig {
+            target_dpi: 600,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let images = ImageExtractionConfig {
+        auto_adjust_dpi: false,
+        max_image_dimension: 128,
+        ..Default::default()
+    };
+    let dpi = crate::types::ImageDpiConfig {
+        target_dpi: 600,
+        ..crate::types::ImageDpiConfig::from(&images)
+    };
+    assert_eq!(
+        crate::image::preprocessing::normalized_image_dimensions(128, 64, &dpi, Some(300.0)),
+        (128, 64)
+    );
+    let error = prepare_encoded_ocr_image(
+        &bytes,
+        &SecurityLimits {
+            max_content_size: REDUCED_BUDGET,
+            ..Default::default()
+        },
+        &config,
+        Some(&images),
+        false,
+    )
+    .err()
+    .expect("equal final dimensions do not mean the convolution resize is skipped");
+    assert!(error.to_string().contains("unbudgeted resize buffers"), "{error}");
+}
