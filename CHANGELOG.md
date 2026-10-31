@@ -141,6 +141,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(swift): The Swift package requires macOS 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+
 - **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
   Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.
 

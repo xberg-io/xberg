@@ -752,6 +752,27 @@ def test_swift_ios_builds_pin_the_deployment_target_to_the_manifest_floor() -> N
     assert pinned[1] == f"{floor[1]}.0"
 
 
+def test_swift_macos_builds_pin_the_deployment_target_to_the_manifest_floor() -> None:
+    root = Path(__file__).parents[2]
+    floors = set()
+    for manifest in (root / "Package.swift", root / "packages" / "swift" / "Package.swift"):
+        floor = re.findall(r"\.macOS\(\.v(\d+)\)", manifest.read_text())
+        assert len(floor) == 1, f"{manifest} must declare exactly one macOS floor"
+        floors.add(int(floor[0]))
+    assert len(floors) == 1, f"Swift manifests declare different macOS floors: {sorted(floors)}"
+    floor = floors.pop()
+    # The bundled ONNX Runtime prebuilt requires macOS 13.4 and `.macOS(.vN)` holds only a major.
+    assert floor >= 14, f"macOS floor {floor} is below the bundled ONNX Runtime's 13.4"
+    swift = job_block(WORKFLOW.read_text(), "swift-target")
+    build = re.search(
+        r"(?ms)^      - uses: xberg-io/actions/build-swift-artifactbundle@[^\n]+\n(.*?)(?=^      - |\Z)", swift
+    )
+    assert build is not None
+    pinned = re.search(r'(?m)^          MACOSX_DEPLOYMENT_TARGET: "([0-9.]+)"$', build[1])
+    assert pinned is not None, "swift-target build step inherits the workflow-wide MACOSX_DEPLOYMENT_TARGET"
+    assert pinned[1] == f"{floor}.0"
+
+
 def test_macos_onnx_action_forwards_rpath_option_only_to_macos() -> None:
     action = (WORKFLOW.parents[1] / "actions/setup-onnx-runtime/action.yml").read_text()
     option = re.findall(r"(?m)^  add-macos-rpath:\n((?:^    [^\n]*\n)+)", action)
