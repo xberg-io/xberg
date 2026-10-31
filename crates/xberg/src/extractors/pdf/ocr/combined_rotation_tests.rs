@@ -299,6 +299,24 @@ mod tests {
         })
     }
 
+    fn public_word_config(elements: &[OcrElement]) -> crate::core::config::OcrConfig {
+        let config = crate::core::config::OcrConfig {
+            auto_rotate: true,
+            element_config: Some(crate::types::OcrElementConfig {
+                include_elements: true,
+                min_level: OcrElementLevel::Word,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            super::super::pipeline::filter_public_ocr_elements(elements, &config).len(),
+            2,
+            "the actual mixed-route selector must retain both word-level source geometries"
+        );
+        config
+    }
+
     fn exercise(case: Case) {
         let pdf = page_pdf();
         let (source, count, rotations) = open_pdf_for_full_ocr(&pdf).expect("actual rotated PDF source");
@@ -310,14 +328,7 @@ mod tests {
         undo_upright_raster_correction(&mut result, correction, upright_width, upright_height);
         let mut formula = result.formulas.pop().expect("real backend formula payload");
         formula_bbox_to_page_points(&mut formula, &source, 0, Some(&result.metadata), 400, 200);
-        let config = crate::core::config::OcrConfig {
-            auto_rotate: true,
-            element_config: Some(crate::types::OcrElementConfig {
-                include_elements: true,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
+        let config = public_word_config(result.ocr_elements.as_deref().expect("source public word packet"));
         let (document, _) = build_mixed_ocr_page_document(
             &mut result,
             &config,
