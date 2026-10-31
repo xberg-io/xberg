@@ -11,9 +11,9 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.42.6",
+    "@astrojs/starlight": "^0.42.8",
     "@xberg-io/docs-theme": "^0.4.2",
-    "astro": "^7.4.2",
+    "astro": "^7.4.4",
     "sharp": "^0.35.5",
     "starlight-llms-txt": "^0.12.0"
   }
