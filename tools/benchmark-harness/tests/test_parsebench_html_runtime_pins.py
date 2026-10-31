@@ -239,6 +239,29 @@ class RuntimePinsTest(unittest.TestCase):
                         path.write_text("PACKAGE_ENTRY = True\n")
                     self._rejected(runner, root, frozen, "runtime source inventory changed")
 
+    def test_direct_invocation_checks_sources_before_producer(self):
+        """A caller of the producer boundary cannot leave out or blank the source check."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with _copied_runner(root) as (runner, package):
+                _, plan = _freeze(root, runner)
+                path = package / "safeguards.py"
+                path.write_text(path.read_text() + "\nCHANGED_RUNTIME = True\n")
+                record = runner.read_stage(root)["records"][0]
+                arm = next(iter(runner.ARMS))
+                for label, sources in (("omitted", {}), ("none", {"runtime_sources": None})):
+                    with (
+                        self.subTest(runtime_sources=label),
+                        patch.object(
+                            runner.subprocess, "run", side_effect=ProducerReachedError("producer reached")
+                        ) as producer,
+                    ):
+                        output = root / f"direct-{label}"
+                        output.mkdir()
+                        with self.assertRaises((TypeError, ValueError)):
+                            runner._invoke(root, record, plan["baseline"], arm, output, timeout=1, **sources)
+                        assert producer.call_count == 0, "unverified runtime reached the producer"
+
     def test_legacy_unbound_plan_requires_explicit_refreeze_before_run(self):
         """Old artifacts remain readable but cannot acquire source-protected execution silently."""
         with tempfile.TemporaryDirectory() as temporary:

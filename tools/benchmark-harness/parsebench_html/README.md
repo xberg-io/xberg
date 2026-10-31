@@ -63,7 +63,7 @@ New frozen plans also include `runtime_sources` version 1: the relative path and
 in the runner's own package, including any package initializer, entry point, or nested helper. The runner verifies
 that its imported contract, evaluator adapter, and guard modules come from that package. It checks source bytes
 and the complete inventory before execution, before every CLI invocation, after case processing, and at finalization.
-Changing the runner or guard, deleting a helper, or adding a Python module requires a new freeze. Run the five
+Changing the runner or guard, deleting a helper, or adding a Python module requires a new freeze. Run the six
 source-pinning controls with the pinned offline evaluator environment using
 `python -m unittest discover -s tools/benchmark-harness/tests -p 'test_parsebench_html_runtime_pins.py'`;
 they fail, and never skip, when the evaluator is not installed. Their unchanged-source positive control reaches the subprocess

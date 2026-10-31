@@ -206,7 +206,7 @@ def _invoke(
     output: Path,
     *,
     timeout: float,
-    runtime_sources: dict | None = None,
+    runtime_sources: dict,
 ) -> str:
     _verify_producer(binary)
     invocation = binary["arms"][arm]
@@ -221,8 +221,7 @@ def _invoke(
         environment.update(binary["environment"])
         environment.update(XDG_CACHE_HOME=temporary, XBERG_CACHE_DIR=temporary, TMPDIR=temporary)
         environment["LLAMACLOUD_BENCH_LLM_NORMALIZATION"] = "off"
-        if runtime_sources is not None:
-            _verify_runtime_sources(runtime_sources)
+        _verify_runtime_sources(runtime_sources)
         try:
             completed = subprocess.run(argv, capture_output=True, timeout=timeout, env=environment, check=False)
         finally:
