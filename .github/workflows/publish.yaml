@@ -1295,7 +1295,7 @@ jobs:
 
       # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
       # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
-      - uses: ruby/setup-ruby@v1.335.0
+      - uses: ruby/setup-ruby@v1
         if: runner.os == 'Windows'
         with:
           ruby-version: "3.3"
