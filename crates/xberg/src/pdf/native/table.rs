@@ -47,6 +47,11 @@ fn finish_extracted_table(
         y1: (rect.y + rect.height) as f64,
     });
     let scripts = scripts::capture(extracted_table, &cells, source_spans);
+    let columns = extracted_table
+        .rows
+        .first()
+        .filter(|row| row.is_header)
+        .and_then(|_| cells.first().cloned());
     NativeTable {
         scripts,
         table: Table {
@@ -54,6 +59,7 @@ fn finish_extracted_table(
             markdown,
             page_number,
             bounding_box,
+            columns,
             ..Default::default()
         },
         grid,
