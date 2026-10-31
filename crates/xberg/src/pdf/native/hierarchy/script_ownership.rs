@@ -91,6 +91,7 @@ impl ContinuationIndex {
         // Rank compatible operators by distance from the script's right edge;
         // source-coordinate precision ties cannot prove a unique expression. ~keep
         let mut best = f64::INFINITY;
+        let mut best_x = right;
         let mut tied = false;
         for &(x, index) in &self.starts[start..end] {
             let next = &spans[index];
@@ -105,10 +106,12 @@ impl ContinuationIndex {
                 continue;
             }
             let distance = (x - right).abs();
-            if distance + precision < best {
+            let pair_precision = f64::from(f32::EPSILON) * right.abs().max(x.abs()).max(best_x.abs()).max(1.0);
+            if distance + pair_precision < best {
                 best = distance;
+                best_x = x;
                 tied = false;
-            } else if (distance - best).abs() <= precision {
+            } else if (distance - best).abs() <= pair_precision {
                 tied = true;
             }
         }
