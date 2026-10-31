@@ -131,6 +131,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Retry detached pages from bounded embedded JPEG/JP2 bytes after raster OCR fails.** (#2339)
+  Recovery preserves page numbers, cancellation and original source image identities.
+
 - **(ci): Gate formula test helpers with the features required by their callers.**
 
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**

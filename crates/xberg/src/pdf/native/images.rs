@@ -6,6 +6,8 @@
 #[cfg(test)]
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 mod decode_skip_tests;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod fallback_budget_tests;
 #[cfg(test)]
 mod parallel_tests;
 
@@ -218,6 +220,47 @@ pub(crate) struct PageFallbackImage {
     pub format: &'static str,
     /// Which recovery mode produced `bytes`.
     pub recovery: XObjectRecovery,
+    /// Zero-based paint order in the source page before recovery filtering.
+    pub paint_order: usize,
+}
+
+/// Recover standalone JPEG/JP2 streams without decoding pixels or outer filters.
+///
+/// The request cap bounds the sum of stored stream bytes copied for this page.
+/// Pixel decoding remains the OCR backend's responsibility.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn page_ocr_fallback_image_bytes_with_limits(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    limits: &crate::extractors::security::SecurityLimits,
+) -> Vec<PageFallbackImage> {
+    use xberg_native_pdf::PdfFilter;
+
+    let Ok(handles) = doc.page_image_handles(page_idx) else {
+        return Vec::new();
+    };
+    let mut remaining = limits.max_content_size;
+    let mut images = Vec::new();
+    for handle in handles {
+        let (format, recovery) = match handle.filter_chain.as_slice() {
+            [PdfFilter::DCTDecode] => ("jpeg", XObjectRecovery::EmbeddedJpeg),
+            [PdfFilter::JPXDecode] => ("jpeg2000", XObjectRecovery::RawCompressedStream),
+            _ => continue,
+        };
+        let Ok(bytes) = handle.raw_compressed_bytes_with_limit(remaining) else {
+            continue;
+        };
+        remaining -= bytes.len();
+        if detect_image_format_from_bytes(&bytes) == format {
+            images.push(PageFallbackImage {
+                bytes: Bytes::from(bytes),
+                format,
+                recovery,
+                paint_order: handle.paint_order,
+            });
+        }
+    }
+    images
 }
 
 /// Collect OCR-ready image bytes for every image XObject on `page_idx`, for use as a
@@ -263,6 +306,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                     bytes: Bytes::copy_from_slice(jpeg_bytes),
                     format: "jpeg",
                     recovery: XObjectRecovery::EmbeddedJpeg,
+                    paint_order: handle.paint_order,
                 }),
                 xberg_native_pdf::extractors::ImageData::Raw { pixels, format } => {
                     match raw_pixels_to_png(img.width(), img.height(), format, pixels) {
@@ -270,6 +314,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                             bytes,
                             format: "png",
                             recovery: XObjectRecovery::ReencodedPixels,
+                            paint_order: handle.paint_order,
                         }),
                         Err(error) => {
                             tracing::debug!(page = page_idx, "force_ocr fallback: raw re-encode failed: {error}");
@@ -290,6 +335,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                                 bytes: Bytes::from(raw),
                                 format,
                                 recovery: XObjectRecovery::RawCompressedStream,
+                                paint_order: handle.paint_order,
                             });
                         }
                         Ok(_) => {

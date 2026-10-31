@@ -60,9 +60,9 @@ use super::rendering::{
     OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryOutcome,
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
-    recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch, render_selected_pages_from_document,
-    share_rendered_page_images, single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
-    whole_page_raster_for_ocr_page,
+    recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch,
+    render_selected_pages_from_document, share_rendered_page_images, single_block_for_ocr_page, valid_page_indices,
+    validate_png_encode_pages_individually, whole_page_raster_for_ocr_page,
 };
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::scoring::{
@@ -4785,32 +4785,48 @@ pub(super) async fn collect_pipeline_xobject_pages(
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
     for page_idx in 0..page_count {
-        let Some(mut recovery) =
+        let Some(recovery) =
             recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, budget).await?
         else {
             continue;
         };
-        let recovered_payload =
-            !recovery.text.is_empty() || !recovery.tables.is_empty() || !recovery.formulas.is_empty();
-        // The returned document is built from this text beside the recovered tables (#2014).
-        outcome.page_texts[page_idx] = std::mem::take(&mut recovery.text_outside_tables);
-        if recovered_payload {
-            outcome
-                .warnings
-                // ~keep This last-resort route runs after every OCR stage failed outright, so no
-                // page raster exists to test: pass `true` to keep the pre-GH#1826 wording rather
-                // than fabricate a signal that was never measured.
-                .push(xobject_fallback_warning(page_idx, recovery.attempted, true));
-        }
-        outcome.llm_usage.append(&mut recovery.llm_usage);
-        outcome.tables.append(&mut recovery.tables);
-        outcome.formulas.append(&mut recovery.formulas);
-        if let Some(metadata) = recovery.image_preprocessing {
-            outcome.preprocessing.insert((page_idx + 1) as u32, metadata);
-        }
-        outcome.images.append(&mut recovery.images);
+        append_pipeline_xobject_page(&mut outcome, recovery, page_idx, page_idx, false);
     }
     Ok(outcome)
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn append_pipeline_xobject_page(
+    outcome: &mut PipelineXObjectRecoveryOutcome,
+    mut recovery: XObjectRecoveryOutcome,
+    page_idx: usize,
+    local_page_idx: usize,
+    page_stages_failed: bool,
+) {
+    let recovered_payload = !recovery.text.is_empty() || !recovery.tables.is_empty() || !recovery.formulas.is_empty();
+    // The returned document is built from this text beside the recovered tables (#2014).
+    outcome.page_texts[local_page_idx] = std::mem::take(&mut recovery.text_outside_tables);
+    if recovered_payload {
+        let warning = if page_stages_failed {
+            crate::types::ProcessingWarning {
+                source: std::borrow::Cow::Borrowed("ocr"),
+                message: std::borrow::Cow::Owned(format!(
+                    "Page {} contains {} image XObject(s); OCR was retried on the embedded image bytes after all page OCR stages failed.",
+                    page_idx + 1,
+                    recovery.attempted
+                )),
+            }
+        } else {
+            xobject_fallback_warning(page_idx, recovery.attempted, true)
+        };
+        outcome.warnings.push(warning);
+    }
+    outcome.llm_usage.append(&mut recovery.llm_usage);
+    outcome.tables.append(&mut recovery.tables);
+    outcome.formulas.append(&mut recovery.formulas);
+    if let Some(metadata) = recovery.image_preprocessing {
+        outcome.preprocessing.insert((page_idx + 1) as u32, metadata);
+    }
+    outcome.images.append(&mut recovery.images);
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn join_pipeline_xobject_text(
@@ -4818,11 +4834,22 @@ pub(super) fn join_pipeline_xobject_text(
     config: &ExtractionConfig,
     budget: &mut crate::extractors::security::SecurityBudget,
 ) -> crate::Result<String> {
+    join_pipeline_xobject_text_at_offset(page_texts, config, budget, 0)
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn join_pipeline_xobject_text_at_offset(
+    page_texts: &[String],
+    config: &ExtractionConfig,
+    budget: &mut crate::extractors::security::SecurityBudget,
+    page_offset: usize,
+) -> crate::Result<String> {
     let page_marker_cfg = config.pages.as_ref().filter(|pages| pages.insert_page_markers);
     let mut text = String::new();
     for (page_idx, page_text) in page_texts.iter().enumerate() {
         if let Some(cfg) = page_marker_cfg {
-            let marker = cfg.marker_format.replace("{page_num}", &(page_idx + 1).to_string());
+            let marker = cfg
+                .marker_format
+                .replace("{page_num}", &(page_offset + page_idx + 1).to_string());
             budget.account_text(marker.len())?;
             text.push_str(&marker);
         } else if page_idx > 0 {
@@ -4861,6 +4888,65 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
         return Ok(None);
     }
     outcome.text = join_pipeline_xobject_text(&outcome.page_texts, config, &mut budget)?;
+    Ok(Some(outcome))
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+async fn recover_pipeline_page_from_image_xobjects(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    config: &ExtractionConfig,
+    ocr_config: &crate::core::config::OcrConfig,
+    backend_name: &str,
+) -> crate::Result<Option<PipelineXObjectRecoveryOutcome>> {
+    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    let backend = {
+        let registry = crate::plugins::registry::get_ocr_backend_registry();
+        let registry = registry.read();
+        let Ok(backend) = registry.get(backend_name) else {
+            return Ok(None);
+        };
+        backend
+    };
+    let Ok(page_count) = doc.page_count() else {
+        return Ok(None);
+    };
+    if page_idx >= page_count {
+        return Ok(None);
+    }
+    let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
+    let mut limits = config.security_limits.clone().unwrap_or_default();
+    if let Some(ocr_limits) = &ocr_config.security_limits {
+        limits.max_content_size = if config.security_limits.is_some() {
+            limits.max_content_size.min(ocr_limits.max_content_size)
+        } else {
+            ocr_limits.max_content_size
+        };
+    }
+    let mut recovery_ocr_config = ocr_config.clone();
+    recovery_ocr_config.security_limits = Some(limits);
+    let recovery = recover_page_text_from_bounded_image_xobjects(
+        &backend,
+        doc,
+        page_idx,
+        page_count,
+        &recovery_ocr_config,
+        &mut budget,
+    )
+    .await?;
+    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    let Some(recovery) = recovery else {
+        return Ok(None);
+    };
+    let mut outcome = PipelineXObjectRecoveryOutcome::new(1);
+    append_pipeline_xobject_page(&mut outcome, recovery, page_idx, 0, true);
+    if !outcome.has_content() {
+        return Ok(None);
+    }
+    outcome.text = join_pipeline_xobject_text_at_offset(&outcome.page_texts, config, &mut budget, page_idx)?;
     Ok(Some(outcome))
 }
 /// Run a multi-backend OCR pipeline with quality-based fallback.
@@ -5468,15 +5554,32 @@ async fn run_ocr_pipeline_stages(
             // giving up -- for a scanned PDF whose rasterizer output is blank, those
             // images are the only place the text ever was.
             #[cfg(feature = "pdf")]
-            if let Some(first_stage) = available_stages.first()
-                && let Some(mut recovery) = Box::pin(recover_pipeline_document_from_image_xobjects(
-                    inputs.content,
-                    config,
-                    ocr_config,
-                    &first_stage.backend,
-                ))
-                .await?
-            {
+            let xobject_recovery = if let Some(first_stage) = available_stages.first() {
+                if inputs.content.is_some() {
+                    Box::pin(recover_pipeline_document_from_image_xobjects(
+                        inputs.content,
+                        config,
+                        ocr_config,
+                        &first_stage.backend,
+                    ))
+                    .await?
+                } else if let Some(doc) = inputs.xobject_document {
+                    Box::pin(recover_pipeline_page_from_image_xobjects(
+                        doc,
+                        inputs.page_index_offset,
+                        config,
+                        ocr_config,
+                        &first_stage.backend,
+                    ))
+                    .await?
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            #[cfg(feature = "pdf")]
+            if let Some(mut recovery) = xobject_recovery {
                 accumulated_usage.append(&mut recovery.llm_usage);
                 let doc =
                     attach_ocr_pipeline_stage_warnings(None, &recovery.text, &unavailable_backends, &stage_failures);
@@ -6077,3 +6180,12 @@ fn append_recognized_tables(
 #[cfg(all(test, feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/recognized_table_grid_tests.rs"]
 mod recognized_table_grid_tests;
+
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "tokio-runtime",
+    any(feature = "ocr", feature = "ocr-pipeline")
+))]
+#[path = "memory_recovery_tests.rs"]
+mod memory_recovery_tests;

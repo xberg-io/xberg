@@ -10093,10 +10093,11 @@ Name: ___
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     fn fallback_test_images(count: usize) -> Vec<crate::pdf::native::images::PageFallbackImage> {
         (0..count)
-            .map(|_| crate::pdf::native::images::PageFallbackImage {
+            .map(|paint_order| crate::pdf::native::images::PageFallbackImage {
                 bytes: bytes::Bytes::from_static(b"ignored image bytes"),
                 format: "jpeg",
                 recovery: crate::pdf::native::images::XObjectRecovery::EmbeddedJpeg,
+                paint_order,
             })
             .collect()
     }
