@@ -21,7 +21,7 @@ use std::io::Cursor;
 mod bounded_jpeg;
 
 #[cfg(feature = "ocr")]
-pub(crate) use bounded_jpeg::{decode_oversized_jpeg, load_image_for_ocr_with_scale};
+pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr_with_scale};
 #[cfg(feature = "ocr")]
 #[doc(hidden)]
 pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
@@ -845,12 +845,13 @@ pub(crate) fn extract_image_metadata_with_security_limits(
         }
     }
 
-    // OCR decodes an oversized JPEG at a reduced size, so the metadata probe admits it the same way. ~keep
+    // OCR decodes an oversized JPEG at a reduced size, so the metadata probe admits it the same way,
+    // from the frame header alone. ~keep
     #[cfg(feature = "ocr")]
-    if let Some(reduced) = decode_oversized_jpeg(bytes, limits, |_| false)? {
+    if let Some((width, height)) = admit_oversized_jpeg(bytes, limits)? {
         return Ok(ExtractedImageMetadata {
-            width: reduced.original_width,
-            height: reduced.original_height,
+            width,
+            height,
             format: "JPEG".to_string(),
             exif_data: extract_exif_data(bytes),
         });

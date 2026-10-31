@@ -62,8 +62,8 @@ pub(crate) fn load_image_for_ocr_with_scale(
     limits: &SecurityLimits,
     accept: impl Fn(ReducedScale) -> bool,
 ) -> Result<DecodedOcrImage> {
-    if let Some(decoded) = decode_oversized_jpeg(image_bytes, limits, accept)? {
-        return Ok(decoded);
+    if let Some((frame, scale)) = admit_reduced_decode(image_bytes, limits, accept)? {
+        return decode(image_bytes, &frame, scale);
     }
     let image = decode_image_to_rgb8_with_security_limits(image_bytes, limits)?;
     Ok(DecodedOcrImage {
@@ -74,25 +74,26 @@ pub(crate) fn load_image_for_ocr_with_scale(
     })
 }
 
-/// Decode a JPEG at a reduced size when its full RGB raster does not fit the limit; `None` for
-/// any other input, which the full decoder then takes.
-pub(crate) fn decode_oversized_jpeg(
+/// The original dimensions of a JPEG whose full RGB raster does not fit the limit but whose
+/// reduced decode does, read from the frame header without decoding; `None` for any other
+/// input, which the full decoder then takes. An oversized JPEG that no reduced decode can take
+/// gets the same error as the OCR path.
+pub(crate) fn admit_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<(u32, u32)>> {
+    Ok(admit_reduced_decode(bytes, limits, |_| false)?.map(|(frame, _)| (frame.width, frame.height)))
+}
+
+/// Choose the reduced decode of a JPEG whose full RGB raster does not fit the limit: the finest
+/// IDCT scale that fits and that `accept` approves, or else the finest fitting scale. `None`
+/// for any other input.
+fn admit_reduced_decode(
     bytes: &[u8],
     limits: &SecurityLimits,
     accept: impl Fn(ReducedScale) -> bool,
-) -> Result<Option<DecodedOcrImage>> {
+) -> Result<Option<(Frame, ReducedScale)>> {
     if !bytes.starts_with(&[0xff, 0xd8]) {
         return Ok(None);
     }
     validate_encoded_image_input(bytes, limits)?;
-    decode_if_needed(bytes, limits, accept)
-}
-
-fn decode_if_needed(
-    bytes: &[u8],
-    limits: &SecurityLimits,
-    accept: impl Fn(ReducedScale) -> bool,
-) -> Result<Option<DecodedOcrImage>> {
     let Some(frame) = read_frame(bytes) else {
         return Ok(None);
     };
@@ -142,7 +143,7 @@ fn decode_if_needed(
             "even a 1/8 reduced decode does not fit"
         }));
     };
-    decode(bytes, &frame, scale).map(Some)
+    Ok(Some((frame, scale)))
 }
 
 /// The admitted peak bound of a reduced decode at `denominator`, for the allocation test in

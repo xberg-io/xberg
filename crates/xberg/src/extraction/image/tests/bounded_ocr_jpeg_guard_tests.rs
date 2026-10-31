@@ -122,3 +122,23 @@ fn metadata_probe_admits_an_oversized_baseline_jpeg_that_ocr_can_reduce() {
     assert_eq!((metadata.width, metadata.height), (WIDTH, HEIGHT));
     assert_eq!(metadata.format, "JPEG");
 }
+
+#[test]
+fn metadata_probe_reads_an_oversized_jpeg_from_its_frame_header_without_decoding() {
+    // Keep the bytes up to the end of the frame header and drop the tables and the scan, so
+    // any decode fails and only a header read succeeds.
+    let mut bytes = jpeg_with_frame_marker(0xc0);
+    let sof = bytes.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    let length = usize::from(u16::from_be_bytes([bytes[sof + 2], bytes[sof + 3]]));
+    bytes.truncate(sof + 2 + length);
+    bytes.extend_from_slice(&[0xff, 0xd9]);
+    let metadata = crate::extraction::image::extract_image_metadata_with_security_limits(
+        &bytes,
+        &SecurityLimits {
+            max_content_size: BUDGET,
+            ..Default::default()
+        },
+    )
+    .expect("the metadata probe must admit an oversized JPEG from its frame header");
+    assert_eq!((metadata.width, metadata.height), (WIDTH, HEIGHT));
+}
