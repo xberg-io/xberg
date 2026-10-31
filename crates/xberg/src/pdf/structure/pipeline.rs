@@ -1985,7 +1985,7 @@ fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> 
     lines
 }
 
-fn paragraph_gaps_from_bands(lines: &[LineBand], leading: fn(&[LineBand], f32) -> f32) -> Vec<f32> {
+fn paragraph_gaps_from_bands(lines: &[LineBand], leading: impl FnOnce(&[LineBand], f32) -> f32) -> Vec<f32> {
     if lines.len() < 2 {
         return Vec::new();
     }

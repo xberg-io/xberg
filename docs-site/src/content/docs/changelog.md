@@ -133,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep ordinary wrapped prose together around native scripts.** (#2275)
   Calibrate paragraph gaps within their source columns and preserve ordinary continuation across inline row repairs.
+  Reuse supported ordinary pitch in sparse columns and exclude proven gutter scripts from paragraph column scope.
   Keep genuine blank gaps and separately displayed equations as paragraph boundaries.
 
 - **(pdf): Keep split fractional and compound superscripts attached as complete native runs.** (#2275)
