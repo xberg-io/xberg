@@ -366,21 +366,25 @@ async fn image_pipeline_retains_canonical_normalized_financial_table() {
 async fn image_pipeline_retains_canonical_stitched_table() {
     let header: Vec<Vec<String>> = vec![vec!["Code".into(), "Count".into()]];
     let data: Vec<Vec<String>> = vec![vec!["STITCHED2226".into(), "17".into()]];
-    let fragments = [(header.clone(), 6.0, 8.0), (data.clone(), 3.0, 5.0)]
-        .into_iter()
-        .map(|(cells, y0, y1)| Table {
-            markdown: crate::rendering::common::render_table_markdown(&cells),
-            cells,
-            page_number: 1,
-            bounding_box: Some(BoundingBox {
-                x0: 1.0,
-                y0,
-                x1: 15.0,
-                y1,
-            }),
-            ..Default::default()
-        })
-        .collect::<Vec<_>>();
+    let fragments = [
+        (header.clone(), header.first().cloned(), 6.0, 8.0),
+        (data.clone(), None, 3.0, 5.0),
+    ]
+    .into_iter()
+    .map(|(cells, columns, y0, y1)| Table {
+        markdown: crate::rendering::common::render_table_markdown(&cells),
+        columns,
+        cells,
+        page_number: 1,
+        bounding_box: Some(BoundingBox {
+            x0: 1.0,
+            y0,
+            x1: 15.0,
+            y1,
+        }),
+        ..Default::default()
+    })
+    .collect::<Vec<_>>();
     assert_eq!(fragments.len(), 2);
     let document = extract_case(
         "image-stitched-table-2226",
