@@ -218,8 +218,8 @@ require_step "$validate_harness_job" '^[[:space:]]+timeout-minutes: 360$' \
   "standalone harness validation must retain the long build timeout"
 require_step "$validate_harness_job" '^[[:space:]]+- uses: actions/checkout@v7$' \
   "standalone harness validation must check out the benchmark source"
-require_step "$validate_harness_job" '^[[:space:]]+ref: \$\{\{ github\.event\.inputs\.branch \|\| github\.sha \}\}$' \
-  "standalone harness validation must check out the dispatched benchmark revision"
+require_step "$validate_harness_job" '^[[:space:]]+ref: \$\{\{ github\.sha \}\}$' \
+  "standalone harness validation must check out the immutable workflow revision"
 require_step "$validate_harness_job" '^[[:space:]]+submodules: recursive$' \
   "standalone harness validation must initialize fixture submodules"
 for required_step in \

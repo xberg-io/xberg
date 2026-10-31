@@ -25,6 +25,14 @@ run_validation() {
 	xberg_assert_output 'benchmark workflow build configuration is valid'
 }
 
+@test "benchmark workflow guard should reject the legacy mutable branch override" {
+	rewrite_fixture 's/ref: \${{ github\.sha }}/ref: ${{ github.event.inputs.branch || github.sha }}/' workflow.yaml
+	[ "$(grep -Fc '          ref: ${{ github.event.inputs.branch || github.sha }}' workflow.yaml)" -eq 14 ]
+	run_validation
+	xberg_assert_status 1
+	xberg_assert_output_contains 'standalone harness validation must check out the immutable workflow revision'
+}
+
 @test "benchmark workflow guard should reject an empty workflow rather than accepting an empty job sweep" {
 	: >workflow.yaml
 	run_validation

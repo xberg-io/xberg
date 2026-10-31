@@ -133,6 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Validate benchmark checkouts against the immutable workflow revision.**
+  Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
+
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
 
