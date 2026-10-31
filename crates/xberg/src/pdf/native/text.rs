@@ -7796,3 +7796,6 @@ mod tests {
         assert_reordered(spans, true);
     }
 }
+
+#[cfg(test)]
+mod fragmented_spacing_source_tests;
