@@ -28,6 +28,8 @@ struct NativeScriptOwner {
     logical_baseline: f32,
     kind: AnnotationKind,
     script_byte_range: Range<usize>,
+    // Every edge retains the complete run so later filtering cannot revive an isolated prefix. ~keep
+    run: Arc<Vec<NativeSpanWitness>>,
 }
 
 // Keep explicit text rise inside the native row candidate's half-em domain. ~keep
@@ -144,29 +146,44 @@ fn collect_suffix_script_owners(spans: &[TextSpan]) -> Vec<NativeScriptOwner> {
     let notes = numeric_notes(spans);
     let base_facts: Vec<_> = spans.iter().map(BaseFacts::from_span).collect();
     let continuations = ContinuationIndex::new(spans);
+    let candidates = script_row_candidates(spans);
+    let cohorts = cohorts::CohortIndex::new(spans, &candidates);
     let mut snapshots = HashMap::new();
-    script_row_candidates(spans)
-        .into_iter()
-        .filter_map(|candidate| {
-            let base_index = candidate.base_index();
-            let script_index = candidate.script_index();
-            let base = &spans[base_index];
-            let script = &spans[script_index];
-            let script_byte_range = suffix_script_range(base, script, base_facts[base_index].supported)?;
-            if is_numeric_note_reference(base, script, &notes, &base_facts[base_index])
-                && !continuations.has_unique_operator(spans, base, script)
-            {
-                return None;
-            }
-            Some(NativeScriptOwner {
+    let mut visited = std::collections::HashSet::new();
+    let mut owners = Vec::new();
+    for candidate in candidates {
+        let base_index = candidate.base_index();
+        if !visited.insert(base_index) {
+            continue;
+        }
+        let Some(members) = cohorts.complete_run(spans, base_index, base_facts[base_index].supported) else {
+            continue;
+        };
+        let base = &spans[base_index];
+        let first = &spans[members[0]];
+        if is_numeric_note_reference(base, first, &notes, &base_facts[base_index])
+            && !continuations.has_unique_operator(spans, base, first)
+        {
+            continue;
+        }
+        let run = Arc::new(
+            members
+                .iter()
+                .map(|&index| span_witness(spans, index, &mut snapshots))
+                .collect(),
+        );
+        for script_index in members {
+            owners.push(NativeScriptOwner {
                 base_witness: span_witness(spans, base_index, &mut snapshots),
                 script_witness: span_witness(spans, script_index, &mut snapshots),
-                logical_baseline: effective_baseline(base)?,
+                logical_baseline: effective_baseline(base).expect("validated native base baseline"),
                 kind: AnnotationKind::Superscript,
-                script_byte_range,
-            })
-        })
-        .collect()
+                script_byte_range: 0..spans[script_index].text.trim_end().len(),
+                run: Arc::clone(&run),
+            });
+        }
+    }
+    owners
 }
 
 fn owner_roles_are_compatible(base: &TextSpan, script: &TextSpan) -> bool {
@@ -192,18 +209,8 @@ fn suffix_script_range(base: &TextSpan, script: &TextSpan, supported_base: bool)
     if !owner_roles_are_compatible(base, script)
         || !supported_base
         || text.is_empty()
-        || text.len() > INLINE_SCRIPT_MAX_CHARS
-        || !text.bytes().all(|character| character.is_ascii_alphanumeric())
-    {
-        return None;
-    }
-    let font_ratio = script.font_size / base.font_size;
-    if !(INLINE_SCRIPT_MIN_FONT_RATIO..=INLINE_SCRIPT_MAX_FONT_RATIO).contains(&font_ratio) {
-        return None;
-    }
-    let shift = effective_baseline(script)? - effective_baseline(base)?;
-    if !(base.font_size * INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM..=base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM)
-        .contains(&shift)
+        || text.chars().take(INLINE_SCRIPT_MAX_CHARS + 1).count() > INLINE_SCRIPT_MAX_CHARS
+        || !raised_member_geometry(base, script)
     {
         return None;
     }
@@ -215,6 +222,19 @@ fn suffix_script_range(base: &TextSpan, script: &TextSpan, supported_base: bool)
         return None;
     }
     Some(0..text.len())
+}
+
+fn raised_member_geometry(base: &TextSpan, script: &TextSpan) -> bool {
+    if !valid_continuation_geometry(base) || !valid_continuation_geometry(script) {
+        return false;
+    }
+    let font_ratio = script.font_size / base.font_size;
+    if !(INLINE_SCRIPT_MIN_FONT_RATIO..=INLINE_SCRIPT_MAX_FONT_RATIO).contains(&font_ratio) {
+        return false;
+    }
+    let shift = effective_baseline(script).unwrap_or(f32::NAN) - effective_baseline(base).unwrap_or(f32::NAN);
+    (base.font_size * INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM..=base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM)
+        .contains(&shift)
 }
 
 fn is_numeric_note_reference(
@@ -250,6 +270,8 @@ fn span_witness(spans: &[TextSpan], index: usize, snapshots: &mut HashMap<usize,
 }
 
 pub(crate) mod page_segments;
+
+mod cohorts;
 
 #[cfg(test)]
 mod tests;

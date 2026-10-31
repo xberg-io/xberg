@@ -26,6 +26,10 @@ pub(crate) struct SegmentScriptOwner {
 }
 
 impl SegmentScriptOwner {
+    fn run_key(&self) -> (usize, usize) {
+        (self.original_index(false), self.source.run[0].original_index)
+    }
+
     pub(crate) fn original_index(&self, script: bool) -> usize {
         if script {
             self.source.script_witness.original_index
@@ -75,6 +79,25 @@ impl SegmentScriptOwner {
     pub(crate) fn logical_baseline(&self) -> f32 {
         self.source.logical_baseline
     }
+}
+
+pub(crate) fn complete_script_runs(owners: Vec<&SegmentScriptOwner>) -> Vec<&SegmentScriptOwner> {
+    let mut counts = HashMap::new();
+    for owner in &owners {
+        *counts
+            .entry((owner.run_key(), owner.original_index(true)))
+            .or_insert(0_usize) += 1;
+    }
+    owners
+        .into_iter()
+        .filter(|owner| {
+            owner
+                .source
+                .run
+                .iter()
+                .all(|member| counts.get(&(owner.run_key(), member.original_index)) == Some(&1))
+        })
+        .collect()
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -180,6 +203,13 @@ impl NativePageSegments {
         self.script_owners
             .iter()
             .filter_map(|owner| {
+                if !owner
+                    .run
+                    .iter()
+                    .all(|member| survivors.get(&member.original_index).is_some_and(Option::is_some))
+                {
+                    return None;
+                }
                 let base_index = *survivors.get(&owner.base_witness.original_index)?.as_ref()?;
                 let script_index = *survivors.get(&owner.script_witness.original_index)?.as_ref()?;
                 (base_index != script_index).then(|| SegmentScriptOwner {

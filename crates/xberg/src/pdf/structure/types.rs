@@ -28,22 +28,24 @@ impl PdfLine {
         &self,
     ) -> Vec<&crate::pdf::native::hierarchy::script_ownership::page_segments::SegmentScriptOwner> {
         let mut endpoints = std::collections::HashMap::new();
-        self.native_scripts
-            .iter()
-            .filter(|owner| {
-                [(owner.base_index, false), (owner.script_index, true)]
-                    .into_iter()
-                    .all(|(index, script)| {
-                        *endpoints
-                            .entry((index, owner.original_index(script)))
-                            .or_insert_with(|| {
-                                self.segments
-                                    .get(index)
-                                    .is_some_and(|segment| owner.endpoint_matches(segment, script))
-                            })
-                    })
-            })
-            .collect()
+        crate::pdf::native::hierarchy::script_ownership::page_segments::complete_script_runs(
+            self.native_scripts
+                .iter()
+                .filter(|owner| {
+                    [(owner.base_index, false), (owner.script_index, true)]
+                        .into_iter()
+                        .all(|(index, script)| {
+                            *endpoints
+                                .entry((index, owner.original_index(script)))
+                                .or_insert_with(|| {
+                                    self.segments
+                                        .get(index)
+                                        .is_some_and(|segment| owner.endpoint_matches(segment, script))
+                                })
+                        })
+                })
+                .collect(),
+        )
     }
 }
 

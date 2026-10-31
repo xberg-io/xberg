@@ -58,6 +58,10 @@ fn assert_owner(owners: &[NativeScriptOwner], spans: &[TextSpan], base: usize, s
         logical_baseline: spans[base].bbox.y,
         kind: AnnotationKind::Superscript,
         script_byte_range: range,
+        run: Arc::new(vec![NativeSpanWitness {
+            original_index: script,
+            snapshot: Arc::new(spans[script].clone()),
+        }]),
     };
     let matching: Vec<_> = owners
         .iter()

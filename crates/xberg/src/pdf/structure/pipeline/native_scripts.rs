@@ -1,7 +1,9 @@
 //! Preserve page-local source identities through native table filtering.
 
 use crate::pdf::hierarchy::SegmentData;
-use crate::pdf::native::hierarchy::script_ownership::page_segments::{NativePageSegments, SegmentScriptOwner};
+use crate::pdf::native::hierarchy::script_ownership::page_segments::{
+    NativePageSegments, SegmentScriptOwner, complete_script_runs,
+};
 
 use super::{TableCoverage, filter_segments_by_table_bboxes, segment_survives_table_filter};
 
@@ -80,7 +82,7 @@ impl NativeScriptIndex {
             .enumerate()
             .map(|(local, &global)| (global, local))
             .collect();
-        let owners = indices
+        let owners: Vec<_> = indices
             .iter()
             .filter_map(|index| {
                 let mut owner = self.by_script.get(index)?.clone();
@@ -94,7 +96,10 @@ impl NativeScriptIndex {
                 .iter()
                 .filter_map(|&index| self.original_indices.get(index).copied())
                 .collect(),
-            owners,
+            owners: complete_script_runs(owners.iter().collect())
+                .into_iter()
+                .cloned()
+                .collect(),
         }
     }
 }
@@ -271,10 +276,12 @@ fn accepted_owners<'a>(segments: &[&SegmentData], evidence: &'a NativeSegmentEvi
     }
     // A nested script chain needs a stronger ownership representation. Keep its
     // original order instead of claiming a partially supported attachment. ~keep
-    owners
-        .into_iter()
-        .filter(|owner| !scripts.contains(&owner.base_index) && script_counts[&owner.script_index] == 1)
-        .collect()
+    complete_script_runs(
+        owners
+            .into_iter()
+            .filter(|owner| !scripts.contains(&owner.base_index) && script_counts[&owner.script_index] == 1)
+            .collect(),
+    )
 }
 
 fn plan_native_order_with_owners(
@@ -418,6 +425,9 @@ mod group_tests;
 
 #[cfg(test)]
 mod line_tests;
+
+#[cfg(test)]
+mod cohort_tests;
 
 #[cfg(test)]
 mod tests {
