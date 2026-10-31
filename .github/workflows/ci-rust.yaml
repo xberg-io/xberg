@@ -47,7 +47,8 @@ permissions:
 jobs:
   rust:
     name: Rust (${{ matrix.os }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ${{ matrix.os }}
     # Raised from 90m, which was silently marginal: the legs used to abort early on the
     # first failure and finish in 35-82m, so nobody saw that a leg running to COMPLETION
@@ -123,20 +124,20 @@ jobs:
         shell: bash
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: mise run rust:lint:workspace
         shell: bash
 
       - name: Clippy full ORT surface (layout + OCR + ML)
-        run: cargo clippy --locked -p xberg --features full --all-targets -- -D warnings
+        run: mise run rust:lint:features full
         shell: bash
 
       - name: Clippy no-ORT tract engine
-        run: cargo clippy --locked -p xberg --no-default-features --features "ocr,auto-rotate-tract" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features "ocr,auto-rotate-tract"
         shell: bash
 
       # actually exercises the `#[allow(dead_code)]` markers on hf_client /
       - name: Clippy no-ORT tract layout
-        run: cargo clippy --locked -p xberg --no-default-features --features "layout-tract" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features layout-tract
         shell: bash
 
       # `formula-recognition` is opt-in and excluded from `full`, so no other cell
@@ -144,7 +145,7 @@ jobs:
       # broader or narrower than their callers' (layout + ocr-pipeline without any
       # OCR backend). ~keep
       - name: Clippy formula recognition cell
-        run: cargo clippy --locked -p xberg --no-default-features --features "formula-recognition,pdf" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features "formula-recognition,pdf"
         shell: bash
 
       # `candle-glm-ocr` is the only OCR backend that turns on `layout-detection`, so this
@@ -152,7 +153,7 @@ jobs:
       # pdf-only callers. Skipped on Linux aarch64 for the same candle reason as below. ~keep
       - name: Clippy GLM-OCR single backend
         if: matrix.os != 'ubuntu-24.04-arm'
-        run: cargo clippy --locked -p xberg --no-default-features --features "tokio-runtime,ocr,candle-glm-ocr" --all-targets -- -D warnings
+        run: mise run rust:lint:features --no-default-features "tokio-runtime,ocr,candle-glm-ocr"
         shell: bash
 
       # `cargo clippy --workspace` above lints xberg-candle-ocr too, but only at its
@@ -166,7 +167,7 @@ jobs:
       # baseline lacks (matches the doctest and unit-test gating for this crate).
       - name: Clippy candle-ocr model surface
         if: matrix.os != 'ubuntu-24.04-arm'
-        run: cargo clippy --locked -p xberg-candle-ocr --features "trocr,paddleocr-vl,glm-ocr,deepseek-ocr" --all-targets -- -D warnings
+        run: mise run rust:lint:features -p xberg-candle-ocr "trocr,paddleocr-vl,glm-ocr,deepseek-ocr"
         shell: bash
 
       # The clippy feature matrix leaves several incompatible copies of the dependency graph in
@@ -381,7 +382,8 @@ jobs:
   # time actually running the (fixture-heavy) test suite. ~keep
   windows-static-embeddings-link:
     name: Rust (windows-latest, static-embeddings link)
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: windows-latest
     timeout-minutes: 360
     steps:
@@ -419,7 +421,8 @@ jobs:
   # Also the only job that builds/tests xberg-libwpd on Windows.
   clippy-windows:
     name: Rust (windows-latest)
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: windows-latest
     timeout-minutes: 360
     steps:
@@ -476,7 +479,8 @@ jobs:
   # CI time for no new coverage. ~keep
   rust-tract-no-ort:
     name: Rust tract-only (no-ORT)
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     env:
@@ -569,7 +573,8 @@ jobs:
   # fail as dead code rather than passing cargo check with warnings (#2243). ~keep
   narrow-feature-legs:
     name: Narrow feature leg (${{ matrix.name }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
@@ -629,7 +634,8 @@ jobs:
   # scaling bench compiling and runnable without paying for a measurement run. ~keep
   chunking-scaling:
     name: Chunking scaling guard
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -667,7 +673,8 @@ jobs:
   # tesseract-wasm's C sources against it, same as publish.yaml's wasm-bindings job).
   wasm-target-check:
     name: Narrow feature leg (wasm-target, wasm32)
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -708,7 +715,8 @@ jobs:
   # introspection with no include_bytes! fixtures, so no test_documents fetch is needed.
   xberg-cli-feature-legs:
     name: xberg-cli feature leg (${{ matrix.name }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
@@ -828,7 +836,8 @@ jobs:
   # copy anywhere. ~keep
   pdfium-engine:
     name: Rust pdfium engine (real library)
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -877,7 +886,8 @@ jobs:
 
   live-hf:
     name: Live HF preset tests
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     steps:

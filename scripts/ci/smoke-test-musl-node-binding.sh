@@ -37,7 +37,7 @@ NODE_FILE="$(find "$STAGED_DIR" -maxdepth 1 -name '*.node' | head -n1)"
 [ -n "$NODE_FILE" ] || die "no .node file found under $STAGED_DIR"
 NODE_FILE_NAME="$(basename "$NODE_FILE")"
 
-# alpine:3.22 matches docker/Dockerfile.musl-node's build image, so this is
+# alpine:3.24.3 matches docker/Dockerfile.musl-node's build image, so this is
 # the same musl libc family the binding was cross-compiled for.
 docker run --rm \
   -v "$STAGED_DIR:/native:ro" \
@@ -46,7 +46,7 @@ docker run --rm \
   -v "$SMOKE_SCRIPT:/smoke/smoke_test_node_binding.js:ro" \
   -e NAPI_RS_NATIVE_LIBRARY_PATH="/native/${NODE_FILE_NAME}" \
   -e EXPECTED_TEXT="$EXPECTED_TEXT" \
-  alpine:3.22 sh -euc '
+  alpine:3.24.3 sh -euc '
     apk add --no-cache nodejs >/dev/null
     # Same libstdc++ skew the Elixir gate hits: the vendored libonnxruntime.so.1 comes
     # from Alpine edge (docker/Dockerfile.musl-node upgrades libstdc++ before compiling)

@@ -39,7 +39,7 @@ EXPECTED_TEXT="XBERG MUSL SMOKE 490"
 
 find "$BUILD_OUTPUT_DIR" -maxdepth 1 -name 'libxberg_ffi.so' | grep -q . || die "no libxberg_ffi.so found under $BUILD_OUTPUT_DIR"
 
-# alpine:3.21 matches docker/Dockerfile.musl-ffi's build image, so this is the
+# alpine:3.24.3 matches docker/Dockerfile.musl-ffi's build image, so this is the
 # same musl libc family the library was cross-compiled for. maven resolves
 # io.xberg's compile-scope dependencies (jackson, jspecify) from Maven
 # Central inside the container -- normal network access for a CI runner, not
@@ -58,7 +58,7 @@ docker run --rm \
   -v "$FIXTURE:/fixture.pdf:ro" \
   -e EXPECTED_TEXT="$EXPECTED_TEXT" \
   -e XBERG_FFI_LIB_PATH="/native/libxberg_ffi.so" \
-  alpine:3.21 sh -euc '
+  alpine:3.24.3 sh -euc '
     apk add --no-cache openjdk25-jdk maven \
       --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
       --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main

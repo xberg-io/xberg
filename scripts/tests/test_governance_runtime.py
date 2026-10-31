@@ -6,6 +6,8 @@ import tomllib
 import unittest
 
 SETUP_AI_RULEZ = "xberg-io/actions/setup-ai-rulez@v1"
+# The reusable validation workflow installs ai-rulez through setup-ai-rulez itself.
+REUSABLE_VALIDATION = "xberg-io/actions/.github/workflows/reusable-ai-rulez-validation.yml@v1"
 
 
 def _latest_ai_rulez_installs(path: Path) -> int:
@@ -14,7 +16,8 @@ def _latest_ai_rulez_installs(path: Path) -> int:
     assert "ai-rulez-version:" not in source, f"{path} passes an ai-rulez version"
     assert "source-revision:" not in source, f"{path} builds a pinned ai-rulez revision"
     assert re.search(r"AI_RULEZ\w*_VERSION", source) is None, f"{path} pins ai-rulez through the environment"
-    return len(re.findall(rf"(?m)^ +(?:- )?uses: {re.escape(SETUP_AI_RULEZ)}$", source))
+    installers = "|".join(re.escape(ref) for ref in (SETUP_AI_RULEZ, REUSABLE_VALIDATION))
+    return len(re.findall(rf"(?m)^ +(?:- )?uses: (?:{installers})$", source))
 
 
 def _hook_revision(sources: list[dict]) -> str | None:

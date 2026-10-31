@@ -29,6 +29,7 @@ concurrency:
 
 jobs:
   setup:
+    if: github.ref == 'refs/heads/main'
     name: Build harness + native libs (with profiling)
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -89,6 +90,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
   bench-native:
+    if: github.ref == 'refs/heads/main'
     name: xberg-rust (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -171,6 +173,7 @@ jobs:
           retention-days: 7
 
   bench-python-sync:
+    if: github.ref == 'refs/heads/main'
     name: xberg-python (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -278,6 +281,7 @@ jobs:
           retention-days: 7
 
   bench-python-async:
+    if: github.ref == 'refs/heads/main'
     name: xberg-python-async-OLD (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -385,6 +389,7 @@ jobs:
           retention-days: 7
 
   bench-python-batch:
+    if: github.ref == 'refs/heads/main'
     name: xberg-python-batch (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -492,6 +497,7 @@ jobs:
           retention-days: 7
 
   bench-node-async:
+    if: github.ref == 'refs/heads/main'
     name: xberg-node (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -588,6 +594,7 @@ jobs:
           retention-days: 7
 
   bench-node-batch:
+    if: github.ref == 'refs/heads/main'
     name: xberg-node-batch (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -684,6 +691,7 @@ jobs:
           retention-days: 7
 
   bench-wasm-async:
+    if: github.ref == 'refs/heads/main'
     name: xberg-wasm-async (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -772,6 +780,7 @@ jobs:
           retention-days: 7
 
   bench-wasm-batch:
+    if: github.ref == 'refs/heads/main'
     name: xberg-wasm-batch (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -860,6 +869,7 @@ jobs:
           retention-days: 7
 
   bench-ruby-sync:
+    if: github.ref == 'refs/heads/main'
     name: xberg-ruby (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -969,6 +979,7 @@ jobs:
           retention-days: 7
 
   bench-ruby-batch:
+    if: github.ref == 'refs/heads/main'
     name: xberg-ruby-batch (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -1078,6 +1089,7 @@ jobs:
           retention-days: 7
 
   bench-go-sync:
+    if: github.ref == 'refs/heads/main'
     name: xberg-go-sync (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -1178,6 +1190,7 @@ jobs:
           retention-days: 7
 
   bench-go-batch:
+    if: github.ref == 'refs/heads/main'
     name: xberg-go-batch (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -1278,6 +1291,7 @@ jobs:
           retention-days: 7
 
   bench-java-sync:
+    if: github.ref == 'refs/heads/main'
     name: xberg-java-sync (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
@@ -1368,6 +1382,7 @@ jobs:
           retention-days: 7
 
   bench-csharp-sync:
+    if: github.ref == 'refs/heads/main'
     name: xberg-csharp-sync (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
