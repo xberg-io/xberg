@@ -35,6 +35,17 @@ pub(super) fn prepare_segments(
 }
 
 #[cfg(test)]
+fn reconstruct_native_lines(
+    segments: &[&SegmentData],
+    _evidence: &NativeSegmentEvidence,
+) -> Vec<crate::pdf::structure::types::PdfLine> {
+    super::reconstruct_pdf_lines(segments)
+}
+
+#[cfg(test)]
+mod line_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::TextSpan;

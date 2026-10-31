@@ -17,11 +17,25 @@ pub(crate) struct NativePageSegments {
     script_owners: Vec<NativeScriptOwner>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SegmentScriptOwner {
     pub(crate) base_index: usize,
     pub(crate) script_index: usize,
     source: NativeScriptOwner,
+}
+
+impl SegmentScriptOwner {
+    pub(crate) fn kind(&self) -> crate::types::document_structure::AnnotationKind {
+        self.source.kind.clone()
+    }
+
+    pub(crate) fn byte_range(&self) -> std::ops::Range<usize> {
+        self.source.script_byte_range.clone()
+    }
+
+    pub(crate) fn logical_baseline(&self) -> f32 {
+        self.source.logical_baseline
+    }
 }
 
 #[derive(PartialEq, Eq, Hash)]

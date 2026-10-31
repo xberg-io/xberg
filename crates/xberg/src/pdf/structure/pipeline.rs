@@ -1310,7 +1310,7 @@ pub(super) fn reattach_detached_list_markers(paragraphs: &mut Vec<PdfParagraph>,
         let marker_bbox = paragraphs[*marker_index].block_bbox;
         let body = &mut paragraphs[*body_index];
         if let Some(line) = body.lines.first_mut() {
-            line.segments.insert(0, marker_segment);
+            line.prepend_segment(marker_segment);
         }
         body.is_list_item = true;
         body.block_bbox = match (body.block_bbox, marker_bbox) {
@@ -2931,6 +2931,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
         let is_monospace = segments.iter().all(|s| s.is_monospace);
         super::types::PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y,
             dominant_font_size,
