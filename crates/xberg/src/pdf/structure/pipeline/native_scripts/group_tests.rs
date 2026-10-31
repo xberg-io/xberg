@@ -380,7 +380,11 @@ fn should_preserve_source_gap_when_consecutive_paragraphs_advance_upward_2275() 
     let before: Vec<_> = paragraphs.iter().map(|paragraph| format!("{paragraph:?}")).collect();
     let mut legacy = paragraphs.clone();
     super::super::merge_continuation_paragraphs(&mut legacy);
-    assert_eq!(legacy.len(), 1, "generic merger accepts the absolute thirty-five-point advance");
+    assert_eq!(
+        legacy.len(),
+        1,
+        "generic merger accepts the absolute thirty-five-point advance"
+    );
     super::super::merge_continuation_paragraphs_at_source_gaps(&mut paragraphs, &gaps);
     assert_eq!(
         paragraphs.len(),
