@@ -105,3 +105,78 @@ fn restart_intervals_cannot_enable_unaccounted_parallel_reduced_buffers() {
     assert!(matches!(error, XbergError::Validation { .. }));
     assert!(error.to_string().contains("restart intervals"), "{error}");
 }
+
+fn insert_segment(bytes: &[u8], at: usize, segment: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(bytes.len() + segment.len());
+    output.extend_from_slice(&bytes[..at]);
+    output.extend_from_slice(segment);
+    output.extend_from_slice(&bytes[at..]);
+    output
+}
+
+fn relocated_adobe_rgb_jpeg() -> (Vec<u8>, Vec<u8>) {
+    const ADOBE_RGB: &[u8] = &[0xff, 0xee, 0, 14, b'A', b'd', b'o', b'b', b'e', 0, 100, 0, 0, 0, 0, 0];
+    let options = oxiarc_jpeg::EncodeOptions {
+        jpeg_color_space: Some(oxiarc_jpeg::ColorSpace::Rgb),
+        component_ids: oxiarc_jpeg::ComponentIds::Sequential,
+        write_jfif: oxiarc_jpeg::MarkerPolicy::Never,
+        write_adobe: oxiarc_jpeg::MarkerPolicy::Never,
+        ..Default::default()
+    };
+    let pixels = [200, 100, 50].repeat(usize::from(WIDTH) * usize::from(HEIGHT));
+    let original =
+        oxiarc_jpeg::encode_to_vec_with_options(&pixels, WIDTH, HEIGHT, oxiarc_jpeg::InputColor::Rgb, &options)
+            .unwrap();
+    assert!(!original.windows(2).any(|marker| marker == [0xff, 0xee]));
+    assert!(!original.windows(2).any(|marker| marker == [0xff, 0xe0]));
+    let frame = original.windows(2).position(|marker| marker == [0xff, 0xc0]).unwrap();
+    let frame_length = usize::from(u16::from_be_bytes([original[frame + 2], original[frame + 3]]));
+    let early = insert_segment(&original, frame, ADOBE_RGB);
+    let late = insert_segment(&original, frame + 2 + frame_length, ADOBE_RGB);
+    (early, late)
+}
+
+#[test]
+fn late_adobe_color_metadata_is_rejected_before_reduced_decoding() {
+    let (early, late) = relocated_adobe_rgb_jpeg();
+    assert_valid(&early);
+    assert_valid(&late);
+    let expected = image::load_from_memory(&early).unwrap().into_rgb8();
+    let moved = image::load_from_memory(&late).unwrap().into_rgb8();
+    for (actual, expected) in expected.get_pixel(0, 0).0.into_iter().zip([200, 100, 50]) {
+        assert!(
+            actual.abs_diff(expected) <= 4,
+            "independent full decode must retain the encoded RGB color"
+        );
+    }
+    assert!(
+        expected.as_raw() == moved.as_raw(),
+        "moving only APP14 must preserve independently decoded RGB"
+    );
+    let limits = SecurityLimits {
+        max_content_size: BUDGET,
+        ..Default::default()
+    };
+    let reduced = load_image_for_ocr(&early, &limits).unwrap().into_rgb8();
+    for (actual, expected) in reduced.get_pixel(0, 0).0.into_iter().zip([200, 100, 50]) {
+        assert!(actual.abs_diff(expected) <= 4);
+    }
+    let fitting = load_image_for_ocr(
+        &late,
+        &SecurityLimits {
+            max_content_size: 1024 * 1024,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .into_rgb8();
+    assert!(
+        fitting.as_raw() == expected.as_raw(),
+        "the fitting-image path keeps its color behavior"
+    );
+    let error = load_image_for_ocr(&late, &limits)
+        .err()
+        .expect("late color signalling must not reach the decoder's frozen pre-scan color state");
+    assert!(matches!(error, XbergError::Validation { .. }));
+    assert!(error.to_string().contains("color marker after frame"), "{error}");
+}
