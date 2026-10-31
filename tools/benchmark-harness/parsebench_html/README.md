@@ -66,7 +66,7 @@ and the complete inventory before execution, before every CLI invocation, after 
 Changing the runner or guard, deleting a helper, or adding a Python module requires a new freeze. Run the five
 source-pinning controls with the pinned offline evaluator environment using
 `python -m unittest discover -s tools/benchmark-harness/tests -p 'test_parsebench_html_runtime_pins.py'`;
-they require five collected tests and no skips. Their unchanged-source positive control reaches the subprocess
+they fail, and never skip, when the evaluator is not installed. Their unchanged-source positive control reaches the subprocess
 boundary exactly once; changed-source controls reach it zero times without extracting a document.
 
 Plans created before source pinning remain readable for artifact audits, but `run` rejects them with an explicit

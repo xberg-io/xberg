@@ -160,9 +160,15 @@ def _freeze(root: Path, runner) -> tuple[Path, dict]:
     return destination, plan
 
 
-@unittest.skipUnless(importlib.util.find_spec("parse_bench"), "requires the pinned offline evaluator environment")
 class RuntimePinsTest(unittest.TestCase):
     """Exercise actual freeze/run preflight before the subprocess invocation boundary."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Fail, never skip, outside the evaluator environment: a skipped run proves no source pin."""
+        if importlib.util.find_spec("parse_bench") is None:
+            message = "parse_bench is missing: run these controls in the pinned offline evaluator environment"
+            raise AssertionError(message)
 
     def _rejected(self, runner, root: Path, frozen: Path, pattern: str) -> None:
         error = None
