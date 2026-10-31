@@ -6,10 +6,13 @@
 //! scaled component planes, two MCU rows of coefficients (the row being filled and the row the
 //! worker takes), the output, the RGB conversion of a grayscale output, and a copy of the encoded
 //! bytes for retained APP data. A progressive scan keeps all coefficients at full resolution, and
-//! its final pass copies every row of one component before the worker runs. The `rayon` worker
-//! finishes each sequential row before the next one is read; the thread worker that `jpeg-decoder`
-//! uses without `rayon` queues rows without a bound. `jpeg-decoder`'s own output-size check is set
-//! to the admitted output as a second stop.
+//! its final pass copies every row of one component before the worker runs. A color decode also
+//! holds one set of upsampler line buffers (one per component, each the widest component row
+//! times the largest horizontal sampling factor) for every output row in flight, and rows run in
+//! parallel on the current `rayon` pool, so the bound counts one set per pool thread. The `rayon`
+//! worker finishes each sequential row before the next one is read; the thread worker that
+//! `jpeg-decoder` uses without `rayon` queues rows without a bound. `jpeg-decoder`'s own
+//! output-size check is set to the admitted output as a second stop.
 
 #[cfg(test)]
 mod tests;
@@ -155,7 +158,8 @@ fn reduced_scale(frame: &Frame, denominator: u8) -> ReducedScale {
 }
 
 /// Upper bound on the live bytes of a `jpeg-decoder` decode at `scale`, following its
-/// component layout (`update_component_sizes`) and immediate worker.
+/// component layout (`update_component_sizes`), immediate worker and upsampler, with one set of
+/// upsampler line buffers per thread of the current `rayon` pool.
 fn reduced_peak(frame: &Frame, scale: ReducedScale, encoded: u64) -> Option<u64> {
     let h_max = u64::from(frame.sampling.iter().map(|s| s.0).max()?);
     let v_max = u64::from(frame.sampling.iter().map(|s| s.1).max()?);
@@ -165,7 +169,12 @@ fn reduced_peak(frame: &Frame, scale: ReducedScale, encoded: u64) -> Option<u64>
     let mut planes = 0u64;
     let mut coefficients = 0u64;
     let mut largest_component = 0u64;
+    let mut widest_row = 0u64;
     for &(h, v) in &frame.sampling {
+        let row = u64::from(frame.width)
+            .checked_mul(u64::from(h) * idct)?
+            .div_ceil(h_max * 8);
+        widest_row = widest_row.max(row);
         let blocks_wide = mcu_columns.checked_mul(u64::from(h))?;
         let blocks_high = mcu_rows.checked_mul(u64::from(v))?;
         let blocks = blocks_wide.checked_mul(blocks_high)?;
@@ -184,8 +193,21 @@ fn reduced_peak(frame: &Frame, scale: ReducedScale, encoded: u64) -> Option<u64>
         coefficients = coefficients.checked_add(largest_component)?;
     }
     let pixels = u64::from(scale.width).checked_mul(u64::from(scale.height))?;
-    let output = pixels.checked_mul(frame.sampling.len() as u64)?;
-    let decoding = planes.checked_add(coefficients)?.checked_add(output)?;
+    let components = frame.sampling.len() as u64;
+    let output = pixels.checked_mul(components)?;
+    // A grayscale decode copies its plane into the output without the upsampler. ~keep
+    let upsampling = if components == 1 {
+        0
+    } else {
+        let threads = u64::try_from(rayon::current_num_threads()).ok()?;
+        components
+            .checked_mul(widest_row.checked_mul(h_max)?)?
+            .checked_mul(threads)?
+    };
+    let decoding = planes
+        .checked_add(coefficients)?
+        .checked_add(output)?
+        .checked_add(upsampling)?;
     let converting = if frame.sampling.len() == 1 {
         output.checked_add(pixels.checked_mul(RGB_CHANNELS)?)?
     } else {

@@ -94,3 +94,37 @@ fn should_count_full_resolution_coefficients_for_a_progressive_scan() {
         "{progressive} vs {sequential}"
     );
 }
+
+#[test]
+fn should_count_one_set_of_upsampler_line_buffers_per_rayon_thread() {
+    let bytes = rgb();
+    let frame = read_frame(&bytes).unwrap();
+    let scale = reduced_scale(&frame, 2);
+    let h_max = u64::from(frame.sampling.iter().map(|sampling| sampling.0).max().unwrap());
+    let peak_on = |threads: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap()
+            .install(|| reduced_peak(&frame, scale, bytes.len() as u64).unwrap())
+    };
+    // Three more threads hold three more sets of three line buffers, each one output row
+    // times the largest horizontal sampling factor.
+    let line_buffer = u64::from(scale.width) * h_max;
+    assert_eq!(peak_on(4) - peak_on(1), 3 * 3 * line_buffer);
+}
+
+#[test]
+fn should_not_count_upsampler_line_buffers_for_a_grayscale_scan() {
+    let bytes = jpeg(image::ExtendedColorType::L8, 1);
+    let frame = read_frame(&bytes).unwrap();
+    let scale = reduced_scale(&frame, 2);
+    let peak_on = |threads: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap()
+            .install(|| reduced_peak(&frame, scale, bytes.len() as u64).unwrap())
+    };
+    assert_eq!(peak_on(4), peak_on(1));
+}
