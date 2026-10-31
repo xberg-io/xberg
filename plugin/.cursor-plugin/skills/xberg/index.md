@@ -1,10 +1,10 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:995528a20ef3610c2da46cc63052bc232907509eca3477ba3e2decb42fba0146
-Source-Hash: blake3:a6076da32e6bfe3750e87d00b1c57c1dafffe1958ab6f8b6768e4a94fae3b20a
+Content-Hash: blake3:03f23e46ea452f0a341ed6552d505e85c4d31333aea0862be9ff0774b399c82d
+Source-Hash: blake3:86f6603084642522923caf5622c5161c131f6967bf44bbb6375805ff0cbb2533
 Schema-Version: v1
 -->
 
 # Concepts
 
-* [Xberg](SKILL.md) - Extract text, tables, metadata, and images from 107 document formats (PDF, Office, images, HTML, email, archives, academic) using Xberg. Use when writing code that calls Xberg APIs in Python, Node.js/TypeScript, Rust, or CLI. Covers installation, extraction (sync/async), configuration (OCR, chunking, output format), batch processing, error handling, and plugins.
+- [Xberg](SKILL.md) - Extract text, tables, metadata, and images from 107 document formats (PDF, Office, images, HTML, email, archives, academic) using Xberg. Use when writing code that calls Xberg APIs in Python, Node.js/TypeScript, Rust, or CLI. Covers installation, extraction (sync/async), configuration (OCR, chunking, output format), batch processing, error handling, and plugins.

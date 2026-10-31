@@ -1,10 +1,10 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:300ad773df783b84ad7b4ea64f24ab3a0b853670f28ac74c7d6f9f00a18ac505
-Source-Hash: blake3:a6076da32e6bfe3750e87d00b1c57c1dafffe1958ab6f8b6768e4a94fae3b20a
+Content-Hash: blake3:1c68a3b266a19383b28a9915e14fda9bce6c6d4668ce923727e86b59a2e34e0e
+Source-Hash: blake3:86f6603084642522923caf5622c5161c131f6967bf44bbb6375805ff0cbb2533
 Schema-Version: v1
 -->
 
 # Concepts
 
-* [Chunking](SKILL.md) - Use when splitting extracted text into chunks for LLM context windows or RAG ingestion. Covers chunk size, overlap, markdown/yaml/semantic chunkers, tokenizer-based sizing, and the standalone `chunk` command.
+- [Chunking](SKILL.md) - Use when splitting extracted text into chunks for LLM context windows or RAG ingestion. Covers chunk size, overlap, markdown/yaml/semantic chunkers, tokenizer-based sizing, and the standalone `chunk` command.
