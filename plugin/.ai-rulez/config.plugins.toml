@@ -1,7 +1,7 @@
 [plugin]
 name = "xberg"
 version = "1.4.0"
-opencode_dependency = "^2.0.29"
+opencode_dependency = "^2.2.3"
 runtimes = [
   "claude",
   "cursor",
