@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Inspect caption decoder sub-blocks with a separate hash-bound diagnostic.** (#2336)
+  Require paired observer controls and exact work counts while preserving failed qualification and frozen tolerances.
+
 - **(benchmarks): Locate decoder divergence with hash-bound, ordered tensor diagnostics.** (#2336)
   Preserve failed caption qualification and frozen tolerances while checking unchanged graph outputs and mask behavior.
 
