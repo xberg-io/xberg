@@ -966,6 +966,31 @@ const RGB_CHANNEL_MAX: f64 = u8::MAX as f64;
 /// Number of channels in an RGB pixel.
 const RGB_CHANNEL_COUNT: usize = 3;
 
+#[cfg(test)]
+mod reduced_jpeg_dpi_tests;
+
+#[cfg(test)]
+fn prepare_encoded_ocr_image(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    config: &TesseractConfig,
+    images: Option<&crate::core::config::ImageExtractionConfig>,
+) -> crate::Result<PreparedOcrImage> {
+    let image = crate::extraction::image::load_image_for_ocr(bytes, limits)?.into_rgb8();
+    let (width, height) = image.dimensions();
+    let dpi = resolve_known_source_dpi(config.source_dpi, bytes, width, height);
+    Ok(prepare_ocr_image(
+        image.into_raw(),
+        width,
+        height,
+        config.preprocessing.as_ref(),
+        images,
+        false,
+        dpi,
+        config.known_full_page_scan,
+    ))
+}
+
 struct PreparedOcrImage {
     data: Vec<u8>,
     width: u32,
