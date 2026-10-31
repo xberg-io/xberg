@@ -13,6 +13,7 @@ pub(super) use paragraph_gaps::NativeParagraphGaps;
 struct OrdinaryGroups {
     original: Vec<usize>,
     repaired: Vec<usize>,
+    original_gaps: Vec<f32>,
 }
 
 impl OrdinaryGroups {
@@ -20,6 +21,7 @@ impl OrdinaryGroups {
         Self {
             original: order.iter().map(|&index| self.original[index]).collect(),
             repaired: order.iter().map(|&index| self.repaired[index]).collect(),
+            original_gaps: self.original_gaps,
         }
     }
 }
@@ -237,7 +239,7 @@ fn apply_native_order(
         .collect();
     let continuation_gaps = ordinary_groups
         .as_ref()
-        .and_then(|_| NativeParagraphGaps::new(&segments, &by_script));
+        .and_then(|groups| NativeParagraphGaps::new(&segments, &by_script, &groups.original_gaps));
     (
         segments,
         NativeScriptIndex {
@@ -290,6 +292,7 @@ fn ordinary_group_labels(segments: &[SegmentData], owners: &[SegmentScriptOwner]
     OrdinaryGroups {
         original,
         repaired: labels,
+        original_gaps: gaps.to_vec(),
     }
 }
 

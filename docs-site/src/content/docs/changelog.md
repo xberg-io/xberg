@@ -143,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reuse supported ordinary pitch in sparse columns and exclude proven gutter scripts from paragraph column scope.
   Keep smaller body-pitch observations and exclude narrow stacked rows when sharing source-column evidence.
   Keep genuine blank gaps and separately displayed equations as paragraph boundaries.
+  Retain original paragraph and numeric-row breaks when same-column source geometry corroborates them.
 
 - **(pdf): Keep split fractional and compound superscripts attached as complete native runs.** (#2275)
   Preserve each glyph witness and discard the whole ownership proof if any run member is filtered or changed.

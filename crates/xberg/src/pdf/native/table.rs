@@ -2096,9 +2096,18 @@ fn longest_recurring_numeric_run<'a>(
 }
 
 fn is_numeric_row(row: &[&crate::pdf::table_reconstruct::HocrWord]) -> bool {
-    let numeric_words = row.iter().filter(|word| is_numeric_word(&word.text)).count();
+    is_dense_numeric_row(row.iter().map(|word| word.text.as_str()))
+}
+
+pub(crate) fn is_dense_numeric_row<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
+    let mut words = 0_usize;
+    let mut numeric_words = 0_usize;
+    for token in tokens {
+        words += 1;
+        numeric_words += usize::from(is_numeric_word(token));
+    }
     numeric_words >= DENSE_NUMERIC_MIN_WORDS_PER_ROW
-        && numeric_words.saturating_mul(100) >= row.len().saturating_mul(DENSE_NUMERIC_MIN_ROW_WORD_PERCENT)
+        && numeric_words.saturating_mul(100) >= words.saturating_mul(DENSE_NUMERIC_MIN_ROW_WORD_PERCENT)
 }
 
 fn recurring_numeric_x_tracks(rows: &[Vec<&crate::pdf::table_reconstruct::HocrWord>], median_height: u32) -> usize {

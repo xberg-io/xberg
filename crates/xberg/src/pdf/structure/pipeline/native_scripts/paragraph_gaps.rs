@@ -1,5 +1,5 @@
 use super::{SegmentData, SegmentScriptOwner};
-use crate::pdf::structure::types::PdfParagraph;
+use crate::pdf::structure::types::{PdfLine, PdfParagraph};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Scope {
@@ -13,12 +13,14 @@ pub(in crate::pdf::structure::pipeline) struct NativeParagraphGaps {
     page: Vec<f32>,
     left: Vec<f32>,
     right: Vec<f32>,
+    original: OriginalSourceGaps,
 }
 
 impl NativeParagraphGaps {
     pub(super) fn new(
         segments: &[SegmentData],
         scripts: &std::collections::HashMap<usize, SegmentScriptOwner>,
+        original_gaps: &[f32],
     ) -> Option<Self> {
         if scripts.is_empty() || !segments.iter().all(SegmentData::is_unrotated) {
             return None;
@@ -35,6 +37,7 @@ impl NativeParagraphGaps {
             page: Vec::new(),
             left: Vec::new(),
             right: Vec::new(),
+            original: OriginalSourceGaps::new(segments, &ordinary, corridor, original_gaps),
         };
         let inherited = plan.calibrate_columns(&ordinary);
         plan.page = ColumnBands::new(ordinary.iter().copied(), Scope::Page, corridor).gaps(inherited);
@@ -79,8 +82,78 @@ impl NativeParagraphGaps {
     pub(in crate::pdf::structure::pipeline) fn merge(&self, paragraphs: &mut Vec<PdfParagraph>) {
         super::super::merge_continuation_paragraphs_by_boundary(paragraphs, |previous, next| {
             let scope = boundary_scope(self.paragraph_scope(previous), self.paragraph_scope(next));
-            scope.is_none_or(|scope| super::super::paragraphs_cross_source_gap(previous, next, self.gaps(scope)))
+            scope.is_none_or(|scope| {
+                super::super::paragraphs_cross_source_gap(previous, next, self.gaps(scope))
+                    || self.retains_original_boundary(previous, next, scope)
+            })
         });
+    }
+
+    fn retains_original_boundary(&self, previous: &PdfParagraph, next: &PdfParagraph, scope: Scope) -> bool {
+        if !super::super::paragraphs_cross_source_gap(previous, next, &self.original.provided)
+            || !super::super::paragraphs_cross_source_gap(previous, next, self.original.gaps(scope))
+        {
+            return false;
+        }
+        let Some((upper, lower)) = previous.lines.last().zip(next.lines.first()) else {
+            return false;
+        };
+        let Some(upper) = self.ordinary_row(upper, scope) else {
+            return false;
+        };
+        let Some(lower) = self.ordinary_row(lower, scope) else {
+            return false;
+        };
+        let numeric_rows = [upper.as_slice(), lower.as_slice()].into_iter().all(|row| {
+            crate::pdf::native::table::is_dense_numeric_row(
+                row.iter().flat_map(|segment| segment.text.split_whitespace()),
+            )
+        });
+        let upper_end = upper
+            .iter()
+            .copied()
+            .max_by(|left, right| {
+                left.upright_advance_extent()
+                    .1
+                    .total_cmp(&right.upright_advance_extent().1)
+            })
+            .expect("ordinary source row is nonempty");
+        let lower_right = lower
+            .iter()
+            .map(|segment| segment.upright_advance_extent().1)
+            .fold(f32::NEG_INFINITY, f32::max);
+        numeric_rows || !super::super::heading_line_ran_out_of_room(upper_end, lower[0], lower_right)
+    }
+
+    fn ordinary_row<'a>(&self, line: &'a PdfLine, scope: Scope) -> Option<Vec<&'a SegmentData>> {
+        if line.native_source_origin.is_none() || !line.baseline_y.is_finite() {
+            return None;
+        }
+        let scripts: std::collections::HashSet<_> = line
+            .valid_native_scripts()
+            .into_iter()
+            .map(|owner| owner.script_index)
+            .collect();
+        let ordinary: Vec<_> = line
+            .segments
+            .iter()
+            .enumerate()
+            .filter(|(index, segment)| !scripts.contains(index) && !segment.text.trim().is_empty())
+            .map(|(_, segment)| segment)
+            .collect();
+        let first = *ordinary.first()?;
+        ordinary
+            .iter()
+            .all(|segment| {
+                finite_source_segment(segment)
+                    && !segment
+                        .text
+                        .chars()
+                        .any(|character| xberg_native_pdf::text::is_rtl_text(character as u32))
+                    && self.segment_scope(segment) == scope
+                    && super::same_ordinary_row(first, segment)
+            })
+            .then_some(ordinary)
     }
 
     fn segment_scope(&self, segment: &SegmentData) -> Scope {
@@ -116,6 +189,87 @@ impl NativeParagraphGaps {
             Scope::Right => &self.right,
         }
     }
+}
+
+#[derive(Default)]
+struct OriginalSourceGaps {
+    provided: Vec<f32>,
+    page: Vec<f32>,
+    left: Vec<f32>,
+    right: Vec<f32>,
+}
+
+impl OriginalSourceGaps {
+    fn new(segments: &[SegmentData], ordinary: &[&SegmentData], corridor: Option<(f32, f32)>, gaps: &[f32]) -> Self {
+        if gaps.is_empty()
+            || segments
+                .iter()
+                .any(|segment| !segment.y.is_finite() || !segment.height.is_finite() || segment.height <= 0.0)
+        {
+            return Self::default();
+        }
+        let bands = super::super::paragraph_line_bands(segments.iter());
+        let Some(height) = super::super::median_line_height(&bands).filter(|height| *height > 0.0) else {
+            return Self::default();
+        };
+        let leading = super::super::body_leading(&bands, height);
+        let mut provided: Vec<_> = gaps.iter().copied().filter(|gap| gap.is_finite()).collect();
+        provided.sort_by(f32::total_cmp);
+        Self {
+            provided,
+            page: original_scope_gaps(ordinary, corridor, Scope::Page, height, leading),
+            left: original_scope_gaps(ordinary, corridor, Scope::Left, height, leading),
+            right: original_scope_gaps(ordinary, corridor, Scope::Right, height, leading),
+        }
+    }
+
+    fn gaps(&self, scope: Scope) -> &[f32] {
+        match scope {
+            Scope::Page => &self.page,
+            Scope::Left => &self.left,
+            Scope::Right => &self.right,
+        }
+    }
+}
+
+fn original_scope_gaps(
+    ordinary: &[&SegmentData],
+    corridor: Option<(f32, f32)>,
+    scope: Scope,
+    height: f32,
+    leading: f32,
+) -> Vec<f32> {
+    let local: Vec<_> = ordinary
+        .iter()
+        .copied()
+        .filter(|segment| segment_scope(segment, corridor) == scope)
+        .collect();
+    if !local.iter().all(|segment| finite_source_segment(segment)) {
+        return Vec::new();
+    }
+    // A foreign page-wide marker is not proof of a gap between this column's own rows. ~keep
+    let bands = super::super::paragraph_line_bands(local.into_iter());
+    let mut gaps = super::super::paragraph_gaps_with_leading(&bands, height, leading);
+    gaps.sort_by(f32::total_cmp);
+    gaps
+}
+
+fn finite_source_segment(segment: &SegmentData) -> bool {
+    let (start, end) = segment.upright_advance_extent();
+    segment.is_unrotated()
+        && [
+            segment.y,
+            segment.height,
+            segment.baseline_y,
+            segment.font_size,
+            start,
+            end,
+        ]
+        .into_iter()
+        .all(f32::is_finite)
+        && segment.font_size > 0.0
+        && segment.height > 0.0
+        && end > start
 }
 
 fn boundary_scope(previous: Scope, next: Scope) -> Option<Scope> {
