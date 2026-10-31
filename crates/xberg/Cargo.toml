@@ -1695,7 +1695,7 @@ optional = true
 # the reported failure exactly as-is for anyone depending on the published crate.
 # See the wasm32 block below for the WASM-safe alternative.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.model2vec-rs]
-version = "0.3"
+version = "0.4"
 default-features = false
 features = []
 optional = true
@@ -1738,7 +1738,7 @@ liter-llm = { workspace = true, optional = true, features = ["wasm-http"] }
 # `tokenizers/unstable_wasm`, which avoids the `esaxx_fast` C++ build entirely.
 # Model acquisition is `StaticEmbeddingEngine::from_bytes`-only on this target —
 # see `embeddings/static_engine.rs`.
-model2vec-rs = { version = "0.3", default-features = false, features = ["wasm"], optional = true }
+model2vec-rs = { version = "0.4", default-features = false, features = ["wasm"], optional = true }
 tree-sitter-language-pack = { workspace = true, default-features = false, features = ["serde"], optional = true }
 # On wasm32, swap xberg-tesseract from its native default ("static-linking" -> "build-tesseract")
 # to the WASI-SDK build path ("build-tesseract-wasm") and bundle eng.traineddata so OCR works
