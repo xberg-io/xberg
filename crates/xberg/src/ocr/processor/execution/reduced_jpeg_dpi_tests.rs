@@ -8,14 +8,15 @@ const REDUCED_BUDGET: usize = 128 * 1024;
 
 fn jpeg(width: u16, height: u16) -> Vec<u8> {
     let pixels = vec![180; usize::from(width) * usize::from(height) * 3];
-    let bytes = oxiarc_jpeg::encode_to_vec_with_options(
-        &pixels,
-        width,
-        height,
-        oxiarc_jpeg::InputColor::Rgb,
-        &Default::default(),
-    )
-    .unwrap();
+    let mut bytes = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90)
+        .encode(
+            &pixels,
+            u32::from(width),
+            u32::from(height),
+            image::ExtendedColorType::Rgb8,
+        )
+        .unwrap();
     let independent = image::load_from_memory(&bytes).unwrap();
     assert_eq!(
         (independent.width(), independent.height()),

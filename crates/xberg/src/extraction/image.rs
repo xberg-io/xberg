@@ -988,3 +988,7 @@ mod tests;
 #[cfg(all(test, feature = "ocr"))]
 #[path = "image/jp2_decode_tests.rs"]
 mod jp2_decode_tests;
+
+#[cfg(all(test, feature = "ocr"))]
+#[path = "image/jpeg_fixture.rs"]
+pub(crate) mod jpeg_fixture;

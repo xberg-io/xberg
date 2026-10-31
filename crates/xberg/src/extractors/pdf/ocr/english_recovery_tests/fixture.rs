@@ -138,19 +138,9 @@ pub(super) fn fixture() -> Fixture {
     let pixel_sha = sha(&rgb);
     let width = u16::try_from(rendered.width).expect("actual fixture width fits JPEG interface");
     let height = u16::try_from(rendered.height).expect("actual fixture height fits JPEG interface");
-    let jpeg =
-        oxiarc_jpeg::encode_to_vec_with_options(&rgb, width, height, oxiarc_jpeg::InputColor::Rgb, &Default::default())
-            .unwrap();
+    let jpeg = crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, width, height);
     drop(rgb);
     drop(rendered);
-    let mut decoder = oxiarc_jpeg::Decoder::new(jpeg.as_slice());
-    let header = decoder.read_info().expect("complete real baseline English JPEG");
-    assert_eq!(
-        (header.width, header.height, header.precision, header.num_components),
-        (width, height, 8, 3)
-    );
-    assert_eq!(header.process, oxiarc_jpeg::CodingProcess::Baseline);
-    drop(decoder);
     let mut document = Document::with_version("1.7");
     let image = document.add_object(Stream::new(
         dictionary! {

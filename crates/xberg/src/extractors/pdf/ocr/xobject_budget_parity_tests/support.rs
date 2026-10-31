@@ -121,18 +121,7 @@ fn stream(gray: u8, raw: bool) -> Vec<u8> {
     if raw {
         return pixels;
     }
-    let bytes =
-        oxiarc_jpeg::encode_to_vec_with_options(&pixels, 32, 24, oxiarc_jpeg::InputColor::Rgb, &Default::default())
-            .unwrap();
-    let mut decoder = oxiarc_jpeg::Decoder::new(bytes.as_slice());
-    let info = decoder.read_info().expect("actual complete baseline stream");
-    assert_eq!(
-        (info.width, info.height, info.precision, info.num_components),
-        (32, 24, 8, 3)
-    );
-    assert_eq!(info.process, oxiarc_jpeg::CodingProcess::Baseline);
-    drop(decoder);
-    bytes
+    crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&pixels, 32, 24)
 }
 
 fn add_page(document: &mut Document, streams: &[Vec<u8>], raw: bool) {

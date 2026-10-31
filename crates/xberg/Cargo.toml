@@ -249,7 +249,7 @@ ocr = [
     "dep:nom-exif",
     "dep:hayro-jpeg2000",
     "dep:hayro-jbig2",
-    "dep:oxiarc-jpeg",
+    "dep:jpeg-decoder",
     "dep:ureq",
     "html",
 ]
@@ -1383,6 +1383,9 @@ indexmap = "2.14.2"
 infer = "0.22.0"
 itertools = { workspace = true, optional = true }
 jotdown = "0.10"
+# Reduced OCR decodes scale in the IDCT; same version as xberg-native-pdf. Without `rayon` the decoder
+# queues coefficient rows to worker threads without a bound; the rayon worker finishes each row first. ~keep
+jpeg-decoder = { version = "0.3", default-features = false, features = ["rayon"], optional = true }
 jsonschema = { version = "0.60", optional = true, default-features = false }
 libc = { workspace = true }
 # lofty: pure-Rust audio tag reader (ID3v1/v2, MP4 atoms, Vorbis comments, FLAC, etc.)
@@ -1435,7 +1438,6 @@ org = { version = "0.3", optional = true }
 # matching CUDA/TensorRT-enabled ONNX Runtime build. `ort_discovery.rs` #[cfg]-gates the
 # corresponding EP construction code to match.
 ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "api-18"], optional = true }
-oxiarc-jpeg = { workspace = true, optional = true }
 outlook-pst = { version = "1.2.0", optional = true }
 parking_lot = { workspace = true }
 pastey = "0.2"

@@ -51,28 +51,7 @@ fn isolated(name: &str, budget: usize) {
 
 fn synthetic_baseline() -> Vec<u8> {
     let original = vec![0; usize::from(DIMENSION).pow(2) * 3];
-    let options = oxiarc_jpeg::EncodeOptions {
-        process: oxiarc_jpeg::EncodeProcess::Sequential,
-        ..Default::default()
-    };
-    let encoded = oxiarc_jpeg::encode_to_vec_with_options(
-        &original,
-        DIMENSION,
-        DIMENSION,
-        oxiarc_jpeg::InputColor::Rgb,
-        &options,
-    )
-    .expect("encode synthetic dark baseline JPEG");
-    drop(original);
-    let mut metadata = oxiarc_jpeg::Decoder::new(encoded.as_slice());
-    let info = metadata.read_info().expect("independent real JPEG header");
-    assert_eq!(
-        (info.width, info.height, info.precision, info.num_components),
-        (DIMENSION, DIMENSION, 8, 3)
-    );
-    assert_eq!(info.process, oxiarc_jpeg::CodingProcess::Baseline);
-    drop(metadata);
-    encoded
+    crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&original, DIMENSION, DIMENSION)
 }
 
 fn validate_observation(observed: Observation, retained: usize, budget: usize) -> Result<usize, &'static str> {
