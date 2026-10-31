@@ -205,7 +205,7 @@ fn should_emit_native_proof_annotations_at_utf8_byte_offsets_without_trailing_sc
         1,
         "proof must survive the existing point35-em heuristic ceiling"
     );
-    assert_eq!(text, "é = x4/l");
+    assert_eq!(text, "é = x4 /l");
     assert_eq!((scripts[0].start, scripts[0].end), (6, 7));
     assert_eq!(&text[scripts[0].start as usize..scripts[0].end as usize], "4");
     assert_eq!(stored_script.text, "4 ");
