@@ -135,6 +135,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
+  Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
 
