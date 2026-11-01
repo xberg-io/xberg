@@ -381,3 +381,116 @@ async fn canonical_math_first_footnote_remains_processable_without_selected_matc
     )
     .await;
 }
+
+fn canonical_hint_alert() -> DerivedResult {
+    let mut builder = InternalDocumentBuilder::new("test");
+    let index = builder.push_admonition("hint", None, None);
+    builder.set_text(index, "safe body");
+    let document = builder.build();
+    assert_eq!(document.elements.len(), 1);
+    assert_eq!(
+        document.elements[0].kind,
+        crate::types::internal::ElementKind::Admonition
+    );
+    let result = prepare(document);
+    assert_eq!(result.content, "hint\n\nsafe body");
+    let markdown = result.formatted_content.as_ref().unwrap();
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, markdown, &canonical_options());
+    let alerts = root
+        .descendants()
+        .filter_map(|node| {
+            if let comrak::nodes::NodeValue::Alert(alert) = &node.data.borrow().value {
+                Some((alert.alert_type.default_title().to_owned(), alert.title.clone()))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(alerts, [("Tip".to_owned(), None)]);
+    assert_eq!(visible(markdown), "Tipsafe body");
+    result
+}
+
+#[tokio::test]
+async fn canonical_default_alert_alias_preserves_its_selected_partial_keyword_match() {
+    process_named_literal(
+        canonical_hint_alert(),
+        "i",
+        1,
+        "h[REDACTED]nt\n\nsafe body",
+        "T[REDACTED]psafe body",
+    )
+    .await;
+}
+
+fn sensitive_math_first_footnote() -> DerivedResult {
+    let source = "$$Jane Doe$$";
+    let annotation = TextAnnotation {
+        start: 0,
+        end: u32::try_from(source.len()).unwrap(),
+        kind: AnnotationKind::math(true),
+    };
+    assert!(crate::rendering::common::valid_math_annotation(source, &annotation));
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("See note", vec![], None, None);
+    builder.push_footnote_ref("1", "note", None);
+    let index = builder.push_footnote_definition(source, "note", None);
+    builder.set_annotations(index, vec![annotation]);
+    let document = builder.build();
+    assert_eq!(document.elements.len(), 3);
+    assert_eq!(document.elements[2].layer, ContentLayer::Footnote);
+    assert_eq!(document.elements[2].text, source);
+    assert_eq!(document.elements[2].annotations.len(), 1);
+    let result = prepare(document);
+    assert_eq!(result.content, "See note[^1]\n\n\n[^1]: $$Jane Doe$$");
+    let markdown = result.formatted_content.as_ref().unwrap();
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, markdown, &canonical_options());
+    let definitions = root
+        .descendants()
+        .filter(|node| {
+            matches!(
+                node.data.borrow().value,
+                comrak::nodes::NodeValue::FootnoteDefinition(_)
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(definitions.len(), 1);
+    let first = definitions[0].first_child().expect("actual definition child");
+    let data = first.data.borrow();
+    let comrak::nodes::NodeValue::CodeBlock(block) = &data.value else {
+        panic!("canonical annotated definition must begin with math CodeBlock");
+    };
+    assert!(block.fenced && block.closed);
+    assert_eq!((block.info.as_str(), block.literal.as_str()), ("math", "Jane Doe\n"));
+    assert_eq!(visible(markdown), "See note11 Jane Doe");
+    assert_sensitive_math_pdf(markdown);
+    result
+}
+
+fn assert_sensitive_math_pdf(_markdown: &str) {
+    #[cfg(feature = "pdf")]
+    {
+        let bytes = crate::rendering::render_pdf(_markdown).expect("actual PDF consumer");
+        assert!(bytes.starts_with(b"%PDF-"));
+        let document = lopdf::Document::load_mem(&bytes).expect("actual PDF package");
+        assert_eq!(document.get_pages().len(), 1);
+        let text = document.extract_text(&[1]).expect("actual selectable PDF text");
+        assert_eq!(text.matches('1').count(), 2);
+        let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(words.contains("Jane Doe"), "actual sensitive math body: {words:?}");
+    }
+}
+
+#[tokio::test]
+async fn canonical_sensitive_math_first_footnote_remains_completely_redactable() {
+    process_named_literal(
+        sensitive_math_first_footnote(),
+        "Jane Doe",
+        1,
+        "See note[^1]\n\n\n[^1]: $$[REDACTED]$$",
+        "See note11 [REDACTED]",
+    )
+    .await;
+}
