@@ -301,3 +301,5 @@ fn should_keep_a_genuine_heading_when_hyphen_continuation_evidence_is_absent_227
     assert!(!heading_fills_column(trailing, pages[0][2].block_bbox.unwrap().2));
     promote_with_active_gate(&mut pages, 0, Some(3));
 }
+
+mod preservation;

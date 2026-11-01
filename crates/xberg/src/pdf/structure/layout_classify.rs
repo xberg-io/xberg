@@ -260,7 +260,7 @@ fn matches_hint_text(hint: &LayoutHint, para_text: &str) -> bool {
     }
 }
 
-fn has_formula_evidence(text: &str) -> bool {
+pub(super) fn has_formula_evidence(text: &str) -> bool {
     let total_chars = text.chars().count();
     if total_chars == 0 {
         return false;
