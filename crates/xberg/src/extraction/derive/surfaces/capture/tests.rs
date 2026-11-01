@@ -242,9 +242,11 @@ fn empty_page_render_does_not_forge_markdown_provenance() {
 #[tokio::test]
 async fn generated_page_context_never_classifies_a_nested_plain_page() {
     let mut result = underlined();
-    let mut child = ExtractedDocument::default();
-    child.content = "<sup>literal</sup>".into();
-    child.pages = Some(vec![literal_page(1)]);
+    let child = ExtractedDocument {
+        content: "<sup>literal</sup>".into(),
+        pages: Some(vec![literal_page(1)]),
+        ..Default::default()
+    };
     result.children = Some(vec![crate::types::ArchiveEntry {
         path: "child".into(),
         mime_type: "text/plain".into(),

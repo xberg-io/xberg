@@ -679,14 +679,6 @@ fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'sta
 /// Pre-render or render `doc` in `output_format`, reusing an already-matching
 /// `doc.pre_rendered_content` instead of re-rendering. `None` for `Plain`, since plain
 /// content is carried separately as `content`.
-#[cfg(test)]
-fn compute_formatted_content(
-    doc: &mut InternalDocument,
-    output_format: &crate::core::config::OutputFormat,
-) -> Option<String> {
-    compute_formatted_content_observed(doc, output_format, &mut ())
-}
-
 fn compute_formatted_content_observed(
     doc: &mut InternalDocument,
     output_format: &crate::core::config::OutputFormat,

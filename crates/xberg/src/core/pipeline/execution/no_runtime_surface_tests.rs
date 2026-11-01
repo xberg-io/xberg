@@ -40,8 +40,10 @@ fn ordinary_async_processor_path_works_without_tokio() {
     let calls = Arc::new(AtomicUsize::new(0));
     let processor: PostProcessorHandle = Arc::new(Probe(Arc::clone(&calls)));
     let stages = [(ProcessingStage::Late, Arc::new(vec![processor]))];
-    let mut result = ExtractedDocument::default();
-    result.content = "source".into();
+    let mut result = ExtractedDocument {
+        content: "source".into(),
+        ..Default::default()
+    };
     finish_ready(execute_processor_stages(
         &mut result,
         &ExtractionConfig::default(),
