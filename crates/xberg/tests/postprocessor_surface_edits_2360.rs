@@ -304,7 +304,7 @@ async fn route_case(edit: Edit, output: OutputFormat, docx: bool) {
     let source = if docx { source_docx().await } else { SOURCE.to_vec() };
     let mime = if docx { MIME_DOCX } else { "text/html" };
     let baseline = extract(
-        ExtractInput::from_bytes(&source, mime, None),
+        ExtractInput::from_bytes(source.as_slice(), mime, None),
         &config(output.clone(), false),
     )
     .await
