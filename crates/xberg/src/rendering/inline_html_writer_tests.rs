@@ -161,3 +161,29 @@ fn should_keep_escaped_inline_tags_literal_in_pdf_writer() {
         0
     );
 }
+
+fn assert_literal_in_both_writers(markdown: &str, expected: &str) {
+    let runs = word_runs(markdown);
+    assert_eq!(runs.iter().map(|run| run.0.as_str()).collect::<String>(), expected);
+    assert!(runs.iter().all(|run| !run.1 && !run.2), "{runs:?}");
+    let (text, operations) = pdf(markdown);
+    let compact = |text: &str| text.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    assert_eq!(compact(&text), compact(expected));
+    assert!(
+        operations
+            .iter()
+            .filter(|op| op.operator == "Ts")
+            .all(|op| op.operands[0].as_float().expect("numeric rise") == 0.0)
+    );
+    assert_eq!(operations.iter().filter(|op| op.operator == "l").count(), 0);
+}
+
+#[test]
+fn should_keep_unclosed_opening_beside_balanced_tags_literal_in_both_writers() {
+    assert_literal_in_both_writers("x<sup>a<u>b</u> tail", "x<sup>a<u>b</u> tail");
+}
+
+#[test]
+fn should_keep_individual_tag_code_spans_literal_in_both_writers() {
+    assert_literal_in_both_writers("`<sup>`2`</sup>`", "<sup>2</sup>");
+}

@@ -159,3 +159,7 @@ async fn should_keep_tag_looking_code_literal_in_public_pdf_conversion() {
         0
     );
 }
+
+#[cfg(feature = "redaction")]
+#[path = "standard_inline_binary_outputs_2358/redaction.rs"]
+mod redaction;
