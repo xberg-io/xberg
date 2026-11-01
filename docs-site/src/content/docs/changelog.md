@@ -13,17 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **(benchmarks): Freeze caption decoder diagnostics for a selected block and original prefix cases.** (#2336)
-  Validate model layer bounds, final-block anchors and exact work counts while retaining failed qualification.
-
-- **(benchmarks): Inspect caption decoder sub-blocks with a separate hash-bound diagnostic.** (#2336)
-  Require paired observer controls and exact work counts while preserving failed qualification and frozen tolerances.
-
-- **(benchmarks): Locate decoder divergence with hash-bound, ordered tensor diagnostics.** (#2336)
-  Preserve failed caption qualification and frozen tolerances while checking unchanged graph outputs and mask behavior.
-
-- **(benchmarks): Export hash-verified local caption sources with an offline CLI.** (#2336)
-  Preserve source notices and provenance, normalize native companions, and validate fresh no-cache ONNX bundles.
+- **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
+  Verify locked runtime versions before export while preserving source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
 
 - **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
   Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.

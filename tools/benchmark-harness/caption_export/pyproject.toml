@@ -6,11 +6,13 @@ dependencies = [
   "numpy==2.5.4",
   "onnx==1.23.2",
   "onnxruntime==1.28.0",
-  "pytest==9.1.1",
   "tokenizers==0.23.3",
   "torch==2.14.1",
   "transformers==5.20.2",
 ]
+
+[dependency-groups]
+dev = ["pytest==9.1.1"]
 
 [tool.uv]
 package = false

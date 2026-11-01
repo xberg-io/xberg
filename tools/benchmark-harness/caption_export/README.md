@@ -5,6 +5,9 @@ not fetch a model or remote Python, install dependencies, publish an artifact, o
 select a default model. The existing frozen Python environment must be prepared
 before running it.
 
+Export and Conv1D planning reject any recorded runtime package version that differs from the selected `uv.lock`.
+Development tests use `uv sync --locked --group dev` in this project, then `mise run caption:test` from the repository root.
+
 ```bash
 mise run caption:export -- export-local \
   --source /absolute/path/to/snapshot \

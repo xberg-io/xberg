@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .assets import digest, read_json
 from .companions import prepare_companions
-from .provenance import write_provenance
+from .provenance import verify_runtime_versions, write_provenance
 from .source import inventory_files, verify_source
 
 
@@ -38,6 +38,7 @@ def export_local(arguments: argparse.Namespace) -> None:
     if output.resolve().is_relative_to(source.resolve()):
         raise ValueError("output must be outside the immutable source directory")
     inventory = verify_source(source, arguments.inventory, arguments.repository, arguments.revision)
+    verify_runtime_versions()
     output.mkdir(parents=True, exist_ok=False)
     model_directory = output / "model"
     model_directory.mkdir()

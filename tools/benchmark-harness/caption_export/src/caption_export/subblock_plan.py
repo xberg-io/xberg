@@ -10,6 +10,7 @@ from pathlib import Path
 from .assets import digest, read_json
 from .first_divergence_evidence import require, verify_original, verify_output, verify_runtime
 from .first_divergence_plan import freeze_plan as freeze_original_evidence
+from .provenance import verify_runtime_versions
 from .subblock import MULTIPLIERS, STAGES, case_lengths, validate_block
 
 PROTOCOL = {
@@ -162,6 +163,7 @@ def freeze_plan(prospective: Path, prospective_sha256: str, original: Path) -> d
     _layer_bounds(data["protocol"], read_json(original / "plan.json"))
     _prior(data["authorized_receipt"])
     original_evidence = freeze_original_evidence(original)
+    verify_runtime_versions()
     conv = Path(importlib.metadata.distribution("transformers").locate_file("transformers/pytorch_utils.py"))
     require(conv.is_file() and not conv.is_symlink(), "missing regular Conv1D implementation source")
     return {

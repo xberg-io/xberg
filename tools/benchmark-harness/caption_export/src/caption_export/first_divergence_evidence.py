@@ -55,7 +55,7 @@ def load_original_helper(path: Path, *, expected_sha256: str | None = None) -> M
         require(hashlib.sha256(source).hexdigest() == expected_sha256, "original helper source checksum mismatch")
     spec = importlib.util.spec_from_file_location("frozen_caption_parity", path)
     module = importlib.util.module_from_spec(spec)
-    # Execute verified source without consuming unpinned caches or writing into immutable evidence. ~keep
+    # The verified SHA bounds this exec; compile bytes to avoid unpinned caches or writes into evidence. ~keep
     exec(compile(source, str(path), "exec", dont_inherit=True), module.__dict__)  # noqa: S102
     return module
 

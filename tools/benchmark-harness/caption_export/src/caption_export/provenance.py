@@ -2,9 +2,32 @@
 
 import importlib.metadata
 import shutil
+import tomllib
 from pathlib import Path
 
 from .assets import digest, read_json, write_json
+
+RUNTIME_PACKAGES = ("torch", "transformers", "tokenizers", "onnx", "onnxruntime", "numpy")
+
+
+def verify_runtime_versions() -> dict[str, str]:
+    """Require each recorded runtime distribution to match the selected lock before production."""
+    project = Path(__file__).resolve().parents[2]
+    with (project / "uv.lock").open("rb") as stream:
+        packages = tomllib.load(stream)["package"]
+    versions = {}
+    for name in RUNTIME_PACKAGES:
+        locked = [package["version"] for package in packages if package["name"] == name]
+        if len(locked) != 1:
+            raise ValueError(f"{name} must have exactly one selected version in uv.lock")
+        try:
+            installed = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError as error:
+            raise ValueError(f"{name} is missing from the runtime required by uv.lock") from error
+        if installed != locked[0]:
+            raise ValueError(f"{name} runtime {installed} differs from uv.lock version {locked[0]}")
+        versions[name] = installed
+    return versions
 
 
 def write_provenance(output: Path, source: Path, receipt: Path, inventory: dict) -> None:
@@ -14,10 +37,7 @@ def write_provenance(output: Path, source: Path, receipt: Path, inventory: dict)
         str(path.relative_to(project)): digest(path) for path in sorted((project / "src/caption_export").glob("*.py"))
     }
     recipe = {name: digest(project / name) for name in ("pyproject.toml", "uv.lock")}
-    versions = {
-        name: importlib.metadata.version(name)
-        for name in ("torch", "transformers", "tokenizers", "onnx", "onnxruntime", "numpy")
-    }
+    versions = verify_runtime_versions()
     shutil.copyfile(receipt, output / "source-inventory.json")
     notices = output / "source-notices"
     notices.mkdir()

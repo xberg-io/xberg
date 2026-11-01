@@ -848,10 +848,14 @@ dependencies = [
     { name = "numpy" },
     { name = "onnx" },
     { name = "onnxruntime" },
-    { name = "pytest" },
     { name = "tokenizers" },
     { name = "torch" },
     { name = "transformers" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
 ]
 
 [package.metadata]
@@ -859,8 +863,10 @@ requires-dist = [
     { name = "numpy", specifier = "==2.5.4" },
     { name = "onnx", specifier = "==1.23.2" },
     { name = "onnxruntime", specifier = "==1.28.0" },
-    { name = "pytest", specifier = "==9.1.1" },
     { name = "tokenizers", specifier = "==0.23.3" },
     { name = "torch", specifier = "==2.14.1" },
     { name = "transformers", specifier = "==5.20.2" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = "==9.1.1" }]
