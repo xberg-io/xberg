@@ -16,6 +16,11 @@ BeforeAll {
     $script:Sut = Join-Path $script:RepoRoot 'scripts/ci/vendor-windows-wheel-closure.ps1'
     $script:Pwsh = (Get-Process -Id $PID).Path
 
+    function Write-FakePe([string]$Path) {
+        & python (Join-Path $script:RepoRoot 'scripts/ci/test_windows_wheel_closure.py') --write-pe $Path
+        if ($LASTEXITCODE -ne 0) { throw 'failed to create portable PE fixture' }
+    }
+
     function New-FakeWheel {
         param(
             [Parameter(Mandatory)][string]$Root,
@@ -27,7 +32,7 @@ BeforeAll {
         $distInfo = Join-Path $stage 'xberg-1.2.0.dist-info'
         New-Item -ItemType Directory -Path $package, $distInfo -Force | Out-Null
         Set-Content -LiteralPath (Join-Path $package '__init__.py') -Value '' -NoNewline
-        Set-Content -LiteralPath (Join-Path $package $NativeName) -Value 'MZ-not-a-real-pe' -NoNewline
+        Write-FakePe (Join-Path $package $NativeName)
         if (-not $OmitRecord) {
             # RECORD is CSV and every row is terminated, including the last -- confirmed against
             # the pip and setuptools wheels vendored under integrations/. Dropping the trailing
@@ -79,8 +84,8 @@ Describe 'vendor-windows-wheel-closure.ps1' {
         $script:Work = Join-Path $TestDrive ([Guid]::NewGuid().ToString('N'))
         $script:DllDir = Join-Path $script:Work 'dlls'
         New-Item -ItemType Directory -Path $script:Work, $script:DllDir -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path $script:DllDir 'onnxruntime.dll') -Value 'ORT-FAKE-BYTES' -NoNewline
-        Set-Content -LiteralPath (Join-Path $script:DllDir 'onnxruntime_providers_shared.dll') -Value 'ORT-PROVIDERS' -NoNewline
+        Write-FakePe (Join-Path $script:DllDir 'onnxruntime.dll')
+        Write-FakePe (Join-Path $script:DllDir 'onnxruntime_providers_shared.dll')
     }
 
     It 'should_exit_zero_when_the_wheel_contains_a_matching_native_extension' {
