@@ -6,6 +6,12 @@ pub(crate) trait DerivationObserver {
     }
     fn formatted(&mut self, _markdown: bool, _text: &str) {}
     fn page(&mut self, _index: usize, _number: u32, _rendered: &str, _plain: String) {}
+    fn formatted_from_source(&mut self, markdown: bool, text: &str, _tag_exemptions: bool) {
+        self.formatted(markdown, text);
+    }
+    fn page_from_source(&mut self, index: usize, number: u32, rendered: &str, plain: String, _tag_exemptions: bool) {
+        self.page(index, number, rendered, plain);
+    }
 }
 
 impl DerivationObserver for () {}
@@ -54,6 +60,18 @@ pub(crate) trait RedactionSurfaces: Send + Sync {
     }
     fn page_backup(&self, _index: usize) -> Option<&str> {
         None
+    }
+    fn formatted_tag_exemptions(&self) -> bool {
+        false
+    }
+    fn formatted_literal_backup(&self) -> Option<&str> {
+        None
+    }
+    fn page_tag_exemptions(&self, _index: usize) -> bool {
+        false
+    }
+    fn page_is_literal(&self, _index: usize) -> bool {
+        false
     }
 }
 #[cfg(feature = "redaction")]

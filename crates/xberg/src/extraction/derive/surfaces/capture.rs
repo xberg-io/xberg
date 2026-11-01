@@ -31,12 +31,15 @@ struct PageSurface {
     number: u32,
     rendered: Fingerprint,
     plain: Option<PlainPageBackup>,
+    tag_exemptions: bool,
+    literal: bool,
 }
 
 #[derive(Default)]
 pub(crate) struct SurfaceCapture {
     formatted: Option<Fingerprint>,
     pages: Vec<PageSurface>,
+    tag_exemptions: bool,
 }
 
 impl DerivationObserver for SurfaceCapture {
@@ -48,12 +51,24 @@ impl DerivationObserver for SurfaceCapture {
             self.formatted = Some(Fingerprint::new(text));
         }
     }
+    fn formatted_from_source(&mut self, markdown: bool, text: &str, tag_exemptions: bool) {
+        self.formatted(markdown, text);
+        self.tag_exemptions = tag_exemptions;
+    }
+    fn page_from_source(&mut self, index: usize, number: u32, rendered: &str, plain: String, tag_exemptions: bool) {
+        self.page(index, number, rendered, plain);
+        if let Some(page) = self.pages.last_mut() {
+            page.tag_exemptions = tag_exemptions;
+        }
+    }
     fn page(&mut self, index: usize, number: u32, rendered: &str, plain: String) {
         self.pages.push(PageSurface {
             index,
             number,
             rendered: Fingerprint::new(rendered),
             plain: Some(PlainPageBackup(plain)),
+            tag_exemptions: false,
+            literal: false,
         });
     }
 }
@@ -63,6 +78,9 @@ pub(crate) struct SurfaceContext {
     plain_document: Fingerprint,
     capture: SurfaceCapture,
     formatted_invalidated: bool,
+    formatted_literal: Option<String>,
+    prefer_current_plain: bool,
+    page_numbers: Option<Vec<u32>>,
 }
 
 impl RedactionSurfaces for SurfaceContext {
@@ -87,6 +105,26 @@ impl RedactionSurfaces for SurfaceContext {
     }
     fn discard_formatted(&self) -> bool {
         self.formatted_invalidated
+    }
+    fn formatted_tag_exemptions(&self) -> bool {
+        self.capture.tag_exemptions
+    }
+    fn formatted_literal_backup(&self) -> Option<&str> {
+        self.formatted_literal.as_deref()
+    }
+    fn page_tag_exemptions(&self, index: usize) -> bool {
+        self.capture
+            .pages
+            .binary_search_by_key(&index, |page| page.index)
+            .ok()
+            .is_some_and(|position| self.capture.pages[position].tag_exemptions)
+    }
+    fn page_is_literal(&self, index: usize) -> bool {
+        self.capture
+            .pages
+            .binary_search_by_key(&index, |page| page.index)
+            .ok()
+            .is_some_and(|position| self.capture.pages[position].literal)
     }
     fn page_markdown(&self, index: usize) -> bool {
         self.capture
@@ -122,6 +160,12 @@ impl DerivedResult {
                 plain_document: Fingerprint::new(&document.content),
                 capture,
                 formatted_invalidated: false,
+                formatted_literal: None,
+                prefer_current_plain: false,
+                page_numbers: document
+                    .pages
+                    .as_ref()
+                    .map(|pages| pages.iter().map(|page| page.page_number).collect()),
             });
         Self {
             document,

@@ -361,11 +361,12 @@ fn render_sub_page(
     let rendered = renderer(&sub_doc);
     if !rendered.is_empty() {
         if let Some(index) = markdown_index.filter(|_| observer.captures_pages()) {
-            observer.page(
+            observer.page_from_source(
                 index,
                 page.page_number,
                 &rendered,
                 crate::rendering::render_plain(&sub_doc),
+                crate::rendering::markdown_tag_exemptions_are_owned(&sub_doc),
             );
         }
         page.content = rendered;

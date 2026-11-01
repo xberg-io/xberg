@@ -149,6 +149,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Keep source tag names redactable in Markdown and preserve edited output.** (#2358)
+  Decline tag-syntax exemptions for raw blocks and rendered annotation values; preserve renderer-owned styles elsewhere.
+  Return current formatted-only and same-frame page edits through warned literal fallbacks.
+  Retain changed-content precedence when processors edit conflicting plain and formatted views.
+
 - **(redaction): Preserve current text after legitimate post-processor edits.** (#2358)
   Discard unproved generated Markdown with a warning and return current redacted plain text.
   Keep page and result identity guards, and preserve unchanged formatting after later no-op processors.

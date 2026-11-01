@@ -691,7 +691,7 @@ fn compute_formatted_content_observed(
                 doc.pre_rendered_content.take()
             } else {
                 let text = crate::rendering::render_markdown(doc);
-                observer.formatted(true, &text);
+                observer.formatted_from_source(true, &text, crate::rendering::markdown_tag_exemptions_are_owned(doc));
                 Some(text)
             }
         }
@@ -741,7 +741,11 @@ fn compute_custom_formatted_content(
     let registry = registry.read();
     match registry.render(name, doc) {
         Ok(rendered) => {
-            observer.formatted(registry.renders_markdown(name), &rendered);
+            observer.formatted_from_source(
+                registry.renders_markdown(name),
+                &rendered,
+                crate::rendering::markdown_tag_exemptions_are_owned(doc),
+            );
             Some(rendered)
         }
         Err(e) => {

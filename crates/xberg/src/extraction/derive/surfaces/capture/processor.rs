@@ -9,14 +9,56 @@ pub(crate) struct ProcessorWitness {
 }
 
 impl SurfaceContext {
+    fn page_shape_matches(&self, document: &ExtractedDocument) -> bool {
+        match (&self.page_numbers, &document.pages) {
+            (None, None) => true,
+            (Some(expected), Some(pages)) => {
+                expected.len() == pages.len()
+                    && expected
+                        .iter()
+                        .zip(pages)
+                        .all(|(number, page)| *number == page.page_number)
+            }
+            _ => false,
+        }
+    }
+
+    fn observe_fields(&mut self, document: &ExtractedDocument, witness: &ProcessorWitness) {
+        let content_changed = !witness.plain.matches(&document.content);
+        let formatted = document.formatted_content.as_deref().map(Fingerprint::new);
+        if content_changed {
+            // The established changed-content preference does not attempt to merge conflicting rendered views. ~keep
+            self.prefer_current_plain = true;
+            self.formatted_literal = None;
+        }
+        if (content_changed || formatted != witness.formatted) && self.formatted_markdown() {
+            self.formatted_invalidated = true;
+            self.capture.formatted = formatted;
+            if !self.prefer_current_plain {
+                self.formatted_literal = document.formatted_content.clone();
+            }
+        }
+        for expected in &mut self.capture.pages {
+            let page = &document.pages.as_ref().expect("page shape was validated")[expected.index];
+            if !expected.rendered.matches(&page.content) {
+                expected.rendered = Fingerprint::new(&page.content);
+                expected.plain = Some(super::PlainPageBackup(page.content.clone()));
+                expected.literal = true;
+                expected.tag_exemptions = false;
+            }
+        }
+        self.plain_document = Fingerprint::new(&document.content);
+    }
+
     pub(super) fn pages_match(&self, document: &ExtractedDocument) -> bool {
-        self.capture.pages.iter().all(|expected| {
-            document
-                .pages
-                .as_ref()
-                .and_then(|pages| pages.get(expected.index))
-                .is_some_and(|page| page.page_number == expected.number && expected.rendered.matches(&page.content))
-        })
+        self.page_shape_matches(document)
+            && self.capture.pages.iter().all(|expected| {
+                document
+                    .pages
+                    .as_ref()
+                    .and_then(|pages| pages.get(expected.index))
+                    .is_some_and(|page| page.page_number == expected.number && expected.rendered.matches(&page.content))
+            })
     }
 }
 
@@ -55,16 +97,11 @@ impl DerivedResult {
         if !Arc::ptr_eq(&context.identity, &witness.identity)
             || context.plain_document != witness.plain
             || context.capture.formatted != witness.formatted
-            || witness.plain.matches(&self.document.content)
-            || !context.pages_match(&self.document)
+            || !context.page_shape_matches(&self.document)
         {
             return;
         }
-        // Only the actual invocation can advance authoritative plain text; its rendering never regains trust. ~keep
-        if context.formatted_markdown() {
-            context.formatted_invalidated = true;
-            context.capture.formatted = self.document.formatted_content.as_deref().map(Fingerprint::new);
-        }
-        context.plain_document = Fingerprint::new(&self.document.content);
+        // Only a validated actual invocation can advance current fields; edited rendering never regains tag authority. ~keep
+        context.observe_fields(&self.document, &witness);
     }
 }

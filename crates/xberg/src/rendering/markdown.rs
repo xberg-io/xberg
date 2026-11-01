@@ -100,6 +100,18 @@ static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     .expect("static regex compiles")
 });
 
+pub(crate) fn markdown_tag_exemptions_are_owned(doc: &InternalDocument) -> bool {
+    // Raw blocks and annotation values bypass Text escaping; parsing their tags cannot establish ownership. ~keep
+    !doc.elements
+        .iter()
+        .any(|element| matches!(element.kind, crate::types::internal::ElementKind::RawBlock))
+        && doc.annotations.as_deref().is_none_or(|annotations| {
+            annotations.iter().all(|annotation| {
+                annotation.author.as_deref().is_none_or(str::is_empty) && annotation_display_text(annotation).is_none()
+            })
+        })
+}
+
 /// Render an `InternalDocument` to GFM Markdown.
 ///
 /// Whether the output backslash-escapes CommonMark-significant leading characters

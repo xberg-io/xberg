@@ -348,35 +348,46 @@ struct RedactionPass<'a> {
 impl RedactionPass<'_> {
     fn plan_surfaces(&self, doc: &ExtractedDocument, surfaces: &impl RedactionSurfaces) -> Result<SurfacePlans> {
         let mut plans = SurfacePlans::default();
-        if surfaces.discard_formatted() {
+        if let Some(source) = surfaces.formatted_literal_backup() {
+            plans.formatted = Some(FormattedPlan::Literal {
+                source: source.to_owned(),
+                matches: self.matches_for(source),
+            });
+        } else if surfaces.discard_formatted() {
             plans.formatted = Some(FormattedPlan::ProcessorDiscard);
         } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
-            plans.formatted = Some(match content_matches(text, self.matches_for(text)) {
-                Some(matches) => FormattedPlan::Preserve(matches),
-                None => FormattedPlan::Discard,
-            });
+            plans.formatted = Some(
+                match content_matches(text, self.matches_for(text), surfaces.formatted_tag_exemptions()) {
+                    Some(matches) => FormattedPlan::Preserve(matches),
+                    None => FormattedPlan::Discard,
+                },
+            );
         }
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
             if !surfaces.page_markdown(index) {
                 continue;
             }
-            let plan = match content_matches(&page.content, self.matches_for(&page.content)) {
-                Some(matches) => PagePlan::Preserve(matches),
-                None => {
-                    let source = surfaces.page_backup(index).ok_or_else(|| {
-                        crate::XbergError::validation("Generated Markdown page has no verified plain backup")
-                    })?;
-                    PagePlan::Plain {
-                        source: source.to_owned(),
-                        matches: self.matches_for(source),
-                    }
-                }
-            };
+            let plan = self.plan_page(&page.content, index, surfaces)?;
             plans.pages.insert(index, plan);
         }
         Ok(plans)
+    }
+
+    fn plan_page(&self, text: &str, index: usize, surfaces: &impl RedactionSurfaces) -> Result<PagePlan> {
+        if !surfaces.page_is_literal(index)
+            && let Some(matches) = content_matches(text, self.matches_for(text), surfaces.page_tag_exemptions(index))
+        {
+            return Ok(PagePlan::Preserve(matches));
+        }
+        let source = surfaces
+            .page_backup(index)
+            .ok_or_else(|| crate::XbergError::validation("Generated Markdown page has no verified plain backup"))?;
+        Ok(PagePlan::Plain {
+            source: source.to_owned(),
+            matches: self.matches_for(source),
+        })
     }
 
     /// Every match in `text`, deduped and in ascending byte order.
@@ -487,9 +498,21 @@ impl RedactionPass<'_> {
         }
     }
 
-    /// Rewrite every text surface of `doc`, recursing into embedded
-    /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
-    fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+    fn redact_primary_surfaces(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        let plan = match (depth == 0).then(|| self.plans.formatted.take()).flatten() {
+            Some(FormattedPlan::Literal { source, matches }) => {
+                doc.content = self.apply_matches(&source, matches);
+                doc.formatted_content = None;
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor edited formatted text; its current literal data was redacted \
+                     and returned as plain text",
+                );
+                return;
+            }
+            plan => plan,
+        };
         // A nested result that its own pipeline already packaged (DOCX, PDF) holds base64 in
         // `content`. That pipeline ran with the same redaction config and redacted the
         // text before packaging it; masking a stretch of the encoding would corrupt it.
@@ -500,7 +523,10 @@ impl RedactionPass<'_> {
             doc.content = self.redact(&content);
         }
 
-        let plan = (depth == 0).then(|| self.plans.formatted.take()).flatten();
+        self.redact_formatted_surface(doc, plan);
+    }
+
+    fn redact_formatted_surface(&mut self, doc: &mut ExtractedDocument, plan: Option<FormattedPlan>) {
         doc.formatted_content = match (plan, doc.formatted_content.take()) {
             (Some(FormattedPlan::ProcessorDiscard), _) => {
                 crate::core::diagnostics::push_warning(
@@ -524,6 +550,12 @@ impl RedactionPass<'_> {
             (_, Some(formatted)) => Some(self.redact(&formatted)),
             (_, None) => None,
         };
+    }
+
+    /// Rewrite every text surface of `doc`, recursing into embedded
+    /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
+    fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        self.redact_primary_surfaces(doc, depth);
 
         self.redact_chunks(doc);
 
@@ -640,8 +672,8 @@ impl RedactionPass<'_> {
                         &mut doc.processing_warnings,
                         "output_format",
                         format!(
-                            "Page {} Markdown crossed generated syntax; its verified plain backup was redacted \
-                             and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
+                            "Page {} Markdown could not retain syntax authority; its verified current backup was redacted \
+                             and escaped as Markdown. Finding offsets refer to the backup before escaping",
                             page.page_number
                         ),
                     );
