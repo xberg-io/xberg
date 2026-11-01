@@ -456,3 +456,4 @@ async fn generated_sensitive_code_block_is_completely_redacted_without_exposing_
 }
 
 mod compatibility_tests;
+mod reachability_tests;
