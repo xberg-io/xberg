@@ -454,3 +454,5 @@ async fn generated_sensitive_code_block_is_completely_redacted_without_exposing_
     );
     assert!(!result.content.contains("Jane Doe"));
 }
+
+mod compatibility_tests;
