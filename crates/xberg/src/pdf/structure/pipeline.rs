@@ -336,7 +336,9 @@ fn opens_aligned_body_block(
         return true;
     };
 
-    if shares_same_text_row(candidate, following, is_same_page) {
+    if shares_same_text_row(candidate, following, is_same_page)
+        || (is_same_page && heading_context::has_trusted_hyphen_continuation(candidate, following))
+    {
         return false;
     }
 

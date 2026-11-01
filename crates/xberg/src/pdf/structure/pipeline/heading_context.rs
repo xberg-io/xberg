@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 
-use super::{PdfParagraph, SegmentData, bbox_coordinates_are_finite, page_column_corridor_for_segments};
+use super::{
+    PdfParagraph, SegmentData, bbox_coordinates_are_finite, heading_fills_column, is_cjk_char,
+    page_column_corridor_for_segments, spans_visual_line_break,
+};
+use crate::pdf::structure::paragraphs::source_rows_continue;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Column {
@@ -108,4 +112,50 @@ fn column(paragraph: &PdfParagraph, ordinary: &[&SegmentData], corridor: Option<
         common = Some(current);
     }
     common.unwrap_or(Column::Page)
+}
+
+pub(super) fn has_trusted_hyphen_continuation(candidate: &PdfParagraph, following: &PdfParagraph) -> bool {
+    let Some(trailing) = candidate.lines.last().and_then(|line| line.segments.last()) else {
+        return false;
+    };
+    let Some(leading) = following.lines.first().and_then(|line| line.segments.first()) else {
+        return false;
+    };
+    let Some(stem) = trailing.text.trim_end().strip_suffix('-') else {
+        return false;
+    };
+    let word = stem.split_whitespace().last().unwrap_or("");
+    if word.is_empty()
+        || !stem.ends_with(word)
+        || !word.chars().all(char::is_alphabetic)
+        || word.chars().last().is_some_and(is_cjk_char)
+        || !leading
+            .text
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() && !c.is_uppercase())
+        || !source_rows_continue(trailing, leading)
+        || !spans_visual_line_break(trailing, leading)
+    {
+        return false;
+    }
+    let (start, end) = trailing.upright_advance_extent();
+    if !start.is_finite() || !end.is_finite() || end <= start {
+        return false;
+    }
+    continuation_right_edge(following, trailing).is_some_and(|right| heading_fills_column(trailing, right))
+}
+
+fn continuation_right_edge(paragraph: &PdfParagraph, frame: &SegmentData) -> Option<f32> {
+    paragraph
+        .lines
+        .iter()
+        .flat_map(|line| &line.segments)
+        .filter(|span| !span.text.trim().is_empty())
+        .try_fold(f32::NEG_INFINITY, |right, span| {
+            let (start, end) = span.upright_advance_extent();
+            (span.has_same_rotation(frame) && start.is_finite() && end.is_finite() && end > start)
+                .then_some(right.max(end))
+        })
 }
