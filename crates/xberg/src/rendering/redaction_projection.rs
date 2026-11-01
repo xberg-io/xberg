@@ -32,9 +32,10 @@ impl VisibleMarkdown {
         let data = node.data.borrow();
         match &data.value {
             NodeValue::Text(text) => self.leaf(text, markdown, source_range(node, markdown, lines)?, true),
-            NodeValue::HtmlInline(text) | NodeValue::Raw(text) | NodeValue::EscapedTag(text) => {
+            NodeValue::HtmlInline(text) | NodeValue::Raw(text) => {
                 self.leaf(text, markdown, source_range(node, markdown, lines)?, false)
             }
+            NodeValue::EscapedTag(text) => self.leaf(text, markdown, source_range(node, markdown, lines)?, false),
             NodeValue::Code(code) => {
                 let range = source_range(node, markdown, lines)?;
                 let source = range.start.checked_add(code.num_backticks)?..range.end.checked_sub(code.num_backticks)?;
