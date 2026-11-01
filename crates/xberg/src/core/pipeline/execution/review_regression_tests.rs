@@ -106,6 +106,11 @@ fn source_document(site: SourceSite) -> DerivedResult {
         }
     }
     let result = derive_with_surfaces(builder.build(), false, OutputFormat::Markdown, true);
+    if matches!(site, SourceSite::AnnotationAuthor) {
+        let annotations = result.annotations.as_ref().expect("actual structured annotation");
+        assert_eq!(annotations.len(), 1);
+        assert_eq!(annotations[0].author.as_deref(), Some(SOURCE_TAGS));
+    }
     assert!(result.content.contains(SOURCE_TAGS));
     assert_eq!(result.content.matches("sup").count(), 3);
     let formatted = result.formatted_content.as_deref().unwrap();
@@ -156,7 +161,7 @@ async fn annotation_text_tags_are_redacted_as_source_data() {
 }
 
 #[tokio::test]
-async fn annotation_author_tags_are_redacted_as_source_data() {
+async fn annotation_author_tags_in_derived_rendering_are_redacted_as_source_data() {
     source_tags_case(SourceSite::AnnotationAuthor).await;
 }
 
