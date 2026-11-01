@@ -118,7 +118,7 @@ class WheelVendoringTests(unittest.TestCase):
     def test_real_packager_stages_transitive_crt_and_record_notice(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            crt = root / "VS/VC/Redist/MSVC/14.44.0/x64/Microsoft.VC143.CRT"
+            crt = root / "Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.44.0/x64/Microsoft.VC143.CRT"
             crt.mkdir(parents=True)
             (crt / "MSVCP140_1.dll").write_bytes(pe(["VCRUNTIME140_1.dll"]))
             (crt / "VCRUNTIME140_1.dll").write_bytes(pe(["KERNEL32.dll"]))
@@ -166,31 +166,64 @@ class RuntimeSourceTests(unittest.TestCase):
         (self.artifact / "test.dist-info").mkdir()
         (self.artifact / "_xberg.pyd").write_bytes(pe(["onnxruntime.dll"]))
         (self.artifact / "onnxruntime.dll").write_bytes(pe(["MSVCP140_1.dll"]))
-        self.crt = self.root / "VS/VC/Redist/MSVC/14.44.0/x64/Microsoft.VC143.CRT"
+        self.crt = self.root / "Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.44.0/x64/Microsoft.VC143.CRT"
         self.crt.mkdir(parents=True)
         (self.crt / "MSVCP140_1.dll").write_bytes(pe(["VCRUNTIME140_1.dll"]))
         (self.crt / "VCRUNTIME140_1.dll").write_bytes(pe(["KERNEL32.dll"]))
 
-    def stage(self) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [
-                sys.executable,
-                str(ROOT / "scripts/ci/windows_wheel_closure.py"),
-                "stage",
-                "--artifact",
-                str(self.artifact),
-                "--crt-dir",
-                str(self.crt),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    def stage(self, *, environment_override: bool = False) -> subprocess.CompletedProcess[str]:
+        command = [
+            sys.executable,
+            str(ROOT / "scripts/ci/windows_wheel_closure.py"),
+            "stage",
+            "--artifact",
+            str(self.artifact),
+        ]
+        environment = dict(os.environ)
+        if environment_override:
+            environment["VCToolsRedistDir"] = str(self.crt)
+        else:
+            command.extend(["--crt-dir", str(self.crt)])
+        return subprocess.run(command, env=environment, capture_output=True, text=True, check=False)
 
     def failure(self, message: str) -> None:
         outcome = self.stage()
         assert outcome.returncode != 0, outcome.stdout + outcome.stderr
         assert message in outcome.stderr, outcome.stderr
+
+    def move_source(self, year: str, edition: str) -> None:
+        target = self.root / f"Microsoft Visual Studio/{year}/{edition}/VC/Redist/MSVC/14.44.0/x64/Microsoft.VC143.CRT"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self.crt.rename(target)
+        self.crt = target
+        assert sorted(path.name for path in self.crt.iterdir()) == ["MSVCP140_1.dll", "VCRUNTIME140_1.dll"]
+
+    def reject_source(self, year: str, edition: str, *, environment_override: bool) -> None:
+        self.move_source(year, edition)
+        before = {str(path): path.read_bytes() for path in self.artifact.rglob("*") if path.is_file()}
+        outcome = self.stage(environment_override=environment_override)
+        assert outcome.returncode != 0, outcome.stdout + outcome.stderr
+        assert "release CRT redist" in outcome.stderr, outcome.stderr
+        assert before == {str(path): path.read_bytes() for path in self.artifact.rglob("*") if path.is_file()}
+
+    def test_explicit_buildtools_source_is_rejected_before_writes(self) -> None:
+        self.reject_source("2022", "BuildTools", environment_override=False)
+
+    def test_environment_buildtools_source_is_rejected_before_writes(self) -> None:
+        self.reject_source("2022", "BuildTools", environment_override=True)
+
+    def test_explicit_unsupported_visual_studio_version_is_rejected_before_writes(self) -> None:
+        self.reject_source("2026", "Enterprise", environment_override=False)
+
+    def test_environment_unsupported_visual_studio_version_is_rejected_before_writes(self) -> None:
+        self.reject_source("2026", "Enterprise", environment_override=True)
+
+    def test_other_supported_full_editions_keep_the_same_release_source_contract(self) -> None:
+        for edition in ["Community", "Professional"]:
+            self.move_source("2022", edition)
+            outcome = self.stage(environment_override=edition == "Professional")
+            assert outcome.returncode == 0, outcome.stdout + outcome.stderr
+            assert (self.artifact / "MSVCP140_1.dll").read_bytes() == (self.crt / "MSVCP140_1.dll").read_bytes()
 
     def test_missing_transitive_source_does_not_write_partial_runtime(self) -> None:
         (self.crt / "VCRUNTIME140_1.dll").unlink()
