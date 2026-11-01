@@ -81,13 +81,20 @@ fn pdf_content(encoded: &str) -> (String, Content) {
     let pages = document.get_pages();
     assert_eq!(pages.len(), 1);
     let text = document.extract_text(&[1]).expect("selectable actual text");
-    let content = Content::decode(&document.get_page_content(pages[&1])).expect("actual operations");
+    let content =
+        Content::decode(&document.get_page_content(pages[&1])).expect("actual operations");
     assert!(!content.operations.is_empty());
     (text, content)
 }
 
 async fn docx_case(case: Case) {
-    let output = redacted(SEMANTIC, "text/html", OutputFormat::Custom("docx".into()), case.term).await;
+    let output = redacted(
+        SEMANTIC,
+        "text/html",
+        OutputFormat::Custom("docx".into()),
+        case.term,
+    )
+    .await;
     let xml = package_xml(&output);
     let doc = roxmltree::Document::parse(&xml).expect("actual Word XML");
     let runs: Vec<_> = doc
@@ -110,22 +117,37 @@ async fn docx_case(case: Case) {
 }
 
 async fn pdf_case(case: Case) {
-    let output = redacted(SEMANTIC, "text/html", OutputFormat::Custom("pdf".into()), case.term).await;
+    let output = redacted(
+        SEMANTIC,
+        "text/html",
+        OutputFormat::Custom("pdf".into()),
+        case.term,
+    )
+    .await;
     let (text, content) = pdf_content(&output);
     assert_eq!(compact(&text), compact(case.plain), "term {}", case.term);
-    assert!(content.operations.iter().any(|op| {
-        op.operator == "Ts"
-            && op
-                .operands
-                .first()
-                .and_then(|v| v.as_float().ok())
-                .is_some_and(|rise| rise > 0.0)
-    }));
-    assert_eq!(content.operations.iter().filter(|op| op.operator == "l").count(), 1);
+    assert!(content.operations.iter().any(|op| op.operator == "Ts"
+        && op
+            .operands
+            .first()
+            .and_then(|v| v.as_float().ok())
+            .is_some_and(|rise| rise > 0.0)));
+    assert_eq!(
+        content
+            .operations
+            .iter()
+            .filter(|op| op.operator == "l")
+            .count(),
+        1
+    );
 }
 
 async fn markdown_case(case: Case) {
-    let source = converted("<p>éx<sup>2</sup> and <u>under</u> end</p>".as_bytes(), "docx").await;
+    let source = converted(
+        "<p>éx<sup>2</sup> and <u>under</u> end</p>".as_bytes(),
+        "docx",
+    )
+    .await;
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
         use_cache: false,
@@ -155,7 +177,10 @@ async fn markdown_case(case: Case) {
     .await;
     assert_eq!(
         output.trim(),
-        format!("éx<sup>{}</sup> and <u>{}</u> end", case.raised, case.underlined)
+        format!(
+            "éx<sup>{}</sup> and <u>{}</u> end",
+            case.raised, case.underlined
+        )
     );
 }
 
@@ -191,7 +216,13 @@ const LITERAL_REDACTED: &str = "<[REDACTED]>2</[REDACTED]> <u>under</u> end";
 #[tokio::test]
 #[serial_test::serial]
 async fn docx_code_tag_names_are_redacted_as_content() {
-    let output = redacted(LITERAL, "text/html", OutputFormat::Custom("docx".into()), "sup").await;
+    let output = redacted(
+        LITERAL,
+        "text/html",
+        OutputFormat::Custom("docx".into()),
+        "sup",
+    )
+    .await;
     let xml = package_xml(&output);
     let doc = roxmltree::Document::parse(&xml).unwrap();
     assert_eq!(text_of(doc.root()), LITERAL_REDACTED);
@@ -202,17 +233,28 @@ async fn docx_code_tag_names_are_redacted_as_content() {
 #[tokio::test]
 #[serial_test::serial]
 async fn pdf_code_tag_names_are_redacted_as_content() {
-    let output = redacted(LITERAL, "text/html", OutputFormat::Custom("pdf".into()), "sup").await;
+    let output = redacted(
+        LITERAL,
+        "text/html",
+        OutputFormat::Custom("pdf".into()),
+        "sup",
+    )
+    .await;
     let (text, content) = pdf_content(&output);
     assert_eq!(compact(&text), compact(LITERAL_REDACTED));
-    assert!(
+    assert!(content
+        .operations
+        .iter()
+        .filter(|op| op.operator == "Ts")
+        .all(|op| op.operands[0].as_float().expect("numeric rise") == 0.0));
+    assert_eq!(
         content
             .operations
             .iter()
-            .filter(|op| op.operator == "Ts")
-            .all(|op| op.operands[0].as_float().expect("numeric rise") == 0.0)
+            .filter(|op| op.operator == "l")
+            .count(),
+        0
     );
-    assert_eq!(content.operations.iter().filter(|op| op.operator == "l").count(), 0);
 }
 
 #[tokio::test]
@@ -229,7 +271,10 @@ async fn markdown_literal_tag_names_are_redacted_as_content() {
     let mut options = comrak::Options::default();
     options.render.r#unsafe = true;
     let html = comrak::markdown_to_html(&output, &options);
-    assert!(html.contains("&lt;[REDACTED]&gt;2&lt;/[REDACTED]&gt;"), "{html}");
+    assert!(
+        html.contains("&lt;[REDACTED]&gt;2&lt;/[REDACTED]&gt;"),
+        "{html}"
+    );
     assert!(
         !html.contains("<sup>") && !html.contains("<u>"),
         "literal DOCX text must stay literal: {html}"
