@@ -8,6 +8,8 @@ use crate::pdf::native::hierarchy::script_ownership::page_segments::{
 use super::{TableCoverage, filter_segments_by_table_bboxes, segment_survives_table_filter};
 
 mod paragraph_gaps;
+mod source_projection;
+mod source_rows;
 pub(super) use paragraph_gaps::NativeParagraphGaps;
 
 struct OrdinaryGroups {
@@ -49,7 +51,13 @@ pub(super) fn prepare_segments(
         Err(segments) => return (filter_segments_by_table_bboxes(segments, tables), None),
     };
     records.retain(|record| segment_survives_table_filter(&record.segment, tables));
-    let owners = page.remap_script_owners(&records);
+    let mut owners = page.remap_script_owners(&records);
+    if !owners.is_empty() {
+        let witness = page.into_projection_witness();
+        for owner in &mut owners {
+            owner.bind_page_projection(&witness);
+        }
+    }
     let (original_indices, segments) = records
         .into_iter()
         .map(|record| (record.original_index, record.segment))
@@ -62,6 +70,16 @@ pub(super) fn prepare_segments(
             owners,
         }),
     )
+}
+
+pub(super) fn release_page_projections(paragraphs: &mut [crate::pdf::structure::types::PdfParagraph]) {
+    for owner in paragraphs
+        .iter_mut()
+        .flat_map(|p| &mut p.lines)
+        .flat_map(|line| &mut line.native_scripts)
+    {
+        owner.clear_page_projection();
+    }
 }
 
 pub(super) struct NativeScriptIndex {
@@ -229,7 +247,7 @@ fn apply_native_order(
         ((0..segments.len()).collect(), Vec::new(), None)
     };
     let owners = remap_owner_positions(owners, &order);
-    let original_indices = order.iter().map(|&index| original_indices[index]).collect();
+    let original_indices: Vec<_> = order.iter().map(|&index| original_indices[index]).collect();
     let by_script = owners.into_iter().map(|owner| (owner.script_index, owner)).collect();
     let ordinary_groups = groups.map(|groups| groups.remap(&order));
     let mut slots: Vec<_> = segments.into_iter().map(Some).collect();
@@ -239,7 +257,7 @@ fn apply_native_order(
         .collect();
     let continuation_gaps = ordinary_groups
         .as_ref()
-        .and_then(|groups| NativeParagraphGaps::new(&segments, &by_script, &groups.original_gaps));
+        .and_then(|groups| NativeParagraphGaps::new(&segments, &original_indices, &by_script, &groups.original_gaps));
     (
         segments,
         NativeScriptIndex {

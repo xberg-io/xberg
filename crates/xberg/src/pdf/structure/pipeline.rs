@@ -24,10 +24,10 @@ use super::lines::{is_cjk_char, segments_need_space};
 use super::paragraphs::{merge_continuation_paragraphs, split_embedded_list_items};
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, RepairedText, TextReplacement, WordWitnesses, apply_to_all_segments,
-    clean_duplicate_punctuation, collapse_spaced_hyphens, expand_ligatures_with_space_absorption,
-    expand_ligatures_with_space_absorption_mapped, normalize_text_encoding, normalize_unicode_text,
-    normalize_unicode_text_mapped, repair_contextual_ligatures, repair_contextual_ligatures_mapped,
-    repair_ligature_spaces,
+    apply_to_all_segments_observed, clean_duplicate_punctuation, collapse_spaced_hyphens,
+    expand_ligatures_with_space_absorption, expand_ligatures_with_space_absorption_mapped, normalize_text_encoding,
+    normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
+    repair_contextual_ligatures_mapped, repair_ligature_spaces,
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
@@ -1060,7 +1060,7 @@ fn segments_to_paragraphs_with_native_scripts(
     witnesses: &TextRepairWitnesses,
     native_scripts: Option<native_scripts::NativeSegmentEvidence>,
 ) -> Vec<PdfParagraph> {
-    let (mut paragraphs, native_gaps) = match native_scripts {
+    let (mut paragraphs, mut native_gaps) = match native_scripts {
         Some(evidence) => {
             let (segments, index) =
                 native_scripts::order_native_paragraph_segments(segments, evidence, paragraph_gap_ys);
@@ -1077,13 +1077,18 @@ fn segments_to_paragraphs_with_native_scripts(
             None,
         ),
     };
-    apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
+    apply_text_repair_to_structure_tree_paragraphs_observed(&mut paragraphs, true, witnesses, |segment, repaired| {
+        if let Some(gaps) = &mut native_gaps {
+            gaps.observe_repair(segment, repaired);
+        }
+    });
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
     if let Some(gaps) = native_gaps {
         gaps.merge(&mut paragraphs);
     } else {
         merge_continuation_paragraphs(&mut paragraphs);
     }
+    native_scripts::release_page_projections(&mut paragraphs);
     synchronize_paragraph_text_metadata(&mut paragraphs);
     paragraphs
 }
@@ -2017,9 +2022,8 @@ fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> 
             seg.upright_cross_extent()
         };
         let baseline = paragraph_gap_axis(seg);
-        let tolerance = (seg.height * 0.5).max(1.0);
         match lines.last_mut() {
-            Some(line) if (baseline - line.anchor_y).abs() <= tolerance => {
+            Some(line) if segment_matches_paragraph_band(seg, line.anchor_y) => {
                 line.top = line.top.max(top);
                 line.bottom = line.bottom.min(bottom);
                 line.height = line.height.max(seg.height);
@@ -2037,6 +2041,10 @@ fn paragraph_line_bands<'a>(segments: impl Iterator<Item = &'a SegmentData>) -> 
         }
     }
     lines
+}
+
+fn segment_matches_paragraph_band(segment: &SegmentData, anchor: f32) -> bool {
+    (paragraph_gap_axis(segment) - anchor).abs() <= (segment.height * 0.5).max(1.0)
 }
 
 fn paragraph_gaps_from_bands<'a>(
@@ -7198,6 +7206,20 @@ fn apply_text_repair_to_structure_tree_paragraphs(
     witnesses: &TextRepairWitnesses,
 ) {
     apply_to_all_segments(paragraphs, |text| fused_text_repairs(text, &witnesses.words));
+    finish_text_repair(paragraphs, has_positions, witnesses);
+}
+
+fn apply_text_repair_to_structure_tree_paragraphs_observed(
+    paragraphs: &mut Vec<PdfParagraph>,
+    has_positions: bool,
+    witnesses: &TextRepairWitnesses,
+    observe: impl FnMut(&SegmentData, &str),
+) {
+    apply_to_all_segments_observed(paragraphs, |text| fused_text_repairs(text, &witnesses.words), observe);
+    finish_text_repair(paragraphs, has_positions, witnesses);
+}
+
+fn finish_text_repair(paragraphs: &mut Vec<PdfParagraph>, has_positions: bool, witnesses: &TextRepairWitnesses) {
     dehyphenate_paragraphs(paragraphs, has_positions, &witnesses.hyphens);
     split_embedded_list_items(paragraphs);
     synchronize_paragraph_text_metadata(paragraphs);

@@ -1,6 +1,7 @@
 //! Private transport of exact native witnesses beside segment projections.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::pdf::hierarchy::SegmentData;
 
@@ -23,9 +24,43 @@ pub(crate) struct SegmentScriptOwner {
     pub(crate) script_index: usize,
     source: NativeScriptOwner,
     assigned_roles: [Option<u8>; 2],
+    page_projection: Option<NativeProjectionWitness>,
+}
+
+#[derive(Clone)]
+pub(crate) struct NativeProjectionWitness(Arc<[NativeSegment]>);
+
+impl std::fmt::Debug for NativeProjectionWitness {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("NativeProjectionWitness")
+            .field("records", &self.0.len())
+            .finish()
+    }
+}
+
+impl NativeProjectionWitness {
+    pub(crate) fn records(&self) -> &[NativeSegment] {
+        &self.0
+    }
+    pub(crate) fn shares_page(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 impl SegmentScriptOwner {
+    pub(crate) fn bind_page_projection(&mut self, witness: &NativeProjectionWitness) {
+        self.page_projection = Some(witness.clone());
+    }
+
+    pub(crate) fn clear_page_projection(&mut self) {
+        self.page_projection = None;
+    }
+
+    pub(crate) fn page_projection(&self) -> Option<&NativeProjectionWitness> {
+        self.page_projection.as_ref()
+    }
+
     fn run_key(&self) -> (usize, usize) {
         (self.original_index(false), self.source.run[0].original_index)
     }
@@ -105,7 +140,7 @@ pub(crate) fn complete_script_runs(owners: Vec<&SegmentScriptOwner>) -> Vec<&Seg
 }
 
 #[derive(PartialEq, Eq, Hash)]
-struct SegmentProjection<'a> {
+pub(crate) struct SegmentProjection<'a> {
     text: &'a str,
     geometry: [u32; 7],
     style: [bool; 3],
@@ -132,7 +167,17 @@ impl<'a> From<&'a SegmentData> for SegmentProjection<'a> {
     }
 }
 
+impl SegmentProjection<'_> {
+    pub(crate) fn scalars(&self) -> ([u32; 7], [bool; 3], Option<u8>) {
+        (self.geometry, self.style, self.assigned_role)
+    }
+}
+
 impl NativePageSegments {
+    pub(crate) fn into_projection_witness(self) -> NativeProjectionWitness {
+        NativeProjectionWitness(self.segments.into())
+    }
+
     pub(crate) fn segments(&self) -> impl Iterator<Item = &SegmentData> {
         self.segments.iter().map(|record| &record.segment)
     }
@@ -220,6 +265,7 @@ impl NativePageSegments {
                     base_index,
                     script_index,
                     source: owner.clone(),
+                    page_projection: None,
                     assigned_roles: [
                         retained_segments[base_index].segment.assigned_role,
                         retained_segments[script_index].segment.assigned_role,
