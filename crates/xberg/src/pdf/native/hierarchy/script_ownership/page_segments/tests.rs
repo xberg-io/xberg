@@ -187,20 +187,39 @@ fn should_not_retarget_a_removed_endpoint_to_same_token_at_different_geometry_22
 fn should_keep_original_projection_collisions_ambiguous_after_one_survivor_is_removed_2275() {
     for duplicate_index in [0, 1] {
         let mut spans = pair();
+        let validated = carrier(&spans);
+        assert_eq!(
+            validated.script_owners.len(),
+            1,
+            "unambiguous native owner producer fires"
+        );
+        assert_eq!(validated.remap_script_owners(&validated.segments).len(), 1);
         let mut duplicate = spans[duplicate_index].clone();
         duplicate.mcid_scope = Some(McidScope::Page(1));
         spans.push(duplicate);
-        let page = carrier(&spans);
+        let mut page = carrier(&spans);
+        // Preserve the real edge while testing transport independently of conservative cohort admission. ~keep
+        page.script_owners = validated.script_owners;
+        assert_eq!(page.script_owners.len(), 1);
+        assert_eq!(page.segments.len(), 3);
         assert_eq!(
-            page.script_owners.len(),
-            1,
-            "native scope distinguishes source witnesses"
+            page.segments
+                .iter()
+                .map(|record| record.original_index)
+                .collect::<Vec<_>>(),
+            [0, 1, 2]
         );
         assert_ne!(spans[duplicate_index].mcid_scope, spans[2].mcid_scope);
         assert_eq!(
             projection_fingerprint(&page.segments[duplicate_index].segment),
             projection_fingerprint(&page.segments[2].segment)
         );
+        let originals = page.unique_originals();
+        assert_eq!(originals.len(), 3);
+        assert!(originals.get(&duplicate_index).is_some_and(Option::is_none));
+        assert!(originals.get(&2).is_some_and(Option::is_none));
+        assert!(originals.get(&(1 - duplicate_index)).is_some_and(Option::is_some));
+        assert!(page.remap_script_owners(&page.segments).is_empty());
         assert!(page.remap_script_owners(&retained(&page, &[0, 1])).is_empty());
         let wrong_survivors = if duplicate_index == 0 { [2, 1] } else { [0, 2] };
         assert!(page.remap_script_owners(&retained(&page, &wrong_survivors)).is_empty());
