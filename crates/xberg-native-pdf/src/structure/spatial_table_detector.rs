@@ -2653,6 +2653,14 @@ fn group_cells_into_tables(cells: &[IntersectionCell]) -> Vec<Vec<usize>> {
     groups
 }
 
+fn column_local_body_top(cell: IntersectionCell, body: &[usize], cells: &[IntersectionCell]) -> Option<f32> {
+    body.iter()
+        .map(|&index| cells[index])
+        .filter(|body| cell.x2.min(body.x2) - cell.x1.max(body.x1) > SNAP_TOL)
+        .map(|body| body.y2)
+        .reduce(f32::max)
+}
+
 /// Attach a spanning header only to an independently established body grid.
 /// A few header boxes alone must not become a newly accepted table: that can
 /// suppress the fallback detector for the real body on the same page. ~keep
@@ -2670,12 +2678,13 @@ fn attach_spanning_headers(cells: &[IntersectionCell], groups: Vec<Vec<usize>>, 
         }
         let left = body.iter().map(|&i| cells[i].x1).fold(f32::INFINITY, f32::min);
         let right = body.iter().map(|&i| cells[i].x2).fold(f32::NEG_INFINITY, f32::max);
-        let top = body.iter().map(|&i| cells[i].y2).fold(f32::NEG_INFINITY, f32::max);
         for (header_index, header) in groups.iter().enumerate() {
             if body_index == header_index
                 || !header.iter().all(|&i| {
                     let c = cells[i];
-                    c.y1 >= top - SNAP_TOL && c.x1 >= left - SNAP_TOL && c.x2 <= right + SNAP_TOL
+                    c.x1 >= left - SNAP_TOL
+                        && c.x2 <= right + SNAP_TOL
+                        && column_local_body_top(c, body, cells).is_some_and(|top| c.y1 >= top - SNAP_TOL)
                 })
             {
                 continue;
