@@ -134,7 +134,6 @@ impl<'a> SourceRows<'a> {
             && following_end.upright_advance_extent().1 > first.upright_advance_extent().0
             && super::super::super::paragraphs::source_rows_continue(last, following)
             && super::super::heading_fills_column(last, following_end.upright_advance_extent().1)
-            && super::super::heading_fills_column(following_end, last.upright_advance_extent().1)
     }
 
     fn segment(&self, slot: usize) -> &SegmentData {
