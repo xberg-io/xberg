@@ -196,3 +196,185 @@ async fn canonical_sensitive_alert_title_is_completely_redacted() {
     )
     .await;
 }
+
+async fn process_named_literal(mut result: DerivedResult, term: &str, count: usize, plain: &str, rendered: &str) {
+    let config = RedactionConfig {
+        custom_terms: vec![RedactionTerm::labeled("person", term)],
+        ..rule()
+    };
+    let markdown = result.formatted_content.as_ref().unwrap();
+    assert_eq!(findings(markdown, &config).await.len(), count);
+    assert_eq!(findings(&visible(markdown), &config).await.len(), count);
+    let selected = findings(&result.content, &config).await;
+    assert_eq!(selected.len(), count);
+    apply(&mut result, config.clone())
+        .await
+        .expect("selected canonical title and label data must remain processable");
+    let result = finish(result);
+    let expected_count = match result.metadata.output_format.as_deref() {
+        Some("markdown") => {
+            assert_eq!(visible(&result.content), rendered);
+            count * 2
+        }
+        Some("plain") => {
+            assert_plain(&result, plain);
+            count
+        }
+        other => panic!("unexpected output format: {other:?}"),
+    };
+    let report = result.redaction_report.as_ref().unwrap();
+    assert_eq!(report.total_redacted as usize, expected_count);
+    assert_eq!(offsets(&report.findings[..count]), offsets(&selected));
+    let final_text = if result.metadata.output_format.as_deref() == Some("markdown") {
+        visible(&result.content)
+    } else {
+        result.content.clone()
+    };
+    assert_eq!(findings(&final_text, &config).await.len(), 0);
+}
+
+#[tokio::test]
+async fn canonical_default_alert_title_is_redactable_as_a_whole_selected_term() {
+    process_named_literal(alert(None), "Note", 1, "[REDACTED]\n\nsafe body", "[REDACTED]safe body").await;
+}
+
+#[tokio::test]
+async fn canonical_default_alert_partial_title_and_body_matches_keep_their_occurrences() {
+    process_named_literal(
+        alert(None),
+        "o",
+        2,
+        "n[REDACTED]te\n\nsafe b[REDACTED]dy",
+        "N[REDACTED]tesafe b[REDACTED]dy",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn canonical_numbered_footnote_reference_and_definition_labels_are_redactable() {
+    process_named_literal(
+        footnote("safe note"),
+        "1",
+        2,
+        "See note[^[REDACTED]]\n\n\n[^[REDACTED]]: safe note",
+        "See note[REDACTED][REDACTED] safe note",
+    )
+    .await;
+}
+
+fn padded_inline_math() -> DerivedResult {
+    let source = "Let $ Jane Doe $ hold.";
+    let annotation = TextAnnotation {
+        start: 4,
+        end: 16,
+        kind: AnnotationKind::math(false),
+    };
+    assert!(crate::rendering::common::valid_math_annotation(source, &annotation));
+    let result = paragraph(source, vec![annotation]);
+    let markdown = result.formatted_content.as_ref().unwrap();
+    assert_eq!(markdown.matches("$` Jane Doe `$").count(), 1);
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, markdown, &canonical_options());
+    let formulas = root
+        .descendants()
+        .filter_map(|node| {
+            if let comrak::nodes::NodeValue::Math(math) = &node.data.borrow().value {
+                Some((math.dollar_math, math.display_math, math.literal.clone()))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(formulas, [(false, false, "Jane Doe".to_owned())]);
+    assert_eq!(visible(markdown), "Let Jane Doe hold.");
+    result
+}
+
+#[tokio::test]
+async fn canonical_padded_inline_math_redacts_the_actual_normalized_visible_literal() {
+    process_named_literal(
+        padded_inline_math(),
+        "Jane Doe",
+        1,
+        "Let $ [REDACTED] $ hold.",
+        "Let [REDACTED] hold.",
+    )
+    .await;
+}
+
+fn math_first_footnote() -> DerivedResult {
+    let source = "$$x+y$$";
+    let annotation = TextAnnotation {
+        start: 0,
+        end: u32::try_from(source.len()).unwrap(),
+        kind: AnnotationKind::math(true),
+    };
+    assert!(crate::rendering::common::valid_math_annotation(source, &annotation));
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("See note", vec![], None, None);
+    builder.push_footnote_ref("1", "note", None);
+    let index = builder.push_footnote_definition(source, "note", None);
+    builder.set_annotations(index, vec![annotation]);
+    let document = builder.build();
+    assert_eq!(document.elements.len(), 3);
+    assert_eq!(document.elements[2].text, source);
+    assert_eq!(document.elements[2].layer, ContentLayer::Footnote);
+    assert_eq!(document.elements[2].annotations.len(), 1);
+    let result = prepare(document);
+    assert_eq!(result.content, "See note[^1]\n\n\n[^1]: $$x+y$$");
+    let markdown = result.formatted_content.as_ref().unwrap();
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, markdown, &canonical_options());
+    let definitions = root
+        .descendants()
+        .filter(|node| {
+            matches!(
+                node.data.borrow().value,
+                comrak::nodes::NodeValue::FootnoteDefinition(_)
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(definitions.len(), 1);
+    let first = definitions[0].first_child().expect("real definition child");
+    let data = first.data.borrow();
+    let comrak::nodes::NodeValue::CodeBlock(block) = &data.value else {
+        panic!(
+            "canonical display math must become the first CodeBlock: {:?}",
+            data.value
+        );
+    };
+    assert_eq!((block.info.as_str(), block.literal.as_str()), ("math", "x+y\n"));
+    assert_math_footnote_consumers(markdown);
+    result
+}
+
+fn assert_math_footnote_consumers(markdown: &str) {
+    let word = visible(markdown);
+    assert_eq!(word, "See note11 x+y");
+    let bytes = crate::rendering::render_pdf(markdown).expect("actual PDF consumer");
+    assert!(bytes.starts_with(b"%PDF-"));
+    let document = lopdf::Document::load_mem(&bytes).expect("actual PDF package");
+    assert_eq!(document.get_pages().len(), 1);
+    let text = document.extract_text(&[1]).expect("actual selectable PDF text");
+    assert_eq!(text.matches('1').count(), 2);
+    assert!(text.contains("x+y"));
+    assert_eq!(
+        text.chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>(),
+        word.chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>()
+    );
+}
+
+#[tokio::test]
+async fn canonical_math_first_footnote_remains_processable_without_selected_matches() {
+    process_literal(
+        math_first_footnote(),
+        0,
+        "See note[^1]\n\n\n[^1]: $$x+y$$",
+        "See note11 x+y",
+    )
+    .await;
+}
