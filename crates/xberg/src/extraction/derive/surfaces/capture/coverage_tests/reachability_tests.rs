@@ -351,21 +351,24 @@ fn math_first_footnote() -> DerivedResult {
 fn assert_math_footnote_consumers(markdown: &str) {
     let word = visible(markdown);
     assert_eq!(word, "See note11 x+y");
-    let bytes = crate::rendering::render_pdf(markdown).expect("actual PDF consumer");
-    assert!(bytes.starts_with(b"%PDF-"));
-    let document = lopdf::Document::load_mem(&bytes).expect("actual PDF package");
-    assert_eq!(document.get_pages().len(), 1);
-    let text = document.extract_text(&[1]).expect("actual selectable PDF text");
-    assert_eq!(text.matches('1').count(), 2);
-    assert!(text.contains("x+y"));
-    assert_eq!(
-        text.chars()
-            .filter(|character| !character.is_whitespace())
-            .collect::<String>(),
-        word.chars()
-            .filter(|character| !character.is_whitespace())
-            .collect::<String>()
-    );
+    #[cfg(feature = "pdf")]
+    {
+        let bytes = crate::rendering::render_pdf(markdown).expect("actual PDF consumer");
+        assert!(bytes.starts_with(b"%PDF-"));
+        let document = lopdf::Document::load_mem(&bytes).expect("actual PDF package");
+        assert_eq!(document.get_pages().len(), 1);
+        let text = document.extract_text(&[1]).expect("actual selectable PDF text");
+        assert_eq!(text.matches('1').count(), 2);
+        assert!(text.contains("x+y"));
+        assert_eq!(
+            text.chars()
+                .filter(|character| !character.is_whitespace())
+                .collect::<String>(),
+            word.chars()
+                .filter(|character| !character.is_whitespace())
+                .collect::<String>()
+        );
+    }
 }
 
 #[tokio::test]
