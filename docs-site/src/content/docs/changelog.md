@@ -149,6 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Include runtime discovery in standalone Sceptre ORT builds.**
+  Enable shared library discovery through the selected engine feature.
+
 - **(dependencies): Require released Sceptre 0.10.1 across Rust dependency graphs.**
   Refresh workspace, Ruby, Elixir and Rust E2E locks while retaining the current ONNX Runtime pins.
 
