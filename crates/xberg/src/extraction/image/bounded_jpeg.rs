@@ -241,7 +241,10 @@ fn reduced_peak(frame: &Frame, scale: ReducedScale, encoded: u64) -> Option<u64>
     } else {
         output
     };
-    decoding.max(converting).checked_add(encoded.checked_mul(2)?)
+    let peak = decoding.max(converting).checked_add(encoded.checked_mul(2)?)?;
+    // Every buffer is part of the peak, so a peak within the allocation layout limit
+    // (isize::MAX) keeps each buffer addressable on a 32-bit target. ~keep
+    (peak <= isize::MAX as u64).then_some(peak)
 }
 
 fn decode(bytes: &[u8], frame: &Frame, scale: ReducedScale) -> Result<DecodedOcrImage> {

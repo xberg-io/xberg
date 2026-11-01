@@ -1,4 +1,4 @@
-use super::{Process, ReducedScale, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
+use super::{Frame, Process, ReducedScale, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
 use crate::extractors::security::SecurityLimits;
 
 const WIDTH: u32 = 512;
@@ -127,4 +127,23 @@ fn should_not_count_upsampler_line_buffers_for_a_grayscale_scan() {
             .install(|| reduced_peak(&frame, scale, bytes.len() as u64).unwrap())
     };
     assert_eq!(peak_on(4), peak_on(1));
+}
+
+#[test]
+fn should_skip_a_scale_whose_peak_exceeds_the_allocation_layout_limit() {
+    let frame = Frame {
+        width: 40_000,
+        height: 40_000,
+        process: Process::Sequential,
+        precision: 8,
+        sampling: vec![(1, 1); 3],
+    };
+    let peak = |denominator| reduced_peak(&frame, reduced_scale(&frame, denominator), 20_000_000);
+    // The half-scale planes and output need about 2.4 GB: addressable only on a 64-bit target.
+    if cfg!(target_pointer_width = "64") {
+        assert!(peak(2).is_some_and(|peak| peak > u64::from(u32::MAX / 2)));
+    } else {
+        assert_eq!(peak(2), None);
+    }
+    assert!(peak(4).is_some_and(|peak| peak <= isize::MAX as u64));
 }
