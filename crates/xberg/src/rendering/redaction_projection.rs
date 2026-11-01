@@ -20,9 +20,22 @@ impl Origin {
     }
 }
 
+#[derive(Clone, Copy)]
+enum PlainLabelKind {
+    DefaultAlert,
+    FootnoteReference,
+    FootnoteDefinition,
+}
+
+struct PlainLabel {
+    visible: Range<usize>,
+    kind: PlainLabelKind,
+}
+
 pub(crate) struct VisibleMarkdown {
     pub text: String,
     origins: Vec<Origin>,
+    labels: Vec<PlainLabel>,
 }
 
 impl VisibleMarkdown {
@@ -35,6 +48,7 @@ impl VisibleMarkdown {
         let mut result = Self {
             text: String::new(),
             origins: Vec::new(),
+            labels: Vec::new(),
         };
         for node in root.descendants() {
             result.append(node, markdown, &lines)?;
@@ -53,11 +67,12 @@ impl VisibleMarkdown {
             NodeValue::Code(code) => self.inline_code(node, code, markdown, lines),
             NodeValue::Math(math) => self.inline_math(node, math, markdown, lines),
             NodeValue::FootnoteReference(reference) => {
-                self.unmapped(&reference.name);
+                self.label(&reference.name, PlainLabelKind::FootnoteReference);
                 Some(())
             }
             NodeValue::CodeBlock(block) => {
                 self.block_boundary();
+                self.definition_label(node);
                 self.unmapped(block.literal.strip_suffix('\n').unwrap_or(&block.literal));
                 Some(())
             }
@@ -80,20 +95,24 @@ impl VisibleMarkdown {
 
     fn structure(&mut self, node: &AstNode<'_>, value: &NodeValue) -> Option<()> {
         match value {
-            NodeValue::Paragraph => self.paragraph(node),
+            NodeValue::Paragraph => {
+                self.block_boundary();
+                self.definition_label(node);
+            }
             NodeValue::FootnoteDefinition(_) => {
-                // Both consumers consume the label at the canonical definition's first paragraph. ~keep
-                node.first_child()
-                    .filter(|child| matches!(child.data.borrow().value, NodeValue::Paragraph))?;
+                node.first_child().filter(|child| match &child.data.borrow().value {
+                    NodeValue::Paragraph => true,
+                    NodeValue::CodeBlock(block) => block.info == "math",
+                    _ => false,
+                })?;
             }
             NodeValue::Alert(alert) => {
                 self.block_boundary();
-                self.unmapped(
-                    alert
-                        .title
-                        .as_deref()
-                        .unwrap_or_else(|| alert.alert_type.default_title()),
-                );
+                if let Some(title) = &alert.title {
+                    self.unmapped(title);
+                } else {
+                    self.label(alert.alert_type.default_title(), PlainLabelKind::DefaultAlert);
+                }
             }
             value => {
                 if structural(value)? {
@@ -104,13 +123,12 @@ impl VisibleMarkdown {
         Some(())
     }
 
-    fn paragraph(&mut self, node: &AstNode<'_>) {
-        self.block_boundary();
+    fn definition_label(&mut self, node: &AstNode<'_>) {
         if node.previous_sibling().is_none()
             && let Some(parent) = node.parent()
             && let NodeValue::FootnoteDefinition(definition) = &parent.data.borrow().value
         {
-            self.unmapped(&definition.name);
+            self.label(&definition.name, PlainLabelKind::FootnoteDefinition);
             self.unmapped(" ");
         }
     }
@@ -126,7 +144,16 @@ impl VisibleMarkdown {
         let source = source_range(node, markdown, lines).and_then(|range| {
             let raw = markdown.get(range.clone())?;
             let payload = raw.strip_prefix(opening)?.strip_suffix(closing)?;
-            (payload == math.literal).then_some(range.start + opening.len()..range.end - closing.len())
+            let start = range.start + opening.len();
+            if payload == math.literal {
+                return Some(start..range.end - closing.len());
+            }
+            // Code-math removes exactly one edge-space pair only when the payload is not all spaces. ~keep
+            (!math.dollar_math
+                && !payload.contains(['\r', '\n'])
+                && payload.bytes().any(|byte| byte != b' ')
+                && payload.strip_prefix(' ')?.strip_suffix(' ')? == math.literal)
+                .then_some(start + 1..range.end - closing.len() - 1)
         });
         if let Some(source) = source {
             self.leaf(&math.literal, markdown, source, false)
@@ -202,6 +229,17 @@ impl VisibleMarkdown {
         });
     }
 
+    fn label(&mut self, text: &str, kind: PlainLabelKind) {
+        let start = self.text.len();
+        self.unmapped(text);
+        if !text.is_empty() && !text.chars().any(char::is_whitespace) {
+            self.labels.push(PlainLabel {
+                visible: start..self.text.len(),
+                kind,
+            });
+        }
+    }
+
     fn unmapped(&mut self, text: &str) {
         self.span(text, None, false);
     }
@@ -232,6 +270,37 @@ impl VisibleMarkdown {
         })
     }
 
+    fn associate_label(&self, label: &PlainLabel, plain: &str, start: usize, result: &mut Self) -> Option<usize> {
+        let text = self.text.get(label.visible.clone())?;
+        let (payload, end) = match label.kind {
+            PlainLabelKind::DefaultAlert => {
+                // Plain writes the canonical kind; consumers display this same enum's title. ~keep
+                let end = start.checked_add(text.len())?;
+                let kind = plain.get(start..end)?;
+                (text.is_ascii() && kind.eq_ignore_ascii_case(text)).then_some(())?;
+                (start..end, end)
+            }
+            kind @ (PlainLabelKind::FootnoteReference | PlainLabelKind::FootnoteDefinition) => {
+                let suffix = if matches!(kind, PlainLabelKind::FootnoteDefinition) {
+                    ":"
+                } else {
+                    ""
+                };
+                let marker = format!("[^{text}]{suffix}");
+                let end = start.checked_add(marker.len())?;
+                (plain.get(start..end)? == marker).then_some(())?;
+                let payload_start = start.checked_add("[^".len())?;
+                (payload_start..payload_start.checked_add(text.len())?, end)
+            }
+        };
+        for (offset, character) in text.char_indices() {
+            let source = payload.start + offset..payload.start + offset + character.len_utf8();
+            let identity = plain.get(source.clone())?.starts_with(character);
+            result.push(character, Some(source), identity);
+        }
+        Some(end)
+    }
+
     // Consume complete streams, never search for a repeated value. Whitespace runs are
     // associated without changing either string supplied to the configured matchers. ~keep
     pub fn on_plain(&self, plain: &str) -> Option<Self> {
@@ -240,9 +309,17 @@ impl VisibleMarkdown {
         let mut result = Self {
             text: String::new(),
             origins: Vec::new(),
+            labels: Vec::new(),
         };
+        let mut labels = self.labels.iter().peekable();
         while let Some((visible_start, character)) = visible.peek().copied() {
             let (start, actual) = source.peek().copied()?;
+            if let Some(label) = labels.next_if(|label| label.visible.start == visible_start) {
+                let end = self.associate_label(label, plain, start, &mut result)?;
+                while source.next_if(|(index, _)| *index < end).is_some() {}
+                while visible.next_if(|(index, _)| *index < label.visible.end).is_some() {}
+                continue;
+            }
             if character.is_whitespace() && actual.is_whitespace() {
                 let mut end = start;
                 while let Some((index, next)) = source.next_if(|(_, next)| next.is_whitespace()) {
@@ -262,7 +339,7 @@ impl VisibleMarkdown {
                 result.push(character, Some(start..start + actual.len_utf8()), true);
             }
         }
-        source.next().is_none().then_some(result)
+        (labels.next().is_none() && source.next().is_none()).then_some(result)
     }
 }
 
