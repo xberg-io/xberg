@@ -183,3 +183,94 @@ async fn should_keep_warned_plain_routing_when_a_middle_edit_removes_formatted_c
     outcome.expect("legitimate removal must remain processable with its original output-kind marker");
     assert_plain_output(result, "[REDACTED] added [REDACTED]");
 }
+
+struct LateNoop {
+    calls: Calls,
+}
+
+impl Plugin for LateNoop {
+    fn name(&self) -> &str {
+        "post-redaction-noop"
+    }
+}
+
+#[async_trait]
+impl PostProcessor for LateNoop {
+    async fn process(&self, result: &mut ExtractedDocument, _config: &ExtractionConfig) -> Result<()> {
+        self.calls
+            .lock()
+            .push(("late-noop", result.content.clone(), result.content.clone()));
+        Ok(())
+    }
+    fn processing_stage(&self) -> ProcessingStage {
+        ProcessingStage::Late
+    }
+    fn priority(&self) -> i32 {
+        0
+    }
+}
+
+#[tokio::test]
+async fn should_allow_a_real_late_noop_after_builtin_redaction_without_recertifying_surfaces() {
+    let mut result = document();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let noop: PostProcessorHandle = Arc::new(LateNoop {
+        calls: Arc::clone(&calls),
+    });
+    let mut registry = crate::plugins::registry::PostProcessorRegistry::new();
+    assert!(registry.register_builtin_redaction().unwrap());
+    registry.register(Arc::clone(&noop)).unwrap();
+    let cache = super::super::cache::ProcessorCache::from_registry(&Arc::new(RwLock::new(registry)), 0).unwrap();
+    assert!(cache.middle.is_empty());
+    assert_eq!(cache.late.len(), 2);
+    let builtin = cache
+        .builtin_redaction
+        .as_ref()
+        .expect("actual registered builtin handle");
+    assert!(Arc::ptr_eq(&cache.late[0], builtin), "actual builtin runs first");
+    assert!(
+        Arc::ptr_eq(&cache.late[1], &noop),
+        "actual priority-zero Late noop runs second"
+    );
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        redaction: Some(RedactionConfig {
+            strategy: RedactionStrategy::Mask,
+            custom_terms: vec![RedactionTerm::labeled("private", "secret")],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let outcome = execute_processor_stages(
+        &mut result,
+        &config,
+        &None,
+        &[(ProcessingStage::Late, Arc::clone(&cache.late))],
+        cache.builtin_redaction.as_ref(),
+    )
+    .await;
+    assert_eq!(
+        calls.lock().as_slice(),
+        [("late-noop", "[REDACTED]".into(), "[REDACTED]".into())],
+        "one actual Late callback observes the already redacted text"
+    );
+    outcome.expect("a post-builtin noop must not revalidate naturally stale pre-redaction fingerprints");
+    assert_eq!(result.content, "[REDACTED]");
+    assert_eq!(result.formatted_content.as_deref(), Some("<sup>[REDACTED]</sup>\n"));
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 3);
+    let pages = result.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(
+        (pages[0].page_number, pages[0].content.as_str()),
+        (1, "<sup>[REDACTED]</sup>\n")
+    );
+    let (document, format) = result.into_output(OutputFormat::Markdown);
+    assert_eq!(
+        format,
+        OutputFormat::Markdown,
+        "the preserved rendering keeps its original route"
+    );
+    let output = super::super::apply_output_format(document, format);
+    assert_eq!(output.metadata.output_format.as_deref(), Some("markdown"));
+    assert_eq!(output.content, "<sup>[REDACTED]</sup>\n");
+}
