@@ -62,7 +62,28 @@ pub(crate) fn load_image_for_ocr_with_scale(
     limits: &SecurityLimits,
     accept: impl Fn(ReducedScale) -> bool,
 ) -> Result<DecodedOcrImage> {
-    if let Some((frame, scale)) = admit_reduced_decode(image_bytes, limits, accept)? {
+    load_reduced_or_full(image_bytes, limits, |_, _| true, accept)
+}
+
+/// Decode a JPEG for a caller that holds more than the decoded raster: `fits` approves the output
+/// dimensions whose working set the caller can hold. A JPEG whose original size `fits` rejects is
+/// decoded at the finest IDCT scale that fits the limit and that `fits` approves. When no scale
+/// qualifies, the image keeps its original size if the full decode fits the limit.
+pub(crate) fn load_image_for_ocr_within(
+    image_bytes: &[u8],
+    limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
+) -> Result<DecodedOcrImage> {
+    load_reduced_or_full(image_bytes, limits, fits, |_| true)
+}
+
+fn load_reduced_or_full(
+    image_bytes: &[u8],
+    limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
+    accept: impl Fn(ReducedScale) -> bool,
+) -> Result<DecodedOcrImage> {
+    if let Some((frame, scale)) = admit_reduced_decode(image_bytes, limits, fits, accept)? {
         return decode(image_bytes, &frame, scale);
     }
     let image = decode_image_to_rgb8_with_security_limits(image_bytes, limits)?;
@@ -79,15 +100,17 @@ pub(crate) fn load_image_for_ocr_with_scale(
 /// input, which the full decoder then takes. An oversized JPEG that no reduced decode can take
 /// gets the same error as the OCR path.
 pub(crate) fn admit_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<(u32, u32)>> {
-    Ok(admit_reduced_decode(bytes, limits, |_| false)?.map(|(frame, _)| (frame.width, frame.height)))
+    Ok(admit_reduced_decode(bytes, limits, |_, _| true, |_| false)?.map(|(frame, _)| (frame.width, frame.height)))
 }
 
-/// Choose the reduced decode of a JPEG whose full RGB raster does not fit the limit: the finest
-/// IDCT scale that fits and that `accept` approves, or else the finest fitting scale. `None`
-/// for any other input.
+/// Choose the reduced decode of a JPEG whose full RGB raster does not fit the limit, or whose original
+/// size `fits` rejects: the finest IDCT scale that fits and that `accept` approves, or else the finest
+/// fitting scale. A scale fits when its peak is within the limit and `fits` approves its size. `None`
+/// for any other input, and for a JPEG whose full decode fits the limit but has no fitting scale.
 fn admit_reduced_decode(
     bytes: &[u8],
     limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
     accept: impl Fn(ReducedScale) -> bool,
 ) -> Result<Option<(Frame, ReducedScale)>> {
     if !bytes.starts_with(&[0xff, 0xd8]) {
@@ -100,35 +123,28 @@ fn admit_reduced_decode(
     let encoded = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let maximum = u64::try_from(limits.max_content_size).unwrap_or(u64::MAX);
     let full_peak = full_decode_peak(&frame, encoded)?;
-    if full_peak <= maximum {
+    let full_fits = full_peak <= maximum;
+    if full_fits && fits(frame.width, frame.height) {
         return Ok(None);
     }
-    let reject = |reason: &str| reduced_decode_error(&frame, full_peak, maximum, reason);
-    if frame.process == Process::Other {
-        return Err(reject(
-            "a lossless, hierarchical or arithmetic-coded JPEG cannot be decoded at a reduced size",
-        ));
-    }
-    if frame.precision != 8 {
-        return Err(reject(&format!(
-            "a JPEG with {}-bit samples cannot be decoded at a reduced size; only 8-bit samples can",
-            frame.precision
-        )));
-    }
-    let components = frame.sampling.len();
-    if !matches!(components, 1 | 3) {
-        return Err(reject(&format!(
-            "a JPEG with {components} color components cannot be decoded at a reduced size; only 1 (grayscale) \
-             and 3 (color) can"
-        )));
+    // A full decode within the limit stays the answer when no reduced decode is possible. ~keep
+    let reject = |reason: &str| {
+        if full_fits {
+            Ok(None)
+        } else {
+            Err(reduced_decode_error(&frame, full_peak, maximum, reason))
+        }
+    };
+    if let Some(reason) = unsupported_reduction(&frame) {
+        return reject(&reason);
     }
     let fitting: Vec<ReducedScale> = DENOMINATORS
         .iter()
         .filter_map(|&denominator| {
             let scale = reduced_scale(&frame, denominator);
-            reduced_peak(&frame, scale, encoded)
-                .is_some_and(|peak| peak <= maximum)
-                .then_some(scale)
+            (reduced_peak(&frame, scale, encoded).is_some_and(|peak| peak <= maximum)
+                && fits(scale.width, scale.height))
+            .then_some(scale)
         })
         .collect();
     let Some(scale) = fitting
@@ -137,13 +153,33 @@ fn admit_reduced_decode(
         .find(|&scale| accept(scale))
         .or(fitting.first().copied())
     else {
-        return Err(reject(if frame.process == Process::Progressive {
+        return reject(if frame.process == Process::Progressive {
             "a progressive JPEG keeps full-resolution coefficients, so even a 1/8 reduced decode does not fit"
         } else {
             "even a 1/8 reduced decode does not fit"
-        }));
+        });
     };
     Ok(Some((frame, scale)))
+}
+
+/// Why `jpeg-decoder` cannot decode this frame at a reduced size, or `None` when it can.
+fn unsupported_reduction(frame: &Frame) -> Option<String> {
+    if frame.process == Process::Other {
+        return Some("a lossless, hierarchical or arithmetic-coded JPEG cannot be decoded at a reduced size".into());
+    }
+    if frame.precision != 8 {
+        return Some(format!(
+            "a JPEG with {}-bit samples cannot be decoded at a reduced size; only 8-bit samples can",
+            frame.precision
+        ));
+    }
+    let components = frame.sampling.len();
+    (!matches!(components, 1 | 3)).then(|| {
+        format!(
+            "a JPEG with {components} color components cannot be decoded at a reduced size; only 1 (grayscale) \
+             and 3 (color) can"
+        )
+    })
 }
 
 /// The admitted peak bound of a reduced decode at `denominator`, for the allocation test in

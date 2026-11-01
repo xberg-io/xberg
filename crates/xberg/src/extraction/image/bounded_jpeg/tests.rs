@@ -1,4 +1,7 @@
-use super::{Frame, Process, ReducedScale, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
+use super::{
+    Frame, Process, ReducedScale, load_image_for_ocr_with_scale, load_image_for_ocr_within, read_frame, reduced_peak,
+    reduced_scale,
+};
 use crate::extractors::security::SecurityLimits;
 
 const WIDTH: u32 = 512;
@@ -68,6 +71,20 @@ fn should_keep_a_fitting_jpeg_at_its_original_size() {
     let decoded = load_image_for_ocr_with_scale(&bytes, &limits(16 * 1024 * 1024), |_| false).unwrap();
     assert_eq!(decoded.scale_denominator, 1);
     assert_eq!(decoded.image.dimensions(), (WIDTH, HEIGHT));
+}
+
+#[test]
+fn should_reduce_a_fitting_jpeg_whose_original_size_the_caller_rejects() {
+    let bytes = rgb();
+    let budget = limits(16 * 1024 * 1024);
+    let decoded = load_image_for_ocr_within(&bytes, &budget, |width, _| width <= WIDTH / 4).unwrap();
+    assert_eq!(decoded.scale_denominator, 4);
+    assert_eq!(decoded.image.dimensions(), (WIDTH / 4, HEIGHT / 4));
+    let decoded = load_image_for_ocr_within(&bytes, &budget, |_, _| false).unwrap();
+    assert_eq!(
+        decoded.scale_denominator, 1,
+        "no fitting scale keeps a full decode that fits"
+    );
 }
 
 #[test]

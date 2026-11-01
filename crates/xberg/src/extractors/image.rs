@@ -3171,16 +3171,17 @@ impl ImageExtractor {
     ) -> Result<InternalDocument> {
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-        let image = crate::extraction::image::decode_image_to_rgb8_with_security_limits(content, security_limits)?;
+        let (image, original_width, original_height, scale) = decode_pipeline_image(content, security_limits)?;
         let source_dpi = crate::extraction::image::resolve_known_source_dpi(
             config
                 .ocr
                 .as_ref()
                 .and_then(crate::extraction::image::explicit_source_dpi_from_ocr_config),
             content,
-            image.width(),
-            image.height(),
-        );
+            original_width,
+            original_height,
+        )
+        .map(|dpi| dpi / f64::from(scale));
         let rgb_bytes = u64::try_from(image.as_raw().len()).map_err(|_| {
             crate::extraction::image_decode::image_dimension_error(image.width(), image.height(), u64::MAX, u64::MAX)
         })?;
@@ -3554,6 +3555,37 @@ fn push_image_placeholder(builder: &mut InternalDocumentBuilder) {
         ocr_confidence: None,
         ocr_rotation: None,
     });
+}
+
+/// Decode the image the OCR pipeline encodes once per stage, with its original size and the reduction
+/// denominator. Each stage holds the PNG encode working set on top of the raster, so a JPEG whose
+/// encode does not fit `max_content_size` is decoded at the finest reduced scale whose encode fits.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn decode_pipeline_image(
+    content: &[u8],
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> Result<(image::RgbImage, u32, u32, u8)> {
+    #[cfg(feature = "ocr")]
+    {
+        let maximum = u64::try_from(security_limits.max_content_size).unwrap_or(u64::MAX);
+        let encode_fits = |width, height| {
+            crate::extractors::pdf::ocr::estimate_png_encode_page_peak_bytes(width, height)
+                .is_ok_and(|peak| peak <= maximum)
+        };
+        let decoded = crate::extraction::image::load_image_for_ocr_within(content, security_limits, encode_fits)?;
+        Ok((
+            decoded.image,
+            decoded.original_width,
+            decoded.original_height,
+            decoded.scale_denominator,
+        ))
+    }
+    #[cfg(not(feature = "ocr"))]
+    {
+        let image = crate::extraction::image::decode_image_to_rgb8_with_security_limits(content, security_limits)?;
+        let (width, height) = image.dimensions();
+        Ok((image, width, height, 1))
+    }
 }
 
 /// Keep the standalone source-image envelope while adopting the OCR contribution.
@@ -3942,6 +3974,10 @@ mod image_table_grid_metadata_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "image_pipeline_reduced_tests.rs"]
+mod image_pipeline_reduced_tests;
 
 #[cfg(test)]
 mod tests {

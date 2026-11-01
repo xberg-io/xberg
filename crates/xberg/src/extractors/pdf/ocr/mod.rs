@@ -90,6 +90,9 @@ pub(crate) use pipeline::{
     numeric_repair_enabled, run_ocr_pipeline,
 };
 
+#[cfg(feature = "ocr")]
+pub(crate) use pipeline::estimate_png_encode_page_peak_bytes;
+
 #[cfg(all(test, feature = "ocr"))]
 mod cache_policy_tests;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]

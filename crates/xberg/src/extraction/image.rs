@@ -21,7 +21,7 @@ use std::io::Cursor;
 mod bounded_jpeg;
 
 #[cfg(feature = "ocr")]
-pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr_with_scale};
+pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr_with_scale, load_image_for_ocr_within};
 #[cfg(feature = "ocr")]
 #[doc(hidden)]
 pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
