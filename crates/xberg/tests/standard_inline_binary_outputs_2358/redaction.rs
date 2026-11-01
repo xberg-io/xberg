@@ -1,5 +1,4 @@
 use super::*;
-use base64::Engine as _;
 use xberg::core::config::redaction::{RedactionConfig, RedactionTerm};
 use xberg::types::redaction::RedactionStrategy;
 
@@ -156,7 +155,7 @@ async fn markdown_case(case: Case) {
     };
     let baseline = extract(
         ExtractInput::from_bytes(
-            &source,
+            source.as_slice(),
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             None,
         ),
