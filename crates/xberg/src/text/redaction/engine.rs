@@ -510,6 +510,7 @@ impl RedactionPass<'_> {
     /// Rewrite every text surface of `doc`, recursing into embedded
     /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
     fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        let incoming_warnings = doc.processing_warnings.len();
         // A nested result that its own pipeline already packaged (DOCX, PDF) holds base64 in
         // `content`. That pipeline ran with the same redaction config and redacted the
         // text before packaging it; masking a stretch of the encoding would corrupt it.
@@ -572,7 +573,7 @@ impl RedactionPass<'_> {
             }
         }
 
-        self.redact_secondary_text_fields(doc, depth);
+        self.redact_secondary_text_fields(doc, depth, incoming_warnings);
     }
 
     /// Rewrite chunk text, keeping chunk byte ranges consistent when the
@@ -609,7 +610,7 @@ impl RedactionPass<'_> {
     /// This is an allowlist of *fields*, but it is meant to be exhaustive over
     /// the text surfaces of [`ExtractedDocument`]; when a new text field is
     /// added there it must be added here too.
-    fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+    fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize, incoming_warnings: usize) {
         self.redact_tables(doc);
         self.redact_pages(doc, depth);
         self.redact_elements(doc);
@@ -619,7 +620,7 @@ impl RedactionPass<'_> {
         self.redact_nested_documents(doc, depth);
         self.redact_references(doc);
         self.redact_metadata(doc);
-        self.redact_processing_warnings(doc);
+        self.redact_processing_warnings(doc, incoming_warnings);
 
         if let Some(structured) = doc.structured_output.as_mut() {
             self.redact_json_value(structured);
@@ -1087,8 +1088,9 @@ impl RedactionPass<'_> {
 
     /// Rewrite processing-warning messages: they can embed source paths or other
     /// diagnostic detail carrying a person's name (e.g. a home-directory path).
-    fn redact_processing_warnings(&mut self, doc: &mut ExtractedDocument) {
-        for warning in doc.processing_warnings.iter_mut() {
+    fn redact_processing_warnings(&mut self, doc: &mut ExtractedDocument, incoming_warnings: usize) {
+        // Diagnostics appended by this pass are not source findings; incoming warnings retain their original order. ~keep
+        for warning in doc.processing_warnings.iter_mut().take(incoming_warnings) {
             let redacted = self.redact(&warning.message);
             warning.message = std::borrow::Cow::Owned(redacted);
         }

@@ -153,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Keep literal HTML, code blocks and padded inline code processable; store exact identity mappings as compact runs.
   Retain canonical inline math, footnote labels and alert titles in the visible coverage check.
   Prove typed label correspondence and exact code-math edge padding before selecting a fallback or source mapping.
+  Preserve accepted alert aliases and display-math frames; exclude newly generated diagnostics from source findings.
 
 - **(redaction): Preserve verified generated Markdown formatting while redacting its content.** (#2358)
   Treat superscript and underline syntax separately from source text, including per-page output.

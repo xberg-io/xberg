@@ -5,6 +5,7 @@ struct Origin {
     visible: Range<usize>,
     source: Option<Range<usize>>,
     identity: bool,
+    discarded_generated: bool,
 }
 
 impl Origin {
@@ -21,21 +22,22 @@ impl Origin {
 }
 
 #[derive(Clone, Copy)]
-enum PlainLabelKind {
+enum PlainAtomKind {
     DefaultAlert,
     FootnoteReference,
     FootnoteDefinition,
+    DisplayMath,
 }
 
-struct PlainLabel {
+struct PlainAtom {
     visible: Range<usize>,
-    kind: PlainLabelKind,
+    kind: PlainAtomKind,
 }
 
 pub(crate) struct VisibleMarkdown {
     pub text: String,
     origins: Vec<Origin>,
-    labels: Vec<PlainLabel>,
+    atoms: Vec<PlainAtom>,
 }
 
 impl VisibleMarkdown {
@@ -48,7 +50,7 @@ impl VisibleMarkdown {
         let mut result = Self {
             text: String::new(),
             origins: Vec::new(),
-            labels: Vec::new(),
+            atoms: Vec::new(),
         };
         for node in root.descendants() {
             result.append(node, markdown, &lines)?;
@@ -67,13 +69,18 @@ impl VisibleMarkdown {
             NodeValue::Code(code) => self.inline_code(node, code, markdown, lines),
             NodeValue::Math(math) => self.inline_math(node, math, markdown, lines),
             NodeValue::FootnoteReference(reference) => {
-                self.label(&reference.name, PlainLabelKind::FootnoteReference);
+                self.label(&reference.name, PlainAtomKind::FootnoteReference);
                 Some(())
             }
             NodeValue::CodeBlock(block) => {
                 self.block_boundary();
                 self.definition_label(node);
-                self.unmapped(block.literal.strip_suffix('\n').unwrap_or(&block.literal));
+                let text = block.literal.strip_suffix('\n').unwrap_or(&block.literal);
+                if block.info == "math" && block.fenced && block.closed {
+                    self.atom(text, PlainAtomKind::DisplayMath);
+                } else {
+                    self.unmapped(text);
+                }
                 Some(())
             }
             NodeValue::HtmlBlock(block) => {
@@ -111,7 +118,7 @@ impl VisibleMarkdown {
                 if let Some(title) = &alert.title {
                     self.unmapped(title);
                 } else {
-                    self.label(alert.alert_type.default_title(), PlainLabelKind::DefaultAlert);
+                    self.label(alert.alert_type.default_title(), PlainAtomKind::DefaultAlert);
                 }
             }
             value => {
@@ -128,7 +135,7 @@ impl VisibleMarkdown {
             && let Some(parent) = node.parent()
             && let NodeValue::FootnoteDefinition(definition) = &parent.data.borrow().value
         {
-            self.label(&definition.name, PlainLabelKind::FootnoteDefinition);
+            self.label(&definition.name, PlainAtomKind::FootnoteDefinition);
             self.unmapped(" ");
         }
     }
@@ -226,18 +233,42 @@ impl VisibleMarkdown {
             visible: start..self.text.len(),
             source,
             identity,
+            discarded_generated: false,
         });
     }
 
-    fn label(&mut self, text: &str, kind: PlainLabelKind) {
+    fn label(&mut self, text: &str, kind: PlainAtomKind) {
         let start = self.text.len();
         self.unmapped(text);
         if !text.is_empty() && !text.chars().any(char::is_whitespace) {
-            self.labels.push(PlainLabel {
+            self.atoms.push(PlainAtom {
                 visible: start..self.text.len(),
                 kind,
             });
         }
+    }
+
+    fn atom(&mut self, text: &str, kind: PlainAtomKind) {
+        let start = self.text.len();
+        self.unmapped(text);
+        if !text.is_empty() {
+            self.atoms.push(PlainAtom {
+                visible: start..self.text.len(),
+                kind,
+            });
+        }
+    }
+
+    fn discarded_label(&mut self, text: &str) {
+        let start = self.text.len();
+        self.text.push_str(text);
+        // This generated enum title disappears in Plain; its actual source kind is redacted separately. ~keep
+        self.origins.push(Origin {
+            visible: start..self.text.len(),
+            source: None,
+            identity: false,
+            discarded_generated: true,
+        });
     }
 
     fn unmapped(&mut self, text: &str) {
@@ -260,28 +291,30 @@ impl VisibleMarkdown {
                 .partition_point(|origin| origin.visible.start < finding.end);
             start < end
                 && self.origins[start..end].iter().all(|origin| {
-                    origin.source_intersection(finding).is_some_and(|source| {
-                        let index = selected.partition_point(|range| range.end <= source.start);
-                        selected
-                            .get(index)
-                            .is_some_and(|range| range.start <= source.start && range.end >= source.end)
-                    })
+                    origin.discarded_generated
+                        || origin.source_intersection(finding).is_some_and(|source| {
+                            let index = selected.partition_point(|range| range.end <= source.start);
+                            selected
+                                .get(index)
+                                .is_some_and(|range| range.start <= source.start && range.end >= source.end)
+                        })
                 })
         })
     }
 
-    fn associate_label(&self, label: &PlainLabel, plain: &str, start: usize, result: &mut Self) -> Option<usize> {
+    fn associate_atom(&self, label: &PlainAtom, plain: &str, start: usize, result: &mut Self) -> Option<usize> {
         let text = self.text.get(label.visible.clone())?;
         let (payload, end) = match label.kind {
-            PlainLabelKind::DefaultAlert => {
-                // Plain writes the canonical kind; consumers display this same enum's title. ~keep
-                let end = start.checked_add(text.len())?;
-                let kind = plain.get(start..end)?;
-                (text.is_ascii() && kind.eq_ignore_ascii_case(text)).then_some(())?;
-                (start..end, end)
+            PlainAtomKind::DefaultAlert => {
+                let kind = plain.get(start..)?.split_whitespace().next()?;
+                let alert = super::comrak_bridge::admonition_alert_type(kind)?;
+                (alert.default_title() == text).then_some(())?;
+                result.discarded_label(text);
+                return start.checked_add(kind.len());
             }
-            kind @ (PlainLabelKind::FootnoteReference | PlainLabelKind::FootnoteDefinition) => {
-                let suffix = if matches!(kind, PlainLabelKind::FootnoteDefinition) {
+            PlainAtomKind::DisplayMath => math_plain_payload(plain, start, text)?,
+            kind @ (PlainAtomKind::FootnoteReference | PlainAtomKind::FootnoteDefinition) => {
+                let suffix = if matches!(kind, PlainAtomKind::FootnoteDefinition) {
                     ":"
                 } else {
                     ""
@@ -309,13 +342,13 @@ impl VisibleMarkdown {
         let mut result = Self {
             text: String::new(),
             origins: Vec::new(),
-            labels: Vec::new(),
+            atoms: Vec::new(),
         };
-        let mut labels = self.labels.iter().peekable();
+        let mut atoms = self.atoms.iter().peekable();
         while let Some((visible_start, character)) = visible.peek().copied() {
             let (start, actual) = source.peek().copied()?;
-            if let Some(label) = labels.next_if(|label| label.visible.start == visible_start) {
-                let end = self.associate_label(label, plain, start, &mut result)?;
+            if let Some(label) = atoms.next_if(|label| label.visible.start == visible_start) {
+                let end = self.associate_atom(label, plain, start, &mut result)?;
                 while source.next_if(|(index, _)| *index < end).is_some() {}
                 while visible.next_if(|(index, _)| *index < label.visible.end).is_some() {}
                 continue;
@@ -325,7 +358,11 @@ impl VisibleMarkdown {
                 while let Some((index, next)) = source.next_if(|(_, next)| next.is_whitespace()) {
                     end = index + next.len_utf8();
                 }
-                while visible.next_if(|(_, next)| next.is_whitespace()).is_some() {}
+                let next_atom = atoms.peek().map(|atom| atom.visible.start);
+                while visible
+                    .next_if(|(index, next)| next.is_whitespace() && next_atom.is_none_or(|start| *index < start))
+                    .is_some()
+                {}
                 let visible_end = visible.peek().map_or(self.text.len(), |(index, _)| *index);
                 let text = &self.text[visible_start..visible_end];
                 let identity = text.len() == character.len_utf8() && plain.get(start..end) == Some(text);
@@ -339,8 +376,22 @@ impl VisibleMarkdown {
                 result.push(character, Some(start..start + actual.len_utf8()), true);
             }
         }
-        (labels.next().is_none() && source.next().is_none()).then_some(result)
+        (atoms.next().is_none() && source.next().is_none()).then_some(result)
     }
+}
+
+fn math_plain_payload(plain: &str, start: usize, text: &str) -> Option<(Range<usize>, usize)> {
+    let direct_end = start.checked_add(text.len())?;
+    if plain.get(start..direct_end) == Some(text) {
+        return Some((start..direct_end, direct_end));
+    }
+    let payload_start = start.checked_add("$$".len())?;
+    let payload_end = payload_start.checked_add(text.len())?;
+    let end = payload_end.checked_add("$$".len())?;
+    (plain.get(start..payload_start) == Some("$$")
+        && plain.get(payload_start..payload_end) == Some(text)
+        && plain.get(payload_end..end) == Some("$$"))
+    .then_some((payload_start..payload_end, end))
 }
 
 fn structural(value: &NodeValue) -> Option<bool> {
