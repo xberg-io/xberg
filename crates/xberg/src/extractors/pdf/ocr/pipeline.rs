@@ -5995,13 +5995,12 @@ pub(super) fn undo_backend_raster_correction(
     if correction == 0 {
         return;
     }
-    let dimensions = super::document::processed_ocr_layout_dimensions(&result.metadata).unwrap_or_else(|| {
-        if matches!(correction, 90 | 270) {
-            (input_height, input_width)
-        } else {
-            (input_width, input_height)
-        }
-    });
+    let rotated_input = if matches!(correction, 90 | 270) {
+        (input_height, input_width)
+    } else {
+        (input_width, input_height)
+    };
+    let dimensions = super::document::processed_ocr_layout_dimensions(&result.metadata).unwrap_or(rotated_input);
     undo_result_rotation(result, correction, dimensions);
     result.metadata.additional.insert(
         crate::ocr_metadata_keys::OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY.into(),
