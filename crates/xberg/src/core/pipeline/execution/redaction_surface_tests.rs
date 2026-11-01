@@ -48,7 +48,7 @@ impl PostProcessor for Probe {
                 message: "fatal failure".into(),
             }),
             Action::Rewrite => {
-                result.formatted_content = Some("unproved <u>literal</u>".into());
+                result.formatted_content = Some("unproved <u>secret</u>".into());
                 Ok(())
             }
         }
@@ -217,7 +217,7 @@ async fn contextual_executor_preserves_soft_and_fatal_error_policy() {
 }
 
 #[tokio::test]
-async fn earlier_processor_cannot_replace_a_verified_formatted_preimage() {
+async fn observed_formatted_edit_returns_redacted_current_literal_with_plain_fallback() {
     let registry = registry();
     let priority = registry.read().builtin_redaction().unwrap().priority();
     let log = Arc::new(Mutex::new(Vec::new()));
@@ -226,10 +226,23 @@ async fn earlier_processor_cannot_replace_a_verified_formatted_preimage() {
         .register(probe("rewrite", priority + 1, true, Action::Rewrite, &log))
         .unwrap();
     let mut result = document();
-    let error = execute(&registry, &mut result).await.unwrap_err();
-    assert!(matches!(error, XbergError::Plugin { .. }));
-    assert_eq!(result.content, "secret", "no partially redacted result may be returned");
-    assert!(result.redaction_report.is_none());
+    execute(&registry, &mut result).await.unwrap();
+    assert_eq!(log.lock().as_slice(), [("rewrite".into(), "secret".into())]);
+    assert_eq!(result.content, "unproved <u>[REDACTED]</u>");
+    assert!(result.formatted_content.is_none());
+    assert_eq!(result.pages.as_ref().unwrap()[0].content, "<sup>[REDACTED]</sup>\n");
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "output_format")
+    );
+    let (document, format) = result.into_output(OutputFormat::Markdown);
+    assert_eq!(format, OutputFormat::Plain);
+    let output = super::super::apply_output_format(document, format);
+    assert_eq!(output.metadata.output_format.as_deref(), Some("plain"));
+    assert_eq!(output.content, "unproved <u>[REDACTED]</u>");
 }
 
 #[tokio::test]
