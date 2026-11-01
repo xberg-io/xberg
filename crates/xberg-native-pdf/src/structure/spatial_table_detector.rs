@@ -4903,21 +4903,74 @@ fn detect_header_row(grid: &GridStructure, spans: &[TextSpan]) -> Option<usize> 
     header_style_contrasts(&first_row_spans, &data_row_spans).then_some(0)
 }
 
+#[derive(Clone, Copy, Default)]
+struct HeaderStyleSummary {
+    spans: usize,
+    bold: usize,
+    font_sum: f32,
+}
+
+impl HeaderStyleSummary {
+    fn from_spans<'a>(spans: impl Iterator<Item = &'a TextSpan> + Clone) -> Self {
+        Self {
+            spans: spans.clone().count(),
+            bold: spans.clone().filter(|span| span.font_weight.is_bold()).count(),
+            font_sum: spans.map(|span| span.font_size).sum(),
+        }
+    }
+
+    fn followed_by(self, suffix: Self) -> Self {
+        Self {
+            spans: self.spans + suffix.spans,
+            bold: self.bold + suffix.bold,
+            font_sum: self.font_sum + suffix.font_sum,
+        }
+    }
+
+    fn contrasts(self, body: Self) -> bool {
+        if self.spans == 0 || body.spans == 0 {
+            return false;
+        }
+        let first_row_bold_ratio = self.bold as f32 / self.spans as f32;
+        let data_bold_ratio = body.bold as f32 / body.spans as f32;
+        if first_row_bold_ratio > 0.5 && data_bold_ratio < 0.3 {
+            return true;
+        }
+        let first_row_avg_size = self.font_sum / self.spans as f32;
+        let data_avg_size = body.font_sum / body.spans as f32;
+        first_row_avg_size > data_avg_size + 1.5
+    }
+}
+
 fn header_style_contrasts(first_row_spans: &[&TextSpan], data_row_spans: &[&TextSpan]) -> bool {
-    if first_row_spans.is_empty() || data_row_spans.is_empty() {
-        return false;
+    HeaderStyleSummary::from_spans(first_row_spans.iter().copied())
+        .contrasts(HeaderStyleSummary::from_spans(data_row_spans.iter().copied()))
+}
+
+fn leading_styled_header_rows(rows: &[TableRow]) -> usize {
+    let summaries: Vec<_> = rows
+        .iter()
+        .map(|row| HeaderStyleSummary::from_spans(row.cells.iter().flat_map(|cell| &cell.spans)))
+        .collect();
+    let mut suffixes = vec![HeaderStyleSummary::default(); summaries.len() + 1];
+    for index in (0..summaries.len()).rev() {
+        suffixes[index] = summaries[index].followed_by(suffixes[index + 1]);
     }
-    let first_row_bold_ratio =
-        first_row_spans.iter().filter(|s| s.font_weight.is_bold()).count() as f32 / first_row_spans.len() as f32;
-    let data_bold_ratio =
-        data_row_spans.iter().filter(|s| s.font_weight.is_bold()).count() as f32 / data_row_spans.len() as f32;
-    if first_row_bold_ratio > 0.5 && data_bold_ratio < 0.3 {
-        return true;
+    let mut headers = 1;
+    for index in 1..rows.len() {
+        if rows[index]
+            .cells
+            .iter()
+            .filter(|cell| !cell.text.trim().is_empty())
+            .count()
+            < 2
+            || !summaries[index].contrasts(suffixes[index + 1])
+        {
+            break;
+        }
+        headers += 1;
     }
-    let first_row_avg_size: f32 =
-        first_row_spans.iter().map(|s| s.font_size).sum::<f32>() / first_row_spans.len() as f32;
-    let data_avg_size: f32 = data_row_spans.iter().map(|s| s.font_size).sum::<f32>() / data_row_spans.len() as f32;
-    first_row_avg_size > data_avg_size + 1.5
+    headers
 }
 
 fn infer_intersection_header(table: &mut Table) {
@@ -4942,10 +4995,13 @@ fn infer_intersection_header(table: &mut Table) {
     if !header_style_contrasts(&first_spans, &body_spans) {
         return;
     }
+    let header_rows = leading_styled_header_rows(&table.rows);
     table.has_header = true;
-    table.rows[0].is_header = true;
-    for cell in &mut table.rows[0].cells {
-        cell.is_header = true;
+    for row in table.rows.iter_mut().take(header_rows) {
+        row.is_header = true;
+        for cell in &mut row.cells {
+            cell.is_header = true;
+        }
     }
 }
 
