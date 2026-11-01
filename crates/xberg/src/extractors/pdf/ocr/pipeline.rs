@@ -6189,3 +6189,7 @@ mod recognized_table_grid_tests;
 ))]
 #[path = "memory_recovery_tests.rs"]
 mod memory_recovery_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "ocr"))]
+#[path = "xobject_budget_parity_tests.rs"]
+mod xobject_budget_parity_tests;
