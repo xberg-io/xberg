@@ -44,7 +44,7 @@ fn pairs<'a>(parent: &'a AstNode<'a>) -> Option<Vec<Pair<'a>>> {
 
 // Binary writers parse the postprocessed Markdown, so only balanced, bare formatting tags
 // become semantic nodes. Text escapes and code literals never enter this HtmlInline path. ~keep
-#[cfg(any(feature = "office", feature = "pdf"))]
+#[cfg(any(feature = "office", feature = "pdf", feature = "redaction"))]
 pub(super) fn decode_standard_inline_html<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
     for parent in root.descendants().collect::<Vec<_>>() {
         let Some(pairs) = pairs(parent) else {

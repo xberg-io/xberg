@@ -351,30 +351,51 @@ impl RedactionPass<'_> {
         if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
-            plans.formatted = Some(match content_matches(text, self.matches_for(text)) {
-                Some(matches) => FormattedPlan::Preserve(matches),
-                None => FormattedPlan::Discard,
-            });
+            plans.formatted = Some(self.plan_markdown(text, Some(&doc.content))?);
         }
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
             if !surfaces.page_markdown(index) {
                 continue;
             }
-            let plan = match content_matches(&page.content, self.matches_for(&page.content)) {
-                Some(matches) => PagePlan::Preserve(matches),
-                None => {
-                    let source = surfaces.page_backup(index).ok_or_else(|| {
-                        crate::XbergError::validation("Generated Markdown page has no verified plain backup")
-                    })?;
-                    PagePlan::Plain {
-                        source: source.to_owned(),
-                        matches: self.matches_for(source),
-                    }
-                }
+            let backup = surfaces.page_backup(index);
+            let plan = match self.plan_markdown(&page.content, backup)? {
+                FormattedPlan::Preserve(matches) => PagePlan::Preserve(matches),
+                FormattedPlan::Discard(matches) => PagePlan::Plain {
+                    source: backup
+                        .ok_or_else(|| crate::XbergError::validation("Missing verified page backup"))?
+                        .to_owned(),
+                    matches,
+                },
             };
             plans.pages.insert(index, plan);
         }
         Ok(plans)
+    }
+
+    fn applicable_matches(&self, text: &str) -> Vec<PatternMatch> {
+        self.matches_for(text)
+            .into_iter()
+            .filter(|finding| is_applicable(text, finding))
+            .collect()
+    }
+
+    fn plan_markdown(&self, markdown: &str, plain: Option<&str>) -> Result<FormattedPlan> {
+        let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
+        let projection = crate::rendering::VisibleMarkdown::parse(markdown).ok_or_else(invalid)?;
+        let sensitive = self.applicable_matches(&projection.text);
+        let sensitive_ranges = match_ranges(&sensitive);
+        if let Some(matches) = content_matches(markdown, self.applicable_matches(markdown))
+            && projection.covered(&sensitive_ranges, &match_ranges(&matches))
+        {
+            return Ok(FormattedPlan::Preserve(matches));
+        }
+        let plain = plain.ok_or_else(invalid)?;
+        let selected = self.applicable_matches(plain);
+        let correspondence = projection.on_plain(plain).ok_or_else(invalid)?;
+        if !correspondence.covered(&sensitive_ranges, &match_ranges(&selected)) {
+            return Err(invalid());
+        }
+        Ok(FormattedPlan::Discard(selected))
     }
 
     /// Every match in `text`, deduped and in ascending byte order.
@@ -495,18 +516,29 @@ impl RedactionPass<'_> {
             && crate::plugins::registry::holds_encoded_package(doc.metadata.output_format.as_deref(), &doc.content);
         if !packaged {
             let content = std::mem::take(&mut doc.content);
-            doc.content = self.redact(&content);
+            let selected = if depth == 0 {
+                match self.plans.formatted.as_mut() {
+                    Some(FormattedPlan::Discard(matches)) => Some(std::mem::take(matches)),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            doc.content = match selected {
+                Some(matches) => self.apply_matches(&content, matches),
+                None => self.redact(&content),
+            };
         }
 
         if let Some(formatted) = doc.formatted_content.take() {
             let plan = (depth == 0).then(|| self.plans.formatted.take()).flatten();
             doc.formatted_content = match plan {
                 Some(FormattedPlan::Preserve(matches)) => Some(self.apply_matches(&formatted, matches)),
-                Some(FormattedPlan::Discard) => {
+                Some(FormattedPlan::Discard(_)) => {
                     crate::core::diagnostics::push_warning(
                         &mut doc.processing_warnings,
                         "output_format",
-                        "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded and redacted plain text is returned",
+                        "Formatted Markdown could not preserve complete redaction coverage; rendering was discarded and redacted plain text is returned",
                     );
                     None
                 }
@@ -629,7 +661,7 @@ impl RedactionPass<'_> {
                         &mut doc.processing_warnings,
                         "output_format",
                         format!(
-                            "Page {} Markdown crossed generated syntax; its verified plain backup was redacted and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
+                            "Page {} Markdown could not preserve complete redaction coverage; its verified plain backup was redacted and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
                             page.page_number
                         ),
                     );
@@ -1075,6 +1107,10 @@ impl RedactionPass<'_> {
             self.redact_djot_block(child, depth + 1);
         }
     }
+}
+
+fn match_ranges(matches: &[PatternMatch]) -> Vec<std::ops::Range<usize>> {
+    matches.iter().map(|finding| finding.start..finding.end).collect()
 }
 
 /// A match is applied only when its span is a valid slice of `text` that still

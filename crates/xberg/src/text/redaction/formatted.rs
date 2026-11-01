@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 pub(super) enum FormattedPlan {
     Preserve(Vec<PatternMatch>),
-    Discard,
+    Discard(Vec<PatternMatch>),
 }
 
 pub(super) enum PagePlan {
