@@ -100,6 +100,11 @@ impl NativeParagraphGaps {
             scope.is_none_or(|scope| {
                 super::super::paragraphs_cross_source_gap(previous, next, self.gaps(scope))
                     || self.retains_original_boundary(previous, next, scope, source_rows.as_ref())
+                    || source_rows.as_ref().is_some_and(|rows| {
+                        rows.has_logical_terminal_boundary(previous, next, |segment| {
+                            self.segment_scope(segment) == scope
+                        })
+                    })
             })
         });
     }

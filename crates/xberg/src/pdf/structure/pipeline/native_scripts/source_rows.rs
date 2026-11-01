@@ -136,6 +136,78 @@ impl<'a> SourceRows<'a> {
             && super::super::heading_fills_column(last, following_end.upright_advance_extent().1)
     }
 
+    pub(super) fn has_logical_terminal_boundary(
+        &self,
+        previous: &PdfParagraph,
+        next: &PdfParagraph,
+        in_scope: impl Fn(&SegmentData) -> bool,
+    ) -> bool {
+        let Some(main) = previous.lines.len().checked_sub(2).and_then(|i| previous.lines.get(i)) else {
+            return false;
+        };
+        let Some((tail, lower)) = previous.lines.last().zip(next.lines.first()) else {
+            return false;
+        };
+        let lines = [main, tail, lower];
+        let [Some(a), Some(b), Some(c)] = lines.map(|line| self.complete_row(line)) else {
+            return false;
+        };
+        if b != a + 1 || c != b + 1 {
+            return false;
+        }
+        let terminal_slot = self.rows[a].last;
+        let terminal = self.segment(terminal_slot);
+        let text = terminal.text.trim();
+        // A tall glyph box alone cannot turn ordinary baseline spacing into a lower inline fragment. ~keep
+        let advance = main.baseline_y - tail.baseline_y;
+        text.chars().count() == 1
+            && super::super::super::paragraphs::ends_with_terminator(text)
+            && !super::super::super::paragraphs::starts_with_lowercase_continuation(next)
+            && advance > 0.0
+            && advance < terminal.font_size.min(self.segment(self.rows[b].first).font_size)
+            && self.rows[b].top > self.rows[a].bottom
+            && self.rows[a].top > self.rows[b].bottom
+            && self.terminal_row_styles_match([a, b, c], terminal)
+            && self.unchanged_terminal_projection(lines, in_scope)
+            && self.terminal_is_rightmost(main, tail, terminal_slot)
+    }
+
+    fn terminal_row_styles_match(&self, rows: [usize; 3], terminal: &SegmentData) -> bool {
+        rows.into_iter().flat_map(|row| &self.rows[row].members).all(|&slot| {
+            let segment = self.segment(slot);
+            segment.is_bold == terminal.is_bold
+                && super::super::super::paragraphs::continuation_fonts_match(terminal.font_size, segment.font_size)
+        })
+    }
+
+    fn unchanged_terminal_projection(&self, lines: [&PdfLine; 3], in_scope: impl Fn(&SegmentData) -> bool) -> bool {
+        lines.into_iter().flat_map(|line| &line.segments).all(|segment| {
+            self.view
+                .resolve(segment)
+                .is_some_and(|slot| self.view.text_unchanged(slot))
+                && in_scope(segment)
+                && segment.assigned_role.is_none()
+                && !segment.is_monospace
+                && !segment
+                    .text
+                    .chars()
+                    .any(|character| xberg_native_pdf::text::is_rtl_text(character as u32))
+        })
+    }
+
+    fn terminal_is_rightmost(&self, main: &PdfLine, tail: &PdfLine, terminal_slot: usize) -> bool {
+        let left = self.segment(terminal_slot).upright_advance_extent().0;
+        // Validated raised members still count as content to the right of a purported sentence end. ~keep
+        main.segments.iter().chain(&tail.segments).all(|segment| {
+            self.view
+                .resolve(segment)
+                .is_some_and(|slot| slot == terminal_slot || segment.upright_advance_extent().1 <= left)
+        }) && tail
+            .segments
+            .iter()
+            .all(|segment| segment.upright_advance_extent().1 < left)
+    }
+
     fn segment(&self, slot: usize) -> &SegmentData {
         &self.view.records()[slot].segment
     }

@@ -201,7 +201,7 @@ fn starts_numbered_section(para: &PdfParagraph) -> bool {
 
 /// Check if a paragraph starts with a lowercase letter, indicating it's a
 /// continuation of a previous sentence split across paragraph boundaries.
-fn starts_with_lowercase_continuation(para: &PdfParagraph) -> bool {
+pub(super) fn starts_with_lowercase_continuation(para: &PdfParagraph) -> bool {
     let first_text = para
         .lines
         .first()
@@ -229,14 +229,14 @@ fn starts_with_lowercase(text: &str) -> bool {
     text.trim_start().chars().next().is_some_and(|c| c.is_lowercase())
 }
 
-fn ends_with_terminator(text: &str) -> bool {
+pub(super) fn ends_with_terminator(text: &str) -> bool {
     matches!(
         text.trim_end().chars().last(),
         Some('.' | '?' | '!' | ':' | ';' | '\u{3002}' | '\u{FF1F}' | '\u{FF01}')
     )
 }
 
-fn continuation_fonts_match(previous: f32, next: f32) -> bool {
+pub(super) fn continuation_fonts_match(previous: f32, next: f32) -> bool {
     (previous - next).abs() < CONTINUATION_FONT_SIZE_TOLERANCE_PT
 }
 
