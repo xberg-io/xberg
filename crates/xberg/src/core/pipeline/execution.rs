@@ -167,3 +167,6 @@ mod redaction_surface_tests;
 
 #[cfg(all(test, not(feature = "tokio-runtime")))]
 mod no_runtime_surface_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+mod processor_mutation_tests;
