@@ -216,7 +216,7 @@ fn source_records() -> Vec<SegmentData> {
         .collect()
 }
 
-fn source_digest<'a>(records: impl IntoIterator<Item = &'a SegmentData>) -> String {
+pub(super) fn source_digest<'a>(records: impl IntoIterator<Item = &'a SegmentData>) -> String {
     let mut digest = Sha256::new();
     for span in records {
         digest.update((span.text.len() as u64).to_le_bytes());
@@ -239,7 +239,7 @@ fn source_digest<'a>(records: impl IntoIterator<Item = &'a SegmentData>) -> Stri
     hex::encode(digest.finalize())
 }
 
-fn canonical_body() -> super::PdfParagraph {
+pub(super) fn canonical_body() -> super::PdfParagraph {
     let records = source_records();
     assert_eq!(records.len(), 26);
     assert_eq!(source_digest(&records), SOURCE_RECORDS_SHA256);
