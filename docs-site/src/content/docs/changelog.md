@@ -158,11 +158,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Preserve cancellation and the smaller image byte cap during whole-document OCR recovery.** (#2339)
   Forward the minimum outer/OCR cap without changing other security limits, and discard retry results when cancelled.
 
-- **(ocr): Decode oversized baseline JPEG scans at a bounded IDCT scale.** (#2339)
-  Three-component 8-bit scans use checked input, metadata, plane and output budgets; fitting images keep their dimensions.
-  Reduced fallback requires one interleaved scan without restart intervals and color markers before the frame.
-  Scales whose combined planes or RGB output exceed the target allocation layout limit are skipped.
-  Tesseract retains the original density at the nominal decode scale; required DPI resizes fail before allocating unbudgeted convolution buffers.
+- **(ocr): Decode oversized JPEG scans at a reduced IDCT scale that fits the content size limit.** (#2339)
+  8-bit color and grayscale scans, baseline or progressive, decode at 1/2, 1/4 or 1/8; fitting images keep their dimensions.
+  The scale is the finest one that fits and needs no DPI resize, so a higher limit never turns a success into an error.
+  When no fitting scale meets target_dpi, the error names the limit to raise and the target_dpi to set.
+  Lossless, hierarchical, arithmetic-coded, 12-bit and CMYK scans keep the size-limit error, which names the reason.
+  Standalone JPEG files that only a reduced decode can take are no longer rejected by the image metadata check.
 
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
