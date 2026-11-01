@@ -1374,7 +1374,7 @@ fn should_retry_sparse_image_ocr(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
-fn is_implicit_horizontal_tesseract(config: &crate::core::config::OcrConfig) -> bool {
+pub(crate) fn is_implicit_horizontal_tesseract(config: &crate::core::config::OcrConfig) -> bool {
     config.backend == "tesseract"
         && config.tesseract_config.as_ref().and_then(|c| c.psm).is_none()
         && !has_vertical_tesseract_language(config)
@@ -1405,7 +1405,7 @@ fn has_robust_word_confidence_distribution(result: &crate::types::ExtractedDocum
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
-fn sparse_image_ocr_fallback_config(
+pub(crate) fn sparse_image_ocr_fallback_config(
     whole_image_config: &crate::core::config::OcrConfig,
 ) -> crate::core::config::OcrConfig {
     let mut fallback_config = whole_image_config.clone();
@@ -2358,7 +2358,7 @@ fn rtl_retry_candidate_improves(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
-fn merge_primary_warnings_into_selected(
+pub(crate) fn merge_primary_warnings_into_selected(
     primary: &crate::types::ExtractedDocument,
     selected: &mut crate::types::ExtractedDocument,
 ) {

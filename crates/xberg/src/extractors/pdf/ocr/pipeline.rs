@@ -1453,6 +1453,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
                 let original_config = ocr_config_resolved.clone();
+                let noise_thresholds = super::sideways_retry::noise_thresholds(config);
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -1463,16 +1464,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    let result = super::sideways_retry::read_whole_page_raster(
                         &backend_clone,
                         upright_data,
                         &original_config,
                         &config_clone,
-                        crate::extractors::image::SparseRetryPolicy {
-                            whole_page_raster,
-                            allow_standard_retry: false,
-                        },
+                        whole_page_raster,
+                        &noise_thresholds,
                         cancel_token.as_ref(),
+                        None,
                     )
                     .await;
                     (idx, correction_degrees, upright_width, upright_height, result)
@@ -1614,16 +1614,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                 };
                 #[cfg(not(target_arch = "wasm32"))]
-                let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                let noise_thresholds = super::sideways_retry::noise_thresholds(config);
+                #[cfg(not(target_arch = "wasm32"))]
+                let result = super::sideways_retry::read_whole_page_raster(
                     backend,
                     upright_data,
                     &ocr_config_resolved,
                     config_for_page.as_ref(),
-                    crate::extractors::image::SparseRetryPolicy {
-                        whole_page_raster,
-                        allow_standard_retry: false,
-                    },
+                    whole_page_raster,
+                    &noise_thresholds,
                     config.cancel_token.as_ref(),
+                    None,
                 )
                 .await;
                 #[cfg(target_arch = "wasm32")]
@@ -2348,6 +2349,8 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         page_ocr_hints,
         0,
         None,
+        #[cfg(not(target_arch = "wasm32"))]
+        None,
     ))
     .await?;
     let (text, page_texts, doc) = with_run_layers_first(
@@ -2459,6 +2462,9 @@ fn attach_page_segmentation_modes(
 /// `xobject_document` -- the open document a detached page image came from. Only the
 /// embedded-image retry reads it, at `page_index_offset`, so a caller that hands in a
 /// detached page without `content` still gets the retry of a blank or failed page (#1912).
+///
+/// `stage_reads` -- set by a pipeline run, which reads a sideways page again after its last stage.
+/// With `None` the sideways retry runs here.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 // Each parameter is independently documented above and forwarded verbatim by every caller
 // (see `run_ocr_pipeline_for_page`); bundling them into a params struct would only move the
@@ -2478,21 +2484,8 @@ pub(super) async fn extract_with_ocr_for_page(
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
     xobject_document: Option<&xberg_native_pdf::PdfDocument>,
-) -> OcrRunResult<(
-    String,
-    Option<f64>,
-    Vec<crate::types::Table>,
-    Vec<crate::types::OcrElement>,
-    Option<crate::types::internal::InternalDocument>,
-    Vec<crate::types::LlmUsage>,
-    Vec<String>,
-    Option<Vec<crate::types::ExtractedImage>>,
-    Vec<crate::types::Formula>,
-    Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
-    ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
-    ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-    Vec<OcrPageNoiseVerdict>,
-)> {
+    #[cfg(not(target_arch = "wasm32"))] stage_reads: Option<&std::sync::Arc<super::sideways_retry::StageReads>>,
+) -> OcrRunResult<OcrStageOutput> {
     use crate::plugins::registry::get_ocr_backend_registry;
     use image::ImageEncoder;
     use image::codecs::png::PngEncoder;
@@ -3071,6 +3064,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 )
                 .into_owned();
                 let original_config = ocr_config_owned.clone();
+                let noise_thresholds = super::sideways_retry::noise_thresholds(config);
+                let stage_reads = stage_reads.cloned();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
                 #[cfg(feature = "pdf")]
@@ -3095,16 +3090,15 @@ pub(super) async fn extract_with_ocr_for_page(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    let result = super::sideways_retry::read_whole_page_raster(
                         &backend_clone,
                         upright_data,
                         &original_config,
                         &config_clone,
-                        crate::extractors::image::SparseRetryPolicy {
-                            whole_page_raster,
-                            allow_standard_retry: false,
-                        },
+                        whole_page_raster,
+                        &noise_thresholds,
                         cancel_token.as_ref(),
+                        stage_reads.as_deref().map(|reads| (reads, page_index_offset + idx)),
                     )
                     .await;
                     (idx, correction_degrees, upright_width, upright_height, result)
@@ -3225,16 +3219,16 @@ pub(super) async fn extract_with_ocr_for_page(
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                            backend,
+                        let noise_thresholds = super::sideways_retry::noise_thresholds(config);
+                        super::sideways_retry::read_whole_page_raster(
+                            &backend,
                             upright_data,
                             &ocr_config_owned,
                             config_for_page.as_ref(),
-                            crate::extractors::image::SparseRetryPolicy {
-                                whole_page_raster,
-                                allow_standard_retry: false,
-                            },
+                            whole_page_raster,
+                            &noise_thresholds,
                             config.cancel_token.as_ref(),
+                            stage_reads.map(|reads| (reads.as_ref(), page_index_offset + *page_idx)),
                         )
                         .await
                     }
@@ -5019,6 +5013,24 @@ pub(super) async fn run_ocr_pipeline_for_page(
     }
 }
 
+/// What one stage returns: the text, the mean confidence, and the rest of what a run returns.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type OcrStageOutput = (
+    String,
+    Option<f64>,
+    Vec<crate::types::Table>,
+    Vec<crate::types::OcrElement>,
+    Option<crate::types::internal::InternalDocument>,
+    Vec<crate::types::LlmUsage>,
+    Vec<String>,
+    Option<Vec<crate::types::ExtractedImage>>,
+    Vec<crate::types::Formula>,
+    Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+    ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
+    ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
+    Vec<OcrPageNoiseVerdict>,
+);
+
 /// What a pipeline run returns: the text, the tables, the OCR elements, the document, the LLM
 /// usage, the text of each page, the page rasters, the formulas, the bare paragraphs of each
 /// page, the preprocessing metadata, the OCR confidence of each page and the recognition-noise
@@ -5125,6 +5137,49 @@ struct PipelineStageInputs<'a> {
     xobject_document: Option<&'a xberg_native_pdf::PdfDocument>,
 }
 
+/// One stage of a pipeline run over `inputs`.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+async fn run_pipeline_stage(
+    inputs: &PipelineStageInputs<'_>,
+    stage_config: &ExtractionConfig,
+    #[cfg(not(target_arch = "wasm32"))] stage_reads: &std::sync::Arc<super::sideways_retry::StageReads>,
+) -> OcrRunResult<OcrStageOutput> {
+    Box::pin(extract_with_ocr_for_page(
+        inputs.content,
+        inputs.images,
+        #[cfg(feature = "layout-detection")]
+        inputs.layout_detections,
+        stage_config,
+        inputs.path,
+        inputs.page_rotation_degrees,
+        inputs.skip_document_global_heuristic,
+        inputs.points_per_pixel_override,
+        inputs.page_ocr_hints.clone(),
+        inputs.page_index_offset,
+        inputs.xobject_document,
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(stage_reads),
+    ))
+    .await
+}
+
+/// Read again each sideways page of the stage that the run returns. If a second read is kept, the
+/// stage runs once more over its recorded reads, and this returns the new output of the stage.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), not(target_arch = "wasm32")))]
+async fn stage_with_second_reads(
+    inputs: &PipelineStageInputs<'_>,
+    stage_config: &ExtractionConfig,
+    stage_reads: &std::sync::Arc<super::sideways_retry::StageReads>,
+    verdicts: &[OcrPageNoiseVerdict],
+) -> OcrRunResult<Option<OcrStageOutput>> {
+    let thresholds = super::sideways_retry::noise_thresholds(stage_config);
+    let cancel_token = stage_config.cancel_token.as_ref();
+    if !super::sideways_retry::run_second_reads(stage_reads, verdicts, &thresholds, cancel_token).await? {
+        return Ok(None);
+    }
+    run_pipeline_stage(inputs, stage_config, stage_reads).await.map(Some)
+}
+
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
 /// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -5205,6 +5260,12 @@ async fn run_ocr_pipeline_stages(
     // authentication) so the failure is surfaced to the caller instead of being
     // silently replaced by a lower-quality earlier result (issue #1339).
     let mut stage_failures: Vec<(String, String)> = Vec::new();
+    // ~keep A later stage goes first. The second read of a sideways page runs on the read that the
+    // run returns, so that it never stops a later stage that reads the page clean.
+    #[cfg(not(target_arch = "wasm32"))]
+    let second_reads = super::sideways_retry::SecondReads::default();
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut best_stage = None;
 
     for stage in &available_stages {
         let mut stage_ocr = ocr_config.clone();
@@ -5234,21 +5295,36 @@ async fn run_ocr_pipeline_stages(
             "Pipeline: trying OCR backend"
         );
 
-        let result = Box::pin(extract_with_ocr_for_page(
-            inputs.content,
-            inputs.images,
-            #[cfg(feature = "layout-detection")]
-            inputs.layout_detections,
+        #[cfg(not(target_arch = "wasm32"))]
+        let stage_reads = std::sync::Arc::new(super::sideways_retry::StageReads::new(std::sync::Arc::clone(
+            &second_reads,
+        )));
+        let result = run_pipeline_stage(
+            &inputs,
             &stage_config,
-            inputs.path,
-            inputs.page_rotation_degrees,
-            inputs.skip_document_global_heuristic,
-            inputs.points_per_pixel_override,
-            inputs.page_ocr_hints.clone(),
-            inputs.page_index_offset,
-            inputs.xobject_document,
-        ))
+            #[cfg(not(target_arch = "wasm32"))]
+            &stage_reads,
+        )
         .await;
+        // ~keep The stage is accepted on what it read. The second read changes the output of an
+        // accepted stage, never the decision.
+        let accepted = result.as_ref().is_ok_and(|output| {
+            pipeline_stage_score(compute_quality_score(&output.0, &pipeline.quality_thresholds), output.1)
+                >= pipeline.quality_thresholds.pipeline_min_quality
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        let result = match result {
+            Ok(mut output) if accepted => {
+                match stage_with_second_reads(&inputs, &stage_config, &stage_reads, &output.12).await? {
+                    Some(replayed) => {
+                        accumulated_usage.append(&mut output.5);
+                        Ok(replayed)
+                    }
+                    None => Ok(output),
+                }
+            }
+            other => other,
+        };
 
         match result {
             Ok((
@@ -5302,7 +5378,7 @@ async fn run_ocr_pipeline_stages(
                     merge_ocr_page_failures(stage_page_failures, stage_doc.ocr_page_failures.clone());
                 }
 
-                if score >= pipeline.quality_thresholds.pipeline_min_quality {
+                if accepted {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,
                         &stage_recognition_noise_verdicts,
@@ -5356,6 +5432,10 @@ async fn run_ocr_pipeline_stages(
                     score,
                     &pipeline.quality_thresholds,
                 ) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        best_stage = Some((stage_config, stage_reads));
+                    }
                     best_result = Some((
                         text,
                         score,
@@ -5385,6 +5465,42 @@ async fn run_ocr_pipeline_stages(
                 merge_ocr_page_failures(stage_page_failures, failed_stage.page_failures);
             }
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if let (Some(best), Some((stage_config, stage_reads))) = (best_result.as_mut(), best_stage.as_ref())
+        && let Some(replayed) = stage_with_second_reads(&inputs, stage_config, stage_reads, &best.11).await?
+    {
+        let (
+            text,
+            _,
+            tables,
+            elements,
+            doc,
+            usage,
+            page_texts,
+            rasters,
+            formulas,
+            paragraphs,
+            preprocessing,
+            confidence,
+            verdicts,
+        ) = replayed;
+        accumulated_usage.extend(usage);
+        *best = (
+            text,
+            best.1,
+            tables,
+            elements,
+            doc,
+            page_texts,
+            rasters,
+            formulas,
+            paragraphs,
+            preprocessing,
+            confidence,
+            verdicts,
+        );
     }
 
     match best_result {

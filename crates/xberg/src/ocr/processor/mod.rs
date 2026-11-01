@@ -14,6 +14,8 @@ mod secondary_dictionary_benchmark_tests;
 pub(crate) mod validation;
 
 pub(crate) use api_pool::tesseract_api_capacity;
+#[cfg(feature = "pdf")]
+pub(crate) use dictionary::words_in_dictionary;
 
 use crate::ocr::cache::OcrCache;
 use crate::ocr::error::OcrError;

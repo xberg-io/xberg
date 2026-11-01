@@ -154,6 +154,27 @@ impl<'a> WordDictionary<'a> {
     }
 }
 
+/// The dictionary verdict of each of `words` under the languages of `config`: `Some(true)` valid,
+/// `Some(false)` invalid, `None` no verdict. The read that needs the verdicts has released its
+/// engine, so this opens one for the same languages.
+#[cfg(feature = "pdf")]
+pub(crate) fn words_in_dictionary(
+    config: &crate::core::config::OcrConfig,
+    words: &[String],
+) -> Result<Vec<Option<bool>>, crate::ocr::error::OcrError> {
+    let languages = config.effective_tesseract_language();
+    let tessdata_path = super::validation::resolve_tessdata_path(&languages, config.tessdata_path.as_deref())?;
+    let language = languages.join("+");
+    let oem = config.tesseract_config.as_ref().map_or_else(
+        || crate::ocr::types::TesseractConfig::default().oem,
+        |tesseract| crate::ocr::types::TesseractConfig::from(tesseract).oem,
+    );
+    let pool = super::api_pool::TesseractApiPool::new();
+    let api = pool.checkout(&tessdata_path, &language, oem)?;
+    let dictionary = api.word_dictionary();
+    Ok(words.iter().map(|word| dictionary.is_valid_word(word)).collect())
+}
+
 /// A word is valid when any language accepts it and invalid only when every language
 /// rejects it; an unanswered lookup keeps "invalid" from being proven. The secondary lookups
 /// are lazy, so none runs once the primary dictionary has accepted the word.

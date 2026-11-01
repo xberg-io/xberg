@@ -527,8 +527,9 @@ fn hierarchy_parent_index(elements: &[OcrElement], child_index: usize) -> Option
         .map(|(index, _, _)| index)
 }
 
+/// Left, top, width and height of a box with a nonzero area, in pixels.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn geometry_bounds(geometry: &OcrBoundingGeometry) -> Option<(u64, u64, u64, u64)> {
+pub(crate) fn geometry_bounds(geometry: &OcrBoundingGeometry) -> Option<(u64, u64, u64, u64)> {
     match geometry {
         OcrBoundingGeometry::Rectangle {
             left,
