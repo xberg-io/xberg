@@ -98,7 +98,7 @@ impl VisibleMarkdown {
             if escapes
                 && raw.as_bytes().get(offset) == Some(&b'\\')
                 && character.is_ascii_punctuation()
-                && raw.get(offset + 1..)?.chars().next() == Some(character)
+                && raw.get(offset + 1..)?.starts_with(character)
             {
                 offset += 1;
             }
