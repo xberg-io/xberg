@@ -79,14 +79,21 @@ class MainOnlyCiTests(unittest.TestCase):
         print(f"Checked latest-only groups for {len(paths)} CI workflows and {job_count} jobs")
 
     def test_accepts_stable_workflow_ref_group_with_cancellation(self) -> None:
-        assert keeps_latest_ci_run({"group": "ci-rust-${{ github.ref }}", "cancel-in-progress": True}, "ci-rust")
+        paths = ci_workflows()
+        assert len(paths) == 15, "CI workflow inventory changed"
+        for path in paths:
+            with self.subTest(workflow=path.name):
+                group = f"{path.stem}-${{{{ github.ref }}}}"
+                assert keeps_latest_ci_run({"group": group, "cancel-in-progress": True}, path.stem)
+                assert not keeps_latest_ci_run({"group": group, "cancel-in-progress": False}, path.stem)
 
-    def test_queued_workflows_never_cancel_an_in_flight_run(self) -> None:
-        for workflow in QUEUED_WORKFLOWS:
-            with self.subTest(workflow=workflow):
-                group = f"{workflow}-${{{{ github.ref }}}}"
-                assert keeps_latest_ci_run({"group": group, "cancel-in-progress": False}, workflow)
-                assert not keeps_latest_ci_run({"group": group, "cancel-in-progress": True}, workflow)
+    def test_no_ci_workflow_queues_superseded_runs(self) -> None:
+        paths = ci_workflows()
+        assert len(paths) == 15, "CI workflow inventory changed"
+        for path in paths:
+            with self.subTest(workflow=path.name):
+                workflow = yaml.safe_load(path.read_text())
+                assert workflow["concurrency"]["cancel-in-progress"] is True, f"{path}: superseded runs must cancel"
 
     def test_rejects_missing_concurrency_and_disabled_cancellation(self) -> None:
         assert not keeps_latest_ci_run(None, "ci-rust")
