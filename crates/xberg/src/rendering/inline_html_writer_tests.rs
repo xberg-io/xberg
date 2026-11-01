@@ -132,3 +132,32 @@ fn should_keep_unbalanced_unknown_and_code_tags_literal_in_pdf_writer() {
         );
     }
 }
+
+#[test]
+fn should_keep_escaped_inline_tags_literal_in_docx_writer() {
+    let runs = word_runs(r"x\<sup\>2\</sup\> \<u\>under\</u\> tail");
+    assert_eq!(
+        runs.iter().map(|run| run.0.as_str()).collect::<String>(),
+        "x<sup>2</sup> <u>under</u> tail"
+    );
+    assert!(runs.iter().all(|run| !run.1 && !run.2));
+}
+
+#[test]
+fn should_keep_escaped_inline_tags_literal_in_pdf_writer() {
+    let (text, operations) = pdf(r"x\<sup\>2\</sup\> \<u\>under\</u\> tail");
+    assert_eq!(
+        text.chars().filter(|c| !c.is_whitespace()).collect::<String>(),
+        "x<sup>2</sup><u>under</u>tail"
+    );
+    assert!(
+        operations
+            .iter()
+            .filter(|operation| operation.operator == "Ts")
+            .all(|operation| operation.operands[0].as_float().expect("numeric rise") == 0.0)
+    );
+    assert_eq!(
+        operations.iter().filter(|operation| operation.operator == "l").count(),
+        0
+    );
+}

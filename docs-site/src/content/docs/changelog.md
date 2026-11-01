@@ -143,8 +143,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(markdown): Render superscript and underline with standard inline HTML.** (#2358)
+- **(markdown): Render document superscript and underline annotations with standard inline HTML.** (#2358)
   Emit `<sup>` and `<u>` while retaining source escaping, nested formatting and table-cell scripts.
+  Preserve those styles when DOCX/PDF writers parse the postprocessed Markdown; leave code and malformed tags literal.
+  The HTML converter's pre-rendered Markdown and explicit conversion options retain their existing notation.
 
 - **(swift): The Swift package requires macOS 14.**
   The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.

@@ -19,6 +19,8 @@ mod dot;
 mod html;
 #[cfg(feature = "html")]
 pub mod html_styled;
+#[cfg(any(feature = "office", feature = "pdf"))]
+mod inline_html;
 mod json;
 mod markdown;
 #[cfg(feature = "pdf")]
