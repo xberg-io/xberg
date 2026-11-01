@@ -1,5 +1,5 @@
 use super::*;
-use lopdf::{dictionary, Document, Object, Stream};
+use lopdf::{Document, Object, Stream, dictionary};
 
 const JP2: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -98,12 +98,10 @@ fn jpeg2000_behind_an_outer_filter_is_not_treated_as_direct_compressed_bytes() {
     let doc = image_document(120, 40, true);
     let handles = doc.page_image_handles(0).unwrap();
     assert_eq!(handles[0].filter_chain.len(), 2);
-    assert!(page_ocr_fallback_image_bytes_with_limits(
-        &doc,
-        0,
-        &crate::extractors::security::SecurityLimits::default()
-    )
-    .is_empty());
+    assert!(
+        page_ocr_fallback_image_bytes_with_limits(&doc, 0, &crate::extractors::security::SecurityLimits::default())
+            .is_empty()
+    );
 }
 
 #[test]

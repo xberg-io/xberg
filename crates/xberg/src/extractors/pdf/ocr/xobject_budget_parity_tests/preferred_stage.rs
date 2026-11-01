@@ -1,16 +1,16 @@
 //! Routing-only policy observations after real native-page rotation admission fails. ~keep
 use super::super::{
-    estimate_png_encode_page_peak_bytes, recover_pipeline_document_from_image_xobjects, run_ocr_pipeline_for_page,
-    upright_raster_for_backend, validate_png_encode_pages_individually, PageOcrHints,
+    PageOcrHints, estimate_png_encode_page_peak_bytes, recover_pipeline_document_from_image_xobjects,
+    run_ocr_pipeline_for_page, upright_raster_for_backend, validate_png_encode_pages_individually,
 };
-use super::support::{fixture, Observed, Records, TEXT};
+use super::support::{Observed, Records, TEXT, fixture};
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig};
 use crate::extractors::security::SecurityLimits;
 use crate::plugins::{OcrBackend, OcrBackendType, PageOrientationHandling, Plugin};
 use crate::types::ExtractedDocument;
 use image::ImageEncoder;
 use std::sync::{Arc, Mutex};
-use xberg_native_pdf::rendering::{render_page, ImageFormat, RenderOptions};
+use xberg_native_pdf::rendering::{ImageFormat, RenderOptions, render_page};
 
 const PREFERRED: &str = "preferred-stage-routing-2339";
 const SECONDARY: &str = "secondary-stage-routing-2339";
@@ -257,10 +257,12 @@ async fn assert_preferred(detached: bool, matching: bool, unavailable: bool) {
     let (config, pipeline, expected_tesseract) = pipeline(frame.cap, matching, unavailable);
     assert_eq!(pipeline.stages.len(), if unavailable { 3 } else { 2 });
     if unavailable {
-        assert!(crate::plugins::registry::get_ocr_backend_registry()
-            .read()
-            .get("absent-preferred-stage-routing-2339")
-            .is_err());
+        assert!(
+            crate::plugins::registry::get_ocr_backend_registry()
+                .read()
+                .get("absent-preferred-stage-routing-2339")
+                .is_err()
+        );
     }
     let images = [frame.raster];
     let result = run_ocr_pipeline_for_page(
