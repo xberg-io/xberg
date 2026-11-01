@@ -1,4 +1,5 @@
 //! Routing-only observations; mock text never qualifies real English OCR. ~keep
+#[path = "xobject_budget_parity_tests/support.rs"]
 mod support;
 use super::{recover_pipeline_document_from_image_xobjects, recover_pipeline_page_from_image_xobjects};
 use support::{BACKEND, Reply, TEXT, config, fixture, observer};

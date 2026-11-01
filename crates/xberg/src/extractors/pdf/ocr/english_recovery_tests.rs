@@ -1,5 +1,7 @@
 //! Explicit model-backed fixture qualification, without native allocation hooks. ~keep
+#[path = "english_recovery_tests/fixture.rs"]
 mod fixture;
+#[path = "english_recovery_tests/observer.rs"]
 mod observer;
 
 use super::{PageOcrHints, run_ocr_pipeline_for_page};

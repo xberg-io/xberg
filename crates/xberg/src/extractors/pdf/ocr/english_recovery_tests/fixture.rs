@@ -170,7 +170,7 @@ pub(super) fn fixture() -> Fixture {
     );
     drop(document);
     let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf.clone()).unwrap();
-    assert_eq!(doc.page_count(), 1);
+    assert_eq!(doc.page_count().expect("actual image-only page count"), 1);
     assert!(
         doc.extract_text_auto(0).unwrap().trim().is_empty(),
         "final PDF has no native text layer"
