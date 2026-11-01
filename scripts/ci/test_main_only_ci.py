@@ -43,18 +43,11 @@ def checks_out_main_source(step: dict[str, object]) -> bool:
     return inputs.get("ref", "") in {"", "${{ github.sha }}"}
 
 
-# Workflows that queue a new run behind the running one instead of cancelling it.
-QUEUED_WORKFLOWS = {
-    "ci-docs": "a cancelled run can abandon a GitHub Pages deployment partway",
-    "ci-gpu": "a dispatch-only multi-job GPU run is too expensive to cancel mid-flight",
-}
-
-
 def keeps_latest_ci_run(concurrency: object, workflow: str) -> bool:
-    """Cancel superseded runs within one workflow's stable ref group, or queue them for named exceptions."""
+    """Cancel superseded runs within one workflow's stable ref group."""
     return (
         isinstance(concurrency, dict)
-        and concurrency.get("cancel-in-progress") is (workflow not in QUEUED_WORKFLOWS)
+        and concurrency.get("cancel-in-progress") is True
         and concurrency.get("group") == f"{workflow}-${{{{ github.ref }}}}"
     )
 

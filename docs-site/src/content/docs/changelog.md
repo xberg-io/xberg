@@ -147,7 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
 - **(ci): Keep only the latest main run for each CI workflow.** (#2346)
-  Cancel superseded runs through stable workflow-ref groups instead of retaining an obsolete-commit backlog. GPU runs and docs deployments queue instead of cancelling.
+  Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
