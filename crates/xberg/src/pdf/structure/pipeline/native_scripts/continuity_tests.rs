@@ -198,3 +198,6 @@ fn should_preserve_a_genuine_blank_gap_between_ordinary_paragraphs_2275() {
 
 #[path = "ragged_wrap_controls.rs"]
 mod ragged_wrap_controls;
+
+#[path = "complete_row_witness_tests.rs"]
+mod complete_row_witness_tests;
