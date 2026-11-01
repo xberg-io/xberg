@@ -31,6 +31,7 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
+mod heading_body;
 mod heading_context;
 pub(super) mod native_scripts;
 mod run_in_lists;
@@ -337,7 +338,9 @@ fn opens_aligned_body_block(
     };
 
     if shares_same_text_row(candidate, following, is_same_page)
-        || (is_same_page && heading_context::has_trusted_hyphen_continuation(candidate, following))
+        || (is_same_page
+            && (heading_context::has_trusted_hyphen_continuation(candidate, following)
+                || heading_body::has_recurring_formula_cells(candidate, following)))
     {
         return false;
     }
