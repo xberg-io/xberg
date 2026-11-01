@@ -152,6 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Decode oversized baseline JPEG scans at a bounded IDCT scale.** (#2339)
   Three-component 8-bit scans use checked input, metadata, plane and output budgets; fitting images keep their dimensions.
   Reduced fallback requires one interleaved scan without restart intervals and color markers before the frame.
+  Scales whose combined planes or RGB output exceed the target allocation layout limit are skipped.
   Tesseract retains the original density at the nominal decode scale; required DPI resizes fail before allocating unbudgeted convolution buffers.
 
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**

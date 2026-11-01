@@ -1,3 +1,5 @@
+use std::alloc::Layout;
+
 use oxiarc_jpeg::{AdobeHeader, AppSegment, Component, DecodeOptions, FrameHeader, JfifHeader, ScanHeader, TableSet};
 
 use super::headers::Header;
@@ -100,8 +102,13 @@ fn plan(header: &Header, encoded_bytes: u64, denominator: u8) -> Option<Plan> {
     let padded_height = product(&[u64::from(header.height).div_ceil(8 * vertical), vertical, numerator])?;
     // Each component's scaled size is at most the frame MCU's scaled size,
     // including chroma whose scaled IDCT is enlarged by oxiarc-jpeg 0.4.2. ~keep
-    let plane_bytes = product(&[padded_width, padded_height, COMPONENTS, size_of::<u16>() as u64])?;
+    let plane_samples = product(&[padded_width, padded_height, COMPONENTS])?;
+    let plane_bytes = plane_samples.checked_mul(size_of::<u16>() as u64)?;
+    // The decoder combines all component planes in one allocation. ~keep
+    Layout::array::<u16>(usize::try_from(plane_samples).ok()?).ok()?;
     let output_bytes = product(&[u64::from(width), u64::from(height), COMPONENTS])?;
+    let output_count = usize::try_from(output_bytes).ok()?;
+    Layout::array::<u8>(output_count).ok()?;
     let rows = product(&[u64::from(width), COMPONENTS * 2, size_of::<u16>() as u64])?;
     let peak_bytes = sum(&[
         encoded_bytes,
@@ -117,7 +124,7 @@ fn plan(header: &Header, encoded_bytes: u64, denominator: u8) -> Option<Plan> {
         height,
         denominator,
         plane_bytes,
-        output_bytes: usize::try_from(output_bytes).ok()?,
+        output_bytes: output_count,
         peak_bytes,
     })
 }
@@ -131,4 +138,34 @@ pub(super) fn select(header: &Header, encoded_bytes: u64, budget: u64) -> Option
 
 pub(super) fn minimum_peak(header: &Header, encoded_bytes: u64) -> u64 {
     plan(header, encoded_bytes, 8).map_or(u64::MAX, |plan| plan.peak_bytes)
+}
+
+#[cfg(all(test, any(target_pointer_width = "32", target_pointer_width = "64")))]
+mod tests {
+    use super::{Header, select};
+
+    #[test]
+    fn should_choose_the_finest_addressable_combined_plane_layout() {
+        const DIMENSION: u32 = 40_000;
+        const ENCODED_BYTES: u64 = 20_000_000;
+        const BUDGET: u64 = 3_700_000_000;
+        let header = Header {
+            width: DIMENSION,
+            height: DIMENSION,
+            horizontal_sampling: 1,
+            vertical_sampling: 1,
+            metadata_bytes: 0,
+            metadata_segments: 0,
+            component_ids: [1, 2, 3],
+        };
+        let selected = select(&header, ENCODED_BYTES, BUDGET).expect("a reduced metadata plan fits");
+        let expected_denominator = if cfg!(target_pointer_width = "32") { 4 } else { 2 };
+        assert_eq!(selected.denominator, expected_denominator);
+        let expected_dimension = DIMENSION / u32::from(expected_denominator);
+        assert_eq!(
+            (selected.width, selected.height),
+            (expected_dimension, expected_dimension)
+        );
+        assert!(selected.peak_bytes <= BUDGET);
+    }
 }
