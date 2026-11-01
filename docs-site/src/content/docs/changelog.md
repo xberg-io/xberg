@@ -143,6 +143,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Preserve verified generated Markdown formatting while redacting its content.** (#2358)
+  Treat superscript and underline syntax separately from source text, including per-page output.
+  Use an explicit plain-text fallback when a match crosses generated syntax; keep literal and code text redactable.
+
 - **(markdown): Render document superscript and underline annotations with standard inline HTML.** (#2358)
   Emit `<sup>` and `<u>` while retaining source escaping, nested formatting and table-cell scripts.
   Preserve those styles when DOCX/PDF writers parse the postprocessed Markdown; leave code and malformed tags literal.

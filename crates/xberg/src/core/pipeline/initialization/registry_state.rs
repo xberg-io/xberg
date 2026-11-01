@@ -153,8 +153,16 @@ impl ProcessorRegistryState {
         }
         run_before_processor_snapshot_hook();
         let lease = ProcessorSnapshotLease::acquire(&self.active_processor_snapshots);
+        #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+        let mut builtin_redaction = None;
         let stages = self.cache.try_read()?.as_ref().and_then(|cache| {
-            (cache.registration_epoch == registration_epoch).then(|| cached_processor_stages(cache))
+            (cache.registration_epoch == registration_epoch).then(|| {
+                #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+                {
+                    builtin_redaction = cache.builtin_redaction.as_ref().map(std::sync::Arc::clone);
+                }
+                cached_processor_stages(cache)
+            })
         })?;
         if self.registration_epoch.load(Ordering::SeqCst) != registration_epoch {
             return None;
@@ -164,6 +172,8 @@ impl ProcessorRegistryState {
             early: stages.0,
             middle: stages.1,
             late: stages.2,
+            #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+            builtin_redaction,
             _lease: lease,
         })
     }

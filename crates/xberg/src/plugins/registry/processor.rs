@@ -17,6 +17,8 @@ pub struct PostProcessorRegistry {
     /// #215) record the generation their snapshot was built from and compare it
     /// against this value to detect a stale cache instead of trusting it forever.
     generation: u64,
+    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    builtin_redaction: Option<Arc<dyn PostProcessor>>,
 }
 
 impl PostProcessorRegistry {
@@ -26,6 +28,8 @@ impl PostProcessorRegistry {
             processors: HashMap::new(),
             name_index: HashMap::new(),
             generation: 0,
+            #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+            builtin_redaction: None,
         }
     }
 
@@ -122,6 +126,32 @@ impl PostProcessorRegistry {
         Ok(true)
     }
 
+    #[cfg(feature = "redaction")]
+    pub(crate) fn register_builtin_redaction(&mut self) -> Result<bool> {
+        if self.name_index.contains_key("redaction") {
+            return Ok(false);
+        }
+        self.register_redaction_processor()?;
+        Ok(true)
+    }
+
+    #[cfg(feature = "redaction")]
+    pub(crate) fn register_redaction_processor(&mut self) -> Result<()> {
+        let processor: Arc<dyn PostProcessor> =
+            Arc::new(crate::plugins::processor::builtin::redaction::RedactionProcessor);
+        self.register(Arc::clone(&processor))?;
+        #[cfg(feature = "tokio-runtime")]
+        {
+            self.builtin_redaction = Some(processor);
+        }
+        Ok(())
+    }
+
+    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    pub(crate) fn builtin_redaction(&self) -> Option<Arc<dyn PostProcessor>> {
+        self.builtin_redaction.as_ref().map(Arc::clone)
+    }
+
     /// Get all processors for a specific stage, in priority order.
     ///
     /// # Arguments
@@ -186,6 +216,14 @@ impl PostProcessorRegistry {
             None
         };
 
+        #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+        if processor_to_shutdown
+            .as_ref()
+            .zip(self.builtin_redaction.as_ref())
+            .is_some_and(|(removed, builtin)| Arc::ptr_eq(removed, builtin))
+        {
+            self.builtin_redaction = None;
+        }
         if let Some(processor) = processor_to_shutdown {
             if let Err(e) = processor.shutdown() {
                 tracing::warn!(

@@ -25,6 +25,8 @@ pub(super) struct ProcessorCache {
     /// populated once on the very first extraction forever.
     pub(super) generation: u64,
     pub(super) registration_epoch: u64,
+    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    pub(super) builtin_redaction: Option<Arc<dyn PostProcessor>>,
 }
 
 impl ProcessorCache {
@@ -51,6 +53,8 @@ impl ProcessorCache {
             late: Arc::new(registry.get_for_stage(ProcessingStage::Late)),
             generation: registry.generation(),
             registration_epoch,
+            #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+            builtin_redaction: registry.builtin_redaction(),
         })
     }
 }

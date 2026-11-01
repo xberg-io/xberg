@@ -19,7 +19,7 @@ mod dot;
 mod html;
 #[cfg(feature = "html")]
 pub mod html_styled;
-#[cfg(any(feature = "office", feature = "pdf"))]
+#[cfg(any(feature = "office", feature = "pdf", feature = "redaction"))]
 mod inline_html;
 mod json;
 mod markdown;
@@ -37,6 +37,8 @@ pub(crate) use dot::render_dot;
 pub(crate) use html::render_html;
 #[cfg(feature = "html")]
 pub use html_styled::StyledHtmlRenderer;
+#[cfg(feature = "redaction")]
+pub(crate) use inline_html::standard_inline_html_ranges;
 pub use json::render_json;
 pub(crate) use markdown::render_markdown;
 #[cfg(feature = "pdf")]

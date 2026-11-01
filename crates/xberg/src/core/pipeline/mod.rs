@@ -336,6 +336,7 @@ async fn run_captioning_prepass(
         config,
         pp_config,
         &[(crate::plugins::ProcessingStage::Middle, captioning_processors)],
+        None,
     )
     .await?;
 
@@ -587,6 +588,17 @@ async fn run_pipeline_impl(
         None
     };
 
+    #[cfg(feature = "redaction")]
+    let mut result = crate::extraction::derive::derive_with_surfaces(
+        doc,
+        include_structure,
+        config.output_format.clone(),
+        processor_stages
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.builtin_redaction().is_some())
+            && (config.redaction.is_some() || crate::text::redaction::external::external_redaction_is_scoped()),
+    );
+    #[cfg(not(feature = "redaction"))]
     let mut result =
         crate::extraction::derive::derive_extraction_result(doc, include_structure, config.output_format.clone());
     result.internal_document = doc_for_elements;
@@ -642,6 +654,7 @@ async fn run_pipeline_impl(
                 crate::plugins::ProcessingStage::Early,
                 std::sync::Arc::clone(&snapshot.early),
             )],
+            snapshot.builtin_redaction(),
         )
         .await?;
     }
@@ -677,6 +690,7 @@ async fn run_pipeline_impl(
                     std::sync::Arc::clone(&snapshot.late),
                 ),
             ],
+            snapshot.builtin_redaction(),
         )
         .await?;
     }
@@ -730,7 +744,11 @@ async fn run_pipeline_impl(
         });
     }
 
-    result = apply_output_format(result, config.output_format.clone());
+    #[cfg(feature = "redaction")]
+    let (result, output_format) = result.into_output(config.output_format.clone());
+    #[cfg(not(feature = "redaction"))]
+    let output_format = config.output_format.clone();
+    let mut result = apply_output_format(result, output_format);
 
     // Chunking runs last, after every step above that rewrites `content` — see the
     // ordering note on this function's doc comment (#213).
