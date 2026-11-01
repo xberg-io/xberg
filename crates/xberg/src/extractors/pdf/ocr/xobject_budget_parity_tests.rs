@@ -58,7 +58,6 @@ async fn whole_document_retry_forwards_the_smaller_outer_cap_like_detached_retry
         .unwrap();
     let calls = records.lock().unwrap();
     assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].bytes, f.streams[0]);
     assert_eq!(
         calls[0].config.security_limits.as_ref().unwrap().max_content_size,
         outer
@@ -212,8 +211,22 @@ async fn legacy_outer_filtered_dct_recovery_is_not_lost_by_direct_stream_admissi
     assert_eq!(out.text, TEXT);
     let calls = records.lock().unwrap();
     assert_eq!(calls.len(), 1);
+    let expected = image::load_from_memory(&f.streams[0]).unwrap().into_rgb8();
+    let recovered = image::load_from_memory(&calls[0].bytes)
+        .expect("legacy retry supplies a complete independently decodable image")
+        .into_rgb8();
+    assert_eq!(expected.dimensions(), (32, 24));
+    assert_eq!(recovered.dimensions(), (32, 24));
     assert_eq!(
-        calls[0].bytes, f.streams[0],
-        "legacy decoder removes the outer ASCIIHex filter before OCR"
+        recovered.as_raw(),
+        expected.as_raw(),
+        "outer-filter recovery preserves actual source pixels"
     );
+    let format = match image::guess_format(&calls[0].bytes).unwrap() {
+        image::ImageFormat::Jpeg => "jpeg",
+        image::ImageFormat::Png => "png",
+        other => panic!("unexpected legacy recovery format: {other:?}"),
+    };
+    assert_eq!(out.images.len(), 1);
+    assert_eq!(out.images[0].format.as_ref(), format);
 }
