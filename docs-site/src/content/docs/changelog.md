@@ -143,6 +143,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve row spans from complete ruled-table source footprints.** (#2332)
+  Retain source text and ordinary empty cells after cleanup, table merging and section cuts.
+  Leave incomplete, cleaned, ambiguous or rotated footprints in their legacy representation.
+
 - **(pdf): Infer ruled-table headers from native row typography.** (#2332)
   Preserve leading headers and declared columns when bold or larger text contrasts with the table body.
   Preserve contiguous lower header tiers when each still contrasts with remaining body rows.

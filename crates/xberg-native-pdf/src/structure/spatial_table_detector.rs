@@ -8,6 +8,9 @@ use crate::layout::text_block::TextSpan;
 use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_for_cell};
 use std::collections::HashMap;
 
+mod intersection_origins;
+use intersection_origins::{AssignedGrid, AssignedRow, GroupOrigin, IntersectionTable, RowOrigin};
+
 /// Disjoint-set (union-find) with path compression.
 struct UnionFind {
     parent: Vec<usize>,
@@ -2770,13 +2773,25 @@ const MIN_EVIDENCED_CLUSTERS_FOR_SPLIT: usize = 2;
 /// (e.g. a label/value pair). For `num_cols == 1` this restores the pre-#1555 behaviour of
 /// accepting any non-empty cluster as evidence; the #1555 guard itself only applies where
 /// it can be evaluated, at `num_cols >= 2`.
+#[cfg(test)]
 fn split_rows_by_text_positions(
     table_rows: Vec<TableRow>,
     row_cell_span_indices: &[Vec<Vec<usize>>],
     spans: &[TextSpan],
     config: &TableDetectionConfig,
 ) -> Vec<TableRow> {
+    split_intersection_rows_tracked(table_rows, row_cell_span_indices, spans, config, None).0
+}
+
+fn split_intersection_rows_tracked(
+    table_rows: Vec<TableRow>,
+    row_cell_span_indices: &[Vec<Vec<usize>>],
+    spans: &[TextSpan],
+    config: &TableDetectionConfig,
+    assignment: Option<(usize, &[AssignedRow])>,
+) -> (Vec<TableRow>, Vec<RowOrigin>) {
     let mut result: Vec<TableRow> = Vec::new();
+    let mut origins = Vec::new();
 
     for (row_idx, row) in table_rows.into_iter().enumerate() {
         let cell_indices = &row_cell_span_indices[row_idx];
@@ -2791,6 +2806,7 @@ fn split_rows_by_text_positions(
         }
 
         if all_ys.len() <= 1 {
+            intersection_origins::record_emission(&mut origins, assignment, row_idx, 0, cell_indices);
             result.push(row);
             continue;
         }
@@ -2810,6 +2826,7 @@ fn split_rows_by_text_positions(
         }
 
         if y_clusters.len() <= 1 {
+            intersection_origins::record_emission(&mut origins, assignment, row_idx, 0, cell_indices);
             result.push(row);
             continue;
         }
@@ -2854,6 +2871,7 @@ fn split_rows_by_text_positions(
         let evidenced_cluster_count = is_evidenced.iter().filter(|&&evidenced| evidenced).count();
 
         if evidenced_cluster_count < MIN_EVIDENCED_CLUSTERS_FOR_SPLIT {
+            intersection_origins::record_emission(&mut origins, assignment, row_idx, 0, cell_indices);
             result.push(row);
             continue;
         }
@@ -2871,6 +2889,7 @@ fn split_rows_by_text_positions(
             .windows(2)
             .all(|pair| !pair[0].iter().zip(pair[1].iter()).any(|(&here, &next)| here && next));
         if staggered_wrapping {
+            intersection_origins::record_emission(&mut origins, assignment, row_idx, 0, cell_indices);
             result.push(row);
             continue;
         }
@@ -2915,7 +2934,8 @@ fn split_rows_by_text_positions(
             .collect();
         group_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(y_clusters[b], y_clusters[a]));
 
-        for group_idx in group_order {
+        for (emitted, group_idx) in group_order.into_iter().enumerate() {
+            let mut emitted_indices = Vec::new();
             let members = &group_members[group_idx];
             let mut new_row = TableRow::new(row.is_header);
             for ci in 0..num_cols {
@@ -2954,6 +2974,7 @@ fn split_rows_by_text_positions(
                     .filter_map(|&idx| spans.get(idx).cloned())
                     .collect::<Vec<_>>();
 
+                emitted_indices.push(matching_indices.clone());
                 new_row.cells.push(TableCell {
                     text: cell_text,
                     spans: cell_spans,
@@ -2965,11 +2986,12 @@ fn split_rows_by_text_positions(
                     is_header: row.is_header,
                 });
             }
+            intersection_origins::record_emission(&mut origins, assignment, row_idx, emitted, &emitted_indices);
             result.push(new_row);
         }
     }
 
-    result
+    (result, origins)
 }
 
 /// Strip form-template numbering artifacts and decorative separators from table rows.
@@ -2983,7 +3005,13 @@ fn split_rows_by_text_positions(
 ///    like real content (starts with a letter, `$`, or contains `/` or `-`).
 /// 3. Clears cells that contain only dashes/underscores (decorative separators).
 /// 4. Removes rows where all cells are empty after separator stripping.
-fn strip_form_numbering_artifacts(table_rows: &mut Vec<TableRow>) {
+#[cfg(test)]
+fn strip_form_numbering_artifacts(rows: &mut Vec<TableRow>) {
+    strip_form_numbering_artifacts_observed(rows, None);
+}
+
+fn strip_form_numbering_artifacts_observed(table_rows: &mut Vec<TableRow>, mut retained: Option<&mut Vec<usize>>) {
+    let mut ordinal = 0;
     // Phase 1: Remove rows where ALL cells are either empty or a lone single
     // digit (1-9), AND at least one cell actually contains a digit.  Rows that
     // are completely empty are left intact so the downstream empty-row splitting
@@ -2997,7 +3025,12 @@ fn strip_form_numbering_artifacts(table_rows: &mut Vec<TableRow>) {
             let t = c.text.trim();
             t.len() == 1 && t.as_bytes().first().is_some_and(|b| b.is_ascii_digit() && *b != b'0')
         });
-        !(all_empty_or_digit && has_digit)
+        let keep = !(all_empty_or_digit && has_digit);
+        if keep && let Some(retained) = &mut retained {
+            retained.push(ordinal);
+        }
+        ordinal += 1;
+        keep
     });
 
     // Phase 2: Strip leading single-digit prefix from individual cells.
@@ -3087,17 +3120,34 @@ fn detect_tables_from_intersections(
     let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, config);
 
     let mut tables = Vec::new();
-    for (group_cells, xs, ys, num_cols) in &groups {
-        let Some((table_rows, row_cell_span_indices)) =
-            assign_spans_to_intersection_grid(group_cells, xs, ys, *num_cols, spans, &v_edges, cells_are_intersections)
+    let mut origins = Vec::new();
+    for (group, (group_cells, xs, ys, num_cols)) in groups.iter().enumerate() {
+        let Some(grid) =
+            assign_intersection_grid_tracked(group_cells, xs, ys, *num_cols, spans, &v_edges, cells_are_intersections)
         else {
+            origins.push(None);
             continue;
         };
-        let sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
-        tables.extend(sub_tables);
+        origins.push(GroupOrigin::from_grid(
+            group_cells,
+            xs,
+            ys,
+            &grid,
+            cells_are_intersections,
+        ));
+        let plan = origins[group]
+            .as_mut()
+            .map(|plan| (group, grid.origins.as_slice(), plan));
+        tables.extend(finalize_intersection_tables_tracked(
+            grid.rows,
+            &grid.indices,
+            spans,
+            config,
+            *num_cols,
+            plan,
+        ));
     }
-
-    merge_vertically_adjacent_tables(&mut tables);
+    merge_intersection_tables(&mut tables);
 
     // Post-merge: split tables at section dividers — full-width horizontal
     // lines that indicate separate form sections within a single grid.
@@ -3107,7 +3157,14 @@ fn detect_tables_from_intersections(
     let (mut h_edges, mut v_edges) = extract_edges(lines);
     snap_and_merge(&mut h_edges);
     snap_edges(&mut v_edges);
-    tables = split_tables_at_section_dividers(tables, &h_edges, &v_edges, config);
+    tables = tables
+        .into_iter()
+        .flat_map(|candidate| split_intersection_table_at_section_dividers(candidate, &h_edges, &v_edges, config))
+        .collect();
+    let mut tables: Vec<Table> = tables
+        .into_iter()
+        .map(|candidate| intersection_origins::normalize(candidate, &origins, spans, config))
+        .collect();
 
     // GH#1358 fix, gated by `BUCKET_TABLE_GRID_IN_ROTATED_FRAME`: applied last
     // so every physical/page-space step above (grid building, row splitting,
@@ -3279,6 +3336,7 @@ fn band_column_groups(
 
 /// Assign text spans to grid cells and build table rows with per-cell span
 /// indices. Returns `None` when the grid is degenerate.
+#[cfg(test)]
 fn assign_spans_to_intersection_grid(
     group_cells: &[IntersectionCell],
     xs: &[f32],
@@ -3288,6 +3346,19 @@ fn assign_spans_to_intersection_grid(
     v_edges: &[Edge],
     cells_are_intersections: bool,
 ) -> Option<(Vec<TableRow>, Vec<Vec<Vec<usize>>>)> {
+    assign_intersection_grid_tracked(group_cells, xs, ys, num_cols, spans, v_edges, cells_are_intersections)
+        .map(|grid| (grid.rows, grid.indices))
+}
+
+fn assign_intersection_grid_tracked(
+    group_cells: &[IntersectionCell],
+    xs: &[f32],
+    ys: &[f32],
+    num_cols: usize,
+    spans: &[TextSpan],
+    v_edges: &[Edge],
+    cells_are_intersections: bool,
+) -> Option<AssignedGrid> {
     let num_rows = if ys.len() >= 2 {
         ys.len() - 1
     } else {
@@ -3347,13 +3418,16 @@ fn assign_spans_to_intersection_grid(
     row_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(ys[b], ys[a]));
 
     let mut table_rows = Vec::new();
+    let mut origins = Vec::new();
     // Track span indices per cell alongside table_rows for text-based row splitting. ~keep
     let mut row_cell_span_indices: Vec<Vec<Vec<usize>>> = Vec::new();
     for &ri in &row_order {
         let mut row = TableRow::new(false);
         let mut cell_indices_for_row: Vec<Vec<usize>> = Vec::new();
         let groups = band_column_groups(xs, ys[ri], ys[ri + 1], num_cols, v_edges, cells_are_intersections);
+        let mut columns = Vec::new();
         for (first_col, last_col) in groups {
+            columns.push(first_col..last_col + 1);
             let colspan = (last_col - first_col + 1) as u32;
             let group_bbox = crate::geometry::Rect::new(
                 xs[first_col],
@@ -3404,11 +3478,16 @@ fn assign_spans_to_intersection_grid(
             });
             cell_indices_for_row.push(group_span_indices);
         }
+        origins.push(AssignedRow { band: ri, columns });
         table_rows.push(row);
         row_cell_span_indices.push(cell_indices_for_row);
     }
 
-    Some((table_rows, row_cell_span_indices))
+    Some(AssignedGrid {
+        rows: table_rows,
+        indices: row_cell_span_indices,
+        origins,
+    })
 }
 
 /// Return the grid interval containing `point`.
@@ -3601,6 +3680,7 @@ fn rotate_table_rows(rows: &[TableRow], rotation_degrees: f32) -> Option<(Vec<Ta
 
 /// Row splitting, form-artifact stripping, empty-row splitting, and bbox
 /// computation. Produces the final `Table` entries for one table group.
+#[cfg(test)]
 fn finalize_intersection_tables(
     table_rows: Vec<TableRow>,
     row_cell_span_indices: &[Vec<Vec<usize>>],
@@ -3608,9 +3688,30 @@ fn finalize_intersection_tables(
     config: &TableDetectionConfig,
     num_cols: usize,
 ) -> Vec<Table> {
-    let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
+    finalize_intersection_tables_tracked(table_rows, row_cell_span_indices, spans, config, num_cols, None)
+        .into_iter()
+        .map(|candidate| candidate.table)
+        .collect()
+}
 
-    strip_form_numbering_artifacts(&mut table_rows);
+fn finalize_intersection_tables_tracked(
+    table_rows: Vec<TableRow>,
+    row_cell_span_indices: &[Vec<Vec<usize>>],
+    spans: &[TextSpan],
+    config: &TableDetectionConfig,
+    num_cols: usize,
+    origin: Option<(usize, &[AssignedRow], &mut GroupOrigin)>,
+) -> Vec<IntersectionTable> {
+    let assignment = origin.as_ref().map(|(group, rows, _)| (*group, *rows));
+    let (mut table_rows, origins) =
+        split_intersection_rows_tracked(table_rows, row_cell_span_indices, spans, config, assignment);
+    if let Some((_, _, plan)) = origin {
+        plan.record_emissions(&origins);
+    }
+    let tracked = assignment.is_some() && origins.len() == table_rows.len();
+    let mut retained = Vec::new();
+    strip_form_numbering_artifacts_observed(&mut table_rows, tracked.then_some(&mut retained));
+    let origins: Vec<_> = retained.into_iter().map(|index| origins[index].clone()).collect();
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();
@@ -3651,11 +3752,14 @@ fn finalize_intersection_tables(
             } else {
                 None
             };
-            tables.push(Table {
-                rows: sub_rows,
-                has_header: false,
-                col_count: num_cols,
-                bbox: sub_bbox,
+            tables.push(IntersectionTable {
+                table: Table {
+                    rows: sub_rows,
+                    has_header: false,
+                    col_count: num_cols,
+                    bbox: sub_bbox,
+                },
+                origins: tracked.then(|| origins[sub_start..sub_end].to_vec()),
             });
         }
         sub_start = sub_end;
@@ -3670,41 +3774,30 @@ const SECTION_DIVIDER_WIDTH_RATIO: f32 = 0.80;
 /// Split each table at interior horizontal edges that span nearly the full
 /// table width ("section dividers").  Returns a new list of tables where each
 /// original table may have been broken into multiple smaller ones.
-fn split_tables_at_section_dividers(
-    tables: Vec<Table>,
-    h_edges: &[Edge],
-    v_edges: &[Edge],
-    config: &TableDetectionConfig,
-) -> Vec<Table> {
-    let mut result = Vec::new();
-    for table in tables {
-        let parts = split_table_at_section_dividers(table, h_edges, v_edges, config);
-        result.extend(parts);
-    }
-    result
-}
-
 /// Split a single table at section divider lines.
 ///
 /// A section divider is a full-width H-edge at a Y position where few or no
 /// V-edges cross through — indicating that the vertical lines stop at that
 /// boundary (separate bordered sections stacked vertically).
-fn split_table_at_section_dividers(
-    table: Table,
+fn split_intersection_table_at_section_dividers(
+    candidate: IntersectionTable,
     h_edges: &[Edge],
     v_edges: &[Edge],
     config: &TableDetectionConfig,
-) -> Vec<Table> {
+) -> Vec<IntersectionTable> {
+    let mut candidate = candidate;
+    candidate.validate_shape();
+    let IntersectionTable { table, origins } = candidate;
     let Some(bbox) = table.bbox else {
-        return vec![table];
+        return vec![IntersectionTable { table, origins }];
     };
     if table.rows.len() < 2 {
-        return vec![table];
+        return vec![IntersectionTable { table, origins }];
     }
 
     let table_width = bbox.right() - bbox.left();
     if table_width <= 0.0 {
-        return vec![table];
+        return vec![IntersectionTable { table, origins }];
     }
 
     // Collect Y-coordinates of H-edges that qualify as section dividers:
@@ -3749,7 +3842,7 @@ fn split_table_at_section_dividers(
     }
 
     if divider_ys.is_empty() {
-        return vec![table];
+        return vec![IntersectionTable { table, origins }];
     }
 
     divider_ys.sort_by(|a, b| crate::utils::safe_float_cmp(*a, *b));
@@ -3764,7 +3857,7 @@ fn split_table_at_section_dividers(
     // fall under `min_table_cells` and vanish (GH#1656). With a single internal rule there is
     // nothing to compare against, so that case keeps the split. ~keep
     if internal_rule_ys.len() >= 2 && divider_ys.len() == internal_rule_ys.len() {
-        return vec![table];
+        return vec![IntersectionTable { table, origins }];
     }
 
     let row_bounds: Vec<Option<(f32, f32)>> = table
@@ -3815,27 +3908,27 @@ fn split_table_at_section_dividers(
     split_after.dedup();
 
     if split_after.is_empty() {
-        return vec![table];
+        return vec![IntersectionTable { table, origins }];
     }
 
     let num_cols = table.col_count;
     let all_rows = table.rows;
-    let mut sub_tables = Vec::new();
+    let mut section_plan = Vec::new();
     let mut start = 0;
     for &split_idx in &split_after {
         let end = split_idx + 1;
         if end > start {
-            sub_tables.push(&all_rows[start..end]);
+            section_plan.push(start..end);
         }
         start = end;
     }
     if start < all_rows.len() {
-        sub_tables.push(&all_rows[start..]);
+        section_plan.push(start..all_rows.len());
     }
 
     let mut result = Vec::new();
-    for sub_rows_slice in sub_tables {
-        let sub_rows: Vec<TableRow> = sub_rows_slice.to_vec();
+    for range in section_plan {
+        let sub_rows: Vec<TableRow> = all_rows[range.clone()].to_vec();
         let filled: usize = sub_rows
             .iter()
             .flat_map(|r| r.cells.iter())
@@ -3863,21 +3956,27 @@ fn split_table_at_section_dividers(
         } else {
             None
         };
-        result.push(Table {
-            rows: sub_rows,
-            has_header: false,
-            col_count: num_cols,
-            bbox: sub_bbox,
+        result.push(IntersectionTable {
+            table: Table {
+                rows: sub_rows,
+                has_header: false,
+                col_count: num_cols,
+                bbox: sub_bbox,
+            },
+            origins: origins.as_ref().map(|rows| rows[range].to_vec()),
         });
     }
 
     if result.is_empty() {
         // Don't lose data; return original if all sub-tables were too small. ~keep
-        return vec![Table {
-            rows: all_rows,
-            has_header: false,
-            col_count: num_cols,
-            bbox: Some(bbox),
+        return vec![IntersectionTable {
+            table: Table {
+                rows: all_rows,
+                has_header: false,
+                col_count: num_cols,
+                bbox: Some(bbox),
+            },
+            origins,
         }];
     }
 
@@ -3895,21 +3994,31 @@ const MERGE_COL_DIFF_TOLERANCE: usize = 2;
 /// Merge tables that are vertically adjacent (small gap between bottom of one
 /// and top of another) and have similar column counts (difference <= `MERGE_COL_DIFF_TOLERANCE`).
 /// When column counts differ, the narrower table's rows are padded with empty cells.
+#[cfg(test)]
 fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
+    let mut candidates = tables.drain(..).map(IntersectionTable::untracked).collect();
+    merge_intersection_tables(&mut candidates);
+    *tables = candidates.into_iter().map(|candidate| candidate.table).collect();
+}
+
+fn merge_intersection_tables(tables: &mut Vec<IntersectionTable>) {
     if tables.len() < 2 {
         return;
     }
 
     // Sort tables by the top-Y of their bbox (highest Y first in PDF coords). ~keep
     tables.sort_by(|a, b| {
-        let ay = a.bbox.map_or(f32::NEG_INFINITY, |bb| bb.top());
-        let by = b.bbox.map_or(f32::NEG_INFINITY, |bb| bb.top());
+        let ay = a.table.bbox.map_or(f32::NEG_INFINITY, |bb| bb.top());
+        let by = b.table.bbox.map_or(f32::NEG_INFINITY, |bb| bb.top());
         crate::utils::safe_float_cmp(ay, by)
     });
 
-    let mut merged: Vec<Table> = Vec::new();
-    for table in tables.drain(..) {
-        let should_merge = merged.last().is_some_and(|prev: &Table| {
+    let mut merged: Vec<IntersectionTable> = Vec::new();
+    for mut candidate in tables.drain(..) {
+        candidate.validate_shape();
+        let IntersectionTable { table, mut origins } = candidate;
+        let should_merge = merged.last().is_some_and(|candidate: &IntersectionTable| {
+            let prev = &candidate.table;
             let col_diff = (prev.col_count as isize - table.col_count as isize).unsigned_abs();
             if col_diff > MERGE_COL_DIFF_TOLERANCE {
                 return false;
@@ -3924,11 +4033,15 @@ fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
         });
 
         if should_merge {
-            let prev = merged.last_mut().unwrap();
+            let IntersectionTable {
+                table: prev,
+                origins: previous_origins,
+            } = merged.last_mut().unwrap();
             let target_cols = prev.col_count.max(table.col_count);
 
             if prev.col_count < target_cols {
                 let pad = target_cols - prev.col_count;
+                intersection_origins::pad_origins(previous_origins, pad);
                 for row in &mut prev.rows {
                     for _ in 0..pad {
                         row.cells.push(TableCell {
@@ -3947,6 +4060,7 @@ fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
             let mut incoming_rows = table.rows;
             if table.col_count < target_cols {
                 let pad = target_cols - table.col_count;
+                intersection_origins::pad_origins(&mut origins, pad);
                 for row in &mut incoming_rows {
                     for _ in 0..pad {
                         row.cells.push(TableCell {
@@ -3962,6 +4076,7 @@ fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
                 }
             }
 
+            intersection_origins::append_origins(previous_origins, origins);
             prev.rows.extend(incoming_rows);
             prev.col_count = target_cols;
             if let (Some(pb), Some(tb)) = (prev.bbox, table.bbox) {
@@ -3973,7 +4088,7 @@ fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
             }
             prev.has_header = prev.has_header || table.has_header;
         } else {
-            merged.push(table);
+            merged.push(IntersectionTable { table, origins });
         }
     }
 
