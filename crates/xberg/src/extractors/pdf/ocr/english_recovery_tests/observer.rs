@@ -66,6 +66,7 @@ impl OcrBackend for Observer {
         let result = self.backend.process_image_owned(bytes, config).await;
         self.records.lock().unwrap().push(serde_json::json!({
             "input_sha256":input_sha,"input_bytes":input_len,"config":config,
+            "runtime_max_content_size":config.security_limits.as_ref().map(|limits| limits.max_content_size),
             "actual_text":result.as_ref().ok().map(|document| &document.content),
             "error":result.as_ref().err().map(ToString::to_string)
         }));
@@ -106,7 +107,7 @@ pub(super) fn assert_policy(records: &Records, cap: usize, directory: &std::path
         let config = &call["config"];
         assert_eq!(config["language"], serde_json::json!(["eng"]));
         assert_eq!(config["tessdata_path"], serde_json::json!(directory));
-        assert_eq!(config["security_limits"]["max_content_size"], cap);
+        assert_eq!(call["runtime_max_content_size"], cap);
         assert_eq!(config["backend_options"]["use_cache"], false);
         assert!(config["backend_options"]["source_dpi"].as_f64().unwrap() > 0.0);
         let preprocessing = &config["tesseract_config"]["preprocessing"];

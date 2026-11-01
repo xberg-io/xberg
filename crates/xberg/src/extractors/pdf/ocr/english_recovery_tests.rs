@@ -58,6 +58,7 @@ fn config(cap: usize, directory: &std::path::Path) -> (ExtractionConfig, OcrPipe
 async fn qualify(detached: bool) {
     let model = verified_model_directory();
     let fixture = fixture::fixture();
+    println!("REAL_ENGLISH_FIXTURE {}", fixture.receipt);
     let records = observer::install();
     for mib in [40, 64] {
         let cap = mib * 1024 * 1024;
