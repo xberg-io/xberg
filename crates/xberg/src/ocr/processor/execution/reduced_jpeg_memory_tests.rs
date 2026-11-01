@@ -1,4 +1,5 @@
 mod contrast;
+mod monotonicity;
 
 #[allow(
     unsafe_code,
