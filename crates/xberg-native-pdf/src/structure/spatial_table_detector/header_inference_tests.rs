@@ -182,6 +182,8 @@ fn intersection_header_only_row_has_no_body_for_style_comparison() {
     assert_headerless(&detect(&source, &grid(1, false), 1, 3));
 }
 
+#[path = "header_inference_tests/multi_tier.rs"]
 mod multi_tier;
 
+#[path = "header_inference_tests/rowspan_metadata.rs"]
 mod rowspan_metadata;
