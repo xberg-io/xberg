@@ -200,3 +200,6 @@ pub(crate) fn derive_with_surfaces(
     let document = super::super::derive(doc, include_document_structure, output_format, true, &mut observer);
     DerivedResult::new(document, Some(observer))
 }
+
+#[cfg(all(test, feature = "tokio-runtime", feature = "office"))]
+mod coverage_tests;
