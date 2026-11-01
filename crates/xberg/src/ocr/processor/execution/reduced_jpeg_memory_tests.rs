@@ -1,3 +1,7 @@
+#[allow(
+    unsafe_code,
+    reason = "Isolated native test measures real Leptonica pixel allocations through its C hook"
+)]
 mod pixel_memory;
 
 use super::{SecurityLimits, TesseractConfig, prepare_encoded_ocr_image};
