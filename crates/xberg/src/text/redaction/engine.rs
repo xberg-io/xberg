@@ -389,7 +389,8 @@ impl RedactionPass<'_> {
         {
             return Ok(FormattedPlan::Preserve(matches));
         }
-        let plain = plain.ok_or_else(invalid)?;
+        let plain = plain
+            .ok_or_else(|| crate::XbergError::validation("Generated Markdown surface has no verified plain backup"))?;
         let selected = self.applicable_matches(plain);
         let correspondence = projection.on_plain(plain).ok_or_else(invalid)?;
         if !correspondence.covered(&sensitive_ranges, &match_ranges(&selected)) {

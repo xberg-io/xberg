@@ -1,4 +1,4 @@
-use comrak::nodes::{AstNode, NodeValue};
+use comrak::nodes::{AstNode, NodeCode, NodeValue};
 use std::ops::Range;
 
 struct Origin {
@@ -50,13 +50,13 @@ impl VisibleMarkdown {
                 self.leaf(text, markdown, source_range(node, markdown, lines)?, false)
             }
             NodeValue::EscapedTag(text) => self.leaf(text, markdown, source_range(node, markdown, lines)?, false),
-            NodeValue::Code(code) => {
-                let range = source_range(node, markdown, lines)?;
-                let source = range.start.checked_add(code.num_backticks)?..range.end.checked_sub(code.num_backticks)?;
-                (markdown.get(source.clone())? == code.literal).then_some(())?;
-                self.leaf(&code.literal, markdown, source, false)
-            }
+            NodeValue::Code(code) => self.inline_code(node, code, markdown, lines),
             NodeValue::CodeBlock(block) => {
+                self.block_boundary();
+                self.unmapped(block.literal.strip_suffix('\n').unwrap_or(&block.literal));
+                Some(())
+            }
+            NodeValue::HtmlBlock(block) => {
                 self.block_boundary();
                 self.unmapped(block.literal.strip_suffix('\n').unwrap_or(&block.literal));
                 Some(())
@@ -75,6 +75,18 @@ impl VisibleMarkdown {
                 }
                 Some(())
             }
+        }
+    }
+
+    fn inline_code(&mut self, node: &AstNode<'_>, code: &NodeCode, markdown: &str, lines: &[usize]) -> Option<()> {
+        let source = source_range(node, markdown, lines).and_then(|range| {
+            Some(range.start.checked_add(code.num_backticks)?..range.end.checked_sub(code.num_backticks)?)
+        });
+        if let Some(source) = source.filter(|range| markdown.get(range.clone()) == Some(code.literal.as_str())) {
+            self.leaf(&code.literal, markdown, source, false)
+        } else {
+            self.unmapped(&code.literal);
+            Some(())
         }
     }
 
