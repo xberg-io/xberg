@@ -214,9 +214,10 @@ async fn each_page_uses_only_its_own_plain_backup_and_original_selected_offsets(
 
 #[tokio::test]
 async fn visible_plain_whitespace_mismatch_aborts_before_any_result_or_report_mutation() {
-    let mut result = paragraph("Jane Doe and Jane\nDoe end", vec![]);
+    let mut result = paragraph("Jane Doe and Jane\nDoe end", vec![underline(18, 21)]);
     let config = config("Jane Doe", RedactionStrategy::TokenReplace);
     let markdown = result.formatted_content.as_ref().unwrap();
+    assert_eq!(markdown.matches("<u>Doe</u>").count(), 1);
     assert_eq!(visible(markdown), "Jane Doe and Jane Doe end");
     assert_eq!(findings(&result.content, &config).await.len(), 1);
     assert_eq!(findings(markdown, &config).await.len(), 1);
