@@ -506,7 +506,8 @@ impl RedactionPass<'_> {
                     crate::core::diagnostics::push_warning(
                         &mut doc.processing_warnings,
                         "output_format",
-                        "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded and redacted plain text is returned",
+                        "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded \
+                         and redacted plain text is returned",
                     );
                     None
                 }
@@ -629,7 +630,8 @@ impl RedactionPass<'_> {
                         &mut doc.processing_warnings,
                         "output_format",
                         format!(
-                            "Page {} Markdown crossed generated syntax; its verified plain backup was redacted and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
+                            "Page {} Markdown crossed generated syntax; its verified plain backup was redacted \
+                             and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
                             page.page_number
                         ),
                     );
