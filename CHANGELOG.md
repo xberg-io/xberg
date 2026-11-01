@@ -147,6 +147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve cancellation and the smaller image byte cap during whole-document OCR recovery.** (#2339)
+  Forward the minimum outer/OCR cap without changing other security limits, and discard retry results when cancelled.
+
 - **(ocr): Decode oversized baseline JPEG scans at a bounded IDCT scale.** (#2339)
   Three-component 8-bit scans use checked input, metadata, plane and output budgets; fitting images keep their dimensions.
   Reduced fallback requires one interleaved scan without restart intervals and color markers before the frame.
