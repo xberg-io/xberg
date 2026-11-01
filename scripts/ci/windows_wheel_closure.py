@@ -68,6 +68,7 @@ SYSTEM_DLLS = frozenset(
     ]
 )
 MSVC_PREFIXES = ("msvcp", "vcruntime", "concrt", "vcomp")
+VS2022_EDITIONS = ("Community", "Professional", "Enterprise")
 REDIST_TERMS = "https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution#visual-c-runtime-files"
 RUNTIME_TERMS = "https://visualstudio.microsoft.com/license-terms/vs2022-cruntime/"
 
@@ -219,9 +220,7 @@ def crt_directory(machine: int, explicit: str | None) -> Path:
                 "-version",
                 "[17.0,18.0)",
                 "-products",
-                "Microsoft.VisualStudio.Product.Community",
-                "Microsoft.VisualStudio.Product.Professional",
-                "Microsoft.VisualStudio.Product.Enterprise",
+                *(f"Microsoft.VisualStudio.Product.{edition}" for edition in VS2022_EDITIONS),
                 "-property",
                 "installationPath",
             ],
@@ -238,6 +237,8 @@ def crt_directory(machine: int, explicit: str | None) -> Path:
         path
         for path in candidates
         if path.parent.name == architecture
+        and [part.casefold() for part in path.parts[-9:-7]] == ["microsoft visual studio", "2022"]
+        and path.parts[-7] in VS2022_EDITIONS
         and [part.lower() for part in path.parts[-6:-3]] == ["vc", "redist", "msvc"]
         and not any("debug" in part.lower() for part in path.parts)
     ]
