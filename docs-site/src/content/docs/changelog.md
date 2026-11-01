@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
+  Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
+
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
+
 - **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
   Email extraction uses read-only parser views while retaining attachment limits, nested-message
   payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
@@ -151,6 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Emit `<sup>` and `<u>` while retaining source escaping, nested formatting and table-cell scripts.
   Preserve those styles when DOCX/PDF writers parse the postprocessed Markdown; leave code and malformed tags literal.
   The HTML converter's pre-rendered Markdown and explicit conversion options retain their existing notation.
+
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
 - **(swift): The Swift package requires macOS 14.**
   The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
