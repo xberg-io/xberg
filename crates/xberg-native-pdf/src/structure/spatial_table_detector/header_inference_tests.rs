@@ -181,3 +181,5 @@ fn intersection_header_only_row_has_no_body_for_style_comparison() {
     let source = spans(&CELLS[..1], |_, _| true);
     assert_headerless(&detect(&source, &grid(1, false), 1, 3));
 }
+
+mod multi_tier;
