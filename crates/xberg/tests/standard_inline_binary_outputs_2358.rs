@@ -58,8 +58,7 @@ async fn pdf(source: &[u8]) -> (String, Content) {
     let pages = document.get_pages();
     assert_eq!(pages.len(), 1, "controlled single paragraph must produce one page");
     let text = document.extract_text(&[1]).expect("embedded font must expose text");
-    let content = Content::decode(&document.get_page_content(pages[&1]).expect("actual page content"))
-        .expect("PDF drawing operations");
+    let content = Content::decode(&document.get_page_content(pages[&1])).expect("PDF drawing operations");
     assert!(!content.operations.is_empty(), "writer must draw actual content");
     (text, content)
 }
