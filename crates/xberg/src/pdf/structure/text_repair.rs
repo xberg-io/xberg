@@ -856,10 +856,19 @@ pub(super) fn normalize_text_encoding(text: &str) -> Cow<'_, str> {
 /// the segment text is unchanged and no allocation is performed. Only
 /// `Cow::Owned` results trigger an update.
 pub(super) fn apply_to_all_segments(paragraphs: &mut [PdfParagraph], repair_fn: impl Fn(&str) -> Cow<'_, str>) {
+    apply_to_all_segments_observed(paragraphs, repair_fn, |_, _| {});
+}
+
+pub(super) fn apply_to_all_segments_observed(
+    paragraphs: &mut [PdfParagraph],
+    repair_fn: impl Fn(&str) -> Cow<'_, str>,
+    mut observe: impl FnMut(&crate::pdf::hierarchy::SegmentData, &str),
+) {
     for para in paragraphs {
         for line in &mut para.lines {
             for seg in &mut line.segments {
                 if let Cow::Owned(s) = repair_fn(&seg.text) {
+                    observe(seg, &s);
                     seg.text = s;
                 }
             }

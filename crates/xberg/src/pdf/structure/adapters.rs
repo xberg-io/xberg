@@ -1588,7 +1588,7 @@ pub(crate) fn reattach_ocr_layout_list_markers(paragraphs: &mut Vec<types::PdfPa
         let marker_bbox = paragraphs[*marker_index].block_bbox;
         let body = &mut paragraphs[*body_index];
         if let Some(line) = body.lines.first_mut() {
-            line.segments.insert(0, marker_segment);
+            line.prepend_segment(marker_segment);
         }
         body.is_list_item = true;
         body.layout_class = Some(types::LayoutHintClass::ListItem);
@@ -1813,6 +1813,8 @@ fn make_ocr_pdf_line(
         assigned_role: None,
     };
     types::PdfLine {
+        native_source_origin: None,
+        native_scripts: Vec::new(),
         segments: vec![segment],
         baseline_y,
         dominant_font_size: font_size,

@@ -6,12 +6,49 @@ use crate::pdf::hierarchy::SegmentData;
 #[derive(Debug, Clone)]
 pub(crate) struct PdfLine {
     pub segments: Vec<SegmentData>,
+    pub native_source_origin: Option<super::pipeline::native_scripts::NativeSourceOrigin>,
+    pub native_scripts: Vec<crate::pdf::native::hierarchy::script_ownership::page_segments::SegmentScriptOwner>,
     pub baseline_y: f32,
     #[allow(dead_code)]
     pub dominant_font_size: f32,
     #[allow(dead_code)]
     pub is_bold: bool,
     pub is_monospace: bool,
+}
+
+impl PdfLine {
+    pub(crate) fn prepend_segment(&mut self, segment: SegmentData) {
+        self.native_source_origin = None;
+        for owner in &mut self.native_scripts {
+            owner.base_index += 1;
+            owner.script_index += 1;
+        }
+        self.segments.insert(0, segment);
+    }
+
+    pub(crate) fn valid_native_scripts(
+        &self,
+    ) -> Vec<&crate::pdf::native::hierarchy::script_ownership::page_segments::SegmentScriptOwner> {
+        let mut endpoints = std::collections::HashMap::new();
+        crate::pdf::native::hierarchy::script_ownership::page_segments::complete_script_runs(
+            self.native_scripts
+                .iter()
+                .filter(|owner| {
+                    [(owner.base_index, false), (owner.script_index, true)]
+                        .into_iter()
+                        .all(|(index, script)| {
+                            *endpoints
+                                .entry((index, owner.original_index(script)))
+                                .or_insert_with(|| {
+                                    self.segments
+                                        .get(index)
+                                        .is_some_and(|segment| owner.endpoint_matches(segment, script))
+                                })
+                        })
+                })
+                .collect(),
+        )
+    }
 }
 
 /// A paragraph composed of lines, with optional heading classification.

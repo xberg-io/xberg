@@ -158,6 +158,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
+- **(pdf): Keep body-size heading evidence within its source text column.** (#2275)
+  Interleaved foreign-column text neither promotes wrapped prose nor hides a genuine heading.
+
+- **(pdf): Preserve native source geometry and complete powers when splitting run-in prose lists.** (#2275)
+  Plan from canonical rendered text; retain the original paragraph when a cut cannot preserve whole source spans.
+  Carry native preparation lineage through ownerless lines while preserving unproved cached-text list behavior.
+
+- **(pdf): Keep ordinary wrapped prose together around native scripts.** (#2275)
+  Calibrate paragraph gaps within their source columns and preserve ordinary continuation across inline row repairs.
+  Reuse supported ordinary pitch in sparse columns and exclude proven gutter scripts from paragraph column scope.
+  Keep smaller body-pitch observations and exclude narrow stacked rows when sharing source-column evidence.
+  Keep genuine blank gaps and separately displayed equations as paragraph boundaries.
+  Retain original paragraph and numeric-row breaks when same-column source geometry corroborates them.
+  Require complete source rows and actual endpoint spacing; corroborate new-paragraph indentation
+  with overlapping following rows.
+
+- **(pdf): Keep split fractional and compound superscripts attached as complete native runs.** (#2275)
+  Preserve each glyph witness and discard the whole ownership proof if any run member is filtered or changed.
+  Match complete numeric note labels and retain whole script ranges across independent italic and bold styles.
+
+- **(pdf): Preserve word boundaries when rebuilding fragmented native text.** (#2275)
+  Reuse the established inline gap policy while preserving source whitespace and numeric script boundaries.
+
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
 

@@ -1,6 +1,9 @@
 //! Utilities for splitting and analyzing PDF paragraphs.
 
 use super::types::PdfParagraph;
+use crate::pdf::hierarchy::SegmentData;
+
+const CONTINUATION_FONT_SIZE_TOLERANCE_PT: f32 = 2.0;
 
 /// Maximum baseline-to-baseline gap, as a multiple of the larger paragraph's
 /// dominant font size, permitted when merging a continuation paragraph.
@@ -38,7 +41,7 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
             && !next.is_code_block
             && !current.is_formula
             && !next.is_formula;
-        let fonts_compatible = (current.dominant_font_size - next.dominant_font_size).abs() < 2.0;
+        let fonts_compatible = continuation_fonts_match(current.dominant_font_size, next.dominant_font_size);
         // Never merge across a bold-state boundary. A bold run following non-bold
         // prose (or vice versa) is a formatting break — an emphasized heading or a
         // list item's bold lead-in — not a wrapped continuation. Absorbing it would
@@ -205,7 +208,7 @@ fn starts_with_lowercase_continuation(para: &PdfParagraph) -> bool {
         .and_then(|l| l.segments.first())
         .map(|s| s.text.trim_start())
         .unwrap_or("");
-    first_text.chars().next().is_some_and(|c| c.is_lowercase())
+    starts_with_lowercase(first_text)
 }
 
 /// Check if a paragraph's last line ends with sentence-terminating punctuation.
@@ -219,10 +222,38 @@ fn ends_with_sentence_terminator(para: &PdfParagraph) -> bool {
         .and_then(|l| l.segments.last())
         .map(|s| s.text.trim_end())
         .unwrap_or("");
+    ends_with_terminator(last_text)
+}
+
+fn starts_with_lowercase(text: &str) -> bool {
+    text.trim_start().chars().next().is_some_and(|c| c.is_lowercase())
+}
+
+fn ends_with_terminator(text: &str) -> bool {
     matches!(
-        last_text.chars().last(),
+        text.trim_end().chars().last(),
         Some('.' | '?' | '!' | ':' | ';' | '\u{3002}' | '\u{FF1F}' | '\u{FF01}')
     )
+}
+
+fn continuation_fonts_match(previous: f32, next: f32) -> bool {
+    (previous - next).abs() < CONTINUATION_FONT_SIZE_TOLERANCE_PT
+}
+
+pub(super) fn source_rows_continue(previous: &SegmentData, next: &SegmentData) -> bool {
+    previous.has_same_rotation(next)
+        && previous.assigned_role.is_none()
+        && next.assigned_role.is_none()
+        && !previous.is_monospace
+        && !next.is_monospace
+        && previous.is_bold == next.is_bold
+        && continuation_fonts_match(previous.font_size, next.font_size)
+        && previous.upright_baseline().is_finite()
+        && next.upright_baseline().is_finite()
+        && previous.upright_baseline() > next.upright_baseline()
+        && previous.upright_baseline() - next.upright_baseline()
+            <= previous.font_size.max(next.font_size).max(1.0) * MAX_CONTINUATION_LINE_GAP_MULTIPLE
+        && (!ends_with_terminator(&previous.text) || starts_with_lowercase(&next.text))
 }
 
 /// Split paragraphs that contain embedded bullet characters (e.g. `•`) into separate list items.
@@ -322,6 +353,8 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
     }];
 
     let line = super::types::PdfLine {
+        native_source_origin: None,
+        native_scripts: Vec::new(),
         segments,
         baseline_y: 0.0,
         dominant_font_size: font_size,
@@ -372,6 +405,8 @@ mod tests {
         }];
 
         let lines = vec![super::super::types::PdfLine {
+            native_source_origin: None,
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: font_size,
@@ -694,6 +729,8 @@ mod tests {
             assigned_role: None,
         }];
         let lines = vec![super::super::types::PdfLine {
+            native_source_origin: None,
+            native_scripts: Vec::new(),
             segments,
             baseline_y,
             dominant_font_size: 12.0,

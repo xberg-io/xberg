@@ -2414,5 +2414,6 @@ mod run;
 mod setup;
 mod span_merging;
 mod span_ordering;
+pub use span_ordering::{ScriptRowCandidate, script_row_candidates};
 mod tj_arrays;
 mod xobjects;

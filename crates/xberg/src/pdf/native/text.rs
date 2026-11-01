@@ -508,8 +508,7 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
 /// 2. Group by chained y-proximity: consecutive spans within COALESCE_THRESHOLD pt
 ///    of the previous span belong to the same visual line.
 /// 3. Within each group sort by x-ascending (left-to-right reading order).
-/// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
-///    exceeds font_size * 0.5.
+/// 4. Concatenate using the ordinary inline word-gap policy within each row.
 fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     if spans.is_empty() {
         return String::new();
@@ -538,20 +537,18 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         if gi > 0 {
             result.push('\n');
         }
-        let font_size = group.iter().map(|s| s.font_size).fold(0.0_f32, f32::max);
-        let space_threshold = font_size * 0.5;
-        let mut prev_end_x = f32::NEG_INFINITY;
-        let mut previous = None;
+        let mut previous: Option<&xberg_native_pdf::layout::TextSpan> = None;
         for (index, span) in group.iter().enumerate() {
-            if (prev_end_x.is_finite() && span.bbox.x - prev_end_x > space_threshold)
-                || previous.is_some_and(|prev| {
-                    needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied())
-                })
-            {
+            if previous.is_some_and(|prev| {
+                needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied())
+                    || ((prev.bbox.x + prev.bbox.width).is_finite()
+                        && !prev.text.ends_with(char::is_whitespace)
+                        && !span.text.starts_with(char::is_whitespace)
+                        && inline_span_needs_word_space(prev, span))
+            }) {
                 result.push(' ');
             }
             result.push_str(&span.text);
-            prev_end_x = span.bbox.x + span.bbox.width;
             previous = Some(*span);
         }
     }
@@ -824,8 +821,8 @@ fn append_span_separator(
 
     // Everything below runs in the pair's shared upright frame: identical to the
     // raw page axes when the pair is unrotated, axis-swapped when it is not.
-    let (previous_start, previous_end) = upright_advance_extent(previous);
-    let (span_start, span_end) = upright_advance_extent(span);
+    let (previous_start, _) = upright_advance_extent(previous);
+    let (span_start, _) = upright_advance_extent(span);
     let (previous_baseline, _) = upright_cross_extent(previous);
     let (span_baseline, _) = upright_cross_extent(span);
     let baseline_gap = (previous_baseline - span_baseline).abs();
@@ -854,12 +851,7 @@ fn append_span_separator(
 
     let effective_height = span.bbox.height.max(previous.bbox.height).max(span.font_size * 0.5);
     if baseline_gap < effective_height * 0.5 {
-        let visual_gap = if span_start < previous_start && has_rtl_content(previous, span) {
-            previous_start - span_end
-        } else {
-            span_start - previous_end
-        };
-        if visual_gap > span.font_size * 0.15 {
+        if inline_span_needs_word_space(previous, span) {
             text.push(' ');
         }
     } else if baseline_gap > paragraph_gap_threshold {
@@ -867,6 +859,20 @@ fn append_span_separator(
     } else {
         text.push('\n');
     }
+}
+
+fn inline_span_needs_word_space(
+    previous: &xberg_native_pdf::layout::TextSpan,
+    span: &xberg_native_pdf::layout::TextSpan,
+) -> bool {
+    let (previous_start, previous_end) = upright_advance_extent(previous);
+    let (span_start, span_end) = upright_advance_extent(span);
+    let visual_gap = if span_start < previous_start && has_rtl_content(previous, span) {
+        previous_start - span_end
+    } else {
+        span_start - previous_end
+    };
+    visual_gap > span.font_size * 0.15
 }
 
 fn assemble_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
@@ -7796,3 +7802,6 @@ mod tests {
         assert_reordered(spans, true);
     }
 }
+
+#[cfg(test)]
+mod fragmented_spacing_source_tests;
