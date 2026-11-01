@@ -40,3 +40,6 @@ pub(crate) use markdown::render_markdown;
 #[cfg(feature = "pdf")]
 pub(crate) use pdf::render_pdf;
 pub(crate) use plain::render_plain;
+
+#[cfg(all(test, feature = "office", feature = "pdf"))]
+mod inline_html_writer_tests;
