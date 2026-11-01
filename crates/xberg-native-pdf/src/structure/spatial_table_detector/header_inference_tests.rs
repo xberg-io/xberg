@@ -183,3 +183,5 @@ fn intersection_header_only_row_has_no_body_for_style_comparison() {
 }
 
 mod multi_tier;
+
+mod rowspan_metadata;
