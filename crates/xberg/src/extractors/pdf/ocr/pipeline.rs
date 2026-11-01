@@ -2514,30 +2514,8 @@ pub(super) async fn extract_with_ocr_for_page(
     #[cfg(all(feature = "layout-detection", not(feature = "ocr"), not(feature = "ocr-wasm")))]
     let _ = points_per_pixel_override;
 
-    let resolved_ocr_config = super::resolve_ocr_config(config);
+    let resolved_ocr_config = pre_page_ocr_config(config);
     let base_ocr_config = resolved_ocr_config.as_ref();
-
-    let accel_ocr_config;
-    let base_ocr_config = if (base_ocr_config.acceleration.is_none() && config.acceleration.is_some())
-        || (base_ocr_config.security_limits.is_none() && config.security_limits.is_some())
-    {
-        accel_ocr_config = {
-            let mut c = base_ocr_config.clone();
-            if c.acceleration.is_none() {
-                c.acceleration = config.acceleration.clone();
-            }
-            // GH#1554: mirrors `acceleration` above so the scanned-page OCR route inherits the
-            // caller's configured decode limits instead of always falling back to
-            // `SecurityLimits::default()`. ~keep
-            if c.security_limits.is_none() {
-                c.security_limits = config.security_limits.clone();
-            }
-            c
-        };
-        &accel_ocr_config
-    } else {
-        base_ocr_config
-    };
 
     let backend = {
         let registry = get_ocr_backend_registry();
@@ -5224,6 +5202,25 @@ struct PipelineStageInputs<'a> {
     xobject_document: Option<&'a xberg_native_pdf::PdfDocument>,
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config::OcrConfig> {
+    let mut resolved = super::resolve_ocr_config(config);
+    if (resolved.acceleration.is_none() && config.acceleration.is_some())
+        || (resolved.security_limits.is_none() && config.security_limits.is_some())
+    {
+        let ocr = resolved.to_mut();
+        if ocr.acceleration.is_none() {
+            ocr.acceleration = config.acceleration.clone();
+        }
+        // GH#1554: mirrors `acceleration` above so the scanned-page OCR route inherits the
+        // caller's configured decode limits instead of always falling back to
+        // `SecurityLimits::default()`. ~keep
+        if ocr.security_limits.is_none() {
+            ocr.security_limits = config.security_limits.clone();
+        }
+    }
+    resolved
+}
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
 /// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -5304,6 +5301,8 @@ async fn run_ocr_pipeline_stages(
     // authentication) so the failure is surfaced to the caller instead of being
     // silently replaced by a lower-quality earlier result (issue #1339).
     let mut stage_failures: Vec<(String, String)> = Vec::new();
+    #[cfg(feature = "pdf")]
+    let mut preferred_recovery_config = None;
 
     for stage in &available_stages {
         let mut stage_ocr = ocr_config.clone();
@@ -5326,6 +5325,10 @@ async fn run_ocr_pipeline_stages(
             ocr: Some(stage_ocr),
             ..config.clone()
         };
+        #[cfg(feature = "pdf")]
+        if preferred_recovery_config.is_none() {
+            preferred_recovery_config = Some(pre_page_ocr_config(&stage_config).into_owned());
+        }
 
         tracing::debug!(
             backend = %stage.backend,
@@ -5567,13 +5570,13 @@ async fn run_ocr_pipeline_stages(
             // giving up -- for a scanned PDF whose rasterizer output is blank, those
             // images are the only place the text ever was.
             #[cfg(feature = "pdf")]
-            let xobject_recovery = if let Some(first_stage) = available_stages.first() {
+            let xobject_recovery = if let Some(recovery_ocr_config) = preferred_recovery_config.as_ref() {
                 if inputs.content.is_some() {
                     Box::pin(recover_pipeline_document_from_image_xobjects(
                         inputs.content,
                         config,
-                        ocr_config,
-                        &first_stage.backend,
+                        recovery_ocr_config,
+                        &recovery_ocr_config.backend,
                     ))
                     .await?
                 } else if let Some(doc) = inputs.xobject_document {
@@ -5581,8 +5584,8 @@ async fn run_ocr_pipeline_stages(
                         doc,
                         inputs.page_index_offset,
                         config,
-                        ocr_config,
-                        &first_stage.backend,
+                        recovery_ocr_config,
+                        &recovery_ocr_config.backend,
                     ))
                     .await?
                 } else {

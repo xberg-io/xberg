@@ -149,6 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep the preferred OCR stage policy when retrying original embedded images.** (#2339)
+  Preserve language, preprocessing and backend options before page-render hints in whole-document and detached recovery.
+
 - **(pdf): Preserve cancellation and the smaller image byte cap during whole-document OCR recovery.** (#2339)
   Forward the minimum outer/OCR cap without changing other security limits, and discard retry results when cancelled.
 
