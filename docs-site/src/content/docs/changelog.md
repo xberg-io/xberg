@@ -152,6 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
   Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
   Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
 
 - **(swift): The Swift package requires macOS 14.**
   The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
