@@ -202,3 +202,143 @@ fn should_keep_eight_source_contribution_rows_with_five_values_each_2275() {
         );
     }
 }
+
+#[test]
+fn should_keep_the_source_remark_continuation_out_of_document_headings_2275() {
+    let result = source_document(
+        "arxiv-2403.01333v1-p4",
+        "b6b67e0379852385254508c03e08e87d35b42348fa933e05e8bdb60c658ad215",
+    );
+    let document = result.document.as_ref().unwrap();
+    let (_, remark) = unique_node(document, "Remark 3.");
+    let (_, continuation) = unique_node(document, "feedback controller is able to achieve");
+    let (_, ending) = unique_node(document, "performance in terms of the closed-loop systems");
+    assert!(ending.content.text().unwrap().contains("norms."));
+    let remark_text = remark.content.text().unwrap();
+    assert!(
+        remark.annotations.iter().any(|annotation| {
+            matches!(annotation.kind, AnnotationKind::Bold | AnnotationKind::Italic)
+                && remark_text
+                    .get(annotation.start as usize..annotation.end as usize)
+                    .is_some_and(|text| text.contains("Remark 3."))
+        }),
+        "actual nonempty styled source context, not an unmatched paragraph anchor"
+    );
+    let (_, previous_control) = unique_node(document, "We next present the result for");
+    assert!(matches!(previous_control.content, NodeContent::Paragraph { .. }));
+    assert!(
+        matches!(continuation.content, NodeContent::Paragraph { .. }),
+        "the continuous source Remark 3 sentence must not become a heading: {:?}",
+        continuation.content
+    );
+}
+
+#[test]
+fn should_keep_the_source_algebraic_definition_continuation_in_one_paragraph_2275() {
+    let result = source_document(
+        "gutenberg-38769-p74",
+        "8843c419ae6e36aa019af4b6a1155bf798fd589463df572b188f88bc402f6b77",
+    );
+    let document = result.document.as_ref().unwrap();
+    let (definition_index, definition) = unique_node(document, "will be said to be an algebraical function");
+    let (coefficient_index, coefficient) = unique_node(document, "coefficients are rational functions of x");
+    assert!(definition.content.text().unwrap().contains("a function y = f(x)"));
+    assert!(
+        coefficient
+            .content
+            .text()
+            .unwrap()
+            .contains("There is plainly no loss of generality")
+    );
+    assert!(matches!(definition.content, NodeContent::Paragraph { .. }));
+    assert!(matches!(coefficient.content, NodeContent::Paragraph { .. }));
+    assert_eq!(
+        definition_index, coefficient_index,
+        "the source's italic definition continues through its coefficient clause without a new paragraph"
+    );
+}
+
+#[test]
+fn should_keep_the_source_t_score_explanation_continuation_in_one_paragraph_2275() {
+    let result = source_document(
+        "openstax-introductory-business-statistics-1e-p362",
+        "dcf927a2900537d64df1b3484af3894d88c38fdbbc05aa82957d228c431016c4",
+    );
+    let document = result.document.as_ref().unwrap();
+    let (formula_index, formula) = unique_node(document, "which measures");
+    let (explanation_index, explanation) = unique_node(document, "how far away a measure is from the population mean");
+    let (_, standard_deviation) = unique_node(document, "standard deviation, and");
+    assert!(
+        standard_deviation
+            .content
+            .text()
+            .unwrap()
+            .contains("is the sample size")
+    );
+    assert!(formula.content.text().unwrap().contains("is the formula for the"));
+    assert!(explanation.content.text().unwrap().contains("Student's t-distribution"));
+    assert!(matches!(formula.content, NodeContent::Paragraph { .. }));
+    assert!(matches!(explanation.content, NodeContent::Paragraph { .. }));
+    assert_eq!(
+        formula_index, explanation_index,
+        "how far away continues the printed t-score definition rather than starting a new paragraph"
+    );
+}
+
+fn table_source_text(document: &DocumentStructure) -> String {
+    document
+        .nodes
+        .iter()
+        .flat_map(|node| match &node.content {
+            NodeContent::Table { grid } => grid.cells.iter().map(|cell| cell.content.as_str()).collect(),
+            content => content.text().into_iter().collect::<Vec<_>>(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn should_keep_source_sample_size_table_labels_out_of_document_headings_2275() {
+    let result = source_document(
+        "openstax-introductory-business-statistics-1e-p412",
+        "56ea62a1dcc0be8bbfcf59597da6f68060524df68f083ebb30c550f0c53f7d5e",
+    );
+    let document = result.document.as_ref().unwrap();
+    let (_, distribution) = unique_node(document, "9.3 Distribution Needed for Hypothesis Testing");
+    let (_, hypotheses) = unique_node(document, "9.1 Null and Alternative Hypotheses");
+    assert!(matches!(distribution.content, NodeContent::Heading { .. }));
+    assert!(matches!(hypotheses.content, NodeContent::Heading { .. }));
+    let text = table_source_text(document);
+    let cells = text
+        .lines()
+        .filter(|line| !line.starts_with("Table 9.6 Test Statistics"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for label in ["Sample Size", "Test Statistic"] {
+        assert_eq!(
+            cells.matches(label).count(),
+            2,
+            "both actual source tables retain {label}"
+        );
+    }
+    assert_eq!(
+        text.matches("Table 9.6 Test Statistics for Test").count(),
+        2,
+        "both actual source table captions are present before heading assertions"
+    );
+    let promoted_labels: Vec<_> = document
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            NodeContent::Heading { text, .. } if text.contains("Sample Size") || text.contains("Test Statistic") => {
+                Some(text.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        promoted_labels,
+        Vec::<&str>::new(),
+        "table column labels have no source document-heading role"
+    );
+}
