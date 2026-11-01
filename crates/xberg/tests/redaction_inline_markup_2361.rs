@@ -42,7 +42,30 @@ fn normalized(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-async fn package(source: &[u8], format: &str, expected_plain: &str) -> Vec<u8> {
+enum Output {
+    Binary(Vec<u8>),
+    Plain(String),
+}
+
+fn verified_plain_fallback(result: &ExtractedDocument, expected: &str) -> String {
+    assert_eq!(result.metadata.output_format.as_deref(), Some("plain"));
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "output_format"
+                && warning.message.contains("rendering was discarded")
+                && warning.message.contains("plain text")),
+        "the format downgrade must be explicit: {:?}",
+        result.processing_warnings
+    );
+    assert!(result.formatted_content.is_none());
+    let text = normalized(&result.content);
+    assert_eq!(text, expected, "the fallback must be the fully redacted source text");
+    text
+}
+
+async fn package(source: &[u8], format: &str, expected_plain: &str) -> Output {
     let plain = redacted(source, OutputFormat::Plain).await;
     assert_eq!(
         normalized(&plain.content),
@@ -50,16 +73,22 @@ async fn package(source: &[u8], format: &str, expected_plain: &str) -> Vec<u8> {
         "the whole term must match the actual plain source"
     );
     let result = redacted(source, OutputFormat::Custom(format.into())).await;
+    if result.metadata.output_format.as_deref() == Some("plain") {
+        return Output::Plain(verified_plain_fallback(&result, expected_plain));
+    }
     assert_eq!(result.metadata.output_format.as_deref(), Some(format));
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&result.content)
         .expect("actual binary output");
     assert!(!bytes.is_empty());
-    bytes
+    Output::Binary(bytes)
 }
 
 async fn word_text(source: &[u8], expected_plain: &str) -> String {
-    let bytes = package(source, "docx", expected_plain).await;
+    let bytes = match package(source, "docx", expected_plain).await {
+        Output::Binary(bytes) => bytes,
+        Output::Plain(text) => return text,
+    };
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).expect("actual DOCX package");
     assert!(archive.len() >= 6, "canonical package parts must exist");
     let mut xml = String::new();
@@ -80,7 +109,10 @@ async fn word_text(source: &[u8], expected_plain: &str) -> String {
 }
 
 async fn pdf_text(source: &[u8], expected_plain: &str) -> String {
-    let bytes = package(source, "pdf", expected_plain).await;
+    let bytes = match package(source, "pdf", expected_plain).await {
+        Output::Binary(bytes) => bytes,
+        Output::Plain(text) => return text,
+    };
     assert!(bytes.starts_with(b"%PDF-"));
     let document = lopdf::Document::load_mem(&bytes).expect("actual PDF output");
     let pages = document.get_pages();
@@ -127,7 +159,9 @@ async fn pdf_redacts_bare_and_inline_split_occurrences_2361() {
 #[serial_test::serial]
 async fn docx_preserves_single_split_plain_fallback_2361() {
     let expected = "Call [REDACTED] today";
-    let text = word_text(SPLIT_ONLY, expected).await;
+    let Output::Plain(text) = package(SPLIT_ONLY, "docx", expected).await else {
+        panic!("the existing single-split case must retain its explicit plain fallback");
+    };
     assert_private_output(&text, expected, &["Call", "today"]);
 }
 
@@ -135,6 +169,8 @@ async fn docx_preserves_single_split_plain_fallback_2361() {
 #[serial_test::serial]
 async fn pdf_preserves_single_split_plain_fallback_2361() {
     let expected = "Call [REDACTED] today";
-    let text = pdf_text(SPLIT_ONLY, expected).await;
+    let Output::Plain(text) = package(SPLIT_ONLY, "pdf", expected).await else {
+        panic!("the existing single-split case must retain its explicit plain fallback");
+    };
     assert_private_output(&text, expected, &["Call", "today"]);
 }
