@@ -170,6 +170,9 @@ jobs:
       - name: Verify actual npm launcher working directory
         run: python3 scripts/tests/test_mcp_launcher_cwd.py
 
+      - name: Verify xberg-tesseract build-script warnings
+        run: python3 scripts/tests/test_tesseract_build_warnings.py
+
   submodule-gitlinks:
     if: >-
       ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
