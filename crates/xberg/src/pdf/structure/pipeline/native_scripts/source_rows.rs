@@ -127,11 +127,14 @@ impl<'a> SourceRows<'a> {
         let first = self.segment(current.first);
         let last = self.segment(current.last);
         let following = self.segment(next.first);
+        let following_end = self.segment(next.last);
         let tolerance = super::super::HEADING_HANGING_INDENT_LEFT_EDGE_TOLERANCE_FONT_FACTOR
             * first.font_size.max(following.font_size).max(1.0);
         first.upright_advance_extent().0 - following.upright_advance_extent().0 > tolerance
+            && following_end.upright_advance_extent().1 > first.upright_advance_extent().0
             && super::super::super::paragraphs::source_rows_continue(last, following)
-            && super::super::heading_fills_column(last, self.segment(next.last).upright_advance_extent().1)
+            && super::super::heading_fills_column(last, following_end.upright_advance_extent().1)
+            && super::super::heading_fills_column(following_end, last.upright_advance_extent().1)
     }
 
     fn segment(&self, slot: usize) -> &SegmentData {
