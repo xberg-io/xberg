@@ -287,8 +287,29 @@ pub(crate) fn page_ocr_fallback_image_bytes(
     doc: &xberg_native_pdf::PdfDocument,
     page_idx: usize,
 ) -> Vec<PageFallbackImage> {
+    collect_legacy_page_fallback_images(doc, page_idx, None, |_| {})
+}
+
+/// Admit stored-input copies per page while preserving legacy codec behavior.
+/// Filter-expanded JPEG, raw pixels and encoded PNG outputs have separate, unqualified bounds.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn page_ocr_fallback_image_bytes_with_stored_copy_limit(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    max_stored_bytes: usize,
+) -> Vec<PageFallbackImage> {
+    collect_legacy_page_fallback_images(doc, page_idx, Some(max_stored_bytes), |_| {})
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn collect_legacy_page_fallback_images(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    mut remaining: Option<usize>,
+    mut on_decode: impl FnMut(usize),
+) -> Vec<PageFallbackImage> {
     let handles = match doc.page_image_handles(page_idx) {
-        Ok(h) => h,
+        Ok(handles) => handles,
         Err(error) => {
             tracing::debug!(
                 page = page_idx,
@@ -297,70 +318,96 @@ pub(crate) fn page_ocr_fallback_image_bytes(
             return Vec::new();
         }
     };
-
     let mut out = Vec::with_capacity(handles.len());
     for handle in &handles {
-        match handle.decode() {
-            Ok(img) => match img.data() {
-                xberg_native_pdf::extractors::ImageData::Jpeg(jpeg_bytes) => out.push(PageFallbackImage {
-                    bytes: Bytes::copy_from_slice(jpeg_bytes),
-                    format: "jpeg",
-                    recovery: XObjectRecovery::EmbeddedJpeg,
-                    paint_order: handle.paint_order,
-                }),
-                xberg_native_pdf::extractors::ImageData::Raw { pixels, format } => {
-                    match raw_pixels_to_png(img.width(), img.height(), format, pixels) {
-                        Ok(bytes) => out.push(PageFallbackImage {
-                            bytes,
-                            format: "png",
-                            recovery: XObjectRecovery::ReencodedPixels,
-                            paint_order: handle.paint_order,
-                        }),
-                        Err(error) => {
-                            tracing::debug!(page = page_idx, "force_ocr fallback: raw re-encode failed: {error}");
-                        }
-                    }
-                }
-            },
-            Err(decode_err) => {
-                let passthrough = matches!(
-                    handle.filter_chain.last(),
-                    Some(xberg_native_pdf::PdfFilter::DCTDecode) | Some(xberg_native_pdf::PdfFilter::JPXDecode)
-                );
-                if passthrough {
-                    match handle.raw_compressed_bytes() {
-                        Ok(raw) if matches!(detect_image_format_from_bytes(&raw), "jpeg" | "jpeg2000") => {
-                            let format = detect_image_format_from_bytes(&raw);
-                            out.push(PageFallbackImage {
-                                bytes: Bytes::from(raw),
-                                format,
-                                recovery: XObjectRecovery::RawCompressedStream,
-                                paint_order: handle.paint_order,
-                            });
-                        }
-                        Ok(_) => {
-                            tracing::debug!(
-                                page = page_idx,
-                                "force_ocr fallback: raw bytes not a recognizable JPEG/JP2"
-                            );
-                        }
-                        Err(error) => {
-                            tracing::debug!(
-                                page = page_idx,
-                                "force_ocr fallback: raw_compressed_bytes failed: {error}"
-                            );
-                        }
-                    }
-                } else {
-                    tracing::debug!(
-                        page = page_idx,
-                        "force_ocr fallback: undecodable image, non-JPEG codec: {decode_err}"
-                    );
-                }
-            }
+        let next_remaining = if let Some(limit) = remaining {
+            let Ok(length) = handle.stored_stream_len() else {
+                continue;
+            };
+            let Some(next) = limit.checked_sub(length) else {
+                continue;
+            };
+            Some(next)
+        } else {
+            None
+        };
+        on_decode(handle.paint_order);
+        if let Some(recovered) = recover_legacy_page_image(handle, page_idx) {
+            out.push(recovered);
+            remaining = next_remaining;
         }
     }
     out
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn recover_legacy_page_image(
+    handle: &xberg_native_pdf::extractors::images::PdfImageHandle<'_>,
+    page_idx: usize,
+) -> Option<PageFallbackImage> {
+    let decoded = handle.decode().map(|image| {
+        let dimensions = (image.width(), image.height());
+        (dimensions, image.into_data())
+    });
+    match decoded {
+        Ok((_, xberg_native_pdf::extractors::ImageData::Jpeg(bytes))) => Some(PageFallbackImage {
+            bytes: Bytes::from(bytes),
+            format: "jpeg",
+            recovery: XObjectRecovery::EmbeddedJpeg,
+            paint_order: handle.paint_order,
+        }),
+        Ok(((width, height), xberg_native_pdf::extractors::ImageData::Raw { pixels, format })) => {
+            match raw_pixels_to_png(width, height, &format, &pixels) {
+                Ok(bytes) => Some(PageFallbackImage {
+                    bytes,
+                    format: "png",
+                    recovery: XObjectRecovery::ReencodedPixels,
+                    paint_order: handle.paint_order,
+                }),
+                Err(error) => {
+                    tracing::debug!(page = page_idx, "force_ocr fallback: raw re-encode failed: {error}");
+                    None
+                }
+            }
+        }
+        Err(decode_err) => {
+            if matches!(
+                handle.filter_chain.last(),
+                Some(xberg_native_pdf::PdfFilter::DCTDecode) | Some(xberg_native_pdf::PdfFilter::JPXDecode)
+            ) {
+                match handle.raw_compressed_bytes() {
+                    Ok(raw) if matches!(detect_image_format_from_bytes(&raw), "jpeg" | "jpeg2000") => {
+                        Some(PageFallbackImage {
+                            format: detect_image_format_from_bytes(&raw),
+                            bytes: Bytes::from(raw),
+                            recovery: XObjectRecovery::RawCompressedStream,
+                            paint_order: handle.paint_order,
+                        })
+                    }
+                    Ok(_) => {
+                        tracing::debug!(
+                            page = page_idx,
+                            "force_ocr fallback: raw bytes not a recognizable JPEG/JP2"
+                        );
+                        None
+                    }
+                    Err(error) => {
+                        tracing::debug!(
+                            page = page_idx,
+                            "force_ocr fallback: raw_compressed_bytes failed: {error}"
+                        );
+                        None
+                    }
+                }
+            } else {
+                tracing::debug!(
+                    page = page_idx,
+                    "force_ocr fallback: undecodable image, non-JPEG codec: {decode_err}"
+                );
+                None
+            }
+        }
+    }
 }
 
 /// Page numbers (1-based) whose PDF-space dimensions are known and whose native text layer is

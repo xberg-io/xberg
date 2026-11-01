@@ -292,6 +292,11 @@ impl PdfImage {
         &self.data
     }
 
+    /// Consume the image and transfer its encoded bytes or raw pixels without copying.
+    pub fn into_data(self) -> ImageData {
+        self.data
+    }
+
     /// Get the bounding box if available.
     pub fn bbox(&self) -> Option<&Rect> {
         self.bbox.as_ref()
@@ -4128,6 +4133,19 @@ impl<'doc> PdfImageHandle<'doc> {
                 }
             }
             PdfImageSource::Inline { compressed_bytes, .. } => Ok(compressed_bytes.to_vec()),
+        }
+    }
+
+    /// Inspect actual stored length before creating an additional recovery payload copy.
+    ///
+    /// Loading an uncached object may materialize parser-owned storage outside this admission bound.
+    pub fn stored_stream_len(&self) -> Result<usize> {
+        match &self.source {
+            PdfImageSource::XObject(obj_ref) => match self.doc.load_object(*obj_ref)? {
+                crate::object::Object::Stream { data, .. } => Ok(data.len()),
+                _ => Err(crate::error::Error::Image("XObject is not a stream".to_string())),
+            },
+            PdfImageSource::Inline { compressed_bytes, .. } => Ok(compressed_bytes.len()),
         }
     }
 

@@ -599,6 +599,33 @@ pub(super) async fn recover_page_text_from_image_xobjects(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) async fn recover_page_text_from_stored_copy_limited_xobjects(
+    backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
+    render_doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    total_pages: usize,
+    ocr_config: &crate::core::config::OcrConfig,
+    budget: &mut crate::extractors::security::SecurityBudget,
+) -> crate::Result<Option<XObjectRecoveryOutcome>> {
+    let cap = ocr_config.security_limits.as_ref().map_or_else(
+        || crate::extractors::security::SecurityLimits::default().max_content_size,
+        |limits| limits.max_content_size,
+    );
+    let fallback_images = crate::pdf::native::images::page_ocr_fallback_image_bytes_with_stored_copy_limit(
+        render_doc, page_idx, cap,
+    );
+    if fallback_images.is_empty() {
+        return Ok(None);
+    }
+    let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();
+    let ocr_config =
+        super::pipeline::ocr_config_with_page_rotation_hint(ocr_config, 0, None, whole_page_raster, false, false);
+    recover_image_xobjects(backend, &fallback_images, page_idx, total_pages, &ocr_config, budget)
+        .await
+        .map(Some)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_page_text_from_bounded_image_xobjects(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
     render_doc: &xberg_native_pdf::PdfDocument,

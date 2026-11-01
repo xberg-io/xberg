@@ -149,6 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Admit stored image inputs before additional whole-document recovery copies.** (#2339)
+  Preserve legacy formats; the per-page stored-input allowance does not bound filter-expanded or pixel/PNG outputs.
+
 - **(pdf): Keep the preferred OCR stage policy when retrying original embedded images.** (#2339)
   Preserve language, preprocessing and backend options before page-render hints in whole-document and detached recovery.
 

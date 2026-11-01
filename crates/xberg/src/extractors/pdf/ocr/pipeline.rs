@@ -4763,8 +4763,10 @@ pub(super) async fn collect_pipeline_xobject_pages(
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
     for page_idx in 0..page_count {
-        let Some(recovery) =
-            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, budget).await?
+        let Some(recovery) = super::rendering::recover_page_text_from_stored_copy_limited_xobjects(
+            backend, doc, page_idx, page_count, ocr_config, budget,
+        )
+        .await?
         else {
             continue;
         };
