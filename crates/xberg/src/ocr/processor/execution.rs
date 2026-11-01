@@ -968,6 +968,8 @@ const RGB_CHANNEL_COUNT: usize = 3;
 
 #[cfg(test)]
 mod reduced_jpeg_dpi_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod reduced_jpeg_memory_tests;
 
 fn prepare_encoded_ocr_image(
     bytes: &[u8],
