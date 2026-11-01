@@ -4849,6 +4849,23 @@ fn pipeline_xobject_content_limit(config: &ExtractionConfig, ocr_config: &crate:
         (None, None) => crate::extractors::security::SecurityLimits::default().max_content_size,
     }
 }
+/// The OCR config both image-XObject retries hand the backend. The limits follow the OCR precedence (the OCR
+/// config's own limits, then the extraction limits, then the defaults); the byte cap is the smaller of the two.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn pipeline_xobject_recovery_ocr_config(
+    config: &ExtractionConfig,
+    ocr_config: &crate::core::config::OcrConfig,
+) -> crate::core::config::OcrConfig {
+    let mut limits = ocr_config
+        .security_limits
+        .clone()
+        .or_else(|| config.security_limits.clone())
+        .unwrap_or_default();
+    limits.max_content_size = pipeline_xobject_content_limit(config, ocr_config);
+    let mut recovery_ocr_config = ocr_config.clone();
+    recovery_ocr_config.security_limits = Some(limits);
+    recovery_ocr_config
+}
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) async fn recover_pipeline_document_from_image_xobjects(
     content: Option<&[u8]>,
@@ -4875,9 +4892,7 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
     };
 
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
-    let mut recovery_ocr_config = ocr_config.clone();
-    let limits = recovery_ocr_config.security_limits.get_or_insert_with(Default::default);
-    limits.max_content_size = pipeline_xobject_content_limit(config, ocr_config);
+    let recovery_ocr_config = pipeline_xobject_recovery_ocr_config(config, ocr_config);
     let outcome = collect_pipeline_xobject_pages(&backend, &doc, page_count, &recovery_ocr_config, &mut budget).await;
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
         return Err(crate::XbergError::Cancelled);
@@ -4915,10 +4930,7 @@ async fn recover_pipeline_page_from_image_xobjects(
         return Ok(None);
     }
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
-    let mut limits = config.security_limits.clone().unwrap_or_default();
-    limits.max_content_size = pipeline_xobject_content_limit(config, ocr_config);
-    let mut recovery_ocr_config = ocr_config.clone();
-    recovery_ocr_config.security_limits = Some(limits);
+    let recovery_ocr_config = pipeline_xobject_recovery_ocr_config(config, ocr_config);
     let recovery = recover_page_text_from_bounded_image_xobjects(
         &backend,
         doc,

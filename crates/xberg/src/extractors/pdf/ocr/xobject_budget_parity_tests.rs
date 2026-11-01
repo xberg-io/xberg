@@ -233,3 +233,46 @@ async fn legacy_outer_filtered_dct_recovery_is_not_lost_by_direct_stream_admissi
     assert_eq!(out.images.len(), 1);
     assert_eq!(out.images[0].format.as_ref(), format);
 }
+
+async fn forwarded_table_cell_limits(
+    f: &support::Fixture,
+    cfg: &crate::core::config::ExtractionConfig,
+    ocr: &crate::core::config::OcrConfig,
+    records: &support::Records,
+) -> [usize; 2] {
+    let mut forwarded = [0; 2];
+    for (slot, detached) in [false, true].into_iter().enumerate() {
+        records.lock().unwrap().clear();
+        if detached {
+            recover_pipeline_page_from_image_xobjects(&f.doc, 0, cfg, ocr, BACKEND).await
+        } else {
+            recover_pipeline_document_from_image_xobjects(Some(&f.bytes), cfg, ocr, BACKEND).await
+        }
+        .unwrap()
+        .expect("both retry routes return routing payload");
+        let calls = records.lock().unwrap();
+        forwarded[slot] = calls[0].config.security_limits.as_ref().unwrap().max_table_cells;
+    }
+    forwarded
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn both_retry_routes_forward_the_same_non_size_limits() {
+    let f = fixture(1, false);
+    let (_guard, records) = observer(Reply::Text);
+    let (mut cfg, mut ocr) = config(16_384, 16_384);
+    cfg.security_limits.as_mut().unwrap().max_table_cells = 9;
+    ocr.security_limits.as_mut().unwrap().max_table_cells = 7;
+    assert_eq!(
+        forwarded_table_cell_limits(&f, &cfg, &ocr, &records).await,
+        [7, 7],
+        "the OCR config's own limits take precedence on both routes"
+    );
+    ocr.security_limits = None;
+    assert_eq!(
+        forwarded_table_cell_limits(&f, &cfg, &ocr, &records).await,
+        [9, 9],
+        "without OCR limits, both routes start from the extraction limits"
+    );
+}
