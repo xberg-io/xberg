@@ -4,8 +4,8 @@ use super::super::{
 };
 use super::source_geometry::{canonical_body, source_digest};
 use super::{
-    MAX_OTHER_HEADING_RATIO, MIN_BODY_SIZE_BOLD_SIGNALS, PdfParagraph, assert_valid_source, fixtures,
-    is_body_size_bold_heading_candidate, line, paragraph, paragraph_text_raw, source_fingerprint,
+    HeadingContext, MAX_OTHER_HEADING_RATIO, MIN_BODY_SIZE_BOLD_SIGNALS, PdfParagraph, assert_valid_source, fixtures,
+    is_body_size_bold_heading_candidate, line, paragraph, paragraph_text_raw, shares_same_text_row, source_fingerprint,
 };
 
 const SOURCE_BODY_FONT: f32 = f32::from_bits(0x411ae205);
@@ -199,6 +199,16 @@ fn source_page(include_table_candidate: bool) -> Vec<Vec<PdfParagraph>> {
         page.push(header);
     }
     page.extend([body, practice, hypotheses, exercise]);
+    if include_table_candidate {
+        let mut context = HeadingContext::new(&page);
+        for (index, paragraph) in page.iter().enumerate().skip(2).rev() {
+            context.observe_content(index, 0, paragraph);
+        }
+        let selected = context.following(1, 0, Some((0, &page[2]))).unwrap();
+        assert_eq!(selected.0, 0);
+        assert!(std::ptr::eq(selected.1, &page[2]));
+        assert!(!shares_same_text_row(&page[1], selected.1, true));
+    }
     vec![page]
 }
 
