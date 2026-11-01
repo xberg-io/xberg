@@ -371,3 +371,86 @@ async fn overlapping_raw_fragment_matches_cannot_stand_in_for_complete_visible_m
             .all(|finding| finding.replacement_token == "[PERSON_1]")
     );
 }
+
+fn source_code_block(text: &str) -> DerivedResult {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_code(text, Some("rust"), None, None);
+    let document = builder.build();
+    assert_eq!(document.elements.len(), 1);
+    assert_eq!(document.elements[0].kind, crate::types::internal::ElementKind::Code);
+    assert_eq!(document.elements[0].text, text);
+    let result = prepare(document);
+    assert_eq!(result.content, text);
+    assert!(result.pages.is_none());
+    let markdown = result.formatted_content.as_ref().unwrap();
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, markdown, &comrak::Options::default());
+    let blocks = root
+        .descendants()
+        .filter_map(|node| {
+            let data = node.data.borrow();
+            if let comrak::nodes::NodeValue::CodeBlock(block) = &data.value {
+                Some((block.fenced, block.info.clone(), block.literal.clone()))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(blocks, [(true, "rust".to_owned(), format!("{text}\n"))]);
+    assert_eq!(visible(markdown), text);
+    result
+}
+
+fn finished_code_text(result: &ExtractedDocument) -> String {
+    match result.metadata.output_format.as_deref() {
+        Some("markdown") => visible(&result.content),
+        Some("plain") => {
+            assert_plain(result, &result.content);
+            result.content.clone()
+        }
+        other => panic!("unexpected code-block output route: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn generated_safe_code_block_with_no_matches_remains_processable_without_content_loss() {
+    let source = "let value = \"safe\";";
+    let mut result = source_code_block(source);
+    let config = config("Jane Doe", RedactionStrategy::Mask);
+    let markdown = result.formatted_content.as_ref().unwrap();
+    assert_eq!(findings(markdown, &config).await.len(), 0);
+    assert_eq!(findings(&visible(markdown), &config).await.len(), 0);
+    assert_eq!(findings(&result.content, &config).await.len(), 0);
+    apply(&mut result, config)
+        .await
+        .expect("safe generated code is a supported redaction surface");
+    let result = finish(result);
+    assert_eq!(finished_code_text(&result), source);
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 0);
+}
+
+#[tokio::test]
+async fn generated_sensitive_code_block_is_completely_redacted_without_exposing_its_literal() {
+    let source = "let owner = \"Jane Doe\";";
+    let mut result = source_code_block(source);
+    let config = config("Jane Doe", RedactionStrategy::Mask);
+    let markdown = result.formatted_content.as_ref().unwrap();
+    assert_eq!(findings(markdown, &config).await.len(), 1);
+    assert_eq!(findings(&visible(markdown), &config).await.len(), 1);
+    assert_eq!(offsets(&findings(&result.content, &config).await), [(13, 21)]);
+    apply(&mut result, config)
+        .await
+        .expect("verified code literals must be fully redacted");
+    let result = finish(result);
+    assert_eq!(finished_code_text(&result), "let owner = \"[REDACTED]\";");
+    let expected_findings = if result.metadata.output_format.as_deref() == Some("plain") {
+        1
+    } else {
+        2
+    };
+    assert_eq!(
+        result.redaction_report.as_ref().unwrap().total_redacted,
+        expected_findings
+    );
+    assert!(!result.content.contains("Jane Doe"));
+}
