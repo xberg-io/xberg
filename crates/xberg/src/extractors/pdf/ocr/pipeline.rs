@@ -6193,3 +6193,7 @@ mod memory_recovery_tests;
 #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "ocr"))]
 #[path = "xobject_budget_parity_tests.rs"]
 mod xobject_budget_parity_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "ocr"))]
+#[path = "english_recovery_tests.rs"]
+mod english_recovery_tests;
