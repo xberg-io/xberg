@@ -143,7 +143,14 @@ async fn should_keep_tag_looking_code_literal_in_public_docx_conversion() {
 async fn should_keep_tag_looking_code_literal_in_public_pdf_conversion() {
     let (text, content) = pdf(LITERAL).await;
     assert_eq!(compact(&text), "<sup>2</sup><u>under</u>end");
-    assert!(!content.operations.iter().any(|operation| operation.operator == "Ts"));
+    for operation in content.operations.iter().filter(|operation| operation.operator == "Ts") {
+        assert_eq!(operation.operands.len(), 1, "text rise must have one numeric operand");
+        assert_eq!(
+            operation.operands[0].as_float().expect("text rise must be numeric"),
+            0.0,
+            "literal tags must not introduce superscript or subscript rise"
+        );
+    }
     assert_eq!(
         content
             .operations
