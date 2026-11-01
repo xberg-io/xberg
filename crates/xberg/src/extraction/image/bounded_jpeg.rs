@@ -1,4 +1,5 @@
 mod budget;
+mod header_types;
 mod headers;
 
 #[cfg(test)]

@@ -1,18 +1,9 @@
 use crate::error::{Result, XbergError};
 
-const COMPONENTS: usize = 3;
-const MAX_HEADER_SEGMENTS: usize = 128;
+use super::header_types::COMPONENTS;
+pub(super) use super::header_types::Header;
 
-#[derive(Clone, Copy)]
-pub(super) struct Header {
-    pub width: u32,
-    pub height: u32,
-    pub horizontal_sampling: u8,
-    pub vertical_sampling: u8,
-    pub metadata_bytes: u64,
-    pub metadata_segments: usize,
-    component_ids: [u8; COMPONENTS],
-}
+const MAX_HEADER_SEGMENTS: usize = 128;
 
 struct Segment<'a> {
     marker: u8,
