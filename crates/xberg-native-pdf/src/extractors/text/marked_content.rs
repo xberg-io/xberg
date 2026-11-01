@@ -7,7 +7,182 @@
 
 use super::*;
 
+/// Text of one hold group, or of the page text that is not held, as the
+/// duplicate measure of `placed_text_kept` reads it.
+#[derive(Default, Clone)]
+struct HeldText {
+    chars: usize,
+    txt: Vec<u8>,
+    /// Letters and digits of each line in paint order, lowercase. Spaces and
+    /// punctuation go.
+    lines: Vec<String>,
+    /// Vertical position of the last span.
+    last_y: Option<f32>,
+}
+
+impl HeldText {
+    /// Add one span. Every span ends a word, as a text run does.
+    fn add_span(&mut self, span: &TextSpan) {
+        let text = &span.text;
+        self.chars += text.chars().count();
+        self.txt.extend_from_slice(text.as_bytes());
+        self.txt.push(b' ');
+
+        let letters: String = text
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect();
+        // Half a font size: raised text stays on its line and the next line does not. ~keep
+        let y = span.bbox.y;
+        let same_line = self.last_y.is_some_and(|last| (last - y).abs() <= span.font_size / 2.0);
+        self.last_y = Some(y);
+        match self.lines.last_mut() {
+            Some(line) if same_line => line.push_str(&letters),
+            _ => self.lines.push(letters),
+        }
+    }
+}
+
+/// Push `item` with its hold group. `holds` stays empty until an item is held.
+pub(super) fn push_held<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, item: T, hold: u32) {
+    if hold != 0 || !holds.is_empty() {
+        holds.resize(items.len(), 0);
+        holds.push(hold);
+    }
+    items.push(item);
+}
+
+/// Keep the items from `start` on that pass `keep`, with their hold groups.
+pub(super) fn retain_held_from<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, start: usize, keep: impl Fn(&T) -> bool) {
+    let mask: Vec<bool> = items[start..].iter().map(keep).collect();
+    let len = items.len();
+    let retain = |index: usize| index < start || mask[index - start];
+    let mut index = 0;
+    items.retain(|_| {
+        index += 1;
+        retain(index - 1)
+    });
+    if !holds.is_empty() {
+        holds.resize(len, 0);
+        let mut index = 0;
+        holds.retain(|_| {
+            index += 1;
+            retain(index - 1)
+        });
+    }
+}
+
+/// Drop each item whose hold group the page rejected. Kept groups stay in paint
+/// position.
+fn apply_verdicts<T>(items: &mut Vec<T>, holds: &mut Vec<u32>, verdicts: &[bool]) {
+    if holds.is_empty() {
+        return;
+    }
+    holds.resize(items.len(), 0);
+    let mut index = 0;
+    items.retain(|_| {
+        let hold = holds[index];
+        index += 1;
+        hold.checked_sub(1)
+            .and_then(|group| verdicts.get(group as usize))
+            .is_none_or(|&keep| keep)
+    });
+    holds.clear();
+}
+
 impl<'doc> TextExtractor<'doc> {
+    /// Start the `/PlacedPDF` state of a char run: the page verdict from its own
+    /// stream, and group numbers from the start, as in its verdict run.
+    pub(super) fn begin_placed_page(&mut self, content_stream: &[u8]) {
+        self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
+        self.placed_hold_groups = 0;
+    }
+
+    /// Hold group of text emitted now (0 when it is not held), or `None` when
+    /// the current state suppresses it.
+    pub(super) fn emit_hold(&self) -> Option<u32> {
+        if self.is_content_suppressed() {
+            None
+        } else if self.inside_placed_pdf && !self.placed_pdf_keep {
+            Some(self.placed_hold)
+        } else {
+            Some(0)
+        }
+    }
+
+    /// Emit a span, unless the current state suppresses it.
+    pub(super) fn push_span(&mut self, span: TextSpan) {
+        if let Some(hold) = self.emit_hold() {
+            push_held(&mut self.spans, &mut self.span_holds, span, hold);
+        }
+    }
+
+    /// Emit a character, unless the current state suppresses it.
+    pub(super) fn push_char(&mut self, ch: TextChar) {
+        if let Some(hold) = self.emit_hold() {
+            push_held(&mut self.chars, &mut self.char_holds, ch, hold);
+        }
+    }
+
+    /// One verdict for each hold group of the page, read from the span text after
+    /// clipping. A verdict run opens the groups of its char run: both walk the
+    /// same forms in the same order. ~keep
+    fn span_verdicts(&self) -> Vec<bool> {
+        let mut other = HeldText::default();
+        let mut held = vec![HeldText::default(); self.placed_hold_groups as usize];
+        for (index, span) in self.spans.iter().enumerate() {
+            let hold = self.span_holds.get(index).copied().unwrap_or(0);
+            match hold.checked_sub(1).and_then(|group| held.get_mut(group as usize)) {
+                Some(group) => group.add_span(span),
+                None => other.add_span(span),
+            }
+        }
+        held.iter()
+            .map(|group| {
+                Self::placed_text_kept(group.chars, other.chars, || {
+                    let words = Self::text_duplication_fraction(&group.txt, &other.txt);
+                    words.max(Self::copied_line_fraction(&group.lines, &other.lines))
+                })
+            })
+            .collect()
+    }
+
+    /// Judge each hold group of a span run once all its text is known. Paint
+    /// order does not matter. ~keep
+    pub(super) fn settle_span_holds(&mut self) {
+        if self.span_holds.is_empty() {
+            return;
+        }
+        let verdicts = self.span_verdicts();
+        apply_verdicts(&mut self.spans, &mut self.span_holds, &verdicts);
+    }
+
+    /// Apply the span verdicts to a char run. Only a page that holds a group pays
+    /// for the span run, which sees the page, the fonts and the filters of the char
+    /// run, so `extract_chars` and `extract_chars_filtered` each get the verdict of
+    /// their own filters. ~keep
+    pub(super) fn settle_char_holds(&mut self, content_stream: &[u8]) -> Result<()> {
+        if self.char_holds.is_empty() {
+            return Ok(());
+        }
+        let mut pass = TextExtractor::with_config(self.config.clone());
+        pass.merging_config = self.merging_config.clone();
+        pass.document = self.document;
+        pass.resources = self.resources.clone();
+        pass.fonts = self.fonts.clone();
+        pass.excluded_layers = self.excluded_layers.clone();
+        pass.excluded_inks = self.excluded_inks.clone();
+        pass.mcid_scope_stack = self.mcid_scope_stack.clone();
+        pass.extract_spans = true;
+        pass.verdict_run = true;
+        pass.run_content_stream(content_stream)?;
+        pass.flush_tj_span_buffer()?;
+        let verdicts = pass.span_verdicts();
+        apply_verdicts(&mut self.chars, &mut self.char_holds, &verdicts);
+        Ok(())
+    }
+
     /// Update the artifact state based on the marked content stack.
     ///
     /// This method computes whether we're currently inside an artifact region
@@ -31,6 +206,12 @@ impl<'doc> TextExtractor<'doc> {
         self.inside_placed_pdf = self.marked_content_stack.iter().any(|ctx| ctx.is_placed_pdf);
     }
 
+    /// Whether a content stream holds the literal `/PlacedPDF` tag. A tag with an
+    /// escaped name is not seen (#2378).
+    pub(super) fn has_placed_tag(content_stream: &[u8]) -> bool {
+        content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF")
+    }
+
     /// Whether content emission should be suppressed.
     ///
     /// Returns true when the current graphics/marked-content state means
@@ -42,7 +223,9 @@ impl<'doc> TextExtractor<'doc> {
     /// Note: artifact filtering is handled separately via span metadata and
     /// downstream filtering, so `inside_artifact` is intentionally not checked here.
     pub(super) fn is_content_suppressed(&self) -> bool {
-        self.inside_excluded_layer || self.inside_excluded_ink || (self.inside_placed_pdf && !self.placed_pdf_keep)
+        self.inside_excluded_layer
+            || self.inside_excluded_ink
+            || (self.inside_placed_pdf && !self.placed_pdf_keep && self.placed_hold == 0)
     }
 
     /// Decide whether `/PlacedPDF` text should be kept (not suppressed) for a page.
@@ -66,23 +249,16 @@ impl<'doc> TextExtractor<'doc> {
     ///    (e.g. an InDesign figure that holds the page's labels and body text, as
     ///    on placed floor-plan / marketing spreads) and must be kept.
     ///
-    /// Conservative on purpose: when placed text lives in a nested XObject the
-    /// page-stream scan undercounts it and gate 1 falls back to suppression (the
-    /// prior behaviour).
+    /// The scan reads the page stream only. A form with its own `/PlacedPDF` tag
+    /// holds its placed text instead, judged by `span_verdicts`. ~keep
     pub(super) fn placed_pdf_text_dominates(content_stream: &[u8]) -> bool {
         // Gate: only pages that actually carry the InDesign tag pay for a parse. ~keep
-        if !content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF") {
+        if !Self::has_placed_tag(content_stream) {
             return false;
         }
         let Ok(operators) = parse_content_stream(content_stream) else {
             return false;
         };
-        // A substantial placed body; below this a placed region is treated as a
-        // decorative figure, not the page's logical content. ~keep
-        const MIN_PLACED_CHARS: usize = 800;
-        // Keep placed text whose words are mostly unique; suppress it once a
-        // majority is also present in the non-placed text (a duplicate overlay). ~keep
-        const MAX_DUP_FRACTION: f64 = 0.5;
 
         let mut placed_stack: Vec<bool> = Vec::new();
         let mut placed_chars: usize = 0;
@@ -135,6 +311,20 @@ impl<'doc> TextExtractor<'doc> {
                 _ => {}
             }
         }
+        Self::placed_text_kept(placed_chars, other_chars, || {
+            Self::text_duplication_fraction(&placed_txt, &other_txt)
+        })
+    }
+
+    /// The keep/suppress gates of `placed_pdf_text_dominates`, for placed text
+    /// judged against the non-placed text beside it.
+    fn placed_text_kept(placed_chars: usize, other_chars: usize, duplication: impl FnOnce() -> f64) -> bool {
+        // A substantial placed body; below this a placed region is treated as a
+        // decorative figure, not the page's logical content. ~keep
+        const MIN_PLACED_CHARS: usize = 800;
+        // Keep placed text that is mostly unique; suppress it once half or more
+        // of it is also present in the non-placed text (a duplicate overlay). ~keep
+        const MAX_DUP_FRACTION: f64 = 0.5;
 
         if placed_chars < MIN_PLACED_CHARS {
             return false;
@@ -143,10 +333,42 @@ impl<'doc> TextExtractor<'doc> {
             return true;
         }
         // Gate 3: placed text is substantial but the outside text is comparable
-        // or larger. Keep it unless a majority of the placed words also appear
+        // or larger. Keep it unless half or more of the placed text also appears
         // outside (a duplicate overlay). Tokenising here (behind gates 1 and 2)
         // keeps the common single-column path allocation-free. ~keep
-        Self::text_duplication_fraction(&placed_txt, &other_txt) < MAX_DUP_FRACTION
+        duplication() < MAX_DUP_FRACTION
+    }
+
+    /// Fraction of the letters of `a` in lines that `b` shows as well. Each line of
+    /// `b` answers one line of `a`. A line compares by its letters and digits, so a
+    /// copy reads the same wherever a `TJ` offset or a text run cuts its words. A row
+    /// on one baseline with its own cells does not match. A table painted by column
+    /// has a line for each cell, so its labels can match, and rows that differ only
+    /// in punctuation or spacing match. ~keep
+    fn copied_line_fraction(a: &[String], b: &[String]) -> f64 {
+        // A shorter line does not count, so a short grid row cannot match. A longer
+        // row of a skewed grid can still match by chance. ~keep
+        const MIN_LINE_LETTERS: usize = 8;
+        let mut unmatched: HashMap<&str, usize> = HashMap::new();
+        for line in b {
+            *unmatched.entry(line).or_default() += 1;
+        }
+        let (mut copied, mut total) = (0, 0);
+        for line in a {
+            let letters = line.chars().count();
+            total += letters;
+            if letters >= MIN_LINE_LETTERS
+                && let Some(count) = unmatched.get_mut(line.as_str())
+                && *count > 0
+            {
+                *count -= 1;
+                copied += letters;
+            }
+        }
+        if total == 0 {
+            return 0.0;
+        }
+        copied as f64 / total as f64
     }
 
     /// Fraction of alphanumeric word tokens in `a` (counting repeats) that also

@@ -392,9 +392,7 @@ impl<'doc> TextExtractor<'doc> {
                                                 final_matrix.f,
                                             ]),
                                         };
-                                        if !self.is_content_suppressed() {
-                                            self.chars.push(space_char);
-                                        }
+                                        self.push_char(space_char);
                                     }
 
                                     // Route through advance_text_matrix so the

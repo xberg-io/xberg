@@ -171,8 +171,11 @@ impl<'doc> TextExtractor<'doc> {
         let xobj_key = (xobject_ref, ctm_key);
 
         // Skip already-processed (XObject, CTM) pairs — each unique combination
-        // is processed at most once per page for text extraction. ~keep
+        // is processed at most once per page for text extraction. The form that
+        // paints this one now misses its text only because of what this page
+        // painted earlier, so its run must not enter the span cache. ~keep
         if self.processed_xobjects.contains(&xobj_key) {
+            self.page_bound_forms += 1;
             return Ok(());
         }
 
@@ -205,8 +208,15 @@ impl<'doc> TextExtractor<'doc> {
         //
         // `ctm_key` was already computed above for the `processed_xobjects` guard. ~keep
         let spans_cache_key = (xobject_ref, ctm_key);
-        let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
-        if self.extract_spans && !has_filters {
+        // Spans in the cache carry no hold group and no placed state, so only a form
+        // painted outside every placed scope uses the cache, for the read and for the
+        // write. A verdict run stays out of it: a hit would open no group. ~keep
+        let span_cache_open = self.extract_spans
+            && self.excluded_layers.is_empty()
+            && self.excluded_inks.is_empty()
+            && !self.verdict_run
+            && !self.inside_placed_pdf;
+        if span_cache_open {
             let cached_spans = { doc.xobject_spans_cache.lock().unwrap().get(&spans_cache_key).cloned() };
             if let Some(cached_spans) = cached_spans {
                 if let Some(spans) = cached_spans {
@@ -382,9 +392,27 @@ impl<'doc> TextExtractor<'doc> {
                 self.mcid_scope_stack
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
+                // The page verdict reads the page stream only. A form with its own
+                // /PlacedPDF tag opens a hold group: when the page verdict drops placed
+                // text, the group holds it instead, and the page judges the group once
+                // it is done. A form painted inside a placed scope while a group is open
+                // joins it; one painted outside any placed scope opens its own group, and
+                // the group it was painted in comes back after it. ~keep
+                let has_placed_tag = Self::has_placed_tag(&stream_data);
+                let page_bound_before = self.page_bound_forms;
+                if has_placed_tag {
+                    self.page_bound_forms += 1;
+                }
+                let enclosing_hold = self.placed_hold;
+                if has_placed_tag && (enclosing_hold == 0 || !self.inside_placed_pdf) {
+                    self.placed_hold_groups += 1;
+                    self.placed_hold = self.placed_hold_groups;
+                }
+
                 self.xobject_depth += 1;
                 let parse_result = self.run_content_stream(&stream_data);
                 self.xobject_depth -= 1;
+                self.placed_hold = enclosing_hold;
                 // Pop the Form XObject scope pushed before the
                 // content-stream walk. Cleared regardless of parse
                 // success so the parent stream's scope is correctly
@@ -476,15 +504,20 @@ impl<'doc> TextExtractor<'doc> {
                                 let is_page_wrapper = page_area.is_some_and(|pa| clip_area >= 0.6 * pa);
                                 if !is_page_wrapper {
                                     if spans_stray {
-                                        let added = self.spans.split_off(spans_before);
-                                        let kept: Vec<TextSpan> = added.into_iter().filter(|s| inside(s)).collect();
-                                        self.spans.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.spans,
+                                            &mut self.span_holds,
+                                            spans_before,
+                                            inside,
+                                        );
                                     }
                                     if chars_stray {
-                                        let added = self.chars.split_off(chars_before);
-                                        let kept: Vec<TextChar> =
-                                            added.into_iter().filter(|c| inside_bbox(&c.bbox)).collect();
-                                        self.chars.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.chars,
+                                            &mut self.char_holds,
+                                            chars_before,
+                                            |c| inside_bbox(&c.bbox),
+                                        );
                                     }
                                 }
                             }
@@ -503,7 +536,12 @@ impl<'doc> TextExtractor<'doc> {
                 // We still require `has_own_resources` so that font lookups are
                 // self-contained; XObjects that inherit page-level fonts would
                 // produce spans whose glyph mappings depend on caller context. ~keep
-                if has_own_resources && self.extract_spans && !has_filters {
+                // A form whose run met a literal /PlacedPDF tag or the processed guard is not
+                // cached: a cache hit skips the hold group, and the guard cut the run
+                // by what this page painted, so another page would reuse text that
+                // only holds for this page. The depth guard and an escaped tag do
+                // not move this count (#2377, #2378). ~keep
+                if has_own_resources && span_cache_open && self.page_bound_forms == page_bound_before {
                     let new_spans = if self.spans.len() > spans_before {
                         Some(self.spans[spans_before..].to_vec())
                     } else {
