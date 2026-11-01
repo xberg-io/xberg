@@ -15,6 +15,15 @@ pub(crate) trait ProcessingDocument: Send {
     fn document_mut(&mut self) -> &mut ExtractedDocument;
 
     #[cfg(feature = "redaction")]
+    fn processor_witness(&self) -> Option<ProcessorWitness> {
+        None
+    }
+    #[cfg(feature = "redaction")]
+    fn observe_processor(&mut self, _witness: Option<ProcessorWitness>) {}
+    #[cfg(feature = "redaction")]
+    fn seal_processor_witness(&mut self) {}
+
+    #[cfg(feature = "redaction")]
     fn redaction_parts(&mut self) -> crate::Result<(&mut ExtractedDocument, Option<&SurfaceContext>)> {
         Ok((self.document_mut(), None))
     }
@@ -37,6 +46,9 @@ pub(crate) trait RedactionSurfaces: Send + Sync {
     fn formatted_markdown(&self) -> bool {
         false
     }
+    fn discard_formatted(&self) -> bool {
+        false
+    }
     fn page_markdown(&self, _index: usize) -> bool {
         false
     }
@@ -52,4 +64,4 @@ mod capture;
 #[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
 pub(crate) use capture::DerivedResult;
 #[cfg(feature = "redaction")]
-pub(crate) use capture::{SurfaceContext, derive_with_surfaces};
+pub(crate) use capture::{ProcessorWitness, SurfaceContext, derive_with_surfaces};

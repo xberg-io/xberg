@@ -42,7 +42,6 @@ pub fn register_post_processor(processor: Arc<dyn PostProcessor>) -> crate::Resu
     feature = "captioning",
     feature = "qr-codes",
     feature = "ner",
-    feature = "redaction",
     feature = "quality",
     feature = "keywords-yake",
     feature = "keywords-rake"

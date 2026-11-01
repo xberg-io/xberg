@@ -24,14 +24,28 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
     _builtin_redaction: Option<&PostProcessorHandle>,
 ) -> Result<()> {
     #[cfg(feature = "redaction")]
-    if _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor))
-        && let (document, Some(surfaces)) = result.redaction_parts()?
-    {
-        return crate::plugins::processor::builtin::redaction::RedactionProcessor
-            .process_with_surfaces(document, config, surfaces)
-            .await;
+    if _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor)) {
+        let outcome = if let (document, Some(surfaces)) = result.redaction_parts()? {
+            crate::plugins::processor::builtin::redaction::RedactionProcessor
+                .process_with_surfaces(document, config, surfaces)
+                .await
+        } else {
+            processor.process(result.document_mut(), config).await
+        };
+        result.seal_processor_witness();
+        return outcome;
     }
-    processor.process(result.document_mut(), config).await
+    #[cfg(feature = "redaction")]
+    {
+        let witness = result.processor_witness();
+        let outcome = processor.process(result.document_mut(), config).await;
+        result.observe_processor(witness);
+        outcome
+    }
+    #[cfg(not(feature = "redaction"))]
+    {
+        processor.process(result.document_mut(), config).await
+    }
 }
 
 /// Execute registered post-processors for the supplied stages.
@@ -167,3 +181,6 @@ mod redaction_surface_tests;
 
 #[cfg(all(test, not(feature = "tokio-runtime")))]
 mod no_runtime_surface_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+mod processor_mutation_tests;

@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct Fingerprint {
     length: usize,
     digest: [u8; 32],
@@ -62,23 +62,19 @@ pub(crate) struct SurfaceContext {
     identity: Arc<()>,
     plain_document: Fingerprint,
     capture: SurfaceCapture,
+    formatted_invalidated: bool,
 }
 
 impl RedactionSurfaces for SurfaceContext {
     fn validate(&self, document: &ExtractedDocument) -> crate::Result<()> {
-        let formatted_valid = self.capture.formatted.as_ref().is_none_or(|expected| {
-            document
+        let formatted_valid = match &self.capture.formatted {
+            Some(expected) => document
                 .formatted_content
                 .as_deref()
-                .is_some_and(|text| expected.matches(text))
-        });
-        let pages_valid = self.capture.pages.iter().all(|expected| {
-            document
-                .pages
-                .as_ref()
-                .and_then(|pages| pages.get(expected.index))
-                .is_some_and(|page| page.page_number == expected.number && expected.rendered.matches(&page.content))
-        });
+                .is_some_and(|text| expected.matches(text)),
+            None => !self.formatted_invalidated || document.formatted_content.is_none(),
+        };
+        let pages_valid = self.pages_match(document);
         if self.plain_document.matches(&document.content) && formatted_valid && pages_valid {
             return Ok(());
         }
@@ -87,7 +83,10 @@ impl RedactionSurfaces for SurfaceContext {
         ))
     }
     fn formatted_markdown(&self) -> bool {
-        self.capture.formatted.is_some()
+        self.formatted_invalidated || self.capture.formatted.is_some()
+    }
+    fn discard_formatted(&self) -> bool {
+        self.formatted_invalidated
     }
     fn page_markdown(&self, index: usize) -> bool {
         self.capture
@@ -109,6 +108,7 @@ pub(crate) struct DerivedResult {
     document: ExtractedDocument,
     identity: Option<Arc<()>>,
     context: Option<SurfaceContext>,
+    witness_active: bool,
 }
 
 impl DerivedResult {
@@ -121,10 +121,12 @@ impl DerivedResult {
                 identity: Arc::clone(identity),
                 plain_document: Fingerprint::new(&document.content),
                 capture,
+                formatted_invalidated: false,
             });
         Self {
             document,
             identity,
+            witness_active: context.is_some(),
             context,
         }
     }
@@ -165,6 +167,15 @@ impl ProcessingDocument for DerivedResult {
     fn document_mut(&mut self) -> &mut ExtractedDocument {
         &mut self.document
     }
+    fn processor_witness(&self) -> Option<ProcessorWitness> {
+        self.begin_processor_mutation()
+    }
+    fn observe_processor(&mut self, witness: Option<ProcessorWitness>) {
+        self.finish_processor_mutation(witness);
+    }
+    fn seal_processor_witness(&mut self) {
+        self.witness_active = false;
+    }
     fn redaction_parts(&mut self) -> crate::Result<(&mut ExtractedDocument, Option<&SurfaceContext>)> {
         if self.context.as_ref().is_some_and(|context| {
             !self
@@ -203,3 +214,6 @@ pub(crate) fn derive_with_surfaces(
 
 #[cfg(all(test, feature = "tokio-runtime", feature = "office"))]
 mod coverage_tests;
+
+mod processor;
+pub(crate) use processor::ProcessorWitness;

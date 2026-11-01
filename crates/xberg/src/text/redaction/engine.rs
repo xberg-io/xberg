@@ -348,7 +348,9 @@ struct RedactionPass<'a> {
 impl RedactionPass<'_> {
     fn plan_surfaces(&self, doc: &ExtractedDocument, surfaces: &impl RedactionSurfaces) -> Result<SurfacePlans> {
         let mut plans = SurfacePlans::default();
-        if surfaces.formatted_markdown()
+        if surfaces.discard_formatted() {
+            plans.formatted = Some(FormattedPlan::ProcessorDiscard(self.applicable_matches(&doc.content)));
+        } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
             plans.formatted = Some(self.plan_markdown(text, Some(&doc.content))?);
@@ -360,7 +362,7 @@ impl RedactionPass<'_> {
             let backup = surfaces.page_backup(index);
             let plan = match self.plan_markdown(&page.content, backup)? {
                 FormattedPlan::Preserve(matches) => PagePlan::Preserve(matches),
-                FormattedPlan::Discard(matches) => PagePlan::Plain {
+                FormattedPlan::Discard(matches) | FormattedPlan::ProcessorDiscard(matches) => PagePlan::Plain {
                     source: backup
                         .ok_or_else(|| crate::XbergError::validation("Missing verified page backup"))?
                         .to_owned(),
@@ -520,7 +522,9 @@ impl RedactionPass<'_> {
             let content = std::mem::take(&mut doc.content);
             let selected = if depth == 0 {
                 match self.plans.formatted.as_mut() {
-                    Some(FormattedPlan::Discard(matches)) => Some(std::mem::take(matches)),
+                    Some(FormattedPlan::Discard(matches) | FormattedPlan::ProcessorDiscard(matches)) => {
+                        Some(std::mem::take(matches))
+                    }
                     _ => None,
                 }
             } else {
@@ -532,21 +536,30 @@ impl RedactionPass<'_> {
             };
         }
 
-        if let Some(formatted) = doc.formatted_content.take() {
-            let plan = (depth == 0).then(|| self.plans.formatted.take()).flatten();
-            doc.formatted_content = match plan {
-                Some(FormattedPlan::Preserve(matches)) => Some(self.apply_matches(&formatted, matches)),
-                Some(FormattedPlan::Discard(_)) => {
-                    crate::core::diagnostics::push_warning(
-                        &mut doc.processing_warnings,
-                        "output_format",
-                        "Formatted Markdown could not preserve complete redaction coverage; rendering was discarded and redacted plain text is returned",
-                    );
-                    None
-                }
-                None => Some(self.redact(&formatted)),
-            };
-        }
+        let plan = (depth == 0).then(|| self.plans.formatted.take()).flatten();
+        doc.formatted_content = match (plan, doc.formatted_content.take()) {
+            (Some(FormattedPlan::ProcessorDiscard(_)), _) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor changed the captured document text; the unproved rendering was discarded \
+                     and current redacted plain text is returned",
+                );
+                None
+            }
+            (Some(FormattedPlan::Preserve(matches)), Some(formatted)) => Some(self.apply_matches(&formatted, matches)),
+            (Some(FormattedPlan::Discard(_)), Some(_)) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "Formatted Markdown could not preserve complete redaction coverage; rendering was discarded \
+                     and redacted plain text is returned",
+                );
+                None
+            }
+            (_, Some(formatted)) => Some(self.redact(&formatted)),
+            (_, None) => None,
+        };
 
         self.redact_chunks(doc);
 
@@ -663,7 +676,8 @@ impl RedactionPass<'_> {
                         &mut doc.processing_warnings,
                         "output_format",
                         format!(
-                            "Page {} Markdown could not preserve complete redaction coverage; its verified plain backup was redacted and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
+                            "Page {} Markdown could not preserve complete redaction coverage; its verified plain backup was redacted \
+                             and escaped as Markdown. Finding offsets refer to the plain backup before escaping",
                             page.page_number
                         ),
                     );

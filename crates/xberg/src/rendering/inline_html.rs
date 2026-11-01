@@ -107,9 +107,6 @@ pub(crate) fn standard_inline_html_ranges(text: &str) -> Option<Vec<std::ops::Ra
         }
     }
     ranges.sort_by_key(|range| range.start);
-    if ranges.windows(2).any(|pair| pair[0].end > pair[1].start) {
-        return None;
-    }
     Some(ranges)
 }
 

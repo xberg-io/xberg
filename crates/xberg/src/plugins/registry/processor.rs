@@ -114,7 +114,6 @@ impl PostProcessorRegistry {
         feature = "captioning",
         feature = "qr-codes",
         feature = "ner",
-        feature = "redaction",
         feature = "keywords-yake",
         feature = "keywords-rake"
     ))]
