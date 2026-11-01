@@ -136,16 +136,12 @@ pub(super) fn fixture() -> Fixture {
         .flat_map(|pixel| pixel[..3].iter().copied())
         .collect();
     let pixel_sha = sha(&rgb);
-    let jpeg = oxiarc_jpeg::encode_to_vec_with_options(
-        &rgb,
-        rendered.width,
-        rendered.height,
-        oxiarc_jpeg::InputColor::Rgb,
-        &Default::default(),
-    )
-    .unwrap();
+    let width = u16::try_from(rendered.width).expect("actual fixture width fits JPEG interface");
+    let height = u16::try_from(rendered.height).expect("actual fixture height fits JPEG interface");
+    let jpeg =
+        oxiarc_jpeg::encode_to_vec_with_options(&rgb, width, height, oxiarc_jpeg::InputColor::Rgb, &Default::default())
+            .unwrap();
     drop(rgb);
-    let (width, height) = (rendered.width, rendered.height);
     drop(rendered);
     let mut decoder = oxiarc_jpeg::Decoder::new(jpeg.as_slice());
     let header = decoder.read_info().expect("complete real baseline English JPEG");

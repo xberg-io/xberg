@@ -97,7 +97,8 @@ async fn qualify(detached: bool) {
                 crate::ExtractInput::from_bytes(fixture.pdf.clone(), "application/pdf", None),
                 &config,
             )
-            .await;
+            .await
+            .expect("actual public PDF extraction");
             assert!(
                 result.errors.is_empty(),
                 "public extraction errors: {:?}",
