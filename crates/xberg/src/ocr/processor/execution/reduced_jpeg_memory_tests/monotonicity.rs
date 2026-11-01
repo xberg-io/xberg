@@ -5,7 +5,7 @@ use std::process::Command;
 const BUDGET: usize = 64 * MIB;
 const CHILD_ENV: &str = "XBERG_REDUCED_JPEG_MONOTONIC_CHILD";
 const TEST_NAME: &str = "ocr::processor::execution::reduced_jpeg_memory_tests::monotonicity::should_keep_the_finest_safe_raster_when_full_rgb_fits_64_mib";
-const SOURCE_SHA: &str = "85bc1b1a55af6794f58da05b32b540301a731f99d48825de6811401d8fcabec3";
+const SOURCE_SHA: &str = "0226112f04a242bb3610b38edbed45a2a3a0f3e3690611efc567ab35f8866f8c";
 
 fn measure_larger_budget() {
     let bytes = synthetic_baseline();
