@@ -423,8 +423,7 @@ pub(super) fn reconstruct_native_lines(
             let base = ordered[owner.base_index];
             base.font_size.max(base.height).abs()
         });
-        let tolerance =
-            (scale.max(logical_scale) * super::LINE_TOLERANCE_SCALE_FACTOR).min(super::MAX_LINE_TOLERANCE_PT);
+        let tolerance = super::line_baseline_tolerance(scale, logical_scale);
         if !current.is_empty()
             && ((segment.rotation_degrees - rotation).abs() > f32::EPSILON
                 || (logical_baseline - baseline).abs() > tolerance)

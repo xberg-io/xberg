@@ -87,10 +87,27 @@ fn source_extent(span: &SegmentData, frame: &SegmentData) -> Option<(f32, f32)> 
         .then_some((start, end))
 }
 
+fn source_row_tolerance(line: &PdfLine) -> Option<f32> {
+    if !line.baseline_y.is_finite() {
+        return None;
+    }
+    let mut scale = 0.0_f32;
+    for span in &line.segments {
+        if !span.height.is_finite() {
+            return None;
+        }
+        scale = scale.max(span.font_size.max(span.height).abs());
+    }
+    // ~keep Finished lines may be sorted by x. The saved baseline is the original grouping anchor;
+    // the final maximum scale bounds every tolerance used before that sorting.
+    Some(super::line_baseline_tolerance(scale, scale))
+}
+
 fn row_evidence<'a>(line: &'a PdfLine, gap: &SourceGap<'_>) -> Option<RowEvidence<'a>> {
     if !line.valid_native_scripts().is_empty() {
         return None;
     }
+    let baseline_tolerance = source_row_tolerance(line)?;
     let seam = gap.start.midpoint(gap.end);
     let mut left_end = f32::NEG_INFINITY;
     let mut right_start = f32::INFINITY;
@@ -102,10 +119,10 @@ fn row_evidence<'a>(line: &'a PdfLine, gap: &SourceGap<'_>) -> Option<RowEvidenc
             if start < gap.left || end > gap.right || (start < seam && end > seam) {
                 return None;
             }
-            let row_anchor = *anchor.get_or_insert(span);
-            if spans_visual_line_break(row_anchor, span) {
+            if (span.upright_baseline() - line.baseline_y).abs() > baseline_tolerance {
                 return None;
             }
+            anchor.get_or_insert(span);
             if end <= seam {
                 left_end = left_end.max(end);
             } else {

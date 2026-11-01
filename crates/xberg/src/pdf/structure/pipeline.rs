@@ -3077,6 +3077,10 @@ fn heading_style_carries_capital_opener(prev: &SegmentData, line: &SegmentData, 
 const MAX_LINE_TOLERANCE_PT: f32 = 3.0;
 const LINE_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
 
+fn line_baseline_tolerance(current_scale: f32, segment_scale: f32) -> f32 {
+    (current_scale.max(segment_scale) * LINE_TOLERANCE_SCALE_FACTOR).min(MAX_LINE_TOLERANCE_PT)
+}
+
 /// Reconstruct PdfLine objects from a flat list of SegmentData, grouping by baseline_y.
 ///
 /// This preserves inline formatting information (is_bold, is_italic, is_monospace)
@@ -3111,8 +3115,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let same_rotation = (seg.rotation_degrees - current_rotation).abs() <= f32::EPSILON;
         let segment_baseline = seg.upright_baseline();
         let segment_scale = seg.font_size.max(seg.height).abs();
-        let baseline_tolerance =
-            (current_scale.max(segment_scale) * LINE_TOLERANCE_SCALE_FACTOR).min(MAX_LINE_TOLERANCE_PT);
+        let baseline_tolerance = line_baseline_tolerance(current_scale, segment_scale);
         if !same_rotation || (segment_baseline - current_baseline).abs() > baseline_tolerance {
             if !current_segments.is_empty() {
                 lines.push(finish_line(std::mem::take(&mut current_segments), current_baseline));
