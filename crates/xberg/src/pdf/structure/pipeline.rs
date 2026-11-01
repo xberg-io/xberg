@@ -31,6 +31,7 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
+mod heading_body;
 mod heading_context;
 pub(super) mod native_scripts;
 mod run_in_lists;
@@ -336,7 +337,9 @@ fn opens_aligned_body_block(
         return true;
     };
 
-    if shares_same_text_row(candidate, following, is_same_page) {
+    if shares_same_text_row(candidate, following, is_same_page)
+        || (is_same_page && heading_context::has_trusted_hyphen_continuation(candidate, following))
+    {
         return false;
     }
 
@@ -368,66 +371,119 @@ fn is_explicit_numbered_body_size_section(text: &str) -> bool {
             .all(char::is_uppercase)
 }
 
-fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size: f32) -> Vec<Vec<bool>> {
+// ~keep Local layout can exclude a heading without removing its legacy repeated-style support.
+struct BodySizeHeadingEvidence {
+    supports_style: bool,
+    emit_heading: bool,
+}
+
+fn suppress_local_table_heading(
+    paragraph: &PdfParagraph,
+    following: Option<(usize, &PdfParagraph)>,
+    page_index: usize,
+    is_explicit_section: bool,
+) -> bool {
+    !is_explicit_section
+        && paragraph.block_bbox.is_some()
+        && following.is_some_and(|(following_page, following)| {
+            page_index == following_page
+                && following.block_bbox.is_some()
+                && heading_body::has_recurring_formula_cells(paragraph, following)
+        })
+}
+
+fn body_size_candidate_evidence(
+    paragraph: &PdfParagraph,
+    body_font_size: f32,
+    page_index: usize,
+    is_explicit_section: bool,
+    next_content: Option<(usize, &PdfParagraph)>,
+    following_content: Option<(usize, &PdfParagraph)>,
+) -> BodySizeHeadingEvidence {
+    let is_candidate = is_body_size_bold_heading_candidate(paragraph, body_font_size);
+    let has_non_finite_geometry = paragraph
+        .block_bbox
+        .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
+        || following_content.is_some_and(|(_, following)| {
+            following
+                .block_bbox
+                .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
+        });
+    let supports_style = is_candidate
+        && !has_non_finite_geometry
+        && if is_explicit_section {
+            !following_content.is_some_and(|(following_page_index, following)| {
+                shares_same_text_row(paragraph, following, page_index == following_page_index)
+            })
+        } else {
+            !next_content.is_some_and(|(following_page_index, following)| {
+                shares_same_text_row(paragraph, following, page_index == following_page_index)
+            }) && following_content.is_some_and(|(following_page_index, following)| {
+                opens_aligned_body_block(paragraph, following, body_font_size, page_index == following_page_index)
+            })
+        };
+    let emit_heading =
+        supports_style && !suppress_local_table_heading(paragraph, following_content, page_index, is_explicit_section);
+    BodySizeHeadingEvidence {
+        supports_style,
+        emit_heading,
+    }
+}
+
+fn body_size_heading_evidence(
+    all_pages: &[Vec<PdfParagraph>],
+    body_font_size: f32,
+) -> Vec<Vec<BodySizeHeadingEvidence>> {
     let mut next_content: Option<(usize, &PdfParagraph)> = None;
-    let mut eligibility = Vec::with_capacity(all_pages.len());
+    let mut evidence = Vec::with_capacity(all_pages.len());
     for (page_index, page) in all_pages.iter().enumerate().rev() {
-        let mut page_eligibility = Vec::with_capacity(page.len());
+        let mut page_evidence = Vec::with_capacity(page.len());
         let mut context = heading_context::HeadingContext::new(page);
         for (paragraph_index, paragraph) in page.iter().enumerate().rev() {
-            let is_candidate = is_body_size_bold_heading_candidate(paragraph, body_font_size);
             let is_explicit_section = is_explicit_numbered_body_size_section(paragraph_text_raw(paragraph).trim());
             let following_content = if is_explicit_section {
                 next_content
             } else {
                 context.following(paragraph_index, page_index, next_content)
             };
-            let has_non_finite_geometry = paragraph
-                .block_bbox
-                .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
-                || following_content.is_some_and(|(_, following)| {
-                    following
-                        .block_bbox
-                        .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
-                });
-            page_eligibility.push(
-                is_candidate
-                    && !has_non_finite_geometry
-                    && if is_explicit_section {
-                        !following_content.is_some_and(|(following_page_index, following)| {
-                            shares_same_text_row(paragraph, following, page_index == following_page_index)
-                        })
-                    } else {
-                        !next_content.is_some_and(|(following_page_index, following)| {
-                            shares_same_text_row(paragraph, following, page_index == following_page_index)
-                        }) && following_content.is_some_and(|(following_page_index, following)| {
-                            opens_aligned_body_block(
-                                paragraph,
-                                following,
-                                body_font_size,
-                                page_index == following_page_index,
-                            )
-                        })
-                    },
-            );
+            page_evidence.push(body_size_candidate_evidence(
+                paragraph,
+                body_font_size,
+                page_index,
+                is_explicit_section,
+                next_content,
+                following_content,
+            ));
             if paragraph.word_count > 0 && !paragraph.is_page_furniture {
                 next_content = Some((page_index, paragraph));
                 context.observe_content(paragraph_index, page_index, paragraph);
             }
         }
-        page_eligibility.reverse();
-        eligibility.push(page_eligibility);
+        page_evidence.reverse();
+        evidence.push(page_evidence);
     }
-    eligibility.reverse();
-    eligibility
+    evidence.reverse();
+    evidence
+}
+
+#[cfg(test)]
+fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size: f32) -> Vec<Vec<bool>> {
+    body_size_heading_evidence(all_pages, body_font_size)
+        .into_iter()
+        .map(|page| page.into_iter().map(|candidate| candidate.emit_heading).collect())
+        .collect()
 }
 
 fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>], body_font_size: Option<f32>) {
     let Some(body_font_size) = body_font_size else {
         return;
     };
-    let eligible = body_size_heading_eligibility(all_pages, body_font_size);
-    let signal_count = eligible.iter().flatten().filter(|&&is_eligible| is_eligible).count();
+    let evidence = body_size_heading_evidence(all_pages, body_font_size);
+    let signal_count = evidence
+        .iter()
+        .flatten()
+        .filter(|candidate| candidate.supports_style)
+        .count();
     let other_heading_count = all_pages
         .iter()
         .flatten()
@@ -439,9 +495,9 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
         return;
     }
 
-    for (page, page_eligibility) in all_pages.iter_mut().zip(eligible) {
-        for (paragraph, is_eligible) in page.iter_mut().zip(page_eligibility) {
-            if is_eligible {
+    for (page, page_evidence) in all_pages.iter_mut().zip(evidence) {
+        for (paragraph, candidate) in page.iter_mut().zip(page_evidence) {
+            if candidate.emit_heading {
                 paragraph.heading_level = Some(3);
             }
         }
@@ -3080,6 +3136,10 @@ fn heading_style_carries_capital_opener(prev: &SegmentData, line: &SegmentData, 
 const MAX_LINE_TOLERANCE_PT: f32 = 3.0;
 const LINE_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
 
+fn line_baseline_tolerance(current_scale: f32, segment_scale: f32) -> f32 {
+    (current_scale.max(segment_scale) * LINE_TOLERANCE_SCALE_FACTOR).min(MAX_LINE_TOLERANCE_PT)
+}
+
 /// Reconstruct PdfLine objects from a flat list of SegmentData, grouping by baseline_y.
 ///
 /// This preserves inline formatting information (is_bold, is_italic, is_monospace)
@@ -3114,8 +3174,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let same_rotation = (seg.rotation_degrees - current_rotation).abs() <= f32::EPSILON;
         let segment_baseline = seg.upright_baseline();
         let segment_scale = seg.font_size.max(seg.height).abs();
-        let baseline_tolerance =
-            (current_scale.max(segment_scale) * LINE_TOLERANCE_SCALE_FACTOR).min(MAX_LINE_TOLERANCE_PT);
+        let baseline_tolerance = line_baseline_tolerance(current_scale, segment_scale);
         if !same_rotation || (segment_baseline - current_baseline).abs() > baseline_tolerance {
             if !current_segments.is_empty() {
                 lines.push(finish_line(std::mem::take(&mut current_segments), current_baseline));
@@ -7304,3 +7363,6 @@ mod list_marker_tests;
 
 #[cfg(test)]
 mod heading_column_tests;
+
+#[cfg(test)]
+mod heading_body_evidence_tests;

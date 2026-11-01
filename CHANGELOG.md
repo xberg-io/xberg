@@ -160,6 +160,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep body-size heading evidence within its source text column.** (#2275)
   Interleaved foreign-column text neither promotes wrapped prose nor hides a genuine heading.
+  A filled native line with a proven lexical hyphen continuation remains body text.
+  Recurring cell-aligned formula rows do not provide prose-opening evidence for a two-span heading candidate.
+  Canonical row membership retains native subscript geometry when evaluating those formula rows.
+  Table labels retain repeated-style support without being emitted as headings themselves.
 
 - **(pdf): Preserve native source geometry and complete powers when splitting run-in prose lists.** (#2275)
   Plan from canonical rendered text; retain the original paragraph when a cut cannot preserve whole source spans.
