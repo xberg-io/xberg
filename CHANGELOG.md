@@ -151,6 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Styled matches cannot be covered by another occurrence or a link destination. Select verified plain fallbacks
   before token allocation and reports; reject unproved coverage before changing any result fields.
   Keep literal HTML, code blocks and padded inline code processable; store exact identity mappings as compact runs.
+  Retain canonical inline math, footnote labels and alert titles in the visible coverage check.
 
 - **(redaction): Preserve verified generated Markdown formatting while redacting its content.** (#2358)
   Treat superscript and underline syntax separately from source text, including per-page output.

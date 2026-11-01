@@ -1,4 +1,4 @@
-use comrak::nodes::{AstNode, NodeCode, NodeValue};
+use comrak::nodes::{AstNode, NodeCode, NodeMath, NodeValue};
 use std::ops::Range;
 
 struct Origin {
@@ -51,6 +51,11 @@ impl VisibleMarkdown {
             }
             NodeValue::EscapedTag(text) => self.leaf(text, markdown, source_range(node, markdown, lines)?, false),
             NodeValue::Code(code) => self.inline_code(node, code, markdown, lines),
+            NodeValue::Math(math) => self.inline_math(node, math, markdown, lines),
+            NodeValue::FootnoteReference(reference) => {
+                self.unmapped(&reference.name);
+                Some(())
+            }
             NodeValue::CodeBlock(block) => {
                 self.block_boundary();
                 self.unmapped(block.literal.strip_suffix('\n').unwrap_or(&block.literal));
@@ -69,12 +74,65 @@ impl VisibleMarkdown {
                 });
                 Some(())
             }
+            value => self.structure(node, value),
+        }
+    }
+
+    fn structure(&mut self, node: &AstNode<'_>, value: &NodeValue) -> Option<()> {
+        match value {
+            NodeValue::Paragraph => self.paragraph(node),
+            NodeValue::FootnoteDefinition(_) => {
+                // Both consumers consume the label at the canonical definition's first paragraph. ~keep
+                node.first_child()
+                    .filter(|child| matches!(child.data.borrow().value, NodeValue::Paragraph))?;
+            }
+            NodeValue::Alert(alert) => {
+                self.block_boundary();
+                self.unmapped(
+                    alert
+                        .title
+                        .as_deref()
+                        .unwrap_or_else(|| alert.alert_type.default_title()),
+                );
+            }
             value => {
                 if structural(value)? {
                     self.block_boundary();
                 }
-                Some(())
             }
+        }
+        Some(())
+    }
+
+    fn paragraph(&mut self, node: &AstNode<'_>) {
+        self.block_boundary();
+        if node.previous_sibling().is_none()
+            && let Some(parent) = node.parent()
+            && let NodeValue::FootnoteDefinition(definition) = &parent.data.borrow().value
+        {
+            self.unmapped(&definition.name);
+            self.unmapped(" ");
+        }
+    }
+
+    fn inline_math(&mut self, node: &AstNode<'_>, math: &NodeMath, markdown: &str, lines: &[usize]) -> Option<()> {
+        let (opening, closing) = if !math.dollar_math {
+            ("$`", "`$")
+        } else if math.display_math {
+            ("$$", "$$")
+        } else {
+            ("$", "$")
+        };
+        let source = source_range(node, markdown, lines).and_then(|range| {
+            let raw = markdown.get(range.clone())?;
+            let payload = raw.strip_prefix(opening)?.strip_suffix(closing)?;
+            (payload == math.literal).then_some(range.start + opening.len()..range.end - closing.len())
+        });
+        if let Some(source) = source {
+            self.leaf(&math.literal, markdown, source, false)
+        } else {
+            self.unmapped(&math.literal);
+            Some(())
         }
     }
 
@@ -210,7 +268,7 @@ impl VisibleMarkdown {
 
 fn structural(value: &NodeValue) -> Option<bool> {
     match value {
-        NodeValue::Paragraph | NodeValue::Heading(_) | NodeValue::TableCell => Some(true),
+        NodeValue::Heading(_) | NodeValue::TableCell => Some(true),
         NodeValue::Document
         | NodeValue::BlockQuote
         | NodeValue::List(_)
