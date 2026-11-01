@@ -1,3 +1,5 @@
+mod contrast;
+
 #[allow(
     unsafe_code,
     reason = "Isolated native test measures real Leptonica pixel allocations through its C hook"
