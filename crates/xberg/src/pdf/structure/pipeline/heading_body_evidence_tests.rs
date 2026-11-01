@@ -303,3 +303,5 @@ fn should_keep_a_genuine_heading_when_hyphen_continuation_evidence_is_absent_227
 }
 
 mod preservation;
+
+mod source_geometry;
