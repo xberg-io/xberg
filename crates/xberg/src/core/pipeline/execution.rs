@@ -24,12 +24,12 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
     _builtin_redaction: Option<&PostProcessorHandle>,
 ) -> Result<()> {
     #[cfg(feature = "redaction")]
-    if _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor)) {
-        if let (document, Some(surfaces)) = result.redaction_parts()? {
-            return crate::plugins::processor::builtin::redaction::RedactionProcessor
-                .process_with_surfaces(document, config, surfaces)
-                .await;
-        }
+    if _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor))
+        && let (document, Some(surfaces)) = result.redaction_parts()?
+    {
+        return crate::plugins::processor::builtin::redaction::RedactionProcessor
+            .process_with_surfaces(document, config, surfaces)
+            .await;
     }
     processor.process(result.document_mut(), config).await
 }

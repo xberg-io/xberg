@@ -49,5 +49,7 @@ impl RedactionSurfaces for () {}
 
 #[cfg(feature = "redaction")]
 mod capture;
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+pub(crate) use capture::DerivedResult;
 #[cfg(feature = "redaction")]
-pub(crate) use capture::{DerivedResult, SurfaceContext, derive_with_surfaces};
+pub(crate) use capture::{SurfaceContext, derive_with_surfaces};
