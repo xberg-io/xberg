@@ -74,15 +74,14 @@ pub(super) struct ProcessorSnapshot {
     pub(super) early: std::sync::Arc<Vec<std::sync::Arc<dyn crate::plugins::PostProcessor>>>,
     pub(super) middle: std::sync::Arc<Vec<std::sync::Arc<dyn crate::plugins::PostProcessor>>>,
     pub(super) late: std::sync::Arc<Vec<std::sync::Arc<dyn crate::plugins::PostProcessor>>>,
-    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    #[cfg(feature = "redaction")]
     builtin_redaction: Option<std::sync::Arc<dyn crate::plugins::PostProcessor>>,
     _lease: ProcessorSnapshotLease,
 }
 
 impl ProcessorSnapshot {
-    #[cfg(feature = "tokio-runtime")]
     pub(super) fn builtin_redaction(&self) -> Option<&std::sync::Arc<dyn crate::plugins::PostProcessor>> {
-        #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+        #[cfg(feature = "redaction")]
         {
             self.builtin_redaction.as_ref()
         }
@@ -517,11 +516,11 @@ fn try_get_processor_snapshot(require_complete_registration: bool) -> Option<Pro
         .read()
         .generation();
     let lease = ProcessorSnapshotLease::acquire(&ACTIVE_PROCESSOR_SNAPSHOTS);
-    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    #[cfg(feature = "redaction")]
     let mut builtin_redaction = None;
     let stages = PROCESSOR_CACHE.try_read()?.as_ref().and_then(|cache| {
         (cache.registration_epoch == registration_epoch && cache.generation == registry_generation).then(|| {
-            #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+            #[cfg(feature = "redaction")]
             {
                 builtin_redaction = cache.builtin_redaction.as_ref().map(std::sync::Arc::clone);
             }
@@ -542,7 +541,7 @@ fn try_get_processor_snapshot(require_complete_registration: bool) -> Option<Pro
         early: stages.0,
         middle: stages.1,
         late: stages.2,
-        #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+        #[cfg(feature = "redaction")]
         builtin_redaction,
         _lease: lease,
     })

@@ -17,7 +17,7 @@ pub struct PostProcessorRegistry {
     /// #215) record the generation their snapshot was built from and compare it
     /// against this value to detect a stale cache instead of trusting it forever.
     generation: u64,
-    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    #[cfg(feature = "redaction")]
     builtin_redaction: Option<Arc<dyn PostProcessor>>,
 }
 
@@ -28,7 +28,7 @@ impl PostProcessorRegistry {
             processors: HashMap::new(),
             name_index: HashMap::new(),
             generation: 0,
-            #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+            #[cfg(feature = "redaction")]
             builtin_redaction: None,
         }
     }
@@ -140,14 +140,11 @@ impl PostProcessorRegistry {
         let processor: Arc<dyn PostProcessor> =
             Arc::new(crate::plugins::processor::builtin::redaction::RedactionProcessor);
         self.register(Arc::clone(&processor))?;
-        #[cfg(feature = "tokio-runtime")]
-        {
-            self.builtin_redaction = Some(processor);
-        }
+        self.builtin_redaction = Some(processor);
         Ok(())
     }
 
-    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    #[cfg(feature = "redaction")]
     pub(crate) fn builtin_redaction(&self) -> Option<Arc<dyn PostProcessor>> {
         self.builtin_redaction.as_ref().map(Arc::clone)
     }
@@ -216,7 +213,7 @@ impl PostProcessorRegistry {
             None
         };
 
-        #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+        #[cfg(feature = "redaction")]
         if processor_to_shutdown
             .as_ref()
             .zip(self.builtin_redaction.as_ref())

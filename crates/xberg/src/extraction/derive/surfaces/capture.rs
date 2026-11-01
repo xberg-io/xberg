@@ -181,7 +181,7 @@ impl ProcessingDocument for DerivedResult {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tokio-runtime"))]
 mod tests;
 
 pub(crate) fn derive_with_surfaces(

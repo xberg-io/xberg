@@ -23,7 +23,7 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
     processor: &PostProcessorHandle,
     _builtin_redaction: Option<&PostProcessorHandle>,
 ) -> Result<()> {
-    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    #[cfg(feature = "redaction")]
     if _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor)) {
         if let (document, Some(surfaces)) = result.redaction_parts()? {
             return crate::plugins::processor::builtin::redaction::RedactionProcessor
@@ -164,3 +164,6 @@ pub(super) async fn execute_validators(result: &ExtractedDocument, config: &Extr
 
 #[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
 mod redaction_surface_tests;
+
+#[cfg(all(test, not(feature = "tokio-runtime")))]
+mod no_runtime_surface_tests;

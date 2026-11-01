@@ -1,4 +1,3 @@
-#[cfg(any(feature = "redaction", feature = "tokio-runtime"))]
 use crate::types::ExtractedDocument;
 
 pub(crate) trait DerivationObserver {
@@ -11,18 +10,16 @@ pub(crate) trait DerivationObserver {
 
 impl DerivationObserver for () {}
 
-#[cfg(feature = "tokio-runtime")]
 pub(crate) trait ProcessingDocument: Send {
     fn document(&self) -> &ExtractedDocument;
     fn document_mut(&mut self) -> &mut ExtractedDocument;
 
-    #[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+    #[cfg(feature = "redaction")]
     fn redaction_parts(&mut self) -> crate::Result<(&mut ExtractedDocument, Option<&SurfaceContext>)> {
         Ok((self.document_mut(), None))
     }
 }
 
-#[cfg(feature = "tokio-runtime")]
 impl ProcessingDocument for ExtractedDocument {
     fn document(&self) -> &ExtractedDocument {
         self
@@ -50,7 +47,7 @@ pub(crate) trait RedactionSurfaces: Send + Sync {
 #[cfg(feature = "redaction")]
 impl RedactionSurfaces for () {}
 
-#[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+#[cfg(feature = "redaction")]
 mod capture;
-#[cfg(all(feature = "redaction", feature = "tokio-runtime"))]
+#[cfg(feature = "redaction")]
 pub(crate) use capture::{DerivedResult, SurfaceContext, derive_with_surfaces};
