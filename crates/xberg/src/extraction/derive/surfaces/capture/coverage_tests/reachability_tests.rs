@@ -12,7 +12,7 @@ fn canonical_options() -> comrak::Options<'static> {
 
 fn rule() -> RedactionConfig {
     RedactionConfig {
-        categories: vec![PiiCategory::Custom("person".into())],
+        categories: [PiiCategory::Custom("person".into())].into_iter().collect(),
         ..config("Jane Doe", RedactionStrategy::Mask)
     }
 }
