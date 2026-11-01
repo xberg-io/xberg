@@ -553,6 +553,9 @@ mod continuation_boundary_tests;
 mod horizontal_frame_tests;
 
 #[cfg(test)]
+mod terminal_boundary_tests;
+
+#[cfg(test)]
 mod tests {
     use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::TextSpan;
