@@ -149,6 +149,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Preserve current text after legitimate post-processor edits.** (#2358)
+  Discard unproved generated Markdown with a warning and return current redacted plain text.
+  Keep page and result identity guards, and preserve unchanged formatting after later no-op processors.
+
 - **(redaction): Preserve verified generated Markdown formatting while redacting its content.** (#2358)
   Treat superscript and underline syntax separately from source text, including per-page output.
   Use an explicit plain-text fallback when a match crosses generated syntax; keep literal and code text redactable.

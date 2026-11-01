@@ -348,7 +348,9 @@ struct RedactionPass<'a> {
 impl RedactionPass<'_> {
     fn plan_surfaces(&self, doc: &ExtractedDocument, surfaces: &impl RedactionSurfaces) -> Result<SurfacePlans> {
         let mut plans = SurfacePlans::default();
-        if surfaces.formatted_markdown()
+        if surfaces.discard_formatted() {
+            plans.formatted = Some(FormattedPlan::ProcessorDiscard);
+        } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
             plans.formatted = Some(match content_matches(text, self.matches_for(text)) {
@@ -498,22 +500,30 @@ impl RedactionPass<'_> {
             doc.content = self.redact(&content);
         }
 
-        if let Some(formatted) = doc.formatted_content.take() {
-            let plan = (depth == 0).then(|| self.plans.formatted.take()).flatten();
-            doc.formatted_content = match plan {
-                Some(FormattedPlan::Preserve(matches)) => Some(self.apply_matches(&formatted, matches)),
-                Some(FormattedPlan::Discard) => {
-                    crate::core::diagnostics::push_warning(
-                        &mut doc.processing_warnings,
-                        "output_format",
-                        "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded \
-                         and redacted plain text is returned",
-                    );
-                    None
-                }
-                None => Some(self.redact(&formatted)),
-            };
-        }
+        let plan = (depth == 0).then(|| self.plans.formatted.take()).flatten();
+        doc.formatted_content = match (plan, doc.formatted_content.take()) {
+            (Some(FormattedPlan::ProcessorDiscard), _) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor changed the captured document text; the unproved rendering was discarded \
+                     and current redacted plain text is returned",
+                );
+                None
+            }
+            (Some(FormattedPlan::Preserve(matches)), Some(formatted)) => Some(self.apply_matches(&formatted, matches)),
+            (Some(FormattedPlan::Discard), Some(_)) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded \
+                     and redacted plain text is returned",
+                );
+                None
+            }
+            (_, Some(formatted)) => Some(self.redact(&formatted)),
+            (_, None) => None,
+        };
 
         self.redact_chunks(doc);
 
