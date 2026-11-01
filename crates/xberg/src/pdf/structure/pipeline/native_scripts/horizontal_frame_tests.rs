@@ -8,13 +8,30 @@ use xberg_native_pdf::structure::McidScope;
 const UPPER: &str = "ordinary source prose continues";
 const LOWER: &str = "and the ordinary account continues here";
 const FOLLOWING: &str = "and another physical row carries the account";
+const RAGGED_FOLLOWING: &str = "like this:";
 const FONT: f32 = 12.0;
+
+#[derive(Clone, Copy)]
+enum FollowingRow {
+    Disjoint,
+    Full,
+    Ragged,
+}
+
+impl FollowingRow {
+    fn text(self) -> &'static str {
+        match self {
+            Self::Ragged => RAGGED_FOLLOWING,
+            Self::Disjoint | Self::Full => FOLLOWING,
+        }
+    }
+}
 
 struct FrameCase {
     segments: Vec<SegmentData>,
     evidence: NativeSegmentEvidence,
     gaps: Vec<f32>,
-    foreign: bool,
+    following: FollowingRow,
 }
 
 fn span(text: &str, x: f32, y: f32, width: f32, font: f32) -> TextSpan {
@@ -29,7 +46,19 @@ fn span(text: &str, x: f32, y: f32, width: f32, font: f32) -> TextSpan {
 }
 
 fn fixture(foreign: bool) -> FrameCase {
-    let (left, width) = if foreign { (72.0, 228.0) } else { (299.0, 261.0) };
+    fixture_with_following(if foreign {
+        FollowingRow::Disjoint
+    } else {
+        FollowingRow::Full
+    })
+}
+
+fn fixture_with_following(following: FollowingRow) -> FrameCase {
+    let (left, width) = match following {
+        FollowingRow::Disjoint => (72.0, 228.0),
+        FollowingRow::Full => (299.0, 261.0),
+        FollowingRow::Ragged => (299.0, 43.6365),
+    };
     let spans = vec![
         span("x", 80.0, 800.0, 10.0, FONT),
         span("4 ", 90.0, 804.9568, 4.0, 8.0),
@@ -39,7 +68,7 @@ fn fixture(foreign: bool) -> FrameCase {
         span("ordinary bridge", 250.0, 740.0, 100.0, FONT),
         span(UPPER, 315.0, 700.0, 120.0, FONT),
         span(LOWER, 315.0, 680.8, 245.0, FONT),
-        span(FOLLOWING, left, 661.6, width, FONT),
+        span(following.text(), left, 661.6, width, FONT),
     ];
     let page = NativePageSegments::from_final_spans(
         spans,
@@ -58,7 +87,7 @@ fn fixture(foreign: bool) -> FrameCase {
         segments,
         evidence,
         gaps,
-        foreign,
+        following,
     }
 }
 
@@ -153,7 +182,7 @@ fn assert_original_votes(
     let upper_row = rows.complete_row(upper).expect("complete immutable upper source row");
     let lower_row = rows.complete_row(lower).expect("complete immutable lower source row");
     let following_row = rows
-        .complete_row(line_for(&grouped, FOLLOWING))
+        .complete_row(line_for(&grouped, case.following.text()))
         .expect("complete immediate following row");
     assert_eq!(lower_row, upper_row + 1);
     assert_eq!(following_row, lower_row + 1);
@@ -202,16 +231,22 @@ fn assert_intent_geometry(case: &FrameCase, upper: &PdfLine, lower: &PdfLine, fo
         following.upright_advance_extent().1
     ));
     assert!(lower.x - following.x > FONT * super::super::HEADING_HANGING_INDENT_LEFT_EDGE_TOLERANCE_FONT_FACTOR);
-    if case.foreign {
-        assert!(
+    match case.following {
+        FollowingRow::Disjoint => assert!(
             following.upright_advance_extent().1 < lower.upright_advance_extent().0,
             "the apparent outdent is a completely disjoint foreign column"
-        );
-    } else {
-        assert!(
+        ),
+        FollowingRow::Full => assert!(
             following.x < lower.x && following.upright_advance_extent().1 == lower_right,
             "a genuine hanging indent shares the same body frame"
-        );
+        ),
+        FollowingRow::Ragged => {
+            assert_eq!(following.text, RAGGED_FOLLOWING);
+            assert_eq!(following.width, 43.6365);
+            assert!(following.x < lower.x);
+            assert!(following.upright_advance_extent().1 > lower.upright_advance_extent().0);
+            assert!(following.upright_advance_extent().1 < lower_right);
+        }
     }
 }
 
@@ -229,7 +264,7 @@ fn assert_preconditions(case: &FrameCase) {
     let (upper, lower, following) = (
         line_for(&grouped, UPPER),
         line_for(&grouped, LOWER),
-        line_for(&grouped, FOLLOWING),
+        line_for(&grouped, case.following.text()),
     );
     assert_intent_geometry(&case, upper, lower, following);
     assert_original_votes(&case, &ordered, &index, upper, lower);
@@ -290,4 +325,9 @@ fn should_join_right_prose_when_only_a_disjoint_left_row_supplies_an_apparent_in
 #[test]
 fn should_preserve_a_genuine_right_column_indent_with_a_common_following_body_frame_2275() {
     assert_result(fixture(false), false);
+}
+
+#[test]
+fn should_preserve_an_indented_paragraph_when_its_following_source_row_is_ragged_2275() {
+    assert_result(fixture_with_following(FollowingRow::Ragged), false);
 }
