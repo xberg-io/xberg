@@ -97,6 +97,7 @@ pub(super) struct Document {
 pub(super) fn parse(markdown: &str) -> Document {
     let arena = Arena::new();
     let root = parse_document(&arena, markdown, &comrak_options());
+    crate::rendering::inline_html::decode_standard_inline_html(root, &arena);
 
     let mut builder = Builder::default();
     for edge in root.traverse() {

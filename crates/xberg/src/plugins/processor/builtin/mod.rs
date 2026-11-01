@@ -121,7 +121,7 @@ fn register_ner() -> crate::Result<()> {
 
 #[cfg(feature = "redaction")]
 fn register_redaction() -> crate::Result<()> {
-    register_builtin_processor(std::sync::Arc::new(redaction::RedactionProcessor))
+    crate::plugins::processor::register_builtin_redaction().map(|_| ())
 }
 
 /// Register every built-in post-processor enabled by the active feature set.

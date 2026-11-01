@@ -136,7 +136,7 @@ fn should_preserve_numeric_superscripts_on_their_own_visual_lines() {
     assert_eq!(cases.len(), 2);
     for content in cases {
         let output = markdown(&script_pdf(content));
-        let expected = ["7,2 x 10^9^/l", "10^5^ KBE/ml"];
+        let expected = ["7,2 x 10<sup>9</sup>/l", "10<sup>5</sup> KBE/ml"];
         assert_eq!(expected.len(), 2);
         for value in expected {
             assert_eq!(
@@ -146,7 +146,7 @@ fn should_preserve_numeric_superscripts_on_their_own_visual_lines() {
             );
         }
         assert_eq!(
-            output.matches('^').count(),
+            output.matches("<sup>").count() + output.matches("</sup>").count(),
             4,
             "two paired exponent markers: {output:?}"
         );
@@ -161,8 +161,8 @@ fn should_preserve_subscript_between_base_and_suffix() {
 #[test]
 fn should_preserve_prose_scripts_when_heuristic_table_detection_is_enabled() {
     let cases = [
-        (SUPERSCRIPTS, "7,2 x 10^9^/l", 4),
-        (POSITIONED_SUPERSCRIPTS, "7,2 x 10^9^/l", 4),
+        (SUPERSCRIPTS, "7,2 x 10<sup>9</sup>/l", 4),
+        (POSITIONED_SUPERSCRIPTS, "7,2 x 10<sup>9</sup>/l", 4),
         (SUBSCRIPT, "H~2~O", 2),
     ];
     assert_eq!(cases.len(), 3);
@@ -175,8 +175,12 @@ fn should_preserve_prose_scripts_when_heuristic_table_detection_is_enabled() {
             1,
             "table detection must preserve the script exactly once: {with_tables:?}"
         );
-        let marker = if content == SUBSCRIPT { '~' } else { '^' };
-        assert_eq!(with_tables.matches(marker).count(), expected_markers);
+        let marker_count = if content == SUBSCRIPT {
+            with_tables.matches('~').count()
+        } else {
+            with_tables.matches("<sup>").count() + with_tables.matches("</sup>").count()
+        };
+        assert_eq!(marker_count, expected_markers);
         assert_eq!(with_tables, without_tables, "table detection must not change prose");
     }
 }
@@ -217,7 +221,7 @@ fn should_preserve_multidigit_exponents_and_multiple_internal_subscripts() {
     let cases = [
         (
             "BT /F1 12 Tf 1 0 0 1 72 700 Tm (10) Tj /F1 8 Tf 3 Ts (12) Tj /F1 12 Tf 0 Ts (/l) Tj ET",
-            "10^12^/l",
+            "10<sup>12</sup>/l",
         ),
         (
             "BT /F1 12 Tf 1 0 0 1 72 700 Tm (H) Tj /F1 8 Tf -2 Ts (2) Tj /F1 12 Tf 0 Ts (SO) Tj /F1 8 Tf -2 Ts (4) Tj /F1 12 Tf 0 Ts ( solution) Tj ET",
@@ -235,8 +239,12 @@ fn should_keep_displaced_exponent_on_its_wrapped_visual_line() {
     let content = "BT /F1 12 Tf 1 0 0 1 72 700 Tm (First visual line) Tj ET\n\
         BT /F1 12 Tf 1 0 0 1 72 682 Tm (10) Tj /F1 8 Tf 4 Ts (9) Tj /F1 12 Tf 0 Ts (/l) Tj ET";
     let output = markdown(&script_pdf(content));
-    assert_eq!(output.matches("10^9^/l").count(), 1, "upper-range shift: {output:?}");
-    assert!(output.find("First visual line").unwrap() < output.find("10^9^/l").unwrap());
+    assert_eq!(
+        output.matches("10<sup>9</sup>/l").count(),
+        1,
+        "upper-range shift: {output:?}"
+    );
+    assert!(output.find("First visual line").unwrap() < output.find("10<sup>9</sup>/l").unwrap());
 }
 
 #[test]
@@ -247,12 +255,12 @@ fn should_keep_confirmed_numeric_note_separate_from_a_true_exponent() {
     let output = markdown(&script_pdf(content));
     assert!(output.contains("Clause 123 1 continues."), "note reference: {output:?}");
     assert_eq!(
-        output.matches("Rate 10^1^+ 2 units").count(),
+        output.matches("Rate 10<sup>1</sup>+ 2 units").count(),
         1,
         "expression: {output:?}"
     );
     assert_eq!(
-        output.matches('^').count(),
+        output.matches("<sup>").count() + output.matches("</sup>").count(),
         2,
         "only the exponent is annotated: {output:?}"
     );
@@ -296,6 +304,11 @@ fn should_preserve_scripts_inside_a_detected_ruled_pdf_table_gh2275() {
     assert_eq!(result.tables.len(), 1, "fixture must produce one actual table");
     assert_eq!(result.tables[0].cells.len(), 3);
     assert!(result.tables[0].cells.iter().all(|row| row.len() == 3));
-    assert_eq!(result.content.matches("10^9^/l").count(), 1, "{}", result.content);
+    assert_eq!(
+        result.content.matches("10<sup>9</sup>/l").count(),
+        1,
+        "{}",
+        result.content
+    );
     assert_eq!(result.content.matches("H~2~O").count(), 1, "{}", result.content);
 }
