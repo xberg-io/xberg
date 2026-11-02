@@ -574,3 +574,40 @@ async fn formatted_literal_multi_scalar_entity_hashes_follow_longer_semantic_ide
     assert_eq!(output.metadata.title.as_deref(), Some(expected.as_str()));
     assert_eq!(output.content, expected);
 }
+
+#[tokio::test]
+async fn formatted_literal_disjoint_entity_identities_abort_before_mutation() {
+    let (source, short, full) = multi_scalar_entity_preconditions();
+    let combining = "\u{0338}";
+    let combining_match = regex::Regex::new(&regex::escape(combining))
+        .unwrap()
+        .find(full)
+        .unwrap();
+    assert_eq!((combining_match.start(), combining_match.end()), (3, 5));
+    let config = config(RedactionStrategy::TokenReplace, &[short, combining], &[]);
+    let terms = &config.redaction.as_ref().unwrap().custom_terms;
+    assert_eq!(terms.len(), 2);
+    assert_eq!((terms[0].value.as_str(), terms[1].value.as_str()), (short, combining));
+    assert!(terms.iter().all(|term| term.value != full));
+    let mut ordinary = ExtractedDocument {
+        content: full.into(),
+        ..Default::default()
+    };
+    crate::plugins::processor::builtin::redaction::RedactionProcessor
+        .process(&mut ordinary, &config)
+        .await
+        .unwrap();
+    assert_eq!(ordinary.content, "[PRIVATE_1][PRIVATE_2]");
+    assert_eq!(ordinary.redaction_report.as_ref().unwrap().total_redacted, 2);
+    let (mut result, cache) = edited(source, Some(full), &config).await;
+    let before = serde_json::to_value(&*result).unwrap();
+    let formatted = result.formatted_content.clone();
+    let error = late(&mut result, &cache, &config)
+        .await
+        .expect_err("one entity envelope cannot collapse disjoint semantic identities");
+    assert!(matches!(&error, XbergError::Plugin { plugin_name, .. } if plugin_name == "redaction"));
+    assert!(error.to_string().contains("coverage"), "{error}");
+    assert_eq!(serde_json::to_value(&*result).unwrap(), before);
+    assert_eq!(result.formatted_content, formatted);
+    assert!(result.redaction_report.is_none());
+}
