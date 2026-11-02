@@ -478,7 +478,7 @@ for table in result.results[0].tables:
 
 ## Error Classes
 
-The errors raised by `extract()` and `extract_batch()` are plain `RuntimeError` — the typed exception classes below are **not** raised by these entry points, so catch `RuntimeError` (or `Exception`) around an `extract()`/`extract_batch()` call.
+`extract()` and `extract_batch()` raise the exported exception subclass for the underlying Rust error kind, including calls with `on_progress`. Catch `XbergError` for extraction failures, or a specific subclass such as `ParsingError`, `SecurityError`, or `ValidationError`.
 
 Xberg also defines a family of typed exception classes re-exported from `xberg`. The `XbergError`-rooted ones inherit from `XbergError` (base): `ParsingError`, `OcrError`, `ValidationError`, `MissingDependencyError`, `UnsupportedFormatError`, `CacheError`, `ImageProcessingError`, `SerializationError`, `PluginError`, `SecurityError`, `TranscriptionError`, `EmbeddingError`, `RerankingError`, `XbergTimeoutError`, `IoError`, and others. A few classes sit in separate hierarchies rooted at `Exception` rather than `XbergError` — e.g. `ConfigError`/`PdfAnalysisError` and `ParseError`/`SchemaValidationError`.
 
@@ -486,12 +486,12 @@ Xberg also defines a family of typed exception classes re-exported from `xberg`.
 
 ```python
 import asyncio
-from xberg import ExtractInput, extract, ExtractionConfig
+from xberg import ExtractInput, extract, ExtractionConfig, XbergError
 
 async def main() -> None:
     try:
         result = await extract(ExtractInput(uri="document.pdf"), ExtractionConfig())
-    except RuntimeError as e:
+    except XbergError as e:
         print(f"Extraction failed: {e}")
 
 asyncio.run(main())
