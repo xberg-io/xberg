@@ -23,6 +23,9 @@
 mod backend;
 mod tensor;
 
+#[cfg(all(test, feature = "layout-detection", inference_ort))]
+pub(crate) mod recording;
+
 #[cfg(inference_ort)]
 mod ort_backend;
 // — so there it is `cfg(test)`-only, keeping non-test builds dead-code-clean.
@@ -32,6 +35,8 @@ mod ort_backend;
 #[cfg(all(feature = "tract", any(not(inference_ort), test)))]
 pub(crate) mod tract_backend;
 
+#[cfg(all(test, feature = "layout-detection"))]
+pub(crate) use backend::InferenceError;
 pub(crate) use backend::{InferenceBackend, InferenceSession};
 pub(crate) use tensor::InferenceTensor;
 
