@@ -492,10 +492,7 @@ mod build_tesseract {
     fn find_wasi_pthread_toolchain(wasi_sdk_dir: &Path) -> PathBuf {
         let candidate = wasi_sdk_dir.join("share/cmake/wasi-sdk-pthread.cmake");
         if candidate.exists() {
-            println!(
-                "cargo:warning=Found WASI SDK pthread toolchain: {}",
-                candidate.display()
-            );
+            eprintln!("Found WASI SDK pthread toolchain: {}", candidate.display());
             return candidate;
         }
         panic!(
@@ -522,10 +519,7 @@ mod build_tesseract {
         let target = target_triple();
 
         if is_wasm_target(&target) {
-            println!(
-                "cargo:warning=Detected WASM target: {}, routing to build_wasm()",
-                target
-            );
+            eprintln!("Detected WASM target: {}, routing to build_wasm()", target);
             return build_wasm();
         }
 
@@ -848,13 +842,13 @@ mod build_tesseract {
         let link_type = "static";
 
         println!("cargo:rustc-link-lib={}={}", link_type, tesseract_link_name);
-        println!(
-            "cargo:warning=Linking with tesseract ({} linking): {}",
+        eprintln!(
+            "Linking with tesseract ({} linking): {}",
             link_type, tesseract_link_name
         );
         println!("cargo:rustc-link-lib={}={}", link_type, leptonica_link_name);
-        println!(
-            "cargo:warning=Linking with leptonica ({} linking): {}",
+        eprintln!(
+            "Linking with leptonica ({} linking): {}",
             link_type, leptonica_link_name
         );
 
@@ -1840,10 +1834,7 @@ Installation instructions:
 
             if let Some((lib_path, link_name)) = found_lib_name {
                 if out_path.exists() {
-                    println!(
-                        "cargo:warning=Library already available at expected location: {}",
-                        out_path.display()
-                    );
+                    eprintln!("Library already available at expected location: {}", out_path.display());
                 } else if let Err(e) = fs::copy(&lib_path, &out_path) {
                     eprintln!("Failed to copy library to standard location: {}", e);
                 }

@@ -154,6 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Publish normalized representative-page metadata while retaining its original orientation provenance.
   The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
 
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
+
 - **(swift): The Swift package requires macOS 14.**
   The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
 
@@ -166,6 +168,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
   Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
   Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
+
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
