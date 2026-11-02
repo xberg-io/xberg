@@ -3226,7 +3226,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                            backend,
+                            &backend,
                             upright_data,
                             &ocr_config_owned,
                             config_for_page.as_ref(),
@@ -3282,12 +3282,6 @@ pub(super) async fn extract_with_ocr_for_page(
             if let Some(metadata) = ocr_result.metadata.image_preprocessing.clone() {
                 preprocessing_by_page.insert(document_page_number, metadata);
             }
-            // #1575: capture once, from the first page that has any -- see this function's
-            // `backend_additional_metadata` declaration for why a single representative page
-            // is the right granularity here.
-            if backend_additional_metadata.is_none() && !ocr_result.metadata.additional.is_empty() {
-                backend_additional_metadata = Some(ocr_result.metadata.additional.clone());
-            }
             crate::core::diagnostics::dedup_extend_warnings(
                 &mut backend_page_warnings,
                 std::mem::take(&mut ocr_result.processing_warnings),
@@ -3296,6 +3290,12 @@ pub(super) async fn extract_with_ocr_for_page(
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
                 undo_upright_raster_correction(&mut ocr_result, correction_degrees, upright_width, upright_height);
+            }
+            // #1575: capture once, from the first page that has any -- see this function's
+            // `backend_additional_metadata` declaration for why a single representative page
+            // is the right granularity here.
+            if backend_additional_metadata.is_none() && !ocr_result.metadata.additional.is_empty() {
+                backend_additional_metadata = Some(ocr_result.metadata.additional.clone());
             }
             #[cfg(feature = "layout-detection")]
             let _height = encoded_batch[offset].3;
@@ -5948,8 +5948,9 @@ pub(super) fn upright_raster_for_backend(
 /// MediaBox raster every downstream consumer (`build_mixed_ocr_page_document`,
 /// `rescale_ocr_bboxes_to_page_points`, the #530 regression test) expects.
 ///
-/// A no-op when `correction_degrees == 0` (the overwhelmingly common case: no correction was
-/// applied at all). Reuses [`undo_auto_rotate_point`] — the same per-point inverse
+/// The backend's own rotation is inverted first, in its processed frame. The upright inverse then
+/// uses that restored frame; neither operation changes the original preprocessing/orientation record.
+/// With no rotation at either stage this is a no-op. Reuses [`undo_auto_rotate_point`] — the same inverse
 /// [`undo_auto_rotate_document_bboxes`] uses for a backend's own internal auto-rotation — since
 /// the geometry problem is identical: a point in a rotated raster mapped back to the unrotated
 /// one it will be rescaled against.
@@ -5973,13 +5974,44 @@ pub(super) fn undo_upright_raster_correction(
     upright_width: u32,
     upright_height: u32,
 ) {
+    undo_backend_raster_correction(result, upright_width, upright_height);
     if correction_degrees == 0 {
         return;
     }
-    let correction_degrees = correction_degrees as u16;
-    let (processed_width, processed_height) = (f64::from(upright_width), f64::from(upright_height));
-    let undo_point =
-        |x: f64, y: f64| undo_auto_rotate_point(x, y, correction_degrees, processed_width, processed_height);
+    let dimensions =
+        super::document::processed_ocr_layout_dimensions(&result.metadata).unwrap_or((upright_width, upright_height));
+    undo_result_rotation(result, correction_degrees as u16, dimensions);
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn undo_backend_raster_correction(
+    result: &mut crate::types::ExtractedDocument,
+    input_width: u32,
+    input_height: u32,
+) {
+    let Some(correction) = super::document::resolved_ocr_correction_degrees(&result.metadata) else {
+        return;
+    };
+    if correction == 0 {
+        return;
+    }
+    let rotated_input = if matches!(correction, 90 | 270) {
+        (input_height, input_width)
+    } else {
+        (input_width, input_height)
+    };
+    let dimensions = super::document::processed_ocr_layout_dimensions(&result.metadata).unwrap_or(rotated_input);
+    undo_result_rotation(result, correction, dimensions);
+    result.metadata.additional.insert(
+        crate::ocr_metadata_keys::OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY.into(),
+        true.into(),
+    );
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn undo_result_rotation(result: &mut crate::types::ExtractedDocument, correction: u16, dimensions: (u32, u32)) {
+    rotate_processed_ocr_frame(result, correction, dimensions);
+    let undo_point = |x, y| undo_auto_rotate_point(x, y, correction, f64::from(dimensions.0), f64::from(dimensions.1));
     let undo_bbox = |bbox: &mut crate::types::extraction::BoundingBox| {
         let (x0, y0) = undo_point(bbox.x0, bbox.y0);
         let (x1, y1) = undo_point(bbox.x1, bbox.y1);
@@ -6011,6 +6043,20 @@ pub(super) fn undo_upright_raster_correction(
         }
     }
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn rotate_processed_ocr_frame(result: &mut crate::types::ExtractedDocument, correction: u16, dimensions: (u32, u32)) {
+    if matches!(correction, 90 | 270) && super::document::processed_ocr_layout_dimensions(&result.metadata).is_some() {
+        result.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(),
+            dimensions.1.into(),
+        );
+        result.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(),
+            dimensions.0.into(),
+        );
+    }
+}
+
 /// Undo an upright-raster (or auto-rotate) correction on one `OcrElement`'s geometry, the
 /// word/line/block-level boxes reported by [`crate::types::OcrElement`]. Missed entirely by
 /// [`undo_upright_raster_correction`] before this fix (#657 follow-up): that function only
@@ -6189,3 +6235,7 @@ mod recognized_table_grid_tests;
 ))]
 #[path = "memory_recovery_tests.rs"]
 mod memory_recovery_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/upright_processed_geometry_tests.rs"]
+mod upright_processed_geometry_tests;
