@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
+  Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
+
 - **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
 
 - **(plugin): Refresh local source and root served-skill pins during bundle generation.**

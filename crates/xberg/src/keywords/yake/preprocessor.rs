@@ -169,6 +169,22 @@ fn is_abbreviation(text: &str, dot_pos: usize) -> bool {
     ABBREVIATIONS.contains(&lower.as_ref())
 }
 
+pub(super) fn canonical_term(word: &str) -> String {
+    let mut term = word.to_lowercase();
+    if let Some(base) = term.strip_suffix("'s").or_else(|| term.strip_suffix("’s"))
+        && !base.is_empty()
+        && !NONPOSSESSIVE_BASES.contains(&base)
+    {
+        term.truncate(base.len());
+    }
+    term
+}
+
+// These contractions share the possessive suffix but retain their lexical identity. ~keep
+const NONPOSSESSIVE_BASES: &[&str] = &[
+    "he", "she", "it", "that", "what", "who", "where", "when", "why", "how", "there", "here", "let",
+];
+
 /// Split a sentence into word tokens. No regex, handles contractions.
 pub(crate) fn split_into_words(text: &str) -> Vec<String> {
     let mut words: Vec<String> = Vec::new();
@@ -191,7 +207,7 @@ pub(crate) fn split_into_words(text: &str) -> Vec<String> {
         }
 
         let word_start = i;
-        i = scan_word_end(text, word_start, &mut words);
+        i = scan_word_end(text, word_start);
 
         if i > word_start {
             let word = &text[word_start..i];
@@ -209,10 +225,7 @@ pub(crate) fn split_into_words(text: &str) -> Vec<String> {
 }
 
 /// Scan forward from `word_start` to the end of one word token, returning that offset.
-///
-/// A contraction apostrophe emits the prefix before it into `words` and keeps scanning
-/// without moving `word_start`, so the caller still emits the whole token afterwards. ~keep
-fn scan_word_end(text: &str, word_start: usize, words: &mut Vec<String>) -> usize {
+fn scan_word_end(text: &str, word_start: usize) -> usize {
     let bytes = text.as_bytes();
     let len = bytes.len();
     let mut i = word_start;
@@ -227,10 +240,6 @@ fn scan_word_end(text: &str, word_start: usize, words: &mut Vec<String>) -> usiz
         } else if c == b'-' && i + 1 < len && (bytes[i + 1].is_ascii_alphanumeric() || bytes[i + 1] > 127) {
             i += 1;
         } else if c == b'\'' && i > word_start && i + 1 < len && bytes[i + 1].is_ascii_alphabetic() {
-            let before = &text[word_start..i];
-            if !before.is_empty() {
-                words.push(before.to_string());
-            }
             i += 1;
             while i < len && bytes[i].is_ascii_alphabetic() {
                 i += 1;
