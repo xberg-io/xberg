@@ -6,7 +6,7 @@ name: xberg-extracting-with-ocr
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 Content-Hash: blake3:b1718303d659167ff376b4e1d4baf546d3e74f8f0804698a3486c0a1d2e6c913
-Source-Hash: blake3:555ec59184e11d60e90b232ec0d070e312558b729d5f925e1b9ef26fc992f546
+Source-Hash: blake3:1e46ba9bed26e6452c3c82c60b33a2fde65ced1c447fbee44693532abe509487
 Schema-Version: v1
 -->
 
