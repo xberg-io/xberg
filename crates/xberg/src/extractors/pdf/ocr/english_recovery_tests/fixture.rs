@@ -98,7 +98,7 @@ fn raster(document: &xberg_native_pdf::PdfDocument, dpi: u32) -> xberg_native_pd
         rendered.data.len(),
         rendered.width as usize * rendered.height as usize * 4
     );
-    assert!(rendered.data.chunks_exact(4).all(|pixel| pixel[3] == 255));
+    assert!(rendered.data.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255));
     rendered
 }
 
@@ -121,18 +121,24 @@ pub(super) fn fixture() -> Fixture {
     assert!((1066..=1067).contains(&rendered.width));
     let dark = rendered
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|pixel| pixel[..3].iter().all(|value| *value < 64))
         .count();
     let white = rendered
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|pixel| pixel[..3].iter().all(|value| *value > 240))
         .count();
     assert!(dark > 500 && white > dark, "real glyph pixels on white background");
     let rgb: Vec<_> = rendered
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|pixel| pixel[..3].iter().copied())
         .collect();
     let pixel_sha = sha(&rgb);

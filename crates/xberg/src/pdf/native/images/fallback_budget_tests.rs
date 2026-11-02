@@ -255,7 +255,7 @@ fn stored_copy_admission_uses_one_inclusive_per_page_allowance() {
     let first = admission_jpeg_stream(0);
     let second = admission_jpeg_stream(7);
     let sum = first.content.len() + second.content.len();
-    let expected = vec![first.content.clone(), second.content.clone()];
+    let expected = [first.content.clone(), second.content.clone()];
     let doc = image_stream_document(vec![first, second]);
     for (cap, count) in [(sum - 1, 1), (sum, 2)] {
         let (images, entered) = observed_stored_collection(&doc, cap);
