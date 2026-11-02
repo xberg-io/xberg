@@ -154,8 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(python): Preserve typed extraction errors, including progress callbacks.** (#2383)
-  Load canonical Rust error metadata before generating public APIs and reuse typed conversion for progress failures.
+- **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
+  Load canonical Rust error metadata before generating public APIs and reuse typed conversion in progress adapters.
 
 - **(publish): Authenticate NuGet publishing with short-lived trusted-publisher credentials for `naaman-xberg`.**
 
