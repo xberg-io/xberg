@@ -910,12 +910,6 @@ def test_caption_ci_selects_its_locked_python_without_changing_the_baseline() ->
         assert re.fullmatch(r"sha256:[0-9a-f]{64}", entries[0][key]["checksum"]), platform
 
 
-if __name__ == "__main__":
-    for name, test in list(globals().items()):
-        if name.startswith("test_") and callable(test):
-            test()
-
-
 def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> None:
     workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
     job = job_block(workflow, "narrow-feature-legs")
@@ -942,3 +936,9 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     )
     assert re.findall(r"(?m)^          ort-version: ([^\n]+)$", setup[0]) == ["${{ env.ORT_VERSION }}"]
     assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
+
+
+if __name__ == "__main__":
+    for name, test in list(globals().items()):
+        if name.startswith("test_") and callable(test):
+            test()
