@@ -155,6 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recognize escaped PlacedPDF names in page-level text decisions.** (#2378)
+  Apply the existing parsed page policy to escaped names; form and cross-page cache handling remain separate.
+
 - **(redaction): Check raw and decoded findings before returning edited formatted text.** (#2358, #2363)
   Preserve semantic token and hash identity, reject incomplete overlap coverage, and bound literal planning work.
   Reject unsupported syntax in witnessed formatted-only edits while retaining trusted generated Markdown behavior.
