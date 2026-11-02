@@ -205,14 +205,10 @@ def audit(
     return {"files": inspected, "edges": edges, "roots": len(native)}
 
 
-def crt_directory(machine: int, explicit: str | None) -> Path:
-    architecture = {0x8664: "x64", 0xAA64: "arm64", 0x14C: "x86"}.get(machine)
-    if architecture is None:
-        raise ValueError(f"unsupported PE architecture {machine}")
-    source = explicit or os.environ.get("VCToolsRedistDir")  # noqa: SIM112 - Visual Studio documents this exact spelling.
-    if not source:
-        installed = Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)"))
-        tool = installed / "Microsoft Visual Studio/Installer/vswhere.exe"
+def installed_redist_directory() -> Path:
+    installed = Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)"))
+    tool = installed / "Microsoft Visual Studio/Installer/vswhere.exe"
+    try:
         result = subprocess.run(
             [
                 str(tool),
@@ -228,7 +224,30 @@ def crt_directory(machine: int, explicit: str | None) -> Path:
             capture_output=True,
             text=True,
         )
-        source = str(Path(result.stdout.strip()) / "VC/Redist/MSVC")
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(
+            "Visual Studio 2022 discovery failed; a supported release CRT installation is required"
+        ) from error
+    location = result.stdout.strip()
+    if not location:
+        raise ValueError("Visual Studio 2022 release CRT installation not found by vswhere")
+    installation = Path(location)
+    if (
+        installation.name not in VS2022_EDITIONS
+        or installation.parent.name != "2022"
+        or installation.parent.parent.name.casefold() != "microsoft visual studio"
+    ):
+        raise ValueError("vswhere must identify a supported Visual Studio 2022 installation")
+    return installation / "VC/Redist/MSVC"
+
+
+def crt_directory(machine: int, explicit: str | None) -> Path:
+    architecture = {0x8664: "x64", 0xAA64: "arm64", 0x14C: "x86"}.get(machine)
+    if architecture is None:
+        raise ValueError(f"unsupported PE architecture {machine}")
+    source = explicit or os.environ.get("VCToolsRedistDir")  # noqa: SIM112 - Visual Studio documents this exact spelling.
+    if not source:
+        source = installed_redist_directory()
     root = Path(source).resolve(strict=True)
     candidates = (
         [root] if root.name == "Microsoft.VC143.CRT" else list(root.glob(f"**/{architecture}/Microsoft.VC143.CRT"))

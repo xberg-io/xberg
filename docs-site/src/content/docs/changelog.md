@@ -149,8 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (#2368)
+- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
   Validate transitive and delayed PE imports without relying on the build host's installed runtime.
+  Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
 
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 

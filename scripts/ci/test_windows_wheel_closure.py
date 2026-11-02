@@ -50,6 +50,13 @@ def pe(imports: Sequence[str] = (), delay: Sequence[str] = (), machine: int = 0x
     return image
 
 
+def require_pwsh() -> str:
+    executable = shutil.which("pwsh")
+    if not executable:
+        raise unittest.SkipTest("pwsh is required for PowerShell wheel contract tests")
+    return executable
+
+
 @contextmanager
 def expected_error(kind: type[Exception], message: str) -> Iterator[None]:
     try:
@@ -71,7 +78,7 @@ class WheelClosureTests(unittest.TestCase):
 
     def gate(self) -> subprocess.CompletedProcess[str]:
         command = [
-            shutil.which("pwsh"),
+            require_pwsh(),
             "-NoProfile",
             "-File",
             str(GATE),
@@ -166,7 +173,7 @@ class WheelVendoringTests(unittest.TestCase):
                 archive.writestr("test.dist-info/RECORD", "xberg/_xberg.pyd,,\n")
             outcome = subprocess.run(
                 [
-                    shutil.which("pwsh"),
+                    require_pwsh(),
                     "-NoProfile",
                     "-File",
                     str(ROOT / "scripts/ci/vendor-windows-wheel-closure.ps1"),
