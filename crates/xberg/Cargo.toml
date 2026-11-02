@@ -454,6 +454,7 @@ auto-rotate = [
 ]
 layout-detection = [
     "layout-types",
+    "dep:fast_image_resize",
     "dep:fs2",
     "dep:ort",
     "dep:ndarray",

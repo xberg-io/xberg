@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
+  Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
+  Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
+
 - **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
   Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.
 
@@ -45,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
 - **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
   Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
 
@@ -168,6 +174,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Emit `<sup>` and `<u>` while retaining source escaping, nested formatting and table-cell scripts.
   Preserve those styles when DOCX/PDF writers parse the postprocessed Markdown; leave code and malformed tags literal.
   The HTML converter's pre-rendered Markdown and explicit conversion options retain their existing notation.
+- **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
+  Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
+
+- **(markdown): Keep frontmatter in metadata and out of rendered body, elements, and chunks.** (#2392)
+  Preserve typed YAML and TOML values without emitting Rust debug representations as document text.
+
+- **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
+
+- **(plugin): Refresh local source and root served-skill pins during bundle generation.**
+  Verify both locks before bundle and public-skill checks while preserving remote imports.
+  Keep the checks in Xberg's task overrides so toolchain synchronization preserves them.
+
+- **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
+  Load canonical Rust error metadata before generating public APIs and reuse typed conversion in progress adapters.
+  Mark test setup overrides for strict Python type checking across supported interpreter versions.
+
+- **(publish): Authenticate NuGet publishing with short-lived trusted-publisher credentials for `naaman-xberg`.**
+
+- **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
+  Use fixed-support cubic resizing and ordered single-image forwards while validating paired rank-bearing rows and masks.
+  Capture tasks require one executed test and two forwards with complete named tensor artifacts and matching sizes and hashes.
+  Bind preserved producer sources to compiled bytes before constructing the model.
+  Decode captured PNGs from hashed bytes and reject input changes during a forward.
+  Restore Clippy-clean V3 and ORT test builds without changing inference or capture behavior.
+  Public detection ordering and model defaults stay unchanged; model-quality qualification remains pending.
+
+- **(ci): Build Windows Python wheels with the reviewed Visual Studio 2022 runtime.** (#2368)
+  Pin smoke and release wheel jobs to the runner that provides the licensed CRT redistribution source.
+
+- **(ocr): Compile the standalone Sceptre ORT feature with its existing discovery module.** (#2364)
+  Check the isolated feature closure in CI so other engines cannot mask the required module gate.
+
+- **(dependencies): Require released Sceptre 0.10.1 across Rust dependency graphs.** (#2364)
+  Refresh workspace, Ruby, Elixir and Rust E2E locks while retaining the current ONNX Runtime pins.
+  Rust E2E and Elixir resolve Windows-sys edges from 0.59.0 to 0.61.2; Ruby resolves them from 0.61.2 to 0.59.0.
+  Ruby's phonemizer dependency resolves image 0.24.9 in place of 0.25.10.
+
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
+- **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
+  Select the locked CI version leg while preserving the repository Python baseline.
+
+- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
+  Validate transitive and delayed PE imports without relying on the build host's installed runtime.
+  Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
+
+- **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
+  Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
+
+- **(bindings): Preserve shared exception families and declare Kotlin JNI resource dependencies.** (GH#2366)
+  Java, C#, and PHP exceptions expose shared family interfaces; Python and Ruby `IoError` remains catchable
+  as both `LoadError` and `XbergError`. Adopt Alef 0.115.14 across local development and CI, link Swift
+  OpenDirectory on macOS, and refresh the generated Maven and Gradle tooling defaults.
 
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
@@ -179,6 +241,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ocr): Honor cancellation after sparse OCR retries complete.** (#2345)
+  Return cancellation before selecting retry text or retaining primary text after a retry error.
+
+- **(benchmarks): Bind ParseBench runs to their Python harness sources.** (#2332)
+  Reject changed or unbound runner code before extraction; preserve older plans and results for read-only audits.
+
+- **(ci): Validate benchmark checkouts against the immutable workflow revision.** (#2344)
+  Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
+
+- **(ocr): Declare the image table stitching fixture's known header metadata.** (#2354)
+  Keep its header-retention assertion aligned with the explicit-header contract without promoting body rows.
+
+- **(ci): Keep only the latest main run for each CI workflow.** (#2346)
+  Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
+
+- **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
+  Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
+
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.

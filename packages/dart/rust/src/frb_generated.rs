@@ -11281,7 +11281,7 @@ fn wire__crate__extract_impl(
             let api_config = <crate::ExtractionConfig>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, AlefBridgeError>(
                     (move || async move {
                         let output_ok = crate::extract(api_input, api_config).await?;
                         std::result::Result::Ok(output_ok)
@@ -11313,7 +11313,7 @@ fn wire__crate__extract_batch_impl(
             let api_config = <crate::ExtractionConfig>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, AlefBridgeError>(
                     (move || async move {
                         let output_ok = crate::extract_batch(api_inputs, api_config).await?;
                         std::result::Result::Ok(output_ok)
@@ -11349,7 +11349,7 @@ fn wire__crate__extract_with_external_redaction_impl(
             let api_max_findings = <Option<i64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, AlefBridgeError>(
                     (move || async move {
                         let output_ok = crate::extract_with_external_redaction(
                             api_input,
@@ -11716,7 +11716,7 @@ fn wire__crate__map_url_impl(
             let api_config = <crate::UrlExtractionConfig>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, AlefBridgeError>(
                     (move || async move {
                         let output_ok = crate::map_url(api_uri, api_config).await?;
                         std::result::Result::Ok(output_ok)

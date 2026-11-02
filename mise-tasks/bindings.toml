@@ -5,6 +5,10 @@
 
 # ---- Python ------------------------------------------------------------------------------------
 
+["python:wheel:closure:test"]
+description = "Test wheel-local Windows PE dependency and runtime packaging contracts"
+run = "python scripts/ci/test_windows_wheel_closure.py -v"
+
 ["python:publish:archive:prepare"]
 description = "Validate combined Python artifacts and prepare their public archive release"
 run = "python3 scripts/ci/python_archive_publication.py prepare"

@@ -14493,7 +14493,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_extraction_result,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData:
+              sse_decode_CustomSerializer_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAlefBridgeError,
         ),
         constMeta: kCrateExtractConstMeta,
         argValues: [input, config],
@@ -14525,7 +14526,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_extraction_result,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData:
+              sse_decode_CustomSerializer_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAlefBridgeError,
         ),
         constMeta: kCrateExtractBatchConstMeta,
         argValues: [inputs, config],
@@ -14565,7 +14567,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_extraction_result,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData:
+              sse_decode_CustomSerializer_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAlefBridgeError,
         ),
         constMeta: kCrateExtractWithExternalRedactionConstMeta,
         argValues: [input, config, findingsJson, offsetEncoding, maxFindings],
@@ -14952,7 +14955,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_map_result,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData:
+              sse_decode_CustomSerializer_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAlefBridgeError,
         ),
         constMeta: kCrateMapUrlConstMeta,
         argValues: [uri, config],

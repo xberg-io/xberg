@@ -4,6 +4,10 @@ All notable changes to llama-index-readers-xberg will be documented in this file
 
 ## [Unreleased]
 
+### Changed
+
+- Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
+
 ## [0.1.1] — 2026-04-23
 
 ### Changed
