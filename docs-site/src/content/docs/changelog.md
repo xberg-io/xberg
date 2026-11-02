@@ -177,7 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
-- **(ci): Validate benchmark checkouts against the immutable workflow revision.**
+- **(ci): Validate benchmark checkouts against the immutable workflow revision.** (#2344)
   Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
 
 - **(ci): Keep only the latest main run for each CI workflow.** (#2346)
