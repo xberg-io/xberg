@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
+  Select the locked CI version leg while preserving the repository Python baseline.
+
 - **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
   Validate transitive and delayed PE imports without relying on the build host's installed runtime.
   Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
