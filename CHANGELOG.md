@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Build Windows Python wheels with the reviewed Visual Studio 2022 runtime.** (#2368)
+  Pin smoke and release wheel jobs to the runner that provides the licensed CRT redistribution source.
+
 - **(ocr): Compile the standalone Sceptre ORT feature with its existing discovery module.** (#2364)
   Check the isolated feature closure in CI so other engines cannot mask the required module gate.
 
