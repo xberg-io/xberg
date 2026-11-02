@@ -380,6 +380,9 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
 mod parenthesis_roundtrip_tests;
 
 #[cfg(test)]
+mod source_ordinal_limits_tests;
+
+#[cfg(test)]
 mod source_ordinal_tests;
 
 #[cfg(test)]
