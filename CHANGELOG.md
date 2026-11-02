@@ -153,6 +153,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recognize escaped PlacedPDF names in page-level text decisions.** (#2378)
+  Apply the existing parsed page policy to escaped names; form and cross-page cache handling remain separate.
+
 - **(ci): Keep publish workflow contract imports in canonical order.**
   Preserve the test assertions while satisfying the pinned Python import-order gate.
 
