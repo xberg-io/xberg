@@ -15,6 +15,7 @@ mod catalog;
 mod columns;
 mod comment_boundaries;
 mod core;
+mod escaped_placed_page;
 mod extract_api;
 mod fonts;
 mod images;
