@@ -403,3 +403,78 @@ async fn ordinary_unwitnessed_complex_markdown_keeps_existing_redaction_path() {
     assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
     assert!(result.processing_warnings.is_empty());
 }
+
+const BUDGET_LITERAL: &str = "Visit force now";
+
+async fn budget_case(limits: crate::extractors::security::SecurityLimits) -> (DerivedResult, Cache, ExtractionConfig) {
+    assert_eq!(visible(BUDGET_LITERAL), BUDGET_LITERAL);
+    assert_eq!(&BUDGET_LITERAL[6..11], "force");
+    let mut config = config(RedactionStrategy::Mask, &["force"], &[]);
+    let redaction = config.redaction.as_ref().unwrap();
+    assert_eq!(redaction.custom_terms.len(), 1);
+    assert!(redaction.custom_patterns.is_empty());
+    assert!(redaction.findings.is_empty());
+    assert!(redaction.findings_path.is_none());
+    assert!(crate::text::redaction::external::current_external_redaction().is_none());
+    assert!(limits.max_iterations > redaction.custom_terms.len());
+    assert!(BASELINE.len() <= limits.max_content_size);
+    assert!(BUDGET_LITERAL.len() <= limits.max_content_size);
+    assert!("Visit [REDACTED] now".len() <= limits.max_content_size);
+    assert!(BUDGET_LITERAL.len() <= limits.max_entity_length);
+    assert!(limits.max_nesting_depth > 3);
+    config.security_limits = Some(limits);
+    let (result, cache) = edited(BUDGET_LITERAL, None, &config).await;
+    assert!(
+        result.pages.as_ref().unwrap()[0].content.len() <= config.security_limits.as_ref().unwrap().max_content_size
+    );
+    (result, cache, config)
+}
+
+async fn assert_literal_budget_error(limits: crate::extractors::security::SecurityLimits, reason: &str) {
+    let (mut result, cache, config) = budget_case(limits).await;
+    let before = serde_json::to_value(&*result).unwrap();
+    let formatted = result.formatted_content.clone();
+    let error = late(&mut result, &cache, &config)
+        .await
+        .expect_err("literal planning budget must abort before document mutation");
+    assert!(matches!(&error, XbergError::Plugin { plugin_name, .. } if plugin_name == "redaction"));
+    assert!(error.to_string().contains(reason), "{error}");
+    assert_eq!(serde_json::to_value(&*result).unwrap(), before);
+    assert_eq!(result.formatted_content, formatted);
+    assert!(result.redaction_report.is_none());
+}
+
+#[tokio::test]
+async fn witnessed_literal_with_ample_operation_and_owned_limits_redacts_normally() {
+    let (mut result, cache, config) = budget_case(crate::extractors::security::SecurityLimits::default()).await;
+    late(&mut result, &cache, &config).await.unwrap();
+    let output = finish(result);
+    assert_eq!(output.content, "Visit [REDACTED] now");
+    assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 1);
+}
+
+#[tokio::test]
+async fn witnessed_literal_iteration_limit_aborts_before_document_mutation() {
+    let limits = crate::extractors::security::SecurityLimits {
+        max_iterations: BUDGET_LITERAL.len() - 1,
+        ..Default::default()
+    };
+    assert_literal_budget_error(limits, "formatted literal Markdown redaction: iteration limit").await;
+}
+
+#[tokio::test]
+async fn witnessed_literal_requested_owned_limit_aborts_when_all_text_inputs_fit() {
+    let input_bytes = BASELINE.len() + BUDGET_LITERAL.len() + BASELINE.len() + 1;
+    assert!(
+        BUDGET_LITERAL.len() * std::mem::size_of::<(std::ops::Range<usize>, std::ops::Range<usize>)>() > input_bytes
+    );
+    let limits = crate::extractors::security::SecurityLimits {
+        max_content_size: input_bytes,
+        ..Default::default()
+    };
+    assert_literal_budget_error(
+        limits,
+        "formatted literal Markdown redaction: requested helper capacity",
+    )
+    .await;
+}
