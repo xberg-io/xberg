@@ -12,9 +12,10 @@ pub(super) fn derive_pages(
     content: &str,
     output_format: &crate::core::config::OutputFormat,
     content_is_plain: bool,
+    observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
     let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(doc, content_is_plain));
-    let pages = apply_page_content_format(raw_pages, doc, output_format);
+    let pages = apply_page_content_format(raw_pages, doc, output_format, observer);
     if content_is_plain
         && !reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref())
         && drop_unusable_page_boundaries(&mut doc.metadata, content)
@@ -209,6 +210,7 @@ pub(super) fn apply_page_content_format(
     pages: Option<Vec<PageContent>>,
     doc: &InternalDocument,
     output_format: &crate::core::config::OutputFormat,
+    observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
     use crate::core::config::OutputFormat;
 
@@ -230,8 +232,16 @@ pub(super) fn apply_page_content_format(
 
     let pages = pages
         .into_iter()
-        .map(|page| match elements_by_page.get(&page.page_number) {
-            Some(elem_indices) => render_sub_page(page, elem_indices, doc, renderer),
+        .enumerate()
+        .map(|(index, page)| match elements_by_page.get(&page.page_number) {
+            Some(elem_indices) => render_sub_page(
+                page,
+                elem_indices,
+                doc,
+                renderer,
+                matches!(output_format, OutputFormat::Markdown).then_some(index),
+                observer,
+            ),
             None => page,
         })
         .collect();
@@ -292,6 +302,8 @@ fn render_sub_page(
     elem_indices: &[usize],
     doc: &InternalDocument,
     renderer: fn(&InternalDocument) -> String,
+    markdown_index: Option<usize>,
+    observer: &mut impl super::surfaces::DerivationObserver,
 ) -> PageContent {
     let mut table_remap: ahash::AHashMap<u32, u32> = ahash::AHashMap::new();
     let mut sub_tables: Vec<Table> = Vec::new();
@@ -348,6 +360,15 @@ fn render_sub_page(
 
     let rendered = renderer(&sub_doc);
     if !rendered.is_empty() {
+        if let Some(index) = markdown_index.filter(|_| observer.captures_pages()) {
+            observer.page_from_source(
+                index,
+                page.page_number,
+                &rendered,
+                crate::rendering::render_plain(&sub_doc),
+                crate::rendering::markdown_tag_exemptions_are_owned(&sub_doc),
+            );
+        }
         page.content = rendered;
     }
     page

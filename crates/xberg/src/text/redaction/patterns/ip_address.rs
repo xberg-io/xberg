@@ -3,7 +3,7 @@
 //! IPv4 uses dotted-quad with each octet in 0-255.
 //! IPv6 supports the full and double-colon (`::`) shortened forms.
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -32,27 +32,35 @@ static RE_IPV6: Lazy<Regex> = Lazy::new(|| {
 
 /// Find all IPv4 and IPv6 address spans in `text`.
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    let mut matches = Vec::new();
+    super::collect_matches(text, &PiiCategory::IpAddress)
+}
 
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
     for m in RE_IPV4.find_iter(text) {
-        matches.push(PatternMatch {
+        let matched = BorrowedMatch {
             start: m.start(),
             end: m.end(),
-            category: PiiCategory::IpAddress,
-            text: m.as_str().to_string(),
-        });
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        eligible(matched)?;
     }
     for m in RE_IPV6.find_iter(text) {
+        let matched = BorrowedMatch {
+            start: m.start(),
+            end: m.end(),
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
         let raw = m.as_str();
         if raw.matches(':').count() < 2 {
             continue;
         }
-        matches.push(PatternMatch {
-            start: m.start(),
-            end: m.end(),
-            category: PiiCategory::IpAddress,
-            text: raw.to_string(),
-        });
+        eligible(matched)?;
     }
-    matches
+    Ok(())
 }
