@@ -187,3 +187,6 @@ mod processor_mutation_tests;
 
 #[cfg(all(test, feature = "redaction", feature = "tokio-runtime", feature = "office"))]
 mod review_regression_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+mod literal_selection_tests;
