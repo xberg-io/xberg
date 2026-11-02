@@ -9,6 +9,8 @@ use crate::core::config::llm::StructuredExtractionConfig;
 use crate::types::LlmUsage;
 use serde_json::Value;
 
+const MAX_PROVIDER_SCHEMA_NAME_LENGTH: usize = 64;
+
 /// Send a free-form prompt to the configured LLM with a JSON-schema response
 /// constraint and return the parsed JSON value plus captured usage.
 ///
@@ -54,7 +56,7 @@ pub async fn complete_with_json_schema(
     super::client::apply_request_time_params(&mut request, llm_config)?;
     request.response_format = Some(liter_llm::ResponseFormat::JsonSchema {
         json_schema: liter_llm::JsonSchemaFormat {
-            name: schema_name.to_string(),
+            name: provider_schema_name(schema_name),
             description: None,
             schema: sanitized_schema,
             strict: Some(false),
@@ -97,6 +99,31 @@ pub async fn complete_with_json_schema(
     })?;
 
     Ok((value, usage))
+}
+
+// ~keep Preserve caller labels, prompts and schema references; canonicalize only the transport identifier.
+fn provider_schema_name(name: &str) -> String {
+    let is_allowed = |character: char| character.is_ascii_alphanumeric() || matches!(character, '_' | '-');
+    let trimmed = name.trim_matches(|character| !is_allowed(character));
+    let mut normalized = String::with_capacity(trimmed.len().min(MAX_PROVIDER_SCHEMA_NAME_LENGTH));
+    let mut in_invalid_run = false;
+    for character in trimmed.chars() {
+        if normalized.len() == MAX_PROVIDER_SCHEMA_NAME_LENGTH {
+            break;
+        }
+        if is_allowed(character) {
+            normalized.push(character);
+            in_invalid_run = false;
+        } else if !in_invalid_run {
+            normalized.push('_');
+            in_invalid_run = true;
+        }
+    }
+    if normalized.is_empty() {
+        StructuredExtractionConfig::default_schema_name()
+    } else {
+        normalized
+    }
 }
 
 /// Strip ```json ... ``` markdown code fences some providers wrap JSON in.
@@ -250,7 +277,7 @@ fn build_structured_request(
     super::client::apply_request_time_params(&mut request, &config.llm)?;
     request.response_format = Some(liter_llm::ResponseFormat::JsonSchema {
         json_schema: liter_llm::JsonSchemaFormat {
-            name: config.schema_name.clone(),
+            name: provider_schema_name(&config.schema_name),
             description: config.schema_description.clone(),
             schema: sanitized_schema,
             strict: Some(config.strict),
