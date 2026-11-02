@@ -8,26 +8,14 @@ use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
+#[cfg(test)]
 use std::convert::Infallible;
 
 static RE_CC: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b(?:\d[ \-]?){12,18}\d\b").expect("credit card regex compiles"));
 
 /// Find all credit card number spans in `text`, validated with the Luhn algorithm.
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    let mut matches = Vec::new();
-    let result = visit_matches(text, &mut |_| Ok::<_, Infallible>(()), &mut |matched| {
-        matches.push(PatternMatch {
-            start: matched.start,
-            end: matched.end,
-            category: PiiCategory::CreditCard,
-            text: matched.text.to_string(),
-        });
-        Ok(())
-    });
-    match result {
-        Ok(()) => matches,
-        Err(never) => match never {},
-    }
+    super::collect_matches(text, &PiiCategory::CreditCard)
 }
 
 pub(super) fn visit_matches<'s, E>(
