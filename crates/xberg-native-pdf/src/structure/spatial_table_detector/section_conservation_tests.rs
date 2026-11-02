@@ -36,6 +36,22 @@ fn drawn_sections() -> (Vec<TextSpan>, Vec<PathContent>) {
     (spans, lines)
 }
 
+fn assert_one_admitted_candidate(events: &[serde_json::Value]) {
+    let merged: Vec<_> = events
+        .iter()
+        .filter(|event| event["stage"] == "intersection_merged")
+        .collect();
+    assert_eq!(merged.len(), 1);
+    let candidates = merged[0]["payload"].as_array().unwrap();
+    assert_eq!(
+        candidates.len(),
+        1,
+        "the control must enter section handling as one table"
+    );
+    assert_eq!(candidates[0]["rows"].as_array().unwrap().len(), 9);
+    assert_eq!(candidates[0]["col_count"], 3);
+}
+
 #[test]
 fn valid_drawn_sections_still_split_with_every_source_cell_exactly_once() {
     let (spans, lines) = drawn_sections();
@@ -45,6 +61,7 @@ fn valid_drawn_sections_still_split_with_every_source_cell_exactly_once() {
         ..Default::default()
     };
     let (tables, events) = header_source_diagnostic::capture(|| detect_tables_with_lines(&spans, &lines, &config));
+    assert_one_admitted_candidate(&events);
     let mut assigned: Vec<_> = events
         .iter()
         .filter(|event| event["stage"] == "intersection_assigned")
