@@ -13,6 +13,10 @@ task_sets = [
   "rust",
 ]
 
+[task_overrides]
+"plugin:generate" = "Refresh plugin source and root served-skill pins after Xberg public skill export"
+"plugin:verify" = "Check plugin source and root served-skill locks before Xberg artifact verification"
+
 [overrides."github:xberg-io/alef"]
 version = "0.115.14"
 reason = "Alef 0.115.14 fixes Kotlin host JNI task dependencies and macOS Swift OpenDirectory linkage; matches alef.toml"

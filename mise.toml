@@ -177,6 +177,26 @@ description = "Validate the root AI governance configuration"
 tools = { node = "26.13.0" }
 run = "npx -y ai-rulez@latest validate"
 
+[tasks."plugin:generate"]
+description = "Regenerate the plugin bundles + marketplace from plugin/.ai-rulez"
+tools = { node = "26.13.0" }
+run = [
+  "npx -y ai-rulez@latest generate --plugin",
+  "python3 scripts/sync_public_skills.py",
+  "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --content-only",
+  "npx -y ai-rulez@latest -C .ai-rulez lock --content-only",
+]
+
+[tasks."plugin:verify"]
+description = "Verify generated plugin bundles match source (byte + BLAKE3 provenance)"
+tools = { node = "26.13.0" }
+run = [
+  "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --check",
+  "npx -y ai-rulez@latest -C .ai-rulez lock --check",
+  "npx -y ai-rulez@latest verify --plugin",
+  "python3 scripts/sync_public_skills.py --check",
+]
+
 [tasks."plugin:test"]
 description = "Check OpenCode v2 tools and packed Pi resources"
 run = [

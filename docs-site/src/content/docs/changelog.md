@@ -156,7 +156,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
 
-- **(plugin): Refresh local authored-source pins during bundle generation and reject stale pins during verification.**
+- **(plugin): Refresh local source and root served-skill pins during bundle generation.**
+  Verify both locks before bundle and public-skill checks while preserving remote imports.
+  Keep the checks in Xberg's task overrides so toolchain synchronization preserves them.
 
 - **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
   Load canonical Rust error metadata before generating public APIs and reuse typed conversion in progress adapters.
