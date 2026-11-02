@@ -2324,51 +2324,68 @@ fn convert_extracted_table(
     };
     use crate::types::{GridCell, TableGrid};
 
-    let rows: Vec<Vec<SpanCell>> = table
+    let has_header_roles = table
+        .rows
+        .iter()
+        .any(|row| row.is_header || row.cells.iter().any(|cell| cell.is_header));
+    let rows: Vec<Vec<(SpanCell, bool)>> = table
         .rows
         .iter()
         .map(|row| {
             row.cells
                 .iter()
-                .map(|cell| SpanCell::new(cell_text_in_reading_order(cell), cell.rowspan, cell.colspan))
+                .map(|cell| {
+                    (
+                        SpanCell::new(cell_text_in_reading_order(cell), cell.rowspan, cell.colspan),
+                        row.is_header || cell.is_header,
+                    )
+                })
                 .collect()
         })
         .collect();
-    // Ordinary tables need no extra geometry payload.
-    let grid = rows
-        .iter()
-        .flatten()
-        .any(|cell| cell.col_span > 1 || cell.row_span > 1)
-        .then(|| {
-            let mut grid_cells = Vec::new();
-            let cols = resolve_span_grid(
-                &rows,
-                |c| c.col_span,
-                |c| c.row_span,
-                |row, col, cell| {
-                    grid_cells.push(GridCell {
-                        content: cell.content.clone(),
-                        row,
-                        col,
-                        row_span: cell.row_span.clamp(1, MAX_ROW_SPAN),
-                        col_span: cell.col_span.clamp(1, MAX_COL_SPAN),
-                        is_header: row == 0 || table.rows[row as usize].is_header,
-                        bbox: None,
-                        heading_level: None,
-                        style_name: None,
-                    });
-                },
-            );
-            TableGrid {
-                rows: rows.len() as u32,
-                cols,
-                cells: grid_cells,
-            }
-        });
+    let grid = (has_header_roles
+        || rows
+            .iter()
+            .flatten()
+            .any(|(cell, _)| cell.col_span > 1 || cell.row_span > 1))
+    .then(|| {
+        let mut grid_cells = Vec::new();
+        let cols = resolve_span_grid(
+            &rows,
+            |(cell, _)| cell.col_span,
+            |(cell, _)| cell.row_span,
+            |row, col, (cell, is_header)| {
+                grid_cells.push(GridCell {
+                    content: cell.content.clone(),
+                    row,
+                    col,
+                    row_span: cell.row_span.clamp(1, MAX_ROW_SPAN),
+                    col_span: cell.col_span.clamp(1, MAX_COL_SPAN),
+                    is_header: if has_header_roles { *is_header } else { row == 0 },
+                    bbox: None,
+                    heading_level: None,
+                    style_name: None,
+                });
+            },
+        );
+        TableGrid {
+            rows: rows.len() as u32,
+            cols,
+            cells: grid_cells,
+        }
+    });
+    let rows: Vec<Vec<SpanCell>> = rows
+        .into_iter()
+        .map(|row| row.into_iter().map(|(cell, _)| cell).collect())
+        .collect();
     let cells = flatten_spanned_rows(&rows);
     let markdown = crate::pdf::table_reconstruct::table_to_markdown(&cells);
     (cells, markdown, grid)
 }
+
+#[cfg(test)]
+#[path = "table/header_metadata_tests.rs"]
+mod header_metadata_tests;
 
 #[cfg(test)]
 mod tests {

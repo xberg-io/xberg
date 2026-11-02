@@ -505,7 +505,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-26, macos-26-intel]
+        # ~keep Runtime staging requires the reviewed Visual Studio 2022 redistributable.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-2022, macos-26, macos-26-intel]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -537,7 +538,7 @@ jobs:
         with:
           python-version: "3.13"
           package-dir: packages/python
-          cibw-build: "cp310-*"
+          cibw-build: "cp311-*"
           upload-artifact: "false"
           build-libheif: "true"
           manylinux-x86_64-image: "manylinux_2_28"
@@ -581,6 +582,11 @@ jobs:
           # target in this workflow, instead of depending on auditwheel alone.
           for w in wheelhouse/*.whl; do bash scripts/ci/vendor-native-closure.sh "$w"; done
 
+      - name: Test Windows wheel closure contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: mise run python:wheel:closure:test
+
       - name: Vendor ONNX Runtime into wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -593,7 +599,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "vendor-windows-wheel-closure failed for $($_.FullName)" }
           }
 
-      - name: Verify wheel has no DirectML import and ships ONNX Runtime (Windows)
+      - name: Verify wheel-local PE dependency closure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -4519,10 +4525,9 @@ jobs:
 
       - uses: xberg-io/actions/publish-nuget@v1
         with:
+          nuget-user: naaman-xberg
           packages-dir: dist/nuget
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
   finalize-github-release-after-uploads:
     name: Finalize GitHub Release (after uploads)

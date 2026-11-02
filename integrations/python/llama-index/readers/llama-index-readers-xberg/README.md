@@ -31,7 +31,7 @@ LlamaIndex reader for 107 file formats powered by [xberg](https://github.com/xbe
 pip install llama-index-readers-xberg
 ```
 
-Requires Python ≥3.10, `xberg>=1.0.0`, and `llama-index-core>=0.14.23,<0.15`.
+Requires Python ≥3.11, `xberg>=1.0.0`, and `llama-index-core>=0.14.23,<0.15`.
 
 ## Features
 

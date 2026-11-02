@@ -7,13 +7,13 @@
 //! result in place. Produces an audit trail in
 //! [`ExtractedDocument::redaction_report`](crate::types::ExtractedDocument::redaction_report).
 
-use std::sync::Arc;
+use std::borrow::Cow;
 
 use async_trait::async_trait;
 
 use crate::Result;
 use crate::core::config::ExtractionConfig;
-use crate::plugins::{Plugin, PostProcessor, ProcessingStage, register_post_processor};
+use crate::plugins::{Plugin, PostProcessor, ProcessingStage};
 use crate::text::redaction::engine::{redact_with_external_findings, redact_with_security_limits};
 use crate::types::ExtractedDocument;
 
@@ -40,19 +40,27 @@ impl Plugin for RedactionProcessor {
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl PostProcessor for RedactionProcessor {
-    async fn process(&self, result: &mut ExtractedDocument, config: &ExtractionConfig) -> Result<()> {
+fn selected_redaction_config(
+    config: &ExtractionConfig,
+    external: bool,
+) -> Option<Cow<'_, crate::core::config::redaction::RedactionConfig>> {
+    config
+        .redaction
+        .as_ref()
+        .map(Cow::Borrowed)
+        .or_else(|| external.then(|| Cow::Owned(crate::core::config::redaction::RedactionConfig::default())))
+}
+
+impl RedactionProcessor {
+    pub(crate) async fn process_with_surfaces(
+        &self,
+        result: &mut ExtractedDocument,
+        config: &ExtractionConfig,
+        surfaces: &impl crate::extraction::derive::surfaces::RedactionSurfaces,
+    ) -> Result<()> {
         let external = crate::text::redaction::external::current_external_redaction();
-        let default_config;
-        let redaction_config = match config.redaction.as_ref() {
-            Some(config) => config,
-            None if external.is_some() => {
-                default_config = crate::core::config::redaction::RedactionConfig::default();
-                &default_config
-            }
-            None => return Ok(()),
+        let Some(redaction_config) = selected_redaction_config(config, external.is_some()) else {
+            return Ok(());
         };
 
         tracing::info!(
@@ -62,18 +70,15 @@ impl PostProcessor for RedactionProcessor {
             "running redaction pipeline"
         );
 
-        let default_limits;
-        let limits = match config.security_limits.as_ref() {
-            Some(limits) => limits,
-            None => {
-                default_limits = crate::extractors::security::SecurityLimits::default();
-                &default_limits
-            }
-        };
+        let limits = config
+            .security_limits
+            .as_ref()
+            .map(Cow::Borrowed)
+            .unwrap_or_else(|| Cow::Owned(crate::extractors::security::SecurityLimits::default()));
 
         let outcome = match external.as_ref() {
-            Some(request) => redact_with_external_findings(result, redaction_config, request, limits).await,
-            None => redact_with_security_limits(result, redaction_config, limits).await,
+            Some(request) => redact_with_external_findings(result, &redaction_config, request, &limits, surfaces).await,
+            None => redact_with_security_limits(result, &redaction_config, &limits, surfaces).await,
         };
         // Redaction is security processing: every failure must abort instead of becoming a warning. ~keep
         let outcome = outcome.map_err(|err| match err {
@@ -92,6 +97,14 @@ impl PostProcessor for RedactionProcessor {
         }
         outcome
     }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl PostProcessor for RedactionProcessor {
+    async fn process(&self, result: &mut ExtractedDocument, config: &ExtractionConfig) -> Result<()> {
+        self.process_with_surfaces(result, config, &()).await
+    }
 
     fn processing_stage(&self) -> ProcessingStage {
         ProcessingStage::Late
@@ -109,7 +122,7 @@ impl PostProcessor for RedactionProcessor {
 /// Register the redaction post-processor with the global registry.
 #[cfg_attr(alef, alef(skip))]
 pub fn register() -> Result<()> {
-    register_post_processor(Arc::new(RedactionProcessor))
+    crate::plugins::processor::register_redaction_processor()
 }
 
 #[cfg(test)]

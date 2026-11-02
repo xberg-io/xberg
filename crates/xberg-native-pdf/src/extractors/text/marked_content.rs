@@ -70,8 +70,8 @@ impl<'doc> TextExtractor<'doc> {
     /// page-stream scan undercounts it and gate 1 falls back to suppression (the
     /// prior behaviour).
     pub(super) fn placed_pdf_text_dominates(content_stream: &[u8]) -> bool {
-        // Gate: only pages that actually carry the InDesign tag pay for a parse. ~keep
-        if !content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF") {
+        // Escaped names must reach the parser, which decides whether the tag is PlacedPDF. ~keep
+        if !content_stream.windows(b"PlacedPDF".len()).any(|w| w == b"PlacedPDF") && !content_stream.contains(&b'#') {
             return false;
         }
         let Ok(operators) = parse_content_stream(content_stream) else {

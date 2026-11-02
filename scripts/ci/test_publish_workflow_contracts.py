@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import tomllib
 from pathlib import Path
 
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
@@ -849,6 +850,92 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         except AssertionError as error:
             error_message = str(error)
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
+
+
+def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    feature = r'--features "?(\$\{\{ matrix\.(\w+) \}\}|[^"\s]+)'
+    checked = 0
+    for job in re.split(r"(?m)^(?=  [\w-]+:$)", workflow):
+        legs = [
+            {"name": name, "features": features}
+            for name, features in re.findall(r"(?m)^ +- name: (\S+)\n +features: (\S+)$", job)
+        ]
+        for step in re.split(r"(?m)^(?=      - )", job):
+            name = re.match(r"      - name: ([^\n]*)", step)
+            if name is None or "--features" not in name[1]:
+                continue
+            shown = re.search(feature, name[1])
+            used = re.search(feature, step[step.index("        run:") :])
+            assert shown is not None and used is not None, name[1]
+            for leg in legs or [{}]:
+                assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
+                checked += 1
+    assert checked > 0
+
+
+def test_caption_ci_selects_its_locked_python_without_changing_the_baseline() -> None:
+    root = WORKFLOW.parents[2]
+    job = job_block((WORKFLOW.parent / "ci-scripts.yaml").read_text(), "caption-export")
+    assert "mise install python uv" in job
+    assert "--python python" in job
+    assert "uv python install" not in job
+    repository = tomllib.loads((root / "mise.toml").read_text())
+    baseline = repository["tools"]["python"]
+    selected = re.search(r'(?m)^      MISE_PYTHON_VERSION: "([0-9.]+)"$', job)
+    version = selected[1] if selected else baseline
+    project = root / "tools/benchmark-harness/caption_export"
+    requires = tomllib.loads((project / "pyproject.toml").read_text())["project"]["requires-python"]
+    bounds = re.fullmatch(r">=(\d+)\.(\d+),<(\d+)\.(\d+)", requires)
+    assert bounds is not None, requires
+    actual = tuple(map(int, version.split(".")[:2]))
+    assert tuple(map(int, bounds.group(1, 2))) <= actual < tuple(map(int, bounds.group(3, 4))), (
+        f"Caption CI selects Python {version}, incompatible with project {requires}"
+    )
+    locked = tomllib.loads((project / "uv.lock").read_text())["requires-python"]
+    assert locked == f"=={actual[0]}.{actual[1]}.*", locked
+    assert selected is not None and version != baseline, "Caption needs an isolated CI version leg"
+    assert re.search(r"(?m)^      MISE_ENV: ci$", job), "Caption must load the CI version lock"
+    declared = tomllib.loads((root / "mise.ci.toml").read_text())["tools"]["python"]
+    assert version in declared, f"Caption Python {version} is absent from locked CI declarations"
+    locks = tomllib.loads((root / "mise.ci.lock").read_text())["tools"]["python"]
+    entries = [entry for entry in locks if entry["version"] == version]
+    assert len(entries) == 1, f"Caption Python {version} needs exactly one lock entry"
+    platforms = repository["settings"]["lockfile_platforms"]
+    assert platforms, "Repository lockfile platforms must not be empty"
+    for platform in platforms:
+        key = f"platforms.{platform}"
+        assert key in entries[0], f"Caption Python {version} has no lock for {platform}"
+        assert f"cpython-{version}+" in entries[0][key]["url"], platform
+        assert re.fullmatch(r"sha256:[0-9a-f]{64}", entries[0][key]["checksum"]), platform
+
+
+def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    job = job_block(workflow, "narrow-feature-legs")
+    legs = re.findall(r"(?m)^          - name: (\S+)\n            features: (\S+)$", job)
+    selected = [leg for leg in legs if leg[0] == "sceptre-ocr-ort"]
+    assert len(selected) == 1, "standalone Sceptre ORT matrix leg must exist exactly once"
+    assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
+    assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
+    steps = re.split(r"(?m)^(?=      - )", job)
+    checks = [step for step in steps if step.startswith("      - name: cargo check -p xberg --no-default-features")]
+    assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
+    commands = re.findall(r"(?m)^        run: ([^\n]+)$", checks[0])
+    assert commands == [
+        'cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets'
+    ], "standalone Sceptre ORT check must retain its locked independent command"
+    conditions = re.findall(r"(?m)^        if: ([^\n]+)$", checks[0])
+    assert conditions == ["matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'"], (
+        "the real feature check must not skip the Sceptre ORT leg"
+    )
+    setup = [step for step in steps if "        uses: ./.github/actions/setup-onnx-runtime\n" in step]
+    assert len(setup) == 1, "standalone Sceptre ORT needs one runtime setup step"
+    assert re.findall(r"(?m)^        if: ([^\n]+)$", setup[0]) == ["matrix.name == 'sceptre-ocr-ort'"], (
+        "runtime setup must select exactly the standalone Sceptre ORT leg"
+    )
+    assert re.findall(r"(?m)^          ort-version: ([^\n]+)$", setup[0]) == ["${{ env.ORT_VERSION }}"]
+    assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
 
 
 if __name__ == "__main__":

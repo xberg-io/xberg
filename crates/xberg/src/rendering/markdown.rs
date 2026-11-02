@@ -100,6 +100,18 @@ static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     .expect("static regex compiles")
 });
 
+pub(crate) fn markdown_tag_exemptions_are_owned(doc: &InternalDocument) -> bool {
+    // Raw blocks and annotation values bypass Text escaping; parsing their tags cannot establish ownership. ~keep
+    !doc.elements
+        .iter()
+        .any(|element| matches!(element.kind, crate::types::internal::ElementKind::RawBlock))
+        && doc.annotations.as_deref().is_none_or(|annotations| {
+            annotations.iter().all(|annotation| {
+                annotation.author.as_deref().is_none_or(str::is_empty) && annotation_display_text(annotation).is_none()
+            })
+        })
+}
+
 /// Render an `InternalDocument` to GFM Markdown.
 ///
 /// Whether the output backslash-escapes CommonMark-significant leading characters
@@ -116,6 +128,7 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
         strip_arxiv_watermark_noise(root);
     }
     keep_code_literal(root, &arena);
+    lower_standard_inline_html(root, &arena);
     if !doc.escape_markdown {
         keep_text_tildes_unescaped(root, &arena);
     }
@@ -186,6 +199,24 @@ fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
                 node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(part.to_string().into()))));
             }
         }
+        node.detach();
+    }
+}
+
+/// ~keep Only semantic annotations create HTML; their text children retain normal CommonMark escaping.
+fn lower_standard_inline_html<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+    for node in root.descendants().collect::<Vec<_>>() {
+        let (opening, closing) = match node.data.borrow().value {
+            NodeValue::Superscript => ("<sup>", "</sup>"),
+            NodeValue::Underline => ("<u>", "</u>"),
+            _ => continue,
+        };
+        node.insert_before(arena.alloc(AstNode::from(NodeValue::HtmlInline(opening.into()))));
+        while let Some(child) = node.first_child() {
+            child.detach();
+            node.insert_before(child);
+        }
+        node.insert_before(arena.alloc(AstNode::from(NodeValue::HtmlInline(closing.into()))));
         node.detach();
     }
 }
@@ -344,6 +375,9 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
     options.render.prefer_fenced = true;
     options
 }
+
+#[cfg(test)]
+mod standard_inline_html_tests;
 
 #[cfg(test)]
 mod tests {

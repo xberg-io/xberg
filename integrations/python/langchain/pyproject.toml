@@ -14,7 +14,7 @@ version = "1.4.0"
 description = "LangChain document loader for Xberg — extract 88+ file formats into Documents with async, batching, chunking, and rich metadata"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
   { name = "Na'aman Hirschfeld", email = "naaman@xberg.io" },
   { name = "Tobias Perlstein", email = "tobias@xberg.io" },
@@ -44,7 +44,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -65,7 +64,7 @@ Repository = "https://github.com/xberg-io/xberg/tree/main/integrations/python/la
 Issues = "https://github.com/xberg-io/xberg/issues"
 
 [tool.pyrefly]
-python-version = "3.10"
+python-version = "3.11"
 preset = "strict"
 
 [tool.pytest.ini_options]

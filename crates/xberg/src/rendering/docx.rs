@@ -45,6 +45,7 @@ const BULLET_GLYPHS: [&str; 3] = ["\u{2022}", "\u{25E6}", "\u{25AA}"];
 pub(crate) fn render_docx(markdown: &str) -> Result<Vec<u8>> {
     let arena = Arena::new();
     let root = parse_document(&arena, markdown, &comrak_options());
+    super::inline_html::decode_standard_inline_html(root, &arena);
 
     let mut body = BodyWriter::default();
     for edge in root.traverse() {

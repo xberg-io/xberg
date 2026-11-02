@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 
 use self::context::Contexts;
 use self::plural_helper::PluralHelper;
-use self::preprocessor::{split_into_sentences, split_into_words};
+use self::preprocessor::{canonical_term, split_into_sentences, split_into_words};
 use self::result_item::{ResultItem, remove_duplicates};
 use self::stats::{OnlineStats, median};
 use self::tag::{Tag, build_punctuation_table};
@@ -161,7 +161,7 @@ impl<'a> Yake<'a> {
             .into_iter()
             .map(|sentence| {
                 let words = split_into_words(&sentence);
-                let lc_terms: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
+                let lc_terms: Vec<String> = words.iter().map(|word| canonical_term(word)).collect();
                 let uq_terms: Vec<String> = lc_terms.iter().map(|w| self.get_unique_term(w)).collect();
                 let tags: Vec<Tag> = words
                     .iter()

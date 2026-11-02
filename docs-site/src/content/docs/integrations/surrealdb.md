@@ -45,7 +45,7 @@ flowchart LR
 pip install surrealdb-xberg
 ```
 
-Requires Python 3.10+. You also need a running SurrealDB instance:
+Requires Python 3.11+. You also need a running SurrealDB instance:
 
 ```bash
 docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --allow-all --user root --pass root

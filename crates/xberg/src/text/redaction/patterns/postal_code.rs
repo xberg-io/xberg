@@ -5,7 +5,7 @@
 //! have well-defined shapes that survive regex extraction without a country
 //! code in scope. Additional locales can be added without breaking changes.
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -20,34 +20,41 @@ static RE_CA: Lazy<Regex> =
 
 /// Find all postal code spans in `text` (US ZIP, UK postcode, German PLZ, Canadian FSA, and more).
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    let mut matches = Vec::new();
+    super::collect_matches(text, &PiiCategory::PostalCode)
+}
 
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
     let upper = text.to_ascii_uppercase();
-
     for m in RE_UK.find_iter(&upper) {
-        matches.push(PatternMatch {
+        let matched = BorrowedMatch {
             start: m.start(),
             end: m.end(),
-            category: PiiCategory::PostalCode,
-            text: text[m.start()..m.end()].to_string(),
-        });
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        eligible(matched)?;
     }
     for m in RE_CA.find_iter(&upper) {
-        matches.push(PatternMatch {
+        let matched = BorrowedMatch {
             start: m.start(),
             end: m.end(),
-            category: PiiCategory::PostalCode,
-            text: text[m.start()..m.end()].to_string(),
-        });
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        eligible(matched)?;
     }
     for m in RE_US.find_iter(text) {
-        matches.push(PatternMatch {
+        let matched = BorrowedMatch {
             start: m.start(),
             end: m.end(),
-            category: PiiCategory::PostalCode,
-            text: m.as_str().to_string(),
-        });
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        eligible(matched)?;
     }
-
-    matches
+    Ok(())
 }

@@ -24,6 +24,14 @@ pub mod ssn;
 pub mod swift_bic;
 
 use crate::types::redaction::PiiCategory;
+use std::convert::Infallible;
+
+#[derive(Clone, Copy)]
+pub(super) struct BorrowedMatch<'s> {
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) text: &'s str,
+}
 
 /// One detected PII span in the input text.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -54,24 +62,50 @@ pub fn scan_text(text: &str, categories: &[PiiCategory]) -> Vec<PatternMatch> {
 
     let mut all = Vec::new();
     for category in &active {
-        match category {
-            PiiCategory::Email => all.extend(email::find_all(text)),
-            PiiCategory::Phone => all.extend(phone::find_all(text)),
-            PiiCategory::Ssn => all.extend(ssn::find_all(text)),
-            PiiCategory::CreditCard => all.extend(credit_card::find_all(text)),
-            PiiCategory::PostalCode => all.extend(postal_code::find_all(text)),
-            PiiCategory::IpAddress => all.extend(ip_address::find_all(text)),
-            PiiCategory::Iban => all.extend(iban::find_all(text)),
-            PiiCategory::SwiftBic => all.extend(swift_bic::find_all(text)),
-            PiiCategory::Person
-            | PiiCategory::Organization
-            | PiiCategory::Location
-            | PiiCategory::DateOfBirth
-            | PiiCategory::Custom(_) => {}
-        }
+        all.extend(collect_matches(text, category));
     }
     all.sort_by_key(|m| m.start);
     all
+}
+
+fn collect_matches(text: &str, category: &PiiCategory) -> Vec<PatternMatch> {
+    let mut matches = Vec::new();
+    let result = visit_category(text, category, &mut |_| Ok::<_, Infallible>(()), &mut |matched| {
+        matches.push(PatternMatch {
+            start: matched.start,
+            end: matched.end,
+            category: category.clone(),
+            text: matched.text.to_string(),
+        });
+        Ok(())
+    });
+    match result {
+        Ok(()) => matches,
+        Err(never) => match never {},
+    }
+}
+
+pub(super) fn visit_category<'s, E>(
+    text: &'s str,
+    category: &PiiCategory,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
+    match category {
+        PiiCategory::CreditCard => credit_card::visit_matches(text, candidate, eligible),
+        PiiCategory::Email => email::visit_matches(text, candidate, eligible),
+        PiiCategory::Phone => phone::visit_matches(text, candidate, eligible),
+        PiiCategory::Ssn => ssn::visit_matches(text, candidate, eligible),
+        PiiCategory::IpAddress => ip_address::visit_matches(text, candidate, eligible),
+        PiiCategory::Iban => iban::visit_matches(text, candidate, eligible),
+        PiiCategory::SwiftBic => swift_bic::visit_matches(text, candidate, eligible),
+        PiiCategory::PostalCode => postal_code::visit_matches(text, candidate, eligible),
+        PiiCategory::Person
+        | PiiCategory::Organization
+        | PiiCategory::Location
+        | PiiCategory::DateOfBirth
+        | PiiCategory::Custom(_) => Ok(()),
+    }
 }
 
 /// Default set of pattern-detectable categories — used when callers leave the
@@ -88,3 +122,9 @@ fn default_pattern_categories() -> Vec<PiiCategory> {
         PiiCategory::SwiftBic,
     ]
 }
+
+#[cfg(test)]
+mod owned_output_tests;
+
+#[cfg(test)]
+mod borrowed_visitor_tests;

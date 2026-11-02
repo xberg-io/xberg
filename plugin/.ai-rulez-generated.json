@@ -1,6 +1,6 @@
 {
   "schema_version": "v1",
-  "source_hash": "blake3:4a90223a333b0f963ae8cdec4f38db88b769132c5dd1b7f39a7fe8e84f57f83e",
+  "source_hash": "blake3:1e46ba9bed26e6452c3c82c60b33a2fde65ced1c447fbee44693532abe509487",
   "outputs": {
     ".claude-plugin/plugin.json": {
       "content_hash": "blake3:7a214ba15e6663902d19b41a9536bb5484703c8d2c70cf36949dbb40367ea661",
@@ -51,7 +51,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-batch-extraction/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-batch-extraction/references/rust-api.md": {
@@ -91,7 +91,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-chunking/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-chunking/references/rust-api.md": {
@@ -131,7 +131,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-keywords/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-keywords/references/rust-api.md": {
@@ -171,7 +171,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-tables/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-tables/references/rust-api.md": {
@@ -211,7 +211,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-with-ocr/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-with-ocr/references/rust-api.md": {
@@ -251,7 +251,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-picking-a-format/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-picking-a-format/references/rust-api.md": {
@@ -263,7 +263,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141",
+      "content_hash": "blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/index.md": {
@@ -291,7 +291,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/references/rust-api.md": {
@@ -323,7 +323,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/hermes.py": {
-      "content_hash": "blake3:199f3e90234e860d46281b652c3c16600eb856c60d40c71b5843051da11fd702",
+      "content_hash": "blake3:39c940f3b66509996606543cbf415840086081671195d504ce78752a2000da49",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/plugin.yaml": {
@@ -359,7 +359,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-batch-extraction/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-batch-extraction/references/rust-api.md": {
@@ -399,7 +399,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-chunking/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-chunking/references/rust-api.md": {
@@ -439,7 +439,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-keywords/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-keywords/references/rust-api.md": {
@@ -479,7 +479,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-tables/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-tables/references/rust-api.md": {
@@ -519,7 +519,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-with-ocr/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-with-ocr/references/rust-api.md": {
@@ -559,7 +559,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-picking-a-format/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-picking-a-format/references/rust-api.md": {
@@ -571,7 +571,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141",
+      "content_hash": "blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/index.md": {
@@ -599,7 +599,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/rust-api.md": {
@@ -623,7 +623,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/hermes.py": {
-      "content_hash": "blake3:199f3e90234e860d46281b652c3c16600eb856c60d40c71b5843051da11fd702",
+      "content_hash": "blake3:39c940f3b66509996606543cbf415840086081671195d504ce78752a2000da49",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/plugin.yaml": {
@@ -659,7 +659,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-batch-extraction/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-batch-extraction/references/rust-api.md": {
@@ -699,7 +699,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-chunking/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-chunking/references/rust-api.md": {
@@ -739,7 +739,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-keywords/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-keywords/references/rust-api.md": {
@@ -779,7 +779,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-tables/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-tables/references/rust-api.md": {
@@ -819,7 +819,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-with-ocr/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-with-ocr/references/rust-api.md": {
@@ -859,7 +859,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-picking-a-format/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-picking-a-format/references/rust-api.md": {
@@ -871,7 +871,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141",
+      "content_hash": "blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/index.md": {
@@ -899,7 +899,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/references/rust-api.md": {
@@ -963,7 +963,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-batch-extraction/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-batch-extraction/references/rust-api.md": {
@@ -1003,7 +1003,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-chunking/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-chunking/references/rust-api.md": {
@@ -1043,7 +1043,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-keywords/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-keywords/references/rust-api.md": {
@@ -1083,7 +1083,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-tables/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-tables/references/rust-api.md": {
@@ -1123,7 +1123,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-with-ocr/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-with-ocr/references/rust-api.md": {
@@ -1163,7 +1163,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-picking-a-format/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-picking-a-format/references/rust-api.md": {
@@ -1175,7 +1175,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141",
+      "content_hash": "blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a",
       "mode": "0644"
     },
     ".opencode/skills/xberg/index.md": {
@@ -1203,7 +1203,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg/references/rust-api.md": {
@@ -1251,7 +1251,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-batch-extraction/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-batch-extraction/references/rust-api.md": {
@@ -1291,7 +1291,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-chunking/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-chunking/references/rust-api.md": {
@@ -1331,7 +1331,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-keywords/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-keywords/references/rust-api.md": {
@@ -1371,7 +1371,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-tables/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-tables/references/rust-api.md": {
@@ -1411,7 +1411,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-with-ocr/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-with-ocr/references/rust-api.md": {
@@ -1451,7 +1451,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-picking-a-format/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-picking-a-format/references/rust-api.md": {
@@ -1463,7 +1463,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141",
+      "content_hash": "blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a",
       "mode": "0644"
     },
     ".pi/skills/xberg/index.md": {
@@ -1491,7 +1491,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     ".pi/skills/xberg/references/rust-api.md": {
@@ -1579,7 +1579,7 @@
       "mode": "0644"
     },
     "skills/xberg-batch-extraction/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg-batch-extraction/references/rust-api.md": {
@@ -1619,7 +1619,7 @@
       "mode": "0644"
     },
     "skills/xberg-chunking/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg-chunking/references/rust-api.md": {
@@ -1659,7 +1659,7 @@
       "mode": "0644"
     },
     "skills/xberg-extracting-keywords/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg-extracting-keywords/references/rust-api.md": {
@@ -1699,7 +1699,7 @@
       "mode": "0644"
     },
     "skills/xberg-extracting-tables/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg-extracting-tables/references/rust-api.md": {
@@ -1739,7 +1739,7 @@
       "mode": "0644"
     },
     "skills/xberg-extracting-with-ocr/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg-extracting-with-ocr/references/rust-api.md": {
@@ -1779,7 +1779,7 @@
       "mode": "0644"
     },
     "skills/xberg-picking-a-format/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg-picking-a-format/references/rust-api.md": {
@@ -1791,7 +1791,7 @@
       "mode": "0644"
     },
     "skills/xberg/SKILL.md": {
-      "content_hash": "blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141",
+      "content_hash": "blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a",
       "mode": "0644"
     },
     "skills/xberg/index.md": {
@@ -1819,7 +1819,7 @@
       "mode": "0644"
     },
     "skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:723cd2abd915f92766e2dec9c90922b94ef60ad5ce81c606bd680b055e5c4717",
+      "content_hash": "blake3:9250a30997ec851cbb228ddcfd1f538e81e843f81e488e5f3d927ba94af93e4f",
       "mode": "0644"
     },
     "skills/xberg/references/rust-api.md": {

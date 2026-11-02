@@ -208,7 +208,7 @@ async fn should_keep_issue_2275_scripts_in_docx_table_markdown() {
 #[tokio::test]
 async fn should_keep_issue_2275_body_markdown_control() {
     let result = extract_package(&format!("<w:p>{}</w:p>", value_runs()), OutputFormat::Markdown).await;
-    assert_eq!(result.content.trim(), "7,2 x 10^9^/l; H~2~O");
+    assert_eq!(result.content.trim(), "7,2 x 10<sup>9</sup>/l; H~2~O");
 }
 
 #[cfg(feature = "tokio-runtime")]
@@ -226,5 +226,5 @@ async fn should_keep_issue_2275_scripts_in_docx_heading_markdown() {
         value_runs()
     );
     let result = extract_package(&body, OutputFormat::Markdown).await;
-    assert_eq!(result.content.trim(), "# 7,2 x 10^9^/l; H~2~O");
+    assert_eq!(result.content.trim(), "# 7,2 x 10<sup>9</sup>/l; H~2~O");
 }

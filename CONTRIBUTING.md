@@ -27,7 +27,7 @@ This installs the toolchain, the dependencies, and the pre-commit hooks via `pol
 
 | Language | Version | Tool                                     |
 | -------- | ------- | ---------------------------------------- |
-| Python   | 3.10+   | [`uv`](https://docs.astral.sh/uv/)       |
+| Python   | 3.11+   | [`uv`](https://docs.astral.sh/uv/)       |
 | Node.js  | 20+     | [`pnpm`](https://pnpm.io/)               |
 | Ruby     | 3.2+    | `rbenv` or `rvm`                         |
 | Go       | 1.26+   | [Official installer](https://go.dev/dl/) |
