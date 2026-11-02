@@ -153,6 +153,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
+  Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
+
 - **(markdown): Keep frontmatter in metadata and out of rendered body, elements, and chunks.** (#2392)
   Preserve typed YAML and TOML values without emitting Rust debug representations as document text.
 
