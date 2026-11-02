@@ -153,6 +153,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(tesseract): Keep routine native and WASM build progress out of Cargo warnings.**
+  Preserve native link directives and actionable fallback diagnostics for strict downstream builds.
+
 - **(ci): Align Python imports and UTC aliases with the Python 3.11 baseline.**
   Use the native exception-group builtin and canonical import ordering in CI helpers.
 
