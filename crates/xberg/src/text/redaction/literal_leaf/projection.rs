@@ -298,7 +298,7 @@ impl Projection<'_> {
 
     pub(super) fn map(
         &self,
-        pub(super) semantic: Range<usize>,
+        semantic: Range<usize>,
         expected: &str,
         limits: Limits,
         work: &mut Work,
