@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
 - **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
   Select the locked CI version leg while preserving the repository Python baseline.
 
@@ -177,6 +180,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ci): Validate benchmark checkouts against the immutable workflow revision.** (#2344)
   Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
+
+- **(ocr): Declare the image table stitching fixture's known header metadata.** (#2354)
+  Keep its header-retention assertion aligned with the explicit-header contract without promoting body rows.
 
 - **(ci): Keep only the latest main run for each CI workflow.** (#2346)
   Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
