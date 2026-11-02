@@ -16,6 +16,11 @@ BeforeAll {
     $script:Sut = Join-Path $script:RepoRoot 'scripts/ci/vendor-windows-wheel-closure.ps1'
     $script:Pwsh = (Get-Process -Id $PID).Path
 
+    function Write-FakePe([string]$Path) {
+        & python (Join-Path $script:RepoRoot 'scripts/ci/test_windows_wheel_closure.py') --write-pe $Path
+        if ($LASTEXITCODE -ne 0) { throw 'failed to create portable PE fixture' }
+    }
+
     function New-FakeWheel {
         param(
             [Parameter(Mandatory)][string]$Root,
@@ -27,7 +32,7 @@ BeforeAll {
         $distInfo = Join-Path $stage 'xberg-1.2.0.dist-info'
         New-Item -ItemType Directory -Path $package, $distInfo -Force | Out-Null
         Set-Content -LiteralPath (Join-Path $package '__init__.py') -Value '' -NoNewline
-        Set-Content -LiteralPath (Join-Path $package $NativeName) -Value 'MZ-not-a-real-pe' -NoNewline
+        Write-FakePe (Join-Path $package $NativeName)
         if (-not $OmitRecord) {
             # RECORD is CSV and every row is terminated, including the last -- confirmed against
             # the pip and setuptools wheels vendored under integrations/. Dropping the trailing
@@ -42,8 +47,11 @@ BeforeAll {
     }
 
     function Invoke-Sut {
-        param([Parameter(Mandatory)][string[]]$Arguments)
-        $output = & $script:Pwsh -NoProfile -NonInteractive -File $script:Sut @Arguments 2>&1
+        param(
+            [Parameter(Mandatory)][string[]]$Arguments,
+            [string]$ScriptPath = $script:Sut
+        )
+        $output = & $script:Pwsh -NoProfile -NonInteractive -File $ScriptPath @Arguments 2>&1
         [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output | Out-String) }
     }
 
@@ -79,8 +87,8 @@ Describe 'vendor-windows-wheel-closure.ps1' {
         $script:Work = Join-Path $TestDrive ([Guid]::NewGuid().ToString('N'))
         $script:DllDir = Join-Path $script:Work 'dlls'
         New-Item -ItemType Directory -Path $script:Work, $script:DllDir -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path $script:DllDir 'onnxruntime.dll') -Value 'ORT-FAKE-BYTES' -NoNewline
-        Set-Content -LiteralPath (Join-Path $script:DllDir 'onnxruntime_providers_shared.dll') -Value 'ORT-PROVIDERS' -NoNewline
+        Write-FakePe (Join-Path $script:DllDir 'onnxruntime.dll')
+        Write-FakePe (Join-Path $script:DllDir 'onnxruntime_providers_shared.dll')
     }
 
     It 'should_exit_zero_when_the_wheel_contains_a_matching_native_extension' {
@@ -183,6 +191,34 @@ Describe 'vendor-windows-wheel-closure.ps1' {
         $result = Invoke-Sut -Arguments @($wheel, (Join-Path $script:Work 'absent'), '*.pyd')
         $result.ExitCode | Should -Not -Be 0
         $result.Output | Should -Match 'DLL source dir not found'
+    }
+
+    It 'should_reject_a_failed_stage_even_when_it_outputs_valid_json' {
+        $isolated = Join-Path $script:Work 'isolated-stage'
+        New-Item -ItemType Directory -Path $isolated -Force | Out-Null
+        $subject = Join-Path $isolated 'vendor-windows-wheel-closure.ps1'
+        Copy-Item -LiteralPath $script:Sut -Destination $subject
+        $helper = Join-Path $isolated 'windows_wheel_closure.py'
+        Set-Content -LiteralPath $helper -Value @'
+import json
+import sys
+from pathlib import Path
+Path(__file__).with_suffix(".receipt.json").write_text(json.dumps(sys.argv[1:]))
+print(json.dumps({"added": []}))
+raise SystemExit(23)
+'@
+        $wheel = New-FakeWheel -Root $script:Work
+        $before = (Get-FileHash -LiteralPath $wheel).Hash
+        $result = Invoke-Sut -ScriptPath $subject -Arguments @($wheel, $script:DllDir, '*.pyd')
+        $result.ExitCode | Should -Not -Be 0
+        $result.Output | Should -Match 'Microsoft runtime closure staging failed'
+        (Get-FileHash -LiteralPath $wheel).Hash | Should -Be $before
+        $call = Get-Content -LiteralPath (Join-Path $isolated 'windows_wheel_closure.receipt.json') -Raw |
+            ConvertFrom-Json
+        $call.Count | Should -Be 5
+        $call[0] | Should -Be 'stage'
+        $call[3] | Should -Be '--native-glob'
+        $call[4] | Should -Be '*.pyd'
     }
 
     It 'should_leave_no_temporary_working_directory_behind_when_it_fails' {
