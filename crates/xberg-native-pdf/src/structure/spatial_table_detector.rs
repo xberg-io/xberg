@@ -9855,3 +9855,7 @@ mod tests {
 #[cfg(test)]
 #[path = "spatial_table_detector/header_source_diagnostic.rs"]
 pub(crate) mod header_source_diagnostic;
+
+#[cfg(test)]
+#[path = "spatial_table_detector/section_conservation_tests.rs"]
+mod section_conservation_tests;
