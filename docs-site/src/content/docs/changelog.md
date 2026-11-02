@@ -154,6 +154,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Build Windows Python wheels with the reviewed Visual Studio 2022 runtime.** (#2368)
+  Pin smoke and release wheel jobs to the runner that provides the licensed CRT redistribution source.
+
+- **(ocr): Compile the standalone Sceptre ORT feature with its existing discovery module.** (#2364)
+  Check the isolated feature closure in CI so other engines cannot mask the required module gate.
+
+- **(dependencies): Require released Sceptre 0.10.1 across Rust dependency graphs.** (#2364)
+  Refresh workspace, Ruby, Elixir and Rust E2E locks while retaining the current ONNX Runtime pins.
+  Rust E2E and Elixir resolve Windows-sys edges from 0.59.0 to 0.61.2; Ruby resolves them from 0.61.2 to 0.59.0.
+  Ruby's phonemizer dependency resolves image 0.24.9 in place of 0.25.10.
+
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
+- **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
+  Select the locked CI version leg while preserving the repository Python baseline.
+
+- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
+  Validate transitive and delayed PE imports without relying on the build host's installed runtime.
+  Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
+
 - **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
   Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
   Publish normalized representative-page metadata while retaining its original orientation provenance.
@@ -174,6 +195,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ocr): Honor cancellation after sparse OCR retries complete.** (#2345)
+  Return cancellation before selecting retry text or retaining primary text after a retry error.
+
+- **(benchmarks): Bind ParseBench runs to their Python harness sources.** (#2332)
+  Reject changed or unbound runner code before extraction; preserve older plans and results for read-only audits.
+
+- **(ci): Validate benchmark checkouts against the immutable workflow revision.** (#2344)
+  Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
+
+- **(ocr): Declare the image table stitching fixture's known header metadata.** (#2354)
+  Keep its header-retention assertion aligned with the explicit-header contract without promoting body rows.
+
+- **(ci): Keep only the latest main run for each CI workflow.** (#2346)
+  Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
 
 - **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
   Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
