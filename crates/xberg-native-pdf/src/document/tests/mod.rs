@@ -13,6 +13,7 @@ mod pdf_fixtures;
 mod annotations;
 mod catalog;
 mod columns;
+mod comment_boundaries;
 mod core;
 mod extract_api;
 mod fonts;
