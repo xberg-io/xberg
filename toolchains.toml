@@ -14,5 +14,5 @@ task_sets = [
 ]
 
 [overrides."github:xberg-io/alef"]
-version = "0.115.9"
-reason = "alef consumer regeneration to 0.115.12 pending; mise.toml follows alef_version in alef.toml"
+version = "0.115.14"
+reason = "Alef 0.115.14 fixes Kotlin host JNI task dependencies and macOS Swift OpenDirectory linkage; matches alef.toml"

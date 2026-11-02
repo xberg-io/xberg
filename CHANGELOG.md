@@ -185,6 +185,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Publish normalized representative-page metadata while retaining its original orientation provenance.
   The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
 
+- **(bindings): Preserve shared exception families and declare Kotlin JNI resource dependencies.** (GH#2366)
+  Java, C#, and PHP exceptions expose shared family interfaces; Python and Ruby `IoError` remains catchable
+  as both `LoadError` and `XbergError`. Adopt Alef 0.115.14 across local development and CI, link Swift
+  OpenDirectory on macOS, and refresh the generated Maven and Gradle tooling defaults.
+
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
 - **(swift): The Swift package requires macOS 14.**

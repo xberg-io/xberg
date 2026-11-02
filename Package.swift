@@ -73,6 +73,7 @@ let package = Package(
         .linkedLibrary("stdc++", .when(platforms: [.linux])),
         .linkedFramework("Security", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
+        .linkedFramework("OpenDirectory", .when(platforms: [.macOS])),
         .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),
       ]
     ),
