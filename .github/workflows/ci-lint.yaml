@@ -170,6 +170,9 @@ jobs:
       - name: Verify actual npm launcher working directory
         run: python3 scripts/tests/test_mcp_launcher_cwd.py
 
+      - name: Verify xberg-tesseract build-script warnings
+        run: python3 scripts/tests/test_tesseract_build_warnings.py
+
   submodule-gitlinks:
     if: >-
       ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
@@ -403,7 +406,7 @@ jobs:
       - name: Install poly
         uses: Goldziher/poly@v0
         with:
-          version: "0.31.2"
+          version: "0.32.1"
       # `alef verify` (aliased as `mise run alef:verify`) is a purpose-built freshness
       # check: it recomputes each generated file's expected hash from the current
       # Rust source, applies the configured formatter to the in-memory render, and
@@ -547,7 +550,7 @@ jobs:
       - name: Install poly
         uses: Goldziher/poly@v0
         with:
-          version: "0.31.2"
+          version: "0.32.1"
       # `mise run e2e:verify` (`alef e2e generate` then `git diff --exit-code e2e/`)
       # was previously invoked by nothing -- it was only named in a comment on
       # the alef-bindings-freshness job above as though it ran. Wiring it here

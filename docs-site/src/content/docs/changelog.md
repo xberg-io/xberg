@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
+  Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
+  Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
+
 - **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
   Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.
 
@@ -46,6 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
+  Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
+
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
 
 - **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
   Email extraction uses read-only parser views while retaining attachment limits, nested-message
@@ -143,11 +154,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
+  Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
+
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
+
+- **(swift): The Swift package requires macOS 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+
+- **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
+  Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.
+
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
 - **(ci): Keep only the latest main run for each CI workflow.** (#2346)
   Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
+
+- **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
+  Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
+
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.

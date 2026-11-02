@@ -15,9 +15,9 @@
 // is expected rather than dead. ~keep
 #![allow(dead_code)]
 
-/// Pixel width of the image actually handed to the OCR backend, after preprocessing.
+/// Pixel width of the current OCR geometry frame, initially the backend's processed image.
 pub(crate) const OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY: &str = "ocr_processed_image_width";
-/// Pixel height of the image actually handed to the OCR backend, after preprocessing.
+/// Pixel height of the current OCR geometry frame, initially the backend's processed image.
 pub(crate) const OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY: &str = "ocr_processed_image_height";
 /// Clockwise rotation, in degrees, that orientation detection reported for the page.
 pub(crate) const OCR_ORIENTATION_DEGREES_METADATA_KEY: &str = "orientation_degrees";
@@ -25,6 +25,8 @@ pub(crate) const OCR_ORIENTATION_DEGREES_METADATA_KEY: &str = "orientation_degre
 pub(crate) const OCR_ORIENTATION_CONFIDENCE_METADATA_KEY: &str = "orientation_confidence";
 /// Set when the pipeline actually rotated the image before running OCR.
 pub(crate) const OCR_AUTO_ROTATED_METADATA_KEY: &str = "auto_rotated";
+/// Backend rotation has already been inverted on all returned geometry; orientation metadata retains its provenance.
+pub(crate) const OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY: &str = "ocr_backend_rotation_undone";
 /// Fraction of a page's dictionary-checkable words that Tesseract's own DAWG dictionary
 /// (`TesseractAPI::is_valid_word`) rejects as not-a-word. Tesseract-only: other backends
 /// never write this key, so consumers must treat its absence as "no evidence" rather than

@@ -752,6 +752,27 @@ def test_swift_ios_builds_pin_the_deployment_target_to_the_manifest_floor() -> N
     assert pinned[1] == f"{floor[1]}.0"
 
 
+def test_swift_macos_builds_pin_the_deployment_target_to_the_manifest_floor() -> None:
+    root = Path(__file__).parents[2]
+    floors = set()
+    for manifest in (root / "Package.swift", root / "packages" / "swift" / "Package.swift"):
+        floor = re.findall(r"\.macOS\(\.v(\d+)\)", manifest.read_text())
+        assert len(floor) == 1, f"{manifest} must declare exactly one macOS floor"
+        floors.add(int(floor[0]))
+    assert len(floors) == 1, f"Swift manifests declare different macOS floors: {sorted(floors)}"
+    floor = floors.pop()
+    # The bundled ONNX Runtime prebuilt requires macOS 13.4 and `.macOS(.vN)` holds only a major.
+    assert floor >= 14, f"macOS floor {floor} is below the bundled ONNX Runtime's 13.4"
+    swift = job_block(WORKFLOW.read_text(), "swift-target")
+    build = re.search(
+        r"(?ms)^      - uses: xberg-io/actions/build-swift-artifactbundle@[^\n]+\n(.*?)(?=^      - |\Z)", swift
+    )
+    assert build is not None
+    pinned = re.search(r'(?m)^          MACOSX_DEPLOYMENT_TARGET: "([0-9.]+)"$', build[1])
+    assert pinned is not None, "swift-target build step inherits the workflow-wide MACOSX_DEPLOYMENT_TARGET"
+    assert pinned[1] == f"{floor}.0"
+
+
 def test_macos_onnx_action_forwards_rpath_option_only_to_macos() -> None:
     action = (WORKFLOW.parents[1] / "actions/setup-onnx-runtime/action.yml").read_text()
     option = re.findall(r"(?m)^  add-macos-rpath:\n((?:^    [^\n]*\n)+)", action)
@@ -828,6 +849,28 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         except AssertionError as error:
             error_message = str(error)
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
+
+
+def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    feature = r'--features "?(\$\{\{ matrix\.(\w+) \}\}|[^"\s]+)'
+    checked = 0
+    for job in re.split(r"(?m)^(?=  [\w-]+:$)", workflow):
+        legs = [
+            {"name": name, "features": features}
+            for name, features in re.findall(r"(?m)^ +- name: (\S+)\n +features: (\S+)$", job)
+        ]
+        for step in re.split(r"(?m)^(?=      - )", job):
+            name = re.match(r"      - name: ([^\n]*)", step)
+            if name is None or "--features" not in name[1]:
+                continue
+            shown = re.search(feature, name[1])
+            used = re.search(feature, step[step.index("        run:") :])
+            assert shown is not None and used is not None, name[1]
+            for leg in legs or [{}]:
+                assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
+                checked += 1
+    assert checked > 0
 
 
 if __name__ == "__main__":
