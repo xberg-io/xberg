@@ -605,3 +605,6 @@ fn should_preserve_the_executed_output_validator_source_in_the_producer_inventor
 
 #[cfg(test)]
 mod compiled_source_tests;
+
+#[cfg(test)]
+mod png_identity_tests;
