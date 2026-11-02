@@ -2924,6 +2924,12 @@ fn split_rows_by_text_positions(
                     })
                     .collect();
 
+                #[cfg(test)]
+                header_source_diagnostic::event("intersection_split_membership", || {
+                    serde_json::json!({
+                        "source_row": row_idx, "output_row": result.len(), "column": ci, "source_span_ids": matching_indices,
+                    })
+                });
                 let cell_text = extract_cell_text(&matching_indices, spans);
                 let mcids: Vec<u32> = matching_indices
                     .iter()
@@ -3079,16 +3085,34 @@ fn detect_tables_from_intersections(
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
+        #[cfg(test)]
+        header_source_diagnostic::grid(group_cells, xs, ys, &v_edges, cells_are_intersections);
         let Some((table_rows, row_cell_span_indices)) =
             assign_spans_to_intersection_grid(group_cells, xs, ys, *num_cols, spans, &v_edges, cells_are_intersections)
         else {
             continue;
         };
+        #[cfg(test)]
+        header_source_diagnostic::event("intersection_assigned", || {
+            serde_json::json!({
+                "rows": header_source_diagnostic::rows(&table_rows), "source_span_ids": row_cell_span_indices,
+            })
+        });
         let sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        #[cfg(test)]
+        header_source_diagnostic::event("intersection_finalized", || {
+            header_source_diagnostic::tables(&sub_tables)
+        });
         tables.extend(sub_tables);
     }
 
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_before_merge", || {
+        header_source_diagnostic::tables(&tables)
+    });
     merge_vertically_adjacent_tables(&mut tables);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
 
     // Post-merge: split tables at section dividers — full-width horizontal
     // lines that indicate separate form sections within a single grid.
@@ -3098,7 +3122,18 @@ fn detect_tables_from_intersections(
     let (mut h_edges, mut v_edges) = extract_edges(lines);
     snap_and_merge(&mut h_edges);
     snap_edges(&mut v_edges);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_divider_edges", || {
+        serde_json::json!({
+            "horizontal": h_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
+            "vertical": v_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
+        })
+    });
     tables = split_tables_at_section_dividers(tables, &h_edges, &v_edges, config);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_section_split", || {
+        header_source_diagnostic::tables(&tables)
+    });
 
     // GH#1358 fix, gated by `BUCKET_TABLE_GRID_IN_ROTATED_FRAME`: applied last
     // so every physical/page-space step above (grid building, row splitting,
@@ -3109,6 +3144,8 @@ fn detect_tables_from_intersections(
         tables = tables.into_iter().map(reorient_table_to_rotated_frame).collect();
     }
 
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_final", || header_source_diagnostic::tables(&tables));
     tables
 }
 
@@ -3599,8 +3636,16 @@ fn finalize_intersection_tables(
     num_cols: usize,
 ) -> Vec<Table> {
     let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_rows_split", || {
+        header_source_diagnostic::rows(&table_rows)
+    });
 
     strip_form_numbering_artifacts(&mut table_rows);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_rows_stripped", || {
+        header_source_diagnostic::rows(&table_rows)
+    });
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();
@@ -9806,3 +9851,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "spatial_table_detector/header_source_diagnostic.rs"]
+pub(crate) mod header_source_diagnostic;
