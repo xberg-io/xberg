@@ -20,6 +20,7 @@
 
 use crate::content::operators::{Operator, TextElement};
 use crate::error::Result;
+use crate::lexer::skip_ws;
 use crate::object::Object;
 use crate::parser::parse_object;
 use nom::IResult;
@@ -107,7 +108,7 @@ pub fn parse_content_stream(data: &[u8]) -> Result<Vec<Operator>> {
     let mut consecutive_errors: usize = 0;
 
     while !input.is_empty() {
-        if let Ok((rest, _)) = multispace0::<&[u8], nom::error::Error<&[u8]>>.parse(input) {
+        if let Ok((rest, _)) = skip_ws(input) {
             input = rest;
         }
 
@@ -2207,7 +2208,7 @@ fn parse_operator_with_operands(input: &[u8]) -> IResult<&[u8], Operator> {
     let mut remaining = input;
 
     loop {
-        let (inp, _) = multispace0.parse(remaining)?;
+        let (inp, _) = skip_ws(remaining)?;
         remaining = inp;
 
         if remaining.is_empty() {
