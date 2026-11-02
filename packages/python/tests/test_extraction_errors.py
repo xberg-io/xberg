@@ -1,10 +1,16 @@
 """Preserve native extraction error kinds across Python async and progress calls."""
 
 import importlib.machinery
+import sys
 import unittest
 from collections.abc import Awaitable
 import xberg
 import xberg._xberg as native
+
+if sys.version_info >= (3, 12):
+    from typing import override
+else:
+    from typing_extensions import override
 
 PLAIN_TEXT = "Plain extraction remains available."
 PARSING_ERROR_CODE = 1001
@@ -31,6 +37,7 @@ def _plain_config() -> xberg.ExtractionConfig:
 class TypedExtractionErrorTests(unittest.IsolatedAsyncioTestCase):
     """Exercise real invalid inputs through the built native extension."""
 
+    @override
     def setUp(self) -> None:
         """Require the real native module and its exported exception identities."""
         assert isinstance(native.__loader__, importlib.machinery.ExtensionFileLoader)
