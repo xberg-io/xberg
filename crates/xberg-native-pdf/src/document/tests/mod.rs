@@ -13,6 +13,7 @@ mod pdf_fixtures;
 mod annotations;
 mod catalog;
 mod columns;
+mod comment_boundaries;
 mod core;
 mod escaped_placed_page;
 mod extract_api;
