@@ -164,7 +164,7 @@ tasks.withType<Test> {
 }
 
 tasks.matching { it.name.endsWith("UnitTestJavaRes") && (it.name.startsWith("process") || it.name.startsWith("compress")) }.configureEach {
-    if (project.properties["alef.skipHostJni"] != "true" && name.contains("UnitTestJavaRes")) {
+    if (project.properties["alef.skipHostJni"] != "true") {
         dependsOn("copyHostJni")
     }
 }
