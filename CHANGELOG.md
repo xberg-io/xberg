@@ -152,6 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
+
 - **(publish): Authenticate NuGet publishing with short-lived trusted-publisher credentials for `naaman-xberg`.**
 
 - **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
