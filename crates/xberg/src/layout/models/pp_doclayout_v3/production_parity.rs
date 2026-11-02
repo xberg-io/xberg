@@ -87,14 +87,15 @@ fn save_tensors(output: &Path, tensors: &[(String, InferenceTensor)], expected: 
 fn capture_page(model: &mut PpDocLayoutV3Model, captures: &Captures, out: &Path, input: &Value) -> Value {
     let name = input["name"].as_str().expect("input name");
     let image_path = PathBuf::from(input["path"].as_str().expect("absolute PNG path"));
-    assert_eq!(sha256(&image_path), input["sha256"].as_str().expect("image hash"));
-    let image = image::load_from_memory(&fs::read(&image_path).expect("PNG bytes"))
-        .expect("valid PNG")
-        .to_rgb8();
+    let image_bytes = fs::read(&image_path).expect("PNG bytes");
+    let image_hash = bytes_sha256(&image_bytes);
+    assert_eq!(image_hash, input["sha256"].as_str().expect("image hash"));
+    let image = image::load_from_memory(&image_bytes).expect("valid PNG").to_rgb8();
     assert_eq!(json!([image.height(), image.width(), 3]), input["shape_hwc"]);
     let detections = model
         .detect_with_threshold(&image, 0.5)
         .expect("real production V3 inference");
+    assert_artifact_hash(&image_path, &image_hash, "pinned PNG identity after forward");
     let forward = take_forward(captures);
     validate_outputs(&forward.outputs);
     let page = out.join(name);
@@ -103,7 +104,7 @@ fn capture_page(model: &mut PpDocLayoutV3Model, captures: &Captures, out: &Path,
     let outputs = page.join("outputs");
     fs::create_dir(&inputs).expect("input tensor directory");
     fs::create_dir(&outputs).expect("output tensor directory");
-    json!({"input": name, "input_sha256": sha256(&image_path),
+    json!({"input": name, "input_sha256": image_hash,
         "inputs": save_tensors(&inputs, &forward.inputs, &["im_shape", "image", "scale_factor"]),
         "outputs": save_tensors(&outputs, &forward.outputs, &["fetch_name_0", "fetch_name_1", "fetch_name_2"]),
         "processed_detections": detections})
