@@ -581,6 +581,11 @@ jobs:
           # target in this workflow, instead of depending on auditwheel alone.
           for w in wheelhouse/*.whl; do bash scripts/ci/vendor-native-closure.sh "$w"; done
 
+      - name: Test Windows wheel closure contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: mise run python:wheel:closure:test
+
       - name: Vendor ONNX Runtime into wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -593,7 +598,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "vendor-windows-wheel-closure failed for $($_.FullName)" }
           }
 
-      - name: Verify wheel has no DirectML import and ships ONNX Runtime (Windows)
+      - name: Verify wheel-local PE dependency closure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -3032,8 +3037,11 @@ jobs:
         # Must equal the `.iOS(.vN)` floor in Package.swift. Unset, rustc links at its iOS default
         # (10.0) while cc/cmake compile for the runner SDK (18.5), and prebuilt ORT objects call
         # ___chkstk_darwin, which libcompiler_rt hides from iOS 7.0-12.1 links (#2146). ~keep
+        # MACOSX_DEPLOYMENT_TARGET likewise equals the `.macOS(.vN)` floor, overriding the
+        # workflow-wide 11.0: the bundled ONNX Runtime prebuilt requires macOS 13.4. ~keep
         env:
           IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
         with:
           crate-name: xberg-swift
           artifact-name: Xberg-rs
