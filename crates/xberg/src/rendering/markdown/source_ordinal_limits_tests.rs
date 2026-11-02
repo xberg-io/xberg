@@ -9,7 +9,7 @@ fn document(items: &[(Option<&str>, &str)]) -> InternalDocument {
     let mut doc = InternalDocument::new("test");
     doc.push_element(InternalElement::text(ElementKind::ListStart { ordered: true }, "", 0));
     for (label, body) in items {
-        let mut item = InternalElement::text(ElementKind::ListItem { ordered: true }, body, 1);
+        let mut item = InternalElement::text(ElementKind::ListItem { ordered: true }, *body, 1);
         if let Some(label) = label {
             item.set_list_item_source_label(*label);
         }
