@@ -66,3 +66,6 @@ mod tests {
         assert!(!luhn_check("4111111111111112"));
     }
 }
+
+#[cfg(test)]
+mod visitor_tests;
