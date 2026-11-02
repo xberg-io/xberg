@@ -155,6 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(tests): Respect optional PDF column metadata in page snapshot checks.**
+  Preserve canonical table equality and require all 16 distinct output-mode combinations.
+
 - **(markdown): Preserve source decimal list starts, gaps, and nested list boundaries.** (#2387)
   Keep literal clause labels and necessary default-mode escapes in prose, code, and link destinations.
   Retain structural list separators without changing the unescaped-prose option.
