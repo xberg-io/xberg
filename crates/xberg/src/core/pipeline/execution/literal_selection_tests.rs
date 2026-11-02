@@ -611,3 +611,33 @@ async fn formatted_literal_disjoint_entity_identities_abort_before_mutation() {
     assert_eq!(result.formatted_content, formatted);
     assert!(result.redaction_report.is_none());
 }
+
+#[tokio::test]
+async fn formatted_literal_disjoint_entity_mask_keeps_safe_physical_redaction() {
+    let (source, short, full) = multi_scalar_entity_preconditions();
+    let combining = "\u{0338}";
+    let combining_match = regex::Regex::new(&regex::escape(combining))
+        .unwrap()
+        .find(full)
+        .unwrap();
+    assert_eq!((combining_match.start(), combining_match.end()), (3, 5));
+    let config = config(RedactionStrategy::Mask, &[short, combining], &[]);
+    let terms = &config.redaction.as_ref().unwrap().custom_terms;
+    assert_eq!(terms.len(), 2);
+    assert!(terms.iter().all(|term| term.value != full));
+    let mut ordinary = ExtractedDocument {
+        content: full.into(),
+        ..Default::default()
+    };
+    crate::plugins::processor::builtin::redaction::RedactionProcessor
+        .process(&mut ordinary, &config)
+        .await
+        .unwrap();
+    assert_eq!(ordinary.content, "[REDACTED][REDACTED]");
+    assert_eq!(ordinary.redaction_report.as_ref().unwrap().total_redacted, 2);
+    let (mut result, cache) = edited(source, None, &config).await;
+    late(&mut result, &cache, &config).await.unwrap();
+    let output = finish(result);
+    assert_eq!(output.content, "[REDACTED]");
+    assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 1);
+}
