@@ -171,7 +171,7 @@ impl<'s> Decoder<'s> {
         self.atom_output.clear();
         let arena = comrak::Arena::new();
         work.parses = work.parses.checked_add(1).ok_or(Error::Budget)?;
-        let root = comrak::parse_document(&arena, &self.atom_input, &crate::rendering::markdown::comrak_options());
+        let root = comrak::parse_document(&arena, &self.atom_input, &crate::rendering::comrak_options());
         for node in root.descendants() {
             work.charge(1, self.limits)?;
             match &node.data.borrow().value {
@@ -269,7 +269,7 @@ fn decode_leaf(source: &str, ordinal: usize, limits: Limits, work: &mut Work) ->
     let mut decoder = Decoder::prepare(source, limits, work)?;
     let arena = comrak::Arena::new();
     work.parses = work.parses.checked_add(1).ok_or(Error::Budget)?;
-    let root = comrak::parse_document(&arena, source, &crate::rendering::markdown::comrak_options());
+    let root = comrak::parse_document(&arena, source, &crate::rendering::comrak_options());
     let mut leaf_index = 0;
     for node in root.descendants() {
         work.charge(1, limits)?;

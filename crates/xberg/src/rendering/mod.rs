@@ -40,6 +40,8 @@ pub use html_styled::StyledHtmlRenderer;
 #[cfg(feature = "redaction")]
 pub(crate) use inline_html::standard_inline_html_ranges;
 pub use json::render_json;
+#[cfg(all(test, feature = "redaction"))]
+pub(crate) use markdown::comrak_options;
 pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown};
 #[cfg(feature = "pdf")]
 pub(crate) use pdf::render_pdf;
