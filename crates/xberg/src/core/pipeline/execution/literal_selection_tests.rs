@@ -295,3 +295,111 @@ async fn formatted_literal_overlap_tail_aborts_before_mutation() {
     assert_eq!(result.formatted_content, before_formatted);
     assert!(result.redaction_report.is_none());
 }
+
+async fn unsupported_link_is_transactional(term: &str, matched: bool) {
+    let source = "Visit [JaneDoe](https://example.test) now";
+    let decoded = visible(source);
+    assert_eq!(decoded, "Visit JaneDoe now");
+    assert_eq!(source.contains(term), matched);
+    assert_eq!(decoded.contains(term), matched);
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, source, &crate::rendering::comrak_options());
+    assert_eq!(
+        root.descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::Link(_)))
+            .count(),
+        1
+    );
+    let config = config(RedactionStrategy::Mask, &[term], &[]);
+    let (mut result, cache) = edited(source, None, &config).await;
+    let before = serde_json::to_value(&*result).unwrap();
+    let formatted = result.formatted_content.clone();
+    let error = late(&mut result, &cache, &config)
+        .await
+        .expect_err("unsupported witnessed formatted syntax must fail even without findings");
+    assert!(matches!(&error, XbergError::Plugin { plugin_name, .. } if plugin_name == "redaction"));
+    assert!(
+        error
+            .to_string()
+            .contains("formatted literal Markdown redaction: unsupported syntax"),
+        "{error}"
+    );
+    assert_eq!(serde_json::to_value(&*result).unwrap(), before);
+    assert_eq!(result.formatted_content, formatted);
+    assert!(result.redaction_report.is_none());
+}
+
+#[tokio::test]
+async fn witnessed_unsupported_formatted_link_with_match_aborts_before_mutation() {
+    unsupported_link_is_transactional("JaneDoe", true).await;
+}
+
+#[tokio::test]
+async fn witnessed_unsupported_formatted_link_without_match_still_aborts_before_mutation() {
+    unsupported_link_is_transactional("AbsentUnique", false).await;
+}
+
+#[tokio::test]
+async fn captured_generated_heading_and_list_keep_existing_markdown_path() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_heading(1, "Public heading", Some(1), None);
+    builder.push_list(false);
+    builder.push_list_item("Public item", false, vec![], Some(1), None);
+    builder.end_list();
+    let mut result = derive_with_surfaces(builder.build(), false, OutputFormat::Markdown, true);
+    let formatted = result.formatted_content.clone().unwrap();
+    let pages = serde_json::to_value(result.pages.as_ref().unwrap()).unwrap();
+    assert_eq!(result.pages.as_ref().unwrap().len(), 1);
+    assert!(formatted.contains("Public heading") && formatted.contains("Public item"));
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, &formatted, &crate::rendering::comrak_options());
+    assert_eq!(
+        root.descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::Heading(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        root.descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::List(_)))
+            .count(),
+        1
+    );
+    {
+        let (document, surfaces) = result.redaction_parts().unwrap();
+        let surfaces = surfaces.expect("actual generated complex Markdown capture");
+        surfaces.validate(document).unwrap();
+        assert!(surfaces.formatted_markdown());
+        assert!(!surfaces.discard_formatted());
+        assert_eq!(surfaces.formatted_literal_backup(), None);
+    }
+    let config = config(RedactionStrategy::Mask, &["AbsentUnique"], &[]);
+    late(&mut result, &cache(None), &config).await.unwrap();
+    assert_eq!(result.formatted_content.as_deref(), Some(formatted.as_str()));
+    assert_eq!(serde_json::to_value(result.pages.as_ref().unwrap()).unwrap(), pages);
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 0);
+    assert!(result.processing_warnings.is_empty());
+}
+
+#[tokio::test]
+async fn ordinary_unwitnessed_complex_markdown_keeps_existing_redaction_path() {
+    let source = "Visit [JaneDoe](https://example.test) now";
+    assert_eq!(visible(source), "Visit JaneDoe now");
+    let mut result = ExtractedDocument {
+        content: "JaneDoe".into(),
+        formatted_content: Some(source.into()),
+        ..Default::default()
+    };
+    let config = config(RedactionStrategy::Mask, &["JaneDoe"], &[]);
+    crate::plugins::processor::builtin::redaction::RedactionProcessor
+        .process(&mut result, &config)
+        .await
+        .unwrap();
+    assert_eq!(result.content, "[REDACTED]");
+    assert_eq!(
+        result.formatted_content.as_deref(),
+        Some("Visit [[REDACTED]](https://example.test) now")
+    );
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
+    assert!(result.processing_warnings.is_empty());
+}
