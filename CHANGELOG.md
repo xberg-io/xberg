@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(python): Preserve typed extraction errors, including progress callbacks.** (#2383)
+  Load canonical Rust error metadata before generating public APIs and reuse typed conversion for progress failures.
+
 - **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
   Use fixed-support cubic resizing and ordered single-image forwards while validating paired rank-bearing rows and masks.
   Capture tasks require one executed test and two forwards with complete named tensor artifacts and matching sizes and hashes.
