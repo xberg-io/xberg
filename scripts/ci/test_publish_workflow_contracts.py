@@ -914,3 +914,31 @@ if __name__ == "__main__":
     for name, test in list(globals().items()):
         if name.startswith("test_") and callable(test):
             test()
+
+
+def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    job = job_block(workflow, "narrow-feature-legs")
+    legs = re.findall(r"(?m)^          - name: (\S+)\n            features: (\S+)$", job)
+    selected = [leg for leg in legs if leg[0] == "sceptre-ocr-ort"]
+    assert len(selected) == 1, "standalone Sceptre ORT matrix leg must exist exactly once"
+    assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
+    assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
+    steps = re.split(r"(?m)^(?=      - )", job)
+    checks = [step for step in steps if step.startswith("      - name: cargo check -p xberg --no-default-features")]
+    assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
+    commands = re.findall(r"(?m)^        run: ([^\n]+)$", checks[0])
+    assert commands == [
+        'cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets'
+    ], "standalone Sceptre ORT check must retain its locked independent command"
+    conditions = re.findall(r"(?m)^        if: ([^\n]+)$", checks[0])
+    assert conditions == ["matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'"], (
+        "the real feature check must not skip the Sceptre ORT leg"
+    )
+    setup = [step for step in steps if "        uses: ./.github/actions/setup-onnx-runtime\n" in step]
+    assert len(setup) == 1, "standalone Sceptre ORT needs one runtime setup step"
+    assert re.findall(r"(?m)^        if: ([^\n]+)$", setup[0]) == ["matrix.name == 'sceptre-ocr-ort'"], (
+        "runtime setup must select exactly the standalone Sceptre ORT leg"
+    )
+    assert re.findall(r"(?m)^          ort-version: ([^\n]+)$", setup[0]) == ["${{ env.ORT_VERSION }}"]
+    assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
