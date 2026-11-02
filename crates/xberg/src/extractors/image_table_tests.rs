@@ -409,6 +409,51 @@ async fn image_pipeline_retains_canonical_stitched_table() {
     assert_marker_count(&result, "STITCHED2226", 1);
 }
 
+#[tokio::test]
+#[serial_test::serial]
+async fn image_pipeline_stitches_table_without_inventing_header_metadata() {
+    let leading_row: Vec<Vec<String>> = vec![vec!["Code".into(), "Count".into()]];
+    let data: Vec<Vec<String>> = vec![vec!["STITCHED2226".into(), "17".into()]];
+    let fragments = [(leading_row.clone(), 6.0, 8.0), (data.clone(), 3.0, 5.0)]
+        .into_iter()
+        .map(|(cells, y0, y1)| Table {
+            markdown: crate::rendering::common::render_table_markdown(&cells),
+            cells,
+            page_number: 1,
+            bounding_box: Some(BoundingBox {
+                x0: 1.0,
+                y0,
+                x1: 15.0,
+                y1,
+            }),
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(fragments.len(), 2);
+    assert!(fragments.iter().all(|table| table.columns.is_none()));
+    let document = extract_case(
+        "image-stitched-unknown-header-2354",
+        geometry_backed_result(fragments),
+        OutputFormat::Markdown,
+        accepting_thresholds(),
+    )
+    .await;
+    let result = derive_case(document, 1);
+    assert_eq!(result.tables[0].cells, vec![leading_row[0].clone(), data[0].clone()]);
+    assert_eq!(result.tables[0].columns, None);
+    assert_eq!(result.tables[0].table_id.as_deref(), Some("table-1"));
+    assert_eq!(
+        result.tables[0].bounding_box,
+        Some(BoundingBox {
+            x0: 1.0,
+            y0: 3.0,
+            x1: 15.0,
+            y1: 8.0
+        })
+    );
+    assert_marker_count(&result, "STITCHED2226", 1);
+}
+
 fn public_node(content: NodeContent) -> DocumentNode {
     DocumentNode {
         id: String::new(),
