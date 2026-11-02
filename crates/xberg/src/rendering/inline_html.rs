@@ -2,12 +2,12 @@ use comrak::Arena;
 use comrak::nodes::{AstNode, NodeValue};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
+pub(crate) enum Kind {
     Superscript,
     Underline,
 }
 
-fn tag(node: &AstNode<'_>) -> Option<(Kind, bool)> {
+pub(crate) fn tag(node: &AstNode<'_>) -> Option<(Kind, bool)> {
     let data = node.data.borrow();
     let NodeValue::HtmlInline(html) = &data.value else {
         return None;

@@ -10,6 +10,7 @@ enum Error {
     InvalidSource,
     MissingLeaf,
     UnsupportedAtom,
+    Unsupported,
 }
 
 #[derive(Clone, Copy)]
@@ -23,6 +24,7 @@ struct Limits {
 struct Work {
     operations: usize,
     parses: usize,
+    document_parses: usize,
     reserved: usize,
 }
 
@@ -215,6 +217,8 @@ impl<'s> Decoder<'s> {
         {
             return Err(Error::InvalidSource);
         }
+        let output_start = self.leaf.text.len();
+        let origin_start = self.leaf.origins.len();
         let mut i = start;
         while i < end {
             let ch = self.source[i..end].chars().next().ok_or(Error::InvalidSource)?;
@@ -227,16 +231,17 @@ impl<'s> Decoder<'s> {
             }
             i += length;
         }
-        if self.leaf.text != expected {
-            if self.leaf.text.strip_prefix(' ').and_then(|s| s.strip_suffix(' ')) != Some(expected) {
+        if self.leaf.text.get(output_start..) != Some(expected) {
+            let text = self.leaf.text.get(output_start..).ok_or(Error::InvalidSource)?;
+            if text.strip_prefix(' ').and_then(|s| s.strip_suffix(' ')) != Some(expected) {
                 return Err(Error::InvalidSource);
             }
-            work.charge(self.leaf.text.len(), self.limits)?;
+            work.charge(text.len(), self.limits)?;
             self.leaf.text.pop();
-            self.leaf.text.remove(0);
+            self.leaf.text.remove(output_start);
             self.leaf.origins.pop();
-            self.leaf.origins.remove(0);
-            for origin in &mut self.leaf.origins {
+            self.leaf.origins.remove(origin_start);
+            for origin in &mut self.leaf.origins[origin_start..] {
                 origin.decoded.start -= 1;
                 origin.decoded.end -= 1;
             }
@@ -273,6 +278,7 @@ fn decode_leaf(source: &str, ordinal: usize, limits: Limits, work: &mut Work) ->
     let mut decoder = Decoder::prepare(source, limits, work)?;
     let arena = comrak::Arena::new();
     work.parses = work.parses.checked_add(1).ok_or(Error::Budget)?;
+    work.document_parses = work.document_parses.checked_add(1).ok_or(Error::Budget)?;
     let root = comrak::parse_document(&arena, source, &crate::rendering::comrak_options());
     let mut leaf_index = 0;
     for node in root.descendants() {
@@ -301,6 +307,8 @@ fn decode_leaf(source: &str, ordinal: usize, limits: Limits, work: &mut Work) ->
     }
     Err(Error::MissingLeaf)
 }
+
+mod projection;
 
 #[cfg(test)]
 mod tests;
