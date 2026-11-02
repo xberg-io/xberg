@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from parse_bench.evaluation.evaluators.parse import ParseEvaluator
@@ -16,7 +16,7 @@ def evaluate(record: dict, root: Path, prediction: str) -> dict:
     """Evaluate genuine HTML without substituting the legacy string metric."""
     os.environ["LLAMACLOUD_BENCH_LLM_NORMALIZATION"] = "off"
     oracle = (root / record["oracle"]["file"]).read_text(encoding="utf-8")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     output = ParseOutput(example_id=record["id"], pipeline_name="local-html", markdown=prediction)
     inference = InferenceResult(
         request=InferenceRequest(

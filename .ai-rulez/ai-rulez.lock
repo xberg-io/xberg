@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.10.0'
 scope = 'all'
-tree = 'sha256:2b89f67f190a2c18d17ff46bc816d44f6d5eec95f35d7c18e1bd1dc5367b348f'
+tree = 'sha256:330ae64068915c265ab84fc12d11de32e72a2da8893ff331d3cec43c23c08ddd'
 
 [[include]]
 name = 'xberg-bindings'
@@ -305,169 +305,169 @@ digest = 'sha256:097a525accaee0bbdc9059737a6763a3c420deff6cbf7865b22bc9baaa1668f
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg'
 commit = ''
-digest = 'sha256:da4d95ee8fcb1fac8e652b4acfdc7b6a1884c6105c845bba86abac9cbe661a7d'
+digest = 'sha256:220a6205510c58f1bfb6bb8cdf59e4b578dec86ef5d3d0ce8d523588b9542368'
 
 [[served]]
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg-batch-extraction'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg-batch-extraction'
 commit = ''
-digest = 'sha256:71d0264317755b5c28a994d235c3f8afd677a390a76bb8dbad5bfd6970f66ff6'
+digest = 'sha256:4142ea708cdc4eedd08d5aa17d6b4a155f769dbb54637e9501cc63959d075572'
 
 [[served]]
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg-chunking'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg-chunking'
 commit = ''
-digest = 'sha256:c1b925bce95093e55a2e9447b5cb0da4438396cbcbbd217b92be2ced529b2ac5'
+digest = 'sha256:0618ba5afc5551f1f5545bf283cbce4091cb0927bd9184677f94718fdb74c9f8'
 
 [[served]]
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg-extracting-keywords'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-keywords'
 commit = ''
-digest = 'sha256:40dbc1917ddad9f986a732af7eac4d9814af57bb069bad6347f4aee346873323'
+digest = 'sha256:aa07641ae3af266ddd9e56a5c4d75dcf646e703e2473f86164b1ee643cd87dfd'
 
 [[served]]
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg-extracting-tables'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-tables'
 commit = ''
-digest = 'sha256:0caac002cff6059abc69ddb734776359701aacaf1c5b25cb96ebe960d82a7a1a'
+digest = 'sha256:1ac8c0c46c314352030624f8d496ee43f30a8cabefd2931849ee301998f60e36'
 
 [[served]]
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg-extracting-with-ocr'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-with-ocr'
 commit = ''
-digest = 'sha256:00b5e7cecc8a1ffd920ffa640a076725c7f7cb28438c9e18a28d3f53f8013658'
+digest = 'sha256:c9d24745e52286aa99a35d24f10ed45f53f23a2a9fe983fdd0187c0768a9b7d2'
 
 [[served]]
 name = 'plugin.hermes.package.src.xberg_hermes_plugin.skills.xberg-picking-a-format'
 source = 'plugin/.hermes/package/src/xberg_hermes_plugin/skills/xberg-picking-a-format'
 commit = ''
-digest = 'sha256:57184cf5207ba4b11021eef233551d7b1fe7e385779625dbc40a8c1f3a3e26b2'
+digest = 'sha256:1351df093562296df7ddeaf9295857e4f6c0b8877c3d02706b7bf977a327de4e'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg'
 commit = ''
-digest = 'sha256:265a8c49f96c1ba2852ffc75c24834c3c25d8d67ea571df63af06bd980b4d0e4'
+digest = 'sha256:77981e4872b8dd7d49616f920cf91c0612a100a560cc96015e7b3a3f4f4d0572'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg-batch-extraction'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg-batch-extraction'
 commit = ''
-digest = 'sha256:0335b7b8e5a2fc2522017fa91b2111e9aa42cf1f01e1c4a51cda3718e80e2501'
+digest = 'sha256:549692a6501f82660247b9d385f4f9075440959bd819fafe76152d4ba5321c32'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg-chunking'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg-chunking'
 commit = ''
-digest = 'sha256:a43ac0deb65c7bfc21c137aafed2acaf37f90d7fa75b69d7be18d62168d31b00'
+digest = 'sha256:354f8c73e6f11d4166cb692b6c58609b955b34b0c478df1e7d952d85bd787afc'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg-extracting-keywords'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg-extracting-keywords'
 commit = ''
-digest = 'sha256:0136aa51cfb8f6639752c80377346fd5d6ccf0818ae2bd534a8d12bb66b54839'
+digest = 'sha256:5d19cd8f112c9e0004b419db8119c7ccf4c4a926b71e96706e050ede8fe9ccda'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg-extracting-tables'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg-extracting-tables'
 commit = ''
-digest = 'sha256:d5c0250c7f2bccfa3499cd7f15ec31bd710794330355e8335d882da8fd146b74'
+digest = 'sha256:37e3a79d69e63907a36b28aaa2669067c7dd8b9ecd4bcf8b2dc6a3203f9ddf24'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg-extracting-with-ocr'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg-extracting-with-ocr'
 commit = ''
-digest = 'sha256:a76141ec5c86b9c157f93f5cdf78d4f8a05a348c61e7c79afee09f358312f8f1'
+digest = 'sha256:0e3f40256f6403a13fc7bef750f65b86e9240399e8db67318aeb639bf3c2a071'
 
 [[served]]
 name = 'plugin.hermes.plugins.xberg.skills.xberg-picking-a-format'
 source = 'plugin/.hermes/plugins/xberg/skills/xberg-picking-a-format'
 commit = ''
-digest = 'sha256:3386b5b20a4f50caee0e7d38c27bad2d4abcb33774b53445b2f795cee0743413'
+digest = 'sha256:0099f09b3bc30c5d0b0f6faef6a06eeb2ed1d58b70ff07b9fff20b3d81d9b228'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg'
 source = 'plugin/.opencode/skills/xberg'
 commit = ''
-digest = 'sha256:ff86c42fddbf6261d908541c152ddb878e18d8492dc2d6740226cc4b7b285261'
+digest = 'sha256:690193482216c1094a1a6dd7cfe832bf9c62c4bf8dd5ef07df2ba92483d18248'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg-batch-extraction'
 source = 'plugin/.opencode/skills/xberg-batch-extraction'
 commit = ''
-digest = 'sha256:cdea2720e809301e3ac67cadce9a3288924f5340efb0a0b824266b3beb88362f'
+digest = 'sha256:1135db49fe6bbb204c78e8a2ab5585bcf27660b15702d54e4cfa4dc6da11e0ac'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg-chunking'
 source = 'plugin/.opencode/skills/xberg-chunking'
 commit = ''
-digest = 'sha256:9866cd84cd90781fef27ac3e421a06dceb95081d55007bbed916c48fcfc06cc4'
+digest = 'sha256:df2b1724f7243b8f0cf9b21e3016b7baff00acb11df34db18ae431b886c92d36'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg-extracting-keywords'
 source = 'plugin/.opencode/skills/xberg-extracting-keywords'
 commit = ''
-digest = 'sha256:0477c0889eeee706d6c1836d145cb472c5bb6c12ccc227fa32bc60aa47311d25'
+digest = 'sha256:451fae245dc1064c7c6cadfe90b7d8b591adcc292bdc2be6cb80d9a5b6ba790d'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg-extracting-tables'
 source = 'plugin/.opencode/skills/xberg-extracting-tables'
 commit = ''
-digest = 'sha256:57dabd68f301578df8acda85d626443e1b986ea1767e17cecf7741ace732cfed'
+digest = 'sha256:4e7689629b4fe49ea145487b3edaf3e374c5205a420cf3f83e6ca1184fb220a9'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg-extracting-with-ocr'
 source = 'plugin/.opencode/skills/xberg-extracting-with-ocr'
 commit = ''
-digest = 'sha256:47c030cf57a2fbaf5c573f7cac8ed1607f544357ed757addfa169425dd6e012e'
+digest = 'sha256:e1794aad5edec2482b1091a89826249c420415d0cc6094c367dd9d92a939e1fd'
 
 [[served]]
 name = 'plugin.opencode.skills.xberg-picking-a-format'
 source = 'plugin/.opencode/skills/xberg-picking-a-format'
 commit = ''
-digest = 'sha256:d9f5605943af3f72b4237db86840f5cd2bc8f0c831afbdba783af724ddf7e45d'
+digest = 'sha256:82cccc4ac84d87aca8e1fffcb2c7c5168fc9041d66aed47b81f9b89da796cf7f'
 
 [[served]]
 name = 'plugin.skills.xberg'
 source = 'plugin/skills/xberg'
 commit = ''
-digest = 'sha256:15fa1ef6e835704fe4cd4003cb5313cd7f551b2f7bb95753c8b440046fe2a6a4'
+digest = 'sha256:75df4fe7a1a36ac7d05a4fb65bc9b07d336b9b3f27ff235d14022f5c589a27a5'
 
 [[served]]
 name = 'plugin.skills.xberg-batch-extraction'
 source = 'plugin/skills/xberg-batch-extraction'
 commit = ''
-digest = 'sha256:f57e7ef27085305355767a6394c289bc8fda19b6c8387f0220a6a70a89798db7'
+digest = 'sha256:acbd51d307d042cadbf645ea28ee0102b5d8eaccde518855c848e612408fc46b'
 
 [[served]]
 name = 'plugin.skills.xberg-chunking'
 source = 'plugin/skills/xberg-chunking'
 commit = ''
-digest = 'sha256:6c726e1f566cbecebf5070adf8eb07096ec16111ec3ac19755d2156890b7c26b'
+digest = 'sha256:f9f957de5e8efeaf4e28009db8928874dada978dc3d2939936df89e1360ca2e3'
 
 [[served]]
 name = 'plugin.skills.xberg-extracting-keywords'
 source = 'plugin/skills/xberg-extracting-keywords'
 commit = ''
-digest = 'sha256:c563e2f32eb73636246aba5d943b855d1ab0b220dbb4abf368ca913bea365952'
+digest = 'sha256:fa8bf361702b33de39009b322f92e2b1546b6c2710c556a643915eb72ffe0acb'
 
 [[served]]
 name = 'plugin.skills.xberg-extracting-tables'
 source = 'plugin/skills/xberg-extracting-tables'
 commit = ''
-digest = 'sha256:b625a924312adb9491d3d9e8e77ba5f9797a28200f4c9db00e2745b6efb836ff'
+digest = 'sha256:a51b509984d99bcbcfe231b48f282717f5c0fb5c9a511c82c75d1f76be2093b5'
 
 [[served]]
 name = 'plugin.skills.xberg-extracting-with-ocr'
 source = 'plugin/skills/xberg-extracting-with-ocr'
 commit = ''
-digest = 'sha256:9f5f44a4d6695c5ec95053dd8fcde8cef91a552ff898aa667dfde63582fce3b0'
+digest = 'sha256:fd530cb53d57897cb052afaf47e76f4dd4b516fda018303488f7b5951ab40210'
 
 [[served]]
 name = 'plugin.skills.xberg-picking-a-format'
 source = 'plugin/skills/xberg-picking-a-format'
 commit = ''
-digest = 'sha256:012f6c5c172c3af761f3fb26d4fcc2e667f33ce673ee353efa71b10e111ef073'
+digest = 'sha256:2699ae56945166f334582e0f7f1cd51b1627f3c21cbeca5f1305c8c7af7ada61'
 
 [[served]]
 name = 'poly-lint-format'
@@ -539,13 +539,13 @@ digest = 'sha256:71ee1393f54cfb794ff02f6c532303298d8a220dd47cd4b29c612bb2059db93
 name = 'xberg'
 source = 'skills/xberg'
 commit = ''
-digest = 'sha256:24e4dbb635eeeec8d97a9089dd6d00ab3aac0cd5a5fdbe45ed43b47cd58c56c3'
+digest = 'sha256:94f5adb933b02382d74605aa4ea0a1709da72b75516b417f6b75a140a12f9030'
 
 [[served]]
 name = 'xberg-batch-extraction'
 source = 'skills/xberg-batch-extraction'
 commit = ''
-digest = 'sha256:1824b10457c55bc30255a3ab80ec0fdf4ee251a6912e1a377c68cf23f92db573'
+digest = 'sha256:f6a719888cfb14d69a82f6b40a1f3957bd32eb9528357d56d7abd1fa5527f963'
 
 [[served]]
 name = 'xberg-brand-and-docs'
@@ -557,31 +557,31 @@ digest = 'sha256:b56a82559495f0589d4d2d827a83b3e5be236b15d5351eabca1162f9c56ef2b
 name = 'xberg-chunking'
 source = 'skills/xberg-chunking'
 commit = ''
-digest = 'sha256:bec57757c3ec3c1b00fb7ffb942cca042588420b11bf5399e5178abae128aedf'
+digest = 'sha256:a5e4f6c9aff7444d9ff00cf0e033b77575e474e0ccb44531d76d5a9faa6aa6dd'
 
 [[served]]
 name = 'xberg-extracting-keywords'
 source = 'skills/xberg-extracting-keywords'
 commit = ''
-digest = 'sha256:d40d233f11bbe771b0a3719fc219a8bb983f1fa548787a3cfc5030d52db0c200'
+digest = 'sha256:59bc80531f5091fb1751a84a2b69d7ade7827fcad96161196d013cd54b5aafc9'
 
 [[served]]
 name = 'xberg-extracting-tables'
 source = 'skills/xberg-extracting-tables'
 commit = ''
-digest = 'sha256:beca721ed87ff6ed6a10a7ea2b8e8228e3908f7ea15b98ecdb414c71ad680ca5'
+digest = 'sha256:1d90339ab35a62ffe09e6fb24f11a24d67bf1726e646c58d69a233e3bfeceffc'
 
 [[served]]
 name = 'xberg-extracting-with-ocr'
 source = 'skills/xberg-extracting-with-ocr'
 commit = ''
-digest = 'sha256:429716f4c1300c6e6d25a9f17c6e7677dffb197b8a2fcaba369bac790af9c43e'
+digest = 'sha256:2710bdccc8a3735e5188e822fe754c7bc3d07f636184ddea35eae32c146f390e'
 
 [[served]]
 name = 'xberg-picking-a-format'
 source = 'skills/xberg-picking-a-format'
 commit = ''
-digest = 'sha256:88decec99b32915b1dde17271fd9a1779961f69c8fe29bd9b116a1744c07e9a8'
+digest = 'sha256:777c172124759fd01e53bf50c7264015c80c6b1d88465a5ef800facc1b153eb3'
 
 [[served]]
 name = 'xberg-release'

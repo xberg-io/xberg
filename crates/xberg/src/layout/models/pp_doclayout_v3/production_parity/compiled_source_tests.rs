@@ -11,7 +11,7 @@ fn compiled_source_tree() -> (tempfile::TempDir, PathBuf) {
         fs::create_dir_all(destination.parent().expect("source parent")).expect("source directories");
         fs::write(&destination, bytes).expect("exact compiled source fixture");
     }
-    assert_eq!(COMPILED_PRODUCER_SOURCES.len(), 18);
+    assert_eq!(COMPILED_PRODUCER_SOURCES.len(), 20);
     for (path, bytes) in COMPILED_PRODUCER_SOURCES {
         assert_eq!(fs::read(root.join(path)).unwrap(), *bytes);
     }
@@ -42,7 +42,7 @@ fn assert_changed_source_rejected(path: &str) {
 }
 
 #[test]
-fn should_accept_all_eighteen_compiled_sources_before_capture() {
+fn should_accept_all_twenty_compiled_sources_before_capture() {
     let (_temporary, root) = compiled_source_tree();
     validate_producer_source_inputs(&root).expect("all actual compiled source bytes match");
     assert!(!root.join("producer").exists());
@@ -56,4 +56,11 @@ fn should_reject_changed_output_validator_before_capture() {
 #[test]
 fn should_reject_changed_preprocessing_before_capture() {
     assert_changed_source_rejected("src/layout/models/pp_doclayout_v3/preprocessing.rs");
+}
+
+#[test]
+fn should_reject_changed_image_decoder_or_budget_before_capture() {
+    for path in ["src/extraction/image_decode.rs", "src/extractors/security.rs"] {
+        assert_changed_source_rejected(path);
+    }
 }
