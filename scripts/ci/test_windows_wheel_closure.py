@@ -362,7 +362,8 @@ def assert_windows_wheel_wiring(source: str, job: str) -> None:
         matching = [(index, step) for index, step in enumerate(steps) if script in step]
         assert len(matching) == 1, f"expected exactly one Windows wheel {label} step; found {len(matching)}"
         index, step = matching[0]
-        assert "if: runner.os == 'Windows'" in step, f"{label} must run on Windows"
+        conditions = [line for line in step.splitlines() if line.startswith("        if:")]
+        assert conditions == ["        if: runner.os == 'Windows'"], f"{label} must run unconditionally on Windows"
         assert "shell: pwsh" in step, f"{label} must use PowerShell"
         assert 'Get-ChildItem -Path wheelhouse -Filter "*.whl" | ForEach-Object {' in step
         lines = [line.strip() for line in step.splitlines()]
@@ -378,6 +379,41 @@ def assert_windows_wheel_wiring(source: str, job: str) -> None:
 
 
 class WheelWorkflowTests(unittest.TestCase):
+    def assert_disabled_step_rejected(self, filename: str, job: str, label: str, script: str) -> None:
+        source = (ROOT / ".github/workflows" / filename).read_text()
+        assert_windows_wheel_wiring(source, job)
+        matching = [step for step in windows_wheel_steps(source, job) if script in step]
+        assert len(matching) == 1
+        step = matching[0]
+        condition = "        if: runner.os == 'Windows'\n"
+        assert step.count(condition) == 1
+        disabled = step.replace(condition, condition.rstrip("\n") + " && false\n", 1)
+        original = "      - " + step
+        assert source.count(original) == 1
+        with tempfile.TemporaryDirectory() as temp:
+            copy = Path(temp) / filename
+            copy.write_text(source.replace(original, "      - " + disabled, 1))
+            with expected_error(AssertionError, f"{label} must run unconditionally on Windows"):
+                assert_windows_wheel_wiring(copy.read_text(), job)
+
+    def test_publish_vendor_condition_cannot_disable_the_step(self) -> None:
+        self.assert_disabled_step_rejected(
+            "publish.yaml", "python-wheels", "vendor", "vendor-windows-wheel-closure.ps1"
+        )
+
+    def test_publish_verify_condition_cannot_disable_the_step(self) -> None:
+        self.assert_disabled_step_rejected("publish.yaml", "python-wheels", "verify", "verify-windows-dll-closure.ps1")
+
+    def test_smoke_vendor_condition_cannot_disable_the_step(self) -> None:
+        self.assert_disabled_step_rejected(
+            "ci-python-wheel-smoke.yaml", "python-wheel-smoke", "vendor", "vendor-windows-wheel-closure.ps1"
+        )
+
+    def test_smoke_verify_condition_cannot_disable_the_step(self) -> None:
+        self.assert_disabled_step_rejected(
+            "ci-python-wheel-smoke.yaml", "python-wheel-smoke", "verify", "verify-windows-dll-closure.ps1"
+        )
+
     def test_publish_runs_both_windows_wheel_closure_steps(self) -> None:
         source = (ROOT / ".github/workflows/publish.yaml").read_text()
         assert_windows_wheel_wiring(source, "python-wheels")
