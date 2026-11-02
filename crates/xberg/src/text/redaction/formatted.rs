@@ -5,7 +5,7 @@ pub(super) enum FormattedPlan {
     Preserve(Vec<PatternMatch>),
     Discard,
     ProcessorDiscard,
-    Literal { source: String, matches: Vec<PatternMatch> },
+    Literal(super::literal_leaf::plan::LiteralPlan),
 }
 
 pub(super) enum PagePlan {

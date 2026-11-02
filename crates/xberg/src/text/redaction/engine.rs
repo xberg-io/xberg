@@ -40,6 +40,7 @@ use crate::types::revisions::{DiffLine, RevisionAnchor};
 #[cfg(feature = "tokio-runtime")]
 use super::external::compile_configured_findings_async;
 use super::external::{ExternalRedactionRequest, compile_configured_findings, compile_external_findings};
+use super::literal_leaf::plan::{self as literal_plan, LiteralPlan, Matchers};
 use super::patterns::{PatternMatch, scan_text};
 use super::strategy::{TokenCounter, apply_strategy};
 
@@ -216,7 +217,14 @@ pub fn redact_with_entities(
 ) -> Result<()> {
     config.validate()?;
     let configured = compile_configured_findings(&result.content, config, &SecurityLimits::default())?;
-    redact_pass(result, config, entities, &configured.terms, true, &())?;
+    redact_pass(
+        result,
+        config,
+        entities,
+        &configured.terms,
+        true,
+        (&(), &SecurityLimits::default()),
+    )?;
     Ok(())
 }
 
@@ -272,7 +280,7 @@ async fn redact_counted(
         &entities,
         &all_external_terms,
         include_configured_sources,
-        surfaces,
+        (surfaces, limits),
     )
 }
 
@@ -283,8 +291,9 @@ fn redact_pass(
     entities: &[Entity],
     external_terms: &[(PiiCategory, regex::Regex)],
     include_configured_sources: bool,
-    surfaces: &impl RedactionSurfaces,
+    context: (&impl RedactionSurfaces, &SecurityLimits),
 ) -> Result<TokenCounter> {
+    let (surfaces, limits) = context;
     let active = if include_configured_sources {
         active_categories(config)
     } else {
@@ -314,7 +323,12 @@ fn redact_pass(
         plans: SurfacePlans::default(),
     };
 
-    pass.plans = pass.plan_surfaces(result, surfaces)?;
+    pass.plans = pass.plan_surfaces(result, surfaces, limits)?;
+    if let Some(FormattedPlan::Literal(plan)) = &pass.plans.formatted {
+        pass.findings.try_reserve_exact(plan.matches.len()).map_err(|_| {
+            crate::XbergError::validation("formatted literal Markdown redaction: requested helper capacity limit")
+        })?;
+    }
     pass.redact_document(result, 0);
 
     let findings = std::mem::take(&mut pass.findings);
@@ -346,13 +360,27 @@ struct RedactionPass<'a> {
 }
 
 impl RedactionPass<'_> {
-    fn plan_surfaces(&self, doc: &ExtractedDocument, surfaces: &impl RedactionSurfaces) -> Result<SurfacePlans> {
+    fn plan_surfaces(
+        &self,
+        doc: &ExtractedDocument,
+        surfaces: &impl RedactionSurfaces,
+        limits: &SecurityLimits,
+    ) -> Result<SurfacePlans> {
         let mut plans = SurfacePlans::default();
         if let Some(source) = surfaces.formatted_literal_backup() {
-            plans.formatted = Some(FormattedPlan::Literal {
-                source: source.to_owned(),
-                matches: self.matches_for(source),
-            });
+            plans.formatted = Some(FormattedPlan::Literal(literal_plan::plan(
+                source,
+                Matchers {
+                    categories: self.categories,
+                    requested: &self.config.categories,
+                    custom: self.custom_regexes,
+                    ner: self.ner_terms,
+                    external: self.external_terms,
+                    builtins: self.include_configured_sources,
+                },
+                limits,
+                self.config.strategy,
+            )?));
         } else if surfaces.discard_formatted() {
             plans.formatted = Some(FormattedPlan::ProcessorDiscard);
         } else if surfaces.formatted_markdown()
@@ -466,6 +494,27 @@ impl RedactionPass<'_> {
         out
     }
 
+    fn apply_literal(&mut self, mut plan: LiteralPlan) -> String {
+        for finding in plan.matches {
+            let text = if finding.decoded { &plan.decoded } else { &plan.source };
+            let identity = &text[finding.identity];
+            let replacement = apply_strategy(self.config.strategy, identity, &finding.category, &mut self.counter);
+            self.findings.push(RedactionFinding {
+                start: finding.raw.start as u32,
+                end: finding.raw.end as u32,
+                category: finding.category,
+                strategy: self.config.strategy,
+                replacement_token: replacement.clone(),
+            });
+            plan.replacements
+                .push((finding.raw.start, finding.raw.end, replacement));
+        }
+        for (start, end, replacement) in plan.replacements.iter().rev() {
+            plan.source.replace_range(*start..*end, replacement);
+        }
+        plan.source
+    }
+
     /// Rewrite a string field in place.
     fn redact_in_place(&mut self, text: &mut String) {
         let redacted = self.redact(text);
@@ -500,8 +549,8 @@ impl RedactionPass<'_> {
 
     fn redact_primary_surfaces(&mut self, doc: &mut ExtractedDocument, depth: usize) {
         let plan = match (depth == 0).then(|| self.plans.formatted.take()).flatten() {
-            Some(FormattedPlan::Literal { source, matches }) => {
-                doc.content = self.apply_matches(&source, matches);
+            Some(FormattedPlan::Literal(plan)) => {
+                doc.content = self.apply_literal(plan);
                 doc.formatted_content = None;
                 crate::core::diagnostics::push_warning(
                     &mut doc.processing_warnings,

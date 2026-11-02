@@ -15,7 +15,6 @@
 pub mod engine;
 pub(crate) mod external;
 mod formatted;
-#[cfg(test)]
 mod literal_leaf;
 pub mod patterns;
 #[cfg(feature = "redaction-rehydrate")]

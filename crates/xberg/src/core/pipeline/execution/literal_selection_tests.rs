@@ -478,3 +478,17 @@ async fn witnessed_literal_requested_owned_limit_aborts_when_all_text_inputs_fit
     )
     .await;
 }
+
+#[tokio::test]
+async fn witnessed_literal_long_winner_covers_disjoint_candidate_requirements() {
+    let source = "safe alpha beta suffix";
+    assert_eq!(visible(source), source);
+    assert_eq!(&source[5..15], "alpha beta");
+    assert_eq!((&source[5..10], &source[11..15]), ("alpha", "beta"));
+    let config = config(RedactionStrategy::Mask, &[], &["alpha beta", "alpha", "beta"]);
+    let (mut result, cache) = edited(source, None, &config).await;
+    late(&mut result, &cache, &config).await.unwrap();
+    let output = finish(result);
+    assert_eq!(output.content, "safe [REDACTED] suffix");
+    assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 1);
+}

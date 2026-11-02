@@ -39,10 +39,10 @@ pub(crate) use html::render_html;
 pub use html_styled::StyledHtmlRenderer;
 #[cfg(feature = "redaction")]
 pub(crate) use inline_html::standard_inline_html_ranges;
-#[cfg(all(test, feature = "redaction"))]
+#[cfg(feature = "redaction")]
 pub(crate) use inline_html::{Kind as PrivacyInlineKind, tag as privacy_inline_tag};
 pub use json::render_json;
-#[cfg(all(test, feature = "redaction"))]
+#[cfg(feature = "redaction")]
 pub(crate) use markdown::comrak_options;
 pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown};
 #[cfg(feature = "pdf")]

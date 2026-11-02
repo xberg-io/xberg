@@ -8,6 +8,8 @@ const SENTINEL_BYTES: usize = "az".len();
 enum Error {
     Budget,
     InvalidSource,
+    Coverage,
+    #[cfg(test)]
     MissingLeaf,
     UnsupportedAtom,
     Unsupported,
@@ -26,14 +28,31 @@ struct Work {
     parses: usize,
     document_parses: usize,
     reserved: usize,
+    entity_limit: Option<usize>,
+    failure: Option<&'static str>,
 }
 
 impl Work {
     fn charge(&mut self, amount: usize, limits: Limits) -> Result<(), Error> {
-        self.operations = self.operations.checked_add(amount).ok_or(Error::Budget)?;
-        (self.operations <= limits.operations)
-            .then_some(())
-            .ok_or(Error::Budget)
+        let Some(total) = self.operations.checked_add(amount) else {
+            self.failure = Some("iteration limit");
+            return Err(Error::Budget);
+        };
+        self.operations = total;
+        if self.operations > limits.operations {
+            self.failure = Some("iteration limit");
+            return Err(Error::Budget);
+        }
+        Ok(())
+    }
+
+    fn reserve(&mut self, bytes: usize, limits: Limits) -> Result<(), Error> {
+        let total = self.reserved.checked_add(bytes).ok_or(Error::Budget)?;
+        if total > limits.owned {
+            return Err(Error::Budget);
+        }
+        self.reserved = total;
+        Ok(())
     }
 }
 
@@ -156,12 +175,20 @@ impl<'s> Decoder<'s> {
         let mut i = start + 1;
         while i < end && (self.source.as_bytes()[i].is_ascii_alphanumeric() || self.source.as_bytes()[i] == b'#') {
             work.charge(1, self.limits)?;
+            if work.entity_limit.is_some_and(|limit| i - start >= limit) {
+                work.failure = Some("entity length limit");
+                return Err(Error::Budget);
+            }
             i += 1;
         }
         Ok((i < end && self.source.as_bytes()[i] == b';').then_some(i + 1))
     }
 
     fn entity(&mut self, range: Range<usize>, work: &mut Work) -> Result<(), Error> {
+        if work.entity_limit.is_some_and(|limit| range.len() > limit) {
+            work.failure = Some("entity length limit");
+            return Err(Error::Budget);
+        }
         work.charge(
             range.len().checked_add(SENTINEL_BYTES).ok_or(Error::Budget)?,
             self.limits,
@@ -249,6 +276,7 @@ impl<'s> Decoder<'s> {
         Ok(())
     }
 
+    #[cfg(test)]
     fn source_range(&self, node: &AstNode<'_>, work: &mut Work) -> Result<Range<usize>, Error> {
         work.charge(self.source.len().checked_mul(2).ok_or(Error::Budget)?, self.limits)?;
         let pos = node.data.borrow().sourcepos;
@@ -274,6 +302,7 @@ impl<'s> Decoder<'s> {
 }
 
 // This selects an actual parser leaf; it grants no grammar admission or whole-document coverage. ~keep
+#[cfg(test)]
 fn decode_leaf(source: &str, ordinal: usize, limits: Limits, work: &mut Work) -> Result<Leaf, Error> {
     let mut decoder = Decoder::prepare(source, limits, work)?;
     let arena = comrak::Arena::new();
@@ -308,6 +337,7 @@ fn decode_leaf(source: &str, ordinal: usize, limits: Limits, work: &mut Work) ->
     Err(Error::MissingLeaf)
 }
 
+pub(super) mod plan;
 mod projection;
 
 #[cfg(test)]

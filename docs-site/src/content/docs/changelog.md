@@ -149,6 +149,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Check raw and decoded findings before returning edited formatted text.** (#2358, #2363)
+  Preserve semantic token and hash identity, reject incomplete overlap coverage, and bound literal planning work.
+  Reject unsupported syntax in witnessed formatted-only edits while retaining trusted generated Markdown behavior.
+
 - **(redaction): Keep source tag names redactable in Markdown and preserve edited output.** (#2358)
   Decline tag-syntax exemptions for raw blocks and rendered annotation values; preserve renderer-owned styles elsewhere.
   Return current formatted-only and same-frame page edits through warned literal fallbacks.

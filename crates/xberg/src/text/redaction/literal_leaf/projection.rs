@@ -20,15 +20,15 @@ struct Construct {
     raw: Range<usize>,
 }
 #[derive(Debug)]
-struct Projection<'s> {
+pub(super) struct Projection<'s> {
     source: &'s str,
-    leaf: Leaf,
+    pub(super) leaf: Leaf,
     constructs: Vec<Construct>,
 }
 #[derive(Debug, PartialEq, Eq)]
-struct Mapped {
-    raw: Range<usize>,
-    semantic: Range<usize>,
+pub(super) struct Mapped {
+    pub(super) raw: Range<usize>,
+    pub(super) semantic: Range<usize>,
 }
 
 fn capacities(source: &str, depth: usize) -> Result<(usize, usize, usize), Error> {
@@ -70,11 +70,13 @@ struct Builder<'s> {
     decoder: Decoder<'s>,
     lines: Vec<usize>,
     frames: Vec<Frame>,
+    frame_limit: usize,
     constructs: Vec<Construct>,
 }
 impl<'s> Builder<'s> {
     fn prepare(source: &'s str, limits: Limits, depth: usize, work: &mut Work) -> Result<Self, Error> {
         if source.len() > limits.input {
+            work.failure = Some("input content limit");
             return Err(Error::Budget);
         }
         work.charge(source.len(), limits)?;
@@ -100,6 +102,7 @@ impl<'s> Builder<'s> {
             decoder,
             lines,
             frames,
+            frame_limit: frame_count,
             constructs,
         })
     }
@@ -113,7 +116,7 @@ impl<'s> Builder<'s> {
     }
 
     fn open(&mut self, kind: Kind, raw: Range<usize>, owner: usize) -> Result<(), Error> {
-        if self.frames.len() == self.frames.capacity() {
+        if self.frames.len() == self.frame_limit {
             return Err(Error::Budget);
         }
         self.frames.push(Frame {
@@ -202,7 +205,12 @@ impl<'s> Builder<'s> {
     }
 }
 
-fn project<'s>(source: &'s str, limits: Limits, depth_limit: usize, work: &mut Work) -> Result<Projection<'s>, Error> {
+pub(super) fn project<'s>(
+    source: &'s str,
+    limits: Limits,
+    depth_limit: usize,
+    work: &mut Work,
+) -> Result<Projection<'s>, Error> {
     let mut builder = Builder::prepare(source, limits, depth_limit, work)?;
     let arena = comrak::Arena::new();
     work.parses = work.parses.checked_add(1).ok_or(Error::Budget)?;
@@ -216,6 +224,7 @@ fn project<'s>(source: &'s str, limits: Limits, depth_limit: usize, work: &mut W
             NodeEdge::Start(node) => {
                 depth = depth.checked_add(1).ok_or(Error::Budget)?;
                 if depth > depth_limit {
+                    work.failure = Some("nesting depth limit");
                     return Err(Error::Budget);
                 }
                 if matches!(node.data.borrow().value, NodeValue::Paragraph) {
@@ -287,7 +296,13 @@ impl Projection<'_> {
         Ok(())
     }
 
-    fn map(&self, semantic: Range<usize>, expected: &str, limits: Limits, work: &mut Work) -> Result<Mapped, Error> {
+    pub(super) fn map(
+        &self,
+        pub(super) semantic: Range<usize>,
+        expected: &str,
+        limits: Limits,
+        work: &mut Work,
+    ) -> Result<Mapped, Error> {
         if semantic.is_empty() {
             return Err(Error::InvalidSource);
         }
