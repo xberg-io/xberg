@@ -115,12 +115,20 @@ run = "poly fmt --check ."
 ["plugin:generate"]
 description = "Regenerate the plugin bundles + marketplace from plugin/.ai-rulez"
 tools = { node = "26.13.0" }
-run = ["npx -y ai-rulez@latest generate --plugin", "python3 scripts/sync_public_skills.py"]
+run = [
+  "npx -y ai-rulez@latest generate --plugin",
+  "python3 scripts/sync_public_skills.py",
+  "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --content-only",
+]
 
 ["plugin:verify"]
 description = "Verify generated plugin bundles match source (byte + BLAKE3 provenance)"
 tools = { node = "26.13.0" }
-run = ["npx -y ai-rulez@latest verify --plugin", "python3 scripts/sync_public_skills.py --check"]
+run = [
+  "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --check",
+  "npx -y ai-rulez@latest verify --plugin",
+  "python3 scripts/sync_public_skills.py --check",
+]
 
 ["plugin:skills:test"]
 description = "Verify public skill ownership and resource freshness"
