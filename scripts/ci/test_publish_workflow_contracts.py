@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import tomllib
 from pathlib import Path
 
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
@@ -871,6 +872,39 @@ def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
                 assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
                 checked += 1
     assert checked > 0
+
+
+def test_caption_ci_selects_its_locked_python_without_changing_the_baseline() -> None:
+    root = WORKFLOW.parents[2]
+    job = job_block((WORKFLOW.parent / "ci-scripts.yaml").read_text(), "caption-export")
+    assert "mise install python uv" in job
+    assert "--python python" in job
+    assert "uv python install" not in job
+    baseline = tomllib.loads((root / "mise.toml").read_text())["tools"]["python"]
+    selected = re.search(r'(?m)^      MISE_PYTHON_VERSION: "([0-9.]+)"$', job)
+    version = selected[1] if selected else baseline
+    project = root / "tools/benchmark-harness/caption_export"
+    requires = tomllib.loads((project / "pyproject.toml").read_text())["project"]["requires-python"]
+    bounds = re.fullmatch(r">=(\d+)\.(\d+),<(\d+)\.(\d+)", requires)
+    assert bounds is not None, requires
+    actual = tuple(map(int, version.split(".")[:2]))
+    assert tuple(map(int, bounds.group(1, 2))) <= actual < tuple(map(int, bounds.group(3, 4))), (
+        f"Caption CI selects Python {version}, incompatible with project {requires}"
+    )
+    locked = tomllib.loads((project / "uv.lock").read_text())["requires-python"]
+    assert locked == f"=={actual[0]}.{actual[1]}.*", locked
+    assert selected is not None and version != baseline, "Caption needs an isolated CI version leg"
+    assert re.search(r"(?m)^      MISE_ENV: ci$", job), "Caption must load the CI version lock"
+    declared = tomllib.loads((root / "mise.ci.toml").read_text())["tools"]["python"]
+    assert version in declared, f"Caption Python {version} is absent from locked CI declarations"
+    locks = tomllib.loads((root / "mise.ci.lock").read_text())["tools"]["python"]
+    entries = [entry for entry in locks if entry["version"] == version]
+    assert len(entries) == 1, f"Caption Python {version} needs exactly one lock entry"
+    for platform in ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64"]:
+        key = f"platforms.{platform}"
+        assert key in entries[0], f"Caption Python {version} has no lock for {platform}"
+        assert f"cpython-{version}+" in entries[0][key]["url"], platform
+        assert re.fullmatch(r"sha256:[0-9a-f]{64}", entries[0][key]["checksum"]), platform
 
 
 if __name__ == "__main__":
