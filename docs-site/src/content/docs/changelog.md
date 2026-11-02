@@ -155,6 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Keep publish workflow contract imports in canonical order.**
+  Preserve the test assertions while satisfying the pinned Python import-order gate.
+
 - **(pdf): Preserve real operators and operands across content-stream comments.** (#2399)
   Skip comment bytes before dispatch and EOF recovery so they cannot become marked-content tags or text operators.
 
