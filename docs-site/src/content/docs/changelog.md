@@ -154,6 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
+
 - **(plugin): Refresh local authored-source pins during bundle generation and reject stale pins during verification.**
 
 - **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
