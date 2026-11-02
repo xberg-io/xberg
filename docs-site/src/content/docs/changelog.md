@@ -151,6 +151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(bindings): Adopt Alef 0.115.14 for Kotlin JNI task dependencies and macOS Swift OpenDirectory linkage.**
   Pin the official generator across local development and CI.
+  Preserve shared exception-family membership through Java, C#, and PHP interfaces, Python multiple inheritance,
+  and Ruby family matching, and refresh the generated Maven and Gradle tooling defaults.
 
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
