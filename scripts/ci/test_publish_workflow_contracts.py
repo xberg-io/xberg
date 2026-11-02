@@ -880,7 +880,8 @@ def test_caption_ci_selects_its_locked_python_without_changing_the_baseline() ->
     assert "mise install python uv" in job
     assert "--python python" in job
     assert "uv python install" not in job
-    baseline = tomllib.loads((root / "mise.toml").read_text())["tools"]["python"]
+    repository = tomllib.loads((root / "mise.toml").read_text())
+    baseline = repository["tools"]["python"]
     selected = re.search(r'(?m)^      MISE_PYTHON_VERSION: "([0-9.]+)"$', job)
     version = selected[1] if selected else baseline
     project = root / "tools/benchmark-harness/caption_export"
@@ -900,7 +901,9 @@ def test_caption_ci_selects_its_locked_python_without_changing_the_baseline() ->
     locks = tomllib.loads((root / "mise.ci.lock").read_text())["tools"]["python"]
     entries = [entry for entry in locks if entry["version"] == version]
     assert len(entries) == 1, f"Caption Python {version} needs exactly one lock entry"
-    for platform in ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64"]:
+    platforms = repository["settings"]["lockfile_platforms"]
+    assert platforms, "Repository lockfile platforms must not be empty"
+    for platform in platforms:
         key = f"platforms.{platform}"
         assert key in entries[0], f"Caption Python {version} has no lock for {platform}"
         assert f"cpython-{version}+" in entries[0][key]["url"], platform
