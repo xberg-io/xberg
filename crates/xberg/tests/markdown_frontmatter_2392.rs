@@ -82,7 +82,7 @@ async fn assert_body_content(frontmatter: &str, format: OutputFormat, mime_type:
     assert!(frontmatter.starts_with("---\n") || frontmatter.starts_with("+++\n"));
     let source = format!("{frontmatter}{BODY}");
     assert!(source.ends_with(BODY));
-    let observed = extract_document(&source, mime_type, format, false).await;
+    let observed = extract_document(&source, mime_type, format.clone(), false).await;
     let body = extract_document(BODY, mime_type, format, false).await;
     assert_metadata(&observed);
     assert_eq!(body.metadata.title.as_deref(), Some("Body heading"));
@@ -111,7 +111,7 @@ fn chunk_texts(document: &ExtractedDocument) -> Vec<&str> {
 
 async fn assert_body_downstream(frontmatter: &str, format: OutputFormat) {
     let source = format!("{frontmatter}{BODY}");
-    let observed = extract_document(&source, "text/markdown", format, true).await;
+    let observed = extract_document(&source, "text/markdown", format.clone(), true).await;
     let body = extract_document(BODY, "text/markdown", format, true).await;
     assert_metadata(&observed);
     let expected_elements = element_texts(&body);
