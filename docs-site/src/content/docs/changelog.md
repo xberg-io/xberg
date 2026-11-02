@@ -155,6 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Keep publish workflow contract imports in canonical order.**
+  Preserve the test assertions while satisfying the pinned Python import-order gate.
+
 - **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
   Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
 

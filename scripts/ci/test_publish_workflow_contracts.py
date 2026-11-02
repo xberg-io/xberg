@@ -6,9 +6,9 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import tomllib
 from pathlib import Path
 
-import tomllib
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish.yaml"
