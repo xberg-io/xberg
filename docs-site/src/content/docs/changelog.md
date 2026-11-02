@@ -158,6 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(markdown): Preserve source decimal list starts, gaps, and nested list boundaries.** (#2387)
   Keep literal clause labels and necessary default-mode escapes in prose, code, and link destinations.
   Retain structural list separators without changing the unescaped-prose option.
+  Restart unlabelled continuations before the CommonMark nine-digit ordinal limit is exceeded.
 
 - **(ci): Check no-runtime test feature invariants at compile time.**
   Keep the email Clippy gate passing without suppressing its constant-assertion check.

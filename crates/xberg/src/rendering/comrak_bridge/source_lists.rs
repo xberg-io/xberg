@@ -4,6 +4,7 @@ use super::{AstNode, ContainerEntry, NodeList, NodeValue, mk};
 use comrak::nodes::ListType;
 
 const MAX_COMMONMARK_ORDINAL_DIGITS: usize = 9;
+const MAX_COMMONMARK_ORDINAL: usize = 999_999_999;
 
 pub(super) fn decimal_ordinal(label: &str) -> Option<usize> {
     let digits = label.strip_suffix('.')?;
@@ -26,10 +27,12 @@ fn previous_ordinal<'a>(parent: &'a AstNode<'a>) -> Option<usize> {
 }
 
 fn compatible(existing: NodeList, requested: NodeList, ordinal: Option<usize>, previous: Option<usize>) -> bool {
+    let next = previous
+        .and_then(|value| value.checked_add(1))
+        .filter(|value| *value <= MAX_COMMONMARK_ORDINAL);
     existing.list_type == requested.list_type
         && (requested.list_type == ListType::Bullet
-            || ordinal.is_none()
-            || previous.and_then(|value| value.checked_add(1)) == ordinal)
+            || next.is_some_and(|next| ordinal.is_none_or(|ordinal| ordinal == next)))
 }
 
 pub(super) fn item_parent<'a>(
