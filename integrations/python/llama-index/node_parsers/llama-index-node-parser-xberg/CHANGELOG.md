@@ -4,6 +4,10 @@ All notable changes to llama-index-node-parser-xberg will be documented in this 
 
 ## [Unreleased]
 
+### Changed
+
+- Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
+
 ## [0.1.0] — 2026-03-20
 
 Initial release.

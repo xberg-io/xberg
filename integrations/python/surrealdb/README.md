@@ -18,7 +18,7 @@ score — plus optionally chunks with embeddings for vector and hybrid search.
 pip install surrealdb-xberg
 ```
 
-Requires Python 3.10+ and a running SurrealDB instance:
+Requires Python 3.11+ and a running SurrealDB instance:
 
 ```bash
 docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --user root --pass root

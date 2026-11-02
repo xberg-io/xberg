@@ -17,10 +17,9 @@ maintainers = [
   { name = "Na'aman Hirschfeld", email = "naaman@xberg.io" },
   { name = "Tobias Perlstein", email = "tobias@xberg.io" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -35,9 +34,9 @@ dev = ["pyrefly>=1.4"]
 [tool.maturin]
 module-name = "xberg._xberg"
 manifest-path = "../../crates/xberg-py/Cargo.toml"
-# abi3-py310 produces a single wheel per platform that loads on Python 3.10+,
+# abi3-py311 produces a single wheel per platform that loads on Python 3.11+,
 # avoiding a per-Python-version build matrix. ~keep
-features = ["pyo3/extension-module", "pyo3/abi3-py310"]
+features = ["pyo3/extension-module", "pyo3/abi3-py311"]
 python-packages = ["xberg"]
 # Bundle the core Rust crate so `pip install` can build from sdist on
 # platforms without a precompiled wheel (e.g. Alpine/musl). Without this
@@ -46,5 +45,5 @@ python-packages = ["xberg"]
 include = [{ path = "../../crates/xberg/**/*", format = "sdist" }]
 
 [tool.pyrefly]
-python-version = "3.10"
+python-version = "3.11"
 preset = "strict"

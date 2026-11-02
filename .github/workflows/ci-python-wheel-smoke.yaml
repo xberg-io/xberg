@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.13"
           package-dir: packages/python
-          cibw-build: "cp310-*"
+          cibw-build: "cp311-*"
           upload-artifact: "false"
           build-libheif: "true"
           manylinux-x86_64-image: "manylinux_2_28"

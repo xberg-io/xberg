@@ -15,7 +15,7 @@ Feed [Xberg](https://github.com/xberg-io/xberg) document extraction into [txtai]
 pip install txtai-xberg
 ```
 
-Requires Python 3.10+. Install the `txtai` extra (`pip install "txtai-xberg[txtai]"`) if txtai isn't already in your environment.
+Requires Python 3.11+. Install the `txtai` extra (`pip install "txtai-xberg[txtai]"`) if txtai isn't already in your environment.
 
 ## Extract
 

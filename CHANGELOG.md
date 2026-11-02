@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
 - **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
   Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
 
@@ -155,6 +156,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
   Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
 
+- **(markdown): Keep frontmatter in metadata and out of rendered body, elements, and chunks.** (#2392)
+  Preserve typed YAML and TOML values without emitting Rust debug representations as document text.
+
 - **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
 
 - **(plugin): Refresh local source and root served-skill pins during bundle generation.**
@@ -163,6 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
   Load canonical Rust error metadata before generating public APIs and reuse typed conversion in progress adapters.
+  Mark test setup overrides for strict Python type checking across supported interpreter versions.
 
 - **(publish): Authenticate NuGet publishing with short-lived trusted-publisher credentials for `naaman-xberg`.**
 
