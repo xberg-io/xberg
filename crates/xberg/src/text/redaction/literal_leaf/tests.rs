@@ -221,3 +221,31 @@ fn owned_reservations_are_pass_local_and_cumulative() {
     );
     assert_eq!(work.parses, parses);
 }
+
+#[test]
+fn unknown_entity_partial_match_keeps_identity_origins_and_safe_bytes() {
+    let source = "prefix &notARealEntity; suffix";
+    let leaf = decode(source, 0);
+    assert_eq!(leaf.text, source);
+    assert_eq!(&leaf.text[12..16], "Real");
+    let selected: Vec<_> = leaf
+        .origins
+        .iter()
+        .filter(|origin| origin.decoded.start >= 12 && origin.decoded.end <= 16)
+        .collect();
+    assert_eq!(selected.len(), 4);
+    let envelope = selected.first().unwrap().source.start..selected.last().unwrap().source.end;
+    assert!(source.get(envelope.clone()).is_some());
+    let mut replacement = source.to_string();
+    replacement.replace_range(envelope, "[REDACTED]");
+    let origins: Vec<_> = leaf
+        .origins
+        .iter()
+        .map(|origin| (origin.decoded.clone(), origin.source.clone()))
+        .collect();
+    let identity: Vec<_> = (0..source.len()).map(|i| (i..i + 1, i..i + 1)).collect();
+    assert_eq!(
+        (origins, replacement),
+        (identity, "prefix &notA[REDACTED]Entity; suffix".to_string())
+    );
+}
