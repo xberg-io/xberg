@@ -24,7 +24,10 @@ fn capture_wildomar_native_header_sources() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/repros/table-snapshot-consistency/fixture/wildomar-p17-repro.pdf");
     let bytes = std::fs::read(&fixture).expect("tracked Wildomar fixture");
-    let sha = format!("{:x}", Sha256::digest(&bytes));
+    let sha = Sha256::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     assert_eq!(sha, "d21fb4bd4af939c647cd07adc4afe0344b06029879f1f347a81f0aee63776bbe");
     let document = PdfDocument::from_bytes(bytes).expect("parse real fixture");
     assert_eq!(document.page_count().expect("real page count"), 1);
