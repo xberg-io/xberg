@@ -3854,7 +3854,7 @@ fn split_table_at_section_dividers(
     }
 
     let num_cols = table.col_count;
-    let all_rows = table.rows;
+    let all_rows = &table.rows;
     let mut sub_tables = Vec::new();
     let mut start = 0;
     for &split_idx in &split_after {
@@ -3868,17 +3868,20 @@ fn split_table_at_section_dividers(
         sub_tables.push(&all_rows[start..]);
     }
 
+    // Splitting is optional; keep the admitted table if any resulting section would disappear. ~keep
+    if sub_tables.iter().any(|rows| {
+        rows.iter()
+            .flat_map(|row| &row.cells)
+            .filter(|cell| !cell.text.is_empty())
+            .count()
+            < config.min_table_cells
+    }) {
+        return vec![table];
+    }
+
     let mut result = Vec::new();
     for sub_rows_slice in sub_tables {
         let sub_rows: Vec<TableRow> = sub_rows_slice.to_vec();
-        let filled: usize = sub_rows
-            .iter()
-            .flat_map(|r| r.cells.iter())
-            .filter(|c| !c.text.is_empty())
-            .count();
-        if filled < config.min_table_cells {
-            continue;
-        }
         let mut min_x = f32::INFINITY;
         let mut min_y = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
@@ -3907,13 +3910,7 @@ fn split_table_at_section_dividers(
     }
 
     if result.is_empty() {
-        // Don't lose data; return original if all sub-tables were too small. ~keep
-        return vec![Table {
-            rows: all_rows,
-            has_header: false,
-            col_count: num_cols,
-            bbox: Some(bbox),
-        }];
+        return vec![table];
     }
 
     result

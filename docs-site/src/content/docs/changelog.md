@@ -149,6 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
 - **(swift): The Swift package requires macOS 14.**
