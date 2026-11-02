@@ -867,7 +867,7 @@ def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
             shown = re.search(feature, name[1])
             used = re.search(feature, step[step.index("        run:") :])
             assert shown is not None and used is not None, name[1]
-            for leg in legs:
+            for leg in legs or [{}]:
                 assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
                 checked += 1
     assert checked > 0
