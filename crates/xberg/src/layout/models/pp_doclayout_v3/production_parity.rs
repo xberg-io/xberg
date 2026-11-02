@@ -6,6 +6,10 @@ use sha2::{Digest, Sha256};
 
 use super::{LayoutModel, PpDocLayoutV3Model};
 use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+use crate::extraction::image_decode::{
+    decode_standard_image_with_security_limits, decode_standard_rgb8_with_security_limits,
+};
+use crate::extractors::security::SecurityLimits;
 use crate::inference::InferenceTensor;
 use crate::inference::recording::{Captures, record_session, with_profile};
 
@@ -90,7 +94,8 @@ fn capture_page(model: &mut PpDocLayoutV3Model, captures: &Captures, out: &Path,
     let image_bytes = fs::read(&image_path).expect("PNG bytes");
     let image_hash = bytes_sha256(&image_bytes);
     assert_eq!(image_hash, input["sha256"].as_str().expect("image hash"));
-    let image = image::load_from_memory(&image_bytes).expect("valid PNG").to_rgb8();
+    let image = decode_standard_rgb8_with_security_limits(&image_bytes, &SecurityLimits::default())
+        .expect("valid PNG within decode budget");
     assert_eq!(json!([image.height(), image.width(), 3]), input["shape_hwc"]);
     let detections = model
         .detect_with_threshold(&image, 0.5)
@@ -204,7 +209,8 @@ fn validate_inputs(inputs: &[Value]) {
             image::guess_format(&bytes).expect("image format"),
             image::ImageFormat::Png
         );
-        let image = image::load_from_memory(&bytes).expect("valid PNG");
+        let image = decode_standard_image_with_security_limits(&bytes, &SecurityLimits::default())
+            .expect("valid PNG within decode budget");
         assert_eq!(image.color(), image::ColorType::Rgb8);
         assert_eq!(json!([image.height(), image.width(), 3]), input["shape_hwc"]);
     }
@@ -315,6 +321,14 @@ const COMPILED_PRODUCER_SOURCES: &[(&str, &[u8])] = &[
     (
         "../../rust-toolchain.toml",
         include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rust-toolchain.toml")),
+    ),
+    (
+        "src/extraction/image_decode.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/extraction/image_decode.rs")),
+    ),
+    (
+        "src/extractors/security.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/extractors/security.rs")),
     ),
     (
         "src/inference/mod.rs",
@@ -433,7 +447,7 @@ fn preserve_producer(output: &Path) -> Value {
         "producer/executable",
     );
     let sources = source_witness(output);
-    assert_eq!(sources.len(), 18, "all producer source artifacts preserved");
+    assert_eq!(sources.len(), 20, "all selected producer source artifacts preserved");
     let producer = json!({"executable": executable, "sources": sources});
     fs::write(
         output.join("producer/manifest.json"),
@@ -599,8 +613,8 @@ fn should_preserve_the_executed_output_validator_source_in_the_producer_inventor
     );
     assert_eq!(
         sources.len(),
-        18,
-        "complete producer source inventory including output validation"
+        20,
+        "selected producer source inventory including output validation and image budgets"
     );
 }
 

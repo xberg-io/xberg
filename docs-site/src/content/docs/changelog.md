@@ -155,6 +155,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Bound PNG decoding in the V3 parity capture.**
+  Use audited image decoders with default security limits before validating parity inputs.
+  Preserve the decoder and security-budget sources with the selected producer inputs.
+
+- **(tesseract): Keep routine native and WASM build progress out of Cargo warnings.**
+  Preserve native link directives and actionable fallback diagnostics for strict downstream builds.
+
 - **(ci): Align Python imports and UTC aliases with the Python 3.11 baseline.**
   Use the native exception-group builtin and canonical import ordering in CI helpers.
 
