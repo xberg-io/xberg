@@ -641,3 +641,82 @@ async fn formatted_literal_disjoint_entity_mask_keeps_safe_physical_redaction() 
     assert_eq!(output.content, "[REDACTED]");
     assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 1);
 }
+
+async fn prefixed_entity_requires_all_semantic_identities(strategy: RedactionStrategy) {
+    let source = "X&NotEqualTilde;";
+    let first = "X≂";
+    let second = "\u{0338}";
+    let full = "X≂\u{0338}";
+    assert_eq!((&source[..1], &source[1..], source.len()), ("X", "&NotEqualTilde;", 16));
+    assert_eq!(visible(source), full);
+    assert_eq!(
+        (first.len(), second.len(), full.len(), full.chars().count()),
+        (4, 2, 6, 3)
+    );
+    assert!(!source.contains(first) && !source.contains(second));
+    let first_match = regex::Regex::new(&regex::escape(first)).unwrap().find(full).unwrap();
+    let second_match = regex::Regex::new(&regex::escape(second)).unwrap().find(full).unwrap();
+    assert_eq!((first_match.start(), first_match.end()), (0, 4));
+    assert_eq!((second_match.start(), second_match.end()), (4, 6));
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, source, &crate::rendering::comrak_options());
+    let mut texts = 0;
+    for node in root.descendants() {
+        let data = node.data.borrow();
+        if let comrak::nodes::NodeValue::Text(value) = &data.value {
+            texts += 1;
+            let value: &str = value.as_ref();
+            assert_eq!(value, full);
+            assert_eq!(
+                (
+                    data.sourcepos.start.line,
+                    data.sourcepos.start.column,
+                    data.sourcepos.end.line,
+                    data.sourcepos.end.column
+                ),
+                (1, 1, 1, 16)
+            );
+        }
+    }
+    assert_eq!(texts, 1);
+    let config = config(strategy, &[first, second], &[]);
+    assert_eq!(config.redaction.as_ref().unwrap().custom_terms.len(), 2);
+    let category = PiiCategory::Custom("private".into());
+    let mut counter = TokenCounter::new();
+    let expected = format!(
+        "{}{}",
+        apply_strategy(strategy, first, &category, &mut counter),
+        apply_strategy(strategy, second, &category, &mut counter)
+    );
+    let mut ordinary = ExtractedDocument {
+        content: full.into(),
+        ..Default::default()
+    };
+    crate::plugins::processor::builtin::redaction::RedactionProcessor
+        .process(&mut ordinary, &config)
+        .await
+        .unwrap();
+    assert_eq!(ordinary.content, expected);
+    assert_eq!(ordinary.redaction_report.as_ref().unwrap().total_redacted, 2);
+    let (mut result, cache) = edited(source, Some(full), &config).await;
+    let before = serde_json::to_value(&*result).unwrap();
+    let formatted = result.formatted_content.clone();
+    let error = late(&mut result, &cache, &config)
+        .await
+        .expect_err("raw coverage must not discard a separate semantic identity in a skipped envelope");
+    assert!(matches!(&error, XbergError::Plugin { plugin_name, .. } if plugin_name == "redaction"));
+    assert!(error.to_string().contains("coverage"), "{error}");
+    assert_eq!(serde_json::to_value(&*result).unwrap(), before);
+    assert_eq!(result.formatted_content, formatted);
+    assert!(result.redaction_report.is_none());
+}
+
+#[tokio::test]
+async fn formatted_literal_prefixed_entity_tokens_reject_lost_semantic_identity() {
+    prefixed_entity_requires_all_semantic_identities(RedactionStrategy::TokenReplace).await;
+}
+
+#[tokio::test]
+async fn formatted_literal_prefixed_entity_hashes_reject_lost_semantic_identity() {
+    prefixed_entity_requires_all_semantic_identities(RedactionStrategy::Hash).await;
+}
