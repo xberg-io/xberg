@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
 - **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
   Select the locked CI version leg while preserving the repository Python baseline.
 
