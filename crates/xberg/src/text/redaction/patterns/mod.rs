@@ -95,3 +95,6 @@ fn default_pattern_categories() -> Vec<PiiCategory> {
         PiiCategory::SwiftBic,
     ]
 }
+
+#[cfg(test)]
+mod owned_output_tests;
