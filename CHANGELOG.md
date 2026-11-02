@@ -141,6 +141,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(tesseract): Keep routine native and WASM build progress out of Cargo warnings.**
+  Preserve native link directives and actionable fallback diagnostics for strict downstream builds.
+
 - **(swift): The Swift package requires macOS 14.**
   The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
 
