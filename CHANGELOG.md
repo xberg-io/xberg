@@ -153,6 +153,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve real operators and operands across content-stream comments.** (#2399)
+  Skip comment bytes before dispatch and EOF recovery so they cannot become marked-content tags or text operators.
+
 - **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
   Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
 
