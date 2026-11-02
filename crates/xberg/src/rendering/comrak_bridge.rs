@@ -986,6 +986,7 @@ fn strip_redundant_list_marker<'a>(
 struct ContainerEntry<'a> {
     node: &'a AstNode<'a>,
     kind: ContainerKind,
+    empty_list_cursor: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1018,6 +1019,11 @@ fn build_comrak_ast_with_table_mode<'a>(
     let footnotes = FootnoteCollector::new(doc);
     let mut state = RenderState::default();
     let consolidated = consolidate_paragraphs(&doc.elements);
+    let paragraph_items = if table_mode == TableRenderMode::Markdown {
+        source_lists::paragraph_items(&doc.elements)
+    } else {
+        HashSet::new()
+    };
 
     tracing::debug!(
         total_elements = doc.elements.len(),
@@ -1152,18 +1158,26 @@ fn build_comrak_ast_with_table_mode<'a>(
                     tight: true,
                     ..Default::default()
                 };
-                let (list_parent, item_list) =
-                    source_lists::item_parent(arena, parent, &mut container_stack, item_list, ordinal);
-                let item = mk(arena, NodeValue::Item(item_list));
-                let item_para = mk(arena, NodeValue::Paragraph);
+                let (item, item_para, list_parent) = if paragraph_items.contains(&orig_idx) {
+                    (None, source_lists::paragraph(arena, parent, &mut container_stack), None)
+                } else {
+                    let (list_parent, item_list) =
+                        source_lists::item_parent(arena, parent, &mut container_stack, item_list, ordinal);
+                    (
+                        Some(mk(arena, NodeValue::Item(item_list))),
+                        mk(arena, NodeValue::Paragraph),
+                        Some(list_parent),
+                    )
+                };
                 if let Some(label) = source_label.filter(|_| ordinal.is_none()) {
                     item_para.append(mk_text(arena, &format!("{label} ")));
                 }
                 let (item_text, item_annotations) = strip_redundant_list_marker(elem_text, elem_annotations);
                 build_inlines(arena, item_para, item_text, item_annotations.as_ref());
-                item.append(item_para);
-
-                list_parent.append(item);
+                if let (Some(item), Some(list_parent)) = (item, list_parent) {
+                    item.append(item_para);
+                    list_parent.append(item);
+                }
             }
 
             ElementKind::Code => {
@@ -1500,6 +1514,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 container_stack.push(ContainerEntry {
                     node: list_node,
                     kind: ContainerKind::List,
+                    empty_list_cursor: false,
                 });
             }
 
@@ -1512,6 +1527,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 container_stack.push(ContainerEntry {
                     node: bq,
                     kind: ContainerKind::BlockQuote,
+                    empty_list_cursor: false,
                 });
             }
 
@@ -1522,6 +1538,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 container_stack.push(ContainerEntry {
                     node: parent,
                     kind: ContainerKind::Group,
+                    empty_list_cursor: false,
                 });
             }
 
@@ -1599,7 +1616,10 @@ fn pop_container(stack: &mut Vec<ContainerEntry<'_>>, target: ContainerKind) {
                 | (ContainerKind::BlockQuote, ContainerKind::BlockQuote)
                 | (ContainerKind::Group, ContainerKind::Group)
         ) {
-            stack.remove(i);
+            let entry = stack.remove(i);
+            if entry.empty_list_cursor && entry.node.first_child().is_none() {
+                entry.node.detach();
+            }
             return;
         }
     }

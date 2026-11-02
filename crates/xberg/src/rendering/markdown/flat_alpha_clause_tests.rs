@@ -113,3 +113,77 @@ fn literal_only_sibling_source_lists_keep_bullets_beside_decimal_lists() {
         assert!(markdown.contains("- D. Independent delta clause"));
     }
 }
+
+#[test]
+fn genuinely_nested_mixed_source_lists_keep_their_literal_list_items() {
+    let mut doc = InternalDocument::new("pdf");
+    source_list(&mut doc, &[("1.", "Outer clause")]);
+    doc.elements.pop();
+    let mut nested = InternalDocument::new("pdf");
+    source_list(
+        &mut nested,
+        &[("7.", "Nested seventh clause"), ("B.", "Nested beta clause")],
+    );
+    for mut element in nested.elements {
+        element.depth += 1;
+        doc.push_element(element);
+    }
+    doc.push_element(InternalElement::text(ElementKind::ListEnd, "", 0));
+    let markdown = render_markdown(&doc);
+    let arena = Arena::new();
+    let root = parse_document(&arena, &markdown, &comrak_options());
+    let literal = root
+        .descendants()
+        .find(|node| matches!(&node.data.borrow().value, NodeValue::Text(text) if text.as_ref() == "B. Nested beta clause"))
+        .expect("complete literal nested source label and body");
+    let paragraph = literal.parent().unwrap();
+    assert!(matches!(paragraph.data.borrow().value, NodeValue::Paragraph));
+    let item = paragraph.parent().unwrap();
+    assert!(matches!(item.data.borrow().value, NodeValue::Item(_)));
+    assert!(
+        matches!(item.parent().unwrap().data.borrow().value, NodeValue::List(list) if list.list_type == ListType::Bullet)
+    );
+    assert!(paragraph.ancestors().any(|node| {
+        matches!(node.data.borrow().value, NodeValue::List(list) if list.list_type == ListType::Ordered && list.start == 1)
+    }));
+    assert_eq!(
+        paragraph
+            .ancestors()
+            .filter(|node| matches!(node.data.borrow().value, NodeValue::List(_)))
+            .count(),
+        2,
+        "the original literal item remains nested under the outer clause"
+    );
+}
+
+#[test]
+fn html_ast_keeps_mixed_source_list_items() {
+    let mut doc = InternalDocument::new("pdf");
+    source_list(
+        &mut doc,
+        &[
+            ("1.", "HTML first clause"),
+            ("A.", "HTML alpha clause"),
+            ("7.", "HTML seventh clause"),
+        ],
+    );
+    let arena = Arena::new();
+    let root = crate::rendering::comrak_bridge::build_html_comrak_ast(&doc, &arena);
+    let shapes: Vec<_> = root
+        .children()
+        .map(|node| {
+            let NodeValue::List(list) = node.data.borrow().value else {
+                panic!("HTML source list did not become a paragraph");
+            };
+            (list.list_type, list.start, node.children().count())
+        })
+        .collect();
+    assert_eq!(
+        shapes,
+        [
+            (ListType::Ordered, 1, 1),
+            (ListType::Bullet, 1, 1),
+            (ListType::Ordered, 7, 1)
+        ]
+    );
+}

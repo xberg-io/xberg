@@ -1,7 +1,8 @@
 //! Preserve source decimal runs without renumbering incompatible list items.
 
-use super::{AstNode, ContainerEntry, NodeList, NodeValue, mk};
+use super::{AstNode, ContainerEntry, ElementKind, InternalElement, NodeList, NodeValue, is_body_element, mk};
 use comrak::nodes::ListType;
+use std::collections::HashSet;
 
 const MAX_COMMONMARK_ORDINAL_DIGITS: usize = 9;
 const MAX_COMMONMARK_ORDINAL: usize = 999_999_999;
@@ -71,4 +72,81 @@ pub(super) fn item_parent<'a>(
         entry.node = list;
     }
     (list, requested)
+}
+
+#[derive(Default)]
+struct SourceList {
+    alphabetic_items: Vec<usize>,
+    decimal: bool,
+    flat: bool,
+}
+
+fn alphabetic_label(label: &str) -> bool {
+    matches!(label.as_bytes(), [letter, b'.'] if letter.is_ascii_alphabetic())
+}
+
+pub(super) fn paragraph_items(elements: &[InternalElement]) -> HashSet<usize> {
+    let mut lists: Vec<SourceList> = Vec::new();
+    let mut paragraphs = HashSet::new();
+    for (index, element) in elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| is_body_element(element))
+    {
+        match element.kind {
+            ElementKind::ListStart { ordered } => {
+                if let Some(parent) = lists.last_mut() {
+                    parent.flat = false;
+                }
+                lists.push(SourceList {
+                    flat: ordered && lists.is_empty(),
+                    ..Default::default()
+                });
+            }
+            ElementKind::ListEnd => {
+                if let Some(list) = lists.pop().filter(|list| list.flat && list.decimal) {
+                    paragraphs.extend(list.alphabetic_items);
+                }
+            }
+            ElementKind::ListItem { ordered: true } => {
+                if let Some(list) = lists.last_mut()
+                    && let Some(label) = element.list_item_source_label()
+                {
+                    list.decimal |= decimal_ordinal(label).is_some();
+                    if alphabetic_label(label) {
+                        list.alphabetic_items.push(index);
+                    }
+                }
+            }
+            ElementKind::ListItem { ordered: false } => {}
+            _ => {
+                if let Some(list) = lists.last_mut() {
+                    list.flat = false;
+                }
+            }
+        }
+    }
+    paragraphs
+}
+
+pub(super) fn paragraph<'a>(
+    arena: &'a comrak::Arena<'a>,
+    parent: &'a AstNode<'a>,
+    stack: &mut [ContainerEntry<'a>],
+) -> &'a AstNode<'a> {
+    let cursor = if parent.first_child().is_none() {
+        parent
+    } else {
+        let cursor = mk(arena, parent.data.borrow().value.clone());
+        parent.insert_after(cursor);
+        cursor
+    };
+    if let Some(entry) = stack.last_mut().filter(|entry| entry.node.same_node(parent)) {
+        entry.node = cursor;
+        entry.empty_list_cursor = true;
+    }
+    // The empty list anchors later items after the literal paragraphs, without inventing nesting. ~keep
+    let paragraph = mk(arena, NodeValue::Paragraph);
+    cursor.insert_before(paragraph);
+    paragraph
 }
