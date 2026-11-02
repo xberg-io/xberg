@@ -37,6 +37,8 @@ jobs:
     name: Offline caption tooling contracts
     env:
       MISE_AUTO_INSTALL: "false"
+      MISE_ENV: ci
+      MISE_PYTHON_VERSION: "3.13.18"
     # The locked Linux Torch distribution includes CUDA dependencies; these CPU tests use the macOS wheel. ~keep
     runs-on: macos-26
     steps:

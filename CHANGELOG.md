@@ -155,6 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
   Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
 
+- **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
+  Select the locked CI version leg while preserving the repository Python baseline.
+
 - **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
   Validate transitive and delayed PE imports without relying on the build host's installed runtime.
   Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
@@ -174,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ci): Keep only the latest main run for each CI workflow.** (#2346)
+  Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
 
 - **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
   Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
