@@ -296,41 +296,116 @@ fn profile_witness(output: &Path) -> Value {
         "real_model_runs": forwards, "cpu_kernel_events": providers.len(), "effective_provider": "CPUExecutionProvider"})
 }
 
+const COMPILED_PRODUCER_SOURCES: &[(&str, &[u8])] = &[
+    (
+        "Cargo.toml",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")),
+    ),
+    (
+        "../../Cargo.toml",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml")),
+    ),
+    (
+        "../../Cargo.lock",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock")),
+    ),
+    (
+        "../../rust-toolchain.toml",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rust-toolchain.toml")),
+    ),
+    (
+        "src/inference/mod.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/inference/mod.rs")),
+    ),
+    (
+        "src/inference/backend.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/inference/backend.rs")),
+    ),
+    (
+        "src/inference/tensor.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/inference/tensor.rs")),
+    ),
+    (
+        "src/inference/recording.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/inference/recording.rs")),
+    ),
+    (
+        "src/inference/ort_backend.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/inference/ort_backend.rs")),
+    ),
+    (
+        "src/ort_discovery.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ort_discovery.rs")),
+    ),
+    (
+        "src/core/config/acceleration.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/core/config/acceleration.rs")),
+    ),
+    (
+        "src/layout/models/mod.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/layout/models/mod.rs")),
+    ),
+    (
+        "src/layout/types.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/layout/types.rs")),
+    ),
+    (
+        "src/layout/error.rs",
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/layout/error.rs")),
+    ),
+    (
+        "src/layout/models/pp_doclayout_v3.rs",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/layout/models/pp_doclayout_v3.rs"
+        )),
+    ),
+    (
+        "src/layout/models/pp_doclayout_v3/production_parity.rs",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/layout/models/pp_doclayout_v3/production_parity.rs"
+        )),
+    ),
+    (
+        "src/layout/models/pp_doclayout_v3/preprocessing.rs",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/layout/models/pp_doclayout_v3/preprocessing.rs"
+        )),
+    ),
+    (
+        "src/layout/models/pp_doclayout_v3/output.rs",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/layout/models/pp_doclayout_v3/output.rs"
+        )),
+    ),
+];
+
+fn validate_producer_source_inputs(root: &Path) -> Result<(), String> {
+    for (path, _) in COMPILED_PRODUCER_SOURCES {
+        let _ = fs::read(root.join(path)).map_err(|error| format!("producer source {path}: {error}"))?;
+    }
+    Ok(())
+}
+
 fn source_witness(output: &Path) -> Vec<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    [
-        "Cargo.toml",
-        "../../Cargo.toml",
-        "../../Cargo.lock",
-        "../../rust-toolchain.toml",
-        "src/inference/mod.rs",
-        "src/inference/backend.rs",
-        "src/inference/tensor.rs",
-        "src/inference/recording.rs",
-        "src/inference/ort_backend.rs",
-        "src/ort_discovery.rs",
-        "src/core/config/acceleration.rs",
-        "src/layout/models/mod.rs",
-        "src/layout/types.rs",
-        "src/layout/error.rs",
-        "src/layout/models/pp_doclayout_v3.rs",
-        "src/layout/models/pp_doclayout_v3/production_parity.rs",
-        "src/layout/models/pp_doclayout_v3/preprocessing.rs",
-        "src/layout/models/pp_doclayout_v3/output.rs",
-    ]
-    .iter()
-    .enumerate()
-    .map(|(index, path)| {
-        let name = Path::new(path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("source filename");
-        let file = format!("producer/sources/{index:02}-{name}");
-        let mut artifact = preserve_artifact(&root.join(path), output, &file);
-        artifact["path"] = json!(path);
-        artifact
-    })
-    .collect()
+    COMPILED_PRODUCER_SOURCES
+        .iter()
+        .enumerate()
+        .map(|(index, (path, _compiled))| {
+            let name = Path::new(path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .expect("source filename");
+            let file = format!("producer/sources/{index:02}-{name}");
+            let mut artifact = preserve_artifact(&root.join(path), output, &file);
+            artifact["path"] = json!(path);
+            artifact
+        })
+        .collect()
 }
 
 fn preserve_producer(output: &Path) -> Value {
@@ -512,3 +587,6 @@ fn should_preserve_the_executed_output_validator_source_in_the_producer_inventor
         "complete producer source inventory including output validation"
     );
 }
+
+#[cfg(test)]
+mod compiled_source_tests;
