@@ -154,9 +154,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(layout): Validate PP-DocLayoutV3 rank-bearing rows and paired binary masks before projection.** (#2284)
-  Reject malformed names, tensor shapes and counts while retaining legacy public detection ordering.
-  Local parity captures retain the output-validation source alongside the executable and preprocessing implementation.
+- **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
+  Use fixed-support cubic resizing and ordered single-image forwards while validating paired rank-bearing rows and masks.
+  Capture tasks require one executed test and two forwards with complete named tensor artifacts and matching sizes and hashes.
+  Public detection ordering and model defaults stay unchanged; model-quality qualification remains pending.
 
 - **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
   Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.

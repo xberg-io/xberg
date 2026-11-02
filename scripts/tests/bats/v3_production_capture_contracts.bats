@@ -73,6 +73,10 @@ manifest = {"schema_version": 1, "qualification_complete": False,
 if os.environ["V3_CAPTURE_CASE"] == "incomplete-manifest":
     manifest["real_forward_passes"] = 0
 (root / "manifest.json").write_text(json.dumps(manifest))
+if os.environ["V3_CAPTURE_CASE"] == "missing-artifact":
+    (root / "document-1/outputs/fetch_name_2.bin").unlink()
+if os.environ["V3_CAPTURE_CASE"] == "changed-artifact":
+    (root / "document-1/inputs/im_shape.bin").write_bytes(bytes(8))
 PY
 CARGO
 	chmod +x "$XBERG_STUB_BIN/cargo"
@@ -133,4 +137,16 @@ run_capture() {
 	run_capture complete
 	xberg_assert_status 0
 	[ -s "$XBERG_V3_CAPTURE_OUT/manifest.json" ]
+}
+
+@test "V3 capture task should reject a missing tensor artifact" {
+	run_capture missing-artifact
+	xberg_assert_status 1
+	xberg_assert_output_contains 'capture manifest incomplete'
+}
+
+@test "V3 capture task should reject a changed tensor artifact" {
+	run_capture changed-artifact
+	xberg_assert_status 1
+	xberg_assert_output_contains 'tensor digest mismatch'
 }
