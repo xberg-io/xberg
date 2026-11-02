@@ -152,6 +152,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Compile the standalone Sceptre ORT feature with its existing discovery module.** (#2364)
+  Check the isolated feature closure in CI so other engines cannot mask the required module gate.
+
+- **(dependencies): Require released Sceptre 0.10.1 across Rust dependency graphs.** (#2364)
+  Refresh workspace, Ruby, Elixir and Rust E2E locks while retaining the current ONNX Runtime pins.
+  Rust E2E and Elixir resolve Windows-sys edges from 0.59.0 to 0.61.2; Ruby resolves them from 0.61.2 to 0.59.0.
+  Ruby's phonemizer dependency resolves image 0.24.9 in place of 0.25.10.
+
 - **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
   Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
 
