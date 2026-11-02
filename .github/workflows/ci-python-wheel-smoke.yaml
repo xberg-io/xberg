@@ -102,6 +102,11 @@ jobs:
         run: |
           for w in wheelhouse/*.whl; do bash scripts/ci/vendor-native-closure.sh "$w"; done
 
+      - name: Test Windows wheel closure contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: mise run python:wheel:closure:test
+
       - name: Vendor ONNX Runtime into wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -111,7 +116,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "vendor-windows-wheel-closure failed for $($_.FullName)" }
           }
 
-      - name: Verify wheel has no DirectML import and ships ONNX Runtime (Windows)
+      - name: Verify wheel-local PE dependency closure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |

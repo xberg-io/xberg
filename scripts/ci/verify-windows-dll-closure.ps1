@@ -158,6 +158,11 @@ function Expand-Artifact([string]$ArtifactPath, [string]$Dest) {
   }
 }
 
+if ($NativeGlob -like '*.pyd') {
+  & python (Join-Path $PSScriptRoot 'windows_wheel_closure.py') audit --artifact $Artifact --native-glob $NativeGlob --required $RequiredDll --forbidden $ForbiddenDll
+  exit $LASTEXITCODE
+}
+
 $root = $Artifact
 $workDir = $null
 if (Test-Path -PathType Container $Artifact) {
