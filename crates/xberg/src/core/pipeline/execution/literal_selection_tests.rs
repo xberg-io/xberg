@@ -115,7 +115,7 @@ async fn edited(
     for field in ["content", "pages", "redaction_report"] {
         assert_eq!(before[field], after[field]);
     }
-    assert_eq!(after["formatted_content"], formatted);
+    assert_eq!(result.formatted_content.as_deref(), Some(formatted));
     assert!(result.redaction_report.is_none());
     assert_eq!(result.metadata.title.as_deref(), title);
     let (document, surfaces) = result.redaction_parts().unwrap();
@@ -287,9 +287,11 @@ async fn formatted_literal_overlap_tail_aborts_before_mutation() {
     let config = config(RedactionStrategy::TokenReplace, &[], &[r"ab\\&", "&cd"]);
     let (mut result, cache) = edited(source, None, &config).await;
     let before = serde_json::to_value(&*result).unwrap();
+    let before_formatted = result.formatted_content.clone();
     let outcome = late(&mut result, &cache, &config).await;
     let error = outcome.expect_err("selected source ranges must cover the decoded finding's tail");
     assert!(error.to_string().contains("coverage"), "{error}");
     assert_eq!(serde_json::to_value(&*result).unwrap(), before);
+    assert_eq!(result.formatted_content, before_formatted);
     assert!(result.redaction_report.is_none());
 }
