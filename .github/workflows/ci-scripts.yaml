@@ -7,6 +7,7 @@ on:
       - "scripts/**"
       - "docker/Dockerfile.*"
       - "tools/**/*.sh"
+      - "tools/benchmark-harness/caption_export/**"
       - "integrations/scripts/**"
       - ".editorconfig"
       - "mise-tasks/**"
@@ -31,6 +32,29 @@ env:
   PESTER_VERSION: "6.2.0"
 
 jobs:
+  caption-export:
+    if: github.ref == 'refs/heads/main'
+    name: Offline caption tooling contracts
+    env:
+      MISE_AUTO_INSTALL: "false"
+    # The locked Linux Torch distribution includes CUDA dependencies; these CPU tests use the macOS wheel. ~keep
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup pinned Python tooling
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+
+      - name: Prepare frozen caption test dependencies
+        run: |
+          mise install python uv
+          mise exec -- uv sync --locked --project tools/benchmark-harness/caption_export --group dev --python python
+
+      - name: Run caption export and diagnostic tests
+        run: mise run caption:test -- --basetemp "$RUNNER_TEMP/caption-tests" -o "cache_dir=$RUNNER_TEMP/caption-pytest-cache"
+
   bats:
     if: github.ref == 'refs/heads/main'
     name: Bats on ${{ matrix.os }}
