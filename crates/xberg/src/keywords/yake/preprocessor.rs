@@ -340,3 +340,111 @@ mod tests {
         assert!(!sentences.is_empty());
     }
 }
+
+#[cfg(test)]
+mod possessive_regression_tests {
+    use super::super::{Yake, YakeConfig};
+    use super::*;
+
+    #[test]
+    fn apostrophe_words_emit_one_original_token_without_invented_prefixes() {
+        let sources = [
+            "COMMISSION'S",
+            "CONSULTANT'S",
+            "can't",
+            "we're",
+            "it's",
+            "O'Connor",
+            "O'Sullivan",
+        ];
+        for source in sources {
+            assert_eq!(source.split_whitespace().count(), 1);
+        }
+        let actual: Vec<_> = sources.iter().map(|source| split_into_words(source)).collect();
+        let expected: Vec<_> = sources.iter().map(|source| vec![source.to_string()]).collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn curly_words_and_real_repeated_names_conserve_original_tokens() {
+        for (source, expected) in [
+            ("commission’s", vec!["commission’s"]),
+            ("CONSULTANT’S", vec!["CONSULTANT’S"]),
+            ("can’t", vec!["can’t"]),
+            ("O’Connor O’Connor", vec!["O’Connor", "O’Connor"]),
+            ("Baden Baden", vec!["Baden", "Baden"]),
+        ] {
+            assert_eq!(split_into_words(source), expected);
+        }
+    }
+
+    #[test]
+    fn possessive_canonical_terms_agree_before_candidate_scoring_and_deduplication() {
+        let stopwords = ahash::AHashSet::new();
+        let yake = Yake {
+            config: YakeConfig::default(),
+            stopwords: &stopwords,
+        };
+        let cases = [
+            ("cat", "cat"),
+            ("cat's", "cat"),
+            ("cat’s", "cat"),
+            ("CAT’S", "cat"),
+            ("Commission", "commission"),
+            ("COMMISSION'S", "commission"),
+            ("commission’s", "commission"),
+            ("CONSULTANT’S", "consultant"),
+        ];
+        let actual: Vec<_> = cases
+            .iter()
+            .map(|(source, _)| {
+                assert_eq!(source.split_whitespace().count(), 1);
+                let sentences = yake.preprocess_text(source);
+                assert_eq!(sentences.len(), 1);
+                let candidates = yake.ngram_selection(1, &sentences);
+                let keys: Vec<_> = candidates.keys().map(|key| key.to_vec()).collect();
+                (sentences[0].lc_terms.clone(), sentences[0].uq_terms.clone(), keys)
+            })
+            .collect();
+        let expected: Vec<_> = cases
+            .iter()
+            .map(|(_, term)| {
+                let term = term.to_string();
+                (vec![term.clone()], vec![term.clone()], vec![vec![term]])
+            })
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn nonpossessive_contractions_keep_their_canonical_text() {
+        let stopwords = ahash::AHashSet::new();
+        let yake = Yake {
+            config: YakeConfig::default(),
+            stopwords: &stopwords,
+        };
+        let sources = [
+            "can't",
+            "we're",
+            "they've",
+            "I'm",
+            "it's",
+            "that's",
+            "he's",
+            "it’s",
+            "HE’S",
+            "O'Connor",
+            "O’Connor",
+        ];
+        let actual: Vec<_> = sources
+            .iter()
+            .map(|source| {
+                let sentences = yake.preprocess_text(source);
+                assert_eq!(sentences.len(), 1);
+                sentences[0].lc_terms.clone()
+            })
+            .collect();
+        let expected: Vec<_> = sources.iter().map(|source| vec![source.to_lowercase()]).collect();
+        assert_eq!(actual, expected);
+    }
+}
