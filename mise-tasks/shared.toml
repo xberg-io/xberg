@@ -119,6 +119,7 @@ run = [
   "npx -y ai-rulez@latest generate --plugin",
   "python3 scripts/sync_public_skills.py",
   "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --content-only",
+  "npx -y ai-rulez@latest -C .ai-rulez lock --content-only",
 ]
 
 ["plugin:verify"]
@@ -126,6 +127,7 @@ description = "Verify generated plugin bundles match source (byte + BLAKE3 prove
 tools = { node = "26.13.0" }
 run = [
   "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --check",
+  "npx -y ai-rulez@latest -C .ai-rulez lock --check",
   "npx -y ai-rulez@latest verify --plugin",
   "python3 scripts/sync_public_skills.py --check",
 ]
