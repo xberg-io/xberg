@@ -273,8 +273,7 @@ fn prefer_semantic(
 
 fn semantic_coverage(
     records: &[Candidate<'_>],
-    group: &[usize],
-    winner: usize,
+    selected: &[usize],
     strategy: RedactionStrategy,
     limits: Limits,
     work: &mut Work,
@@ -282,35 +281,37 @@ fn semantic_coverage(
     if !matches!(strategy, RedactionStrategy::Hash | RedactionStrategy::TokenReplace) {
         return Ok(());
     }
-    let identity = &records[winner];
-    for &index in group {
+    for required in records {
         work.charge(1, limits)?;
-        let required = &records[index];
-        if required.decoded
-            && (!identity.decoded
-                || identity.identity.start > required.identity.start
-                || identity.identity.end < required.identity.end)
-        {
+        if !required.decoded {
+            continue;
+        }
+        let mut covered = false;
+        for &index in selected {
+            work.charge(1, limits)?;
+            let identity = &records[index];
+            if identity.decoded
+                && identity.identity.start <= required.identity.start
+                && identity.identity.end >= required.identity.end
+            {
+                covered = true;
+                break;
+            }
+        }
+        if !covered {
             return Err(Error::Coverage);
         }
     }
     Ok(())
 }
 
-fn selected(
-    records: &[Candidate<'_>],
-    order: &[usize],
-    strategy: RedactionStrategy,
-    limits: Limits,
-    work: &mut Work,
-) -> Result<Vec<usize>, Error> {
+fn selected(records: &[Candidate<'_>], order: &[usize], limits: Limits, work: &mut Work) -> Result<Vec<usize>, Error> {
     let mut selected = Vec::new();
     selected.try_reserve_exact(order.len()).map_err(|_| Error::Budget)?;
     let mut at = 0;
     let mut end = 0;
     while at < order.len() {
         work.charge(1, limits)?;
-        let group_start = at;
         let first = &records[order[at]];
         let mut winner = order[at];
         at += 1;
@@ -326,7 +327,6 @@ fn selected(
             at += 1;
         }
         if first.raw.start >= end {
-            semantic_coverage(records, &order[group_start..at], winner, strategy, limits, work)?;
             end = first.raw.end;
             selected.push(winner);
         }
@@ -464,8 +464,9 @@ fn prepare<'a>(
     let records = collect(source, &projection, matchers, limits, work)?;
     let mut budget = work.borrow_mut();
     let order = ordered(&records, limits, &mut budget)?;
-    let selected = selected(&records, &order, strategy, limits, &mut budget)?;
+    let selected = selected(&records, &order, limits, &mut budget)?;
     cover(&records, &order, &selected, limits, &mut budget)?;
+    semantic_coverage(&records, &selected, strategy, limits, &mut budget)?;
     let count = selected.len();
     u32::try_from(count).map_err(|_| Error::Budget)?;
     budget.reserve(
@@ -504,8 +505,7 @@ fn prepare<'a>(
     let mut output = String::new();
     output.try_reserve_exact(output_bound).map_err(|_| Error::Budget)?;
     output.push_str(source);
-    let mut matches = Vec::new();
-    let mut replacements = Vec::new();
+    let (mut matches, mut replacements) = (Vec::new(), Vec::new());
     matches.try_reserve_exact(count).map_err(|_| Error::Budget)?;
     replacements.try_reserve_exact(count).map_err(|_| Error::Budget)?;
     for index in selected {
