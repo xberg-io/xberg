@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(markdown): Keep frontmatter in metadata and out of rendered body, elements, and chunks.** (#2392)
+  Preserve typed YAML and TOML values without emitting Rust debug representations as document text.
+
 - **(plugin): Refresh local authored-source pins during bundle generation and reject stale pins during verification.**
 
 - **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
