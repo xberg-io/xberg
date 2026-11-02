@@ -15,7 +15,7 @@ A [LangChain](https://www.langchain.com/) document loader backed by [Xberg](http
 pip install langchain-xberg
 ```
 
-Requires Python 3.10+.
+Requires Python 3.11+.
 
 ## Load
 

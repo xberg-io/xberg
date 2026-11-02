@@ -1033,7 +1033,7 @@ impl InternalDocumentExtractor for MarkdownExtractor {
         // Images (including data-URI decoding) are handled in-line inside
         // `build_internal_document`, which pushes a correctly-indexed image element for each
         // one, so no separate extraction/push pass is needed here.
-        let mut doc = Self::build_internal_document(&events, &yaml);
+        let mut doc = Self::build_internal_document(&events, &None);
         doc.metadata = metadata;
         #[cfg(not(feature = "notebook"))]
         if let Some(notebook) = text_notebook {
