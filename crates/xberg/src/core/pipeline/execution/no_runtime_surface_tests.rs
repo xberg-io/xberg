@@ -36,7 +36,7 @@ fn finish_ready<F: Future>(future: F) -> F::Output {
 
 #[test]
 fn ordinary_async_processor_path_works_without_tokio() {
-    assert!(!cfg!(feature = "tokio-runtime"));
+    const { assert!(!cfg!(feature = "tokio-runtime")) };
     let calls = Arc::new(AtomicUsize::new(0));
     let processor: PostProcessorHandle = Arc::new(Probe(Arc::clone(&calls)));
     let stages = [(ProcessingStage::Late, Arc::new(vec![processor]))];
@@ -64,7 +64,7 @@ fn source_bound_redaction_path_works_without_tokio() {
     use crate::types::builder::superscript;
     use crate::types::internal_builder::InternalDocumentBuilder;
 
-    assert!(!cfg!(feature = "tokio-runtime"));
+    const { assert!(!cfg!(feature = "tokio-runtime")) };
     let mut builder = InternalDocumentBuilder::new("test");
     builder.push_paragraph("secret", vec![superscript(0, 6)], Some(1), None);
     let mut result =
