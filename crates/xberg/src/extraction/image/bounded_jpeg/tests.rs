@@ -1,7 +1,6 @@
-use super::{
-    Frame, Process, ReducedScale, load_image_for_ocr_with_scale, load_image_for_ocr_within, read_frame, reduced_peak,
-    reduced_scale,
-};
+#[cfg(feature = "pdf")]
+use super::load_image_for_ocr_within;
+use super::{Frame, Process, ReducedScale, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
 use crate::extractors::security::SecurityLimits;
 
 const WIDTH: u32 = 512;
@@ -73,6 +72,7 @@ fn should_keep_a_fitting_jpeg_at_its_original_size() {
     assert_eq!(decoded.image.dimensions(), (WIDTH, HEIGHT));
 }
 
+#[cfg(feature = "pdf")]
 #[test]
 fn should_reduce_a_fitting_jpeg_whose_original_size_the_caller_rejects() {
     let bytes = rgb();

@@ -69,6 +69,7 @@ pub(crate) fn load_image_for_ocr_with_scale(
 /// dimensions whose working set the caller can hold. A JPEG whose original size `fits` rejects is
 /// decoded at the finest IDCT scale that fits the limit and that `fits` approves. When no scale
 /// qualifies, the image keeps its original size if the full decode fits the limit.
+#[cfg(feature = "pdf")]
 pub(crate) fn load_image_for_ocr_within(
     image_bytes: &[u8],
     limits: &SecurityLimits,
