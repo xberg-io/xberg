@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
 - **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
   Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
 

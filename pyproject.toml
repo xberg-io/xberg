@@ -7,7 +7,7 @@ requires = ["maturin>=1.15.0,<2"]
 [project]
 name = "xberg-dev"
 version = "1.4.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["xberg"]
 classifiers = ["Private :: Do Not Upload"]
 

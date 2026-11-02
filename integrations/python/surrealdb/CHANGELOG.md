@@ -2,6 +2,12 @@
 
 All notable changes to surrealdb-xberg will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
+
 ## [0.2.0] — 2026-05-15
 
 > **Migration required** — records ingested with `0.1.x` have different field shapes in SurrealDB. Drop and re-ingest your document and chunk tables after upgrading to ensure consistent data.
