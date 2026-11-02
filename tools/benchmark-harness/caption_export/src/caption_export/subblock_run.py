@@ -15,6 +15,7 @@ from .assets import digest, read_json
 from .first_divergence import ATOL, RTOL, compare_tensor
 from .first_divergence_evidence import require
 from .first_divergence_run import frozen_inputs, offline_environment, session
+from .provenance import verify_runtime_versions
 from .subblock import (
     MULTIPLIERS,
     STAGES,
@@ -242,6 +243,7 @@ def main() -> int:
     parser.add_argument("--plan-sha256", required=True)
     parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
+    verify_runtime_versions()
     require(digest(arguments.plan) == arguments.plan_sha256, "subblock plan SHA mismatch")
     plan = read_json(arguments.plan)
     offline_environment()

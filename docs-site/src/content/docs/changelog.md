@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
-  Verify locked runtime versions before export while preserving source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
+  Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
   Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
 
 - **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)

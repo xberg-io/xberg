@@ -32,6 +32,7 @@ from .first_divergence_evidence import (
     verify_output,
     verify_runtime,
 )
+from .provenance import verify_runtime_versions
 
 
 def offline_environment() -> None:
@@ -222,6 +223,7 @@ def main() -> int:
     parser.add_argument("--plan-sha256", required=True)
     parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
+    verify_runtime_versions()
     require(digest(arguments.plan) == arguments.plan_sha256, "diagnostic plan SHA mismatch")
     plan = read_json(arguments.plan)
     offline_environment()

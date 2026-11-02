@@ -8,10 +8,12 @@ from pathlib import Path
 
 from .assets import digest
 from .first_divergence_evidence import PROTOCOL, require
+from .provenance import verify_runtime_versions
 
 
 def freeze_plan(original: Path) -> dict:
     """Pin exact local runtime and original receipts without loading a model."""
+    verify_runtime_versions()
     root = Path(__file__).resolve().parent
     files = {}
     for name in ("plan.json", "parity.py", "result.json"):
