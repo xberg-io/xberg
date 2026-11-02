@@ -190,7 +190,14 @@ impl<'s> Decoder<'s> {
             .strip_prefix('a')
             .and_then(|s| s.strip_suffix('z'))
             .ok_or(Error::InvalidSource)?;
-        self.emit(value, range, work)?;
+        if self.source.get(range.clone()) == Some(value) {
+            for (offset, ch) in value.char_indices() {
+                let end = offset + ch.len_utf8();
+                self.emit(&value[offset..end], range.start + offset..range.start + end, work)?;
+            }
+        } else {
+            self.emit(value, range, work)?;
+        }
         output.clear();
         self.atom_output = output;
         Ok(())
