@@ -887,3 +887,18 @@ fn should_not_split_flush_continuation_lines_on_left_edge_jitter() {
         "sub-pixel left-edge jitter on flush continuation lines must not start a new block"
     );
 }
+
+#[cfg(feature = "sceptre-ocr-ort")]
+#[test]
+fn standalone_ort_feature_preserves_shared_provider_override_policy() {
+    use crate::core::config::acceleration::ExecutionProviderType;
+
+    assert_eq!(
+        crate::ort_discovery::parse_execution_provider_override(" CPU "),
+        Some(ExecutionProviderType::Cpu)
+    );
+    assert_eq!(
+        crate::ort_discovery::parse_execution_provider_override("not-a-provider"),
+        None
+    );
+}
