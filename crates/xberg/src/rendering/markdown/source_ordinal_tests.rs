@@ -109,17 +109,42 @@ fn same_level_literal_family_does_not_demote_either_decimal_run() {
         ("7.", "Seventh clause"),
     ]);
     let markdown = render_qualified(&doc);
-    assert!(markdown.contains("- A. Alpha qualification"));
-    assert!(markdown.contains("- B. Beta qualification"));
+    assert!(markdown.contains("A. Alpha qualification"));
+    assert!(markdown.contains("B. Beta qualification"));
+    let positions: Vec<_> = [
+        "Principal clause",
+        "Alpha qualification",
+        "Beta qualification",
+        "Seventh clause",
+    ]
+    .into_iter()
+    .map(|body| markdown.find(body).unwrap())
+    .collect();
+    assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
     assert_eq!(
         top_lists(&markdown),
-        vec![
-            (ListType::Ordered, 1, 1),
-            (ListType::Bullet, 1, 2),
-            (ListType::Ordered, 7, 1),
-        ],
+        vec![(ListType::Ordered, 1, 1), (ListType::Ordered, 7, 1)],
         "{markdown:?}"
     );
+    let arena = Arena::new();
+    let root = parse_document(&arena, &markdown, &comrak_options());
+    let paragraphs: Vec<String> = root
+        .children()
+        .filter_map(|node| {
+            if !matches!(node.data.borrow().value, NodeValue::Paragraph) {
+                return None;
+            }
+            Some(
+                node.descendants()
+                    .filter_map(|child| match &child.data.borrow().value {
+                        NodeValue::Text(text) => Some(text.to_string()),
+                        _ => None,
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(paragraphs, ["A. Alpha qualification", "B. Beta qualification"]);
 }
 
 #[test]

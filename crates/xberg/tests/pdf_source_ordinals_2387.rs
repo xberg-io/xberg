@@ -239,3 +239,135 @@ fn ordinary_prose_and_unordered_source_items_do_not_gain_decimal_markers() {
             .any(|line| line.trim_start().starts_with("1. "))
     );
 }
+
+fn contract_clause_nodes(
+    document: &ExtractedDocument,
+) -> Vec<(&'static str, &xberg::types::document_structure::DocumentNode)> {
+    [
+        ("1.", "DUTIES"),
+        ("A.", "exercise special skill"),
+        ("B.", "personnel listed"),
+    ]
+    .into_iter()
+    .map(|(label, phrase)| {
+        assert_eq!(label_for(document, phrase), label);
+        let nodes: Vec<_> = document
+            .document
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter(|node| matches!(&node.content, NodeContent::ListItem { text } if text.contains(phrase)))
+            .collect();
+        assert_eq!(nodes.len(), 1);
+        (label, nodes[0])
+    })
+    .collect()
+}
+
+fn full_contract_clauses() -> ExtractedDocument {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/pdf/sample_contract.pdf");
+    let bytes = std::fs::read(path).expect("mandatory pinned public contract");
+    assert_eq!(bytes.len(), 49647);
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "5c970b36c96f043f2be2ffe4f02746075e7b9210536130128f53e8d62894eb1a"
+    );
+    let plain = extract(&bytes, OutputFormat::Plain);
+    let markdown = extract(&bytes, OutputFormat::Markdown);
+    let clauses = contract_clause_nodes(&markdown);
+    let plain_clauses = contract_clause_nodes(&plain);
+    for ((label, node), (plain_label, plain_node)) in clauses.iter().zip(&plain_clauses) {
+        assert_eq!(label, plain_label);
+        assert_eq!(node.content, plain_node.content);
+        let NodeContent::ListItem { text } = &node.content else {
+            unreachable!()
+        };
+        assert!(plain.content.contains(&format!("{label} {text}")));
+    }
+    assert!(clauses[0].1.parent.is_some());
+    assert!(clauses.iter().all(|(_, node)| node.parent == clauses[0].1.parent));
+    let parent = clauses[0].1.parent.unwrap().0 as usize;
+    assert!(matches!(
+        markdown.document.as_ref().unwrap().nodes[parent].content,
+        NodeContent::List { ordered: true }
+    ));
+    assert!(
+        clauses[0]
+            .1
+            .annotations
+            .iter()
+            .any(|annotation| matches!(annotation.kind, AnnotationKind::Bold))
+    );
+    markdown
+}
+
+fn contract_paragraph_text<'a>(node: &'a comrak::nodes::AstNode<'a>) -> String {
+    node.descendants()
+        .filter_map(|child| match &child.data.borrow().value {
+            comrak::nodes::NodeValue::Text(text) => Some(text.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn public_contract_flat_alphabetic_clauses_are_paragraphs_beside_the_decimal_clause() {
+    use comrak::nodes::NodeValue;
+    let document = full_contract_clauses();
+    let clauses = contract_clause_nodes(&document);
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, &document.content, &comrak::Options::default());
+    let nodes: Vec<_> = root.descendants().collect();
+    let paragraphs: Vec<_> = clauses
+        .iter()
+        .map(|(label, node)| {
+            let NodeContent::ListItem { text } = &node.content else {
+                unreachable!()
+            };
+            let expected = if *label == "1." {
+                text.clone()
+            } else {
+                format!("{label} {text}")
+            };
+            let matches: Vec<_> = nodes
+                .iter()
+                .copied()
+                .filter(|node| {
+                    matches!(node.data.borrow().value, NodeValue::Paragraph)
+                        && contract_paragraph_text(node) == expected
+                })
+                .collect();
+            assert_eq!(
+                matches.len(),
+                1,
+                "complete original clause body must reach the reader: {label}"
+            );
+            matches[0]
+        })
+        .collect();
+    let positions: Vec<_> = paragraphs
+        .iter()
+        .map(|paragraph| nodes.iter().position(|node| node.same_node(paragraph)).unwrap())
+        .collect();
+    assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(
+        paragraphs[0]
+            .descendants()
+            .any(|node| matches!(node.data.borrow().value, NodeValue::Strong))
+    );
+    let duty_item = paragraphs[0].parent().unwrap();
+    assert!(matches!(duty_item.data.borrow().value, NodeValue::Item(_)));
+    assert!(
+        matches!(duty_item.parent().unwrap().data.borrow().value, NodeValue::List(list) if list.list_type == comrak::nodes::ListType::Ordered && list.start == 1)
+    );
+    for paragraph in &paragraphs[1..] {
+        assert!(
+            !paragraph
+                .ancestors()
+                .any(|node| matches!(node.data.borrow().value, NodeValue::List(_))),
+            "flat source A/B clauses must remain literal paragraphs without invented nesting: {:?}",
+            paragraph.data.borrow().value
+        );
+    }
+}
