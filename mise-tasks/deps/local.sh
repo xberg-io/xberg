@@ -31,13 +31,12 @@ refresh_rust() {
     done
     return
   fi
-  # Public registry getters expose parking_lot 0.12 lock types; 0.13 changes their identity. ~keep
-  cargo upgrade --incompatible --exclude parking_lot
+  cargo upgrade --incompatible
   cargo update
   # Workspace members are covered above; upgrading one by --manifest-path rewrites the root
   # manifest again. List only excluded/standalone workspaces. ~keep
   for manifest in packages/ruby/ext/xberg_rb/native/Cargo.toml packages/elixir/native/xberg_nif/Cargo.toml; do
-    { cargo upgrade --incompatible --exclude parking_lot --manifest-path "$manifest" &&
+    { cargo upgrade --incompatible --manifest-path "$manifest" &&
       cargo update --manifest-path "$manifest"; } || true
   done
   # e2e/rust is generated -- do NOT rewrite its Cargo.toml; only refresh its lock so its pins

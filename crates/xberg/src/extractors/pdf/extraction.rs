@@ -6,6 +6,10 @@ use crate::Result;
 use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::types::{PageBoundary, PageContent, PdfAnnotation};
 
+#[cfg(test)]
+#[path = "extraction/native_table_metadata_tests.rs"]
+mod native_table_metadata_tests;
+
 #[cfg(feature = "pdf")]
 use crate::types::Table;
 
@@ -69,25 +73,27 @@ fn attach_native_table_grids(
     tables: &[Table],
     grids: &[NativeTableMetadata],
 ) -> Result<()> {
+    let sidecars: Vec<_> = tables
+        .iter()
+        .zip(grids)
+        .filter_map(|(table, (grid, _))| {
+            grid.as_ref()
+                .map(|grid| crate::pdf::structure::table_grid::TableGridSidecar {
+                    table: table.clone(),
+                    grid: grid.clone(),
+                })
+        })
+        .collect();
+    crate::pdf::structure::table_grid::attach_table_grids(document, &sidecars)
+        .map_err(|error| crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}")))?;
     for element in &mut document.elements {
         let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
             continue;
         };
         let index = table_index as usize;
-        let Some((table, (grid, scripts))) = tables.get(index).zip(grids.get(index)) else {
+        let Some((table, (_, scripts))) = tables.get(index).zip(grids.get(index)) else {
             continue;
         };
-        if let Some(grid) = grid
-            && crate::extraction::derive::native_grid_matches_table(table, grid)
-        {
-            let encoded = serde_json::to_string(grid).map_err(|error| {
-                crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}"))
-            })?;
-            element
-                .attributes
-                .get_or_insert_with(Default::default)
-                .insert(crate::types::internal::NATIVE_TABLE_GRID_ATTRIBUTE.to_string(), encoded);
-        }
         if let Some(scripts) = scripts
             && scripts.cells == table.cells
             && document

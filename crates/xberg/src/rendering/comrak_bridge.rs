@@ -807,6 +807,107 @@ fn build_table<'a>(
     Some(table_node)
 }
 
+#[cfg(any(
+    feature = "pdf",
+    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
+))]
+fn build_retained_grid_html<'a>(
+    arena: &'a comrak::Arena<'a>,
+    table: &crate::types::Table,
+    attributes: Option<&ahash::AHashMap<String, String>>,
+) -> Option<&'a AstNode<'a>> {
+    let grid = crate::types::internal::table_grid::retained_grid(table, attributes)?;
+    let occupied = validated_grid_occupancy(table, &grid)?;
+    let anchors: ahash::AHashMap<_, _> = grid.cells.iter().map(|cell| ((cell.row, cell.col), cell)).collect();
+    let mut annotations = super::table_math::read_annotations(attributes, &table.cells);
+    for (position, scripts) in super::table_scripts::read_annotations(attributes, &table.cells) {
+        annotations.entry(position).or_default().extend(scripts);
+    }
+    let options = super::markdown::comrak_options();
+    // A rowspan may cross the detected header/body boundary, so all rows share one row group. ~keep
+    let mut html = String::from("<table>\n<tbody>\n");
+    for (row, columns) in occupied.iter().enumerate() {
+        html.push_str("<tr>");
+        for (col, covered) in columns.iter().enumerate() {
+            if let Some(cell) = anchors.get(&(row as u32, col as u32)) {
+                let inline = annotations.get(&(row, col)).map(Vec::as_slice).unwrap_or(&[]);
+                append_grid_html_cell(arena, cell, inline, &options, &mut html);
+            } else if !covered {
+                html.push_str("<td></td>");
+            }
+        }
+        html.push_str("</tr>\n");
+    }
+    html.push_str("</tbody>\n</table>\n");
+    Some(mk(
+        arena,
+        NodeValue::HtmlBlock(comrak::nodes::NodeHtmlBlock {
+            literal: html,
+            ..Default::default()
+        }),
+    ))
+}
+
+#[cfg(any(
+    feature = "pdf",
+    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
+))]
+fn validated_grid_occupancy(table: &crate::types::Table, grid: &crate::types::TableGrid) -> Option<Vec<Vec<bool>>> {
+    if grid.rows == 0 || grid.cols == 0 {
+        return None;
+    }
+    let mut occupied = vec![vec![false; grid.cols as usize]; grid.rows as usize];
+    for cell in &grid.cells {
+        let row_end = cell.row.checked_add(cell.row_span)?;
+        let col_end = cell.col.checked_add(cell.col_span)?;
+        if cell.row_span == 0 || cell.col_span == 0 || row_end > grid.rows || col_end > grid.cols {
+            return None;
+        }
+        for row in cell.row..row_end {
+            for col in cell.col..col_end {
+                let covered_text =
+                    (row != cell.row || col != cell.col) && !table.cells[row as usize][col as usize].is_empty();
+                if occupied[row as usize][col as usize] || covered_text {
+                    return None;
+                }
+                occupied[row as usize][col as usize] = true;
+            }
+        }
+    }
+    Some(occupied)
+}
+
+#[cfg(any(
+    feature = "pdf",
+    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
+))]
+fn append_grid_html_cell<'a>(
+    arena: &'a comrak::Arena<'a>,
+    cell: &crate::types::GridCell,
+    annotations: &[TextAnnotation],
+    options: &comrak::Options<'_>,
+    html: &mut String,
+) {
+    use std::fmt::Write as _;
+
+    let tag = if cell.is_header { "th" } else { "td" };
+    write!(html, "<{tag}").expect("String writes are infallible");
+    if cell.row_span > 1 {
+        write!(html, " rowspan=\"{}\"", cell.row_span).expect("String writes are infallible");
+    }
+    if cell.col_span > 1 {
+        write!(html, " colspan=\"{}\"", cell.col_span).expect("String writes are infallible");
+    }
+    html.push('>');
+    let inline_parent = mk(arena, NodeValue::Paragraph);
+    build_inlines(arena, inline_parent, &cell.content, annotations);
+    // The formatter escapes source text and URLs while retaining the existing math/script annotations. ~keep
+    for child in inline_parent.children() {
+        comrak::format_html(child, options, html).expect("String HTML formatting is infallible");
+    }
+    write!(html, "</{tag}>").expect("String writes are infallible");
+}
+
 /// Bullet glyphs that OCR/plain-text extraction commonly reads as unordered
 /// list markers.
 const BULLET_MARKER_CHARS: &[char] = &['-', '*', '•', '‣', '◦'];
@@ -1136,7 +1237,17 @@ fn build_comrak_ast_with_table_mode<'a>(
                         anchor.append(mk_text(arena, &format!("[TABLE:{table_id}]")));
                         parent.append(anchor);
                     }
-                    let has_header = table.columns.is_some()
+                    #[cfg(any(
+                        feature = "pdf",
+                        all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
+                    ))]
+                    if table_mode == TableRenderMode::Html
+                        && let Some(table_node) = build_retained_grid_html(arena, table, elem_attributes)
+                    {
+                        parent.append(table_node);
+                        continue;
+                    }
+                    let has_header = table.has_header_row()
                         || (table_mode == TableRenderMode::Markdown
                             && !matches!(doc.source_format.as_str(), "csv" | "orgmode" | "typst"));
                     match build_table(arena, &table.cells, has_header, elem_attributes, table_mode) {
@@ -1725,6 +1836,7 @@ mod tests {
     fn should_escape_declared_table_headers_and_body_cells_in_html() {
         let mut document = table_header_document("pdf", true);
         document.tables[0].cells[0][0] = "<Name & role>".to_owned();
+        document.tables[0].columns = Some(document.tables[0].cells[0].clone());
         document.tables[0].cells[1][0] = "<script>alert(1)</script>".to_owned();
         assert_eq!(
             crate::rendering::render_html(&document),

@@ -7,6 +7,7 @@ run = 'SWAP_SIZE_GIB="${SWAP_SIZE_GIB:-16}" bash scripts/ci/benchmarks/setup-bui
 
 ["benchmark:validate:scripts"]
 description = "Validate benchmark workflow configuration and Python adapters"
+depends = ["benchmark:validate:parsebench", "benchmark:validate:olmocr"]
 run = [
   "scripts/ci/benchmarks/validate-workflow-build-config.sh",
   "python3 -m unittest scripts/ci/benchmarks/test_validate_workflow_matrix.py",
@@ -19,3 +20,11 @@ run = [
 ["benchmark:validate:layout-annotations"]
 description = "Validate independent layout ground-truth preservation and identity checks"
 run = "uv run --frozen --only-dev python -m pytest -q tools/benchmark-harness/tests/test_import_omnidocbench.py"
+
+["benchmark:validate:parsebench"]
+description = "Validate ParseBench invocation, integrity, coverage and scoring contracts"
+run = "python3 -m unittest tools/benchmark-harness/tests/test_parsebench_html_contracts.py tools/benchmark-harness/tests/test_parsebench_html_safeguards.py tools/benchmark-harness/tests/test_parsebench_html_staging.py"
+
+["benchmark:validate:olmocr"]
+description = "Validate olmOCR invocation, integrity and complete coverage contracts"
+run = "python3 -m unittest tools/benchmark-harness/tests/test_olmocr_contracts.py"

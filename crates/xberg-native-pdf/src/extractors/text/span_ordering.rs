@@ -9,22 +9,27 @@ use super::*;
 
 impl<'doc> TextExtractor<'doc> {
     pub(super) fn sort_spans_preserving_script_geometry(&mut self) {
-        // Sorting may snap a script to its base, but geometry must retain the
-        // original baseline for downstream script annotations (GH#2275). Sequence
-        // numbers are unique here; sorting neither splits nor merges spans. ~keep
-        let baselines = self.preserve_script_baselines.then(|| {
+        // Cached Form XObjects can reuse source sequence numbers. Use temporary
+        // indices during sorting, then restore source IDs and raw baselines before
+        // deduplication or merging can consume their geometry (GH#2275). ~keep
+        let original_geometry = self.preserve_script_baselines.then(|| {
             self.spans
-                .iter()
-                .map(|span| (span.sequence, span.bbox.y))
-                .collect::<std::collections::HashMap<_, _>>()
+                .iter_mut()
+                .enumerate()
+                .map(|(index, span)| {
+                    let original = (span.sequence, span.bbox.y);
+                    span.sequence = index;
+                    original
+                })
+                .collect::<Vec<_>>()
         });
         self.snap_superscript_baselines();
         self.sort_spans_by_reading_order();
-        if let Some(baselines) = baselines {
+        if let Some(original_geometry) = original_geometry {
             for span in &mut self.spans {
-                if let Some(baseline) = baselines.get(&span.sequence) {
-                    span.bbox.y = *baseline;
-                }
+                let (sequence, baseline) = original_geometry[span.sequence];
+                span.sequence = sequence;
+                span.bbox.y = baseline;
             }
         }
     }
@@ -801,5 +806,119 @@ impl SnapBaseSearch<'_> {
             }
         }
         best_base_y
+    }
+}
+
+#[cfg(test)]
+mod script_geometry_tests {
+    use super::*;
+
+    fn source_spans(script_y: f32, text_rise: f32, source_sequence: usize) -> Vec<TextSpan> {
+        [
+            ("base", 100.0, 700.0, 10.0, 12.0, 1),
+            ("2", 110.0, script_y, 4.0, 8.0, source_sequence),
+            ("figure label", 100.0, 500.0, 40.0, 8.0, source_sequence),
+            ("caption", 100.0, 300.0, 40.0, 10.0, source_sequence),
+        ]
+        .into_iter()
+        .map(|(text, x, y, width, font_size, sequence)| TextSpan {
+            text: text.to_string(),
+            bbox: crate::geometry::Rect::new(x, y, width, font_size),
+            font_size,
+            font_name: format!("source-{text}"),
+            is_italic: text == "caption",
+            primary_detected: text == "figure label",
+            mirrored: text == "caption",
+            page_rotation_applied: if text == "figure label" { 90 } else { 0 },
+            sequence,
+            text_rise: if text == "2" { text_rise } else { 0.0 },
+            char_x_offsets: vec![x],
+            char_widths: vec![width],
+            ..Default::default()
+        })
+        .collect()
+    }
+
+    fn span_multiset(spans: &[TextSpan]) -> Vec<(String, bool, i32)> {
+        let mut records = spans
+            .iter()
+            .map(|span| {
+                (
+                    serde_json::to_string(span).unwrap(),
+                    span.mirrored,
+                    span.page_rotation_applied,
+                )
+            })
+            .collect::<Vec<_>>();
+        records.sort();
+        records
+    }
+
+    fn assert_preserved_after_sort(original: Vec<TextSpan>) {
+        let mut extractor = TextExtractor::new();
+        extractor.preserve_script_baselines = true;
+        extractor.spans = original.clone();
+        extractor.spans.reverse();
+        extractor.sort_spans_preserving_script_geometry();
+        assert_eq!(extractor.spans.len(), 4);
+        assert_eq!(span_multiset(&extractor.spans), span_multiset(&original));
+        assert_eq!(
+            extractor
+                .spans
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect::<Vec<_>>(),
+            ["base", "2", "figure label", "caption"]
+        );
+    }
+
+    #[test]
+    fn should_preserve_each_source_span_when_form_and_page_sequences_collide() {
+        for (script_y, text_rise, sequence) in [
+            (703.0, 0.0, 0),
+            (700.0, 0.375, 0),
+            (703.0, 0.0, usize::MAX),
+            (700.0, 0.375, usize::MAX),
+        ] {
+            let original = source_spans(script_y, text_rise, sequence);
+            assert_eq!(original.iter().filter(|span| span.sequence == sequence).count(), 3);
+            assert_preserved_after_sort(original);
+        }
+    }
+
+    #[test]
+    fn should_preserve_unique_source_sequences_and_geometry_after_reordering() {
+        for (script_y, text_rise) in [(703.0, 0.0), (700.0, 0.375)] {
+            let mut original = source_spans(script_y, text_rise, 0);
+            for (span, sequence) in original.iter_mut().zip([usize::MAX, 7, 2, 99]) {
+                span.sequence = sequence;
+            }
+            assert_preserved_after_sort(original);
+        }
+    }
+
+    #[test]
+    fn should_keep_default_script_snapping_with_colliding_source_sequences() {
+        let mut extractor = TextExtractor::new();
+        extractor.spans = source_spans(703.0, 0.0, usize::MAX);
+        extractor.sort_spans_preserving_script_geometry();
+        let coordinates = extractor
+            .spans
+            .iter()
+            .map(|span| (span.text.as_str(), span.bbox.y))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            coordinates,
+            [
+                ("base", 700.0),
+                ("2", 700.0),
+                ("figure label", 500.0),
+                ("caption", 300.0)
+            ]
+        );
+        assert_eq!(
+            extractor.spans.iter().map(|span| span.sequence).collect::<Vec<_>>(),
+            [1, usize::MAX, usize::MAX, usize::MAX]
+        );
     }
 }

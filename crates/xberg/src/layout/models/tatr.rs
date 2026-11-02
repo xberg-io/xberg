@@ -484,6 +484,7 @@ fn iob(a: [f32; 4], b: [f32; 4]) -> f32 {
 /// 3. For each (row, column) pair, compute the intersection rectangle
 ///
 /// If `table_bbox` is provided, it is used to clip the row widening bounds.
+#[cfg(test)]
 pub(crate) fn build_cell_grid(result: &TatrResult, table_bbox: Option<[f32; 4]>) -> Vec<Vec<CellBBox>> {
     build_cell_grid_with_structure(result, table_bbox).0
 }
@@ -505,8 +506,8 @@ pub(crate) struct TableStructure {
 /// detection: more than half the row/column must be covered.
 const STRUCTURE_IOB_THRESHOLD: f32 = 0.5;
 
-/// Same as [`build_cell_grid`], but also returns the [`TableStructure`]
-/// (header rows + merged spans) derived from `result.headers` and
+/// Build a cell grid and return the [`TableStructure`] (header rows + merged spans)
+/// derived from `result.headers` and
 /// `result.spanning` against the same row/column bands used to build the
 /// grid.
 pub(crate) fn build_cell_grid_with_structure(

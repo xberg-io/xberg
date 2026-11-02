@@ -426,13 +426,14 @@ fn table_id_assignment_is_deterministic_across_runs() {
     assert_eq!(first_ids, second_ids, "table_id assignment must be deterministic");
 }
 
-/// Issue #1297: every emitted table fragment carries `columns` (its own
-/// header row), even a fragment that stitching left untouched.
+/// Issue #1297: declared columns survive stitching and standalone emission.
 #[test]
-fn stitching_populates_columns_on_merged_and_standalone_fragments() {
-    let frag_top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"]]);
+fn stitching_preserves_declared_columns_on_merged_and_standalone_fragments() {
+    let mut frag_top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"]]);
+    frag_top.columns = frag_top.cells.first().cloned();
     let frag_bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"]]);
-    let standalone = cell_table(3, (0.0, 0.0, 100.0, 20.0), &[&["Name", "Age"], &["Alice", "30"]]);
+    let mut standalone = cell_table(3, (0.0, 0.0, 100.0, 20.0), &[&["Name", "Age"], &["Alice", "30"]]);
+    standalone.columns = standalone.cells.first().cloned();
 
     let all_page_segments: Vec<Vec<SegmentData>> = Vec::new();
     let result = stitch_and_emit(vec![frag_top, frag_bottom, standalone], Vec::new(), &all_page_segments);
@@ -441,25 +442,26 @@ fn stitching_populates_columns_on_merged_and_standalone_fragments() {
     assert_eq!(
         stitched.columns,
         Some(vec!["H1".to_string(), "H2".to_string()]),
-        "stitched table's columns come from the topmost fragment's header row"
+        "stitched table's declared columns survive merging"
     );
 
     let standalone_result = result.iter().find(|t| t.page_number == 3).unwrap();
     assert_eq!(
         standalone_result.columns,
         Some(vec!["Name".to_string(), "Age".to_string()]),
-        "a standalone fragment's columns come from its own first row"
+        "a standalone fragment retains its declared columns"
     );
 }
 
 /// Issue #1297 code review (Finding 1): a layout-detected table (never
 /// passed through `stitch_fragmented_tables`, only appended in
 /// `prepare_emitted_tables`) must still receive a `table_id` and
-/// `columns` once it survives dedup into the final emitted set.
+/// declared `columns` once it survives dedup into the final emitted set.
 #[test]
 fn layout_detected_table_surviving_dedup_gets_table_id_and_columns() {
     let native = cell_table(1, (0.0, 0.0, 100.0, 20.0), &[&["A", "B"]]);
-    let layout_only = cell_table(2, (0.0, 0.0, 100.0, 20.0), &[&["Layout1", "Layout2"], &["x", "y"]]);
+    let mut layout_only = cell_table(2, (0.0, 0.0, 100.0, 20.0), &[&["Layout1", "Layout2"], &["x", "y"]]);
+    layout_only.columns = layout_only.cells.first().cloned();
 
     let all_page_segments: Vec<Vec<SegmentData>> = Vec::new();
     let result = stitch_and_emit(vec![native], vec![layout_only], &all_page_segments);
@@ -481,7 +483,7 @@ fn layout_detected_table_surviving_dedup_gets_table_id_and_columns() {
     assert_eq!(
         layout_result.columns,
         Some(vec!["Layout1".to_string(), "Layout2".to_string()]),
-        "a layout-detected table must receive columns from its own header row"
+        "a layout-detected table must retain its declared columns"
     );
 }
 
@@ -7779,4 +7781,203 @@ fn should_exclude_nonfinite_and_nonpositive_heading_sizes_from_tier_inference_gh
         levels,
         vec![Some(1), Some(2), Some(3), Some(4), Some(4), Some(4), Some(4)]
     );
+}
+
+mod table_header_metadata_tests {
+    use super::*;
+    use crate::core::config::{OutputFormat, layout::TableOverlapPreference};
+    use crate::extraction::derive::derive_extraction_result;
+    use crate::types::document_structure::NodeContent;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    fn table(has_header: bool) -> crate::types::Table {
+        let mut table = cell_table(1, (0.0, 0.0, 100.0, 40.0), &[&["A1", "B1"], &["A2", "B2"]]);
+        table.columns = has_header.then(|| table.cells[0].clone());
+        table
+    }
+
+    fn assert_emitted_header_metadata(layout_only: bool, has_header: bool) {
+        let input = table(has_header);
+        let expected_cells = input.cells.clone();
+        let (native, layout) = if layout_only {
+            (Vec::new(), vec![input])
+        } else {
+            (vec![input], Vec::new())
+        };
+        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].table_id.as_deref(), Some("table-1"));
+        assert_eq!(emitted[0].cells, expected_cells);
+        assert_eq!(emitted[0].columns, has_header.then(|| expected_cells[0].clone()));
+        let mut document = InternalDocument::new("pdf");
+        document.tables = emitted;
+        document.push_element(InternalElement::text(ElementKind::Table { table_index: 0 }, "", 0).with_page(1));
+        let result = derive_extraction_result(document.clone(), true, OutputFormat::Html);
+        let html = result.formatted_content.expect("HTML output");
+        assert_eq!(html.matches("<th>").count(), if has_header { 2 } else { 0 });
+        assert_eq!(html.matches("<td>").count(), if has_header { 2 } else { 4 });
+        for content in expected_cells.iter().flatten() {
+            assert_eq!(html.matches(content.as_str()).count(), 1, "{html}");
+        }
+        let structure = result.document.expect("document structure");
+        let grid = structure
+            .nodes
+            .iter()
+            .find_map(|node| match &node.content {
+                NodeContent::Table { grid } => Some(grid),
+                _ => None,
+            })
+            .expect("derived table grid");
+        assert_eq!(
+            grid.cells.iter().filter(|cell| cell.is_header).count(),
+            if has_header { 2 } else { 0 }
+        );
+        let markdown = derive_extraction_result(document, false, OutputFormat::Markdown)
+            .formatted_content
+            .expect("Markdown output");
+        assert_eq!(markdown, "| A1 | B1 |\n| --- | --- |\n| A2 | B2 |\n");
+    }
+
+    #[test]
+    fn assigning_table_ids_does_not_invent_header_metadata() {
+        let mut tables = vec![table(false)];
+        let cells = tables[0].cells.clone();
+        assign_deterministic_table_ids(&mut tables);
+        assert_eq!(tables[0].table_id.as_deref(), Some("table-1"));
+        assert_eq!(tables[0].cells, cells);
+        assert_eq!(tables[0].columns, None);
+    }
+
+    #[test]
+    fn native_headerless_table_survives_preparation_and_derivation() {
+        assert_emitted_header_metadata(false, false);
+    }
+
+    #[test]
+    fn layout_headerless_table_survives_preparation_and_derivation() {
+        assert_emitted_header_metadata(true, false);
+    }
+
+    #[test]
+    fn explicit_headers_survive_native_and_layout_preparation() {
+        assert_emitted_header_metadata(false, true);
+        assert_emitted_header_metadata(true, true);
+    }
+
+    #[test]
+    fn stitching_unknown_headers_does_not_promote_a_data_row() {
+        let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["A1", "B1"]]);
+        let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["A2", "B2"]]);
+        let result = stitch_and_emit(vec![top, bottom], Vec::new(), &[]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].table_id.as_deref(), Some("table-1"));
+        assert_eq!(result[0].cells, vec![vec!["A1", "B1"], vec!["A2", "B2"]]);
+        assert_eq!(result[0].columns, None);
+    }
+
+    #[test]
+    fn stitching_propagates_declared_columns_without_replacing_them_with_data() {
+        let mut top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["A1", "B1"]]);
+        top.columns = Some(vec!["Known A".into(), "Known B".into()]);
+        let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["A2", "B2"]]);
+        let result = stitch_and_emit(vec![top, bottom], Vec::new(), &[]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].columns,
+            Some(vec!["Known A".to_owned(), "Known B".to_owned()])
+        );
+        assert_eq!(result[0].cells, vec![vec!["A1", "B1"], vec!["A2", "B2"]]);
+        assert_borrowed_headers_are_metadata_only(&result[0]);
+    }
+
+    #[test]
+    fn stitching_multiline_explicit_headers_preserves_the_collapsed_header() {
+        let result = stitch_multiline_header_table(true);
+        assert_eq!(result.columns, Some(vec!["Revenue USD".into(), "Year 2024".into()]));
+        assert_multiline_merged_header_rendering(&result, true);
+    }
+
+    #[test]
+    fn stitching_multiline_borrowed_headers_keeps_all_rows_as_data() {
+        let result = stitch_multiline_header_table(false);
+        assert_eq!(result.columns, Some(vec!["Known A".into(), "Known B".into()]));
+        assert_multiline_merged_header_rendering(&result, false);
+    }
+
+    fn stitch_multiline_header_table(physical_header: bool) -> crate::types::Table {
+        let mut top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["Revenue", "Year"], &["USD", "2024"]]);
+        top.columns = Some(if physical_header {
+            vec!["Revenue".into(), "Year".into()]
+        } else {
+            vec!["Known A".into(), "Known B".into()]
+        });
+        assert_eq!(top.has_header_row(), physical_header);
+        let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["A1", "B1"]]);
+        let mut result = stitch_and_emit(vec![top, bottom], Vec::new(), &[]);
+        assert_eq!(result.len(), 1);
+        let table = result.remove(0);
+        assert_eq!(table.cells, vec![vec!["Revenue USD", "Year 2024"], vec!["A1", "B1"]]);
+        table
+    }
+
+    fn assert_multiline_merged_header_rendering(table: &crate::types::Table, physical_header: bool) {
+        let mut document = InternalDocument::new("pdf");
+        document.tables.push(table.clone());
+        document.push_element(InternalElement::text(ElementKind::Table { table_index: 0 }, "", 0).with_page(1));
+        let result = derive_extraction_result(document.clone(), true, OutputFormat::Html);
+        let html = result.formatted_content.expect("HTML output");
+        assert_eq!(html.matches("<th>").count(), if physical_header { 2 } else { 0 });
+        assert_eq!(html.matches("<td>").count(), if physical_header { 2 } else { 4 });
+        for cell in table.cells.iter().flatten() {
+            assert_eq!(html.matches(cell.as_str()).count(), 1, "{html}");
+        }
+        assert!(!html.contains("Known A") && !html.contains("Known B"), "{html}");
+        let grid = result
+            .document
+            .expect("document structure")
+            .nodes
+            .into_iter()
+            .find_map(|node| match node.content {
+                NodeContent::Table { grid } => Some(grid),
+                _ => None,
+            })
+            .expect("derived table grid");
+        assert_eq!(
+            grid.cells.iter().map(|cell| cell.is_header).collect::<Vec<_>>(),
+            [physical_header, physical_header, false, false]
+        );
+        let markdown = derive_extraction_result(document, false, OutputFormat::Markdown)
+            .formatted_content
+            .expect("Markdown output");
+        assert_eq!(markdown, "| Revenue USD | Year 2024 |\n| --- | --- |\n| A1 | B1 |\n");
+    }
+
+    fn assert_borrowed_headers_are_metadata_only(table: &crate::types::Table) {
+        let mut document = InternalDocument::new("pdf");
+        document.tables.push(table.clone());
+        document.push_element(InternalElement::text(ElementKind::Table { table_index: 0 }, "", 0).with_page(1));
+        let result = derive_extraction_result(document.clone(), true, OutputFormat::Html);
+        let html = result.formatted_content.expect("HTML output");
+        for content in ["A1", "B1", "A2", "B2"] {
+            assert_eq!(html.matches(content).count(), 1, "{html}");
+        }
+        assert_eq!(html.matches("Known A").count(), 0, "{html}");
+        assert_eq!(html.matches("Known B").count(), 0, "{html}");
+        assert_eq!(html.matches("<th>").count(), 0, "{html}");
+        assert_eq!(html.matches("<td>").count(), 4, "{html}");
+        let structure = result.document.expect("document structure");
+        let grid = structure
+            .nodes
+            .iter()
+            .find_map(|node| match &node.content {
+                NodeContent::Table { grid } => Some(grid),
+                _ => None,
+            })
+            .expect("derived table grid");
+        assert_eq!(grid.cells.iter().filter(|cell| cell.is_header).count(), 0);
+        let markdown = derive_extraction_result(document, false, OutputFormat::Markdown)
+            .formatted_content
+            .expect("Markdown output");
+        assert_eq!(markdown, "| A1 | B1 |\n| --- | --- |\n| A2 | B2 |\n");
+    }
 }

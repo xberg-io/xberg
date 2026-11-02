@@ -5360,8 +5360,9 @@ pub(super) mod tests {
             .filter(|warning| warning.message.contains("suspected OCR recognition noise"))
             .collect::<Vec<_>>();
         assert_eq!(full_warnings.len(), 1, "full OCR must report overlapping signals once");
-        assert_eq!(result.0, SUSPECTED_NOISE);
-        assert_eq!(result.1.get(&1).map(String::as_str), Some(SUSPECTED_NOISE));
+        let with_layer = format!("{native_text}\n\n{SUSPECTED_NOISE}");
+        assert_eq!(result.0, with_layer);
+        assert_eq!(result.1.get(&1).map(String::as_str), Some(with_layer.as_str()));
         let warnings = result
             .8
             .iter()
@@ -8238,6 +8239,7 @@ Name: ___
             source_dpi: None,
             known_full_page_scan: false,
             single_block_pages: Some(std::sync::Arc::new(std::collections::HashSet::from([1]))),
+            native_page_layers: None,
         };
         let config = ExtractionConfig {
             use_cache: false,
@@ -10091,10 +10093,11 @@ Name: ___
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     fn fallback_test_images(count: usize) -> Vec<crate::pdf::native::images::PageFallbackImage> {
         (0..count)
-            .map(|_| crate::pdf::native::images::PageFallbackImage {
+            .map(|paint_order| crate::pdf::native::images::PageFallbackImage {
                 bytes: bytes::Bytes::from_static(b"ignored image bytes"),
                 format: "jpeg",
                 recovery: crate::pdf::native::images::XObjectRecovery::EmbeddedJpeg,
+                paint_order,
             })
             .collect()
     }

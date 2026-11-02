@@ -36,7 +36,7 @@
     "websiteURL": "https://xberg.io",
     "privacyPolicyURL": "https://xberg.io/privacy",
     "termsOfServiceURL": "https://xberg.io/terms",
-    "brandColor": "#1F6FEB",
+    "brandColor": "#00E0C2",
     "composerIcon": "./assets/icon.svg",
     "logo": "./assets/logo.png"
   }

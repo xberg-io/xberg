@@ -7,4 +7,4 @@ governance_verify_root="$(mktemp -d)"
 trap 'rm -rf -- "$governance_verify_root"' EXIT
 cp -R .ai-rulez "$governance_verify_root/.ai-rulez"
 cd "$governance_verify_root"
-ai-rulez generate --no-self-mcp --quiet
+npx -y ai-rulez@latest generate --no-self-mcp --quiet

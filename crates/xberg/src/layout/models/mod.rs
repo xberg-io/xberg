@@ -15,7 +15,10 @@ pub mod slanet;
 /// on the `crate::inference` seam) — available under both `layout-detection` (ORT) and
 /// `layout-tract` (tract).
 pub mod table_classifier;
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 /// Table Transformer (TATR) table structure recognition model. ORT-only (bare
 /// `ort::Session`; quantized export tract cannot unify — see `docs-site/src/content/docs/concepts/tract-inference.md`).
 pub mod tatr;

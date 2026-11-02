@@ -70,9 +70,15 @@ pub use models::table_classifier::{TableClassifier, TableType};
 #[cfg(feature = "layout-detection")]
 pub use models::yolo::{YoloModel, YoloVariant};
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 use std::ops::{Deref, DerefMut};
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 use std::sync::{Condvar, Mutex, MutexGuard};
 
 #[cfg(all(
@@ -96,7 +102,10 @@ use crate::model_cache::{ModelCache, ModelLease};
     any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
 ))]
 const LAYOUT_ENGINE_POOL_CAPACITY: usize = 2;
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 const TATR_MODEL_POOL_CAPACITY: usize = 2;
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 const SLANET_MODEL_POOL_CAPACITY: usize = 1;
@@ -114,34 +123,52 @@ const TABLE_CLASSIFIER_POOL_CAPACITY: usize = 1;
 static CACHED_ENGINE: ModelCache<LayoutEngine> = ModelCache::with_capacity(LAYOUT_ENGINE_POOL_CAPACITY);
 
 /// Global cached TATR table structure recognition model.
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 static CACHED_TATR: ModelCache<ConfiguredModel<models::tatr::TatrModel>> =
     ModelCache::with_capacity(TATR_MODEL_POOL_CAPACITY);
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 type ModelAccelerationKey = Option<crate::core::config::acceleration::AccelerationConfig>;
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 #[derive(Clone, PartialEq)]
 struct ModelSessionKey {
     acceleration: ModelAccelerationKey,
     thread_budget: usize,
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 pub(crate) struct ConfiguredModel<T> {
     session_key: ModelSessionKey,
     model: T,
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 impl<T> ConfiguredModel<T> {
     fn matches_session(&self, session_key: &ModelSessionKey) -> bool {
         self.session_key == *session_key
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 impl<T> Deref for ConfiguredModel<T> {
     type Target = T;
 
@@ -150,21 +177,30 @@ impl<T> Deref for ConfiguredModel<T> {
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 impl<T> DerefMut for ConfiguredModel<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.model
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 pub(crate) type TatrLease = ModelLease<'static, ConfiguredModel<models::tatr::TatrModel>>;
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) type SlanetLease = ModelLease<'static, ConfiguredModel<models::slanet::SlanetModel>>;
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) type TableClassifierLease = ModelLease<'static, ConfiguredModel<models::table_classifier::TableClassifier>>;
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 #[derive(Clone, Copy)]
 enum AvailabilityState {
     Unknown,
@@ -173,19 +209,28 @@ enum AvailabilityState {
     Failed,
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 struct ModelAvailability {
     state: Mutex<AvailabilityState>,
     changed: Condvar,
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 struct AvailabilityAttempt<'a> {
     availability: &'a ModelAvailability,
     completed: bool,
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 impl ModelAvailability {
     const fn new() -> Self {
         Self {
@@ -243,6 +288,7 @@ impl ModelAvailability {
         }
     }
 
+    #[cfg(feature = "pdf")]
     fn settled(&self) -> Option<bool> {
         match *self.lock_state() {
             AvailabilityState::Available => Some(true),
@@ -252,7 +298,10 @@ impl ModelAvailability {
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 impl AvailabilityAttempt<'_> {
     fn finish(mut self, succeeded: bool) -> bool {
         self.completed = true;
@@ -260,7 +309,10 @@ impl AvailabilityAttempt<'_> {
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 impl Drop for AvailabilityAttempt<'_> {
     fn drop(&mut self) {
         if !self.completed {
@@ -269,7 +321,10 @@ impl Drop for AvailabilityAttempt<'_> {
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 fn begin_model_attempt<'a>(
     availability: &'a ModelAvailability,
     acceleration: &ModelAccelerationKey,
@@ -281,7 +336,10 @@ fn begin_model_attempt<'a>(
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 fn finish_model_attempt(attempt: Option<AvailabilityAttempt<'_>>, succeeded: bool) -> bool {
     match attempt {
         Some(attempt) => attempt.finish(succeeded),
@@ -289,7 +347,10 @@ fn finish_model_attempt(attempt: Option<AvailabilityAttempt<'_>>, succeeded: boo
     }
 }
 
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 static TATR_AVAILABILITY: ModelAvailability = ModelAvailability::new();
 
 /// Convert a [`LayoutDetectionConfig`] into a [`LayoutEngineConfig`].
@@ -346,7 +407,10 @@ pub(crate) fn return_engine(engine: ModelLease<'static, LayoutEngine>) {
 /// Returns `None` if the model cannot be loaded. A failed default-acceleration
 /// load is cached to avoid repeated download attempts. Explicit acceleration
 /// configurations remain retryable and log each construction failure.
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 pub(crate) fn take_or_create_tatr(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     thread_budget: usize,
@@ -481,7 +545,10 @@ pub(crate) fn take_or_create_slanet(
 
 /// ~keep The processing warning for a document whose layout pass found table regions while the table model
 /// is not available. `source` names the extraction path that skipped table recognition.
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
 pub(crate) fn table_model_unavailable_warning(
     source: &'static str,
     model_name: &str,

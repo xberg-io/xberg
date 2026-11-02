@@ -1796,6 +1796,8 @@ pub(crate) fn hf_cached_revision_with_client(
 /// `<64-hex-sha256>  <path>`. Leading `./` is stripped from paths and checksums are
 /// lowercased. Returns the pairs in file order (may be empty if the content is all
 /// comments — callers that require at least one entry check that themselves).
+/// Artifact paths must be unique relative file paths; extra fields and traversal
+/// components are rejected rather than silently changing the selected inventory.
 ///
 /// Shared by every checksum-manifest consumer (GLiNER model checksums, Candle VLM-OCR
 /// weight staging) so the format and validation live in one place.
@@ -1808,27 +1810,70 @@ pub(crate) fn hf_cached_revision_with_client(
 ))]
 pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String)>, String> {
     let mut entries = Vec::new();
+    let mut paths = std::collections::HashSet::new();
     for (index, line) in content.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
         let mut parts = trimmed.split_whitespace();
-        let checksum = parts
-            .next()
-            .ok_or_else(|| format!("Invalid checksum line {}: missing checksum", index + 1))?;
-        let path = parts
-            .next()
-            .ok_or_else(|| format!("Invalid checksum line {}: missing path", index + 1))?;
+        let (Some(checksum), Some(path), None) = (parts.next(), parts.next(), parts.next()) else {
+            return Err(format!(
+                "Invalid checksum line {}: expected exactly two fields",
+                index + 1
+            ));
+        };
         if checksum.len() != 64 || !checksum.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(format!(
                 "Invalid checksum line {}: checksum must be SHA256 hex",
                 index + 1
             ));
         }
-        entries.push((path.trim_start_matches("./").to_string(), checksum.to_ascii_lowercase()));
+        let path = path.strip_prefix("./").unwrap_or(path);
+        if !path.split('/').all(portable_artifact_component) {
+            return Err(format!(
+                "Invalid checksum line {}: path must be a relative artifact file",
+                index + 1
+            ));
+        }
+        if !paths.insert(path.to_ascii_lowercase()) {
+            return Err(format!(
+                "Invalid checksum line {}: duplicate artifact path {path}",
+                index + 1
+            ));
+        }
+        entries.push((path.to_owned(), checksum.to_ascii_lowercase()));
     }
     Ok(entries)
+}
+
+#[cfg(any(
+    feature = "ner-onnx",
+    feature = "candle-paddleocr-vl",
+    feature = "candle-deepseek-ocr",
+    feature = "onnx-runtime",
+    all(feature = "static-embeddings", not(target_arch = "wasm32"))
+))]
+fn portable_artifact_component(component: &str) -> bool {
+    if component.is_empty()
+        || component.ends_with(['.', ' '])
+        || component.contains(['<', '>', ':', '"', '\\', '|', '?', '*'])
+        || component.chars().any(char::is_control)
+    {
+        return false;
+    }
+    // Windows reserves device stems even with extensions and superscript port digits. ~keep
+    let stem = component.split('.').next().unwrap_or_default().to_ascii_uppercase();
+    if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+        return false;
+    }
+    let port = stem.strip_prefix("COM").or_else(|| stem.strip_prefix("LPT"));
+    !port.is_some_and(|number| {
+        matches!(
+            number,
+            "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+        )
+    })
 }
 
 /// Verify the SHA256 checksum of a file using streaming reads.
@@ -2577,3 +2622,16 @@ mod vendored_manifest_registry_tests {
         assert!(manifests.len() <= 7, "registry declares more families than expected");
     }
 }
+
+#[cfg(all(
+    test,
+    any(
+        feature = "ner-onnx",
+        feature = "candle-paddleocr-vl",
+        feature = "candle-deepseek-ocr",
+        feature = "onnx-runtime",
+        all(feature = "static-embeddings", not(target_arch = "wasm32"))
+    )
+))]
+#[path = "model_download/manifest_validation_tests.rs"]
+mod manifest_validation_tests;

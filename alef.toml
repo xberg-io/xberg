@@ -6,7 +6,7 @@
 # for. 0.83.0 additionally fixes the php/napi/pyo3 mirror defaults, the elixir bytes
 # hop and the typescript/wasm mock-url builder that this repo's e2e legs were red on.
 # ~keep
-alef_version = "0.115.6"
+alef_version = "0.115.9"
 # Alef 0.115.5 emits a redundant PathBuf conversion closure in the Dart bridge. ~keep
 # This supported allow-list applies only to generated Rust bindings. ~keep
 extra_clippy_allows = ["redundant_closure"]
@@ -35,7 +35,6 @@ node_package_manager = "pnpm"
 
 [workspace.ownership]
 user_owned = [
-  "Taskfile.yml",
   "e2e/csharp/Xberg.E2eTests.csproj",
   "e2e/dart/pubspec.yaml",
   "e2e/go/go.mod",
@@ -388,7 +387,7 @@ exclude = [
   # lint rules (docstring/annotation/complexity checks fire on generator structure, not
   # human choices). The real gate is execution + freshness, both already wired: the CI E2E
   # workflow's `e2e-tests` matrix runs all 14 languages, and the `e2e-freshness` job
-  # (`task e2e:verify`) regenerates and diffs the tree so a stale commit fails CI. `poly
+  # (`mise run e2e:verify`) regenerates and diffs the tree so a stale commit fails CI. `poly
   # lint e2e/**` reporting "0 files linted, exit 0" is therefore not a silent gap -- do not
   # remove this exclude to "fix" that read without first replacing execution+freshness with
   # something at least as strong. ~keep
@@ -1796,7 +1795,7 @@ exclude_types = ["Recyclable"]
 [crates.elixir.dependency_versions]
 "cargo:alloc-no-stdlib" = "^3.0.0"
 "cargo:alloc-stdlib" = "^0.3.0"
-"cargo:brotli-decompressor" = "^6.0.1"
+"cargo:brotli-decompressor" = "^6.2.0"
 
 [[crates.elixir.target_dep_overrides]]
 cfg = 'target_os = "windows"'
@@ -2744,6 +2743,9 @@ default_features = false
 [crates.swift]
 module_name = "Xberg"
 package_name = "Xberg"
+# The bundled ONNX Runtime (ort-sys prebuilt) requires macOS 13.4. The scaffold writes only the
+# major version into `.macOS(.vN)`, so 14 is the lowest floor that covers it. ~keep
+min_macos_version = "14.0"
 # Mobile uses tract; preset types stay default while native inference flags remain opt-in.
 # The desktop FFI dependency below retains the full native inference surface. ~keep
 excluded_default_features = ["heic", "layout-detection", "reranker", "late-interaction"]
@@ -5743,11 +5745,11 @@ clear_fn = "clear_tokenizer_backends"
 [[workspace.poly.hooks-sources]]
 id = "ai-rulez"
 git = "https://github.com/Goldziher/ai-rulez.git"
-revision = "v5.9.2"
+revision = "v5"
 hooks = ["ai-rulez-validate", "ai-rulez-plugin-verify"]
 
 [[workspace.poly.hooks-sources]]
 id = "adrlint"
 git = "https://github.com/Goldziher/adrlint.git"
-revision = "v0.4.0"
+revision = "v0"
 hooks = ["adrlint-lint", "adrlint-format-check", "adrlint-lock-check"]

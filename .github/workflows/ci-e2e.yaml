@@ -44,7 +44,8 @@ permissions:
 jobs:
   build-ffi:
     name: Build FFI (${{ matrix.target }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     env:
@@ -139,7 +140,8 @@ jobs:
 
   e2e-tests:
     name: E2E (${{ matrix.lang }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     needs: [build-ffi]
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 360
@@ -377,6 +379,7 @@ jobs:
           bundle config set frozen true
           bundle install --jobs 4
 
+      # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - name: Setup Android SDK
         if: matrix.lang == 'kotlin-android'
         uses: android-actions/setup-android@v4
@@ -390,12 +393,14 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
+      # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
       - name: Setup .NET
         if: matrix.dotnet-version
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
 
+      # PHP stays on its setup action (toolchain-management rule). ~keep
       - name: Setup PHP
         if: matrix.php-version
         uses: xberg-io/actions/setup-php@v1
@@ -403,6 +408,7 @@ jobs:
           php-version: ${{ matrix.php-version }}
           tools: composer
 
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - name: Setup Elixir
         if: matrix.elixir-version
         uses: xberg-io/actions/setup-elixir@v1
@@ -410,12 +416,14 @@ jobs:
           elixir-version: ${{ matrix.elixir-version }}
           otp-version: ${{ matrix.otp-version }}
 
+      # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
       - name: Setup Dart
         if: matrix.dart-version
         uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.dart-version }}
 
+      # Swift stays on its setup action (toolchain-management rule). ~keep
       - name: Setup Swift
         if: matrix.swift-version
         uses: xberg-io/actions/setup-swift@v1

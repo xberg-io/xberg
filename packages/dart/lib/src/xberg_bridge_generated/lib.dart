@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import 'frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
@@ -18686,11 +18687,11 @@ class Table {
   /// serialises exactly as it did before. Indices are into `cells`.
   final List<TableCellStyle> cellStyles;
 
-  /// Header cells for this fragment, i.e. the first row of `cells`.
+  /// Declared column header labels for this fragment.
   ///
-  /// Populated even when this fragment's own header row was merged away or
-  /// physically lives in a sibling fragment (see `table_id`), so a single
-  /// fragment is interpretable in isolation. `None` when no header row
+  /// These may describe the first row of `cells` or be inherited from a sibling
+  /// fragment (see `table_id`) whose header row is absent here, so a single
+  /// fragment is interpretable in isolation. `None` when no column headers
   /// could be determined.
   final List<String>? columns;
 

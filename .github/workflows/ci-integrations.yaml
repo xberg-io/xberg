@@ -52,7 +52,8 @@ permissions:
 jobs:
   build-bindings:
     name: Build local integration bindings
-    if: github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     env:
       MISE_ENV: ci
@@ -140,7 +141,8 @@ jobs:
 
   python:
     name: Python (py${{ matrix.python }})
-    if: github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true) }}
     needs: [build-bindings]
     runs-on: ubuntu-latest
     env:
@@ -196,7 +198,8 @@ jobs:
 
   node:
     name: Node
-    if: github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true) }}
     needs: [build-bindings]
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -240,7 +243,8 @@ jobs:
 
   java:
     name: Java (spring-ai)
-    if: github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.event.pull_request.draft != true) }}
     needs: [build-bindings]
     runs-on: ubuntu-latest
     timeout-minutes: 360

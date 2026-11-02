@@ -44,9 +44,6 @@ export default defineConfig({
           "bindings for 15 languages.",
         githubUrl: "https://github.com/xberg-io/xberg",
         editBaseUrl: "https://github.com/xberg-io/xberg/edit/main/docs-site/",
-        starlight: {
-          favicon: "https://cdn.jsdelivr.net/gh/xberg-io/assets@v1.0.0/docs/app-icon.svg",
-        },
         plugins: [
           starlightLlmsTxt({
             customSets: [

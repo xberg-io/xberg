@@ -3,6 +3,13 @@
 use super::super::geometry::Rect;
 
 #[cfg(feature = "layout-detection")]
+mod structure;
+
+#[cfg(all(test, feature = "layout-detection"))]
+#[path = "table_recognition/metadata_tests.rs"]
+mod metadata_tests;
+
+#[cfg(feature = "layout-detection")]
 use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
 #[cfg(feature = "layout-detection")]
 use crate::types::Table;
@@ -50,6 +57,7 @@ const TATR_OUTER_EDGE_PADDING_MAX_PTS: f32 = 4.0;
 #[cfg(feature = "layout-detection")]
 struct RecognizedTatrTable {
     table: Table,
+    grid: Option<crate::types::TableGrid>,
     eligible_word_ids: std::collections::BTreeSet<usize>,
     consumed_word_ids: std::collections::BTreeSet<usize>,
 }
@@ -109,7 +117,7 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
     page_height: f32,
     options: NativeTatrRecognitionOptions,
     tatr_model: &mut crate::layout::models::tatr::TatrModel,
-) -> Vec<Table> {
+) -> crate::pdf::structure::table_grid::RecognizedNativeTables {
     let rgb_image = page_image;
 
     let table_hints: Vec<&LayoutHint> = hints
@@ -141,7 +149,17 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
         ));
     }
 
-    tables
+    let mut result = crate::pdf::structure::table_grid::RecognizedNativeTables::default();
+    for recognized in tables {
+        if let Some(grid) = recognized.grid {
+            result.grids.push(crate::pdf::structure::table_grid::TableGridSidecar {
+                table: recognized.table.clone(),
+                grid,
+            });
+        }
+        result.tables.push(recognized.table);
+    }
+    result
 }
 
 #[cfg(feature = "layout-detection")]
@@ -150,7 +168,7 @@ fn recognize_hint_with_optional_split<F>(
     words: &[crate::pdf::table_reconstruct::HocrWord],
     page_height: f32,
     mut recognize: F,
-) -> Vec<Table>
+) -> Vec<RecognizedTatrTable>
 where
     F: FnMut(&LayoutHint, Option<&std::collections::BTreeSet<usize>>) -> Option<RecognizedTatrTable>,
 {
@@ -177,11 +195,11 @@ where
             && split_child_is_credible(&right)
             && left.consumed_word_ids.is_disjoint(&right.consumed_word_ids)
         {
-            return vec![left.table, right.table];
+            return vec![left, right];
         }
     }
 
-    recognize(hint, None).map(|result| result.table).into_iter().collect()
+    recognize(hint, None).into_iter().collect()
 }
 
 #[cfg(feature = "layout-detection")]
@@ -312,7 +330,7 @@ fn infer_tatr_grid(
     tatr_model: &mut crate::layout::models::tatr::TatrModel,
     crop: &TatrCrop,
     page_index: usize,
-) -> Option<Vec<Vec<crate::layout::models::tatr::CellBBox>>> {
+) -> Option<TatrInference> {
     let tatr_result = match tatr_model.recognize(&crop.image) {
         Ok(r) => r,
         Err(e) => {
@@ -332,7 +350,8 @@ fn infer_tatr_grid(
     }
 
     let table_bbox_crop = [0.0_f32, 0.0, crop.width as f32, crop.height as f32];
-    let cell_grid = crate::layout::models::tatr::build_cell_grid(&tatr_result, Some(table_bbox_crop));
+    let (cell_grid, structure) =
+        crate::layout::models::tatr::build_cell_grid_with_structure(&tatr_result, Some(table_bbox_crop));
     let num_rows = cell_grid.len();
     let num_cols = if num_rows > 0 { cell_grid[0].len() } else { 0 };
 
@@ -349,12 +368,21 @@ fn infer_tatr_grid(
     if num_rows == 0 || num_cols == 0 {
         return None;
     }
-    Some(cell_grid)
+    Some(TatrInference {
+        cells: cell_grid,
+        structure,
+    })
+}
+
+#[cfg(feature = "layout-detection")]
+struct TatrInference {
+    cells: Vec<Vec<crate::layout::models::tatr::CellBBox>>,
+    structure: crate::layout::models::tatr::TableStructure,
 }
 
 #[cfg(feature = "layout-detection")]
 fn assemble_tatr_table(
-    cell_grid: &[Vec<crate::layout::models::tatr::CellBBox>],
+    inference: &TatrInference,
     crop: &TatrCrop,
     hint: &LayoutHint,
     allowed_word_ids: Option<&std::collections::BTreeSet<usize>>,
@@ -368,8 +396,8 @@ fn assemble_tatr_table(
         context.page_height,
     );
     let table_words: Vec<_> = indexed_table_words.iter().map(|(_, word)| *word).collect();
-    let grid_output = build_tatr_grid_table(
-        cell_grid,
+    let mut grid_output = build_tatr_grid_table(
+        &inference.cells,
         &table_words,
         crop.px_left as f32,
         crop.px_top as f32,
@@ -387,10 +415,15 @@ fn assemble_tatr_table(
         .iter()
         .map(|local_id| indexed_table_words[*local_id].0)
         .collect();
+    let grid = structure::apply_structure(&mut grid_output.grid, inference, crop, context.page_height);
+    let columns = (inference.structure.header_row_count > 0).then(|| grid_output.grid[0].clone());
+    grid_output.markdown = render_grid_as_markdown(&grid_output.grid);
     Some(RecognizedTatrTable {
+        grid: Some(grid),
         table: Table {
             cells: grid_output.grid,
             markdown: grid_output.markdown,
+            columns,
             page_number: (context.page_index + 1) as u32,
             bounding_box: Some(bounding_box),
             ..Default::default()
@@ -1789,6 +1822,7 @@ mod tests {
             .cloned()
             .unwrap_or_else(|| (0..30).collect::<std::collections::BTreeSet<_>>());
         RecognizedTatrTable {
+            grid: None,
             table: Table {
                 cells: vec![
                     vec!["name".to_string(), "value".to_string()],
@@ -2103,7 +2137,7 @@ mod tests {
         assert_eq!(tables.len(), 1);
         assert_eq!(calls.len(), 3);
         assert_eq!(calls[2], (hint.left, hint.right));
-        assert_eq!(tables[0].bounding_box.as_ref().map(|bbox| bbox.x1), Some(200.0));
+        assert_eq!(tables[0].table.bounding_box.as_ref().map(|bbox| bbox.x1), Some(200.0));
     }
 
     #[test]
@@ -2114,8 +2148,8 @@ mod tests {
         });
 
         assert_eq!(tables.len(), 2);
-        let left = tables[0].bounding_box.as_ref().expect("left bbox");
-        let right = tables[1].bounding_box.as_ref().expect("right bbox");
+        let left = tables[0].table.bounding_box.as_ref().expect("left bbox");
+        let right = tables[1].table.bounding_box.as_ref().expect("right bbox");
         assert!(left.x0 < right.x0);
         assert_eq!(left.x1, right.x0);
     }
@@ -2143,7 +2177,7 @@ mod tests {
 
         assert_eq!(calls, 3);
         assert_eq!(tables.len(), 1);
-        assert_eq!(tables[0].bounding_box.as_ref().map(|bbox| bbox.x1), Some(200.0));
+        assert_eq!(tables[0].table.bounding_box.as_ref().map(|bbox| bbox.x1), Some(200.0));
     }
 
     #[test]
@@ -2205,7 +2239,7 @@ mod tests {
 
         assert_eq!(calls, 1);
         assert_eq!(tables.len(), 1);
-        assert_eq!(tables[0].bounding_box.as_ref().map(|bbox| bbox.x1), Some(200.0));
+        assert_eq!(tables[0].table.bounding_box.as_ref().map(|bbox| bbox.x1), Some(200.0));
     }
 
     #[test]

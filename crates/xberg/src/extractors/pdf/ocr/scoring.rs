@@ -247,6 +247,51 @@ pub(crate) fn evaluate_native_text_for_ocr(
 ) -> OcrFallbackDecision {
     evaluate_native_text_for_ocr_with_garbage_threshold(native_text, page_count, thresholds, true)
 }
+/// The clauses of the native-text gate that mark a text layer as unusable regardless of its
+/// size: no alphanumerics, undecodable characters, fragmentation, repeated runs. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn native_text_definitively_failed(
+    stats: &NativeTextStats,
+    has_substantial_content: bool,
+    thresholds: &OcrQualityThresholds,
+    apply_absolute_garbage_threshold: bool,
+) -> bool {
+    // A page with a high fraction of undecodable characters (PUA / replacement / control
+    // garbage) has a broken glyph-to-Unicode mapping regardless of how "substantial" the
+    // page otherwise looks — it is gated only by a minimum character count so a stray
+    // symbol or two on an otherwise short page can't trip it (issue #1254). ~keep
+    let has_undecodable_text_layer = stats.non_whitespace >= thresholds.min_total_non_whitespace
+        && stats.undecodable_ratio >= thresholds.min_undecodable_ratio;
+
+    let has_excessive_garbage =
+        apply_absolute_garbage_threshold && stats.garbage_char_count >= thresholds.min_garbage_chars;
+
+    stats.non_whitespace == 0
+        || stats.alnum == 0
+        || has_excessive_garbage
+        || stats.fragmented_word_ratio >= thresholds.critical_fragmented_word_ratio
+        || has_undecodable_text_layer
+        || (!has_substantial_content
+            && (stats.fragmented_word_ratio >= thresholds.max_fragmented_word_ratio
+                && stats.meaningful_words < thresholds.min_meaningful_words))
+        || (!has_substantial_content
+            && (stats.avg_word_length < thresholds.min_avg_word_length
+                && stats.word_count >= thresholds.min_words_for_avg_length_check))
+        || (!has_substantial_content && stats.consecutive_repeat_ratio >= thresholds.min_consecutive_repeat_ratio)
+}
+/// True when a text layer is readable text that failed the OCR gate on size only: the layer
+/// holds characters and none of the garble clauses of the gate fires. A caller keeps such a
+/// layer beside OCR text that is judged recognition noise. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn native_layer_is_clean(native_text: &str, thresholds: &OcrQualityThresholds) -> bool {
+    let trimmed = native_text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let stats = NativeTextStats::compute(trimmed, thresholds);
+    let has_substantial_content = stats.non_whitespace as f64 >= MIN_AVG_NON_WHITESPACE_TO_TRUST;
+    !native_text_definitively_failed(&stats, has_substantial_content, thresholds, true)
+}
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn evaluate_native_text_for_ocr_with_garbage_threshold(
     native_text: &str,
@@ -289,29 +334,12 @@ pub(super) fn evaluate_native_text_for_ocr_with_garbage_threshold(
         && stats.meaningful_words >= thresholds.min_meaningful_words;
 
     let has_substantial_content = avg_non_whitespace >= MIN_AVG_NON_WHITESPACE_TO_TRUST;
-
-    // A page with a high fraction of undecodable characters (PUA / replacement / control
-    // garbage) has a broken glyph-to-Unicode mapping regardless of how "substantial" the
-    // page otherwise looks — it is gated only by a minimum character count so a stray
-    // symbol or two on an otherwise short page can't trip it (issue #1254). ~keep
-    let has_undecodable_text_layer = stats.non_whitespace >= thresholds.min_total_non_whitespace
-        && stats.undecodable_ratio >= thresholds.min_undecodable_ratio;
-
-    let has_excessive_garbage =
-        apply_absolute_garbage_threshold && stats.garbage_char_count >= thresholds.min_garbage_chars;
-
-    let definitive_failure = stats.non_whitespace == 0
-        || stats.alnum == 0
-        || has_excessive_garbage
-        || stats.fragmented_word_ratio >= thresholds.critical_fragmented_word_ratio
-        || has_undecodable_text_layer
-        || (!has_substantial_content
-            && (stats.fragmented_word_ratio >= thresholds.max_fragmented_word_ratio
-                && stats.meaningful_words < thresholds.min_meaningful_words))
-        || (!has_substantial_content
-            && (stats.avg_word_length < thresholds.min_avg_word_length
-                && stats.word_count >= thresholds.min_words_for_avg_length_check))
-        || (!has_substantial_content && stats.consecutive_repeat_ratio >= thresholds.min_consecutive_repeat_ratio);
+    let definitive_failure = native_text_definitively_failed(
+        &stats,
+        has_substantial_content,
+        thresholds,
+        apply_absolute_garbage_threshold,
+    );
 
     let fallback = if definitive_failure {
         true

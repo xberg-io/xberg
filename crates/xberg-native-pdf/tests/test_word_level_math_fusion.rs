@@ -159,3 +159,90 @@ fn line_wrap_with_near_zero_y_delta_does_not_fuse() {
         words.iter().map(|w| &w.text).collect::<Vec<_>>()
     );
 }
+
+fn tagged_word_pair_pdf(content: &str) -> Vec<u8> {
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>".to_owned(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+         /StructParents 0 /Resources << /Font << /F1 5 0 R >> >> >>"
+            .to_owned(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_owned(),
+        "<< /Type /StructTreeRoot /K [7 0 R] /ParentTree 8 0 R >>".to_owned(),
+        "<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K [0 1] >>".to_owned(),
+        "<< /Nums [0 [7 0 R 7 0 R]] >>".to_owned(),
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = vec![0];
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+    }
+    common::finalize_pdf(pdf, &offsets)
+}
+
+#[test]
+fn near_baseline_numeric_columns_do_not_merge_when_reading_order_backtracks() {
+    // The font size, x positions and 0.5118pt baseline drift reproduce adjacent IRS year/rate cells. ~keep
+    let content = "BT /F1 7.9066746 Tf\n\
+        /Span <</MCID 0>> BDC 1 0 0 1 95.00274 500 Tm (5.55) Tj EMC\n\
+        /Span <</MCID 1>> BDC 1 0 0 1 62.19003 499.4882 Tm (16) Tj EMC\nET";
+    let doc = PdfDocument::from_bytes(tagged_word_pair_pdf(content)).expect("parse numeric columns");
+    let ordered = xberg_native_pdf::pipeline::page_reading_order(&doc, 0).expect("ordered numeric spans");
+    assert_eq!(
+        ordered.iter().map(|span| span.span.text.as_str()).collect::<Vec<_>>(),
+        ["5.55", "16"],
+        "the fixture must exercise a backwards merge candidate rather than a geometry-sort control"
+    );
+    assert!(
+        ordered[1].span.bbox.right() < ordered[0].span.bbox.x,
+        "the incoming value must occupy disjoint ink left of the preceding value"
+    );
+    let words = doc.extract_words(0).expect("numeric words");
+    assert_eq!(
+        words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>(),
+        ["5.55", "16"],
+        "separate values must survive sub-point baseline jitter"
+    );
+}
+
+#[test]
+fn raised_exponent_after_a_base_still_merges() {
+    let content = "BT\n\
+        /Span <</MCID 0>> BDC /F1 12 Tf 1 0 0 1 100 500 Tm (x) Tj EMC\n\
+        /Span <</MCID 1>> BDC /F1 8 Tf 1 0 0 1 106 504 Tm (2) Tj EMC\nET";
+    let doc = PdfDocument::from_bytes(tagged_word_pair_pdf(content)).expect("parse raised exponent");
+    let words = doc.extract_words(0).expect("exponent words");
+    assert_eq!(words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>(), ["x2"]);
+}
+
+#[test]
+fn right_to_left_runs_still_merge_across_leftward_ink() {
+    let content = "BT /F1 12 Tf\n\
+        /Span <</MCID 0 /ActualText <FEFF05D0>>> BDC 1 0 0 1 120 500 Tm (A) Tj EMC\n\
+        /Span <</MCID 1 /ActualText <FEFF05D1>>> BDC 1 0 0 1 110 499.5 Tm (B) Tj EMC\nET";
+    let doc = PdfDocument::from_bytes(tagged_word_pair_pdf(content)).expect("parse RTL runs");
+    let words = doc.extract_words(0).expect("RTL words");
+    assert_eq!(words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>(), ["אב"]);
+}
+
+#[test]
+fn overlapping_ink_with_forward_origins_still_merges() {
+    let content = "BT /F1 12 Tf\n\
+        /Span <</MCID 0>> BDC 1 0 0 1 100 500 Tm (Q) Tj EMC\n\
+        /Span <</MCID 1>> BDC 1 0 0 1 109 500 Tm (mark) Tj EMC\nET";
+    let doc = PdfDocument::from_bytes(tagged_word_pair_pdf(content)).expect("parse overlapping runs");
+    let ordered = xberg_native_pdf::pipeline::page_reading_order(&doc, 0).expect("ordered overlapping spans");
+    assert_eq!(ordered.len(), 2, "the merger must receive separate source spans");
+    assert!(ordered[1].span.bbox.x > ordered[0].span.bbox.x);
+    assert!(
+        ordered[1].span.bbox.x < ordered[0].span.bbox.right(),
+        "the kerning control must contain actual overlapping ink"
+    );
+    let words = doc.extract_words(0).expect("overlapping words");
+    assert_eq!(
+        words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>(),
+        ["Qmark"]
+    );
+}

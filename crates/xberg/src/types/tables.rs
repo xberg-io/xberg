@@ -76,14 +76,29 @@ pub struct Table {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cell_styles: Vec<TableCellStyle>,
 
-    /// Header cells for this fragment, i.e. the first row of `cells`.
+    /// Declared column header labels for this fragment.
     ///
-    /// Populated even when this fragment's own header row was merged away or
-    /// physically lives in a sibling fragment (see `table_id`), so a single
-    /// fragment is interpretable in isolation. `None` when no header row
+    /// These may describe the first row of `cells` or be inherited from a sibling
+    /// fragment (see `table_id`) whose header row is absent here, so a single
+    /// fragment is interpretable in isolation. `None` when no column headers
     /// could be determined.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub columns: Option<Vec<String>>,
+}
+
+impl Table {
+    pub(crate) fn has_header_row(&self) -> bool {
+        let (Some(columns), Some(first_row)) = (self.columns.as_ref(), self.cells.first()) else {
+            return false;
+        };
+        !columns.is_empty()
+            && first_row.len() == columns.len()
+            && columns.iter().any(|column| !column.trim().is_empty())
+            && first_row
+                .iter()
+                .zip(columns)
+                .all(|(cell, column)| cell.trim() == column.trim())
+    }
 }
 
 /// The paragraph style a single table cell's text carries, located by grid position.
@@ -131,6 +146,37 @@ fn default_span() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn physical_header_requires_matching_nonblank_declared_cells() {
+        type HeaderCase<'a> = (&'a [&'a str], Option<&'a [&'a str]>, bool);
+        let cases: &[HeaderCase<'_>] = &[
+            (&["A", "B"], None, false),
+            (&[], Some(&[]), false),
+            (&[" ", ""], Some(&["", " "]), false),
+            (&["A", "B"], Some(&["Known A", "Known B"]), false),
+            (&["A", "B"], Some(&["A"]), false),
+            (&["A"], Some(&["A", "B"]), false),
+            (&["A", "B"], Some(&["A", "B"]), true),
+            (&[" A ", " B"], Some(&["A", "B "]), true),
+            (&["", "B"], Some(&["", "B"]), true),
+        ];
+        for (first_row, columns, expected) in cases {
+            let table = Table {
+                cells: vec![first_row.iter().map(|cell| (*cell).to_owned()).collect()],
+                columns: columns.map(|columns| columns.iter().map(|column| (*column).to_owned()).collect()),
+                ..Default::default()
+            };
+            assert_eq!(table.has_header_row(), *expected, "{table:?}");
+        }
+        assert!(
+            !Table {
+                columns: Some(vec!["A".to_owned()]),
+                ..Default::default()
+            }
+            .has_header_row()
+        );
+    }
 
     #[test]
     fn test_table_with_bounding_box_serialization() {

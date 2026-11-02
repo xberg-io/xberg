@@ -18,7 +18,8 @@
 param(
   [Parameter(Mandatory = $true)][string]$Wheel,
   [Parameter(Mandatory = $true)][string]$DllSourceDir,
-  [Parameter(Mandatory = $true)][string]$NativeGlob
+  [Parameter(Mandatory = $true)][string]$NativeGlob,
+  [string]$MsvcRuntimeDir
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +71,18 @@ try {
       $relPath = [System.IO.Path]::GetRelativePath($workDir, $destPath) -replace '\\', '/'
       $addedRecordLines += "$relPath,sha256=$b64,$size"
     }
+  }
+
+  $stageArgs = @('stage', '--artifact', $workDir, '--native-glob', $NativeGlob)
+  if ($MsvcRuntimeDir) { $stageArgs += @('--crt-dir', $MsvcRuntimeDir) }
+  $runtime = & python (Join-Path $PSScriptRoot 'windows_wheel_closure.py') @stageArgs
+  if ($LASTEXITCODE -ne 0) { throw 'Microsoft runtime closure staging failed' }
+  $runtimeFiles = ($runtime | ConvertFrom-Json).added
+  foreach ($path in $runtimeFiles) {
+    $rawBytes = [Convert]::FromHexString((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash)
+    $b64 = [Convert]::ToBase64String($rawBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    $relPath = [System.IO.Path]::GetRelativePath($workDir, $path) -replace '\\', '/'
+    $addedRecordLines += "$relPath,sha256=$b64,$((Get-Item -LiteralPath $path).Length)"
   }
 
   if ($addedRecordLines.Count -gt 0) {

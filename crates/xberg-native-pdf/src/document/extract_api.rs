@@ -1545,6 +1545,9 @@ impl PdfDocument {
                 let line_h = prev.bbox.height.max(word.bbox.height);
                 let font_size = prev.avg_font_size.max(word.avg_font_size).max(1.0);
                 let not_rtl = !merged_rtl.last().copied().unwrap_or(false) && !word_rtl;
+                // Disjoint ink wholly left of the preceding origin cannot continue an LTR word,
+                // even when adjacent table values have sub-point baseline jitter. ~keep
+                let is_disjoint_ltr_backtrack = word.bbox.right() < prev.bbox.x && not_rtl;
                 let is_math_backtrack = y_diff > 1.0 && delta_x <= 0.5 && gap < -font_size && not_rtl;
                 // A LINE WRAP can land at nearly the same y as the line
                 // above it (some producers emit sub-1pt baseline drift
@@ -1559,7 +1562,12 @@ impl PdfDocument {
                 // fused onto its own next line's head (e.g. "of whom" +
                 // "tered with books" → "whomteredwithbooks"). ~keep
                 let is_line_wrap_reset = delta_x < -5.0 * font_size && not_rtl;
-                if y_diff <= line_h * 0.5 && gap <= font_size * 0.15 && !is_math_backtrack && !is_line_wrap_reset {
+                if y_diff <= line_h * 0.5
+                    && gap <= font_size * 0.15
+                    && !is_disjoint_ltr_backtrack
+                    && !is_math_backtrack
+                    && !is_line_wrap_reset
+                {
                     // Incremental merge — O(k) per merge, O(total_chars) overall.
                     // Avoids the O(n²) clone+from_chars pattern that caused
                     // catastrophic slowdown on TOC dot-leader pages. ~keep

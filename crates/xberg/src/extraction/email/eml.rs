@@ -41,7 +41,7 @@ pub(super) struct EmailAddressFields {
 }
 
 /// Read the sender's address and display name from the first `From:` mailbox.
-pub(super) fn extract_sender_fields(message: &mail_parser::Message<'_>) -> (Option<String>, Option<String>) {
+pub(super) fn extract_sender_fields(message: &mail_parser::MessageRef<'_>) -> (Option<String>, Option<String>) {
     let sender = message.from().and_then(|from| from.first());
     let from_email = sender.and_then(|address| address.address().map(str::to_string));
     let from_name = sender
@@ -54,7 +54,7 @@ pub(super) fn extract_sender_fields(message: &mail_parser::Message<'_>) -> (Opti
 /// Read the message date, preferring the literal `Date:` header text (see
 /// `extract_raw_date_header`) over `mail_parser`'s own parsed value, and discarding a
 /// parsed value that round-trips to an obviously-invalid placeholder year.
-pub(super) fn extract_email_date_field(message: &mail_parser::Message<'_>, data: &[u8]) -> Option<String> {
+pub(super) fn extract_email_date_field(message: &mail_parser::MessageRef<'_>, data: &[u8]) -> Option<String> {
     extract_raw_date_header(data).or_else(|| {
         message.date().and_then(|d| {
             let rfc3339 = d.to_rfc3339();
@@ -70,14 +70,14 @@ pub(super) fn extract_email_date_field(message: &mail_parser::Message<'_>, data:
 /// Read subject/sender/recipient/date/threading fields from a parsed message and its raw
 /// bytes (`data`, needed because `extract_raw_date_header` reads the literal `Date:`
 /// header text rather than `mail_parser`'s own parsed value -- see that function).
-pub(super) fn extract_email_address_fields(message: &mail_parser::Message<'_>, data: &[u8]) -> EmailAddressFields {
+pub(super) fn extract_email_address_fields(message: &mail_parser::MessageRef<'_>, data: &[u8]) -> EmailAddressFields {
     let subject = message.subject().map(|s| s.to_string());
     let (from_email, from_name) = extract_sender_fields(message);
 
     let to_emails: Vec<String> = message
         .to()
         .map(|to| {
-            to.iter()
+            to.mailboxes()
                 .filter_map(|addr| addr.address().map(|email| email.to_string()))
                 .collect()
         })
@@ -86,7 +86,7 @@ pub(super) fn extract_email_address_fields(message: &mail_parser::Message<'_>, d
     let cc_emails: Vec<String> = message
         .cc()
         .map(|cc| {
-            cc.iter()
+            cc.mailboxes()
                 .filter_map(|addr| addr.address().map(|email| email.to_string()))
                 .collect()
         })
@@ -95,7 +95,7 @@ pub(super) fn extract_email_address_fields(message: &mail_parser::Message<'_>, d
     let bcc_emails: Vec<String> = message
         .bcc()
         .map(|bcc| {
-            bcc.iter()
+            bcc.mailboxes()
                 .filter_map(|addr| addr.address().map(|email| email.to_string()))
                 .collect()
         })
@@ -109,7 +109,7 @@ pub(super) fn extract_email_address_fields(message: &mail_parser::Message<'_>, d
         .reply_to()
         .map(|addrs| {
             addrs
-                .iter()
+                .mailboxes()
                 .filter_map(|addr| addr.address().map(|email| email.to_string()))
                 .collect()
         })
@@ -117,13 +117,11 @@ pub(super) fn extract_email_address_fields(message: &mail_parser::Message<'_>, d
 
     let in_reply_to: Vec<String> = message
         .in_reply_to()
-        .as_text_list()
         .map(|list| list.iter().map(|s| s.to_string()).collect())
         .unwrap_or_default();
 
     let references: Vec<String> = message
         .references()
-        .as_text_list()
         .map(|list| list.iter().map(|s| s.to_string()).collect())
         .unwrap_or_default();
 
@@ -147,18 +145,16 @@ pub(super) fn extract_email_address_fields(message: &mail_parser::Message<'_>, d
 /// [`collect_nested_message_payloads`]) when nesting was requested, or from the part's own
 /// raw bytes otherwise.
 pub(super) fn build_email_attachments(
-    message: &mail_parser::Message<'_>,
+    message: &mail_parser::MessageRef<'_>,
     nested_messages: &[NestedMessagePayload],
     include_nested_messages: bool,
 ) -> Vec<EmailAttachment> {
     let mut attachments = Vec::with_capacity(message.attachments().count().min(20));
-    for &part_id in &message.attachments {
-        let Some(attachment) = message.parts.get(part_id as usize) else {
-            continue;
-        };
+    for attachment in message.attachments() {
+        let part_id = attachment.id() as usize;
         let filename = attachment.attachment_name().map(|s| s.to_string());
 
-        let mime_type = if matches!(&attachment.body, mail_parser::PartType::Message(_)) {
+        let mime_type = if matches!(attachment.kind(), mail_parser::PartKind::Message(_)) {
             "message/rfc822".to_string()
         } else {
             attachment
@@ -170,13 +166,13 @@ pub(super) fn build_email_attachments(
                 .unwrap_or_else(|| "application/octet-stream".to_string())
         };
 
-        let (data, size) = match &attachment.body {
-            mail_parser::PartType::Message(nested) => {
-                let raw_message = nested.raw_message();
+        let (data, size) = match attachment.kind() {
+            mail_parser::PartKind::Message(nested) => {
+                let raw_message = nested.raw();
                 let data = if include_nested_messages {
                     nested_messages
                         .iter()
-                        .find(|payload| payload.part_id == part_id as usize)
+                        .find(|payload| payload.part_id == part_id)
                         .and_then(|payload| payload.data.clone())
                 } else {
                     Some(Bytes::copy_from_slice(raw_message))
@@ -184,9 +180,9 @@ pub(super) fn build_email_attachments(
                 (data, raw_message.len())
             }
             _ => {
-                let contents = recover_base64_contents(message, attachment)
+                let contents = recover_base64_contents(&attachment)
                     .map(Cow::Owned)
-                    .unwrap_or(Cow::Borrowed(attachment.contents()));
+                    .unwrap_or_else(|| attachment.decoded());
                 (Some(Bytes::copy_from_slice(&contents)), contents.len())
             }
         };
@@ -213,40 +209,23 @@ const LENIENT_BASE64: base64::engine::GeneralPurpose = base64::engine::GeneralPu
         .with_decode_allow_trailing_bits(true),
 );
 
-/// The bytes of a base64 part that `mail-parser` could not decode.
+/// Recover malformed base64 from the source body while retaining mislabeled plain sentences.
 ///
-/// `mail-parser` gives up on a base64 body at the first character outside the base64 alphabet,
-/// such as a stray `>`, and keeps the still-encoded text as the part's contents: it flags the part
-/// `is_encoding_problem` and resets its `encoding` to `None`. That text then came out as the body
-/// or as the text of an attachment. RFC 2045, section 6.8, has a decoder ignore those characters,
-/// so the text is decoded here without them, up to the first `=`, which the RFC also takes as the
-/// end of the data. A last symbol left on its own holds six bits, no whole byte, and is dropped.
-///
-/// `None` for any other part, including an attached message that `mail-parser` decoded but could
-/// not parse: it is flagged too, but keeps its `Base64` encoding and its decoded contents. Also
-/// `None` for text that is not base64 at all despite its label, such as a plain sentence: a line
-/// of base64 has no space between two symbols, and that text reads as it was.
-///
-/// The encoded text is read from `message`, the message that owns `part`, at the part's body
-/// offsets. The contents of a text part are already decoded with its charset, so the base64 of a
-/// UTF-16 body came back as unrelated characters there and filtered down to nothing.
-pub(super) fn recover_base64_contents(
-    message: &mail_parser::Message<'_>,
-    part: &mail_parser::MessagePart<'_>,
-) -> Option<Vec<u8>> {
+/// The checked decoder distinguishes a malformed transfer from a valid decoded attachment at
+/// the nested-message limit. Recovery reads the owning part's source buffer, before charset
+/// conversion, and stops at the first padding character as RFC 2045 requires. ~keep
+pub(super) fn recover_base64_contents(part: &mail_parser::MessagePart<'_>) -> Option<Vec<u8>> {
     use base64::Engine as _;
 
     let declares_base64 = part
         .content_transfer_encoding()
         .is_some_and(|encoding| encoding.trim().eq_ignore_ascii_case("base64"));
-    if part.encoding != mail_parser::Encoding::None || !declares_base64 {
+    if !declares_base64 || part.decoded_checked().1.is_empty() {
         return None;
     }
-    let encoded = message
-        .raw_message
-        .get(part.offset_body as usize..part.offset_end as usize)?;
+    let encoded = part.raw_body();
     if encoded.split(|&byte| byte == b'\n').any(has_space_between_symbols) {
-        return None;
+        return Some(encoded.to_vec());
     }
     let mut symbols: Vec<u8> = encoded
         .iter()
@@ -284,14 +263,14 @@ fn has_space_between_symbols(line: &[u8]) -> bool {
 
 /// The text of a body part, decoded from base64 by [`recover_base64_contents`] where
 /// `mail-parser` could not, in the charset the part declares.
-fn recover_base64_text(message: &mail_parser::Message<'_>, part: &mail_parser::MessagePart<'_>) -> Option<String> {
-    let bytes = recover_base64_contents(message, part)?;
+fn recover_base64_text(part: &mail_parser::MessagePart<'_>) -> Option<String> {
+    let bytes = recover_base64_contents(part)?;
     let decoder = part
         .content_type()
         .and_then(|content_type| content_type.attribute("charset"))
-        .and_then(|charset| mail_parser::decoders::charsets::map::charset_decoder(charset.as_bytes()));
+        .and_then(|charset| mail_parser::Charset::from_label(charset.as_bytes()));
     Some(match decoder {
-        Some(decode) => decode(&bytes),
+        Some(charset) => charset.decode(&bytes).into_owned(),
         None => String::from_utf8_lossy(&bytes).into_owned(),
     })
 }
@@ -337,27 +316,40 @@ pub(super) fn augment_email_metadata(
     }
 }
 
+fn has_body_separator(message: &mail_parser::MessageRef<'_>) -> bool {
+    !message
+        .root_part()
+        .flags()
+        .contains(mail_parser::PartFlags::NO_BLANK_LINE)
+}
+
+fn body_part_text(part: mail_parser::MessagePart<'_>) -> Option<Cow<'_, str>> {
+    match part.kind() {
+        mail_parser::PartKind::Text => part.text(),
+        mail_parser::PartKind::Html => part.text().map(|html| Cow::Owned(mail_parser::html_to_text(&html))),
+        _ => None,
+    }
+}
+
 /// Gather the message's plain-text and HTML bodies (each joined from every genuine body
 /// part plus any nested message's own bodies), or `None` for a body kind the message
 /// carries no genuine part of -- unless `should_treat_as_html`, which forces both to be
 /// gathered so [`parse_eml_content_internal`] can decide there whether one substitutes
 /// for the other.
 pub(super) fn extract_email_bodies(
-    message: &mail_parser::Message<'_>,
+    message: &mail_parser::MessageRef<'_>,
     should_treat_as_html: bool,
 ) -> (Option<String>, Option<String>) {
+    if !has_body_separator(message) {
+        return (None, None);
+    }
     let has_genuine_text_part = has_genuine_text_body(message);
     let plain_text = if has_genuine_text_part || should_treat_as_html {
         let mut all_text = Vec::new();
-        let mut i = 0;
-        while let Some(text) = message.body_text(i) {
-            let recovered = message
-                .text_body
-                .get(i)
-                .and_then(|&part_id| message.parts.get(part_id as usize))
-                .and_then(|part| recover_base64_text(message, part));
-            all_text.push(recovered.unwrap_or_else(|| text.to_string()));
-            i += 1;
+        for part in message.text_body() {
+            if let Some(text) = recover_base64_text(&part).or_else(|| body_part_text(part).map(Cow::into_owned)) {
+                all_text.push(text);
+            }
         }
         collect_nested_message_text(message, &mut all_text);
         if all_text.is_empty() {
@@ -372,11 +364,7 @@ pub(super) fn extract_email_bodies(
     let has_genuine_html_part = has_genuine_html_body(message);
     let html_content = if has_genuine_html_part || should_treat_as_html {
         let mut all_html = Vec::new();
-        let mut i = 0;
-        while let Some(html) = message.body_html(i) {
-            all_html.push(html.to_string());
-            i += 1;
-        }
+        all_html.extend(message.html_bodies().map(Cow::into_owned));
         collect_nested_message_html(message, &mut all_html);
         if all_html.is_empty() {
             None
@@ -415,6 +403,40 @@ pub(super) fn resolve_email_content(
     (html_content, content)
 }
 
+// mail-parser 0.11 accepted a final header-name token without a colon, but exposed no body.
+// Retain that acceptance without synthesizing a header or treating the input as body text. ~keep
+fn parse_legacy_unterminated_headerless(data: &[u8]) -> Result<ParsedEmailContent> {
+    let last_line = data.rsplit(|&byte| byte == b'\n').next().unwrap_or_default();
+    if u32::try_from(data.len()).is_err()
+        || !last_line
+            .iter()
+            .any(|byte| !byte.is_ascii_whitespace() && *byte != b':')
+    {
+        return Err(XbergError::parsing(
+            "Failed to parse EML file: invalid email format".to_string(),
+        ));
+    }
+    Ok(ParsedEmailContent {
+        result: EmailExtractionResult {
+            subject: None,
+            from_email: None,
+            to_emails: Vec::new(),
+            cc_emails: Vec::new(),
+            bcc_emails: Vec::new(),
+            date: None,
+            message_id: None,
+            plain_text: None,
+            html_content: None,
+            content: String::new(),
+            attachments: Vec::new(),
+            metadata: extract_raw_headers(data),
+        },
+        nested_messages: Vec::new(),
+        nested_embedded_messages: Vec::new(),
+        warnings: Vec::new(),
+    })
+}
+
 pub(super) fn parse_eml_content_internal(
     data: &[u8],
     include_nested_messages: bool,
@@ -426,9 +448,10 @@ pub(super) fn parse_eml_content_internal(
         std::borrow::Cow::Borrowed(data)
     };
 
-    let message = mail_parser::MessageParser::default()
-        .parse(&data)
-        .ok_or_else(|| XbergError::parsing("Failed to parse EML file: invalid email format".to_string()))?;
+    let Some(parsed) = mail_parser::MessageParser::default().parse(&data) else {
+        return parse_legacy_unterminated_headerless(&data);
+    };
+    let message = parsed.root();
 
     let addresses = extract_email_address_fields(&message, &data);
     let raw_headers = extract_raw_headers(&data);
@@ -495,23 +518,21 @@ pub(super) fn parse_eml_content_internal(
 }
 
 pub(super) fn collect_nested_message_payloads(
-    message: &mail_parser::Message<'_>,
+    message: &mail_parser::MessageRef<'_>,
     max_nested_message_bytes: Option<u64>,
 ) -> Vec<NestedMessagePayload> {
-    use mail_parser::PartType;
+    use mail_parser::PartKind;
 
     message
-        .parts
-        .iter()
-        .enumerate()
-        .filter_map(|(part_id, part)| match &part.body {
-            PartType::Message(nested) if !nested.raw_message().is_empty() => {
-                let raw_message = nested.raw_message();
+        .parts()
+        .filter_map(|part| match part.kind() {
+            PartKind::Message(nested) if !nested.raw().is_empty() => {
+                let raw_message = nested.raw();
                 let data = max_nested_message_bytes
                     .is_none_or(|cap| raw_message.len() as u64 <= cap)
                     .then(|| Bytes::copy_from_slice(raw_message));
                 Some(NestedMessagePayload {
-                    part_id,
+                    part_id: part.id() as usize,
                     data,
                     size: raw_message.len(),
                 })
@@ -525,68 +546,50 @@ pub(super) fn collect_nested_message_payloads(
 ///
 /// `mail-parser`'s `body_text()` auto-converts HTML to plain text using a naive
 /// tag-stripper that doesn't remove `<script>` or `<style>` content. This helper
-/// inspects the actual `PartType` of each `text_body` entry to determine if a
+/// inspects the actual `PartKind` of each `text_body` entry to determine if a
 /// real `text/plain` part exists. For HTML-only messages (all text_body entries
-/// are `PartType::Html`), callers should use `clean_html_content()` instead.
-pub(super) fn has_genuine_text_body(message: &mail_parser::Message<'_>) -> bool {
-    use mail_parser::PartType;
-    for &part_id in &message.text_body {
-        if let Some(part) = message.parts.get(part_id as usize)
-            && matches!(&part.body, PartType::Text(_))
-        {
-            return true;
-        }
-    }
-    false
+/// are `PartKind::Html`), callers should use `clean_html_content()` instead.
+pub(super) fn has_genuine_text_body(message: &mail_parser::MessageRef<'_>) -> bool {
+    message
+        .text_body()
+        .any(|part| matches!(part.kind(), mail_parser::PartKind::Text))
 }
 
 /// Check whether a message has at least one genuine `text/html` body part.
 ///
 /// `mail-parser`'s `body_html()` auto-converts text/plain bodies into HTML when
 /// no real HTML part exists. This helper inspects each `html_body` entry's
-/// `PartType` so callers can avoid treating plain-text emails as HTML.
-pub(super) fn has_genuine_html_body(message: &mail_parser::Message<'_>) -> bool {
-    use mail_parser::PartType;
-    for &part_id in &message.html_body {
-        if let Some(part) = message.parts.get(part_id as usize)
-            && matches!(&part.body, PartType::Html(_))
-        {
-            return true;
-        }
-    }
-    false
+/// `PartKind` so callers can avoid treating plain-text emails as HTML.
+pub(super) fn has_genuine_html_body(message: &mail_parser::MessageRef<'_>) -> bool {
+    message
+        .html_body()
+        .any(|part| matches!(part.kind(), mail_parser::PartKind::Html))
 }
 
 /// Recursively collect plain text from nested `message/rfc822` sub-messages.
 ///
 /// In `multipart/digest` emails, each part is itself an RFC822 message stored as
-/// `PartType::Message`. The top-level `body_text()` won't return these; we must
+/// `PartKind::Message`. The top-level `body_text()` won't return these; we must
 /// recurse into the nested `Message` to extract their text bodies.
-pub(super) fn collect_nested_message_text(message: &mail_parser::Message<'_>, out: &mut Vec<String>) {
-    use mail_parser::PartType;
-    for part in &message.parts {
-        if let PartType::Message(sub_msg) = &part.body {
-            let mut i = 0;
-            while let Some(text) = sub_msg.body_text(i) {
-                out.push(text.to_string());
-                i += 1;
+pub(super) fn collect_nested_message_text(message: &mail_parser::MessageRef<'_>, out: &mut Vec<String>) {
+    for part in message.parts() {
+        if let mail_parser::PartKind::Message(sub_msg) = part.kind() {
+            if has_body_separator(&sub_msg) {
+                out.extend(sub_msg.text_bodies().map(Cow::into_owned));
             }
-            collect_nested_message_text(sub_msg, out);
+            collect_nested_message_text(&sub_msg, out);
         }
     }
 }
 
 /// Recursively collect HTML from nested `message/rfc822` sub-messages.
-pub(super) fn collect_nested_message_html(message: &mail_parser::Message<'_>, out: &mut Vec<String>) {
-    use mail_parser::PartType;
-    for part in &message.parts {
-        if let PartType::Message(sub_msg) = &part.body {
-            let mut i = 0;
-            while let Some(html) = sub_msg.body_html(i) {
-                out.push(html.to_string());
-                i += 1;
+pub(super) fn collect_nested_message_html(message: &mail_parser::MessageRef<'_>, out: &mut Vec<String>) {
+    for part in message.parts() {
+        if let mail_parser::PartKind::Message(sub_msg) = part.kind() {
+            if has_body_separator(&sub_msg) {
+                out.extend(sub_msg.html_bodies().map(Cow::into_owned));
             }
-            collect_nested_message_html(sub_msg, out);
+            collect_nested_message_html(&sub_msg, out);
         }
     }
 }

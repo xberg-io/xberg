@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
+  Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
+  Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
+
+- **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
+  Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.
+
+- **(benchmarks): Fetch pinned ParseBench and olmOCR inputs as upstream references.**
+  The corpus submodule records 1,493 file hashes and source license notices; offline staging preserves raw table oracles.
+
+- **(benchmarks): Reproduce full ParseBench HTML table comparisons with the official evaluator.** (#2332)
+  Pin inputs, model artifacts, executable and configuration identities; retain extraction failures and metric exclusions.
+
 - **(structured): Add opt-in partial-response recovery with batch-local validation diagnostics.** (#2318)
   Return usable candidate fields separately from validated output and citation fusion.
 - **(structured): Add caller-selected image size limits and option-aware render caching.** (#2319)
@@ -36,7 +50,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(development): Follow shared toolchain baseline 1.11.0 and agent conventions 1.4.0.**
+- **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
+  Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
+
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
+
+- **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
+  Email extraction uses read-only parser views while retaining attachment limits, nested-message
+  payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
+
+- **(rust): Upgrade parking_lot to 0.13 and refresh compatible dependencies.**
+  Public registry accessors now return parking_lot 0.13 lock types. ZIP advances to 9.2 and
+  HTML conversion, encoding and 7z dependencies receive their latest compatible fixes.
+
+- **(ci): Restrict CI and governance validation to `main`.**
+  Skip jobs for other branches and tags, including manual dispatches, and remove pull-request validation triggers.
+  Pin benchmark source checkouts to the dispatched main revision.
+
+- **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
+  Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
+- **(dependencies): Update Liter LLM to 2.4.2 and refresh Rust dependency locks.**
+  Elixir native builds now require Brotli decompressor 6.2 or later within the compatible major version.
+- **(development): Follow shared toolchain baseline 1.12.0 and agent conventions 1.5.1.**
+  Governance checks follow the shared AI-Rulez version policy.
+- **(plugin): Use the Xberg symbol for the plugin icon and logo.**
+- **(tests): Refresh the published corpus governance and tooling pin.** (#2338)
+  Document contents and checksums are unchanged.
 - **(ocr): Add regression coverage for caller-selected image budgets in direct and staged OCR.** (#2325)
 - **(ci): Run governance, fixture, archive and OCR-cache contract tests, and document manual OCR-cache acceptance.**
 - **(layout): Simplify YOLO decoding and remove its function-length lint exception.** (#1567)
@@ -116,6 +156,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reject malformed names, tensor shapes and counts while retaining legacy public detection ordering.
   Local parity captures retain the output-validation source alongside the executable and preprocessing implementation.
 
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
+- **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
+  Select the locked CI version leg while preserving the repository Python baseline.
+
+- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
+  Validate transitive and delayed PE imports without relying on the build host's installed runtime.
+  Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
+
+- **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
+  Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
+
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
+
+- **(swift): The Swift package requires macOS 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+
+- **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
+  Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.
+
+- **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
+  Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ci): Validate benchmark checkouts against the immutable workflow revision.** (#2344)
+  Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
+
+- **(ocr): Declare the image table stitching fixture's known header metadata.** (#2354)
+  Keep its header-retention assertion aligned with the explicit-header contract without promoting body rows.
+
+- **(ci): Keep only the latest main run for each CI workflow.** (#2346)
+  Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
+
+- **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
+  Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
+
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
+
+- **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
+  Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
+
+- **(benchmarks): Distinguish ParseBench renderer warnings from model failures.** (#2332)
+  Retain renderer diagnostics while rejecting genuine model and table-recognition fallbacks.
+
+- **(pdf): Retry detached pages from bounded embedded JPEG/JP2 bytes after raster OCR fails.** (#2339)
+  Recovery preserves page numbers, cancellation and original source image identities.
+
+- **(ci): Gate formula test helpers with the features required by their callers.**
+
+- **(pdf): A photo page keeps its text layer when OCR reads only noise.**
+  When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
+
+- **(models): Reject ambiguous or incomplete pinned model inventories before downloading.** (#2336)
+  Duplicate paths, unsafe portable filenames, empty supplied manifests and unpinned external weights fail validation.
+
+- **(pdf): Keep superscripts and formatting on their source characters after text repair.** (#2275)
+  Annotation ranges follow ligature expansion, absorbed spaces and Unicode normalization.
+- **(tables): Retain OCR table headers, spans and cell geometry in image and PDF output.** (#2332)
+  PDF table elements and retained cells use the same final page coordinates.
+- **(tables): Preserve native TATR headers, merged cells and cell coordinates through PDF assembly.** (#2332)
+  HTML retains row and column spans, and stale or ambiguous table geometry is discarded.
+- **(pdf): Retain each text run’s baseline when cached form objects reuse source span IDs.**
+  Raw script geometry no longer inherits a different run’s baseline after sorting.
+
+- **(pdf): Preserve separate values during leftward reading-order jumps.**
+  Adjacent values such as `5.55` and `16` no longer fuse when their baselines differ slightly.
+
+- **(tables): Preserve declared headers across PDF table fragments.**
+  HTML and document structure distinguish physical header rows from labels inherited from another fragment,
+  while keeping multiline headers and existing table anchors. (#2332)
+
+- **(pdf): Render recognized formulas missing from OCR body elements.**
+  Preserve page order, existing list ownership and element references; retain math in metadata with a warning
+  when no safe same-page insertion boundary exists. (#2331)
+
+- **(ci): Install governance tools through the locked mise toolchain.**
+  Generation and validation now use the reviewed AI-Rulez and Python versions.
 - **(rendering): Honor table header metadata in HTML and preserve headerless data rows.** (#2332)
 - **(development): Keep generated skill summaries within Claude and Codex context budgets.**
 - **(ci): Refresh governance server tracking for ai-rulez 5.9.3 validation.**

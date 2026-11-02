@@ -1,0 +1,11 @@
+# Minimal direct import closure of the pinned local Markdown benchmark evaluator.
+beautifulsoup4
+fuzzysearch
+numpy
+Pillow
+playwright
+pypdf>=5.2.0
+rapidfuzz
+tqdm
+
+lxml

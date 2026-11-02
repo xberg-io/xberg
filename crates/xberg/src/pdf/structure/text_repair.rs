@@ -27,6 +27,36 @@ pub(super) type WordWitnesses = ahash::AHashSet<String>;
 /// `f irst`) is common and must never witness itself. ~keep
 pub(super) const MIN_LIGATURE_WITNESS_WORD_LEN: usize = 2;
 
+pub(super) struct TextReplacement {
+    pub before: std::ops::Range<usize>,
+    pub after: std::ops::Range<usize>,
+}
+
+pub(super) struct RepairedText<'a> {
+    pub text: Cow<'a, str>,
+    pub replacements: Vec<TextReplacement>,
+}
+
+impl<'a> RepairedText<'a> {
+    fn unchanged(text: &'a str) -> Self {
+        Self {
+            text: Cow::Borrowed(text),
+            replacements: Vec::new(),
+        }
+    }
+}
+
+fn record_replacement(
+    replacements: &mut Vec<TextReplacement>,
+    enabled: bool,
+    before: std::ops::Range<usize>,
+    after: std::ops::Range<usize>,
+) {
+    if enabled {
+        replacements.push(TextReplacement { before, after });
+    }
+}
+
 /// Repair ligature corruption using contextual heuristics.
 ///
 /// Some PDF fonts have broken ToUnicode CMaps that map ligature glyphs to
@@ -38,12 +68,17 @@ pub(super) const MIN_LIGATURE_WITNESS_WORD_LEN: usize = 2;
 /// All patterns are contextual: the corrupt character must appear between
 /// alphabetic characters (mid-word), where it virtually never occurs in real text.
 pub(super) fn repair_contextual_ligatures(text: &str) -> Cow<'_, str> {
+    repair_contextual_ligatures_mapped(text, false).text
+}
+
+pub(super) fn repair_contextual_ligatures_mapped(text: &str, record: bool) -> RepairedText<'_> {
     if text.len() < 2 {
-        return Cow::Borrowed(text);
+        return RepairedText::unchanged(text);
     }
 
     let mut result = String::with_capacity(text.len() + 16);
     let mut repaired = false;
+    let mut replacements = Vec::new();
     let bytes = text.as_bytes();
     let chars = text.chars().peekable();
     let mut byte_idx = 0;
@@ -87,6 +122,7 @@ pub(super) fn repair_contextual_ligatures(text: &str) -> Cow<'_, str> {
             false
         };
 
+        let output_start = result.len();
         match ch {
             '!' if prev_is_alpha && next_is_vowel => {
                 result.push_str("ff");
@@ -130,15 +166,26 @@ pub(super) fn repair_contextual_ligatures(text: &str) -> Cow<'_, str> {
             _ => result.push(ch),
         }
 
+        if record && result[output_start..] != text[byte_idx..next_byte_idx] {
+            record_replacement(
+                &mut replacements,
+                record,
+                byte_idx..next_byte_idx,
+                output_start..result.len(),
+            );
+        }
         prev_is_alpha = ch.is_alphabetic();
         prev_is_space_or_start = ch.is_whitespace();
         byte_idx = next_byte_idx;
     }
 
     if repaired {
-        Cow::Owned(result)
+        RepairedText {
+            text: Cow::Owned(result),
+            replacements,
+        }
     } else {
-        Cow::Borrowed(text)
+        RepairedText::unchanged(text)
     }
 }
 
@@ -459,16 +506,19 @@ fn is_common_short_word(word: &str) -> bool {
 ///
 /// Uses `Cow<str>` for zero-alloc fast path when no ligatures are present.
 pub(super) fn expand_ligatures_with_space_absorption(text: &str) -> Cow<'_, str> {
+    expand_ligatures_with_space_absorption_mapped(text, false).text
+}
+
+pub(super) fn expand_ligatures_with_space_absorption_mapped(text: &str, record: bool) -> RepairedText<'_> {
     if !text.contains([
         '\u{FB00}', '\u{FB01}', '\u{FB02}', '\u{FB03}', '\u{FB04}', '\u{FB05}', '\u{FB06}',
     ]) {
-        return Cow::Borrowed(text);
+        return RepairedText::unchanged(text);
     }
-
     let mut result = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-
-    while let Some(ch) = chars.next() {
+    let mut replacements = Vec::new();
+    let mut chars = text.char_indices().peekable();
+    while let Some((offset, ch)) = chars.next() {
         let expansion = match ch {
             '\u{FB00}' => "ff",
             '\u{FB01}' => "fi",
@@ -482,19 +532,35 @@ pub(super) fn expand_ligatures_with_space_absorption(text: &str) -> Cow<'_, str>
                 continue;
             }
         };
-
+        let output_start = result.len();
         result.push_str(expansion);
-
-        if chars.peek() == Some(&' ') {
+        record_replacement(
+            &mut replacements,
+            record,
+            offset..offset + ch.len_utf8(),
+            output_start..result.len(),
+        );
+        if chars.peek().is_some_and(|(_, ch)| *ch == ' ') {
             let mut lookahead = chars.clone();
             lookahead.next();
-            if lookahead.peek().is_some_and(|c| c.is_alphanumeric() || *c == '_') {
-                chars.next();
+            if lookahead
+                .peek()
+                .is_some_and(|(_, ch)| ch.is_alphanumeric() || *ch == '_')
+            {
+                let (space_offset, _) = chars.next().expect("the absorbed space was inspected");
+                record_replacement(
+                    &mut replacements,
+                    record,
+                    space_offset..space_offset + 1,
+                    result.len()..result.len(),
+                );
             }
         }
     }
-
-    Cow::Owned(result)
+    RepairedText {
+        text: Cow::Owned(result),
+        replacements,
+    }
 }
 
 /// Repair ligature-glyph word breaks in extracted text.
@@ -580,15 +646,38 @@ fn alphabetic_run_at(text: &str, start: usize) -> &str {
 /// slash, and bullet characters. This improves TF1 by ensuring extracted text
 /// matches ground truth tokenization.
 pub(super) fn normalize_unicode_text(text: &str) -> Cow<'_, str> {
+    normalize_unicode_text_mapped(text, false).text
+}
+
+pub(super) fn normalize_unicode_text_mapped(text: &str, record: bool) -> RepairedText<'_> {
     if !text.contains(['\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2044}', '\u{2022}']) {
-        return Cow::Borrowed(text);
+        return RepairedText::unchanged(text);
     }
-    Cow::Owned(
-        text.replace(['\u{2018}', '\u{2019}'], "'")
-            .replace(['\u{201C}', '\u{201D}'], "\"")
-            .replace('\u{2044}', "/")
-            .replace('\u{2022}', "\u{00B7}"),
-    )
+    let mut result = String::with_capacity(text.len());
+    let mut replacements = Vec::new();
+    for (offset, ch) in text.char_indices() {
+        let normalized = match ch {
+            '\u{2018}' | '\u{2019}' => '\'',
+            '\u{201C}' | '\u{201D}' => '"',
+            '\u{2044}' => '/',
+            '\u{2022}' => '\u{00B7}',
+            other => other,
+        };
+        let output_start = result.len();
+        result.push(normalized);
+        if normalized != ch {
+            record_replacement(
+                &mut replacements,
+                record,
+                offset..offset + ch.len_utf8(),
+                output_start..result.len(),
+            );
+        }
+    }
+    RepairedText {
+        text: Cow::Owned(result),
+        replacements,
+    }
 }
 
 /// Final hyphen polish applied to assembled paragraph text.

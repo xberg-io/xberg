@@ -4131,6 +4131,29 @@ impl<'doc> PdfImageHandle<'doc> {
         }
     }
 
+    /// Return stored stream bytes subject to an inclusive allocation limit.
+    ///
+    /// A zero limit permits only an empty stream. Filters and pixel decoders are
+    /// not run; the limit applies to the actual stored bytes, not `/Length`.
+    pub fn raw_compressed_bytes_with_limit(&self, max_bytes: usize) -> Result<Vec<u8>> {
+        let bounded_copy = |data: &[u8]| {
+            if data.len() > max_bytes {
+                return Err(crate::error::Error::Image(format!(
+                    "stored image stream requires {} bytes, exceeding limit {max_bytes}",
+                    data.len()
+                )));
+            }
+            Ok(data.to_vec())
+        };
+        match &self.source {
+            PdfImageSource::XObject(obj_ref) => match self.doc.load_object(*obj_ref)? {
+                crate::object::Object::Stream { data, .. } => bounded_copy(&data),
+                _ => Err(crate::error::Error::Image("XObject is not a stream".to_string())),
+            },
+            PdfImageSource::Inline { compressed_bytes, .. } => bounded_copy(compressed_bytes),
+        }
+    }
+
     /// For an Indexed image, the de-indexed *base* colour space.
     ///
     /// When [`color_space`](Self::color_space) is [`ColorSpace::Indexed`] the
@@ -4143,6 +4166,10 @@ impl<'doc> PdfImageHandle<'doc> {
         self.indexed_base
     }
 }
+
+#[cfg(test)]
+#[path = "image_raw_bytes_limit_tests.rs"]
+mod raw_bytes_limit_tests;
 
 impl std::fmt::Debug for PdfImageHandle<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -581,6 +581,11 @@ jobs:
           # target in this workflow, instead of depending on auditwheel alone.
           for w in wheelhouse/*.whl; do bash scripts/ci/vendor-native-closure.sh "$w"; done
 
+      - name: Test Windows wheel closure contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: mise run python:wheel:closure:test
+
       - name: Vendor ONNX Runtime into wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -593,7 +598,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "vendor-windows-wheel-closure failed for $($_.FullName)" }
           }
 
-      - name: Verify wheel has no DirectML import and ships ONNX Runtime (Windows)
+      - name: Verify wheel-local PE dependency closure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -980,14 +985,14 @@ jobs:
               arch: x86_64,
               napi_arch: x64,
               target: x86_64-unknown-linux-gnu,
-              image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.26-1@sha256:e0adf18521ad35192df733a6c62d35df7801957d24e0470238aacecfab2188a3,
+              image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf,
             }
           - {
               os: ubuntu-24.04-arm,
               arch: aarch64,
               napi_arch: arm64,
               target: aarch64-unknown-linux-gnu,
-              image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.26-1@sha256:a3e02308c822fb6ce0d12248b0c941817ba5e1a1bc9e7bb5929f29c50eaa40a9,
+              image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f,
             }
     steps:
       - uses: actions/checkout@v7
@@ -1285,7 +1290,18 @@ jobs:
         with:
           toolchain: ${{ runner.os == 'Windows' && 'stable-x86_64-pc-windows-gnu' || '' }}
 
-      - uses: ruby/setup-ruby@v1.335.0
+      # Ruby 3.3 is the ABI the release gem ships; mise.ci.toml locks it. ~keep
+      - uses: xberg-io/actions/setup-mise@v1
+        if: runner.os != 'Windows'
+        with:
+          tools: ruby=3.3
+          mise-env: ci
+          config-ref: ${{ github.sha }}
+
+      # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
+      # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
+      - uses: ruby/setup-ruby@v1
+        if: runner.os == 'Windows'
         with:
           ruby-version: "3.3"
           bundler-cache: false
@@ -1353,6 +1369,7 @@ jobs:
           fetch-depth: 0
 
           submodules: false
+      # PHP stays on its setup action (toolchain-management rule). ~keep
       - uses: xberg-io/actions/setup-php@v1
         with:
           php-version: ${{ matrix.php }}
@@ -2489,6 +2506,7 @@ jobs:
         shell: bash
         run: echo "ImageOS=win25" >> "$GITHUB_ENV"
 
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.17"
@@ -2658,12 +2676,12 @@ jobs:
           - os: ubuntu-latest
             label: linux-x86_64
             target: x86_64-unknown-linux-gnu
-            image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.26-1@sha256:e0adf18521ad35192df733a6c62d35df7801957d24e0470238aacecfab2188a3
+            image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf
             nif: "2.16"
           - os: ubuntu-24.04-arm
             label: linux-aarch64
             target: aarch64-unknown-linux-gnu
-            image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.26-1@sha256:a3e02308c822fb6ce0d12248b0c941817ba5e1a1bc9e7bb5929f29c50eaa40a9
+            image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f
             nif: "2.16"
     steps:
       - uses: actions/checkout@v7
@@ -3014,13 +3032,16 @@ jobs:
           cargo-zigbuild-revision: "89c352ae6ff0bbafe17788da327764d9ef92240b"
           macos-dynamic-lookup: "false"
 
-      - uses: xberg-io/actions/build-swift-artifactbundle@624902e41e000f252cc3811b9b357f5cc5a7d0a8
+      - uses: xberg-io/actions/build-swift-artifactbundle@v1
         id: libs
         # Must equal the `.iOS(.vN)` floor in Package.swift. Unset, rustc links at its iOS default
         # (10.0) while cc/cmake compile for the runner SDK (18.5), and prebuilt ORT objects call
         # ___chkstk_darwin, which libcompiler_rt hides from iOS 7.0-12.1 links (#2146). ~keep
+        # MACOSX_DEPLOYMENT_TARGET likewise equals the `.macOS(.vN)` floor, overriding the
+        # workflow-wide 11.0: the bundled ONNX Runtime prebuilt requires macOS 13.4. ~keep
         env:
           IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
         with:
           crate-name: xberg-swift
           artifact-name: Xberg-rs
@@ -3061,7 +3082,7 @@ jobs:
           merge-multiple: true
           path: swift-libs
 
-      - uses: xberg-io/actions/build-swift-artifactbundle@624902e41e000f252cc3811b9b357f5cc5a7d0a8
+      - uses: xberg-io/actions/build-swift-artifactbundle@v1
         id: bundle
         with:
           crate-name: xberg-swift
@@ -3978,15 +3999,25 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # Only the mise config, so setup-mise installs the locked Ruby. ~keep
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            mise.toml
+            mise*.lock
+            mise-tasks
+
       - uses: actions/download-artifact@v8
         with:
           pattern: rubygems-*
           path: dist
 
-      - uses: ruby/setup-ruby@v1.335.0
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          ruby-version: "3.3"
-          bundler-cache: false
+          tools: ruby
 
       - name: Update RubyGems for OIDC trusted publishing
         run: gem update --system
@@ -4359,20 +4390,10 @@ jobs:
             linux-musl-x86_64 linux-musl-aarch64
           lib-name: xberg_ffi
 
-      - uses: actions/setup-java@v6
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-
-      - uses: xberg-io/actions/setup-maven@v1
-        with:
-          version: "3.9.16"
+          tools: maven
+          config-ref: ${{ github.sha }}
 
       - uses: xberg-io/actions/publish-maven@v1
         with:
@@ -4384,6 +4405,7 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
   publish-kotlin-android:
     name: Publish Kotlin Android (Maven Central via Gradle)
@@ -4415,6 +4437,7 @@ jobs:
             fi
           done
 
+      # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - uses: android-actions/setup-android@v4
         with:
           packages: "platforms;android-36 build-tools;36.0.0"
@@ -4461,6 +4484,7 @@ jobs:
           done
         shell: bash
 
+      # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
@@ -4555,6 +4579,7 @@ jobs:
 
           submodules: false
       - uses: xberg-io/actions/setup-rust@v1
+      # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.17"
@@ -5322,19 +5347,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
-      - uses: actions/setup-java@v6
+      - uses: xberg-io/actions/setup-mise@v1
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - uses: xberg-io/actions/setup-maven@v1
-        with:
-          version: "3.9.16"
+          tools: maven
+          config-ref: ${{ github.sha }}
       - name: Wait for core artifact on Maven Central
         if: needs.prepare.outputs.dry_run != 'true'
         env:
@@ -5367,6 +5383,7 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
   publish-integrations-npm:
     name: Publish ${{ matrix.package }} to npm
@@ -5463,13 +5480,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Node, pnpm and ai-rulez
+      - name: Install Node and pnpm
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm github:Goldziher/ai-rulez
+          install-args: node pnpm
           config-ref: ${{ github.sha }}
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Install pnpm workspace dependencies
         shell: bash
         run: pnpm install --no-frozen-lockfile
@@ -5523,13 +5540,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Python, uv and ai-rulez
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv github:Goldziher/ai-rulez
+          install-args: python uv
           config-ref: ${{ github.sha }}
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash
@@ -5566,13 +5583,8 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
       - name: Install ai-rulez
-        uses: xberg-io/actions/setup-mise@v1
-        with:
-          install-args: github:Goldziher/ai-rulez
-          config-ref: ${{ github.sha }}
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Verify public skill exports
         run: python3 scripts/sync_public_skills.py --check
       - name: Package all supported plugin runtimes
@@ -5640,12 +5652,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Node, pnpm and ai-rulez
+      - name: Install Node and pnpm
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: node pnpm github:Goldziher/ai-rulez
+          install-args: node pnpm
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Verify plugin versions and generated resources
         uses: xberg-io/actions/verify-ai-rulez-plugin@v1
         with:
@@ -5711,12 +5723,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      # ~keep Release paths pin ai-rulez (mise.toml) so a new upstream release cannot break a release with no
-      # repo change; CI validation runs latest and flags regeneration first. Bump with the poly hook revision.
-      - name: Install Python, uv and ai-rulez
+      - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: python uv github:Goldziher/ai-rulez
+          install-args: python uv
+      - name: Install ai-rulez
+        uses: xberg-io/actions/setup-ai-rulez@v1
       - name: Resolve the mise Python version
         id: mise-python
         shell: bash

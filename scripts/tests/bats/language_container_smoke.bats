@@ -48,7 +48,7 @@ assert_container() {
 @test "musl Elixir smoke should mount generated native exports and the complete closure" {
 	run_native_smoke elixir-nif
 	xberg_assert_status 0
-	assert_container alpine:3.21 'elixir /smoke/smoke_test_elixir_nif.exs /fixture.pdf'
+	assert_container alpine:3.24.3 'elixir /smoke/smoke_test_elixir_nif.exs /fixture.pdf'
 	grep -Fxq "$XBERG_WORK/native:/native:ro" "$XBERG_TRACE"
 	grep -Fxq "$FIXTURE_ROOT/packages/elixir/lib/xberg/native.ex:/smoke/native.ex:ro" "$XBERG_TRACE"
 	grep -Fxq 'XBERG_NIF_PATH=/native/libxberg_nif' "$XBERG_TRACE"
@@ -58,7 +58,7 @@ assert_container() {
 @test "musl Java smoke should compile actual package sources and invoke the extraction program" {
 	run_native_smoke java-ffi
 	xberg_assert_status 0
-	assert_container alpine:3.21 'Smoke /fixture.pdf'
+	assert_container alpine:3.24.3 'Smoke /fixture.pdf'
 	grep -Fxq "$XBERG_WORK/native:/native:ro" "$XBERG_TRACE"
 	grep -Fxq 'XBERG_FFI_LIB_PATH=/native/libxberg_ffi.so' "$XBERG_TRACE"
 	grep -Fq 'javac --release 25 --enable-preview' "$XBERG_TRACE"
@@ -68,7 +68,7 @@ assert_container() {
 @test "musl Node smoke should select the actual addon and run extraction rather than only require" {
 	run_native_smoke node-binding
 	xberg_assert_status 0
-	assert_container alpine:3.22 'node /smoke/smoke_test_node_binding.js /smoke/index.js /fixture.pdf'
+	assert_container alpine:3.24.3 'node /smoke/smoke_test_node_binding.js /smoke/index.js /fixture.pdf'
 	grep -Fxq 'NAPI_RS_NATIVE_LIBRARY_PATH=/native/xberg.node' "$XBERG_TRACE"
 	grep -Fxq "$XBERG_WORK/native:/native:ro" "$XBERG_TRACE"
 	grep -Fq 'apk add --no-cache --upgrade libstdc++' "$XBERG_TRACE"
@@ -77,7 +77,7 @@ assert_container() {
 @test "musl Python smoke should mount the selected wheel and invoke the extraction script" {
 	run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-python-wheel.sh" xberg.whl
 	xberg_assert_status 0
-	assert_container alpine:3.22 '/venv/bin/python3 /smoke_test_python_wheel.py /fixture.pdf'
+	assert_container alpine:3.24.3 '/venv/bin/python3 /smoke_test_python_wheel.py /fixture.pdf'
 	grep -Fxq "$XBERG_WORK/xberg.whl:/wheel/xberg.whl:ro" "$XBERG_TRACE"
 	grep -Fxq 'WHEEL_NAME=xberg.whl' "$XBERG_TRACE"
 	grep -Fq '/venv/bin/pip install --no-cache-dir --quiet "/wheel/${WHEEL_NAME}"' "$XBERG_TRACE"

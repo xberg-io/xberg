@@ -16,6 +16,7 @@ pub(crate) mod page_number;
 mod paragraphs;
 pub(crate) mod pipeline;
 pub(crate) mod regions;
+pub(crate) mod table_grid;
 mod text_repair;
 pub(crate) mod types;
 
