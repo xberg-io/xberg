@@ -1367,7 +1367,7 @@ error_constructor = "xberg::XbergError::Other({msg})"
 version_from = "Cargo.toml"
 workspace_root = "."
 crate_attributes = ["allow(deprecated)"]
-# ~keep Load the canonical Result alias before Alef recursively reads public APIs.
+# ~keep Load the canonical Result alias before Alef recursively reads public APIs (xberg-io/alef#813).
 sources = [
   "crates/xberg/src/error.rs",
   "crates/xberg/src/lib.rs",
