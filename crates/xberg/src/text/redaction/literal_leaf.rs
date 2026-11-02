@@ -211,12 +211,9 @@ impl<'s> Decoder<'s> {
         let mut i = start;
         while i < end {
             let ch = self.source[i..end].chars().next().ok_or(Error::InvalidSource)?;
-            let length = if ch == '\r' && self.source.as_bytes().get(i + 1) == Some(&b'\n') {
-                2
-            } else {
-                ch.len_utf8()
-            };
-            if ch == '\r' || ch == '\n' {
+            let length = ch.len_utf8();
+            // Comrak retains CR before LF; reconstruction must equal the actual leaf. ~keep
+            if ch == '\n' || (ch == '\r' && self.source.as_bytes().get(i + 1) != Some(&b'\n')) {
                 self.emit(" ", i..i + length, work)?;
             } else {
                 self.emit(&self.source[i..i + length], i..i + length, work)?;

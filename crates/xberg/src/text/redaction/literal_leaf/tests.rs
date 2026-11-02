@@ -129,7 +129,7 @@ fn inline_code_keeps_stars_entities_and_tabs_literal() {
 #[test]
 fn inline_code_normalization_preserves_exact_crlf_and_trim_origins() {
     let leaf = decode("`α\r\nβ`", 0);
-    assert_eq!(leaf.text, "α β");
+    assert_eq!(leaf.text, "α\r β");
     assert_eq!(
         leaf.origins,
         vec![
@@ -139,10 +139,14 @@ fn inline_code_normalization_preserves_exact_crlf_and_trim_origins() {
             },
             Origin {
                 decoded: 2..3,
-                source: 3..5
+                source: 3..4
             },
             Origin {
-                decoded: 3..5,
+                decoded: 3..4,
+                source: 4..5
+            },
+            Origin {
+                decoded: 4..6,
                 source: 5..7
             },
         ]
