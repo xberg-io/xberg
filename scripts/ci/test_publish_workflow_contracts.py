@@ -851,6 +851,28 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
 
 
+def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    feature = r'--features "?(\$\{\{ matrix\.(\w+) \}\}|[^"\s]+)'
+    checked = 0
+    for job in re.split(r"(?m)^(?=  [\w-]+:$)", workflow):
+        legs = [
+            {"name": name, "features": features}
+            for name, features in re.findall(r"(?m)^ +- name: (\S+)\n +features: (\S+)$", job)
+        ]
+        for step in re.split(r"(?m)^(?=      - )", job):
+            name = re.match(r"      - name: ([^\n]*)", step)
+            if name is None or "--features" not in name[1]:
+                continue
+            shown = re.search(feature, name[1])
+            used = re.search(feature, step[step.index("        run:") :])
+            assert shown is not None and used is not None, name[1]
+            for leg in legs or [{}]:
+                assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
+                checked += 1
+    assert checked > 0
+
+
 if __name__ == "__main__":
     for name, test in list(globals().items()):
         if name.startswith("test_") and callable(test):

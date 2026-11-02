@@ -149,6 +149,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
+  Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
+
 - **(bindings): Adopt Alef 0.115.14 for Kotlin JNI task dependencies and macOS Swift OpenDirectory linkage.**
   Pin the official generator across local development and CI.
   Preserve shared exception-family membership through Java, C#, and PHP interfaces, Python multiple inheritance,
@@ -164,6 +169,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
+  Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
+
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
 
 - **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
   Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
