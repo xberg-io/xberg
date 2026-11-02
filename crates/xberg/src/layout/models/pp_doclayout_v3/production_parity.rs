@@ -116,6 +116,8 @@ fn should_capture_two_production_v3_forwards() {
     let model_path = required_path("XBERG_V3_PARITY_MODEL");
     let output = required_path("XBERG_V3_CAPTURE_OUT");
     assert!(!output.exists(), "capture output must not already exist");
+    validate_producer_source_inputs(Path::new(env!("CARGO_MANIFEST_DIR")))
+        .expect("compiled producer source identity before capture");
     assert_artifact_hash(&model_path, MODEL_SHA256, "pinned ONNX identity");
     assert_eq!(
         sha256(&root.join("comparison-contract-v1.json")),
@@ -384,8 +386,15 @@ const COMPILED_PRODUCER_SOURCES: &[(&str, &[u8])] = &[
 ];
 
 fn validate_producer_source_inputs(root: &Path) -> Result<(), String> {
-    for (path, _) in COMPILED_PRODUCER_SOURCES {
-        let _ = fs::read(root.join(path)).map_err(|error| format!("producer source {path}: {error}"))?;
+    for (path, compiled) in COMPILED_PRODUCER_SOURCES {
+        let live = fs::read(root.join(path)).map_err(|error| format!("producer source {path}: {error}"))?;
+        if live.as_slice() != *compiled {
+            return Err(format!(
+                "compiled source mismatch {path}: expected {}, got {}",
+                bytes_sha256(compiled),
+                bytes_sha256(&live)
+            ));
+        }
     }
     Ok(())
 }
@@ -395,13 +404,19 @@ fn source_witness(output: &Path) -> Vec<Value> {
     COMPILED_PRODUCER_SOURCES
         .iter()
         .enumerate()
-        .map(|(index, (path, _compiled))| {
+        .map(|(index, (path, compiled))| {
             let name = Path::new(path)
                 .file_name()
                 .and_then(|name| name.to_str())
                 .expect("source filename");
             let file = format!("producer/sources/{index:02}-{name}");
             let mut artifact = preserve_artifact(&root.join(path), output, &file);
+            assert_eq!(
+                artifact["sha256"],
+                bytes_sha256(compiled),
+                "preserved source must match compiled bytes: {path}"
+            );
+            assert_eq!(artifact["bytes"], compiled.len(), "complete compiled source: {path}");
             artifact["path"] = json!(path);
             artifact
         })

@@ -157,6 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
   Use fixed-support cubic resizing and ordered single-image forwards while validating paired rank-bearing rows and masks.
   Capture tasks require one executed test and two forwards with complete named tensor artifacts and matching sizes and hashes.
+  Bind preserved producer sources to compiled bytes before constructing the model.
   Public detection ordering and model defaults stay unchanged; model-quality qualification remains pending.
 
 - **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
