@@ -153,6 +153,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Check no-runtime test feature invariants at compile time.**
+  Keep the email Clippy gate passing without suppressing its constant-assertion check.
+
 - **(pdf): Recognize escaped PlacedPDF names in page-level text decisions.** (#2378)
   Apply the existing parsed page policy to escaped names; form and cross-page cache handling remain separate.
 
