@@ -219,5 +219,9 @@ fn should_take_the_rtl_retry_branch_for_the_rtl_config() {
     let original = rtl_config();
     let mut effective = original.clone();
     apply_default_whole_image_tesseract_psm(&mut effective);
-    assert!(should_retry_sparse_rtl_ocr(&original, &effective, &document("primary", 0.1)));
+    assert!(should_retry_sparse_rtl_ocr(
+        &original,
+        &effective,
+        &document("primary", 0.1)
+    ));
 }
