@@ -492,3 +492,85 @@ async fn witnessed_literal_long_winner_covers_disjoint_candidate_requirements() 
     assert_eq!(output.content, "safe [REDACTED] suffix");
     assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 1);
 }
+
+fn multi_scalar_entity_preconditions() -> (&'static str, &'static str, &'static str) {
+    let (source, short, full) = ("&NotEqualTilde;", "≂", "≂\u{0338}");
+    assert_eq!(source.len(), 15);
+    assert_eq!(visible(source), full);
+    assert_eq!((short.len(), full.len(), full.chars().count()), (3, 5, 2));
+    assert!(!source.contains(short) && !source.contains(full));
+    let short_match = regex::Regex::new(&regex::escape(short)).unwrap().find(full).unwrap();
+    let full_match = regex::Regex::new(&regex::escape(full)).unwrap().find(full).unwrap();
+    assert_eq!((short_match.start(), short_match.end()), (0, 3));
+    assert_eq!((full_match.start(), full_match.end()), (0, 5));
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, source, &crate::rendering::comrak_options());
+    let mut texts = 0;
+    for node in root.descendants() {
+        let data = node.data.borrow();
+        if let comrak::nodes::NodeValue::Text(text) = &data.value {
+            texts += 1;
+            let actual: &str = text.as_ref();
+            assert_eq!(actual, full);
+            assert_eq!(
+                (
+                    data.sourcepos.start.line,
+                    data.sourcepos.start.column,
+                    data.sourcepos.end.line,
+                    data.sourcepos.end.column
+                ),
+                (1, 1, 1, 15)
+            );
+        }
+    }
+    assert_eq!(texts, 1);
+    (source, short, full)
+}
+
+#[tokio::test]
+async fn formatted_literal_multi_scalar_entity_tokens_follow_longer_semantic_identity() {
+    let (source, short, full) = multi_scalar_entity_preconditions();
+    let config = config(RedactionStrategy::TokenReplace, &[short, full], &[]);
+    let mut ordinary = ExtractedDocument {
+        content: full.into(),
+        ..Default::default()
+    };
+    crate::plugins::processor::builtin::redaction::RedactionProcessor
+        .process(&mut ordinary, &config)
+        .await
+        .unwrap();
+    assert_eq!(ordinary.content, "[PRIVATE_1]");
+    assert_eq!(ordinary.redaction_report.as_ref().unwrap().total_redacted, 1);
+    let (mut result, cache) = edited(source, Some(full), &config).await;
+    late(&mut result, &cache, &config).await.unwrap();
+    let output = finish(result);
+    assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 2);
+    assert_eq!(output.content, "[PRIVATE_1]");
+    assert_eq!(output.metadata.title.as_deref(), Some("[PRIVATE_1]"));
+}
+
+#[tokio::test]
+async fn formatted_literal_multi_scalar_entity_hashes_follow_longer_semantic_identity() {
+    let (source, short, full) = multi_scalar_entity_preconditions();
+    let category = PiiCategory::Custom("private".into());
+    let expected = apply_strategy(RedactionStrategy::Hash, full, &category, &mut TokenCounter::new());
+    let wrong = apply_strategy(RedactionStrategy::Hash, short, &category, &mut TokenCounter::new());
+    assert_ne!(expected, wrong);
+    let config = config(RedactionStrategy::Hash, &[short, full], &[]);
+    let mut ordinary = ExtractedDocument {
+        content: full.into(),
+        ..Default::default()
+    };
+    crate::plugins::processor::builtin::redaction::RedactionProcessor
+        .process(&mut ordinary, &config)
+        .await
+        .unwrap();
+    assert_eq!(ordinary.content, expected);
+    assert_eq!(ordinary.redaction_report.as_ref().unwrap().total_redacted, 1);
+    let (mut result, cache) = edited(source, Some(full), &config).await;
+    late(&mut result, &cache, &config).await.unwrap();
+    let output = finish(result);
+    assert_eq!(output.redaction_report.as_ref().unwrap().total_redacted, 2);
+    assert_eq!(output.metadata.title.as_deref(), Some(expected.as_str()));
+    assert_eq!(output.content, expected);
+}
