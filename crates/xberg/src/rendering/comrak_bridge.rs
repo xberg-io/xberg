@@ -1158,7 +1158,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                     tight: true,
                     ..Default::default()
                 };
-                let (item, item_para, list_parent) = if paragraph_items.contains(&orig_idx) {
+                let (item, item_para, list_parent) = if orig_idx.is_some_and(|index| paragraph_items.contains(&index)) {
                     (None, source_lists::paragraph(arena, parent, &mut container_stack), None)
                 } else {
                     let (list_parent, item_list) =
