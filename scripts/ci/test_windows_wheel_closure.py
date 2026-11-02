@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -10,8 +11,12 @@ import sys
 import tempfile
 import unittest
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
+
+import windows_wheel_closure as closure
 
 ROOT = Path(__file__).resolve().parents[2]
 GATE = ROOT / "scripts/ci/verify-windows-dll-closure.ps1"
@@ -45,6 +50,17 @@ def pe(imports: Sequence[str] = (), delay: Sequence[str] = (), machine: int = 0x
     return image
 
 
+@contextmanager
+def expected_error(kind: type[Exception], message: str) -> Iterator[None]:
+    try:
+        yield
+    except kind as error:
+        detail = str(error)
+    else:
+        raise AssertionError(f"expected {kind.__name__}: {message}")
+    assert message in detail, detail
+
+
 class WheelClosureTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -64,10 +80,11 @@ class WheelClosureTests(unittest.TestCase):
         ]
         return subprocess.run([*command, "-NativeGlob", "*.pyd"], capture_output=True, text=True, check=False)
 
-    def require_failure(self, term: str) -> None:
+    def require_failure(self, term: str) -> subprocess.CompletedProcess[str]:
         outcome = self.gate()
         assert outcome.returncode != 0, outcome.stdout + outcome.stderr
         assert term.lower() in (outcome.stdout + outcome.stderr).lower()
+        return outcome
 
     def test_missing_transitive_runtime_fails_even_when_ort_is_present(self) -> None:
         self.require_failure("MSVCP140_1.dll")
@@ -107,11 +124,29 @@ class WheelClosureTests(unittest.TestCase):
 
     def test_forbidden_import_in_transitive_dll_fails(self) -> None:
         (self.root / "onnxruntime.dll").write_bytes(pe(["DirectML.dll"]))
-        self.require_failure("DirectML.dll")
+        outcome = self.require_failure("DirectML.dll")
+        assert "imports forbidden directml.dll" in outcome.stderr.lower(), outcome.stderr
 
     def test_malformed_transitive_pe_fails(self) -> None:
         (self.root / "onnxruntime.dll").write_bytes(b"not a PE")
         self.require_failure("PE")
+
+    def test_shipped_directml_is_still_rejected_for_the_forbidden_import(self) -> None:
+        (self.root / "onnxruntime.dll").write_bytes(pe(["DirectML.dll"]))
+        (self.root / "DirectML.dll").write_bytes(pe())
+        outcome = self.require_failure("DirectML.dll")
+        assert "imports forbidden directml.dll" in outcome.stderr.lower(), outcome.stderr
+
+    def test_pe_outside_the_native_search_directory_is_rejected(self) -> None:
+        (self.root / "MSVCP140_1.dll").write_bytes(pe())
+        outside = self.root / "other"
+        outside.mkdir()
+        (outside / "auxiliary.dll").write_bytes(pe())
+        self.require_failure("PE file outside native search directory: other/auxiliary.dll")
+
+    def test_missing_pwsh_is_reported_as_an_explicit_skip(self) -> None:
+        with mock.patch("shutil.which", return_value=None), expected_error(unittest.SkipTest, "pwsh is required"):
+            self.gate()
 
 
 class WheelVendoringTests(unittest.TestCase):
@@ -206,6 +241,57 @@ class RuntimeSourceTests(unittest.TestCase):
         assert "release CRT redist" in outcome.stderr, outcome.stderr
         assert before == {str(path): path.read_bytes() for path in self.artifact.rglob("*") if path.is_file()}
 
+    @contextmanager
+    def vswhere_result(self, output: str = "", error: OSError | None = None) -> Iterator[mock.MagicMock]:
+        result = subprocess.CompletedProcess([], 0, stdout=output, stderr="")
+        with (
+            mock.patch.dict(os.environ, {"VCToolsRedistDir": ""}),
+            mock.patch.object(closure.subprocess, "run", return_value=result, side_effect=error) as lookup,
+            mock.patch.object(Path, "resolve", autospec=True, side_effect=Path.resolve) as resolution,
+        ):
+            try:
+                yield resolution
+            finally:
+                lookup.assert_called_once()
+                command = lookup.call_args.args[0]
+                assert command[command.index("-version") + 1] == "[17.0,18.0)"
+                for edition in closure.VS2022_EDITIONS:
+                    assert f"Microsoft.VisualStudio.Product.{edition}" in command
+
+    def test_empty_vswhere_result_names_vs2022_before_resolving_paths(self) -> None:
+        with self.vswhere_result() as resolution:
+            with expected_error(ValueError, "Visual Studio 2022"):
+                closure.crt_directory(0x8664, None)
+            resolution.assert_not_called()
+
+    def test_non_vs2022_lookup_is_rejected_before_resolving_paths(self) -> None:
+        self.move_source("2026", "Enterprise")
+        installation = self.root / "Microsoft Visual Studio/2026/Enterprise"
+        with self.vswhere_result(str(installation)) as resolution:
+            with expected_error(ValueError, "Visual Studio 2022"):
+                closure.crt_directory(0x8664, None)
+            resolution.assert_not_called()
+
+    def test_unavailable_vswhere_names_vs2022(self) -> None:
+        with self.vswhere_result(error=FileNotFoundError("vswhere unavailable")) as resolution:
+            with expected_error(ValueError, "Visual Studio 2022"):
+                closure.crt_directory(0x8664, None)
+            resolution.assert_not_called()
+
+    def test_supported_vs2022_lookup_resolves_the_actual_release_crt(self) -> None:
+        installation = self.root / "Microsoft Visual Studio/2022/Enterprise"
+        expected = self.crt.resolve()
+        with self.vswhere_result(str(installation) + "\n") as resolution:
+            assert closure.crt_directory(0x8664, None) == expected
+            resolution.assert_called_once()
+
+    def test_stage_final_audit_rejects_shipped_forbidden_dll_before_any_writes(self) -> None:
+        (self.artifact / "onnxruntime.dll").write_bytes(pe(["MSVCP140_1.dll", "DirectML.dll"]))
+        (self.artifact / "DirectML.dll").write_bytes(pe())
+        before = {str(path): path.read_bytes() for path in self.artifact.rglob("*") if path.is_file()}
+        self.failure("imports forbidden directml.dll")
+        assert before == {str(path): path.read_bytes() for path in self.artifact.rglob("*") if path.is_file()}
+
     def test_explicit_buildtools_source_is_rejected_before_writes(self) -> None:
         self.reject_source("2022", "BuildTools", environment_override=False)
 
@@ -251,6 +337,47 @@ class RuntimeSourceTests(unittest.TestCase):
         assert second.returncode == 0, second.stderr
         assert json.loads(second.stdout)["added"] == []
         assert before == {str(path): path.read_bytes() for path in self.artifact.rglob("*") if path.is_file()}
+
+
+def windows_wheel_steps(source: str, job: str) -> list[str]:
+    match = re.search(rf"(?ms)^  {re.escape(job)}:\n(.*?)(?=^  [\w-]+:|\Z)", source)
+    assert match is not None, f"missing workflow job: {job}"
+    return re.split(r"(?m)^      - ", match[1])[1:]
+
+
+def assert_windows_wheel_wiring(source: str, job: str) -> None:
+    steps = windows_wheel_steps(source, job)
+    selected = []
+    for label, script, argument in [
+        ("vendor", "vendor-windows-wheel-closure.ps1", "-Wheel"),
+        ("verify", "verify-windows-dll-closure.ps1", "-Artifact"),
+    ]:
+        matching = [(index, step) for index, step in enumerate(steps) if script in step]
+        assert len(matching) == 1, f"expected exactly one Windows wheel {label} step; found {len(matching)}"
+        index, step = matching[0]
+        assert "if: runner.os == 'Windows'" in step, f"{label} must run on Windows"
+        assert "shell: pwsh" in step, f"{label} must use PowerShell"
+        assert 'Get-ChildItem -Path wheelhouse -Filter "*.whl" | ForEach-Object {' in step
+        lines = [line.strip() for line in step.splitlines()]
+        calls = [index for index, line in enumerate(lines) if line.startswith("& ") and f'\\{script}"' in line]
+        assert len(calls) == 1, f"expected one active {label} invocation; found {len(calls)}"
+        call = calls[0]
+        assert f"{argument} $_.FullName" in lines[call], f"missing {label} wheel argument"
+        assert '-NativeGlob "*.pyd"' in lines[call], f"{label} must target wheel extensions"
+        guard = f'if ($LASTEXITCODE -ne 0) {{ throw "{script.removesuffix(".ps1")} failed'
+        assert call + 1 < len(lines) and lines[call + 1].startswith(guard), f"missing {label} exit guard"
+        selected.append(index)
+    assert selected[0] < selected[1], "verify must follow vendoring"
+
+
+class WheelWorkflowTests(unittest.TestCase):
+    def test_publish_runs_both_windows_wheel_closure_steps(self) -> None:
+        source = (ROOT / ".github/workflows/publish.yaml").read_text()
+        assert_windows_wheel_wiring(source, "python-wheels")
+
+    def test_smoke_ci_runs_both_windows_wheel_closure_steps(self) -> None:
+        source = (ROOT / ".github/workflows/ci-python-wheel-smoke.yaml").read_text()
+        assert_windows_wheel_wiring(source, "python-wheel-smoke")
 
 
 if __name__ == "__main__":

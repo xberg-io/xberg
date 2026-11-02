@@ -47,8 +47,11 @@ BeforeAll {
     }
 
     function Invoke-Sut {
-        param([Parameter(Mandatory)][string[]]$Arguments)
-        $output = & $script:Pwsh -NoProfile -NonInteractive -File $script:Sut @Arguments 2>&1
+        param(
+            [Parameter(Mandatory)][string[]]$Arguments,
+            [string]$ScriptPath = $script:Sut
+        )
+        $output = & $script:Pwsh -NoProfile -NonInteractive -File $ScriptPath @Arguments 2>&1
         [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output | Out-String) }
     }
 
@@ -188,6 +191,34 @@ Describe 'vendor-windows-wheel-closure.ps1' {
         $result = Invoke-Sut -Arguments @($wheel, (Join-Path $script:Work 'absent'), '*.pyd')
         $result.ExitCode | Should -Not -Be 0
         $result.Output | Should -Match 'DLL source dir not found'
+    }
+
+    It 'should_reject_a_failed_stage_even_when_it_outputs_valid_json' {
+        $isolated = Join-Path $script:Work 'isolated-stage'
+        New-Item -ItemType Directory -Path $isolated -Force | Out-Null
+        $subject = Join-Path $isolated 'vendor-windows-wheel-closure.ps1'
+        Copy-Item -LiteralPath $script:Sut -Destination $subject
+        $helper = Join-Path $isolated 'windows_wheel_closure.py'
+        Set-Content -LiteralPath $helper -Value @'
+import json
+import sys
+from pathlib import Path
+Path(__file__).with_suffix(".receipt.json").write_text(json.dumps(sys.argv[1:]))
+print(json.dumps({"added": []}))
+raise SystemExit(23)
+'@
+        $wheel = New-FakeWheel -Root $script:Work
+        $before = (Get-FileHash -LiteralPath $wheel).Hash
+        $result = Invoke-Sut -ScriptPath $subject -Arguments @($wheel, $script:DllDir, '*.pyd')
+        $result.ExitCode | Should -Not -Be 0
+        $result.Output | Should -Match 'Microsoft runtime closure staging failed'
+        (Get-FileHash -LiteralPath $wheel).Hash | Should -Be $before
+        $call = Get-Content -LiteralPath (Join-Path $isolated 'windows_wheel_closure.receipt.json') -Raw |
+            ConvertFrom-Json
+        $call.Count | Should -Be 5
+        $call[0] | Should -Be 'stage'
+        $call[3] | Should -Be '--native-glob'
+        $call[4] | Should -Be '*.pyd'
     }
 
     It 'should_leave_no_temporary_working_directory_behind_when_it_fails' {
