@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
+  Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
+  Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
+
 - **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
   Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.
 
@@ -151,6 +156,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Validate transitive and delayed PE imports without relying on the build host's installed runtime.
   Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
 
+- **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
+  Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
+
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
 - **(swift): The Swift package requires macOS 14.**
@@ -161,6 +171,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
+  Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
 
 - **(pdf): Preserve native table header roles through grid conversion.** (#2332)
   Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
