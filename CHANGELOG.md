@@ -152,6 +152,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
+  Validate transitive and delayed PE imports without relying on the build host's installed runtime.
+  Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
+
 - **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
   Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
   Publish normalized representative-page metadata while retaining its original orientation provenance.
