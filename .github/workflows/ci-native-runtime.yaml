@@ -18,6 +18,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-native-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   runtime:
     if: github.ref == 'refs/heads/main'
