@@ -68,7 +68,7 @@ class MainOnlyCiTests(unittest.TestCase):
                 with self.subTest(workflow=path.name, job=name):
                     assert "concurrency" not in job, "job concurrency can replace other jobs within one workflow run"
                 job_count += 1
-        assert job_count == 73, "CI job inventory changed"
+        assert job_count == 74, "CI job inventory changed"
         print(f"Checked latest-only groups for {len(paths)} CI workflows and {job_count} jobs")
 
     def test_accepts_stable_workflow_ref_group_with_cancellation(self) -> None:
@@ -141,7 +141,7 @@ class MainOnlyCiTests(unittest.TestCase):
                     with self.subTest(workflow=path.name, job=name, step=step.get("name", step.get("uses"))):
                         assert checks_out_main_source(step), f"{path}:{name}: alternate source checkout"
                     checkout_count += str(step.get("uses", "")).startswith("actions/checkout@")
-        assert checkout_count == 73, "CI checkout inventory changed"
+        assert checkout_count == 74, "CI checkout inventory changed"
         print(f"Checked {checkout_count} CI checkout steps")
 
     def test_rejects_checkout_ref_inputs_and_alternate_branches(self) -> None:
