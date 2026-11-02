@@ -463,7 +463,9 @@ mod capability_manifest_tests {
             cfg!(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))
         );
         #[cfg(feature = "sceptre-ocr-candle")]
-        assert!(cfg!(sceptre_ocr));
+        const {
+            assert!(cfg!(sceptre_ocr))
+        };
     }
 
     #[test]

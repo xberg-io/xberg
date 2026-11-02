@@ -505,7 +505,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-26, macos-26-intel]
+        # ~keep Runtime staging requires the reviewed Visual Studio 2022 redistributable.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-2022, macos-26, macos-26-intel]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -4524,10 +4525,9 @@ jobs:
 
       - uses: xberg-io/actions/publish-nuget@v1
         with:
+          nuget-user: naaman
           packages-dir: dist/nuget
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
   finalize-github-release-after-uploads:
     name: Finalize GitHub Release (after uploads)

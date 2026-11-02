@@ -547,27 +547,13 @@ jobs:
           fi
         shell: bash
 
-  # #741: narrow, non-ORT feature legs that no other job in this file exercises in
-  # isolation. `pdf` alone (no ocr/ocr-pipeline, no ML) rotted into two independent
-  # compile errors -- compute_quality_score missing its ocr/ocr-pipeline cfg gate, and
-  # render.rs's `log::set_boxed_logger` call (gated behind log's non-default `std`
-  # feature, only ever turned on transitively by unrelated crates in the full-feature
-  # graph) -- while `full`, `formats`, and every other leg in this file stayed green for
-  # months, because they all enable enough of the dependency graph to activate `log/std`
-  # by accident. `no-ort-target` and `formats-no-heic` share the exact `pdf` feature
-  # closure and are real shipping configurations (`no-ort-target` underlies both
-  # wasm-target and android-target; `formats-no-heic` underlies `full-no-heic`, which
-  # feeds macos-intel-target and the Swift cross-build), so a break in either is just as
-  # invisible to the rest of this file as the `pdf` break was.
+  # Isolated feature closures catch cfg dependencies hidden by `full` (#741).
+  # `no-ort-target` and `formats-no-heic` cover the PDF closure used by shipping
+  # mobile, desktop and Swift configurations. Independent matrix legs with
+  # `fail-fast: false` expose every broken closure even when another leg fails.
   #
-  # One matrix entry per leg (not sequential steps in one job): fixing the first of the
-  # two `pdf` breaks above only *revealed* the second -- a job that stops at its first
-  # failing step would have reported red, gotten "fixed", and then gone green again while
-  # still carrying the second break. `fail-fast: false` means every leg always reports its
-  # own real, independent result.
-  #
-  # No install-system-deps / setup-onnx-runtime / setup-tesseract-cache: none of these
-  # feature sets pull ORT, Tesseract, or libheif. The email leg lints test targets
+  # Only the Sceptre ORT leg provisions ONNX Runtime; the other feature sets need
+  # no ORT, Tesseract, or libheif setup. The email leg lints test targets
   # without Tokio so fixture constants gated wider than their callers fail CI (#2281).
   # XML and HWPX each lint the library alone so helpers only called by other features
   # fail as dead code rather than passing cargo check with warnings (#2243). ~keep
@@ -585,6 +571,8 @@ jobs:
             features: pdf
           - name: pdf-ocr-pipeline
             features: pdf,ocr-pipeline
+          - name: sceptre-ocr-ort
+            features: sceptre-ocr-ort
           - name: no-ort-target
             features: no-ort-target
           - name: formats-no-heic
@@ -605,6 +593,13 @@ jobs:
         with:
           cache-key-prefix: rust-feature-leg-${{ matrix.name }}
           use-sccache: "true"
+
+      - name: Setup ONNX Runtime for standalone Sceptre ORT
+        if: matrix.name == 'sceptre-ocr-ort'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+          dest-dir: crates/xberg-ffi
 
       - name: cargo check -p xberg --no-default-features --features ${{ matrix.features }} --all-targets
         if: matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'
