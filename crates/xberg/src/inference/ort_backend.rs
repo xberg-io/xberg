@@ -253,6 +253,17 @@ fn value_to_tensor(value: &Value) -> Result<InferenceTensor, InferenceError> {
     Ok(tensor)
 }
 
+#[cfg(all(test, feature = "layout-detection"))]
+impl Drop for OrtSession {
+    fn drop(&mut self) {
+        if self.profiling_enabled {
+            self.session
+                .end_profiling()
+                .expect("finalized production parity profile");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ndarray::ArrayD;
@@ -306,17 +317,6 @@ mod tests {
         match value_to_tensor(&value).unwrap() {
             InferenceTensor::I64(extracted) => assert_eq!(extracted, array),
             other => panic!("expected I64 tensor, got {other:?}"),
-        }
-    }
-}
-
-#[cfg(all(test, feature = "layout-detection"))]
-impl Drop for OrtSession {
-    fn drop(&mut self) {
-        if self.profiling_enabled {
-            self.session
-                .end_profiling()
-                .expect("finalized production parity profile");
         }
     }
 }
