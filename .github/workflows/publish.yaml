@@ -4524,10 +4524,9 @@ jobs:
 
       - uses: xberg-io/actions/publish-nuget@v1
         with:
+          nuget-user: naaman
           packages-dir: dist/nuget
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
   finalize-github-release-after-uploads:
     name: Finalize GitHub Release (after uploads)
