@@ -8,6 +8,12 @@
     feature = "build-tesseract-wasm",
     all(feature = "build-tesseract", not(feature = "dynamic-linking"))
 ))]
+#[path = "build_support/output.rs"]
+mod output;
+#[cfg(any(
+    feature = "build-tesseract-wasm",
+    all(feature = "build-tesseract", not(feature = "dynamic-linking"))
+))]
 #[path = "build_support/source_archive.rs"]
 mod source_archive;
 #[cfg(any(
@@ -22,6 +28,7 @@ mod source_cache;
     all(feature = "build-tesseract", not(feature = "dynamic-linking"))
 ))]
 mod build_tesseract {
+    use crate::output;
     use crate::source_archive::{ArchiveLimits, extract_source_archive};
     use crate::source_cache::{
         PreparedSourceTree, SourceArtifact, canonicalize_trusted_build_root, cmake_source_path, copy_verified_artifact,
@@ -492,7 +499,10 @@ mod build_tesseract {
     fn find_wasi_pthread_toolchain(wasi_sdk_dir: &Path) -> PathBuf {
         let candidate = wasi_sdk_dir.join("share/cmake/wasi-sdk-pthread.cmake");
         if candidate.exists() {
-            eprintln!("Found WASI SDK pthread toolchain: {}", candidate.display());
+            output::status(format_args!(
+                "Found WASI SDK pthread toolchain: {}",
+                candidate.display()
+            ));
             return candidate;
         }
         panic!(
@@ -519,7 +529,10 @@ mod build_tesseract {
         let target = target_triple();
 
         if is_wasm_target(&target) {
-            eprintln!("Detected WASM target: {}, routing to build_wasm()", target);
+            output::status(format_args!(
+                "Detected WASM target: {}, routing to build_wasm()",
+                target
+            ));
             return build_wasm();
         }
 
@@ -841,16 +854,8 @@ mod build_tesseract {
         #[cfg(not(feature = "dynamic-linking"))]
         let link_type = "static";
 
-        println!("cargo:rustc-link-lib={}={}", link_type, tesseract_link_name);
-        eprintln!(
-            "Linking with tesseract ({} linking): {}",
-            link_type, tesseract_link_name
-        );
-        println!("cargo:rustc-link-lib={}={}", link_type, leptonica_link_name);
-        eprintln!(
-            "Linking with leptonica ({} linking): {}",
-            link_type, leptonica_link_name
-        );
+        output::link_library("tesseract", link_type, &tesseract_link_name);
+        output::link_library("leptonica", link_type, &leptonica_link_name);
 
         set_os_specific_link_flags();
 
@@ -1834,7 +1839,7 @@ Installation instructions:
 
             if let Some((lib_path, link_name)) = found_lib_name {
                 if out_path.exists() {
-                    eprintln!("Library already available at expected location: {}", out_path.display());
+                    output::available_library(&out_path);
                 } else if let Err(e) = fs::copy(&lib_path, &out_path) {
                     eprintln!("Failed to copy library to standard location: {}", e);
                 }
