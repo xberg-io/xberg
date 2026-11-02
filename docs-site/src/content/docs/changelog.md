@@ -188,6 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
   Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
 
+- **(ocr): Honor cancellation after sparse OCR retries complete.** (#2345)
+  Return cancellation before selecting retry text or retaining primary text after a retry error.
+
 - **(benchmarks): Bind ParseBench runs to their Python harness sources.** (#2332)
   Reject changed or unbound runner code before extraction; preserve older plans and results for read-only audits.
 

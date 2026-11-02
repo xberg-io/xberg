@@ -2213,6 +2213,9 @@ async fn recover_selected_rtl_identifiers_fail_open(
     match recover_selected_rtl_identifiers(backend, image_bytes, selected, fallback_config, cancel_token).await {
         Ok(()) => Ok(()),
         Err(error @ crate::XbergError::Cancelled) => Err(error),
+        Err(_) if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) => {
+            Err(crate::XbergError::Cancelled)
+        }
         Err(error) => {
             tracing::warn!(
                 backend = backend.name(),
@@ -2485,10 +2488,13 @@ pub(crate) async fn process_whole_image_ocr_with_sparse_retry(
     } else {
         sparse_image_ocr_fallback_config(effective_config.as_ref())
     };
-    let fallback = match backend
+    let fallback_result = backend
         .process_image_owned(std::sync::Arc::clone(&image_bytes), &fallback_config)
-        .await
-    {
+        .await;
+    if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    let fallback = match fallback_result {
         Ok(fallback) => fallback,
         Err(error @ crate::XbergError::Cancelled) => return Err(error),
         Err(error) => {
@@ -3942,6 +3948,10 @@ mod image_table_grid_metadata_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr-pipeline"))]
+#[path = "image_sparse_retry_cancellation_tests.rs"]
+mod image_sparse_retry_cancellation_tests;
 
 #[cfg(test)]
 mod tests {
@@ -5482,6 +5492,87 @@ mod tests {
                 .await,
                 Err(crate::XbergError::Cancelled)
             ));
+        }
+
+        #[tokio::test]
+        async fn recover_selected_rtl_identifiers_keeps_cancellation_when_recovery_errors() {
+            use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+
+            struct CancellingFailingRecoveryBackend(crate::cancellation::CancellationToken);
+
+            #[async_trait::async_trait]
+            impl OcrBackend for CancellingFailingRecoveryBackend {
+                fn backend_type(&self) -> OcrBackendType {
+                    OcrBackendType::Custom
+                }
+                fn supports_language(&self, _: &str) -> bool {
+                    true
+                }
+                async fn process_image(
+                    &self,
+                    _: &[u8],
+                    _: &crate::core::config::OcrConfig,
+                ) -> crate::Result<crate::types::ExtractedDocument> {
+                    self.0.cancel();
+                    Err(crate::XbergError::Other("recovery interrupted".to_string()))
+                }
+            }
+
+            impl Plugin for CancellingFailingRecoveryBackend {
+                fn name(&self) -> &str {
+                    "cancelling-failing-recovery"
+                }
+                fn version(&self) -> String {
+                    "1.0.0".to_string()
+                }
+                fn initialize(&self) -> crate::Result<()> {
+                    Ok(())
+                }
+                fn shutdown(&self) -> crate::Result<()> {
+                    Ok(())
+                }
+            }
+
+            let mut word = crate::types::OcrElement {
+                text: "880-2026-104".to_string(),
+                level: crate::types::OcrElementLevel::Word,
+                geometry: crate::types::OcrBoundingGeometry::Rectangle {
+                    left: 1,
+                    top: 1,
+                    width: 8,
+                    height: 8,
+                },
+                ..Default::default()
+            };
+            word.backend_metadata
+                .insert("word_language".to_string(), serde_json::json!("ara"));
+            let mut selected = crate::types::ExtractedDocument {
+                content: "880-2026-104".to_string(),
+                ocr_elements: Some(vec![word]),
+                ..Default::default()
+            };
+            let mut encoded = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::new_rgb8(10, 10)
+                .write_to(&mut encoded, image::ImageFormat::Png)
+                .expect("test image must encode");
+            let cancellation = crate::cancellation::CancellationToken::new();
+            let backend: std::sync::Arc<dyn OcrBackend> =
+                std::sync::Arc::new(CancellingFailingRecoveryBackend(cancellation.clone()));
+
+            let outcome = recover_selected_rtl_identifiers_fail_open(
+                &backend,
+                std::sync::Arc::new(encoded.into_inner()),
+                &mut selected,
+                &crate::core::config::OcrConfig::default(),
+                Some(&cancellation),
+            )
+            .await;
+
+            assert!(cancellation.is_cancelled(), "the recovery OCR call must run");
+            assert!(
+                matches!(outcome, Err(crate::XbergError::Cancelled)),
+                "a recovery error after cancellation must stay a cancellation, got {outcome:?}"
+            );
         }
 
         #[test]
