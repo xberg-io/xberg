@@ -25,6 +25,13 @@ pub mod swift_bic;
 
 use crate::types::redaction::PiiCategory;
 
+#[derive(Clone, Copy)]
+pub(super) struct BorrowedMatch<'s> {
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) text: &'s str,
+}
+
 /// One detected PII span in the input text.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PatternMatch {

@@ -4,34 +4,54 @@
 //! validates them with the Luhn mod-10 algorithm. Without the Luhn check the
 //! false-positive rate on document text is unacceptable.
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::convert::Infallible;
 
 static RE_CC: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b(?:\d[ \-]?){12,18}\d\b").expect("credit card regex compiles"));
 
 /// Find all credit card number spans in `text`, validated with the Luhn algorithm.
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    RE_CC
-        .find_iter(text)
-        .filter_map(|m| {
-            let raw = m.as_str();
-            let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
-            if !(13..=19).contains(&digits.len()) {
-                return None;
-            }
-            if !luhn_check(&digits) {
-                return None;
-            }
-            Some(PatternMatch {
-                start: m.start(),
-                end: m.end(),
-                category: PiiCategory::CreditCard,
-                text: raw.to_string(),
-            })
-        })
-        .collect()
+    let mut matches = Vec::new();
+    let result = visit_matches(text, &mut |_| Ok::<_, Infallible>(()), &mut |matched| {
+        matches.push(PatternMatch {
+            start: matched.start,
+            end: matched.end,
+            category: PiiCategory::CreditCard,
+            text: matched.text.to_string(),
+        });
+        Ok(())
+    });
+    match result {
+        Ok(()) => matches,
+        Err(never) => match never {},
+    }
+}
+
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
+    for m in RE_CC.find_iter(text) {
+        let matched = BorrowedMatch {
+            start: m.start(),
+            end: m.end(),
+            text: m.as_str(),
+        };
+        candidate(matched)?;
+        let digits: String = matched.text.chars().filter(|c| c.is_ascii_digit()).collect();
+        if !(13..=19).contains(&digits.len()) {
+            continue;
+        }
+        if !luhn_check(&digits) {
+            continue;
+        }
+        eligible(matched)?;
+    }
+    Ok(())
 }
 
 /// Luhn mod-10 checksum: standard implementation used by Visa/MC/Amex.
