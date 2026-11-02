@@ -58,6 +58,8 @@ use crate::layout::types::{BBox, LayoutClass, LayoutDetection};
 mod output;
 mod preprocessing;
 
+type InputTensors = (Array4<f32>, Array2<f32>, Array2<f32>);
+
 /// Default confidence threshold for PP-DocLayout-V3 detections.
 const DEFAULT_THRESHOLD: f32 = 0.5;
 
@@ -190,7 +192,7 @@ impl PpDocLayoutV3Model {
     /// the model expects the tensor dimensions here, not the original image size).
     /// `scale_factor` is `[800/orig_h, 800/orig_w]`; the model divides output box coords by
     /// these values to restore original-image pixel coordinates.
-    fn preprocess_single(img: &RgbImage) -> Result<(Array4<f32>, Array2<f32>, Array2<f32>), LayoutError> {
+    fn preprocess_single(img: &RgbImage) -> Result<InputTensors, LayoutError> {
         let orig_w = img.width() as f32;
         let orig_h = img.height() as f32;
         let ts = INPUT_SIZE;
@@ -219,9 +221,11 @@ impl PpDocLayoutV3Model {
         orig_h: u32,
     ) -> Vec<LayoutDetection> {
         Self::project_detections(
-            rows.chunks_exact(DET_ROW_COLS)
+            rows.as_chunks::<DET_ROW_COLS>()
+                .0
+                .iter()
                 .take(n_valid)
-                .map(ndarray::ArrayView1::from),
+                .map(|row| ndarray::ArrayView1::from(row.as_slice())),
             threshold,
             orig_w,
             orig_h,

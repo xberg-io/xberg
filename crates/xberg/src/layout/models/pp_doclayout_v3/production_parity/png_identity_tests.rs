@@ -210,11 +210,7 @@ fn assert_artifacts(fixture: &Fixture, row: &Value) {
         pixels.len(),
         INPUT_SIZE as usize * INPUT_SIZE as usize * ORIGINAL.len() * std::mem::size_of::<f32>()
     );
-    assert_original_tensor(
-        pixels
-            .chunks_exact(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap())),
-    );
+    assert_original_tensor(pixels.as_chunks::<4>().0.iter().map(|bytes| f32::from_le_bytes(*bytes)));
 }
 
 #[test]
