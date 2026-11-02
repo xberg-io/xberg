@@ -26,8 +26,10 @@
 
 use std::collections::HashSet;
 
+use super::formatted::{FormattedPlan, PagePlan, SurfacePlans, content_matches, escaped_plain_markdown};
 use crate::Result;
 use crate::core::config::redaction::{ExternalRedactionFinding, RedactionConfig, RedactionOffsetEncoding};
+use crate::extraction::derive::surfaces::RedactionSurfaces;
 use crate::extractors::security::SecurityLimits;
 use crate::types::ExtractedDocument;
 use crate::types::entity::{Entity, EntityCategory};
@@ -38,6 +40,7 @@ use crate::types::revisions::{DiffLine, RevisionAnchor};
 #[cfg(feature = "tokio-runtime")]
 use super::external::compile_configured_findings_async;
 use super::external::{ExternalRedactionRequest, compile_configured_findings, compile_external_findings};
+use super::literal_leaf::plan::{self as literal_plan, LiteralPlan, Matchers};
 use super::patterns::{PatternMatch, scan_text};
 use super::strategy::{TokenCounter, apply_strategy};
 
@@ -54,7 +57,7 @@ const MAX_BLOCK_NESTING_DEPTH: usize = 32;
 /// Run pattern redaction (and optional NER-driven redaction) over `result` and
 /// rewrite every textual field. Populates `result.redaction_report`.
 pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) -> Result<()> {
-    redact_with_security_limits(result, config, &SecurityLimits::default()).await
+    redact_with_security_limits(result, config, &SecurityLimits::default(), &()).await
 }
 
 /// Redact an owned document using a JSON array or JSON Lines payload from an external inspection engine.
@@ -118,6 +121,7 @@ pub(crate) async fn redact_external_with_findings(
         },
         true,
         &default_limits,
+        &(),
     )
     .await?;
     Ok(document)
@@ -127,10 +131,18 @@ pub(crate) async fn redact_with_security_limits(
     result: &mut ExtractedDocument,
     config: &RedactionConfig,
     limits: &SecurityLimits,
+    surfaces: &impl RedactionSurfaces,
 ) -> Result<()> {
-    redact_counted(result, config, CompiledExternalFindings::default(), true, limits)
-        .await
-        .map(|_counter| ())
+    redact_counted(
+        result,
+        config,
+        CompiledExternalFindings::default(),
+        true,
+        limits,
+        surfaces,
+    )
+    .await
+    .map(|_counter| ())
 }
 
 pub(crate) async fn redact_with_external_findings(
@@ -138,7 +150,9 @@ pub(crate) async fn redact_with_external_findings(
     config: &RedactionConfig,
     request: &ExternalRedactionRequest,
     limits: &SecurityLimits,
+    surfaces: &impl RedactionSurfaces,
 ) -> Result<()> {
+    surfaces.validate(result)?;
     config.validate()?;
     let external_terms = compile_external_findings(
         &result.content,
@@ -157,6 +171,7 @@ pub(crate) async fn redact_with_external_findings(
         },
         request.include_configured_sources,
         limits,
+        surfaces,
     )
     .await
     .map(|_counter| ())
@@ -179,6 +194,7 @@ pub async fn redact_capturing_rehydration_map(
         CompiledExternalFindings::default(),
         true,
         &SecurityLimits::default(),
+        &(),
     )
     .await?;
     Ok(counter.rehydration_map())
@@ -201,7 +217,14 @@ pub fn redact_with_entities(
 ) -> Result<()> {
     config.validate()?;
     let configured = compile_configured_findings(&result.content, config, &SecurityLimits::default())?;
-    redact_pass(result, config, entities, &configured.terms, true);
+    redact_pass(
+        result,
+        config,
+        entities,
+        &configured.terms,
+        true,
+        (&(), &SecurityLimits::default()),
+    )?;
     Ok(())
 }
 
@@ -220,7 +243,9 @@ async fn redact_counted(
     external: CompiledExternalFindings<'_>,
     include_configured_sources: bool,
     limits: &SecurityLimits,
+    surfaces: &impl RedactionSurfaces,
 ) -> Result<TokenCounter> {
+    surfaces.validate(result)?;
     config.validate()?;
     #[cfg(feature = "tokio-runtime")]
     let configured = compile_configured_findings_async(&result.content, config, limits).await?;
@@ -249,13 +274,14 @@ async fn redact_counted(
     #[cfg(not(feature = "ner"))]
     let entities: Vec<Entity> = Vec::new();
 
-    Ok(redact_pass(
+    redact_pass(
         result,
         config,
         &entities,
         &all_external_terms,
         include_configured_sources,
-    ))
+        (surfaces, limits),
+    )
 }
 
 /// Rewrite every text-bearing field on `result` and populate its audit report.
@@ -265,7 +291,9 @@ fn redact_pass(
     entities: &[Entity],
     external_terms: &[(PiiCategory, regex::Regex)],
     include_configured_sources: bool,
-) -> TokenCounter {
+    context: (&impl RedactionSurfaces, &SecurityLimits),
+) -> Result<TokenCounter> {
+    let (surfaces, limits) = context;
     let active = if include_configured_sources {
         active_categories(config)
     } else {
@@ -292,8 +320,15 @@ fn redact_pass(
         include_configured_sources,
         counter: TokenCounter::new(),
         findings: Vec::new(),
+        plans: SurfacePlans::default(),
     };
 
+    pass.plans = pass.plan_surfaces(result, surfaces, limits)?;
+    if let Some(FormattedPlan::Literal(plan)) = &pass.plans.formatted {
+        pass.findings.try_reserve_exact(plan.matches.len()).map_err(|_| {
+            crate::XbergError::validation("formatted literal Markdown redaction: requested helper capacity limit")
+        })?;
+    }
     pass.redact_document(result, 0);
 
     let findings = std::mem::take(&mut pass.findings);
@@ -303,7 +338,7 @@ fn redact_pass(
         total_redacted,
     });
 
-    pass.counter
+    Ok(pass.counter)
 }
 
 /// One document-wide redaction pass.
@@ -321,9 +356,68 @@ struct RedactionPass<'a> {
     include_configured_sources: bool,
     counter: TokenCounter,
     findings: Vec<RedactionFinding>,
+    plans: SurfacePlans,
 }
 
 impl RedactionPass<'_> {
+    fn plan_surfaces(
+        &self,
+        doc: &ExtractedDocument,
+        surfaces: &impl RedactionSurfaces,
+        limits: &SecurityLimits,
+    ) -> Result<SurfacePlans> {
+        let mut plans = SurfacePlans::default();
+        if let Some(source) = surfaces.formatted_literal_backup() {
+            plans.formatted = Some(FormattedPlan::Literal(literal_plan::plan(
+                source,
+                Matchers {
+                    categories: self.categories,
+                    requested: &self.config.categories,
+                    custom: self.custom_regexes,
+                    ner: self.ner_terms,
+                    external: self.external_terms,
+                    builtins: self.include_configured_sources,
+                },
+                limits,
+                self.config.strategy,
+            )?));
+        } else if surfaces.discard_formatted() {
+            plans.formatted = Some(FormattedPlan::ProcessorDiscard);
+        } else if surfaces.formatted_markdown()
+            && let Some(text) = doc.formatted_content.as_deref()
+        {
+            plans.formatted = Some(
+                match content_matches(text, self.matches_for(text), surfaces.formatted_tag_exemptions()) {
+                    Some(matches) => FormattedPlan::Preserve(matches),
+                    None => FormattedPlan::Discard,
+                },
+            );
+        }
+        for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
+            if !surfaces.page_markdown(index) {
+                continue;
+            }
+            let plan = self.plan_page(&page.content, index, surfaces)?;
+            plans.pages.insert(index, plan);
+        }
+        Ok(plans)
+    }
+
+    fn plan_page(&self, text: &str, index: usize, surfaces: &impl RedactionSurfaces) -> Result<PagePlan> {
+        if !surfaces.page_is_literal(index)
+            && let Some(matches) = content_matches(text, self.matches_for(text), surfaces.page_tag_exemptions(index))
+        {
+            return Ok(PagePlan::Preserve(matches));
+        }
+        let source = surfaces
+            .page_backup(index)
+            .ok_or_else(|| crate::XbergError::validation("Generated Markdown page has no verified plain backup"))?;
+        Ok(PagePlan::Plain {
+            source: source.to_owned(),
+            matches: self.matches_for(source),
+        })
+    }
+
     /// Every match in `text`, deduped and in ascending byte order.
     fn matches_for(&self, text: &str) -> Vec<PatternMatch> {
         let mut matches = if self.include_configured_sources {
@@ -366,6 +460,10 @@ impl RedactionPass<'_> {
     /// audit trail is worse than a visibly missing one (xberg-io/xberg#201).
     fn redact(&mut self, text: &str) -> String {
         let matches = self.matches_for(text);
+        self.apply_matches(text, matches)
+    }
+
+    fn apply_matches(&mut self, text: &str, matches: Vec<PatternMatch>) -> String {
         if matches.is_empty() {
             return text.to_string();
         }
@@ -394,6 +492,27 @@ impl RedactionPass<'_> {
             out.replace_range(*start..*end, replacement);
         }
         out
+    }
+
+    fn apply_literal(&mut self, mut plan: LiteralPlan) -> String {
+        for finding in plan.matches {
+            let text = if finding.decoded { &plan.decoded } else { &plan.source };
+            let identity = &text[finding.identity];
+            let replacement = apply_strategy(self.config.strategy, identity, &finding.category, &mut self.counter);
+            self.findings.push(RedactionFinding {
+                start: finding.raw.start as u32,
+                end: finding.raw.end as u32,
+                category: finding.category,
+                strategy: self.config.strategy,
+                replacement_token: replacement.clone(),
+            });
+            plan.replacements
+                .push((finding.raw.start, finding.raw.end, replacement));
+        }
+        for (start, end, replacement) in plan.replacements.iter().rev() {
+            plan.source.replace_range(*start..*end, replacement);
+        }
+        plan.source
     }
 
     /// Rewrite a string field in place.
@@ -428,9 +547,21 @@ impl RedactionPass<'_> {
         }
     }
 
-    /// Rewrite every text surface of `doc`, recursing into embedded
-    /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
-    fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+    fn redact_primary_surfaces(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        let plan = match (depth == 0).then(|| self.plans.formatted.take()).flatten() {
+            Some(FormattedPlan::Literal(plan)) => {
+                doc.content = self.apply_literal(plan);
+                doc.formatted_content = None;
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor edited formatted text; its current literal data was redacted \
+                     and returned as plain text",
+                );
+                return;
+            }
+            plan => plan,
+        };
         // A nested result that its own pipeline already packaged (DOCX, PDF) holds base64 in
         // `content`. That pipeline ran with the same redaction config and redacted the
         // text before packaging it; masking a stretch of the encoding would corrupt it.
@@ -441,9 +572,39 @@ impl RedactionPass<'_> {
             doc.content = self.redact(&content);
         }
 
-        if let Some(formatted) = doc.formatted_content.take() {
-            doc.formatted_content = Some(self.redact(&formatted));
-        }
+        self.redact_formatted_surface(doc, plan);
+    }
+
+    fn redact_formatted_surface(&mut self, doc: &mut ExtractedDocument, plan: Option<FormattedPlan>) {
+        doc.formatted_content = match (plan, doc.formatted_content.take()) {
+            (Some(FormattedPlan::ProcessorDiscard), _) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor changed the captured document text; the unproved rendering was discarded \
+                     and current redacted plain text is returned",
+                );
+                None
+            }
+            (Some(FormattedPlan::Preserve(matches)), Some(formatted)) => Some(self.apply_matches(&formatted, matches)),
+            (Some(FormattedPlan::Discard), Some(_)) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded \
+                     and redacted plain text is returned",
+                );
+                None
+            }
+            (_, Some(formatted)) => Some(self.redact(&formatted)),
+            (_, None) => None,
+        };
+    }
+
+    /// Rewrite every text surface of `doc`, recursing into embedded
+    /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
+    fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        self.redact_primary_surfaces(doc, depth);
 
         self.redact_chunks(doc);
 
@@ -509,7 +670,7 @@ impl RedactionPass<'_> {
     /// added there it must be added here too.
     fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize) {
         self.redact_tables(doc);
-        self.redact_pages(doc);
+        self.redact_pages(doc, depth);
         self.redact_elements(doc);
         self.redact_djot(doc);
         self.redact_document_structure(doc);
@@ -546,12 +707,29 @@ impl RedactionPass<'_> {
     }
 
     /// Rewrite per-page text, slide/sheet names, hierarchy blocks, and page tables.
-    fn redact_pages(&mut self, doc: &mut ExtractedDocument) {
+    fn redact_pages(&mut self, doc: &mut ExtractedDocument, depth: usize) {
         let Some(pages) = doc.pages.as_mut() else {
             return;
         };
-        for page in pages.iter_mut() {
-            self.redact_in_place(&mut page.content);
+        for (index, page) in pages.iter_mut().enumerate() {
+            let plan = (depth == 0).then(|| self.plans.pages.remove(&index)).flatten();
+            page.content = match plan {
+                Some(PagePlan::Preserve(matches)) => self.apply_matches(&page.content, matches),
+                Some(PagePlan::Plain { source, matches }) => {
+                    let redacted = self.apply_matches(&source, matches);
+                    crate::core::diagnostics::push_warning(
+                        &mut doc.processing_warnings,
+                        "output_format",
+                        format!(
+                            "Page {} Markdown could not retain syntax authority; its verified current backup was redacted \
+                             and escaped as Markdown. Finding offsets refer to the backup before escaping",
+                            page.page_number
+                        ),
+                    );
+                    escaped_plain_markdown(&redacted)
+                }
+                None => self.redact(&page.content),
+            };
             self.redact_optional(&mut page.native_content);
             self.redact_optional(&mut page.speaker_notes);
             self.redact_optional(&mut page.section_name);

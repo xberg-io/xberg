@@ -1,6 +1,6 @@
 //! Email address detection.
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -10,13 +10,22 @@ static RE_EMAIL: Lazy<Regex> =
 
 /// Find all email address spans in `text`.
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    RE_EMAIL
-        .find_iter(text)
-        .map(|m| PatternMatch {
+    super::collect_matches(text, &PiiCategory::Email)
+}
+
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
+    for m in RE_EMAIL.find_iter(text) {
+        let matched = BorrowedMatch {
             start: m.start(),
             end: m.end(),
-            category: PiiCategory::Email,
-            text: m.as_str().to_string(),
-        })
-        .collect()
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        eligible(matched)?;
+    }
+    Ok(())
 }

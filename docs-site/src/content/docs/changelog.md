@@ -158,6 +158,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recognize escaped PlacedPDF names in page-level text decisions.** (#2378)
   Apply the existing parsed page policy to escaped names; form and cross-page cache handling remain separate.
 
+- **(redaction): Check raw and decoded findings before returning edited formatted text.** (#2358, #2363)
+  Preserve semantic token and hash identity, reject incomplete overlap coverage, and bound literal planning work.
+  Reject unsupported syntax in witnessed formatted-only edits while retaining trusted generated Markdown behavior.
+
+- **(redaction): Keep source tag names redactable in Markdown and preserve edited output.** (#2358)
+  Decline tag-syntax exemptions for raw blocks and rendered annotation values; preserve renderer-owned styles elsewhere.
+  Return current formatted-only and same-frame page edits through warned literal fallbacks.
+  Retain changed-content precedence when processors edit conflicting plain and formatted views.
+
+- **(redaction): Preserve current text after legitimate post-processor edits.** (#2358)
+  Discard unproved generated Markdown with a warning and return current redacted plain text.
+  Keep page and result identity guards, and preserve unchanged formatting after later no-op processors.
+
+- **(redaction): Preserve verified generated Markdown formatting while redacting its content.** (#2358)
+  Treat superscript and underline syntax separately from source text, including per-page output.
+  Use an explicit plain-text fallback when a match crosses generated syntax; keep literal and code text redactable.
+
+- **(markdown): Render document superscript and underline annotations with standard inline HTML.** (#2358)
+  Emit `<sup>` and `<u>` while retaining source escaping, nested formatting and table-cell scripts.
+  Preserve those styles when DOCX/PDF writers parse the postprocessed Markdown; leave code and malformed tags literal.
+  The HTML converter's pre-rendered Markdown and explicit conversion options retain their existing notation.
+
 - **(ci): Keep publish workflow contract imports in canonical order.**
   Preserve the test assertions while satisfying the pinned Python import-order gate.
 

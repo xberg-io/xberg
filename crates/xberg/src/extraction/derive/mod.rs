@@ -23,6 +23,7 @@ mod formulas;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod ocr_document;
 mod pages;
+pub(crate) mod surfaces;
 use formulas::derive_formulas;
 pub(crate) use formulas::strip_math_delimiters;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -678,9 +679,10 @@ fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'sta
 /// Pre-render or render `doc` in `output_format`, reusing an already-matching
 /// `doc.pre_rendered_content` instead of re-rendering. `None` for `Plain`, since plain
 /// content is carried separately as `content`.
-fn compute_formatted_content(
+fn compute_formatted_content_observed(
     doc: &mut InternalDocument,
     output_format: &crate::core::config::OutputFormat,
+    observer: &mut impl surfaces::DerivationObserver,
 ) -> Option<String> {
     match output_format {
         crate::core::config::OutputFormat::Plain => None,
@@ -688,7 +690,9 @@ fn compute_formatted_content(
             if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("markdown") {
                 doc.pre_rendered_content.take()
             } else {
-                Some(crate::rendering::render_markdown(doc))
+                let text = crate::rendering::render_markdown(doc);
+                observer.formatted_from_source(true, &text, crate::rendering::markdown_tag_exemptions_are_owned(doc));
+                Some(text)
             }
         }
         crate::core::config::OutputFormat::Djot => {
@@ -719,33 +723,46 @@ fn compute_formatted_content(
                 Some(crate::rendering::render_doctags(doc))
             }
         }
-        crate::core::config::OutputFormat::Custom(name) => {
-            // A prior `clear_renderers()` call (e.g. by a sibling test, or any consumer
-            // resetting the plugin lifecycle) empties this global registry, including the
-            // built-ins. Self-heal before dispatch so a built-in reached only through
-            // `Custom` (such as "dot") is never permanently lost. ~keep
-            crate::plugins::ensure_renderers_initialized();
-            let registry = crate::plugins::registry::get_renderer_registry();
-            let registry = registry.read();
-            match registry.render(name, doc) {
-                Ok(rendered) => Some(rendered),
-                Err(e) => {
-                    tracing::warn!(renderer = %name, error = %e, "Custom renderer failed, falling back to plain");
-                    // #208: `tracing::warn!` is invisible to API/binding consumers — the
-                    // only channel they can observe is `processing_warnings`. Without
-                    // this, a typo'd or unregistered custom format silently produced
-                    // plain text with no way for the caller to detect the fallback. ~keep
-                    crate::core::diagnostics::push_warning(
-                        &mut doc.processing_warnings,
-                        "output-format",
-                        format!(
-                            "requested output format '{name}' has no registered renderer ({e}); \
-                             returned plain text instead"
-                        ),
-                    );
-                    None
-                }
-            }
+        crate::core::config::OutputFormat::Custom(name) => compute_custom_formatted_content(doc, name, observer),
+    }
+}
+
+fn compute_custom_formatted_content(
+    doc: &mut InternalDocument,
+    name: &str,
+    observer: &mut impl surfaces::DerivationObserver,
+) -> Option<String> {
+    // A prior `clear_renderers()` call (e.g. by a sibling test, or any consumer
+    // resetting the plugin lifecycle) empties this global registry, including the
+    // built-ins. Self-heal before dispatch so a built-in reached only through
+    // `Custom` (such as "dot") is never permanently lost. ~keep
+    crate::plugins::ensure_renderers_initialized();
+    let registry = crate::plugins::registry::get_renderer_registry();
+    let registry = registry.read();
+    match registry.render(name, doc) {
+        Ok(rendered) => {
+            observer.formatted_from_source(
+                registry.renders_markdown(name),
+                &rendered,
+                crate::rendering::markdown_tag_exemptions_are_owned(doc),
+            );
+            Some(rendered)
+        }
+        Err(e) => {
+            tracing::warn!(renderer = %name, error = %e, "Custom renderer failed, falling back to plain");
+            // #208: `tracing::warn!` is invisible to API/binding consumers — the
+            // only channel they can observe is `processing_warnings`. Without
+            // this, a typo'd or unregistered custom format silently produced
+            // plain text with no way for the caller to detect the fallback. ~keep
+            crate::core::diagnostics::push_warning(
+                &mut doc.processing_warnings,
+                "output-format",
+                format!(
+                    "requested output format '{name}' has no registered renderer ({e}); \
+                     returned plain text instead"
+                ),
+            );
+            None
         }
     }
 }
@@ -830,8 +847,11 @@ pub fn derive_extraction_result(
     include_document_structure: bool,
     output_format: crate::core::config::OutputFormat,
 ) -> ExtractedDocument {
-    derive(doc, include_document_structure, output_format, true)
+    derive(doc, include_document_structure, output_format, true, &mut ())
 }
+
+#[cfg(feature = "redaction")]
+pub(crate) use surfaces::derive_with_surfaces;
 
 /// Derive the document that the registry hands to a registered public renderer.
 ///
@@ -839,7 +859,7 @@ pub fn derive_extraction_result(
 /// the renderer's output, not this `content`, so its pages are built as for every output
 /// that is not plain: from the text of their elements only. ~keep
 pub(crate) fn derive_renderer_input(doc: InternalDocument) -> ExtractedDocument {
-    derive(doc, true, crate::core::config::OutputFormat::Plain, false)
+    derive(doc, true, crate::core::config::OutputFormat::Plain, false, &mut ())
 }
 
 /// The derivation pipeline. `is_result` says that the caller gets this document: then its
@@ -849,6 +869,7 @@ fn derive(
     include_document_structure: bool,
     output_format: crate::core::config::OutputFormat,
     is_result: bool,
+    observer: &mut impl surfaces::DerivationObserver,
 ) -> ExtractedDocument {
     tracing::debug!(
         element_count = doc.elements.len(),
@@ -859,13 +880,13 @@ fn derive(
     resolve_relationships(&mut doc);
 
     let (content, mime_type) = derive_content_and_mime_type(&mut doc);
-    let formatted_content = compute_formatted_content(&mut doc, &output_format);
+    let formatted_content = compute_formatted_content_observed(&mut doc, &output_format, observer);
 
     // `content`, the plain rendering, is the output the caller gets exactly when the caller
     // gets this document and `formatted_content` is `None`: plain output, or a custom format
     // name with no renderer. The document for a registered renderer is not the caller's. ~keep
     let content_is_plain = is_result && formatted_content.is_none();
-    let pages = derive_pages(&mut doc, &content, &output_format, content_is_plain);
+    let pages = derive_pages(&mut doc, &content, &output_format, content_is_plain, observer);
     let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
 
     let formulas = derive_formulas(&mut doc);
