@@ -1,4 +1,4 @@
-baseline = "v1.12.3"
+baseline = "v1.13.0"
 task_sets = [
   "alef-bindings",
   "alef-version",
@@ -12,3 +12,7 @@ task_sets = [
   "plugin",
   "rust",
 ]
+
+[overrides."github:xberg-io/alef"]
+version = "0.115.9"
+reason = "alef consumer regeneration to 0.115.12 pending; mise.toml follows alef_version in alef.toml"
