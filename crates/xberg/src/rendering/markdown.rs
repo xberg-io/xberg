@@ -377,6 +377,9 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
 }
 
 #[cfg(test)]
+mod source_ordinal_tests;
+
+#[cfg(test)]
 mod standard_inline_html_tests;
 
 #[cfg(test)]
