@@ -72,6 +72,11 @@ pub(crate) fn inject_page_marker_elements(doc: &mut InternalDocument, marker_for
 /// whose page is at least its own, so a page with no element still gets its marker and
 /// elements without a page number never move one. Markers left over after the last
 /// element belong to trailing pages with no content.
+///
+/// A container start (a list, a quote, a group) carries no page number, so the first
+/// element of a page can sit right behind one. The marker goes before that container
+/// start: the page begins where its first block begins, and a marker inside the block
+/// would render as a bullet or a child of the block.
 fn insert_markers_for_listed_pages(doc: &mut InternalDocument, marker_elem: &dyn Fn(u32) -> InternalElement) {
     let mut pages = doc.page_numbers.iter().copied();
     let mut pending = pages.next();
@@ -83,7 +88,8 @@ fn insert_markers_for_listed_pages(doc: &mut InternalDocument, marker_elem: &dyn
     for elem in std::mem::take(&mut doc.elements) {
         if let Some(element_page) = elem.page {
             while let Some(page) = pending.filter(|&page| page <= element_page) {
-                out.push(marker_elem(page));
+                let open_blocks = out.iter().rev().take_while(|e| e.kind.is_container_start()).count();
+                out.insert(out.len() - open_blocks, marker_elem(page));
                 pending = pages.next();
             }
         }
@@ -202,6 +208,102 @@ mod tests {
 
         assert_eq!(marker_texts(&doc), vec!["<!-- PAGE 1 -->", "<!-- PAGE 2 -->"]);
         assert_eq!(doc.elements[0].text, "<!-- PAGE 1 -->");
+    }
+
+    #[test]
+    fn listed_page_marker_goes_before_a_list_that_opens_the_page() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.page_numbers = vec![1, 2, 3];
+        doc.push_element(paragraph("Page one text.").with_page(1));
+        doc.push_element(InternalElement::text(ElementKind::ListStart { ordered: false }, "", 0));
+        let item = InternalElement::text(ElementKind::ListItem { ordered: false }, "First item", 0);
+        doc.push_element(item.with_page(2));
+        doc.push_element(InternalElement::text(ElementKind::ListEnd, "", 0));
+        doc.push_element(InternalElement::text(ElementKind::QuoteStart, "", 0));
+        doc.push_element(InternalElement::text(ElementKind::GroupStart, "", 0));
+        doc.push_element(paragraph("Quoted page three text.").with_page(3));
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        let order: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+        assert_eq!(
+            order,
+            vec![
+                "<!-- PAGE 1 -->",
+                "Page one text.",
+                "<!-- PAGE 2 -->",
+                "",
+                "First item",
+                "",
+                "<!-- PAGE 3 -->",
+                "",
+                "",
+                "Quoted page three text.",
+            ]
+        );
+        assert_eq!(doc.elements[3].kind, ElementKind::ListStart { ordered: false });
+    }
+
+    #[test]
+    fn listed_empty_page_before_a_list_keeps_its_markers_ahead_of_the_list() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.page_numbers = vec![1, 2, 3];
+        doc.push_element(paragraph("Page one text.").with_page(1));
+        doc.push_element(InternalElement::text(ElementKind::ListStart { ordered: true }, "", 0));
+        doc.push_element(InternalElement::text(ElementKind::ListItem { ordered: true }, "Item", 0).with_page(3));
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        let order: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+        assert_eq!(
+            order,
+            vec![
+                "<!-- PAGE 1 -->",
+                "Page one text.",
+                "<!-- PAGE 2 -->",
+                "<!-- PAGE 3 -->",
+                "",
+                "Item"
+            ]
+        );
+    }
+
+    fn three_pages_with_text_only_on_page_two() -> InternalDocument {
+        let mut doc = InternalDocument::new("pdf");
+        doc.page_numbers = vec![1, 2, 3];
+        doc.push_element(paragraph("Page two text.").with_page(2));
+        doc
+    }
+
+    #[test]
+    fn listed_pages_survive_a_json_round_trip() {
+        let json = serde_json::to_string(&three_pages_with_text_only_on_page_two()).unwrap();
+        let mut doc: InternalDocument = serde_json::from_str(&json).unwrap();
+        assert_eq!(doc.page_numbers, vec![1, 2, 3]);
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        assert_eq!(
+            marker_texts(&doc),
+            vec!["<!-- PAGE 1 -->", "<!-- PAGE 2 -->", "<!-- PAGE 3 -->"]
+        );
+    }
+
+    #[test]
+    fn json_without_the_page_list_reads_as_no_listed_pages() {
+        let mut value = serde_json::to_value(three_pages_with_text_only_on_page_two()).unwrap();
+        assert!(value.as_object_mut().unwrap().remove("page_numbers").is_some());
+        let mut doc: InternalDocument = serde_json::from_value(value).unwrap();
+        assert!(doc.page_numbers.is_empty());
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        assert_eq!(marker_texts(&doc), vec!["<!-- PAGE 2 -->"]);
+        assert!(
+            !serde_json::to_string(&InternalDocument::new("pdf"))
+                .unwrap()
+                .contains("page_numbers")
+        );
     }
 
     #[test]

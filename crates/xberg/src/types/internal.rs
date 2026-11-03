@@ -360,7 +360,10 @@ pub struct InternalDocument {
     /// no element leaves no trace in `elements`, so the page marker pass reads this list
     /// to give that page its marker. Empty when the extractor does not list its pages:
     /// the marker pass then follows the `PageBreak` elements.
-    #[serde(skip)]
+    ///
+    /// Serialized when not empty, so a JSON round trip keeps the list. JSON without the
+    /// field reads as an empty list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub page_numbers: Vec<u32>,
 
     /// When `true`, Markdown rendering inserts a `[TABLE:{table_id}]` marker

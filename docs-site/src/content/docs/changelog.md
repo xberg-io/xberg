@@ -169,6 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A PPTX deck got one marker for all its slides.
   Expected change: output for these documents now holds one marker per page or slide.
   A three-slide deck shows markers 1, 2 and 3.
+  A page or slide that opens with a list gets its marker on its own line before the list,
+  in Markdown and HTML as in the other formats.
+  A slide that fails to parse still gets its marker.
 
 - **(pdf): Apply the ordinary span page-bounds policy to configured spans.** (#2379)
   Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.

@@ -21,7 +21,8 @@ fn build_pdf(pages: &[&str]) -> Vec<u8> {
         let stream = if text.is_empty() {
             String::new()
         } else {
-            format!("BT /F1 14 Tf 1 0 0 1 72 700 Tm ({text}) Tj ET\n")
+            let lines: Vec<String> = text.lines().map(|line| format!("({line}) Tj")).collect();
+            format!("BT /F1 14 Tf 18 TL 72 700 Td {} ET\n", lines.join(" T* "))
         };
         let contents_id = objects.len() + 2;
         objects.push(
@@ -52,12 +53,22 @@ fn build_pdf(pages: &[&str]) -> Vec<u8> {
 }
 
 fn slide_xml(text: &str) -> String {
+    let paragraphs: String = text
+        .lines()
+        .map(|line| match line.strip_prefix("- ") {
+            Some(item) => format!(
+                r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buChar char="&#8226;"/></a:pPr>
+<a:r><a:t>{item}</a:t></a:r></a:p>"#
+            ),
+            None => format!(r#"<a:p><a:r><a:t>{line}</a:t></a:r></a:p>"#),
+        })
+        .collect();
     let body = if text.is_empty() {
         String::new()
     } else {
         format!(
             r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Body"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/>
-<p:txBody><a:bodyPr/><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>"#
+<p:txBody><a:bodyPr/>{paragraphs}</p:txBody></p:sp>"#
         )
     };
     format!(
@@ -69,6 +80,11 @@ fn slide_xml(text: &str) -> String {
 }
 
 fn build_pptx(slides: &[&str]) -> Vec<u8> {
+    build_pptx_with_broken_slide(slides, None)
+}
+
+/// A deck whose slide at `broken` (zero based) holds XML that does not parse.
+fn build_pptx_with_broken_slide(slides: &[&str], broken: Option<usize>) -> Vec<u8> {
     let mut buffer = Vec::new();
     {
         let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
@@ -134,7 +150,12 @@ fn build_pptx(slides: &[&str]) -> Vec<u8> {
             ),
         );
         for (index, text) in slides.iter().enumerate() {
-            add(&format!("ppt/slides/slide{}.xml", index + 1), &slide_xml(text));
+            let xml = if broken == Some(index) {
+                "<p:sld><p:cSld><p:spTree></p:cSld></p:sld>".to_string()
+            } else {
+                slide_xml(text)
+            };
+            add(&format!("ppt/slides/slide{}.xml", index + 1), &xml);
         }
         zip.finish().unwrap();
     }
@@ -252,6 +273,74 @@ fn docx_with_a_blank_middle_page_marks_all_three_pages() {
             marker_numbers(&result.content),
             vec![1, 2, 3],
             "docx {output_format}: markers in content {:?}",
+            result.content
+        );
+    }
+}
+
+/// Every marker stands on its own line, outside any list, in every output format.
+fn assert_markers_stand_alone(bytes: &[u8], mime: &str, pages: u32, label: &str) {
+    for output_format in ["plain", "markdown", "djot", "html"] {
+        for structure in [false, true] {
+            let result = extract_bytes_document_blocking(bytes, mime, &config(output_format, structure)).unwrap();
+            let content = &result.content;
+            let what = format!("{label} {output_format} structure={structure}");
+            let expected: Vec<u32> = (1..=pages).collect();
+            assert_eq!(
+                marker_numbers(content),
+                expected,
+                "{what}: markers in content {content:?}"
+            );
+            let in_list = content.contains("- <!--") || content.contains("<li><!--");
+            assert!(!in_list, "{what}: marker in a list: {content:?}");
+            if structure && output_format != "plain" {
+                let list_mark = if output_format == "html" { "<li>" } else { "- " };
+                assert!(
+                    content.contains(list_mark),
+                    "{what}: the list did not render as a list: {content:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn pdf_page_that_starts_with_a_list_gets_its_marker_before_the_list() {
+    let bytes = build_pdf(&[
+        "First page text",
+        "- First item\n- Second item\n- Third item",
+        "Third page text",
+    ]);
+    assert_markers_stand_alone(&bytes, "application/pdf", 3, "pdf list-first page");
+}
+
+#[test]
+fn pptx_slide_that_starts_with_a_list_gets_its_marker_before_the_list() {
+    let bytes = build_pptx(&[
+        "First slide text",
+        "Second slide text",
+        "- First item\n- Second item\n- Third item",
+    ]);
+    assert_markers_stand_alone(&bytes, PPTX_MIME, 3, "pptx list-first slide");
+}
+
+#[test]
+fn pptx_with_a_malformed_middle_slide_still_marks_all_three_slides() {
+    let bytes = build_pptx_with_broken_slide(&["First slide text", "Second slide text", "Third slide text"], Some(1));
+    for output_format in ["plain", "markdown", "djot", "html"] {
+        let result = extract_bytes_document_blocking(&bytes, PPTX_MIME, &config(output_format, true)).unwrap();
+        assert!(
+            result.content.contains("Third slide text"),
+            "{output_format}: slide 3 parsed"
+        );
+        assert!(
+            !result.content.contains("Second slide text"),
+            "{output_format}: slide 2 is the broken one"
+        );
+        assert_eq!(
+            marker_numbers(&result.content),
+            vec![1, 2, 3],
+            "pptx malformed middle {output_format}: markers in content {:?}",
             result.content
         );
     }

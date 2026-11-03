@@ -234,7 +234,9 @@ impl PptxExtractor {
         }
 
         let mut document = builder.build();
-        document.page_numbers = slide_contents.iter().map(|slide| slide.slide_number).collect();
+        // Every slide of the source, not only those that parsed: a slide that failed to
+        // parse has no elements but still gets its marker.
+        document.page_numbers = (1..=slide_count).collect();
         Ok(document)
     }
 
