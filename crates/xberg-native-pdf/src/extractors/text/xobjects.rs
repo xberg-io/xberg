@@ -196,15 +196,18 @@ impl<'doc> TextExtractor<'doc> {
 
         // Span result cache: reuse extracted spans from self-contained Form XObjects.
         //
-        // The cache key is (ObjectRef, ctm_key) where ctm_key encodes the caller's
-        // CTM as 6 millipoint-rounded i64 values. This allows the same Form XObject
-        // to have independent cached results for each unique CTM it is painted with,
-        // fixing the issue where cross-page reuse of a single Form XObject with
-        // different per-page CTM translations returned stale page-0 coordinates on
-        // all subsequent pages.
-        //
-        // `ctm_key` was already computed above for the `processed_xobjects` guard. ~keep
-        let spans_cache_key = (xobject_ref, ctm_key);
+        // Spans are cached after the figure/wrapper clip, whose policy depends on
+        // page area. Use the same unrounded area for identity and clipping. ~keep
+        let page_idx = match self.mcid_scope_stack.first() {
+            Some(crate::structure::McidScope::Page(p)) => *p as usize,
+            _ => 0,
+        };
+        let page_area = doc
+            .get_page_media_box(page_idx)
+            .ok()
+            .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
+            .filter(|area| *area > 0.0);
+        let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
         let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
         if self.extract_spans && !has_filters {
             let cached_spans = { doc.xobject_spans_cache.lock().unwrap().get(&spans_cache_key).cloned() };
@@ -462,15 +465,6 @@ impl<'doc> TextExtractor<'doc> {
                                 // the form is figure-sized, so the galley-dedup win
                                 // stays while page-wrapper bodies are preserved. ~keep
                                 let clip_area = (max_x - min_x) * (max_y - min_y);
-                                let page_idx = match self.mcid_scope_stack.first() {
-                                    Some(crate::structure::McidScope::Page(p)) => *p as usize,
-                                    _ => 0,
-                                };
-                                let page_area = self
-                                    .document
-                                    .and_then(|d| d.get_page_media_box(page_idx).ok())
-                                    .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
-                                    .filter(|a| *a > 0.0);
                                 // ≥60% of page area ⇒ content-frame wrapper, not a
                                 // figure (figures measured ≤27%; wrappers ≥82%). ~keep
                                 let is_page_wrapper = page_area.is_some_and(|pa| clip_area >= 0.6 * pa);
@@ -494,11 +488,8 @@ impl<'doc> TextExtractor<'doc> {
 
                 // Cache span results for self-contained Form XObjects.
                 //
-                // The cache key `spans_cache_key` already encodes (ObjectRef, ctm_key),
-                // so each unique (XObject, CTM) pair gets its own entry. There is no
-                // longer any need to restrict caching to identity-CTM invocations —
-                // different CTMs produce different cache entries and therefore cannot
-                // pollute each other.
+                // The key separates caller CTMs and page-area clipping contexts,
+                // so cached results retain the destination page's clipping policy.
                 //
                 // We still require `has_own_resources` so that font lookups are
                 // self-contained; XObjects that inherit page-level fonts would
