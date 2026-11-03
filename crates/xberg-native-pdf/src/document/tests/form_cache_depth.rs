@@ -221,6 +221,6 @@ fn text_config_and_word_reads_cannot_cache_depth_truncated_form_spans() {
                 "warmed page {page}, mode {mode}"
             );
         }
-        assert_eq!(root_form_is_cached(&document, 0), false, "truncated root, mode {mode}");
+        assert!(!root_form_is_cached(&document, 0), "truncated root, mode {mode}");
     }
 }
