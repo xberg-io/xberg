@@ -5368,7 +5368,7 @@
             "type": "string"
           },
           "default": {},
-          "description": "Per-dependency version overrides for the manifests alef regenerates for this\nlanguage. Keys are ecosystem-qualified (`cargo:pyo3`, `pypi:pyrefly`, `maven:junit`,\n`hex:credo`, `gem:rspec`, `cran:rextendr`) and are listed, with the literal each one\ndefaults to, by `alef::core::managed_versions`. An unknown key is rejected outright\nrather than ignored: silently dropping an override is the exact failure this table\nexists to prevent.",
+          "description": "Per-dependency version overrides for the manifests alef regenerates for this\nlanguage. Keys are ecosystem-qualified (`cargo:pyo3`, `pypi:pyrefly`, `maven:junit`,\n`hex:credo`, `gem:rspec`, `cran:rextendr`) and are listed, with the literal each one\ndefaults to, by `alef::core::managed_versions`. An unknown key is rejected outright\nrather than ignored: silently dropping an override is the exact failure this table\nexists to prevent.\n`runtime:python` selects a supported Python major/minor minimum, independent of the\ndevelopment interpreter; it cannot lower this Alef release line's default.",
           "type": "object"
         },
         "exclude_functions": {
@@ -8542,7 +8542,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.115.5/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.115.16/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8674,6 +8674,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.115.5",
-  "x-alef-version": "0.115.5"
+  "version": "0.115.16",
+  "x-alef-version": "0.115.16"
 }

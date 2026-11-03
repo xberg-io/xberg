@@ -60,10 +60,3 @@ report.fail_under = 80
 # xberg ships as a pre-release (1.0.0rcN) until the 1.0.0 GA; persist prerelease
 # resolution so the lockfile is authoritative and `uv run` does not re-resolve. ~keep
 prerelease = "allow"
-
-# onnxruntime stopped shipping cp310 wheels at 1.24.0 -- 1.23.2 is the last release with one --
-# but its metadata still advertises requires-python >=3.10. uv therefore resolves 1.24.x for the
-# sub-3.11 fork and the install fails with "doesn't have a source distribution or wheel for the
-# current platform". The CI matrix for this package tests 3.10 and nothing else, so that job
-# failed on every run. Hold the 3.10 fork at the last version that actually has a wheel. ~keep
-constraint-dependencies = ["onnxruntime<1.24; python_full_version < '3.11'"]
