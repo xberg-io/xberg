@@ -97,7 +97,6 @@ fn build_internal_document(
     let mut builder = InternalDocumentBuilder::new("docx");
 
     let mut current_list_numbering_id: Option<i64> = None;
-    let mut current_list_ordered: bool = false;
     let mut current_list_nesting_level: i64 = 0;
     let mut open_list_count: i64 = 0;
     let mut current_page = 1;
@@ -205,7 +204,6 @@ fn build_internal_document(
                             }
                             builder.push_list(is_ordered);
                             current_list_numbering_id = Some(nid);
-                            current_list_ordered = is_ordered;
                             current_list_nesting_level = nlvl;
                             open_list_count = 1;
                         } else if nlvl > current_list_nesting_level {
@@ -223,13 +221,8 @@ fn build_internal_document(
                             }
                             current_list_nesting_level = nlvl;
                         }
-                        let li_idx = builder.push_list_item(
-                            &text,
-                            current_list_ordered,
-                            annotations.clone(),
-                            Some(current_page),
-                            None,
-                        );
+                        let li_idx =
+                            builder.push_list_item(&text, is_ordered, annotations.clone(), Some(current_page), None);
                         if let Some(label) = doc.list_labels.get(idx) {
                             word_list_labels.insert(li_idx, label.as_str());
                         }
@@ -1488,6 +1481,9 @@ impl InternalDocumentExtractor for DocxExtractor {
         50
     }
 }
+
+#[cfg(test)]
+mod list_kind_tests;
 
 #[cfg(test)]
 mod tests {

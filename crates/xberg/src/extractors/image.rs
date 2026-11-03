@@ -3985,10 +3985,7 @@ mod tests {
             document.elements[0].kind,
             crate::types::internal::ElementKind::ListItem { ordered: true }
         ));
-        assert_eq!(
-            crate::rendering::render_markdown(&document),
-            "- 1\\. Template for day 1\n"
-        );
+        assert_eq!(crate::rendering::render_markdown(&document), "1. Template for day 1\n");
     }
 
     #[tokio::test]
