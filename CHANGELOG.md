@@ -162,6 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(python): Preserve existing enum stringification when targeting Python 3.11.**
+
 - **(tests): Assert public `IoError` for missing files in the CrewAI integration CI checks.**
 
 - **(tests): Borrow fenced-code expectations in Markdown round-trip checks.**

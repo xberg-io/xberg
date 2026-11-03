@@ -628,6 +628,8 @@ traineddata = "traineddata"
 
 [workspace.poly.per-file-ignores]
 "packages/python/xberg/__init__.py" = ["F811"]
+# Preserve enum str()/format() output; StrEnum changes it to the wire value. ~keep
+"packages/python/xberg/options.py" = ["UP042"]
 # Alef config and its generated derivatives. All three grow with the size of the surface alef
 # manages and with the quality-debt baseline below -- alef.toml is where that baseline is
 # written, so paying it down makes this file shorter, never longer. A line count on declarative
