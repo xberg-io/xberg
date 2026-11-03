@@ -774,6 +774,18 @@ def test_swift_macos_builds_pin_the_deployment_target_to_the_manifest_floor() ->
     assert pinned[1] == f"{floor}.0"
 
 
+def test_lint_go_inputs_override_incompatible_reusable_defaults() -> None:
+    root = Path(__file__).parents[2]
+    tools = tomllib.loads((root / "mise.toml").read_text())["tools"]
+    lint = job_block(CI_WORKFLOW.read_text(), "validate")
+    go_version = re.findall(r'(?m)^      go-version: "([0-9.]+)"$', lint)
+    assert go_version == [tools["go"]], "lint must use the repository's locked Go version"
+    linter = re.findall(r'(?m)^      golangci-lint-version: "v(\d+)\.(\d+)\.(\d+)"$', lint)
+    assert len(linter) == 1, "lint must override the incompatible reusable linter default"
+    # Go 1.27 support first shipped in golangci-lint 2.13. ~keep
+    assert tuple(map(int, linter[0])) >= (2, 13, 0), "Go 1.27 needs golangci-lint 2.13 or later"
+
+
 def test_macos_onnx_action_forwards_rpath_option_only_to_macos() -> None:
     action = (WORKFLOW.parents[1] / "actions/setup-onnx-runtime/action.yml").read_text()
     option = re.findall(r"(?m)^  add-macos-rpath:\n((?:^    [^\n]*\n)+)", action)
