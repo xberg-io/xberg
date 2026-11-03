@@ -165,6 +165,13 @@ const SAME_LINE_REORDER_MAX_GAP_FACTOR: f32 = 3.0;
 
 pub(crate) use crate::cache::BoundedEntryCache;
 
+#[derive(Clone)]
+pub(crate) struct CachedFormSpans {
+    /// Includes this Form and the deepest descendant visited by the complete run.
+    pub(crate) required_depth: u32,
+    pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
+}
+
 /// Size-bounded object cache with FIFO eviction.
 ///
 /// Wraps a `HashMap<ObjectRef, Object>` with byte-size tracking. When an
@@ -733,13 +740,12 @@ pub struct PdfDocument {
     pub(crate) xobject_stream_cache: Mutex<HashMap<ObjectRef, std::sync::Arc<Vec<u8>>>>,
     pub(crate) xobject_stream_cache_bytes: AtomicUsize,
     /// Cache of extracted TextSpan results from self-contained Form XObjects
-    /// (those with own /Resources/Font). None = processed but no spans.
+    /// (those with own /Resources/Font), with the nesting required for a complete run.
     /// Key includes the object, millipoint-rounded caller CTM, and exact page-area
     /// bits used by the figure/wrapper clipping policy. Equal clipping contexts
     /// share entries; pages with different areas cannot reuse already-clipped spans.
     /// Bounded at [`DEFAULT_XOBJECT_CACHE_MAX_ENTRIES`] entries with FIFO eviction.
-    pub(crate) xobject_spans_cache:
-        Mutex<BoundedEntryCache<(ObjectRef, [i64; 6], Option<u32>), Option<Vec<crate::layout::TextSpan>>>>,
+    pub(crate) xobject_spans_cache: Mutex<BoundedEntryCache<(ObjectRef, [i64; 6], Option<u32>), CachedFormSpans>>,
     /// Cache of extracted images from Form XObjects (keyed by ObjectRef).
     /// Images are stored without CTM applied — caller applies its own CTM.
     /// Bounded at [`DEFAULT_XOBJECT_CACHE_MAX_ENTRIES`] entries with FIFO eviction.

@@ -50,6 +50,7 @@ impl<'doc> TextExtractor<'doc> {
             processed_xobjects: HashSet::new(),
             cached_xobject_refs: HashMap::new(),
             xobject_depth: 0,
+            xobject_subtree_depth: Some(0),
             xobject_decode_count: 0,
             config,
             merging_config: SpanMergingConfig::default(),

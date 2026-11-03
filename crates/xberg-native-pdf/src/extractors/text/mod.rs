@@ -2177,6 +2177,8 @@ pub struct TextExtractor<'doc> {
     cached_xobject_refs: HashMap<String, Option<ObjectRef>>,
     /// Current XObject recursion depth (0 = page level)
     xobject_depth: u32,
+    /// Required nesting below this scope; None means a descendant hit the depth limit.
+    xobject_subtree_depth: Option<u32>,
     /// Number of XObjects decoded on this page (for budget limiting)
     xobject_decode_count: u32,
     /// Configuration for text extraction heuristics
