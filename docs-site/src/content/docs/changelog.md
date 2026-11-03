@@ -164,6 +164,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf, pptx): Write one page marker for every page and slide, an empty one included.** (GH#2422)
+  With `pages.insert_page_markers` on, a PDF page with no content got no marker in the structured path.
+  A PPTX deck got one marker for all its slides.
+  Expected change: output for these documents now holds one marker per page or slide.
+  A three-slide deck shows markers 1, 2 and 3.
+
 - **(pdf): Apply the ordinary span page-bounds policy to configured spans.** (#2379)
   Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.
   Raw character extraction retains off-page characters and PDF coordinates for inspection.

@@ -354,6 +354,15 @@ pub struct InternalDocument {
     #[serde(skip)]
     pub page_marker_format: Option<String>,
 
+    /// Page or slide numbers the extractor iterated, in order, an empty page included.
+    ///
+    /// An extractor that builds elements page by page lists every page here. A page with
+    /// no element leaves no trace in `elements`, so the page marker pass reads this list
+    /// to give that page its marker. Empty when the extractor does not list its pages:
+    /// the marker pass then follows the `PageBreak` elements.
+    #[serde(skip)]
+    pub page_numbers: Vec<u32>,
+
     /// When `true`, Markdown rendering inserts a `[TABLE:{table_id}]` marker
     /// immediately before each table's rendered Markdown block. Set by the
     /// pipeline from `ExtractionConfig::table_anchors`. Defaults to `false`.
@@ -460,6 +469,7 @@ impl InternalDocument {
             escape_markdown: true,
             include_watermarks: false,
             page_marker_format: None,
+            page_numbers: Vec::new(),
             table_anchors: false,
             form_fields: Vec::new(),
             formulas: Vec::new(),

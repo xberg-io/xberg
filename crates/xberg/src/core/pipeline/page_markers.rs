@@ -13,10 +13,12 @@ use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 ///
 /// Flat documents (built by splitting marker-bearing text into paragraphs) get
 /// their marker paragraphs converted in place. Structured documents (no marker
-/// text, `PageBreak` elements at page boundaries) get `RawBlock` markers
-/// synthesized: one before the first element, one after each page break.
+/// text) get `RawBlock` markers synthesized. An extractor that lists the pages
+/// it iterated in `InternalDocument::page_numbers` gets one marker per listed
+/// page, an empty page included. Any other structured document gets one marker
+/// before the first element and one after each page break.
 pub(crate) fn inject_page_marker_elements(doc: &mut InternalDocument, marker_format: &str) {
-    if doc.elements.is_empty() {
+    if doc.elements.is_empty() && doc.page_numbers.is_empty() {
         return;
     }
 
@@ -41,6 +43,11 @@ pub(crate) fn inject_page_marker_elements(doc: &mut InternalDocument, marker_for
     };
     let marker_elem = |page: u32| InternalElement::text(ElementKind::RawBlock, render_marker(page), 0);
 
+    if !doc.page_numbers.is_empty() {
+        insert_markers_for_listed_pages(doc, &marker_elem);
+        return;
+    }
+
     let elements = std::mem::take(&mut doc.elements);
     let total = elements.len();
     let mut out = Vec::with_capacity(total + 4);
@@ -56,6 +63,33 @@ pub(crate) fn inject_page_marker_elements(doc: &mut InternalDocument, marker_for
             out.push(marker_elem(current_page));
         }
     }
+    doc.elements = out;
+}
+
+/// Put one marker per page of `doc.page_numbers`, in list order, before the first element of a later page.
+///
+/// The first marker leads the document. Each other marker waits for the first element
+/// whose page is at least its own, so a page with no element still gets its marker and
+/// elements without a page number never move one. Markers left over after the last
+/// element belong to trailing pages with no content.
+fn insert_markers_for_listed_pages(doc: &mut InternalDocument, marker_elem: &dyn Fn(u32) -> InternalElement) {
+    let mut pages = doc.page_numbers.iter().copied();
+    let mut pending = pages.next();
+    let mut out = Vec::with_capacity(doc.elements.len() + doc.page_numbers.len());
+    if let Some(first) = pending.take() {
+        out.push(marker_elem(first));
+        pending = pages.next();
+    }
+    for elem in std::mem::take(&mut doc.elements) {
+        if let Some(element_page) = elem.page {
+            while let Some(page) = pending.filter(|&page| page <= element_page) {
+                out.push(marker_elem(page));
+                pending = pages.next();
+            }
+        }
+        out.push(elem);
+    }
+    out.extend(pending.into_iter().chain(pages).map(marker_elem));
     doc.elements = out;
 }
 
@@ -121,6 +155,63 @@ mod tests {
             .map(|e| e.text.as_str())
             .collect();
         assert_eq!(texts, vec!["<!-- PAGE 3 -->", "<!-- PAGE 7 -->"]);
+    }
+
+    fn marker_texts(doc: &InternalDocument) -> Vec<&str> {
+        doc.elements
+            .iter()
+            .filter(|e| matches!(e.kind, ElementKind::RawBlock))
+            .map(|e| e.text.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn listed_pages_get_a_marker_each_when_the_extractor_lists_them() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.page_numbers = vec![1, 2, 3, 4, 5];
+        doc.push_element(paragraph("Page two text.").with_page(2));
+        doc.push_element(paragraph("Page four text.").with_page(4));
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        let order: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+        assert_eq!(
+            order,
+            vec![
+                "<!-- PAGE 1 -->",
+                "<!-- PAGE 2 -->",
+                "Page two text.",
+                "<!-- PAGE 3 -->",
+                "<!-- PAGE 4 -->",
+                "Page four text.",
+                "<!-- PAGE 5 -->",
+            ]
+        );
+    }
+
+    #[test]
+    fn listed_pages_ignore_page_breaks_and_unnumbered_elements() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.page_numbers = vec![1, 2];
+        doc.push_element(paragraph("Unnumbered lead text."));
+        doc.push_element(paragraph("Page one text.").with_page(1));
+        doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 0));
+        doc.push_element(paragraph("Page two text.").with_page(2));
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        assert_eq!(marker_texts(&doc), vec!["<!-- PAGE 1 -->", "<!-- PAGE 2 -->"]);
+        assert_eq!(doc.elements[0].text, "<!-- PAGE 1 -->");
+    }
+
+    #[test]
+    fn listed_pages_with_no_elements_still_get_every_marker() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.page_numbers = vec![1, 2];
+
+        inject_page_marker_elements(&mut doc, DEFAULT_FORMAT);
+
+        assert_eq!(marker_texts(&doc), vec!["<!-- PAGE 1 -->", "<!-- PAGE 2 -->"]);
     }
 
     #[test]

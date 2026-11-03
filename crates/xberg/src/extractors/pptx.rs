@@ -233,7 +233,9 @@ impl PptxExtractor {
             builder.push_slide(1, None, Some(1));
         }
 
-        Ok(builder.build())
+        let mut document = builder.build();
+        document.page_numbers = slide_contents.iter().map(|slide| slide.slide_number).collect();
+        Ok(document)
     }
 
     fn push_table_content(
