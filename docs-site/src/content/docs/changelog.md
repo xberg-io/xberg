@@ -159,6 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(tests): Borrow fenced-code expectations in Markdown round-trip checks.**
+
 - **(ci): Run Go lint with the locked Go 1.27 toolchain and a compatible linter.**
 
 - **(swift): Build release artifacts for the declared macOS 26 minimum.**

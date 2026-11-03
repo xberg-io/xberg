@@ -147,7 +147,7 @@ fn fenced_code(escape: bool, source: &str) {
     doc.escape_markdown = escape;
     let expected = format!("{source}\n");
     assert_eq!(doc.elements[0].text, source);
-    assert_eq!(code_values(&raw_markdown(&doc)), [expected.clone()]);
+    assert_eq!(code_values(&raw_markdown(&doc)), std::slice::from_ref(&expected));
     let markdown = render_markdown(&doc);
     assert!(markdown.contains("literal") && markdown.contains("unmatched"));
     assert_eq!(doc.elements[0].text, source);
