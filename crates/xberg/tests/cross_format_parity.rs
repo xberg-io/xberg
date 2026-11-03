@@ -13,8 +13,14 @@
 #[path = "cross_format_parity/front_matter.rs"]
 mod front_matter;
 mod helpers;
+#[path = "cross_format_parity/html.rs"]
+mod html;
+#[path = "cross_format_parity/markdown.rs"]
+mod markdown;
 use front_matter::markdown_body_start;
 use helpers::extract_uri_document_blocking;
+use html::strip_html;
+use markdown::SourceRanges;
 
 use helpers::{get_test_file_path, test_documents_available};
 use std::collections::HashMap;
@@ -24,11 +30,22 @@ use xberg::core::config::{ExtractionConfig, OutputFormat};
 /// Strip markdown markup to recover approximate plain text.
 fn strip_markdown(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
+    let ranges = SourceRanges::new(text);
+    let mut offset = 0;
 
-    for line in text.lines() {
+    for line in text.split_inclusive('\n') {
+        let span = offset..offset + line.len();
+        offset = span.end;
         let trimmed = line.trim();
 
-        if trimmed.starts_with("```") {
+        if ranges.code_block(&span).is_some() {
+            if ranges.is_code_text(&span) {
+                result.push_str(line.trim_end_matches(['\r', '\n']));
+                result.push('\n');
+            }
+            continue;
+        }
+        if trimmed == "<!-- end list -->" && ranges.is_boundary_comment(&span) {
             continue;
         }
 
@@ -60,33 +77,6 @@ fn strip_markdown(text: &str) -> String {
     }
 
     result
-}
-
-/// Strip HTML tags and decode common entities.
-fn strip_html(text: &str) -> String {
-    let mut result = String::with_capacity(text.len());
-    let mut in_tag = false;
-
-    for ch in text.chars() {
-        if ch == '<' {
-            in_tag = true;
-        } else if ch == '>' {
-            in_tag = false;
-            result.push(' ');
-        } else if !in_tag {
-            result.push(ch);
-        }
-    }
-
-    let result = result.replace("&amp;", "&");
-    let result = result.replace("&lt;", "<");
-    let result = result.replace("&gt;", ">");
-    let result = result.replace("&quot;", "\"");
-    let result = result.replace("&apos;", "'");
-    let result = result.replace("&#39;", "'");
-    let result = result.replace("&nbsp;", " ");
-
-    decode_numeric_entities(&result)
 }
 
 /// Strip djot markup (similar to markdown with minor differences).
@@ -234,44 +224,6 @@ fn strip_images(text: &str) -> String {
     result
 }
 
-/// Decode numeric HTML entities (&#NNN;) to characters.
-fn decode_numeric_entities(text: &str) -> String {
-    let mut result = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '&' && chars.peek() == Some(&'#') {
-            chars.next();
-            let mut num_str = String::new();
-            while let Some(&c) = chars.peek() {
-                if c == ';' {
-                    chars.next();
-                    break;
-                }
-                if c.is_ascii_digit() {
-                    num_str.push(c);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-            if let Ok(code) = num_str.parse::<u32>()
-                && let Some(decoded) = char::from_u32(code)
-            {
-                result.push(decoded);
-                continue;
-            }
-            result.push('&');
-            result.push('#');
-            result.push_str(&num_str);
-        } else {
-            result.push(ch);
-        }
-    }
-
-    result
-}
-
 /// Validate basic GFM (GitHub Flavored Markdown) lint rules.
 ///
 /// Returns a list of violation descriptions. An empty list means the markdown
@@ -402,21 +354,23 @@ fn strip_inline_code(line: &str) -> String {
 /// Returns a map of block type name to count.
 fn count_blocks(content: &str) -> HashMap<String, usize> {
     let mut counts: HashMap<String, usize> = HashMap::new();
-    let lines: Vec<&str> = content.lines().collect();
-    let mut in_code_block = false;
+    let lines: Vec<&str> = content.split_inclusive('\n').collect();
+    let ranges = SourceRanges::new(content);
+    let mut offset = 0;
 
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
+        let span = offset..offset + line.len();
+        offset = span.end;
 
-        if trimmed.starts_with("```") {
-            if !in_code_block {
+        if let Some(block) = ranges.code_block(&span) {
+            if span.contains(&block.start) {
                 *counts.entry("code_blocks".to_string()).or_insert(0) += 1;
             }
-            in_code_block = !in_code_block;
             continue;
         }
 
-        if in_code_block {
+        if trimmed == "<!-- end list -->" && ranges.is_boundary_comment(&span) {
             continue;
         }
 

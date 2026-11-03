@@ -146,13 +146,12 @@ fn a_numbered_word_list_keeps_the_numbers_word_paints() {
         "content:\n{}",
         doc.content
     );
-    // A label is written as text on a bullet. `10.` is escaped: after `- ` CommonMark would
-    // read it as a numbered list of its own. ~keep
+    // Decimal labels become ordered starts; other Word labels remain visible bullet text. ~keep
     for line in [
         "- Q1. Define speed.",
         "  - (b) Give an example.",
         "    - ii) Offices.",
-        "- 10\\. Restarted.",
+        "10. Restarted.",
     ] {
         assert!(doc.content.contains(line), "missing {line:?} in:\n{}", doc.content);
     }
@@ -178,27 +177,21 @@ fn a_plain_numbered_list_is_unchanged_and_one_carried_on_keeps_its_number() {
         doc.content
     );
     assert!(
-        doc.content.contains("1. First.\n2. Second.\n") && doc.content.contains("- 3\\. Third."),
+        doc.content.contains("1. First.\n2. Second.\n") && doc.content.contains("3. Third."),
         "content:\n{}",
         doc.content
     );
 }
 
-/// A numbered level under a bullet sits in a list whose items are bullets, so the renderers would
-/// not number it: its plain `1.` is kept even though it is the first item.
+/// A numbered level under a bullet keeps its ordered kind and needs no redundant source label.
 #[test]
-fn a_numbered_level_under_a_bullet_keeps_even_a_plain_number() {
+fn a_numbered_level_under_a_bullet_remains_ordered() {
     let body = format!("{}{}", list_item(5, 0, "Fruit."), list_item(5, 1, "Apple."));
 
     let doc = extract(&body);
 
-    assert_eq!(
-        list_markers(&doc),
-        vec![None, Some("1.".to_string())],
-        "content:\n{}",
-        doc.content
-    );
-    assert!(doc.content.contains("  - 1\\. Apple."), "content:\n{}", doc.content);
+    assert_eq!(list_markers(&doc), vec![None, None], "content:\n{}", doc.content);
+    assert!(doc.content.contains("1. Apple."), "content:\n{}", doc.content);
 }
 
 /// A level that writes no `w:numFmt` is decimal (ISO/IEC 29500-1 §17.9.18), so Word paints
@@ -252,7 +245,7 @@ fn two_lists_sharing_a_definition_keep_one_count_and_their_own_levels() {
         "content:\n{}",
         doc.content
     );
-    for line in ["1. First.\n2. Second.", "- 6\\. Carried on."] {
+    for line in ["1. First.\n2. Second.", "6. Carried on."] {
         assert!(doc.content.contains(line), "missing {line:?} in:\n{}", doc.content);
     }
 }

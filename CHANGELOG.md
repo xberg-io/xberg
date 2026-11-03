@@ -162,6 +162,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(tests): Preserve literal list-boundary comments in multiline and indented code during output-parity checks.**
+
+- **(tests): Compare visible list and image text consistently across Markdown and HTML output.**
+
+- **(docx): Preserve ordered and bullet item kinds at each level of a shared numbering definition.**
+
+- **(tests): Check preserved source ordinals as ordered Markdown in image and DOCX list regressions.**
+
 - **(python): Preserve existing enum stringification when targeting Python 3.11.**
 
 - **(tests): Assert public `IoError` for missing files in the CrewAI integration CI checks.**
