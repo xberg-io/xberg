@@ -259,8 +259,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "slanet_wired",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/table/SLANeXt_wired.onnx",
         local_filename: "slanet_wired.onnx",
         sha256_checksum: "64990fa026a7e2e2c2d4ad2c810bc9c6992da76d5f91b54771dfc900927ca3d0",
@@ -268,8 +268,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "slanet_wireless",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/table/SLANeXt_wireless.onnx",
         local_filename: "slanet_wireless.onnx",
         sha256_checksum: "b29ae2b4fe0ff8bbf7efd73fda0951227eb1abaedcaa046ad016191c779b7766",
@@ -277,8 +277,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "slanet_plus",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/table/SLANet_plus.onnx",
         local_filename: "slanet_plus.onnx",
         sha256_checksum: "e48a401a4ebcddd47fe3822427db24d867a557324f58e438692f588bbe9231de",
@@ -286,8 +286,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "table_classifier",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/classifiers/PP-LCNet_x1_0_table_cls.onnx",
         local_filename: "table_cls.onnx",
         sha256_checksum: "f02bf087e924dadfb109e3b7887d7d56dc961b80e08c64cacf1030f97345b3c3",
@@ -622,6 +622,22 @@ impl LayoutModelManager {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn should_pin_the_paddle_models_repository_at_the_one_shared_revision() {
+        let paddle_pins: Vec<_> = pinned_repo_revisions()
+            .into_iter()
+            .filter(|(repo, _)| *repo == model_download::PADDLE_MODELS_REPO_ID)
+            .collect();
+
+        assert_eq!(
+            paddle_pins,
+            vec![(
+                model_download::PADDLE_MODELS_REPO_ID,
+                model_download::PADDLE_MODELS_REVISION
+            )]
+        );
+    }
 
     #[test]
     fn cache_only_capability_checks_do_not_create_directories() {

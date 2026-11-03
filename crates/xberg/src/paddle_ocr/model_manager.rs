@@ -25,10 +25,10 @@ use crate::model_download;
 
 /// HuggingFace repository containing PaddleOCR ONNX models.
 #[cfg(paddle_ocr)]
-const HF_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
+const HF_REPO_ID: &str = model_download::PADDLE_MODELS_REPO_ID;
 /// Immutable Hub revision containing the checksummed PaddleOCR model set.
 #[cfg(paddle_ocr)]
-pub(crate) const HF_REPO_REVISION: &str = "bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8";
+pub(crate) const HF_REPO_REVISION: &str = model_download::PADDLE_MODELS_REVISION;
 
 /// Shared model definition (detection and classification).
 #[cfg(paddle_ocr)]
@@ -464,7 +464,7 @@ impl ModelManager {
     }
 
     #[cfg(paddle_ocr)]
-    fn manifest_cache_path(&self, relative_path: &str) -> PathBuf {
+    pub(crate) fn manifest_cache_path(&self, relative_path: &str) -> PathBuf {
         self.cache_dir
             .join("models--xberg-io--paddleocr-onnx-models")
             .join("snapshots")
