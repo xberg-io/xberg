@@ -6,7 +6,7 @@
 /// one of them fills is the cache that the others read. ~keep
 #[cfg(all(
     not(target_arch = "wasm32"),
-    any(paddle_ocr, layout_detection, feature = "ocr", sceptre_ocr)
+    any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr)))
 ))]
 pub(crate) const PADDLE_MODELS_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
 
@@ -15,7 +15,7 @@ pub(crate) const PADDLE_MODELS_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
 /// identical between it and the older pin. ~keep
 #[cfg(all(
     not(target_arch = "wasm32"),
-    any(paddle_ocr, layout_detection, feature = "ocr", sceptre_ocr)
+    any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr)))
 ))]
 pub(crate) const PADDLE_MODELS_REVISION: &str = "bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8";
 
