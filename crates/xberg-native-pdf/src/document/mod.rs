@@ -734,12 +734,12 @@ pub struct PdfDocument {
     pub(crate) xobject_stream_cache_bytes: AtomicUsize,
     /// Cache of extracted TextSpan results from self-contained Form XObjects
     /// (those with own /Resources/Font). None = processed but no spans.
-    /// Key is `(ObjectRef, [i64; 6])` where the array encodes the caller's CTM
-    /// as millipoint-rounded integers, allowing the same Form XObject to cache
-    /// distinct results for each unique CTM it is painted with.
+    /// Key includes the object, millipoint-rounded caller CTM, and exact page-area
+    /// bits used by the figure/wrapper clipping policy. Equal clipping contexts
+    /// share entries; pages with different areas cannot reuse already-clipped spans.
     /// Bounded at [`DEFAULT_XOBJECT_CACHE_MAX_ENTRIES`] entries with FIFO eviction.
     pub(crate) xobject_spans_cache:
-        Mutex<BoundedEntryCache<(ObjectRef, [i64; 6]), Option<Vec<crate::layout::TextSpan>>>>,
+        Mutex<BoundedEntryCache<(ObjectRef, [i64; 6], Option<u32>), Option<Vec<crate::layout::TextSpan>>>>,
     /// Cache of extracted images from Form XObjects (keyed by ObjectRef).
     /// Images are stored without CTM applied — caller applies its own CTM.
     /// Bounded at [`DEFAULT_XOBJECT_CACHE_MAX_ENTRIES`] entries with FIFO eviction.

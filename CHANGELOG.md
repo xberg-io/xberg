@@ -162,6 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep cached Form spans tied to the destination page clipping context.** (#2382)
+
 - **(tests): Preserve literal list-boundary comments in multiline and indented code during output-parity checks.**
 
 - **(tests): Compare visible list and image text consistently across Markdown and HTML output.**
