@@ -110,6 +110,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(excel): Upgrade Calamine to 0.38.0 for RUSTSEC-2026-0436.**
+  Fixes a parser panic and unbounded allocation when reading malformed CFB/OLE2 spreadsheets.
+
 - **(build): Update the zlib build dependency to 1.1.31 for RUSTSEC-2026-0418.**
 
 - **(rendering): Avoid quadratic work when rendering user-controlled HTML table cells.**

@@ -1348,7 +1348,7 @@ bytes = { workspace = true }
 # than unifying them and `encoding` never reaches our copy. Do not collapse
 # them onto one version without checking what `encoding` gates out — it
 # compiles away `Attribute::unescape_value`, among others.
-calamine = { version = "0.37.0", features = ["dates"], optional = true }
+calamine = { version = "0.38.0", features = ["dates"], optional = true }
 cfb = { workspace = true, optional = true }
 chardetng = { version = "1.0.0", optional = true }
 chrono = { workspace = true, optional = true }
