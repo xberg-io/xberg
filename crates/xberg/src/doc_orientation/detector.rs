@@ -400,6 +400,9 @@ mod tests {
     use super::*;
 
     #[cfg(all(paddle_ocr, not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
+    const OFFLINE_CACHE_ROOT: &str = "XBERG_DOC_ORI_OFFLINE_CACHE_ROOT";
+
+    #[cfg(all(paddle_ocr, not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
     #[test]
     fn should_read_the_orientation_model_where_the_model_manifest_writes_it() {
         let cache = tempfile::TempDir::new().unwrap();
@@ -413,21 +416,42 @@ mod tests {
         let written = manager.manifest_cache_path(&entry.relative_path);
         std::fs::create_dir_all(written.parent().unwrap()).unwrap();
         std::fs::write(&written, b"cached orientation model").unwrap();
-        let api = hf_hub::HFClientBuilder::new()
-            .endpoint("http://127.0.0.1:1")
-            .cache_dir(cache.path())
-            .build_sync()
-            .unwrap();
-        let read = crate::model_download::hf_cached_revision_with_client(
-            &api,
-            HF_REPO_ID,
-            REMOTE_FILENAME,
-            Some(HF_REPO_REVISION),
-        )
-        .unwrap();
 
-        assert_eq!(read.as_deref(), Some(written.as_path()));
-        assert!(entry.source_url.contains(HF_REPO_REVISION));
+        crate::utils::test_support::run_child_test(
+            "doc_orientation::detector::tests::orientation_fetch_finds_the_manifest_file_child",
+            OFFLINE_CACHE_ROOT,
+            cache.path(),
+            |command| {
+                command.env("HF_HUB_OFFLINE", "1").env_remove("HUGGINGFACE_HUB_OFFLINE");
+            },
+        );
+    }
+
+    /// Runs the detector's own `ensure_model`, offline, against a cache that holds a stand-in file at
+    /// the manifest path. A lookup at the manifest's revision finds the file and rejects its content;
+    /// a lookup at any other revision finds nothing. ~keep
+    #[cfg(all(paddle_ocr, not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
+    #[test]
+    #[ignore = "run in an isolated subprocess by should_read_the_orientation_model_where_the_model_manifest_writes_it"]
+    fn orientation_fetch_finds_the_manifest_file_child() {
+        let Some(cache) = crate::utils::test_support::child_test_root(OFFLINE_CACHE_ROOT) else {
+            return;
+        };
+        let revision = crate::paddle_ocr::ModelManager::pinned_revision();
+
+        let empty = tempfile::TempDir::new().unwrap();
+        let miss = DocOrientationDetector::ensure_model(empty.path())
+            .unwrap_err()
+            .to_string();
+        assert!(miss.contains("not available in the local cache"), "{miss}");
+        assert!(
+            miss.contains(&format!("@{revision}")),
+            "the fetch asks for another revision: {miss}"
+        );
+
+        let hit = DocOrientationDetector::ensure_model(&cache).unwrap_err().to_string();
+        assert!(hit.contains("failed checksum verification"), "{hit}");
+        assert!(hit.contains(&format!("@{revision}")), "{hit}");
     }
 
     #[test]

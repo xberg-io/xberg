@@ -1042,6 +1042,69 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    #[cfg(paddle_ocr)]
+    const ORIENTATION_CACHE_ROOT: &str = "XBERG_PADDLE_ORIENTATION_CACHE_ROOT";
+    #[cfg(paddle_ocr)]
+    const TEXTLINE_ORIENTATION: &str = "v2/classifiers/PP-LCNet_x1_0_textline_ori.onnx";
+    #[cfg(paddle_ocr)]
+    const DOCUMENT_ORIENTATION: &str = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
+
+    #[cfg(paddle_ocr)]
+    #[test]
+    fn should_read_both_orientation_models_where_the_manifest_writes_them() {
+        let cache = TempDir::new().unwrap();
+        let manager = ModelManager::new(cache.path().to_path_buf());
+        for file in [TEXTLINE_ORIENTATION, DOCUMENT_ORIENTATION] {
+            let entry = ModelManager::manifest()
+                .into_iter()
+                .find(|entry| entry.relative_path == file)
+                .unwrap_or_else(|| panic!("the manifest lists {file}"));
+            assert!(entry.source_url.contains(HF_REPO_REVISION), "{}", entry.source_url);
+            let written = manager.manifest_cache_path(&entry.relative_path);
+            std::fs::create_dir_all(written.parent().unwrap()).unwrap();
+            std::fs::write(&written, b"cached orientation model").unwrap();
+        }
+
+        crate::utils::test_support::run_child_test(
+            "paddle_ocr::model_manager::tests::orientation_reads_find_the_manifest_files_child",
+            ORIENTATION_CACHE_ROOT,
+            cache.path(),
+            |command| {
+                command.env("HF_HUB_OFFLINE", "1").env_remove("HUGGINGFACE_HUB_OFFLINE");
+            },
+        );
+    }
+
+    /// Runs the manager's own readers for the text line and document orientation models, offline,
+    /// against stand-in files at the manifest paths. A lookup at the manifest's revision finds a file
+    /// and rejects its content; a lookup at any other revision finds nothing. ~keep
+    #[cfg(paddle_ocr)]
+    #[test]
+    #[ignore = "run in an isolated subprocess by should_read_both_orientation_models_where_the_manifest_writes_them"]
+    fn orientation_reads_find_the_manifest_files_child() {
+        let Some(cache) = crate::utils::test_support::child_test_root(ORIENTATION_CACHE_ROOT) else {
+            return;
+        };
+        let manager = ModelManager::new(cache);
+        let revision = ModelManager::pinned_revision();
+
+        let empty = TempDir::new().unwrap();
+        let blank = ModelManager::new(empty.path().to_path_buf());
+        let miss = blank.ensure_v2_cls_model().unwrap_err().to_string();
+        assert!(miss.contains("not available in the local cache"), "{miss}");
+        assert!(miss.contains(&format!("@{revision}")), "{miss}");
+
+        let readers = [
+            ("textline", manager.ensure_v2_cls_model()),
+            ("document", manager.ensure_doc_ori_model()),
+        ];
+        for (name, result) in readers {
+            let hit = result.unwrap_err().to_string();
+            assert!(hit.contains("failed checksum verification"), "{name}: {hit}");
+            assert!(hit.contains(&format!("@{revision}")), "{name}: {hit}");
+        }
+    }
+
     #[test]
     fn test_model_manager_creation() {
         let temp_dir = TempDir::new().unwrap();
