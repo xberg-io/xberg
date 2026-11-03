@@ -682,6 +682,12 @@ impl PdfDocument {
     /// This method allows controlling span merging behavior through configuration,
     /// including adaptive threshold settings for improved extraction quality.
     ///
+    /// Like [`Self::extract_spans`], this retains whole merged spans whose bounding
+    /// boxes overlap the normalized page MediaBox expanded by 2 points. Partially
+    /// overlapping spans are kept without clipping. Membership is tested in
+    /// unrotated PDF coordinates. Configured spans retain extractor coordinates
+    /// without the page rotation or other post-processing of `extract_spans`.
+    ///
     /// # Arguments
     ///
     /// * `page_index` - Zero-based page index
@@ -762,44 +768,11 @@ impl PdfDocument {
             }
         }
 
-        extractor.extract_text_spans(&content_data)
+        let mut spans = extractor.extract_text_spans(&content_data)?;
+        self.drop_offpage_spans(page_index, &mut spans);
+        Ok(spans)
     }
 
-    /// Extract individual characters from a PDF page.
-    ///
-    /// This is a **low-level API** for character-level granularity. For most use cases,
-    /// prefer `extract_spans()` which provides complete text strings as PDF defines them.
-    ///
-    /// # Character-level extraction details:
-    ///
-    /// - Returns individual `TextChar` objects with position, font, and style information
-    /// - Characters are sorted in reading order (top-to-bottom, left-to-right)
-    /// - Overlapping characters (rendered multiple times for effects) are deduplicated
-    /// - Useful for layout analysis, debugging, or custom text processing pipelines
-    ///
-    /// # Arguments
-    ///
-    /// * `page_index` - Page number (0-indexed)
-    ///
-    /// # Returns
-    ///
-    /// Vector of `TextChar` objects in reading order, or error if extraction fails
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use xberg_native_pdf::document::PdfDocument;
-    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut doc = PdfDocument::open("document.pdf")?;
-    /// let chars = doc.extract_chars(0)?;
-    /// for ch in chars {
-    ///     println!("'{}' at ({:.1}, {:.1}), font: {}",
-    ///         ch.char, ch.bbox.x, ch.bbox.y, ch.font_name);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
     /// List all Optional Content Group (OCG) layer names in the document.
     ///
     /// Reads `/OCProperties` from the document catalog and returns the `/Name`
@@ -1127,6 +1100,45 @@ impl PdfDocument {
         Ok(())
     }
 
+    /// Extract individual characters from a PDF page.
+    ///
+    /// This is a **low-level API** for character-level granularity. For most use cases,
+    /// prefer [`Self::extract_spans`] which provides complete text strings as PDF defines them.
+    ///
+    /// Characters retain raw PDF coordinates, including characters entirely outside
+    /// the page MediaBox. This API does not apply the span APIs' page-bounds filter
+    /// or page rotation; use spans when page-bounded text is required.
+    ///
+    /// # Character-level extraction details:
+    ///
+    /// - Returns individual `TextChar` objects with position, font, and style information
+    /// - Characters are sorted in reading order (top-to-bottom, left-to-right)
+    /// - Overlapping characters (rendered multiple times for effects) are deduplicated
+    /// - Useful for layout analysis, debugging, or custom text processing pipelines
+    ///
+    /// # Arguments
+    ///
+    /// * `page_index` - Page number (0-indexed)
+    ///
+    /// # Returns
+    ///
+    /// Vector of `TextChar` objects in reading order, or error if extraction fails
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use xberg_native_pdf::document::PdfDocument;
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut doc = PdfDocument::open("document.pdf")?;
+    /// let chars = doc.extract_chars(0)?;
+    /// for ch in chars {
+    ///     println!("'{}' at ({:.1}, {:.1}), font: {}",
+    ///         ch.char, ch.bbox.x, ch.bbox.y, ch.font_name);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
     /// # Performance Note
     ///
     /// Character extraction is typically 30-50% faster than span extraction

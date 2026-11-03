@@ -164,6 +164,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Apply the ordinary span page-bounds policy to configured spans.** (#2379)
+  Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.
+  Raw character extraction retains off-page characters and PDF coordinates for inspection.
+
 - **(pdf): Keep nested Form text independent of earlier page reads at the recursion limit.** (#2377)
 
 - **(pdf): Omit generated image placeholders when image extraction is disabled.** (#2386)
