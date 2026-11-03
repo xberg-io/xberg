@@ -47,7 +47,7 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
     <xberg.version>1.4.0</xberg.version>
     <spring-ai.version>2.0.1</spring-ai.version>
     <junit.version>6.1.3</junit.version>

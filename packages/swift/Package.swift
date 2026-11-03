@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 import Foundation
 
@@ -31,7 +31,7 @@ func resolvedStaticLib(_ name: String) -> String {
 let package = Package(
   name: "Xberg",
   platforms: [
-    .macOS(.v14),
+    .macOS(.v26),
     .iOS(.v16),
   ],
   products: [

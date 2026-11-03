@@ -29,7 +29,7 @@ Or install it manually:
 npm install @xberg-io/n8n-nodes-xberg
 ```
 
-Node.js 20.15+ is required. Prebuilt binaries ship for Linux (x64/arm64, glibc or musl), macOS (arm64), and Windows (x64/arm64).
+Node.js 22+ is required. Prebuilt binaries ship for Linux (x64/arm64, glibc or musl), macOS (arm64), and Windows (x64/arm64).
 
 ## Operations
 

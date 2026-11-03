@@ -32,7 +32,7 @@ resolver = "2"
 [workspace.package]
 version = "1.4.0"
 edition = "2024"
-rust-version = "1.98"
+rust-version = "1.99"
 authors = [
   "Na'aman Hirschfeld <naaman@xberg.io>",
   "Tobias Perlstein <tobias@xberg.io>",

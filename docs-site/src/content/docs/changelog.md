@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Minimum supported versions raised: Node.js 22, Ruby 3.3, PHP 8.3, Go 1.27, Java 25, Android API 24, Dart 3.13, macOS 26, Rust 1.99.
 - Python 3.11 is now the minimum supported version; Python 3.10 reached end of life.
 - **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
   Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.

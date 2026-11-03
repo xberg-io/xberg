@@ -195,45 +195,6 @@ specifiers = ["3.3.13"]
 checksum = "sha256:590bc6a1a557ae0ae1630ca36be71a253d068b0298c302e9bf803d99a00a6516"
 url = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.3.13-1/rubyinstaller-3.3.13-1-x64.7z"
 
-[[tools.ruby]]
-version = "3.2.11"
-backend = "core:ruby"
-specifiers = ["3.2.11"]
-
-[tools.ruby.options]
-compile = "false"
-precompiled_url = "jdx/ruby"
-ruby_build_repo = "https://github.com/rbenv/ruby-build.git"
-ruby_install = "false"
-
-[tools.ruby."platforms.linux-arm64"]
-checksum = "sha256:af95277ffd1d380d6b484955fb37a4cc3556d1d84f11c382d840224e4d687f60"
-url = "https://github.com/jdx/ruby/releases/download/3.2.11-7/ruby-3.2.11.arm64_linux.tar.gz"
-provenance = "github-attestations"
-
-[tools.ruby."platforms.linux-x64"]
-checksum = "sha256:a68c12e52486a81d4e2bd9ca412be902849f312a2591f224480751d3d8c5de7b"
-url = "https://github.com/jdx/ruby/releases/download/3.2.11-7/ruby-3.2.11.x86_64_linux.tar.gz"
-provenance = "github-attestations"
-
-[tools.ruby."platforms.macos-arm64"]
-checksum = "sha256:a9cba3b6ac5478e0505ffc0756d0f82282829e31506846975e3380588b7baab2"
-url = "https://github.com/jdx/ruby/releases/download/3.2.11-7/ruby-3.2.11.macos.tar.gz"
-provenance = "github-attestations"
-
-[tools.ruby."platforms.macos-x64"]
-checksum = "sha256:b3eeabd6636f334531db3ffdc3229eb05e524740e6c84fdc043720573cf2f8b2"
-url = "https://cache.ruby-lang.org/pub/ruby/3.2/ruby-3.2.11.tar.gz"
-
-[[tools.ruby]]
-version = "3.2.11"
-backend = "core:ruby"
-specifiers = ["3.2.11"]
-
-[tools.ruby."platforms.windows-x64"]
-checksum = "sha256:20e56be307ae5576c024c97a7d8784c2033e676ea8c67477dda602b8e97fe69c"
-url = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.2.11-1/rubyinstaller-3.2.11-1-x64.7z"
-
 [[tools.zig]]
 version = "0.17.0"
 backend = "core:zig"

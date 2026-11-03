@@ -5530,7 +5530,7 @@ name = "PHP"
 package_name = "xberg-io/xberg"
 badge_url = "https://img.shields.io/packagist/v/xberg-io/xberg?label=PHP&color=007ec6"
 docs_url = "https://xberg.io/"
-description = "Extract text, tables, images, metadata, and code intelligence from 107 file formats and 371 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. PHP bindings with modern PHP 8.2+ support and type-safe API."
+description = "Extract text, tables, images, metadata, and code intelligence from 107 file formats and 371 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. PHP bindings with modern PHP 8.3+ support and type-safe API."
 package_manager = ["composer"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr", "sceptre"]
