@@ -18,6 +18,7 @@ struct Frame {
 struct Construct {
     decoded: Range<usize>,
     raw: Range<usize>,
+    preserve_envelope: bool,
 }
 #[derive(Debug)]
 pub(super) struct Projection<'s> {
@@ -72,6 +73,7 @@ struct Builder<'s> {
     frames: Vec<Frame>,
     frame_limit: usize,
     constructs: Vec<Construct>,
+    paragraph_end: Option<usize>,
 }
 impl<'s> Builder<'s> {
     fn prepare(source: &'s str, limits: Limits, depth: usize, work: &mut Work) -> Result<Self, Error> {
@@ -104,14 +106,19 @@ impl<'s> Builder<'s> {
             frames,
             frame_limit: frame_count,
             constructs,
+            paragraph_end: None,
         })
     }
 
-    fn construct(&mut self, decoded: Range<usize>, raw: Range<usize>) -> Result<(), Error> {
+    fn construct(&mut self, decoded: Range<usize>, raw: Range<usize>, preserve_envelope: bool) -> Result<(), Error> {
         if self.constructs.len() == self.decoder.source.len() {
             return Err(Error::Budget);
         }
-        self.constructs.push(Construct { decoded, raw });
+        self.constructs.push(Construct {
+            decoded,
+            raw,
+            preserve_envelope,
+        });
         Ok(())
     }
 
@@ -134,7 +141,7 @@ impl<'s> Builder<'s> {
             return Err(Error::Unsupported);
         }
         let end = self.decoder.leaf.text.len();
-        self.construct(frame.start..end, frame.raw.start..raw.end)
+        self.construct(frame.start..end, frame.raw.start..raw.end, false)
     }
 
     fn delimiter(&self, range: Range<usize>, strong: bool) -> Result<(), Error> {
@@ -147,10 +154,33 @@ impl<'s> Builder<'s> {
             .ok_or(Error::InvalidSource)
     }
 
+    fn paragraph(&mut self, node: &AstNode<'_>, work: &mut Work) -> Result<(), Error> {
+        let parent = node.parent().ok_or(Error::Unsupported)?;
+        if !matches!(parent.data.borrow().value, NodeValue::Document)
+            || parent.parent().is_some()
+            || !self.frames.is_empty()
+        {
+            return Err(Error::Unsupported);
+        }
+        let range = source_range(self.decoder.source, node, &self.lines)?;
+        if let Some(previous_end) = self.paragraph_end {
+            let gap = previous_end..range.start;
+            let bytes = self.decoder.source.get(gap.clone()).ok_or(Error::InvalidSource)?;
+            work.charge(bytes.len(), self.decoder.limits)?;
+            if !bytes.bytes().all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
+                return Err(Error::Unsupported);
+            }
+            self.decoder.text(gap, work)?;
+        }
+        self.paragraph_end = Some(range.end);
+        Ok(())
+    }
+
     fn start(&mut self, node: &AstNode<'_>, work: &mut Work) -> Result<(), Error> {
         let data = node.data.borrow();
         match &data.value {
-            NodeValue::Document | NodeValue::Paragraph => Ok(()),
+            NodeValue::Document => Ok(()),
+            NodeValue::Paragraph => self.paragraph(node, work),
             NodeValue::Text(expected) => {
                 let range = source_range(self.decoder.source, node, &self.lines)?;
                 let start = self.decoder.leaf.text.len();
@@ -164,7 +194,7 @@ impl<'s> Builder<'s> {
                 let start = self.decoder.leaf.text.len();
                 self.decoder
                     .code(range.clone(), code.num_backticks, &code.literal, work)?;
-                self.construct(start..self.decoder.leaf.text.len(), range)
+                self.construct(start..self.decoder.leaf.text.len(), range, true)
             }
             NodeValue::Strong | NodeValue::Emph => {
                 let strong = matches!(data.value, NodeValue::Strong);
@@ -196,6 +226,7 @@ impl<'s> Builder<'s> {
     fn end(&mut self, node: &AstNode<'_>) -> Result<(), Error> {
         let value = &node.data.borrow().value;
         let kind = match value {
+            NodeValue::Paragraph => return self.frames.is_empty().then_some(()).ok_or(Error::Unsupported),
             NodeValue::Strong => Kind::Strong,
             NodeValue::Emph => Kind::Emphasis,
             _ => return Ok(()),
@@ -216,7 +247,6 @@ pub(super) fn project<'s>(
     work.parses = work.parses.checked_add(1).ok_or(Error::Budget)?;
     work.document_parses = work.document_parses.checked_add(1).ok_or(Error::Budget)?;
     let root = comrak::parse_document(&arena, source, &crate::rendering::comrak_options());
-    let mut paragraphs = 0;
     let mut depth = 0usize;
     for edge in root.traverse() {
         work.charge(1, limits)?;
@@ -226,12 +256,6 @@ pub(super) fn project<'s>(
                 if depth > depth_limit {
                     work.failure = Some("nesting depth limit");
                     return Err(Error::Budget);
-                }
-                if matches!(node.data.borrow().value, NodeValue::Paragraph) {
-                    paragraphs += 1;
-                    if paragraphs > 1 {
-                        return Err(Error::Unsupported);
-                    }
                 }
                 builder.start(node, work)?;
             }
@@ -296,6 +320,37 @@ impl Projection<'_> {
         Ok(())
     }
 
+    fn contiguous_identity(
+        &self,
+        origins: &[Origin],
+        raw: &Range<usize>,
+        expected: &str,
+        limits: Limits,
+        work: &mut Work,
+    ) -> Result<bool, Error> {
+        work.charge(
+            expected
+                .len()
+                .checked_mul(2)
+                .and_then(|n| n.checked_add(origins.len()))
+                .ok_or(Error::Budget)?,
+            limits,
+        )?;
+        if self.source.get(raw.clone()).ok_or(Error::InvalidSource)? != expected {
+            return Ok(false);
+        }
+        let mut end = raw.start;
+        for origin in origins {
+            let source = self.source.get(origin.source.clone()).ok_or(Error::InvalidSource)?;
+            let decoded = self.leaf.text.get(origin.decoded.clone()).ok_or(Error::InvalidSource)?;
+            if origin.source.start != end || source != decoded {
+                return Ok(false);
+            }
+            end = origin.source.end;
+        }
+        Ok(end == raw.end)
+    }
+
     pub(super) fn map(
         &self,
         semantic: Range<usize>,
@@ -337,10 +392,12 @@ impl Projection<'_> {
             return Err(Error::InvalidSource);
         }
         let mut raw = origins[0].source.start..origins[origins.len() - 1].source.end;
+        let contiguous = self.contiguous_identity(origins, &raw, expected, limits, work)?;
         for construct in &self.constructs {
             if !construct.decoded.is_empty()
                 && semantic.start <= construct.decoded.start
                 && semantic.end >= construct.decoded.end
+                && (!contiguous || construct.preserve_envelope)
             {
                 raw.start = raw.start.min(construct.raw.start);
                 raw.end = raw.end.max(construct.raw.end);

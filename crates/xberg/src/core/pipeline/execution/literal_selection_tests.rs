@@ -720,3 +720,6 @@ async fn formatted_literal_prefixed_entity_tokens_reject_lost_semantic_identity(
 async fn formatted_literal_prefixed_entity_hashes_reject_lost_semantic_identity() {
     prefixed_entity_requires_all_semantic_identities(RedactionStrategy::Hash).await;
 }
+
+#[path = "literal_selection_tests/surface_regression_tests.rs"]
+mod surface_regression_tests;

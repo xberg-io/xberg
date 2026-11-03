@@ -117,7 +117,6 @@ fn one_whole_source_parse_is_distinct_from_charged_entity_atom_parses() {
 fn unsupported_fields_blocks_and_unbalanced_tags_are_not_silently_omitted() {
     for source in [
         "# header",
-        "a\n\nb",
         "a\nb",
         "[Jane](https://example.test \"secret\")",
         "![Jane](x)",
@@ -227,4 +226,119 @@ fn all_wrapper_owned_capacities_are_preflighted_and_depth_work_is_bounded() {
         projection.map(0..1, "a", Limits { operations: 0, ..cap }, &mut Work::default()),
         Err(Error::Budget)
     );
+}
+
+#[test]
+fn multiple_paragraphs_preserve_actual_whitespace_gaps_and_source_origins() {
+    for source in ["a\n\nb", "a\r\n\r\nb", "a\r\n \t\r\nb"] {
+        let projection = parsed(source);
+        assert_eq!(projection.leaf.text, source);
+        assert_eq!(projection.leaf.source, 0..source.len());
+        assert_eq!(
+            projection
+                .leaf
+                .origins
+                .iter()
+                .map(|origin| (origin.decoded.clone(), origin.source.clone()))
+                .collect::<Vec<_>>(),
+            (0..source.len())
+                .map(|index| (index..index + 1, index..index + 1))
+                .collect::<Vec<_>>()
+        );
+        let last = source.len() - 1;
+        let mapped = projection
+            .map(
+                last..last + 1,
+                "b",
+                limits(source, source.len() + 2),
+                &mut Work::default(),
+            )
+            .unwrap();
+        assert_eq!(
+            mapped,
+            Mapped {
+                raw: last..last + 1,
+                semantic: last..last + 1
+            }
+        );
+    }
+}
+
+#[test]
+fn balanced_inline_markup_in_each_paragraph_keeps_exact_gap_and_inner_origins() {
+    let source = "a **b**\r\n\r\nc <u>d</u>";
+    let projection = parsed(source);
+    assert_eq!(projection.leaf.text, "a b\r\n\r\nc d");
+    assert_eq!(
+        projection.leaf.origins[3..7]
+            .iter()
+            .map(|origin| origin.source.clone())
+            .collect::<Vec<_>>(),
+        vec![7..8, 8..9, 9..10, 10..11]
+    );
+    assert_eq!(projection.leaf.origins.last().unwrap().source, 16..17);
+    let mapped = projection
+        .map(9..10, "d", limits(source, source.len() + 2), &mut Work::default())
+        .unwrap();
+    assert_eq!(
+        mapped,
+        Mapped {
+            raw: 16..17,
+            semantic: 9..10
+        }
+    );
+}
+
+#[test]
+fn contiguous_literal_identity_maps_to_proven_inner_origins_without_removing_wrappers() {
+    for (source, raw) in [
+        ("x <u>secret</u> y", 5..11),
+        ("x **secret** y", 4..10),
+        ("x **<u>secret</u>** y", 7..13),
+    ] {
+        let projection = parsed(source);
+        assert_eq!(projection.leaf.text, "x secret y");
+        assert_eq!(&source[raw.clone()], "secret");
+        let mapped = projection
+            .map(2..8, "secret", limits(source, source.len() + 2), &mut Work::default())
+            .unwrap();
+        assert_eq!(
+            mapped,
+            Mapped {
+                raw: raw.clone(),
+                semantic: 2..8
+            }
+        );
+        let identity_origins = &projection.leaf.origins[2..8];
+        assert_eq!(identity_origins.first().unwrap().source.start, raw.start);
+        assert_eq!(identity_origins.last().unwrap().source.end, raw.end);
+        assert!(
+            identity_origins
+                .iter()
+                .all(|origin| projection.leaf.text.get(origin.decoded.clone()) == source.get(origin.source.clone()))
+        );
+    }
+}
+
+#[test]
+fn paragraph_boundaries_do_not_let_unbalanced_markup_or_unsupported_blocks_hide() {
+    for source in [
+        "a <u>Jane\n\nDoe</u>",
+        "a\n\n# heading",
+        "a\n\n- item",
+        "a\n\n[Jane](https://example.test)",
+        "a\n\n<u>Jane</sup>",
+    ] {
+        assert_eq!(
+            project(
+                source,
+                limits(source, source.len() + 2),
+                source.len() + 2,
+                &mut Work::default()
+            )
+            .unwrap_err(),
+            Error::Unsupported,
+            "{source}"
+        );
+    }
 }
