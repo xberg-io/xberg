@@ -10,6 +10,10 @@ use crate::types::{PageBoundary, PageContent, PdfAnnotation};
 #[path = "extraction/native_table_metadata_tests.rs"]
 mod native_table_metadata_tests;
 
+#[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
+#[path = "extraction/image_anchor_tests.rs"]
+mod image_anchor_tests;
+
 #[cfg(feature = "pdf")]
 use crate::types::Table;
 
@@ -217,7 +221,12 @@ pub(super) enum ImageAnchor {
 /// placeholder: the element is the only anchor for the recognized text (GH#2068). Both
 /// sites that make image elements call this; neither derives it again. ~keep
 pub(super) fn image_anchor(config: &ExtractionConfig) -> ImageAnchor {
-    if config.images.as_ref().is_some_and(|images| images.inject_placeholders) {
+    let extract_images = config.images.as_ref().is_some_and(|images| images.extract_images)
+        || config
+            .pdf_options
+            .as_ref()
+            .is_some_and(|options| options.extract_images);
+    if extract_images && config.images.as_ref().is_some_and(|images| images.inject_placeholders) {
         return ImageAnchor::Placeholder;
     }
     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]

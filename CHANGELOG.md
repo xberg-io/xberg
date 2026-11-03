@@ -162,6 +162,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Omit generated image placeholders when image extraction is disabled.** (#2386)
+  Preserve recognized image text and the legacy PDF image-extraction opt-in.
+
 - **(pdf): Keep cached Form spans tied to the destination page clipping context.** (#2382)
 
 - **(tests): Preserve literal list-boundary comments in multiline and indented code during output-parity checks.**
