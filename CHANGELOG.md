@@ -162,6 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(tests): Keep cache-depth and DOCX list regressions compatible with strict Clippy checks.**
+
 - **(ocr): Fetch and read the document orientation model at one revision, so a synced cache is complete offline.** (GH#2417)
   The orientation detector, the PaddleOCR model manifest and the table models now share one pinned revision of the model repository.
   A cache that the manifest or the cache warm fills holds every file the engine reads. Caches that hold the table models at the older revision download them once more.

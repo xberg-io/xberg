@@ -96,7 +96,7 @@ fn assert_mixed_list_round_trip(kinds: [bool; 3]) {
         .iter()
         .enumerate()
         .map(|(index, (text, level))| {
-            let ordinal = if matches!(index, 3 | 4 | 5) { 2 } else { 1 };
+            let ordinal = if matches!(index, 3..=5) { 2 } else { 1 };
             if kinds[*level] {
                 format!("{ordinal}. {text}")
             } else {
