@@ -3042,7 +3042,7 @@ jobs:
         # workflow-wide 11.0: the bundled ONNX Runtime prebuilt requires macOS 13.4. ~keep
         env:
           IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-          MACOSX_DEPLOYMENT_TARGET: "14.0"
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
         with:
           crate-name: xberg-swift
           artifact-name: Xberg-rs
