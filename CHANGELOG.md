@@ -157,6 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ci): Run Go lint with the locked Go 1.27 toolchain and a compatible linter.**
+
 - **(swift): Build release artifacts for the declared macOS 26 minimum.**
 
 - **(formula): Honor `XBERG_CACHE_DIR` for formula recognition models.** (#2409)

@@ -730,5 +730,7 @@ jobs:
       java-version: "25"
       # golangci-lint failed with `poly-hook: 1: golangci-lint: not found`. ~keep
       setup-go: true
+      go-version: "1.27.3"
+      golangci-lint-version: "v2.15.0"
       # dart-analyze failed with no Dart SDK present. ~keep
       setup-dart: true
