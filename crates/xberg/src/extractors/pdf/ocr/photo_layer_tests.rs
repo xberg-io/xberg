@@ -584,3 +584,308 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
     );
     assert_eq!(marked, "<p1>xq zv wj<p2>Meeting Notes\n\nxq zv wj");
 }
+
+/// A one-page PDF whose only content is a short readable title in its text layer.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn title_only_pdf(title: &str) -> Vec<u8> {
+    use lopdf::content::{Content, Operation};
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let mut document = Document::with_version("1.5");
+    let pages_id = document.new_object_id();
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+    });
+    let content = Content {
+        operations: vec![
+            Operation::new("BT", vec![]),
+            Operation::new("Tf", vec!["F1".into(), 18.into()]),
+            Operation::new("Td", vec![72.into(), 720.into()]),
+            Operation::new("Tj", vec![Object::string_literal(title)]),
+            Operation::new("ET", vec![]),
+        ],
+    };
+    let content_id = document.add_object(Stream::new(
+        dictionary! {},
+        content.encode().expect("the title content must encode"),
+    ));
+    let page_id = document.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages_id,
+        "Contents" => content_id,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+    });
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_id.into()],
+            "Count" => 1,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    document.trailer.set("Root", catalog_id);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).expect("the title PDF must serialize");
+    bytes
+}
+
+/// The extractor sends a page with too little text to the whole-document OCR run. A noise page
+/// there keeps its short readable title first. Read from the extraction result of the extractor,
+/// so a call site that hands the run no layers is caught. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_keep_the_title_first_when_the_extractor_runs_ocr_on_the_whole_document() {
+    use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat};
+    use crate::extractors::pdf::PdfExtractor;
+    use crate::plugins::InternalDocumentExtractor;
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-extractor-whole-document-backend";
+    const NOISY: &str = "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z A B C D";
+    const TITLE: &str = "Meeting Notes";
+
+    crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+        name: BACKEND,
+        text: NOISY,
+        noisy: true,
+    }))
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let internal = PdfExtractor::new()
+        .extract_content(&title_only_pdf(TITLE), "application/pdf", &config)
+        .await;
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    let result = crate::extraction::derive::derive_extraction_result(
+        internal.expect("the extractor must return a result"),
+        true,
+        OutputFormat::Plain,
+    );
+
+    assert!(
+        result.content.contains(NOISY),
+        "the OCR text must be in the result, or this test proves nothing: {:?}",
+        result.content
+    );
+    assert!(
+        result.content.starts_with(TITLE),
+        "the title of the text layer goes first: {:?}",
+        result.content
+    );
+}
+
+/// A page the caller forced to OCR is replaced by definition: it keeps no text layer, however
+/// short and readable. The same call without the forced page list puts the title first, which
+/// shows the OCR text is judged noise in this test. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_give_a_forced_page_the_ocr_text_without_the_text_layer() {
+    use super::pipeline::extract_mixed_ocr_native;
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-forced-page-backend";
+    const NOISY: &str = "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z A B C D";
+    const TITLE: &str = "Meeting Notes";
+
+    crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+        name: BACKEND,
+        text: NOISY,
+        noisy: true,
+    }))
+    .unwrap();
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let boundary = [crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: TITLE.len(),
+        page_number: 1,
+    }];
+    let config = |forced: Option<Vec<u32>>| ExtractionConfig {
+        use_cache: false,
+        force_ocr_pages: forced,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let automatic = extract_mixed_ocr_native(TITLE, &boundary, &[1], &pdf, &config(None), None)
+        .await
+        .unwrap();
+    let forced = extract_mixed_ocr_native(TITLE, &boundary, &[1], &pdf, &config(Some(vec![1])), None)
+        .await
+        .unwrap();
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+
+    assert_eq!(
+        automatic.0,
+        format!("{TITLE}\n\n{NOISY}"),
+        "control: an automatic page keeps the title first"
+    );
+    assert_eq!(forced.0, NOISY, "a forced page is the OCR text alone");
+    assert_eq!(forced.1.get(&1).map(String::as_str), Some(NOISY));
+}
+
+/// The OCR text of a page that the noise gate discards is empty. In a whole-document run the
+/// layer does not go in front of that empty text: the page stays empty. Another page of the same
+/// run, not discarded, gets its layer, so the layer words differ from the OCR text and the
+/// whole-word skip cannot hide the discarded case. ~keep
+#[test]
+fn should_not_put_a_layer_on_a_page_the_noise_gate_discarded() {
+    use super::document::put_layers_first_in_run;
+    use super::scoring::OcrPageNoiseVerdict;
+
+    let verdict = |page_index: usize, discarded: bool| OcrPageNoiseVerdict {
+        page_index,
+        low_confidence: true,
+        fragmented_noise: false,
+        dictionary_noise: false,
+        fragmented_word_ratio: 0.0,
+        word_count: 3,
+        mean_confidence: Some(0.2),
+        dict_invalid_word_ratio: None,
+        discarded,
+    };
+    let mut page_texts = vec![String::new(), "xq zv wj".to_string()];
+    let mut text = page_texts.join("\n\n");
+    let layers = ahash::AHashMap::from([(1, "Meeting Notes".to_string()), (2, "Budget Report".to_string())]);
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        None,
+        &layers,
+        &[verdict(0, true), verdict(1, false)],
+        0,
+        None,
+    );
+    assert_eq!(page_texts, ["", "Budget Report\n\nxq zv wj"]);
+    assert_eq!(text, "\n\nBudget Report\n\nxq zv wj");
+}
+
+/// On the page route a discarded page has no OCR text to replace the native page, so the native
+/// page stays byte for byte whatever its layer. This pins the result a discarded page must give.
+/// It passes with or without the discarded-page check that sits before the layer step in the
+/// route, because the empty text is refused as a replacement first. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_keep_the_native_page_when_the_noise_gate_discards_its_ocr_text() {
+    use super::pipeline::extract_mixed_ocr_native;
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-discarded-page-backend";
+    const NOISY: &str = "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z A B C D";
+    const TITLE: &str = "Meeting Notes";
+
+    crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+        name: BACKEND,
+        text: NOISY,
+        noisy: true,
+    }))
+    .unwrap();
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let boundary = [crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: TITLE.len(),
+        page_number: 1,
+    }];
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let run = extract_mixed_ocr_native(TITLE, &boundary, &[1], &pdf, &config, None)
+        .await
+        .unwrap();
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+
+    assert_eq!(run.0, TITLE, "the native page stays");
+    assert!(run.1.is_empty(), "no replacement for a discarded page");
+}
+
+/// The page-by-page run of a whole document, used for the default classical pipeline, hands the
+/// layers of its hints to its pages: a noise page keeps its title first. ~keep
+#[cfg(all(paddle_ocr, feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_keep_the_title_first_in_the_page_by_page_whole_document_pipeline() {
+    use super::pipeline::{PageOcrHints, extract_full_document_ocr_pipeline_per_page};
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-page-by-page-backend";
+    const NOISY: &str = "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z A B C D";
+    const TITLE: &str = "Meeting Notes";
+
+    crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+        name: BACKEND,
+        text: NOISY,
+        noisy: true,
+    }))
+    .unwrap();
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: BACKEND.to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    paddle_ocr_settings: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: crate::core::config::OcrQualityThresholds {
+                    pipeline_min_quality: 0.0,
+                    ..Default::default()
+                },
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let hints = PageOcrHints {
+        source_dpi: None,
+        known_full_page_scan: false,
+        single_block_pages: None,
+        native_page_layers: Some(Arc::new(ahash::AHashMap::from([(1, TITLE.to_string())]))),
+    };
+    let result = Box::pin(extract_full_document_ocr_pipeline_per_page(
+        &pdf,
+        &config,
+        None,
+        Some(hints),
+        #[cfg(feature = "layout-detection")]
+        None,
+    ))
+    .await;
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    let result = result.expect("the page-by-page run must return a result");
+
+    let expected = format!("{TITLE}\n\n{NOISY}");
+    assert_eq!(result.0, expected, "the flat text holds the title first");
+    assert_eq!(result.5, [expected.as_str()], "the page text holds the title first");
+}
