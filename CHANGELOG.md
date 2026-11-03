@@ -171,9 +171,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in Markdown and HTML as in the other formats.
   A slide that fails to parse still gets its marker.
 
+- **(tests): Keep cache-depth and DOCX list regressions compatible with strict Clippy checks.**
+
+- **(ocr): Fetch and read the document orientation model at one revision, so a synced cache is complete offline.** (GH#2417)
+  The orientation detector, the PaddleOCR model manifest and the table models now share one pinned revision of the model repository.
+  A cache that the manifest or the cache warm fills holds every file the engine reads. Caches that hold the table models at the older revision download them once more.
+
 - **(pdf): Apply the ordinary span page-bounds policy to configured spans.** (#2379)
   Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.
   Raw character extraction retains off-page characters and PDF coordinates for inspection.
+
+- **(pdf): Keep body text placed inside Form XObjects in spans and characters.** (#2310, #2380)
+  Judge each placed group against the visible page text after clipping, in either paint order.
+  Keep the 800-character minimum and half-duplicate threshold; characters use the span verdict.
+  Duplicate matching still treats punctuation and spacing differences as equivalent in matching lines.
+  Column-painted tables with repeated labels, skewed symbol grids, and mostly duplicated groups can still lose
+  unique text. Each extraction view now uses its own page dimensions for figure and wrapper clipping.
+
+- **(pdf): Recognize escaped PlacedPDF form tags and keep cached output independent of earlier page reads.** (#2378)
+  Preserve a child's own verdict after its parent's placed scope ends, including inside a placed page scope.
 
 - **(pdf): Keep nested Form text independent of earlier page reads at the recursion limit.** (#2377)
 

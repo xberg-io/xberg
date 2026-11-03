@@ -354,15 +354,9 @@ pub struct InternalDocument {
     #[serde(skip)]
     pub page_marker_format: Option<String>,
 
-    /// Page or slide numbers the extractor iterated, in order, an empty page included.
-    ///
-    /// An extractor that builds elements page by page lists every page here. A page with
-    /// no element leaves no trace in `elements`, so the page marker pass reads this list
-    /// to give that page its marker. Empty when the extractor does not list its pages:
-    /// the marker pass then follows the `PageBreak` elements.
-    ///
-    /// Serialized when not empty, so a JSON round trip keeps the list. JSON without the
-    /// field reads as an empty list.
+    /// Page or slide numbers in extraction order, including pages without elements.
+    /// Page markers fall back to `PageBreak` elements when this list is empty.
+    /// Survives JSON round trips and defaults to empty for older documents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub page_numbers: Vec<u32>,
 

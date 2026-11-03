@@ -172,9 +172,10 @@ impl<'doc> TextExtractor<'doc> {
         let ctm_key = Self::quantize_ctm(current_ctm);
         let xobj_key = (xobject_ref, ctm_key);
 
-        // Skip already-processed (XObject, CTM) pairs — each unique combination
-        // is processed at most once per page for text extraction. ~keep
+        // A containing form skipped this text because of an earlier paint on this
+        // page, so its partial result must not enter the shared cache. ~keep
         if self.processed_xobjects.contains(&xobj_key) {
+            self.page_bound_forms += 1;
             return Ok(());
         }
 
@@ -211,7 +212,10 @@ impl<'doc> TextExtractor<'doc> {
             .filter(|area| *area > 0.0);
         let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
         let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
-        if self.extract_spans && !has_filters {
+        // Cached spans carry no hold identity. A placed scope or a character
+        // verdict pass must walk the form to preserve its groups. ~keep
+        let span_cache_open = self.extract_spans && !has_filters && !self.verdict_run && !self.inside_placed_pdf;
+        if span_cache_open {
             let cached_spans = { doc.xobject_spans_cache.lock_or_recover().get(&spans_cache_key).cloned() };
             if let Some(cached) = cached_spans
                 && cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
@@ -390,6 +394,25 @@ impl<'doc> TextExtractor<'doc> {
                 self.mcid_scope_stack
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
+                let has_placed_tag = Self::has_placed_tag(&stream_data);
+                let page_bound_before = self.page_bound_forms;
+                if has_placed_tag {
+                    self.page_bound_forms += 1;
+                }
+                let enclosing_hold = self.placed_hold;
+                let enclosing_hold_scope = self.placed_hold_scope_start;
+                // An outer page scope must not keep a parent's hold active after
+                // the parent's own placed scope ends. ~keep
+                let inside_held_scope = self
+                    .marked_content_stack
+                    .get(enclosing_hold_scope..)
+                    .is_some_and(|stack| stack.iter().any(|context| context.is_placed_pdf));
+                if has_placed_tag && (enclosing_hold == 0 || !inside_held_scope) {
+                    self.placed_hold_groups += 1;
+                    self.placed_hold = self.placed_hold_groups;
+                    self.placed_hold_scope_start = self.marked_content_stack.len();
+                }
+
                 let parent_subtree_depth = self.xobject_subtree_depth.replace(0);
                 self.xobject_depth += 1;
                 let parse_result = self.run_content_stream(&stream_data);
@@ -398,6 +421,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.xobject_subtree_depth = parent_subtree_depth
                     .zip(required_depth)
                     .map(|(parent, child)| parent.max(child));
+                self.placed_hold = enclosing_hold;
+                self.placed_hold_scope_start = enclosing_hold_scope;
                 // Pop the Form XObject scope pushed before the
                 // content-stream walk. Cleared regardless of parse
                 // success so the parent stream's scope is correctly
@@ -480,15 +505,20 @@ impl<'doc> TextExtractor<'doc> {
                                 let is_page_wrapper = page_area.is_some_and(|pa| clip_area >= 0.6 * pa);
                                 if !is_page_wrapper {
                                     if spans_stray {
-                                        let added = self.spans.split_off(spans_before);
-                                        let kept: Vec<TextSpan> = added.into_iter().filter(|s| inside(s)).collect();
-                                        self.spans.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.spans,
+                                            &mut self.span_holds,
+                                            spans_before,
+                                            inside,
+                                        );
                                     }
                                     if chars_stray {
-                                        let added = self.chars.split_off(chars_before);
-                                        let kept: Vec<TextChar> =
-                                            added.into_iter().filter(|c| inside_bbox(&c.bbox)).collect();
-                                        self.chars.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.chars,
+                                            &mut self.char_holds,
+                                            chars_before,
+                                            |character| inside_bbox(&character.bbox),
+                                        );
                                     }
                                 }
                             }
@@ -504,10 +534,12 @@ impl<'doc> TextExtractor<'doc> {
                 // We still require `has_own_resources` so that font lookups are
                 // self-contained; XObjects that inherit page-level fonts would
                 // produce spans whose glyph mappings depend on caller context. ~keep
+                // A placed tag or skipped descendant makes the result page-dependent;
+                // an incomplete depth-limited run cannot be shared either. ~keep
                 if let Some(required_depth) = required_depth
                     && has_own_resources
-                    && self.extract_spans
-                    && !has_filters
+                    && span_cache_open
+                    && self.page_bound_forms == page_bound_before
                 {
                     let new_spans = if self.spans.len() > spans_before {
                         Some(self.spans[spans_before..].to_vec())

@@ -27,9 +27,9 @@ use super::types::OrientationResult;
 /// Only read by `ensure_model`/`with_acceleration`, the native cache-dir resolution
 /// path; dead on WASM, which receives model bytes from the caller. ~keep
 #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
-const HF_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
+const HF_REPO_ID: &str = crate::model_download::PADDLE_MODELS_REPO_ID;
 #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
-const HF_REPO_REVISION: &str = "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443";
+const HF_REPO_REVISION: &str = crate::model_download::PADDLE_MODELS_REVISION;
 #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
 const REMOTE_FILENAME: &str = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
 #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
@@ -398,6 +398,61 @@ fn orientation_from_probabilities(probabilities: &[f32]) -> Result<OrientationRe
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(paddle_ocr, not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
+    const OFFLINE_CACHE_ROOT: &str = "XBERG_DOC_ORI_OFFLINE_CACHE_ROOT";
+
+    #[cfg(all(paddle_ocr, not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
+    #[test]
+    fn should_read_the_orientation_model_where_the_model_manifest_writes_it() {
+        let cache = tempfile::TempDir::new().unwrap();
+        let manager = crate::paddle_ocr::ModelManager::new(cache.path().to_path_buf());
+        let entry = crate::paddle_ocr::ModelManager::manifest()
+            .into_iter()
+            .find(|entry| entry.relative_path == REMOTE_FILENAME)
+            .expect("the manifest lists the orientation model");
+        assert_eq!(entry.sha256, SHA256);
+
+        let written = manager.manifest_cache_path(&entry.relative_path);
+        std::fs::create_dir_all(written.parent().unwrap()).unwrap();
+        std::fs::write(&written, b"cached orientation model").unwrap();
+
+        crate::utils::test_support::run_child_test(
+            "doc_orientation::detector::tests::orientation_fetch_finds_the_manifest_file_child",
+            OFFLINE_CACHE_ROOT,
+            cache.path(),
+            |command| {
+                command.env("HF_HUB_OFFLINE", "1").env_remove("HUGGINGFACE_HUB_OFFLINE");
+            },
+        );
+    }
+
+    /// Runs the detector's own `ensure_model`, offline, against a cache that holds a stand-in file at
+    /// the manifest path. A lookup at the manifest's revision finds the file and rejects its content;
+    /// a lookup at any other revision finds nothing. ~keep
+    #[cfg(all(paddle_ocr, not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
+    #[test]
+    #[ignore = "run in an isolated subprocess by should_read_the_orientation_model_where_the_model_manifest_writes_it"]
+    fn orientation_fetch_finds_the_manifest_file_child() {
+        let Some(cache) = crate::utils::test_support::child_test_root(OFFLINE_CACHE_ROOT) else {
+            return;
+        };
+        let revision = crate::paddle_ocr::ModelManager::pinned_revision();
+
+        let empty = tempfile::TempDir::new().unwrap();
+        let miss = DocOrientationDetector::ensure_model(empty.path())
+            .unwrap_err()
+            .to_string();
+        assert!(miss.contains("not available in the local cache"), "{miss}");
+        assert!(
+            miss.contains(&format!("@{revision}")),
+            "the fetch asks for another revision: {miss}"
+        );
+
+        let hit = DocOrientationDetector::ensure_model(&cache).unwrap_err().to_string();
+        assert!(hit.contains("failed checksum verification"), "{hit}");
+        assert!(hit.contains(&format!("@{revision}")), "{hit}");
+    }
 
     #[test]
     fn should_offer_edge_crops_for_sparse_portrait_page() {
