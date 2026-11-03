@@ -164,8 +164,7 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
     output
 }
 
-/// Drop HTML comment lines from rendered output, except page-marker comments
-/// that match `page_marker_format` (when configured).
+/// Retain canonical list boundaries and configured page markers while dropping other HTML comment lines.
 fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>) -> String {
     if !output.contains("<!--") {
         return output;
@@ -178,6 +177,7 @@ fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>)
             let trimmed = line.trim();
             !trimmed.starts_with("<!--")
                 || !trimmed.ends_with("-->")
+                || trimmed == "<!-- end list -->"
                 || marker_re.as_ref().is_some_and(|re| re.is_match(trimmed))
         })
         .collect::<Vec<_>>()
@@ -224,7 +224,7 @@ fn lower_standard_inline_html<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
 /// Apply the `escape_markdown`-dependent unescape pass to rendered output.
 fn unescape_markdown_output(mut output: String, escape_markdown: bool) -> String {
     if escape_markdown {
-        const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '(', ')', '*', '='];
+        const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '*', '='];
         let cow = unescape_backslash_sequences(&output, UNESCAPE_TARGETS);
         if let Cow::Owned(s) = cow {
             output = s;
@@ -375,6 +375,18 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
     options.render.prefer_fenced = true;
     options
 }
+
+#[cfg(test)]
+mod flat_alpha_clause_tests;
+
+#[cfg(test)]
+mod parenthesis_roundtrip_tests;
+
+#[cfg(test)]
+mod source_ordinal_limits_tests;
+
+#[cfg(test)]
+mod source_ordinal_tests;
 
 #[cfg(test)]
 mod standard_inline_html_tests;
