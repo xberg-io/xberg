@@ -164,6 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep nested Form text independent of earlier page reads at the recursion limit.** (#2377)
+
 - **(pdf): Omit generated image placeholders when image extraction is disabled.** (#2386)
   Preserve recognized image text and the legacy PDF image-extraction opt-in.
 

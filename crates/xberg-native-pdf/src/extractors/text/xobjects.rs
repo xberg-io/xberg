@@ -6,6 +6,7 @@
 //! items unchanged. ~keep
 
 use super::*;
+use crate::cache::MutexExt;
 
 impl<'doc> TextExtractor<'doc> {
     /// Resolve XObject name to ObjectRef using cached mapping.
@@ -139,6 +140,7 @@ impl<'doc> TextExtractor<'doc> {
 
     pub(super) fn process_xobject(&mut self, name: &str) -> Result<()> {
         if self.xobject_depth >= Self::MAX_XOBJECT_DEPTH {
+            self.xobject_subtree_depth = None;
             return Ok(());
         }
         if self.xobject_decode_count >= Self::MAX_XOBJECT_DECODES {
@@ -210,9 +212,12 @@ impl<'doc> TextExtractor<'doc> {
         let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
         let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
         if self.extract_spans && !has_filters {
-            let cached_spans = { doc.xobject_spans_cache.lock().unwrap().get(&spans_cache_key).cloned() };
-            if let Some(cached_spans) = cached_spans {
-                if let Some(spans) = cached_spans {
+            let cached_spans = { doc.xobject_spans_cache.lock_or_recover().get(&spans_cache_key).cloned() };
+            if let Some(cached) = cached_spans
+                && cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
+            {
+                self.xobject_subtree_depth = self.xobject_subtree_depth.map(|depth| depth.max(cached.required_depth));
+                if let Some(spans) = cached.spans {
                     self.spans.extend(spans.iter().cloned());
                 }
                 return Ok(());
@@ -385,9 +390,14 @@ impl<'doc> TextExtractor<'doc> {
                 self.mcid_scope_stack
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
+                let parent_subtree_depth = self.xobject_subtree_depth.replace(0);
                 self.xobject_depth += 1;
                 let parse_result = self.run_content_stream(&stream_data);
                 self.xobject_depth -= 1;
+                let required_depth = self.xobject_subtree_depth.map(|depth| depth + 1);
+                self.xobject_subtree_depth = parent_subtree_depth
+                    .zip(required_depth)
+                    .map(|(parent, child)| parent.max(child));
                 // Pop the Form XObject scope pushed before the
                 // content-stream walk. Cleared regardless of parse
                 // success so the parent stream's scope is correctly
@@ -494,16 +504,23 @@ impl<'doc> TextExtractor<'doc> {
                 // We still require `has_own_resources` so that font lookups are
                 // self-contained; XObjects that inherit page-level fonts would
                 // produce spans whose glyph mappings depend on caller context. ~keep
-                if has_own_resources && self.extract_spans && !has_filters {
+                if let Some(required_depth) = required_depth
+                    && has_own_resources
+                    && self.extract_spans
+                    && !has_filters
+                {
                     let new_spans = if self.spans.len() > spans_before {
                         Some(self.spans[spans_before..].to_vec())
                     } else {
                         None
                     };
-                    doc.xobject_spans_cache
-                        .lock()
-                        .unwrap()
-                        .insert(spans_cache_key, new_spans);
+                    doc.xobject_spans_cache.lock_or_recover().insert(
+                        spans_cache_key,
+                        crate::document::CachedFormSpans {
+                            required_depth,
+                            spans: new_spans,
+                        },
+                    );
                 }
 
                 // Restore graphics state (implicit Q per ISO 32000-1 §8.10.1) ~keep
