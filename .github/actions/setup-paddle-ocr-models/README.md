@@ -2,7 +2,7 @@
 
 This composite action downloads the PaddleOCR ONNX artifacts used by Xberg into the standard Hugging Face Hub cache. It does not create a second Xberg-owned copy.
 
-The repository is pinned to commit `bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443`. Every requested artifact is SHA-256 verified after both warm-cache resolution and download.
+The repository is pinned to commit `bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8`. Every requested artifact is SHA-256 verified after both warm-cache resolution and download.
 
 ## Usage
 

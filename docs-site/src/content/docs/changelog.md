@@ -164,6 +164,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Fetch and read the document orientation model at one revision, so a synced cache is complete offline.** (GH#2417)
+  The orientation detector, the PaddleOCR model manifest and the table models now share one pinned revision of the model repository.
+  A cache that the manifest or the cache warm fills holds every file the engine reads. Caches that hold the table models at the older revision download them once more.
+
 - **(pdf): Apply the ordinary span page-bounds policy to configured spans.** (#2379)
   Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.
   Raw character extraction retains off-page characters and PDF coordinates for inspection.
