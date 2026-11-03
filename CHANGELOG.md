@@ -172,6 +172,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.
   Raw character extraction retains off-page characters and PDF coordinates for inspection.
 
+- **(pdf): Keep body text placed inside Form XObjects in spans and characters.** (#2310, #2380)
+  Judge each placed group against the visible page text after clipping, in either paint order.
+  Keep the 800-character minimum and half-duplicate threshold; characters use the span verdict.
+  Duplicate matching still treats punctuation and spacing differences as equivalent in matching lines.
+  Column-painted tables with repeated labels, skewed symbol grids, and mostly duplicated groups can still lose
+  unique text. Each extraction view now uses its own page dimensions for figure and wrapper clipping.
+
+- **(pdf): Recognize escaped PlacedPDF form tags and keep cached output independent of earlier page reads.** (#2378)
+  Preserve a child's own verdict after its parent's placed scope ends, including inside a placed page scope.
+
 - **(pdf): Keep nested Form text independent of earlier page reads at the recursion limit.** (#2377)
 
 - **(pdf): Omit generated image placeholders when image extraction is disabled.** (#2386)

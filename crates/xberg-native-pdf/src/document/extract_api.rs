@@ -751,6 +751,7 @@ impl PdfDocument {
         }
 
         let mut extractor = TextExtractor::new().with_merging_config(config);
+        extractor.set_page_index(page_index as u32);
 
         if let Some(resources) = page_dict.get("Resources") {
             extractor.set_resources(resources.clone());
@@ -1212,6 +1213,7 @@ impl PdfDocument {
         }
 
         let mut extractor = TextExtractor::new();
+        extractor.set_page_index(page_index as u32);
         if !excluded_layers.is_empty() {
             extractor.set_excluded_layers(excluded_layers);
         }
