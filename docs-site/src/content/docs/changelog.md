@@ -156,6 +156,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(formula): Honor `XBERG_CACHE_DIR` for formula recognition models.** (#2409)
+  Preserve explicit model directories and the Hugging Face cache fallback when the override is unset.
+
 - **(tests): Respect optional PDF column metadata in page snapshot checks.**
   Preserve canonical table equality and require all 16 distinct output-mode combinations.
 
