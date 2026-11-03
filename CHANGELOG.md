@@ -163,6 +163,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Restart unlabelled continuations before the CommonMark nine-digit ordinal limit is exceeded.
   Render flat alphabetic clauses as paragraphs when their own source list also contains decimal clauses.
 
+- **(redaction): Preserve current formatted edits across supported paragraphs.** (#2361)
+  Keep original paragraph whitespace and surrounding literal formatting while redacting current text.
+  Split, escaped and code findings retain complete source coverage and semantic hash/token identities.
+
 - **(ci): Bound PNG decoding in the V3 parity capture.**
   Use audited image decoders with default security limits before validating parity inputs.
   Preserve the decoder and security-budget sources with the selected producer inputs.
