@@ -169,6 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(structured): Apply the caller's raster budget to PDF pages.** (#2352)
+  Check the canvas, CMYK and spot-color planes, and PNG encoding allowance before allocating the page raster.
+
 - **(pdf): Report an undecodable painted image when OCR sees a blank page.** (#2427)
   The warning names the affected page when neither decoding nor raw image recovery can supply the image.
 
