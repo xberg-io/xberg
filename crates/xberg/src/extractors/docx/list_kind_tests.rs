@@ -1,5 +1,5 @@
 use super::build_internal_document;
-use crate::extraction::docx::parser::parse_document;
+use crate::extraction::docx::parser::parse_document_with_hyperlinks;
 use crate::extractors::security::{SecurityBudget, SecurityLimits};
 use crate::types::internal::{ElementKind, InternalDocument};
 use std::io::{Cursor, Write};
@@ -48,8 +48,9 @@ fn mixed_list_package(kinds: [bool; 3]) -> Vec<u8> {
 fn import_package(bytes: &[u8]) -> InternalDocument {
     let limits = SecurityLimits::default();
     let mut budget = SecurityBudget::from_limits(&limits);
-    let parsed = parse_document(bytes, &mut budget, &limits).expect("minimal mixed list package must parse");
-    build_internal_document(&parsed, false)
+    let (parsed, hyperlinks) =
+        parse_document_with_hyperlinks(bytes, &mut budget, &limits).expect("minimal mixed list package must parse");
+    build_internal_document(&parsed, &hyperlinks, false)
 }
 
 fn assert_item_kinds(document: &InternalDocument, kinds: [bool; 3]) {
