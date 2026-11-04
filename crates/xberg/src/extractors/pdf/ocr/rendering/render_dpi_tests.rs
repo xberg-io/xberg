@@ -227,3 +227,82 @@ fn render_full_pdf_ocr_batch_caps_a_legal_scan_under_default_limits() {
     let (_, _, width, height) = &batch[0];
     assert_eq!((*width, *height), (2397, 3948), "Legal at the safe 282 DPI cap");
 }
+
+fn rotated_pdf_for_render_warning() -> xberg_native_pdf::PdfDocument {
+    let bytes = crate::pdf::render::build_minimal_pdf_with_mediabox(200.0, 100.0);
+    let mut pdf = lopdf::Document::load_mem(&bytes).expect("fixture must load");
+    let page_id = pdf.get_pages()[&1];
+    pdf.get_object_mut(page_id)
+        .expect("fixture must contain a page")
+        .as_dict_mut()
+        .expect("fixture page must be a dictionary")
+        .set("Rotate", 90);
+    let mut rotated = Vec::new();
+    pdf.save_to(&mut rotated).expect("fixture must serialize");
+    xberg_native_pdf::PdfDocument::from_bytes(rotated).expect("rotated fixture must open")
+}
+
+fn assert_failed_ocr_render_keeps_only_prior_warning(
+    render: impl Fn(
+        &xberg_native_pdf::PdfDocument,
+        &[u32],
+        &crate::extractors::security::SecurityLimits,
+    ) -> crate::Result<Vec<EncodedPage>>,
+) {
+    use crate::extractors::security::SecurityLimits;
+    use crate::pdf::render::{record_render_warning, take_xberg_native_pdf_render_warnings};
+
+    let doc = rotated_pdf_for_render_warning();
+    let rotation = crate::pdf::render::get_page_rotations(&doc, 1);
+    assert_eq!(rotation, vec![90]);
+    let strict = SecurityLimits {
+        max_content_size: 1024,
+        ..Default::default()
+    };
+    record_render_warning(crate::core::diagnostics::warning(
+        "prior-render",
+        "earlier page warning",
+    ));
+    let error = render(&doc, &rotation, &strict).expect_err("PNG rotation must exceed the limit");
+    assert!(
+        error.to_string().contains("security_limits.max_content_size"),
+        "{error}"
+    );
+    let next =
+        render(&doc, &rotation, &SecurityLimits::default()).expect("the same page must render with the default budget");
+    assert_eq!(next.len(), 1);
+
+    let warnings = take_xberg_native_pdf_render_warnings();
+    assert_eq!(
+        warnings.len(),
+        1,
+        "only the earlier warning should remain: {warnings:?}"
+    );
+    assert_eq!(warnings[0].source, "prior-render");
+    assert_eq!(warnings[0].message, "earlier page warning");
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
+fn failed_ocr_render_does_not_leak_dpi_warning_from_rayon_worker() {
+    let worker = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .expect("test pool");
+    worker.install(|| {
+        assert_failed_ocr_render_keeps_only_prior_warning(|doc, rotation, limits| {
+            render_full_pdf_ocr_batch(doc, rotation, 0..1, limits, None)
+        });
+    });
+}
+
+#[test]
+fn failed_ocr_render_does_not_leak_dpi_warning_from_sequential_render() {
+    assert_failed_ocr_render_keeps_only_prior_warning(|doc, rotation, limits| {
+        crate::pdf::render::discard_new_render_warnings_on_error(|| {
+            (0..1)
+                .map(|page_idx| render_one_full_pdf_ocr_page(doc, rotation, page_idx, limits, None))
+                .collect()
+        })
+    });
+}

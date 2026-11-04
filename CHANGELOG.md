@@ -179,6 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep warnings from failed PDF rasterization out of later extraction results.**
+
 - **(pdf): Enforce the request's raster budget before allocating layout-only page images.** (#2491)
   The native check uses the actual page dimensions and final render DPI, including the 72 DPI floor.
 

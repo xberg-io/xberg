@@ -424,6 +424,32 @@ pub(crate) fn record_render_warning(warning: ProcessingWarning) {
     ENGINE_PENDING_WARNINGS.with(|pending| push_warning_deduped(&mut pending.borrow_mut(), warning));
 }
 
+/// Capture this synchronous render's warnings without leaving them on a worker that
+/// may poll another extraction while the current request awaits OCR.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(crate) fn capture_render_warnings<T>(render: impl FnOnce() -> Result<T>) -> Result<(T, Vec<ProcessingWarning>)> {
+    let prior = take_xberg_native_pdf_render_warnings();
+    let result = render();
+    let warnings = ENGINE_PENDING_WARNINGS.with(|pending| pending.replace(prior));
+    result.map(|value| (value, warnings))
+}
+
+/// Roll back warnings from a failed sequential render batch. Recording only appends, so
+/// retaining the original length preserves warnings already pending on the same thread.
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(test, not(feature = "tokio-runtime"), target_arch = "wasm32")
+))]
+pub(crate) fn discard_new_render_warnings_on_error<T>(render: impl FnOnce() -> Result<T>) -> Result<T> {
+    let prior_count = ENGINE_PENDING_WARNINGS.with(|pending| pending.borrow().len());
+    let result = render();
+    if result.is_err() {
+        ENGINE_PENDING_WARNINGS.with(|pending| pending.borrow_mut().truncate(prior_count));
+    }
+    result
+}
+
 /// Deposit warnings drained on another thread into *this* thread's pending buffer, so a later
 /// [`take_xberg_native_pdf_render_warnings`] here returns them.
 ///
@@ -462,19 +488,29 @@ pub(crate) fn par_render_pages_collecting_warnings<T: Send>(
 ) -> crate::Result<Vec<T>> {
     use rayon::prelude::*;
 
-    let rendered: Vec<(T, Vec<ProcessingWarning>)> = page_indices
+    // The caller can also execute a page. Save its pending warnings so a failed batch
+    // cannot drop unrelated diagnostics when the per-page drain runs on that thread.
+    let mut warnings = take_xberg_native_pdf_render_warnings();
+    let pages = page_indices
         .into_par_iter()
-        .map(|page_index| render(page_index).map(|page| (page, take_xberg_native_pdf_render_warnings())))
-        .collect::<crate::Result<Vec<_>>>()?;
-
-    let mut pages = Vec::with_capacity(rendered.len());
-    let mut warnings = Vec::new();
-    for (page, page_warnings) in rendered {
-        pages.push(page);
-        warnings.extend(page_warnings);
-    }
-    absorb_render_warnings(warnings);
-    Ok(pages)
+        .map(|page_index| {
+            let result = render(page_index);
+            let page_warnings = take_xberg_native_pdf_render_warnings();
+            result.map(|page| (page, page_warnings))
+        })
+        .collect::<crate::Result<Vec<_>>>()
+        .map(|rendered| {
+            let mut pages = Vec::with_capacity(rendered.len());
+            for (page, page_warnings) in rendered {
+                pages.push(page);
+                for warning in page_warnings {
+                    push_warning_deduped(&mut warnings, warning);
+                }
+            }
+            pages
+        });
+    ENGINE_PENDING_WARNINGS.with(|pending| *pending.borrow_mut() = warnings);
+    pages
 }
 
 #[cfg(all(

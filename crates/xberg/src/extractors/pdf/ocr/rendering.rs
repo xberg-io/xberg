@@ -809,9 +809,13 @@ pub(super) fn render_full_pdf_ocr_batch(
     }
     #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
     {
-        page_range
-            .map(|page_idx| render_one_full_pdf_ocr_page(doc, page_rotations, page_idx, security_limits, images_config))
-            .collect()
+        crate::pdf::render::discard_new_render_warnings_on_error(|| {
+            page_range
+                .map(|page_idx| {
+                    render_one_full_pdf_ocr_page(doc, page_rotations, page_idx, security_limits, images_config)
+                })
+                .collect()
+        })
     }
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

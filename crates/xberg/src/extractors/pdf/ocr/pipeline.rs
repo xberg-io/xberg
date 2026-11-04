@@ -3035,6 +3035,8 @@ pub(super) async fn extract_with_ocr_for_page(
     // mirroring that sibling route. Metadata is captured once, from the first page whose
     // backend result carries any -- psm/language are constant for the whole OCR run, and a
     // single representative page is a strict improvement over reporting none at all. ~keep
+    #[cfg(feature = "pdf")]
+    let mut render_warnings = Vec::new();
     let mut backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     let mut backend_additional_metadata: Option<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>> =
         None;
@@ -3172,13 +3174,17 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                render_full_pdf_ocr_batch(
-                    doc,
-                    page_rotations,
-                    batch_start..batch_end,
-                    security_limits,
-                    config.images.as_ref(),
-                )?
+                let (pages, warnings) = crate::pdf::render::capture_render_warnings(|| {
+                    render_full_pdf_ocr_batch(
+                        doc,
+                        page_rotations,
+                        batch_start..batch_end,
+                        security_limits,
+                        config.images.as_ref(),
+                    )
+                })?;
+                crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
+                pages
             };
             #[cfg(not(feature = "pdf"))]
             let encoded: Vec<(usize, Arc<Vec<u8>>, u32, u32)> = Vec::new();
@@ -4483,6 +4489,11 @@ pub(super) async fn extract_with_ocr_for_page(
         backend_additional_metadata,
         page_segmentation_modes,
     );
+
+    #[cfg(feature = "pdf")]
+    for warning in render_warnings {
+        crate::pdf::render::record_render_warning(warning);
+    }
 
     Ok((
         result,
