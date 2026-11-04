@@ -141,6 +141,64 @@ fn attach_native_table_grids(
     Ok(())
 }
 
+fn retain_headerless_financial_tables(
+    tables: &mut [Table],
+    metadata: &[NativeTableMetadata],
+    financial_rows: &crate::pdf::native::text::NativeFinancialRows,
+    document: Option<&mut crate::types::internal::InternalDocument>,
+) {
+    use crate::rendering::common::render_headerless_table_markdown;
+    use crate::types::internal::{ElementKind, NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE};
+
+    if financial_rows.is_empty() {
+        return;
+    }
+    let mut page_counts = ahash::AHashMap::<u32, usize>::new();
+    for table in tables
+        .iter()
+        .filter(|table| financial_rows.contains_key(&table.page_number))
+    {
+        *page_counts.entry(table.page_number).or_default() += 1;
+    }
+    let mut proven = ahash::AHashMap::new();
+    for (table, metadata) in tables.iter_mut().zip(metadata) {
+        if page_counts.get(&table.page_number) == Some(&1)
+            && financial_rows.get(&table.page_number) == Some(&table.cells)
+            && table.columns.is_none()
+            && !metadata.complete_leading_header
+            && metadata
+                .grid
+                .as_ref()
+                .is_none_or(|grid| grid.cells.iter().all(|cell| !cell.is_header))
+        {
+            table.markdown = render_headerless_table_markdown(&table.cells);
+            proven.insert(table.page_number, table);
+        }
+    }
+    let Some(document) = document else {
+        return;
+    };
+    for element in &mut document.elements {
+        let ElementKind::Table { table_index } = element.kind else {
+            continue;
+        };
+        let Some(table) = document.tables.get_mut(table_index as usize) else {
+            continue;
+        };
+        if let Some(source) = proven.get(&table.page_number)
+            && table.cells == source.cells
+            && table.bounding_box == source.bounding_box
+            && table.columns.is_none()
+        {
+            table.markdown.clone_from(&source.markdown);
+            element
+                .attributes
+                .get_or_insert_with(Default::default)
+                .insert(NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE.to_owned(), String::new());
+        }
+    }
+}
+
 #[cfg(feature = "layout-detection")]
 fn effective_layout_acceleration<'a>(
     config: &'a ExtractionConfig,
@@ -591,7 +649,7 @@ pub(crate) fn extract_all_from_native_document(
         force_annotation_page_tracking && !crate::pdf::native::text::page_boundaries_required(config);
 
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
-    let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata) =
+    let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata, financial_rows) =
         crate::pdf::native::text::extract_text_and_metadata(&mut doc, Some(text_config))
             .map_err(map_native_text_error)?;
 
@@ -987,6 +1045,12 @@ pub(crate) fn extract_all_from_native_document(
     if let Some(document) = &mut pre_rendered_doc {
         attach_native_table_grids(document, &tables, &native_table_grids)?;
     }
+    retain_headerless_financial_tables(
+        &mut tables,
+        &native_table_grids,
+        &financial_rows,
+        pre_rendered_doc.as_mut(),
+    );
 
     let has_font_encoding_issues = false;
 

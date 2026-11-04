@@ -175,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep aligned financial amounts with their labels.** (#2315)
+  Preserve complete native PDF rows in plain text and keep proven financial body rows out of Markdown headers.
+
 - **(pdf): Preserve characters mapped by multiline ToUnicode ranges.** (#2476)
   Keep destination arrays together so their entries cannot be mistaken for separate character ranges.
 

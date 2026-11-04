@@ -27,12 +27,22 @@ use xberg_native_pdf::structure::McidScope;
 /// `fabricated_text_pages` (issue #1744).
 type PageProvenanceCounts = Option<Vec<(usize, usize)>>;
 
+/// Complete financial body cells retained from the same raw spans used to build the page text.
+pub(crate) type NativeFinancialRows = std::collections::HashMap<u32, Vec<Vec<String>>>;
+
+#[derive(Default)]
+#[cfg_attr(test, derive(Debug))]
+struct NativeTextEvidence {
+    provenance_counts: PageProvenanceCounts,
+    financial_rows: NativeFinancialRows,
+}
+
 /// Result type for PDF text extraction with optional page tracking.
 type PdfTextExtractionResult = (
     String,
     Option<Vec<PageBoundary>>,
     Option<Vec<PageContent>>,
-    PageProvenanceCounts,
+    NativeTextEvidence,
 );
 
 // #1574: these were 0.06/0.05 through 1.1.0. `top_margin_fraction`/`bottom_margin_fraction`
@@ -86,11 +96,12 @@ impl PageMarginFractions {
 /// Result type for unified PDF text and metadata extraction.
 ///
 /// Contains text, optional page boundaries, optional per-page content, and metadata.
-pub type NativeUnifiedExtractionResult = (
+pub(crate) type NativeUnifiedExtractionResult = (
     String,
     Option<Vec<PageBoundary>>,
     Option<Vec<PageContent>>,
     PdfExtractionMetadata,
+    NativeFinancialRows,
 );
 
 /// Extract text and metadata from a PDF document in a single pass.
@@ -103,7 +114,7 @@ pub(crate) fn extract_text_and_metadata(
 ) -> Result<NativeUnifiedExtractionResult> {
     let page_config = extraction_config.and_then(|c| c.pages.as_ref());
     let margins = PageMarginFractions::from_extraction_config(extraction_config);
-    let (text, boundaries, page_contents, provenance_counts) =
+    let (text, boundaries, page_contents, evidence) =
         extract_text_from_native_document(doc, page_config, extraction_config, margins)?;
 
     let scanned_min_confidence = extraction_config
@@ -119,10 +130,10 @@ pub(crate) fn extract_text_and_metadata(
         &text,
         scanned_min_confidence,
         &ocr_quality_thresholds,
-        provenance_counts.as_deref(),
+        evidence.provenance_counts.as_deref(),
     )?;
 
-    Ok((text, boundaries, page_contents, metadata))
+    Ok((text, boundaries, page_contents, metadata, evidence.financial_rows))
 }
 
 /// Extract text spans with bounding boxes from a single page.
@@ -190,7 +201,7 @@ pub(crate) fn page_boundaries_required(config: &ExtractionConfig) -> bool {
 /// need.
 ///
 /// Otherwise the fast path is used (no per-page tracking).
-pub(crate) fn extract_text_from_native_document(
+fn extract_text_from_native_document(
     doc: &mut NativeDocument,
     page_config: Option<&PageConfig>,
     extraction_config: Option<&ExtractionConfig>,
@@ -216,17 +227,24 @@ pub(crate) fn extract_text_from_native_document(
 /// than repeating the literal. ~keep
 pub(crate) const PAGE_SEPARATOR: &str = "\n\n";
 
-/// Extract and clean one page's text, alongside its fabricated-mapping counts when available.
-///
-/// See [`PageProvenanceCounts`] for when the second element is `None`.
+struct NativePageText {
+    text: String,
+    provenance_counts: Option<(usize, usize)>,
+    financial_rows: Option<Vec<Vec<String>>>,
+}
+
+/// Extract and clean one page, retaining the evidence produced by the same span read.
 fn extract_one_page_text(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     excluded_layers: &std::collections::HashSet<String>,
     margins: PageMarginFractions,
-) -> Result<(String, Option<(usize, usize)>)> {
-    let (page_text, provenance_counts) = extract_page_text_column_aware(doc, page_index, excluded_layers, margins)?;
-    Ok((apply_text_cleanup(&page_text).into_owned(), provenance_counts))
+) -> Result<NativePageText> {
+    let mut page = extract_page_text_column_aware(doc, page_index, excluded_layers, margins)?;
+    if let std::borrow::Cow::Owned(cleaned) = apply_text_cleanup(&page.text) {
+        page.text = cleaned;
+    }
+    Ok(page)
 }
 
 /// Extract every page's cleaned text, in page order.
@@ -250,7 +268,7 @@ fn extract_all_page_texts(
     doc: &xberg_native_pdf::PdfDocument,
     margins: PageMarginFractions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
-) -> Result<(Vec<String>, PageProvenanceCounts)> {
+) -> Result<(Vec<String>, NativeTextEvidence)> {
     let page_count = doc
         .page_count()
         .map_err(|e| PdfError::TextExtractionFailed(format!("Failed to get page count: {}", e)))?;
@@ -259,22 +277,30 @@ fn extract_all_page_texts(
     // `/OCProperties/D` (ISO 32000-1:2008 §8.11.4). Computed once per
     // document; empty for the common case of no `/OCProperties`.
     let excluded_layers = xberg_native_pdf::optional_content::compute_default_off_ocgs(doc);
-    let mut provenance_counts = excluded_layers.is_empty().then(|| Vec::with_capacity(page_count));
+    let mut evidence = NativeTextEvidence {
+        provenance_counts: excluded_layers.is_empty().then(|| Vec::with_capacity(page_count)),
+        ..Default::default()
+    };
 
     let mut texts = Vec::with_capacity(page_count);
     for page_idx in 0..page_count {
         if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
             return Err(PdfError::Cancelled);
         }
-        let (text, counts) = extract_one_page_text(doc, page_idx, &excluded_layers, margins)?;
-        texts.push(text);
-        if let Some(collected) = provenance_counts.as_mut() {
-            collected
-                .push(counts.expect("extract_one_page_text must report provenance counts when no layers are excluded"));
+        let page = extract_one_page_text(doc, page_idx, &excluded_layers, margins)?;
+        texts.push(page.text);
+        if let Some(collected) = evidence.provenance_counts.as_mut() {
+            collected.push(
+                page.provenance_counts
+                    .expect("extract_one_page_text must report provenance counts when no layers are excluded"),
+            );
+        }
+        if let Some(rows) = page.financial_rows {
+            evidence.financial_rows.insert((page_idx + 1) as u32, rows);
         }
     }
 
-    Ok((texts, provenance_counts))
+    Ok((texts, evidence))
 }
 
 /// Fast path: extract text without page tracking.
@@ -286,7 +312,7 @@ fn extract_text_fast_path(
     margins: PageMarginFractions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<PdfTextExtractionResult> {
-    let (page_texts, provenance_counts) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
+    let (page_texts, evidence) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
 
     let separators = page_texts.len().saturating_sub(1) * PAGE_SEPARATOR.len();
     let mut content = String::with_capacity(page_texts.iter().map(String::len).sum::<usize>() + separators);
@@ -298,7 +324,7 @@ fn extract_text_fast_path(
         content.push_str(page_text);
     }
 
-    Ok((content, None, None, provenance_counts))
+    Ok((content, None, None, evidence))
 }
 
 /// Extract text with page boundary and content tracking.
@@ -312,7 +338,7 @@ fn extract_text_with_tracking(
     margins: PageMarginFractions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<PdfTextExtractionResult> {
-    let (page_texts, provenance_counts) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
+    let (page_texts, evidence) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
     let page_count = page_texts.len();
 
     let markers: Vec<String> = if config.insert_page_markers {
@@ -376,7 +402,7 @@ fn extract_text_with_tracking(
         }
     }
 
-    Ok((content, Some(boundaries), page_contents, provenance_counts))
+    Ok((content, Some(boundaries), page_contents, evidence))
 }
 
 /// Collect Widget annotation field values for the given page, sorted top-to-bottom.
@@ -2778,6 +2804,72 @@ fn producer_paired_table_order(spans: &[TextSpan], page_index: usize, page_width
     Some(lines.into_iter().flatten().collect())
 }
 
+fn is_grouped_financial_amount(text: &str) -> bool {
+    let Some((leading, groups)) = text.trim().split_once(',') else {
+        return false;
+    };
+    (1..=3).contains(&leading.len())
+        && leading.bytes().all(|byte| byte.is_ascii_digit())
+        && groups
+            .split(',')
+            .all(|group| group.len() == 3 && group.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+fn matches_financial_row(spans: &[TextSpan], row: &[usize], first: &[usize]) -> bool {
+    let label = &spans[row[0]];
+    row.len() == first.len()
+        && label.bbox.x == spans[first[0]].bbox.x
+        && label.text.bytes().any(|byte| byte.is_ascii_alphabetic())
+        && row[1..].iter().zip(&first[1..]).all(|(&index, &anchor)| {
+            let span = &spans[index];
+            span.bbox.y == label.bbox.y
+                && (span.bbox.right() - spans[anchor].bbox.right()).abs() <= LINE_Y_TOLERANCE_PTS
+                && is_grouped_financial_amount(&span.text)
+        })
+        && row
+            .windows(2)
+            .all(|pair| spans[pair[0]].bbox.right() < spans[pair[1]].bbox.x)
+}
+
+/// Recover only complete financial rectangles whose visual rows agree with the source paint order.
+fn producer_financial_row_order(spans: &[TextSpan], page_index: usize) -> Option<(Vec<usize>, usize)> {
+    let min_arity = super::table::DENSE_NUMERIC_MIN_RECURRING_TRACKS + 1;
+    let first = spans.first()?;
+    if spans.len() < min_arity * MIN_DENSE_COLUMN_SPLIT_LINES
+        || !first.font_size.is_finite()
+        || first.font_size <= 0.0
+        || first.mcid_scope != Some(McidScope::Page(u32::try_from(page_index).ok()?))
+        || !spans
+            .iter()
+            .all(|span| is_paired_table_cell(span, first) && span.color == first.color)
+    {
+        return None;
+    }
+
+    let order = spans_sorted_top_to_bottom(spans);
+    if !order
+        .windows(2)
+        .all(|pair| spans[pair[0]].sequence < spans[pair[1]].sequence)
+    {
+        return None;
+    }
+    let lines = group_into_lines(spans, &order);
+    let first_line = lines.first()?;
+    if lines.len() < MIN_DENSE_COLUMN_SPLIT_LINES
+        || first_line.len() < min_arity
+        || !lines.iter().all(|row| matches_financial_row(spans, row, first_line))
+        || !lines.windows(2).all(|pair| {
+            let upper_baseline = spans[pair[0][0]].bbox.y;
+            pair[1]
+                .iter()
+                .all(|&index| spans[index].bbox.bottom() <= upper_baseline)
+        })
+    {
+        return None;
+    }
+    Some((order, first_line.len()))
+}
+
 fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
     matches!(
         doc.get_page_rotation_status(page_index),
@@ -2947,7 +3039,7 @@ fn extract_page_text_column_aware(
     page_index: usize,
     excluded_layers: &std::collections::HashSet<String>,
     margins: PageMarginFractions,
-) -> Result<(String, Option<(usize, usize)>)> {
+) -> Result<NativePageText> {
     let (page_bottom, page_top) = page_vertical_bounds(doc, page_index)?;
     let mut widgets = collect_widget_field_values(doc, page_index);
     widgets
@@ -2975,18 +3067,33 @@ fn extract_page_text_column_aware(
     let span_count = page_text_data.spans.len();
     retain_spans_inside_page_margins(&mut page_text_data.spans, page_bottom, page_top, margins);
 
-    let sparse_reordered = reorder_sparse_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
-    let dense_reordered = reorder_dense_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
-    if !sparse_reordered
-        && !dense_reordered
-        && excluded_layers.is_empty()
-        && widgets.is_empty()
-        && span_count == page_text_data.spans.len()
-        && let Some(order) = producer_paired_table_order(&page_text_data.spans, page_index, page_text_data.page_width)
+    let complete_page = excluded_layers.is_empty() && widgets.is_empty() && span_count == page_text_data.spans.len();
+    let financial_rows = if complete_page
+        && let Some((order, arity)) = producer_financial_row_order(&page_text_data.spans, page_index)
         && untagged_upright_page(doc, page_index)
     {
         apply_span_order(&mut page_text_data.spans, &order);
-    }
+        Some(
+            page_text_data
+                .spans
+                .chunks_exact(arity)
+                .map(|row| row.iter().map(|span| span.text.trim().to_owned()).collect())
+                .collect(),
+        )
+    } else {
+        let sparse_reordered = reorder_sparse_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
+        let dense_reordered = reorder_dense_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
+        if !sparse_reordered
+            && !dense_reordered
+            && complete_page
+            && let Some(order) =
+                producer_paired_table_order(&page_text_data.spans, page_index, page_text_data.page_width)
+            && untagged_upright_page(doc, page_index)
+        {
+            apply_span_order(&mut page_text_data.spans, &order);
+        }
+        None
+    };
 
     let rotation_spans = page_text_data.spans.iter().map(rotation_span).collect::<Vec<_>>();
     let mut text = if let Some(repaired) = crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans) {
@@ -3003,7 +3110,11 @@ fn extract_page_text_column_aware(
 
     append_missing_widget_values(&mut text, &widgets);
 
-    Ok((text, provenance_counts))
+    Ok(NativePageText {
+        text,
+        provenance_counts,
+        financial_rows,
+    })
 }
 
 pub(crate) fn rotation_span(span: &xberg_native_pdf::layout::TextSpan) -> crate::extractors::pdf::rotation::TextSpan {
@@ -3143,7 +3254,7 @@ mod tests {
                 PageMarginFractions::default(),
             )
             .expect("RTL PDF fixture must extract")
-            .0,
+            .text,
         )
     }
 
@@ -7273,7 +7384,7 @@ mod tests {
             .map(|page_idx| {
                 extract_one_page_text(&doc.doc, page_idx, &excluded_layers, margins)
                     .expect("page must extract")
-                    .0
+                    .text
             })
             .collect();
         assert!(
@@ -7387,7 +7498,7 @@ mod tests {
             .with(|counter| counter.store(0, std::sync::atomic::Ordering::SeqCst));
 
         let mut doc = NativeDocument::open_bytes(&bytes).expect("corpus document must open a second time");
-        let (_, _, _, metadata) = extract_text_and_metadata(&mut doc, None).expect("extraction must succeed");
+        let (_, _, _, metadata, _) = extract_text_and_metadata(&mut doc, None).expect("extraction must succeed");
 
         assert_eq!(
             crate::pdf::scan_detect::FABRICATED_PROVENANCE_SECOND_PASS_CALLS
