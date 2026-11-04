@@ -916,13 +916,16 @@ fn guard_render_panic(
 /// inputs during force_ocr / VLM / layout paths.
 ///
 /// Uses the opened document (so callers that batch multiple pages only parse once).
+/// When a byte limit is supplied, native rendering checks the actual raster at the final DPI
+/// before allocating the canvas, including when the 72 DPI floor applies.
 pub(crate) fn render_page_with_safeguards(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     base_dpi: u32,
+    max_png_working_bytes: Option<usize>,
 ) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
     let options = safeguarded_render_options(doc, page_index, base_dpi);
-    render_page_with_options(doc, page_index, &options, None)
+    render_page_with_options(doc, page_index, &options, max_png_working_bytes)
 }
 
 fn safeguarded_render_options(
@@ -1031,12 +1034,12 @@ pub(crate) fn render_open_pdf_page_to_png(
     security_limits: Option<&crate::extractors::security::SecurityLimits>,
 ) -> Result<Vec<u8>> {
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    let rendered = if let Some(limits) = security_limits {
-        let options = safeguarded_render_options(doc, page_index, render_dpi);
-        render_page_with_options(doc, page_index, &options, Some(limits.max_content_size))
-    } else {
-        render_page_with_safeguards(doc, page_index, render_dpi)
-    }
+    let rendered = render_page_with_safeguards(
+        doc,
+        page_index,
+        render_dpi,
+        security_limits.map(|limits| limits.max_content_size),
+    )
     .map_err(|e| XbergError::Parsing {
         message: format!("Failed to render page {page_index}: {e}"),
         source: None,

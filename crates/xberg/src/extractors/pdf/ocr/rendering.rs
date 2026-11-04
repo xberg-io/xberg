@@ -769,12 +769,10 @@ fn render_one_full_pdf_ocr_page(
     // per page HERE rather than in the batch loop above, so the parallel render keeps it. Doing
     // it in the caller would have serialized the batch again. ~keep
     let render_dpi = ocr_page_render_dpi(doc, page_idx, images_config, security_limits);
-    let rendered =
-        crate::pdf::render::render_page_with_safeguards(doc, page_idx, render_dpi.max(1) as u32).map_err(|e| {
-            crate::XbergError::Parsing {
-                message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
-                source: None,
-            }
+    let rendered = crate::pdf::render::render_page_with_safeguards(doc, page_idx, render_dpi.max(1) as u32, None)
+        .map_err(|e| crate::XbergError::Parsing {
+            message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
+            source: None,
         })?;
     let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
     let (data, width, height) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
@@ -886,7 +884,7 @@ fn render_one_selected_page(
     record_render_thread();
     let render_dpi = ocr_page_render_dpi(doc, idx, images_config, security_limits);
     let rendered =
-        crate::pdf::render::render_page_with_safeguards(doc, idx, render_dpi.max(1) as u32).map_err(|e| {
+        crate::pdf::render::render_page_with_safeguards(doc, idx, render_dpi.max(1) as u32, None).map_err(|e| {
             crate::XbergError::Parsing {
                 message: format!("Failed to render PDF page {}: {}", idx + 1, e),
                 source: None,

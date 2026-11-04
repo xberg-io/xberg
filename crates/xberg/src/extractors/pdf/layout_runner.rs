@@ -641,18 +641,22 @@ fn render_layout_page(
             f64::from(media_height_pt),
         )
     };
-    let rendered = crate::pdf::render::render_page_with_safeguards(doc, page_index, render_dpi.max(1) as u32).map_err(
-        |error| {
-            tracing::warn!(
-                page = page_index + 1,
-                page_width_pts,
-                page_height_pts,
-                error = %error,
-                "layout runner: skipping page with render failure, returning empty detections"
-            );
-            format!("page {} failed to render: {error}", page_index + 1)
-        },
-    )?;
+    let rendered = crate::pdf::render::render_page_with_safeguards(
+        doc,
+        page_index,
+        render_dpi.max(1) as u32,
+        (!normalize_for_ocr).then_some(budget.security_limits.max_content_size),
+    )
+    .map_err(|error| {
+        tracing::warn!(
+            page = page_index + 1,
+            page_width_pts,
+            page_height_pts,
+            error = %error,
+            "layout runner: skipping page with render failure, returning empty detections"
+        );
+        format!("page {} failed to render: {error}", page_index + 1)
+    })?;
 
     let rendered_data = if normalize_for_ocr {
         crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
@@ -1473,6 +1477,10 @@ mod tests {
     }
 
     fn rotated_pdf(inherited: bool, rotation: i64) -> Vec<u8> {
+        pdf_with_media_box(inherited, rotation, &[0, 0, 200, 100])
+    }
+
+    fn pdf_with_media_box(inherited: bool, rotation: i64, media_box: &[i64]) -> Vec<u8> {
         use lopdf::{Document, Object, Stream, dictionary};
 
         let mut document = Document::with_version("1.5");
@@ -1483,7 +1491,7 @@ mod tests {
         let mut page = dictionary! {
             "Type" => "Page",
             "Parent" => pages_id,
-            "MediaBox" => vec![0.into(), 0.into(), 200.into(), 100.into()],
+            "MediaBox" => media_box.iter().copied().map(Object::from).collect::<Vec<_>>(),
             "Resources" => dictionary! {},
             "Contents" => content_id,
         };
@@ -1557,8 +1565,8 @@ mod tests {
 
     fn assert_xberg_native_pdf_applies_rotation(bytes: Vec<u8>) {
         let document = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("fixture PDF must open");
-        let rendered =
-            crate::pdf::render::render_page_with_safeguards(&document, 0, 72).expect("rotated fixture must render");
+        let rendered = crate::pdf::render::render_page_with_safeguards(&document, 0, 72, None)
+            .expect("rotated fixture must render");
         let rotations = crate::pdf::render::get_page_rotations(&document, 1);
         let (media_width, media_height) = document
             .get_page_media_box(0)
@@ -2250,6 +2258,57 @@ mod tests {
             "glyph-drop warnings must come back through the spawn_blocking closure's return value, not leak into \
              (or vanish from) the caller thread's own thread-local buffer: {leaked_to_caller_thread:?}"
         );
+    }
+
+    #[test]
+    fn layout_render_rejects_over_budget_raster_at_final_dpi() {
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 2 << 20,
+            ..Default::default()
+        };
+        let budget = RenderBudget {
+            security_limits: &security_limits,
+            images_config: None,
+        };
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[0, 0, 20000, 8]))
+            .expect("long narrow fixture must open");
+
+        let pages = render_layout_chunk(&doc, &[0], 0, 1, None, GatedPageHandling::SkipRender, budget);
+        let failure = pages[0]
+            .render_failure
+            .as_deref()
+            .expect("budget must reject the raster");
+        assert!(
+            failure.contains("PDF raster 20000x8 exceeds security_limits.max_content_size"),
+            "native render must reject the exact raster at the 72 DPI floor: {failure}"
+        );
+        assert!(pages[0].image.is_none());
+    }
+
+    #[test]
+    fn layout_render_uses_native_dimensions_for_malformed_media_box_budget() {
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 27 << 20,
+            ..Default::default()
+        };
+        let budget = RenderBudget {
+            security_limits: &security_limits,
+            images_config: None,
+        };
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[-100, 0]))
+            .expect("short MediaBox fixture must open");
+        assert_eq!(crate::pdf::render::get_page_dimensions_pt(&doc, 0), (612.0, 792.0));
+
+        let pages = render_layout_chunk(&doc, &[0], 0, 1, None, GatedPageHandling::SkipRender, budget);
+        let failure = pages[0]
+            .render_failure
+            .as_deref()
+            .expect("budget must reject the raster");
+        assert!(
+            failure.contains("PDF raster 1484x1650 exceeds security_limits.max_content_size"),
+            "native render must reject the true raster instead of estimating from Letter: {failure}"
+        );
+        assert!(pages[0].image.is_none());
     }
 
     /// #1828: `render_layout_chunk`'s OCR-input render (`GatedPageHandling::RenderWithoutInference`,
