@@ -2,7 +2,7 @@
 
 # Report
 
-Each year, the administration issues two reports that detail the government's financial results: the *Budget* and this *Financial Report* . The exhibit on the following page provides the key characteristics and differences between the two documents. Treasury generally prepares the financial statements in this *Financial Report* on an accrual basis of accounting as prescribed by GAAP for federal entities.10 These principles are tailored to the government's unique characteristics and circumstances. For example, entities prepare a uniquely structured "Statement of Net Cost," which is intended to present net government resources used in its operations. Also, unique to government is the preparation of separate statements to reconcile differences and articulate the relationship between the *Budget* and the *Financial Report* .
+Each year, the administration issues two reports that detail the government's financial results: the *Budget* and this *Financial Report* . The exhibit on the following page provides the key characteristics and differences between the two documents. Treasury generally prepares the financial statements in this *Financial Report* on an accrual basis of accounting as prescribed by GAAP for federal entities.<sup>10</sup> These principles are tailored to the government's unique characteristics and circumstances. For example, entities prepare a uniquely structured "Statement of Net Cost," which is intended to present net government resources used in its operations. Also, unique to government is the preparation of separate statements to reconcile differences and articulate the relationship between the *Budget* and the *Financial Report* .
 
 **Budget of the U.S. Government**
 
