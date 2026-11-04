@@ -65,12 +65,7 @@ pub(crate) fn builtin_ocr_backend_names() -> Vec<&'static str> {
 #[cfg_attr(alef, alef(skip))]
 pub struct OcrBackendRegistry {
     pub(super) backends: AHashMap<String, Arc<dyn OcrBackend>>,
-    #[cfg(all(
-        any(auto_rotate, paddle_ocr),
-        feature = "ocr",
-        feature = "pdf",
-        not(target_arch = "wasm32")
-    ))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     builtin_tesseract: Option<std::sync::Weak<dyn OcrBackend>>,
     #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     builtin_paddle: Option<std::sync::Weak<dyn OcrBackend>>,
@@ -137,7 +132,7 @@ impl OcrBackendRegistry {
             let backend: Arc<dyn OcrBackend> = Arc::new(TesseractBackend::new());
             match self.register(Arc::clone(&backend)) {
                 Ok(()) => {
-                    #[cfg(all(any(auto_rotate, paddle_ocr), feature = "pdf", not(target_arch = "wasm32")))]
+                    #[cfg(not(target_arch = "wasm32"))]
                     {
                         self.builtin_tesseract = Some(Arc::downgrade(&backend));
                     }
@@ -276,24 +271,14 @@ impl OcrBackendRegistry {
     pub fn new_empty() -> Self {
         Self {
             backends: AHashMap::new(),
-            #[cfg(all(
-                any(auto_rotate, paddle_ocr),
-                feature = "ocr",
-                feature = "pdf",
-                not(target_arch = "wasm32")
-            ))]
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             builtin_tesseract: None,
             #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
             builtin_paddle: None,
         }
     }
 
-    #[cfg(all(
-        any(auto_rotate, paddle_ocr),
-        feature = "ocr",
-        feature = "pdf",
-        not(target_arch = "wasm32")
-    ))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) fn is_builtin_tesseract(&self, backend: &Arc<dyn OcrBackend>) -> bool {
         self.builtin_tesseract
             .as_ref()
@@ -584,7 +569,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(auto_rotate, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     #[test]
     fn replacing_tesseract_does_not_grant_builtin_orientation_retry() {
         let mut registry = OcrBackendRegistry::new();
