@@ -372,6 +372,27 @@ fn render_observed_page(
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> PageContent {
     use crate::core::config::OutputFormat;
+    if matches!(format, OutputFormat::Markdown) && observer.captures_pages() {
+        let all_owned = crate::rendering::markdown_tag_exemptions_are_owned(doc);
+        let budget = if all_owned {
+            None
+        } else {
+            observer.markdown_tag_budget()
+        };
+        let (rendered, ranges) = crate::rendering::render_markdown_observed(doc, budget);
+        if !rendered.is_empty() {
+            observer.page_from_source(
+                index,
+                page.page_number,
+                &rendered,
+                crate::rendering::render_plain(doc),
+                all_owned,
+            );
+            observer.page_tag_ranges(ranges);
+            page.content = rendered;
+        }
+        return page;
+    }
     let rendered = match renderer {
         Some(renderer)
             if observer.captures_verified_markup() && matches!(format, OutputFormat::Html | OutputFormat::Djot) =>
@@ -407,15 +428,6 @@ fn render_observed_page(
         }
     };
     if !rendered.is_empty() {
-        if matches!(format, OutputFormat::Markdown) && observer.captures_pages() {
-            observer.page_from_source(
-                index,
-                page.page_number,
-                &rendered,
-                crate::rendering::render_plain(doc),
-                crate::rendering::markdown_tag_exemptions_are_owned(doc),
-            );
-        }
         page.content = rendered;
     }
     page

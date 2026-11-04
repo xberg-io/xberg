@@ -1,7 +1,7 @@
 use super::{DerivationObserver, MarkupPageBody, ProcessingDocument, RedactionSurfaces, VerifiedMarkup};
 use crate::types::ExtractedDocument;
 use sha2::{Digest, Sha256};
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Range};
 use std::sync::Arc;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -32,6 +32,7 @@ struct PageSurface {
     rendered: Fingerprint,
     plain: Option<PlainPageBackup>,
     tag_exemptions: bool,
+    owned_tags: Option<Vec<Range<usize>>>,
     literal: bool,
 }
 
@@ -60,6 +61,8 @@ pub(crate) struct SurfaceCapture {
     markup_pages: Vec<MarkupPage>,
     pages: Vec<PageSurface>,
     tag_exemptions: bool,
+    remaining_tag_proof: usize,
+    owned_tags: Option<Vec<Range<usize>>>,
 }
 
 impl DerivationObserver for SurfaceCapture {
@@ -86,6 +89,18 @@ impl DerivationObserver for SurfaceCapture {
         });
     }
 
+    fn markdown_tag_budget(&mut self) -> Option<&mut usize> {
+        Some(&mut self.remaining_tag_proof)
+    }
+
+    fn formatted_tag_ranges(&mut self, ranges: Option<Vec<Range<usize>>>) {
+        self.owned_tags = ranges;
+    }
+    fn page_tag_ranges(&mut self, ranges: Option<Vec<Range<usize>>>) {
+        if let Some(page) = self.pages.last_mut() {
+            page.owned_tags = ranges;
+        }
+    }
     fn formatted(&mut self, markdown: bool, text: &str) {
         if markdown {
             self.formatted = Some(Fingerprint::new(text));
@@ -108,6 +123,7 @@ impl DerivationObserver for SurfaceCapture {
             rendered: Fingerprint::new(rendered),
             plain: Some(PlainPageBackup(plain)),
             tag_exemptions: false,
+            owned_tags: None,
             literal: false,
         });
     }
@@ -203,6 +219,16 @@ impl RedactionSurfaces for SurfaceContext {
     }
     fn discard_formatted(&self) -> bool {
         self.formatted_invalidated
+    }
+    fn formatted_owned_tags(&self) -> Option<&[Range<usize>]> {
+        self.capture.owned_tags.as_deref()
+    }
+    fn page_owned_tags(&self, index: usize) -> Option<&[Range<usize>]> {
+        self.capture
+            .pages
+            .binary_search_by_key(&index, |page| page.index)
+            .ok()
+            .and_then(|position| self.capture.pages[position].owned_tags.as_deref())
     }
     fn formatted_tag_exemptions(&self) -> bool {
         self.capture.tag_exemptions
@@ -435,7 +461,10 @@ pub(crate) fn derive_with_surfaces(
             None,
         );
     }
-    let mut observer = SurfaceCapture::default();
+    let mut observer = SurfaceCapture {
+        remaining_tag_proof: crate::extractors::security::SecurityLimits::default().max_iterations,
+        ..Default::default()
+    };
     let document = super::super::derive(doc, include_document_structure, output_format, true, &mut observer);
     DerivedResult::new(document, Some(observer))
 }

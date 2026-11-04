@@ -697,9 +697,7 @@ fn compute_formatted_content_observed(
                 }
                 Some(text)
             } else {
-                let text = crate::rendering::render_markdown(doc);
-                observer.formatted_from_source(true, &text, crate::rendering::markdown_tag_exemptions_are_owned(doc));
-                Some(text)
+                Some(surfaces::derive_markdown(doc, observer))
             }
         }
         crate::core::config::OutputFormat::Djot => surfaces::derive_djot(doc, observer, plain_from_ir),
