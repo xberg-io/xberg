@@ -171,6 +171,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
+  Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
+
 - **(pdf): Render Latin text on hosts without a matching font.** (#2347)
   Use the bundled DejaVu Sans face for covered Latin glyphs after embedded and system font lookup fails.
 

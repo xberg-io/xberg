@@ -23,6 +23,8 @@ mod document;
 mod markdown;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use markdown::strip_embedded_gfm_tables;
+#[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+mod orientation_retry;
 mod pipeline;
 mod plausibility;
 mod rendering;
