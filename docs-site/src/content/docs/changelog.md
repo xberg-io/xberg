@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
+  Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
+
 - Minimum supported versions raised: Node.js 22, Ruby 3.3, PHP 8.3, Go 1.27, Java 25, Android API 24, Dart 3.13, macOS 26, Rust 1.99.
 - **(python): Set the package minimum and native stable ABI target to Python 3.11 (`abi3-py311`).**
 - **(swift): Preserve the macOS 26 deployment minimum in regenerated packages.**
@@ -171,6 +174,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Release discarded hierarchy data before constructing script-preserving paragraphs.
   Leave stacked fractions and incomplete raised cohorts unassociated, preserving their original records and annotations.
   Reject opposing fraction records even when their native semantic or style metadata differs.
+
+- **(redaction): Cover repeated inline-styled terms in Markdown and DOCX/PDF output.** (#2361)
+  Verify each rendered occurrence against its own plain backup before retaining formatting or returning a plain fallback.
+  Preserve untrusted HTML-derived Markdown obligations through processor edits and keep original finding offsets.
+  Keep the projection available with standalone redaction and runtime-free processing.
+  Preserve literal handling for inputs without an internal document body.
 
 - **(pdf, pptx): Write one page marker for every page and slide, an empty one included.** (GH#2422)
   With `pages.insert_page_markers` on, a PDF page with no content got no marker in the structured path.
