@@ -954,3 +954,25 @@ fn cached_form_fonts_keep_enclosing_cmap_donor_on_every_cache_layer() {
         );
     }
 }
+
+#[test]
+fn replacing_cmap_on_font_clone_detaches_cached_unicode() {
+    use crate::fonts::TrueTypeCMap;
+
+    let doc = PdfDocument::from_bytes(build_minimal_pdf(b"")).expect("open fixture");
+    donor_and_recipient_font_resources(&doc);
+    let object = doc.load_object(ObjectRef::new(14, 0)).expect("Type0 recipient");
+    let mut original = crate::fonts::FontInfo::from_dict(&object, &doc).expect("load recipient");
+    let cmap =
+        |code| TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format4(&[(code, 3)])).expect("parse cmap");
+    original.set_truetype_cmap(Some(cmap(0x42)));
+    assert_eq!(original.char_to_unicode(3).as_deref(), Some("B"));
+    assert_eq!(original.get_byte_to_char_table()[3], 'B');
+
+    let mut other = original.clone();
+    other.set_truetype_cmap(Some(cmap(0x43)));
+    assert_eq!(other.char_to_unicode(3).as_deref(), Some("C"));
+    assert_eq!(other.get_byte_to_char_table()[3], 'C');
+    assert_eq!(original.char_to_unicode(3).as_deref(), Some("B"));
+    assert_eq!(original.get_byte_to_char_table()[3], 'B');
+}
