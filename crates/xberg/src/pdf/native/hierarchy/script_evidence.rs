@@ -244,6 +244,42 @@ fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usi
     (!members.is_empty() && members[0] == first).then_some(members)
 }
 
+fn has_stacked_counterpart(spans: &[TextSpan], base: usize, members: &[usize]) -> bool {
+    let base = &spans[base];
+    spans.iter().any(|lower| {
+        let shift = baseline(base) - baseline(lower);
+        let ratio = lower.font_size / base.font_size;
+        same_context(base, lower)
+            && (super::INLINE_SCRIPT_MIN_FONT_RATIO..=super::INLINE_SCRIPT_MAX_FONT_RATIO).contains(&ratio)
+            && shift > 0.0
+            && shift <= base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
+            && members
+                .iter()
+                .any(|&member| lower.bbox.x < spans[member].bbox.right() && lower.bbox.right() > spans[member].bbox.x)
+    })
+}
+
+fn has_unclaimed_cohort_record(spans: &[TextSpan], base: usize, members: &[usize]) -> bool {
+    let Some((&first, &last)) = members.first().zip(members.last()) else {
+        return true;
+    };
+    let base = &spans[base];
+    let gap = base.font_size * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM;
+    let left = spans[first].bbox.x - gap;
+    let right = spans[last].bbox.right() + gap;
+    // A different font or role cannot hide a missing member, including an overlapping decimal point. ~keep
+    spans.iter().enumerate().any(|(index, span)| {
+        let shift = baseline(span) - baseline(base);
+        !members.contains(&index)
+            && super::has_valid_span_geometry(span)
+            && super::has_same_rotation(base, span)
+            && shift > base.font_size * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+            && shift <= base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
+            && span.bbox.x <= right
+            && span.bbox.right() >= left
+    })
+}
+
 fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOwner> {
     let mut edges: Vec<_> = spans
         .iter()
@@ -273,6 +309,9 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
         let Some(members) = complete_run(spans, *base, first) else {
             continue;
         };
+        if has_stacked_counterpart(spans, *base, &members) || has_unclaimed_cohort_record(spans, *base, &members) {
+            continue;
+        }
         if members.iter().any(|&member| {
             projected[*base].assigned_role != projected[member].assigned_role
                 || super::super::text::needs_numeric_script_boundary(&spans[*base], &spans[member], &notes, None)

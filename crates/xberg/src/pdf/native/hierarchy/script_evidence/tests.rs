@@ -374,6 +374,50 @@ fn should_keep_decimal_exponents_complete_or_leave_them_unassociated() {
     }
 }
 
+#[test]
+fn should_reject_decimal_cohort_retries_from_either_source_order() {
+    for order in [[0, 1, 2], [2, 1, 0]] {
+        let scripts = [
+            span("2", 120.0, 704.5, 0.25, 8.0),
+            span(".", 120.25, 704.5000610351562, 0.25, 8.0),
+            span("58", 120.5, 704.5, 0.5, 8.0),
+        ];
+        let mut spans = vec![span("10", 100.0, 700.0, 20.0, 12.0)];
+        spans.extend(order.map(|index| scripts[index].clone()));
+        let captured = page(spans);
+        assert_eq!(
+            captured.owners.len(),
+            0,
+            "neither end of an incomplete cohort can retry"
+        );
+        assert_eq!(captured.segments.len(), 4, "every source record must remain available");
+    }
+}
+
+#[test]
+fn should_reject_overlapping_unclaimed_punctuation_with_a_different_font_or_role() {
+    for size in [8.0, 9.0] {
+        let mut point = span(".", 121.0, 704.5000610351562, 1.0, size);
+        point.mcid = Some(7);
+        let captured = NativePageSegments::from_final_spans(
+            vec![
+                span("10", 100.0, 700.0, 20.0, 12.0),
+                span("258", 120.0, 704.5, 4.0, 8.0),
+                point,
+            ],
+            &HashMap::from([(7, Some(2))]),
+            ArtifactRetention::default(),
+        );
+        assert_eq!(captured.segments[2].assigned_role, Some(2));
+        assert_eq!(
+            captured.owners.len(),
+            0,
+            "a different font or role cannot hide the point"
+        );
+        assert_eq!(captured.segments.len(), 3);
+    }
+}
+
 fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
     use sha2::{Digest, Sha256};
     let root = std::env::var_os("XBERG_SCRIPT_RETENTION_FIXTURE_ROOT")

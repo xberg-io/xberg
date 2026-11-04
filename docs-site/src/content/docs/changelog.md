@@ -169,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Attach surviving suffix records after semantic refinement to preserve references, list boundaries and existing scripts.
   Keep existing script annotations when a new suffix would exceed the legacy base search window.
   Release discarded hierarchy data before constructing script-preserving paragraphs.
+  Leave stacked fractions and incomplete raised cohorts unassociated, preserving their original records and annotations.
 
 - **(pdf, pptx): Write one page marker for every page and slide, an empty one included.** (GH#2422)
   With `pages.insert_page_markers` on, a PDF page with no content got no marker in the structured path.
