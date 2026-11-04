@@ -326,3 +326,46 @@ async fn page_fallback_preserves_newlines_and_reports_plain_utf8_byte_offsets() 
         [(0, 6), (11, 15), (0, 6), (11, 15)]
     );
 }
+
+#[tokio::test]
+async fn metadata_and_container_only_placeholders_preserve_the_no_body_literal_protocol() {
+    let empty = crate::types::internal::InternalDocument::new("test");
+    let mut metadata = crate::types::internal::InternalDocument::new("test");
+    metadata.metadata.title = Some("non-body placeholder".into());
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_list(false);
+    builder.end_list();
+    let containers = builder.build();
+    assert_eq!(containers.elements.len(), 2);
+    let mut results = Vec::new();
+    for mut doc in [empty, metadata, containers] {
+        assert_eq!(crate::rendering::render_plain(&doc), "");
+        doc.pre_rendered_content = Some("<sup>literal</sup>".into());
+        doc.metadata.output_format = Some("markdown".into());
+        let result = crate::extraction::derive::derive_with_surfaces(doc, false, OutputFormat::Markdown, true);
+        assert_eq!(result.content, "<sup>literal</sup>");
+        results.push(result);
+    }
+    let contexts = results
+        .iter()
+        .map(|result| (result.context.is_some(), result.identity.is_some()))
+        .collect::<Vec<_>>();
+    assert_eq!(contexts, [(false, false), (false, false), (false, false)]);
+    for mut result in results {
+        apply(
+            &mut result,
+            RedactionConfig {
+                custom_terms: vec![RedactionTerm::labeled("private", "sup")],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.content, "<[REDACTED]>literal</[REDACTED]>");
+        assert_eq!(
+            result.formatted_content.as_deref(),
+            Some("<[REDACTED]>literal</[REDACTED]>")
+        );
+        assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 4);
+    }
+}

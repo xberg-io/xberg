@@ -659,8 +659,9 @@ fn parse_metadata_entries(text: &str) -> Vec<(String, String)> {
 /// tree, so `render_plain` yields nothing. Its already-extracted text lives in
 /// `pre_rendered_content` and must be returned verbatim rather than dropped. Only the
 /// empty rendering falls back, so a document that does have elements always wins.
-fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'static, str>) {
+fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'static, str>, bool) {
     let mut content = crate::rendering::render_plain(doc);
+    let plain_from_ir = !content.is_empty();
     if content.is_empty()
         && let Some(pre_rendered) = doc.pre_rendered_content.as_ref()
     {
@@ -673,7 +674,7 @@ fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'sta
         Cow::Borrowed(source_format_to_mime_type(&doc.source_format))
     };
 
-    (content, mime_type)
+    (content, mime_type, plain_from_ir)
 }
 
 /// Pre-render or render `doc` in `output_format`, reusing an already-matching
@@ -683,13 +684,16 @@ fn compute_formatted_content_observed(
     doc: &mut InternalDocument,
     output_format: &crate::core::config::OutputFormat,
     observer: &mut impl surfaces::DerivationObserver,
+    plain_from_ir: bool,
 ) -> Option<String> {
     match output_format {
         crate::core::config::OutputFormat::Plain => None,
         crate::core::config::OutputFormat::Markdown => {
             if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("markdown") {
                 let text = doc.pre_rendered_content.take()?;
-                observer.formatted_from_source(true, &text, false);
+                if plain_from_ir {
+                    observer.formatted_from_source(true, &text, false);
+                }
                 Some(text)
             } else {
                 let text = crate::rendering::render_markdown(doc);
@@ -881,8 +885,8 @@ fn derive(
     );
     resolve_relationships(&mut doc);
 
-    let (content, mime_type) = derive_content_and_mime_type(&mut doc);
-    let formatted_content = compute_formatted_content_observed(&mut doc, &output_format, observer);
+    let (content, mime_type, plain_from_ir) = derive_content_and_mime_type(&mut doc);
+    let formatted_content = compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir);
 
     // `content`, the plain rendering, is the output the caller gets exactly when the caller
     // gets this document and `formatted_content` is `None`: plain output, or a custom format
