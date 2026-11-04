@@ -29,8 +29,8 @@ use crate::ocr::table::has_table_grid;
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
     TableWords, drop_document_elements_claimed_by_tables, extract_table_words_from_tsv, extract_words_from_tsv,
-    orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild,
-    table_to_markdown,
+    orient_table_for_reading_order, reconstruct_table_with_columns, restore_words_of_rejected_regions,
+    shading_mark_keep_mask, should_adopt_table_rebuild, table_to_markdown,
 };
 #[cfg(test)]
 use crate::ocr::types::BatchItemResult;
@@ -2318,6 +2318,7 @@ pub(super) fn perform_ocr(
     }
 
     let mut tables = Vec::new();
+    let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
 
     if config.enable_table_detection {
         let tsv_data = tsv_data_for_tables.as_ref().unwrap();
@@ -2442,6 +2443,7 @@ pub(super) fn perform_ocr(
                     region_index,
                     "OCR table region has no row or column that relates two cells; keeping it as text"
                 );
+                rejected_regions.push(region.words);
                 continue;
             }
 
@@ -2479,6 +2481,11 @@ pub(super) fn perform_ocr(
 
     if let Some(document) = hocr_document.as_mut() {
         filter_elements_covered_by_tables(document, &tables);
+        // A region kept as text must keep every word, including the lines the page document
+        // dropped as noise, which the table path would have printed in a cell. ~keep
+        if restore_words_of_rejected_regions(document, &rejected_regions, config.page_number) {
+            content = strip_control_characters(&flatten_hocr_elements_to_text(&document.elements)).into_owned();
+        }
     }
 
     let is_markdown_output = extraction_config

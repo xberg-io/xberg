@@ -167,9 +167,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(ocr): Keep scattered labels as text and keep sparse ledgers and receipts as tables.** (#2431)
+- **(ocr): Keep the labels of a cover page or a map as text.** (#2431)
   OCR no longer builds a table from the labels of a cover page or a map when no row or column relates two cells.
-  A column of numbers, or three rows that fill the same columns, still makes a table, so a ledger with one value per row and a table after lines of prose pass the rule.
+  The words of such a region stay in the page text, including lines that the noise filter drops.
+  A column of numbers, or three rows that fill the same columns, still makes a table in a build without the `pdf` feature.
+  The `pdf` build drops a two-column OCR grid before this rule runs, as before.
   The PaddleOCR table path applies the same rule.
 
 - **(pdf): Keep proved native superscript suffixes with their base text across paragraph grouping.** (#2275)

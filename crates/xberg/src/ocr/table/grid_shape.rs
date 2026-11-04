@@ -217,6 +217,51 @@ mod tests {
     }
 
     #[test]
+    fn column_where_numbers_are_a_minority_is_not_a_table() {
+        let staircase = grid(&[
+            &["Title", ""],
+            &["", "Edition"],
+            &["Volume", ""],
+            &["", "2024"],
+            &["Prepared", ""],
+            &["", "2025"],
+            &["Office", ""],
+            &["", "Council"],
+            &["Review", ""],
+            &["", "Seventh"],
+        ]);
+        assert!(columns_with_relation(&staircase) >= 2);
+        assert!(!rows_relate(&staircase));
+        assert!(!has_table_grid(&staircase));
+    }
+
+    #[test]
+    fn rows_that_start_with_a_sentence_are_not_a_block() {
+        let region = grid(&[
+            &["Lorem ipsum dolor sit amet", "", ""],
+            &["consectetur adipiscing elit sed", "", ""],
+            &["eiusmod tempor incididunt ut", "", ""],
+            &["labore et dolore magna", "", ""],
+            &["Aenean commodo ligula eget", "", "Note"],
+            &["Donec quam felis ultricies", "", "Memo"],
+            &["Nulla consequat massa quis", "", "Item"],
+        ]);
+        assert!(columns_with_relation(&region) >= 2);
+        assert!(!rows_relate(&region));
+        assert!(!has_table_grid(&region));
+    }
+
+    #[test]
+    fn one_related_row_does_not_relate_rows() {
+        assert!(!rows_relate(&grid(&[&["North Harbor", "Pine Ridge"]])));
+        assert!(!rows_relate(&grid(&[
+            &["North Harbor", "Pine Ridge"],
+            &["Stone Bridge", ""]
+        ])));
+        assert!(rows_relate(&grid(&[&["Item", "Qty"], &["Anvil", "12"]])));
+    }
+
+    #[test]
     fn two_aligned_rows_among_prose_are_not_a_block() {
         let region = grid(&[
             &["Lorem ipsum dolor sit amet", "", ""],

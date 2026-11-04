@@ -3312,6 +3312,56 @@ mod tests {
         );
     }
 
+    /// A candidate that the shape rule rejects claims no line of the page document, so every line
+    /// of the cover stays in the page text. ~keep
+    #[test]
+    #[cfg(feature = "pdf")]
+    fn lines_of_a_rejected_candidate_stay_in_the_page_document() {
+        let words = hocr_words_from(&[
+            ("HARBOR", 100, 500, 120, 20),
+            ("CITY", 400, 500, 80, 20),
+            ("Annual", 100, 540, 100, 20),
+            ("Review", 400, 540, 100, 20),
+            ("Seventh", 400, 580, 100, 20),
+            ("Edition", 520, 580, 100, 20),
+            ("Prepared", 100, 620, 100, 20),
+            ("for", 210, 620, 40, 20),
+            ("the", 260, 620, 40, 20),
+            ("council", 310, 620, 90, 20),
+            ("Office", 100, 660, 80, 20),
+            ("of", 190, 660, 30, 20),
+            ("Planning", 240, 660, 100, 20),
+            ("Spring", 100, 700, 80, 20),
+            ("Volume", 200, 700, 90, 20),
+            ("Two", 310, 700, 50, 20),
+        ]);
+        let built = PaddleOcrBackend::build_ocr_tables_from_words(&words);
+        assert!(built.tables.is_empty(), "the cover is text, not a table");
+        assert_eq!(
+            built.rejected_candidates, 1,
+            "the cover must reach the rule as a candidate"
+        );
+
+        let lines = [
+            ("HARBOR CITY", 100, 500, 380),
+            ("Annual Review", 100, 540, 400),
+            ("Seventh Edition", 400, 580, 220),
+            ("Prepared for the council", 100, 620, 300),
+            ("Office of Planning", 100, 660, 240),
+            ("Spring Volume Two", 100, 700, 260),
+        ];
+        let elements: Vec<OcrElement> = lines
+            .iter()
+            .map(|(text, left, top, width)| paddle_element_at(text, OcrElementLevel::Line, *left, *top, *width))
+            .collect();
+
+        let doc = PaddleOcrBackend::build_ocr_document(&elements, &built.tables);
+
+        let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+        let expected: Vec<&str> = lines.iter().map(|line| line.0).collect();
+        assert_eq!(texts, expected);
+    }
+
     #[test]
     fn table_rejection_warning_reports_structurally_rejected_candidates() {
         assert!(PaddleOcrBackend::table_rejection_warning(0).is_none());
