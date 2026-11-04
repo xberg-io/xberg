@@ -1058,9 +1058,9 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     }
     let pixel_count_f64 = pixel_count as f64;
     let max_pixel_channel_sum = RGB_CHANNEL_MAX * RGB_CHANNEL_COUNT as f64;
-    if channel_sum as f64 / (pixel_count_f64 * max_pixel_channel_sum) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD
-        || light_pixels as f64 / pixel_count_f64 < CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD
-    {
+    let bright_mean =
+        channel_sum as f64 / (pixel_count_f64 * max_pixel_channel_sum) >= CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD;
+    if light_pixels as f64 / pixel_count_f64 < CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD {
         return false;
     }
     if foreground_pixels == 0 {
@@ -1069,10 +1069,15 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
 
     let background_luminance = light_channel_sum as f64 / (light_pixels as f64 * max_pixel_channel_sum);
     let foreground_luminance = foreground_channel_sum as f64 / (foreground_pixels as f64 * max_pixel_channel_sum);
-    if background_luminance - foreground_luminance >= CLEAN_PAGE_MIN_FOREGROUND_CONTRAST {
+    let strong_contrast = background_luminance - foreground_luminance >= CLEAN_PAGE_MIN_FOREGROUND_CONTRAST;
+    if bright_mean && strong_contrast {
         return true;
     }
+    if !bright_mean && !strong_contrast {
+        return false;
+    }
 
+    // Dense dark glyphs can lower the page mean on a light background. Confirm text structure. ~keep
     let Some((lower_mode_max, lower_mode_pixels)) = foreground_lower_mode(&foreground_histogram) else {
         return false;
     };
@@ -5302,6 +5307,187 @@ mod tests {
             .expect("implicit preprocessing must retain its effective configuration");
         assert!(preprocessing.deskew);
         assert_eq!(preprocessing.binarization_method, "otsu");
+    }
+
+    const REPEATED_LINE_COUNT: usize = 10;
+    const REPEATED_LINE_WIDTH: u32 = 400;
+    const REPEATED_LINE_PITCH: u32 = 132;
+    const REPEATED_LINE_SOURCE_DPI: u32 = 150;
+
+    fn repeated_line_raster(count: usize, staggered: bool) -> Option<image::RgbImage> {
+        let source = crate::utils::read_test_fixture("images/test_hello_world.png")?;
+        let source = image::load_from_memory(&source)
+            .expect("corpus PNG must decode")
+            .to_rgb8();
+        assert_eq!(source.dimensions(), (800, 200));
+        // Preserve the source glyph pixels and leave 37 white pixels for the stagger. ~keep
+        let line = image::imageops::crop_imm(&source, 219, 36, REPEATED_LINE_WIDTH, REPEATED_LINE_PITCH);
+        let height = REPEATED_LINE_PITCH * u32::try_from(count).expect("small test raster");
+        let mut raster = image::RgbImage::from_pixel(REPEATED_LINE_WIDTH, height, image::Rgb([255; 3]));
+        for index in 0..count {
+            let x = if staggered && index % 2 != 0 { 37 } else { 0 };
+            let y = i64::try_from(index).expect("small test raster") * i64::from(REPEATED_LINE_PITCH);
+            image::imageops::replace(&mut raster, &line.to_image(), x, y);
+        }
+        Some(raster)
+    }
+
+    async fn extract_repeated_line_raster(
+        raster: &image::RgbImage,
+        output_format: crate::core::config::OutputFormat,
+        tesseract_config: Option<crate::types::TesseractConfig>,
+    ) -> crate::types::ExtractedDocument {
+        use crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION;
+        use crate::core::config::{ExtractInput, ExtractionConfig, OcrConfig, PageConfig};
+        use image::ImageEncoder;
+
+        let mut bytes = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(
+                raster.as_raw(),
+                raster.width(),
+                raster.height(),
+                image::ExtendedColorType::Rgb8,
+            )
+            .expect("encode the test raster");
+        let config = ExtractionConfig {
+            output_format,
+            use_cache: false,
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend_options: Some(serde_json::json!({ (SOURCE_DPI_BACKEND_OPTION): REPEATED_LINE_SOURCE_DPI })),
+                tesseract_config,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut batch = crate::extract(ExtractInput::from_bytes(bytes, "image/png", None), &config)
+            .await
+            .expect("real Tesseract extraction");
+        assert_eq!(batch.results.len(), 1);
+        batch.results.remove(0)
+    }
+
+    fn assert_repeated_line_text(doc: &crate::types::ExtractedDocument, expected_count: usize, psm: &str) {
+        let pages = doc.pages.as_deref().expect("one image page");
+        assert_eq!(pages.len(), 1);
+        assert_eq!(
+            doc.metadata.additional.get("psm").and_then(serde_json::Value::as_str),
+            Some(psm)
+        );
+        for text in [&doc.content, &pages[0].content] {
+            let lines: Vec<&str> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+            assert_eq!(
+                lines,
+                vec!["Hello World"; expected_count],
+                "every source line must retain all letters"
+            );
+        }
+    }
+
+    async fn assert_implicit_aligned_lines(output_format: crate::core::config::OutputFormat) {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        let result = extract_repeated_line_raster(&raster, output_format, None).await;
+        assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+        assert!(result.metadata.image_preprocessing.is_some());
+    }
+
+    #[tokio::test]
+    async fn implicit_plain_ocr_retains_every_aligned_repeated_line() {
+        assert_implicit_aligned_lines(crate::core::config::OutputFormat::Plain).await;
+    }
+
+    #[tokio::test]
+    async fn implicit_markdown_ocr_retains_every_aligned_repeated_line() {
+        assert_implicit_aligned_lines(crate::core::config::OutputFormat::Markdown).await;
+    }
+
+    #[test]
+    fn dense_dark_glyphs_on_a_light_page_select_default_preprocessing() {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        assert!(
+            should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+            "the dark text components qualify despite their contribution to the page mean"
+        );
+    }
+
+    #[test]
+    fn dense_unstructured_or_shadowed_rasters_keep_raw_pixels() {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        // Reordering the same RGB pixels makes a filled foreground block. ~keep
+        let mut pixels = raster.as_raw().as_chunks::<RGB_CHANNEL_COUNT>().0.to_vec();
+        pixels.sort_unstable_by_key(|pixel| pixel.iter().map(|&channel| u16::from(channel)).sum::<u16>());
+        let graphic: Vec<u8> = pixels.into_iter().flatten().collect();
+        assert!(!should_apply_default_preprocessing(
+            &graphic,
+            raster.width(),
+            raster.height()
+        ));
+
+        let shadow: Vec<u8> = raster
+            .as_raw()
+            .iter()
+            .map(|&channel| (u16::from(channel) * 3 / 4) as u8)
+            .collect();
+        assert!(!should_apply_default_preprocessing(
+            &shadow,
+            raster.width(),
+            raster.height()
+        ));
+    }
+
+    #[tokio::test]
+    async fn single_and_staggered_lines_retain_exact_text_with_implicit_psm() {
+        for (count, staggered) in [(1, false), (REPEATED_LINE_COUNT, true)] {
+            let Some(raster) = repeated_line_raster(count, staggered) else {
+                return;
+            };
+            let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+            assert_repeated_line_text(&result, count, "11");
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_line_preprocessing_respects_explicit_psm_and_preprocessing() {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        use crate::core::config::OutputFormat;
+        use crate::types::{ImagePreprocessingConfig, TesseractConfig};
+        let block_config = TesseractConfig {
+            psm: Some(6),
+            ..Default::default()
+        };
+        let block = extract_repeated_line_raster(&raster, OutputFormat::Plain, Some(block_config)).await;
+        assert_repeated_line_text(&block, REPEATED_LINE_COUNT, "6");
+
+        let preprocessing = ImagePreprocessingConfig::default();
+        let target_dpi = preprocessing.target_dpi;
+        let automatic_layout_config = TesseractConfig {
+            psm: Some(3),
+            preprocessing: Some(preprocessing),
+            ..Default::default()
+        };
+        let automatic_layout =
+            extract_repeated_line_raster(&raster, OutputFormat::Plain, Some(automatic_layout_config)).await;
+        assert_repeated_line_text(&automatic_layout, REPEATED_LINE_COUNT, "3");
+        assert_eq!(
+            automatic_layout
+                .metadata
+                .image_preprocessing
+                .expect("explicit preprocessing")
+                .target_dpi,
+            target_dpi
+        );
     }
 
     #[test]
