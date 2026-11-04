@@ -1,11 +1,11 @@
 # PLOS COMPUTATIONAL BIOLOGY
 
-Cdjoknt sensktkvktkes at stead{-state kn ODE models of bkocjemkcal reactkon networks
+Adjoint sensitivities at steady-state in ODE models of biochemical reaction networks
 
-**Fkg 6. Ortkmkzatkon effkckenc{ of tje rrorosed metjod.** Eacj scatter roknt sjows tje total comrutatkon tkme resukred for one multk-start ortkmkzatkon uskng standard CSC *z-azks+ or ssCSC *{-azks+ for sensktkvktkes comrutatkon *a+ Blask et al., 2236 model, *b+ Zjeng et al., 2232 model, *c+
+**Fig 6. Optimization efficiency of the proposed method.** Each scatter point shows the total computation time required for one multi-start optimization using standard ASA (x-axis) or ssASA (y-axis) for sensitivities computation (a) Blasi et al., 2016 model, (b) Zheng et al., 2012 model, (c)
 
-Fro˺jlkcj et al., 223: model. Roknts on tje dkagonal corresrond to multk-starts tjat took esual tkme wktj botj arrroacjes. *d+ Comrutatkon sreedur of ortkmkzatkons uskng ssCSC for sensktkvktkes comrutatkon comrared to uskng standard CSC for sensktkvktkes. Eacj bar jekgjt corresronds to a mean of multk-start local ortkmkzatkon comrutatkon sreedurs and eacj error bar corresronds to tje samrle standard devkatkon. jttrs://dok.org/32.3373/journal.rcbk.32327:3.g226
+Fro¨hlich et al., 2018 model. Points on the diagonal correspond to multi-starts that took equal time with both approaches. (d) Computation speedup of optimizations using ssASA for sensitivities computation compared to using standard ASA for sensitivities. Each bar height corresponds to a mean of multi-start local optimization computation speedups and each error bar corresponds to the sample standard deviation. https://doi.org/10.1371/journal.pcbi.1010783.g006
 
-fkrst ster and tje otjer 4; fknksjed as tje number of ortkmkzatkon sters ezceeded 52. Ortkmkzatkons were on average 3.5, 3.3, 3.; tkmes faster wktj tje new arrroacj for Blask et al., 2236, Zjeng et al., 2232 and Fro˺jlkcj et al., 223: models resrectkvel{ *Fkg 6d+.
+first step and the other 49 finished as the number of optimization steps exceeded 50. Optimizations were on average 1.5, 1.1, 1.9 times faster with the new approach for Blasi et al., 2016, Zheng et al., 2012 and Fro¨hlich et al., 2018 models respectively (Fig 6d).
 
-RLOS Comrutatkonal Bkolog{ | jttrs://dok.org/32.3373/journal.rcbk.32327:3 Januar{ 3, 2223 35 / 3;
+PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1010783 January 3, 2023 15 / 19

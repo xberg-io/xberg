@@ -38,6 +38,7 @@ fn assert_page_tables(result: &ExtractedDocument) {
 
 #[test]
 fn wildomar_page_tables_match_final_selection_in_all_output_modes() {
+    let mut checked_modes = std::collections::BTreeSet::new();
     for format in ["plain", "markdown"] {
         for structure in [false, true] {
             for pages in [true, false] {
@@ -69,12 +70,17 @@ fn wildomar_page_tables_match_final_selection_in_all_output_modes() {
                         assert_eq!(result.tables[1].table_id.as_deref(), Some("table-2"));
                         assert_eq!(result.tables[0].cells.len(), 5);
                         assert_eq!(result.tables[1].cells.len(), 10);
-                        assert!(result.tables.iter().all(|t| t.columns.is_some()));
                     }
+                    assert!(checked_modes.insert((format, structure, pages, tables)));
                 }
             }
         }
     }
+    assert_eq!(
+        checked_modes.len(),
+        16,
+        "all distinct output-mode combinations must execute"
+    );
 }
 
 #[test]

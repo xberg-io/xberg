@@ -34,7 +34,7 @@
 {% elif language == "java" %}
 - **Java package** — FFM binding for direct native document extraction.
 {% elif language == "php" %}
-- **PHP package** — PHP 8.2+ API with generated types.
+- **PHP package** — PHP 8.3+ API with generated types.
 {% elif language == "ruby" %}
 - **Ruby package** — native extension with idiomatic Ruby objects.
 {% elif language == "csharp" %}

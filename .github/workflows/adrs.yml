@@ -1,14 +1,6 @@
 name: ADRs
 
 on:
-  pull_request:
-    paths:
-      - "adrs/**"
-      - "adrlint.lock"
-      - ".adrlint.toml"
-      - "mise.toml"
-      - "mise.lock"
-      - ".github/workflows/adrs.yml"
   push:
     branches: [main]
     paths:
@@ -23,8 +15,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: adrs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   adrlint:
+    if: github.ref == 'refs/heads/main'
     name: Decision log
     runs-on: ubuntu-latest
     steps:

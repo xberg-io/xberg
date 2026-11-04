@@ -41,7 +41,7 @@ runs:
       id: cache-models
       with:
         path: ~/.cache/huggingface/hub
-        key: ${{ inputs.cache-key-suffix }}-${{ runner.os }}-${{ runner.arch }}-bfaf0b492cfc1dee
+        key: ${{ inputs.cache-key-suffix }}-${{ runner.os }}-${{ runner.arch }}-bc5ec866cf0e798e
         restore-keys: |
           ${{ inputs.cache-key-suffix }}-${{ runner.os }}-${{ runner.arch }}-
           ${{ inputs.cache-key-suffix }}-${{ runner.os }}-
@@ -58,7 +58,7 @@ runs:
       run: |
         set -euo pipefail
         REPO="xberg-io/paddleocr-onnx-models"
-        REVISION="bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443"
+        REVISION="bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8"
         FILES=()
         CHECKSUMS=()
         AVAILABLE=()

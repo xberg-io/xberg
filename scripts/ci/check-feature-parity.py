@@ -45,9 +45,8 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 CORE_MANIFEST = Path("crates/xberg/Cargo.toml")
 CORE_SRC = Path("crates/xberg/src")

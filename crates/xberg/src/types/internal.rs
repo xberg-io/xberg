@@ -70,6 +70,7 @@ const LIST_ITEM_SOURCE_LABEL_ATTRIBUTE: &str = "list_marker";
 const MEASURED_FONT_SIZE_ATTRIBUTE: &str = "xberg:internal:font-size-pt";
 
 pub(crate) const NATIVE_TABLE_GRID_ATTRIBUTE: &str = "xberg:internal:native-table-grid";
+pub(crate) const NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE: &str = "xberg:internal:native-pdf-headerless-table";
 
 /// One OCR page's authoritative processed-raster coordinate frame (GH#1645).
 ///
@@ -354,6 +355,12 @@ pub struct InternalDocument {
     #[serde(skip)]
     pub page_marker_format: Option<String>,
 
+    /// Page or slide numbers in extraction order, including pages without elements.
+    /// Page markers fall back to `PageBreak` elements when this list is empty.
+    /// Survives JSON round trips and defaults to empty for older documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub page_numbers: Vec<u32>,
+
     /// When `true`, Markdown rendering inserts a `[TABLE:{table_id}]` marker
     /// immediately before each table's rendered Markdown block. Set by the
     /// pipeline from `ExtractionConfig::table_anchors`. Defaults to `false`.
@@ -460,6 +467,7 @@ impl InternalDocument {
             escape_markdown: true,
             include_watermarks: false,
             page_marker_format: None,
+            page_numbers: Vec::new(),
             table_anchors: false,
             form_fields: Vec::new(),
             formulas: Vec::new(),
@@ -791,6 +799,7 @@ fn is_internal_only_attribute(key: &str) -> bool {
         || key == IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE
         || key == MEASURED_FONT_SIZE_ATTRIBUTE
         || key == NATIVE_TABLE_GRID_ATTRIBUTE
+        || key == NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE
         || key == crate::rendering::table_math::TABLE_CELL_MATH_ATTRIBUTE
         || key == crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE
 }

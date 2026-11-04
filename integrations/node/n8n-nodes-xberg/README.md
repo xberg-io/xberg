@@ -18,7 +18,7 @@ cloud call, no data leaves your n8n instance.
 
 - Self-hosted n8n (native N-API addons are not available on n8n Cloud, so this node is
   self-hosted only).
-- Node.js 20.15+ on Linux (x64/arm64, glibc or musl), macOS (arm64), or Windows (x64/arm64) — the
+- Node.js 22+ on Linux (x64/arm64, glibc or musl), macOS (arm64), or Windows (x64/arm64) — the
   platforms for which `@xberg-io/xberg` ships prebuilt binaries.
 
 ## Installation

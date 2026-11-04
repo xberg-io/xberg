@@ -516,6 +516,9 @@ impl FontInfo {
 
     /// Set the TrueType cmap directly (used by share_truetype_cmaps and tests).
     pub fn set_truetype_cmap(&mut self, cmap: Option<TrueTypeCMap>) {
+        // A donated cmap can differ between clones that shared their old memo. ~keep
+        self.type0_unicode_memo = Default::default();
+        self.byte_to_char_table = Default::default();
         self.truetype_cmap = std::sync::OnceLock::new();
         if let Some(c) = cmap {
             let _ = self.truetype_cmap.set(Some(c));

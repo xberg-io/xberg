@@ -285,7 +285,7 @@ fn should_preserve_doc_table_scripts_without_changing_plain_cells_gh2275() {
     push_paragraph_elements(&mut doc, &paragraphs, &mut SecurityBudget::with_defaults()).unwrap();
     assert_eq!(doc.tables[0].cells, [vec!["Value"], vec!["7,2 x 109/l"]]);
     let markdown = crate::rendering::render_markdown(&doc);
-    assert!(markdown.contains("7,2 x 10^9^/l"), "{markdown}");
+    assert!(markdown.contains("7,2 x 10<sup>9</sup>/l"), "{markdown}");
     let html = crate::rendering::render_html(&doc);
     assert!(html.contains("7,2 x 10<sup>9</sup>/l"), "{html}");
     let plain = crate::rendering::render_plain(&doc);
@@ -310,7 +310,7 @@ fn should_project_doc_table_scripts_after_unicode_trim_and_paragraph_join_gh2275
     push_paragraph_elements(&mut doc, &paragraphs, &mut SecurityBudget::with_defaults()).unwrap();
     assert_eq!(doc.tables[0].cells, [vec!["é109\nH2O"]]);
     let markdown = crate::rendering::render_markdown(&doc);
-    assert!(markdown.contains("é10^9^"), "{markdown}");
+    assert!(markdown.contains("é10<sup>9</sup>"), "{markdown}");
     assert!(markdown.contains("H~2~O"), "{markdown}");
 }
 

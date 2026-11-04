@@ -389,7 +389,7 @@ fn test_page_ocr_fallback_image_bytes_recovers_real_image() {
     let bytes = std::fs::read(&pdf_path).expect("failed to read test PDF");
     let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("failed to open PDF");
 
-    let fallback_images = page_ocr_fallback_image_bytes(&doc.doc, 0);
+    let (fallback_images, _) = page_ocr_fallback_image_bytes(&doc.doc, 0, None, None);
 
     assert!(
         !fallback_images.is_empty(),
@@ -421,7 +421,7 @@ fn should_report_recovery_mode_for_each_recovered_xobject() {
     let bytes = std::fs::read(&pdf_path).expect("failed to read test PDF");
     let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("failed to open PDF");
 
-    let fallback_images = page_ocr_fallback_image_bytes(&doc.doc, 0);
+    let (fallback_images, _) = page_ocr_fallback_image_bytes(&doc.doc, 0, None, None);
     let first = fallback_images
         .first()
         .expect("fixture page 0 must contain at least one recoverable image XObject");
@@ -440,7 +440,7 @@ fn test_page_ocr_fallback_image_bytes_out_of_range_page_returns_empty() {
     let bytes = std::fs::read(&pdf_path).expect("failed to read test PDF");
     let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("failed to open PDF");
 
-    let fallback_images = page_ocr_fallback_image_bytes(&doc.doc, 9999);
+    let (fallback_images, _) = page_ocr_fallback_image_bytes(&doc.doc, 9999, None, None);
 
     assert!(
         fallback_images.is_empty(),
@@ -460,7 +460,7 @@ fn should_recover_dimension_bounded_high_ratio_ocr_image() {
 
     let bytes = std::fs::read(&pdf_path).expect("read OCR regression fixture");
     let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("open OCR regression fixture");
-    let recovered = page_ocr_fallback_image_bytes(&doc.doc, 0);
+    let (recovered, _) = page_ocr_fallback_image_bytes(&doc.doc, 0, None, None);
 
     let image = recovered.first().expect("recover the scanned page image for OCR");
     let decoded = image::load_from_memory(&image.bytes).expect("decode recovered OCR image");

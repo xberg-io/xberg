@@ -26,7 +26,7 @@ The batch tool routes every input through Xberg's `extract_batch` in a single na
 pip install crewai-xberg
 ```
 
-Requires Python 3.10+.
+Requires Python 3.11+.
 
 ## Quick start
 

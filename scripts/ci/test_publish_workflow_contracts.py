@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import tomllib
 from pathlib import Path
 
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
@@ -752,6 +753,39 @@ def test_swift_ios_builds_pin_the_deployment_target_to_the_manifest_floor() -> N
     assert pinned[1] == f"{floor[1]}.0"
 
 
+def test_swift_macos_builds_pin_the_deployment_target_to_the_manifest_floor() -> None:
+    root = Path(__file__).parents[2]
+    floors = set()
+    for manifest in (root / "Package.swift", root / "packages" / "swift" / "Package.swift"):
+        floor = re.findall(r"\.macOS\(\.v(\d+)\)", manifest.read_text())
+        assert len(floor) == 1, f"{manifest} must declare exactly one macOS floor"
+        floors.add(int(floor[0]))
+    assert len(floors) == 1, f"Swift manifests declare different macOS floors: {sorted(floors)}"
+    floor = floors.pop()
+    # The bundled ONNX Runtime prebuilt requires macOS 13.4 and `.macOS(.vN)` holds only a major.
+    assert floor >= 14, f"macOS floor {floor} is below the bundled ONNX Runtime's 13.4"
+    swift = job_block(WORKFLOW.read_text(), "swift-target")
+    build = re.search(
+        r"(?ms)^      - uses: xberg-io/actions/build-swift-artifactbundle@[^\n]+\n(.*?)(?=^      - |\Z)", swift
+    )
+    assert build is not None
+    pinned = re.search(r'(?m)^          MACOSX_DEPLOYMENT_TARGET: "([0-9.]+)"$', build[1])
+    assert pinned is not None, "swift-target build step inherits the workflow-wide MACOSX_DEPLOYMENT_TARGET"
+    assert pinned[1] == f"{floor}.0"
+
+
+def test_lint_go_inputs_override_incompatible_reusable_defaults() -> None:
+    root = Path(__file__).parents[2]
+    tools = tomllib.loads((root / "mise.toml").read_text())["tools"]
+    lint = job_block(CI_WORKFLOW.read_text(), "validate")
+    go_version = re.findall(r'(?m)^      go-version: "([0-9.]+)"$', lint)
+    assert go_version == [tools["go"]], "lint must use the repository's locked Go version"
+    linter = re.findall(r'(?m)^      golangci-lint-version: "v(\d+)\.(\d+)\.(\d+)"$', lint)
+    assert len(linter) == 1, "lint must override the incompatible reusable linter default"
+    # Go 1.27 support first shipped in golangci-lint 2.13. ~keep
+    assert tuple(map(int, linter[0])) >= (2, 13, 0), "Go 1.27 needs golangci-lint 2.13 or later"
+
+
 def test_macos_onnx_action_forwards_rpath_option_only_to_macos() -> None:
     action = (WORKFLOW.parents[1] / "actions/setup-onnx-runtime/action.yml").read_text()
     option = re.findall(r"(?m)^  add-macos-rpath:\n((?:^    [^\n]*\n)+)", action)
@@ -828,6 +862,92 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         except AssertionError as error:
             error_message = str(error)
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
+
+
+def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    feature = r'--features "?(\$\{\{ matrix\.(\w+) \}\}|[^"\s]+)'
+    checked = 0
+    for job in re.split(r"(?m)^(?=  [\w-]+:$)", workflow):
+        legs = [
+            {"name": name, "features": features}
+            for name, features in re.findall(r"(?m)^ +- name: (\S+)\n +features: (\S+)$", job)
+        ]
+        for step in re.split(r"(?m)^(?=      - )", job):
+            name = re.match(r"      - name: ([^\n]*)", step)
+            if name is None or "--features" not in name[1]:
+                continue
+            shown = re.search(feature, name[1])
+            used = re.search(feature, step[step.index("        run:") :])
+            assert shown is not None and used is not None, name[1]
+            for leg in legs or [{}]:
+                assert leg.get(shown[2], shown[1]) == leg.get(used[2], used[1]), f"{name[1]!r} for {leg}"
+                checked += 1
+    assert checked > 0
+
+
+def test_caption_ci_selects_its_locked_python_without_changing_the_baseline() -> None:
+    root = WORKFLOW.parents[2]
+    job = job_block((WORKFLOW.parent / "ci-scripts.yaml").read_text(), "caption-export")
+    assert "mise install python uv" in job
+    assert "--python python" in job
+    assert "uv python install" not in job
+    repository = tomllib.loads((root / "mise.toml").read_text())
+    baseline = repository["tools"]["python"]
+    selected = re.search(r'(?m)^      MISE_PYTHON_VERSION: "([0-9.]+)"$', job)
+    version = selected[1] if selected else baseline
+    project = root / "tools/benchmark-harness/caption_export"
+    requires = tomllib.loads((project / "pyproject.toml").read_text())["project"]["requires-python"]
+    bounds = re.fullmatch(r">=(\d+)\.(\d+),<(\d+)\.(\d+)", requires)
+    assert bounds is not None, requires
+    actual = tuple(map(int, version.split(".")[:2]))
+    assert tuple(map(int, bounds.group(1, 2))) <= actual < tuple(map(int, bounds.group(3, 4))), (
+        f"Caption CI selects Python {version}, incompatible with project {requires}"
+    )
+    locked = tomllib.loads((project / "uv.lock").read_text())["requires-python"]
+    assert locked == f"=={actual[0]}.{actual[1]}.*", locked
+    assert selected is not None and version != baseline, "Caption needs an isolated CI version leg"
+    assert re.search(r"(?m)^      MISE_ENV: ci$", job), "Caption must load the CI version lock"
+    declared = tomllib.loads((root / "mise.ci.toml").read_text())["tools"]["python"]
+    assert version in declared, f"Caption Python {version} is absent from locked CI declarations"
+    locks = tomllib.loads((root / "mise.ci.lock").read_text())["tools"]["python"]
+    entries = [entry for entry in locks if entry["version"] == version]
+    assert len(entries) == 1, f"Caption Python {version} needs exactly one lock entry"
+    platforms = repository["settings"]["lockfile_platforms"]
+    assert platforms, "Repository lockfile platforms must not be empty"
+    for platform in platforms:
+        key = f"platforms.{platform}"
+        assert key in entries[0], f"Caption Python {version} has no lock for {platform}"
+        assert f"cpython-{version}+" in entries[0][key]["url"], platform
+        assert re.fullmatch(r"sha256:[0-9a-f]{64}", entries[0][key]["checksum"]), platform
+
+
+def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    job = job_block(workflow, "narrow-feature-legs")
+    legs = re.findall(r"(?m)^          - name: (\S+)\n            features: (\S+)$", job)
+    selected = [leg for leg in legs if leg[0] == "sceptre-ocr-ort"]
+    assert len(selected) == 1, "standalone Sceptre ORT matrix leg must exist exactly once"
+    assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
+    assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
+    steps = re.split(r"(?m)^(?=      - )", job)
+    checks = [step for step in steps if step.startswith("      - name: cargo check -p xberg --no-default-features")]
+    assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
+    commands = re.findall(r"(?m)^        run: ([^\n]+)$", checks[0])
+    assert commands == [
+        'cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets'
+    ], "standalone Sceptre ORT check must retain its locked independent command"
+    conditions = re.findall(r"(?m)^        if: ([^\n]+)$", checks[0])
+    assert conditions == ["matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'"], (
+        "the real feature check must not skip the Sceptre ORT leg"
+    )
+    setup = [step for step in steps if "        uses: ./.github/actions/setup-onnx-runtime\n" in step]
+    assert len(setup) == 1, "standalone Sceptre ORT needs one runtime setup step"
+    assert re.findall(r"(?m)^        if: ([^\n]+)$", setup[0]) == ["matrix.name == 'sceptre-ocr-ort'"], (
+        "runtime setup must select exactly the standalone Sceptre ORT leg"
+    )
+    assert re.findall(r"(?m)^          ort-version: ([^\n]+)$", setup[0]) == ["${{ env.ORT_VERSION }}"]
+    assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
 
 
 if __name__ == "__main__":

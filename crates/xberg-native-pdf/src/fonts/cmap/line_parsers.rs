@@ -141,6 +141,76 @@ pub(super) fn parse_bfchar_line(line: &str) -> Vec<(u32, String)> {
     results
 }
 
+static BFRANGE_SEQUENTIAL: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"<([^>]*)>\s*<([^>]*)>\s*<([^>]*)>").unwrap());
+
+fn bfrange_array_header_offset(header: &str) -> Option<usize> {
+    static SOURCE_PAIR: std::sync::LazyLock<Regex> =
+        std::sync::LazyLock::new(|| Regex::new(r"^<[^>]*>\s*<[^>]*>$").unwrap());
+    let (offset, _) = header.rmatch_indices('<').nth(1)?;
+    SOURCE_PAIR.is_match(header[offset..].trim_end()).then_some(offset)
+}
+
+/// Visit bfrange records, keeping explicit destination arrays together across physical lines.
+pub(super) fn for_each_bfrange_record(section: &str, mut visit: impl FnMut(&str)) {
+    let mut lines = super::cmap_code_lines(section).peekable();
+    let mut suffix = "";
+    let mut record = String::new();
+    while let Some(mut line) = if suffix.is_empty() {
+        lines.next()
+    } else {
+        Some(std::mem::take(&mut suffix))
+    } {
+        let opening = line.find('[');
+        let header = opening
+            .map(|offset| &line[..offset])
+            .or_else(|| lines.peek().is_some_and(|next| next.starts_with('[')).then_some(line));
+        if let Some(offset) = header.and_then(bfrange_array_header_offset) {
+            for prefix in BFRANGE_SEQUENTIAL.find_iter(&line[..offset]) {
+                visit(prefix.as_str());
+            }
+            line = &line[offset..];
+        } else if opening.is_none() {
+            visit(line);
+            continue;
+        }
+
+        let mut depth = 0;
+        if let Some(end) = bfrange_array_end(line, &mut depth) {
+            visit(&line[..end]);
+            suffix = line[end..].trim();
+            continue;
+        }
+
+        record.clear();
+        record.push_str(line);
+        for next in lines.by_ref() {
+            let end = bfrange_array_end(next, &mut depth);
+            record.push(' ');
+            record.push_str(&next[..end.unwrap_or(next.len())]);
+            if let Some(end) = end {
+                suffix = next[end..].trim();
+                break;
+            }
+        }
+        visit(&record);
+    }
+}
+
+fn bfrange_array_end(fragment: &str, depth: &mut usize) -> Option<usize> {
+    for (offset, byte) in fragment.bytes().enumerate() {
+        if byte == b'[' {
+            *depth += 1;
+        } else if byte == b']' && *depth > 0 {
+            *depth -= 1;
+            if *depth == 0 {
+                return Some(offset + 1);
+            }
+        }
+    }
+    None
+}
+
 /// Parse a bfrange line: `<start> <end> <dst>`
 ///
 /// Example: `<0020> <007E> <0020>` maps codes 0x20-0x7E to Unicode U+0020-U+007E.
@@ -151,16 +221,17 @@ pub(super) fn parse_bfchar_line(line: &str) -> Vec<(u32, String)> {
 ///
 /// This function supports both formats and flexible whitespace within angle brackets.
 pub(super) fn parse_bfrange_line(line: &str) -> Option<Vec<(u32, String)>> {
-    static RE_SEQ: std::sync::LazyLock<Regex> =
-        std::sync::LazyLock::new(|| Regex::new(r"<([^>]*)>\s*<([^>]*)>\s*<([^>]*)>").unwrap());
     static RE_ARRAY: std::sync::LazyLock<Regex> =
         std::sync::LazyLock::new(|| Regex::new(r"<([^>]*)>\s*<([^>]*)>\s*\[((?:\s*<[^>]+>\s*)+)\]").unwrap());
 
-    if let Some(caps) = RE_ARRAY.captures(line) {
-        return parse_bfrange_array_form(&caps);
+    if line.contains(['[', ']']) {
+        if line.matches('[').count() != 1 || line.matches(']').count() != 1 {
+            return None;
+        }
+        return RE_ARRAY.captures(line).and_then(|caps| parse_bfrange_array_form(&caps));
     }
 
-    if let Some(caps) = RE_SEQ.captures(line) {
+    if let Some(caps) = BFRANGE_SEQUENTIAL.captures(line) {
         return parse_bfrange_sequential_form(&caps);
     }
 
@@ -184,12 +255,13 @@ fn parse_bfrange_array_form(caps: &regex::Captures) -> Option<Vec<(u32, String)>
     // U+FFFD from invalid UTF-8 in the raw stream) before it can reach the
     // byte-index slices below. See `is_ascii_hex_digits`. A dropped entry
     // shrinks `dst_hexes` below `range_size`, which the existing
-    // size-mismatch warning already surfaces. ~keep
-    let dst_hexes: Vec<String> = RE_HEX
+    // size-mismatch warning already surfaces. Keep its original slot so later entries do not shift. ~keep
+    let dst_hexes: Vec<(usize, String)> = RE_HEX
         .captures_iter(array_str)
-        .filter_map(|cap| {
+        .enumerate()
+        .filter_map(|(slot, cap)| {
             let s = cap.get(1).unwrap().as_str().trim().replace(char::is_whitespace, "");
-            if is_ascii_hex_digits(&s) { Some(s) } else { None }
+            is_ascii_hex_digits(&s).then_some((slot, s))
         })
         .collect();
 
@@ -220,8 +292,8 @@ fn parse_bfrange_array_form(caps: &regex::Captures) -> Option<Vec<(u32, String)>
         );
     }
 
-    for (i, dst_hex) in dst_hexes.iter().take(range_size).enumerate() {
-        let src = start + i as u32;
+    for (slot, dst_hex) in dst_hexes.iter().take_while(|(slot, _)| *slot < range_size) {
+        let src = start + *slot as u32;
 
         let Some(dst) = decode_bfrange_array_entry(dst_hex)? else {
             continue;

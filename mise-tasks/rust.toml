@@ -58,6 +58,19 @@ description = "Verify native VLM layout restoration without formula recognition"
 depends = ["os:require linux darwin"]
 run = "bash scripts/ci/rust/run-vlm-auto-gate-tests.sh"
 
+["rust:lint:workspace"]
+description = "Lint every workspace crate and target at its default features"
+run = "cargo clippy --workspace --all-targets -- -D warnings"
+
+["rust:lint:features"]
+description = "Lint all targets of one crate with the given features"
+usage = """
+arg "<features>" help="Comma-separated features to enable"
+flag "-p --package <package>" default="xberg" help="The crate to lint"
+flag "--no-default-features" help="Disable the crate's default features"
+"""
+run = 'cargo clippy --locked -p "$usage_package" $([ "${usage_no_default_features:-false}" = true ] && echo --no-default-features) --features "$usage_features" --all-targets -- -D warnings'
+
 ["rust:lint:feature"]
 description = "Lint the library with one standalone feature enabled"
 usage = 'arg "<feature>" env="FEATURE" help="The single library feature to enable"'

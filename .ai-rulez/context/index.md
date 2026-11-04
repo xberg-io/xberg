@@ -1,3 +1,3 @@
 # Concepts
 
-* [Area Map](area-map.md)
+- [Area Map](area-map.md)

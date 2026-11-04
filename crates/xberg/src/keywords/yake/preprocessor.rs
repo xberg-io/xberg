@@ -169,6 +169,22 @@ fn is_abbreviation(text: &str, dot_pos: usize) -> bool {
     ABBREVIATIONS.contains(&lower.as_ref())
 }
 
+pub(super) fn canonical_term(word: &str) -> String {
+    let mut term = word.to_lowercase();
+    if let Some(base) = term.strip_suffix("'s").or_else(|| term.strip_suffix("’s"))
+        && !base.is_empty()
+        && !NONPOSSESSIVE_BASES.contains(&base)
+    {
+        term.truncate(base.len());
+    }
+    term
+}
+
+// These contractions share the possessive suffix but retain their lexical identity. ~keep
+const NONPOSSESSIVE_BASES: &[&str] = &[
+    "he", "she", "it", "that", "what", "who", "where", "when", "why", "how", "there", "here", "let",
+];
+
 /// Split a sentence into word tokens. No regex, handles contractions.
 pub(crate) fn split_into_words(text: &str) -> Vec<String> {
     let mut words: Vec<String> = Vec::new();
@@ -191,7 +207,7 @@ pub(crate) fn split_into_words(text: &str) -> Vec<String> {
         }
 
         let word_start = i;
-        i = scan_word_end(text, word_start, &mut words);
+        i = scan_word_end(text, word_start);
 
         if i > word_start {
             let word = &text[word_start..i];
@@ -209,10 +225,7 @@ pub(crate) fn split_into_words(text: &str) -> Vec<String> {
 }
 
 /// Scan forward from `word_start` to the end of one word token, returning that offset.
-///
-/// A contraction apostrophe emits the prefix before it into `words` and keeps scanning
-/// without moving `word_start`, so the caller still emits the whole token afterwards. ~keep
-fn scan_word_end(text: &str, word_start: usize, words: &mut Vec<String>) -> usize {
+fn scan_word_end(text: &str, word_start: usize) -> usize {
     let bytes = text.as_bytes();
     let len = bytes.len();
     let mut i = word_start;
@@ -227,10 +240,6 @@ fn scan_word_end(text: &str, word_start: usize, words: &mut Vec<String>) -> usiz
         } else if c == b'-' && i + 1 < len && (bytes[i + 1].is_ascii_alphanumeric() || bytes[i + 1] > 127) {
             i += 1;
         } else if c == b'\'' && i > word_start && i + 1 < len && bytes[i + 1].is_ascii_alphabetic() {
-            let before = &text[word_start..i];
-            if !before.is_empty() {
-                words.push(before.to_string());
-            }
             i += 1;
             while i < len && bytes[i].is_ascii_alphabetic() {
                 i += 1;
@@ -338,5 +347,113 @@ mod tests {
         let large_text = paragraph.repeat(250_000);
         let sentences = split_into_sentences(&large_text);
         assert!(!sentences.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod possessive_regression_tests {
+    use super::super::{Yake, YakeConfig};
+    use super::*;
+
+    #[test]
+    fn apostrophe_words_emit_one_original_token_without_invented_prefixes() {
+        let sources = [
+            "COMMISSION'S",
+            "CONSULTANT'S",
+            "can't",
+            "we're",
+            "it's",
+            "O'Connor",
+            "O'Sullivan",
+        ];
+        for source in sources {
+            assert_eq!(source.split_whitespace().count(), 1);
+        }
+        let actual: Vec<_> = sources.iter().map(|source| split_into_words(source)).collect();
+        let expected: Vec<_> = sources.iter().map(|source| vec![source.to_string()]).collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn curly_words_and_real_repeated_names_conserve_original_tokens() {
+        for (source, expected) in [
+            ("commission’s", vec!["commission’s"]),
+            ("CONSULTANT’S", vec!["CONSULTANT’S"]),
+            ("can’t", vec!["can’t"]),
+            ("O’Connor O’Connor", vec!["O’Connor", "O’Connor"]),
+            ("Baden Baden", vec!["Baden", "Baden"]),
+        ] {
+            assert_eq!(split_into_words(source), expected);
+        }
+    }
+
+    #[test]
+    fn possessive_canonical_terms_agree_before_candidate_scoring_and_deduplication() {
+        let stopwords = ahash::AHashSet::new();
+        let yake = Yake {
+            config: YakeConfig::default(),
+            stopwords: &stopwords,
+        };
+        let cases = [
+            ("cat", "cat"),
+            ("cat's", "cat"),
+            ("cat’s", "cat"),
+            ("CAT’S", "cat"),
+            ("Commission", "commission"),
+            ("COMMISSION'S", "commission"),
+            ("commission’s", "commission"),
+            ("CONSULTANT’S", "consultant"),
+        ];
+        let actual: Vec<_> = cases
+            .iter()
+            .map(|(source, _)| {
+                assert_eq!(source.split_whitespace().count(), 1);
+                let sentences = yake.preprocess_text(source);
+                assert_eq!(sentences.len(), 1);
+                let candidates = yake.ngram_selection(1, &sentences);
+                let keys: Vec<_> = candidates.keys().map(|key| key.to_vec()).collect();
+                (sentences[0].lc_terms.clone(), sentences[0].uq_terms.clone(), keys)
+            })
+            .collect();
+        let expected: Vec<_> = cases
+            .iter()
+            .map(|(_, term)| {
+                let term = term.to_string();
+                (vec![term.clone()], vec![term.clone()], vec![vec![term]])
+            })
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn nonpossessive_contractions_keep_their_canonical_text() {
+        let stopwords = ahash::AHashSet::new();
+        let yake = Yake {
+            config: YakeConfig::default(),
+            stopwords: &stopwords,
+        };
+        let sources = [
+            "can't",
+            "we're",
+            "they've",
+            "I'm",
+            "it's",
+            "that's",
+            "he's",
+            "it’s",
+            "HE’S",
+            "O'Connor",
+            "O’Connor",
+        ];
+        let actual: Vec<_> = sources
+            .iter()
+            .map(|source| {
+                let sentences = yake.preprocess_text(source);
+                assert_eq!(sentences.len(), 1);
+                sentences[0].lc_terms.clone()
+            })
+            .collect();
+        let expected: Vec<_> = sources.iter().map(|source| vec![source.to_lowercase()]).collect();
+        assert_eq!(actual, expected);
     }
 }

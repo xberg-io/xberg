@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // Root-level Package.swift — alef-generated for published distributions.
 //
 // This manifest uses `.binaryTarget` for pre-built XCFramework/artifact bundles.
@@ -11,7 +11,7 @@ import PackageDescription
 let package = Package(
   name: "Xberg",
   platforms: [
-    .macOS(.v13),
+    .macOS(.v26),
     .iOS(.v16),
   ],
   products: [
@@ -73,6 +73,7 @@ let package = Package(
         .linkedLibrary("stdc++", .when(platforms: [.linux])),
         .linkedFramework("Security", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
+        .linkedFramework("OpenDirectory", .when(platforms: [.macOS])),
         .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),
       ]
     ),

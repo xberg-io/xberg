@@ -233,7 +233,11 @@ impl PptxExtractor {
             builder.push_slide(1, None, Some(1));
         }
 
-        Ok(builder.build())
+        let mut document = builder.build();
+        // Every slide of the source, not only those that parsed: a slide that failed to
+        // parse has no elements but still gets its marker.
+        document.page_numbers = (1..=slide_count).collect();
+        Ok(document)
     }
 
     fn push_table_content(

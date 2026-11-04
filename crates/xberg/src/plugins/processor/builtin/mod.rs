@@ -78,7 +78,6 @@ fn register_all(entries: &[BuiltinRegistration]) -> crate::Result<()> {
     feature = "captioning",
     feature = "qr-codes",
     feature = "ner",
-    feature = "redaction"
 ))]
 fn register_builtin_processor(processor: std::sync::Arc<dyn crate::plugins::PostProcessor>) -> crate::Result<()> {
     crate::plugins::processor::register_post_processor_if_absent(processor).map(|_| ())
@@ -121,7 +120,7 @@ fn register_ner() -> crate::Result<()> {
 
 #[cfg(feature = "redaction")]
 fn register_redaction() -> crate::Result<()> {
-    register_builtin_processor(std::sync::Arc::new(redaction::RedactionProcessor))
+    crate::plugins::processor::register_builtin_redaction().map(|_| ())
 }
 
 /// Register every built-in post-processor enabled by the active feature set.

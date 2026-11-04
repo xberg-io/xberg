@@ -20,6 +20,7 @@
 
 use crate::content::operators::{Operator, TextElement};
 use crate::error::Result;
+use crate::lexer::skip_ws;
 use crate::object::Object;
 use crate::parser::parse_object;
 use nom::IResult;
@@ -107,7 +108,7 @@ pub fn parse_content_stream(data: &[u8]) -> Result<Vec<Operator>> {
     let mut consecutive_errors: usize = 0;
 
     while !input.is_empty() {
-        if let Ok((rest, _)) = multispace0::<&[u8], nom::error::Error<&[u8]>>.parse(input) {
+        if let Ok((rest, _)) = skip_ws(input) {
             input = rest;
         }
 
@@ -148,6 +149,40 @@ pub fn parse_content_stream(data: &[u8]) -> Result<Vec<Operator>> {
     }
 
     Ok(operators)
+}
+
+/// Visit a complete content stream without the recovery and truncation used for extraction.
+#[doc(hidden)]
+pub fn visit_complete_content_stream(
+    data: &[u8],
+    operator_limit: usize,
+    mut visit: impl FnMut(Operator) -> bool,
+) -> Result<bool> {
+    let mut input = data;
+    let mut remaining = operator_limit.min(effective_max_operators());
+    loop {
+        let offset = data.len() - input.len();
+        let invalid = || crate::error::Error::ParseError {
+            offset,
+            reason: "Incomplete content stream audit".to_string(),
+        };
+        let (rest, _) = skip_ws(input).map_err(|_| invalid())?;
+        if rest.is_empty() {
+            return Ok(true);
+        }
+        if remaining == 0 {
+            return Err(invalid());
+        }
+        let (next, op) = parse_operator_with_operands(rest).map_err(|_| invalid())?;
+        if next.len() >= rest.len() {
+            return Err(invalid());
+        }
+        if !visit(op) {
+            return Ok(false);
+        }
+        input = next;
+        remaining -= 1;
+    }
 }
 
 /// Parse a content stream for path extraction, skipping BT/ET text blocks.
@@ -2207,7 +2242,7 @@ fn parse_operator_with_operands(input: &[u8]) -> IResult<&[u8], Operator> {
     let mut remaining = input;
 
     loop {
-        let (inp, _) = multispace0.parse(remaining)?;
+        let (inp, _) = skip_ws(remaining)?;
         remaining = inp;
 
         if remaining.is_empty() {

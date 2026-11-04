@@ -45,6 +45,7 @@ permissions:
 
 jobs:
   toolchain:
+    if: github.ref == 'refs/heads/main'
     name: Toolchain baseline
     runs-on: ubuntu-latest
     steps:
@@ -52,6 +53,7 @@ jobs:
       - uses: xberg-io/actions/check-toolchain@v1
 
   governance-validation:
+    if: github.ref == 'refs/heads/main'
     name: AI governance validation
     runs-on: ubuntu-latest
     steps:
@@ -66,7 +68,8 @@ jobs:
         run: mise run governance:test
 
   benchmark-scripts:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Benchmark script regressions
     runs-on: ubuntu-latest
     env:
@@ -92,6 +95,8 @@ jobs:
           restore-keys: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-
       - name: Validate benchmark scripts
         run: mise run benchmark:validate:scripts
+      - name: Enforce main-only CI
+        run: mise run ci:verify:main-only
       - name: Validate Publish workflow contracts
         run: mise run release:test:contracts
       - name: Test Python archive publication
@@ -104,7 +109,8 @@ jobs:
         run: mise run test:classic-ocr-cache:harness
 
   plugin-freshness:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Plugin bundle freshness
     runs-on: ubuntu-latest
     env:
@@ -164,8 +170,12 @@ jobs:
       - name: Verify actual npm launcher working directory
         run: python3 scripts/tests/test_mcp_launcher_cwd.py
 
+      - name: Verify xberg-tesseract build-script warnings
+        run: python3 scripts/tests/test_tesseract_build_warnings.py
+
   submodule-gitlinks:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Submodule gitlinks reachable
     runs-on: ubuntu-latest
     steps:
@@ -183,7 +193,8 @@ jobs:
         run: scripts/ci/check-submodule-gitlinks.sh --on-fetch-failure=fail
 
   ruby-windows-features:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Ruby Windows feature agreement
     runs-on: ubuntu-latest
     steps:
@@ -199,7 +210,8 @@ jobs:
         run: scripts/ci/check-ruby-windows-features.sh
 
   ffi-declaration-parity:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Hand-declared FFI surfaces match the emitted header
     runs-on: ubuntu-latest
     steps:
@@ -221,7 +233,8 @@ jobs:
         run: mise run ffi:verify:declarations
 
   alef-readme-paths:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Alef readme/docs paths resolve
     runs-on: ubuntu-latest
     env:
@@ -289,7 +302,8 @@ jobs:
         run: mise run docs:verify:changelog
 
   alef-bindings-freshness:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Alef-generated bindings freshness
     runs-on: ubuntu-latest
     steps:
@@ -392,7 +406,7 @@ jobs:
       - name: Install poly
         uses: Goldziher/poly@v0
         with:
-          version: "0.31.2"
+          version: "0.32.1"
       # `alef verify` (aliased as `mise run alef:verify`) is a purpose-built freshness
       # check: it recomputes each generated file's expected hash from the current
       # Rust source, applies the configured formatter to the in-memory render, and
@@ -434,7 +448,8 @@ jobs:
           fi
 
   e2e-freshness:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Generated e2e suites freshness
     runs-on: ubuntu-latest
     env:
@@ -535,7 +550,7 @@ jobs:
       - name: Install poly
         uses: Goldziher/poly@v0
         with:
-          version: "0.31.2"
+          version: "0.32.1"
       # `mise run e2e:verify` (`alef e2e generate` then `git diff --exit-code e2e/`)
       # was previously invoked by nothing -- it was only named in a comment on
       # the alef-bindings-freshness job above as though it ran. Wiring it here
@@ -545,7 +560,8 @@ jobs:
         run: mise run e2e:verify
 
   docs-snippets:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Docs snippets gate
     runs-on: ubuntu-latest
     steps:
@@ -651,7 +667,8 @@ jobs:
           and on docs:snippets:all in mise-tasks/docs.toml for why and where that coverage belongs."
 
   validate:
-    if: github.event.pull_request.draft != true
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     uses: xberg-io/actions/.github/workflows/reusable-validate.yml@v1
     with:
       # poly-version is deliberately unset so the reusable workflow resolves the
@@ -713,5 +730,7 @@ jobs:
       java-version: "25"
       # golangci-lint failed with `poly-hook: 1: golangci-lint: not found`. ~keep
       setup-go: true
+      go-version: "1.27.3"
+      golangci-lint-version: "v2.15.0"
       # dart-analyze failed with no Dart SDK present. ~keep
       setup-dart: true

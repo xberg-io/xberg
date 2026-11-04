@@ -2322,7 +2322,14 @@ fn insert_formula_document_element(doc: &mut InternalDocument, at: usize, mut el
     doc.elements.insert(at, element);
 }
 
-#[cfg(all(test, feature = "formula-recognition", feature = "layout-detection"))]
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "layout-detection",
+    feature = "ocr",
+    feature = "formula-recognition",
+    feature = "tokio-runtime"
+))]
 pub(crate) async fn recognize_formula_regions_for_test(
     doc: &mut InternalDocument,
     formulas: &mut Vec<crate::types::Formula>,
@@ -3389,7 +3396,40 @@ impl PdfExtractor {
                         (native_text, ExtractionMethod::Native)
                     }
                 },
+                #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                 ocr::OcrGateOutcome::UseNative => (native_text, ExtractionMethod::Native),
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                ocr::OcrGateOutcome::UseNative => {
+                    let probe = ocr::probe_incomplete_hidden_layers(
+                        &native_text,
+                        boundaries.as_deref().unwrap_or(&[]),
+                        pdf_metadata.pdf_specific.scanned_pages.as_deref().unwrap_or(&[]),
+                        content,
+                        config,
+                    )
+                    .await?;
+                    if let Some(mixed_run) = probe {
+                        let (text, replacements, _, _, _, _, preprocessing, confidence, warnings, page_failures) =
+                            mixed_run.output;
+                        let method = extraction_method_after_mixed_ocr(&replacements);
+                        ocr_preprocessing_by_page.extend(
+                            preprocessing
+                                .into_iter()
+                                .filter(|(page, _)| replacements.contains_key(page)),
+                        );
+                        ocr_confidence_by_page.extend(
+                            confidence
+                                .into_iter()
+                                .filter(|(page, _)| replacements.contains_key(page)),
+                        );
+                        ocr_fallback_warnings.extend(warnings);
+                        ocr_page_failures.extend(page_failures);
+                        ocr_results_map = Some(replacements);
+                        (text, method)
+                    } else {
+                        (native_text, ExtractionMethod::Native)
+                    }
+                }
             }
         } else {
             (native_text, ExtractionMethod::Native)

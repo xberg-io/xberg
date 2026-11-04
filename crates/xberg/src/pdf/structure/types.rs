@@ -6,12 +6,22 @@ use crate::pdf::hierarchy::SegmentData;
 #[derive(Debug, Clone)]
 pub(crate) struct PdfLine {
     pub segments: Vec<SegmentData>,
+    pub native_scripts: Vec<crate::pdf::native::hierarchy::script_evidence::ScriptOwner>,
     pub baseline_y: f32,
     #[allow(dead_code)]
     pub dominant_font_size: f32,
     #[allow(dead_code)]
     pub is_bold: bool,
     pub is_monospace: bool,
+}
+
+impl PdfLine {
+    pub(crate) fn valid_native_scripts(&self) -> Vec<&crate::pdf::native::hierarchy::script_evidence::ScriptOwner> {
+        self.native_scripts
+            .iter()
+            .filter(|owner| owner.survives(&self.segments))
+            .collect()
+    }
 }
 
 /// A paragraph composed of lines, with optional heading classification.

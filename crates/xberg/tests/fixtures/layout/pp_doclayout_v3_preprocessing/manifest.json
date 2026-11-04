@@ -1,0 +1,107 @@
+{
+  "input_size": 800,
+  "generator_sha256": "83a270ebcfe4f7db8f62a0865737b7b0e095977b1ba1f382211efb887c9ebb09",
+  "max_error_u8": 1,
+  "comparison": "All RGB values, including borders; one final u8 rounding and clamp before /255 NCHW",
+  "tolerance_basis": "One u8 level permits OpenCV's 11-bit fixed-point coefficient rounding versus f32",
+  "reference": {
+    "python": "3.13.18",
+    "numpy": "2.2.6",
+    "opencv_python_headless": "4.10.0.84",
+    "optimized": false,
+    "threads": 14,
+    "opencl": false
+  },
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleX/4c968d30b9d0d4a693d9eaaef0881c20f8d7d0e0/paddlex/inference/models/layout_analysis/predictor.py",
+      "sha256": "e08b4347d79c029da1a4b592808629fb4a88f2a63e747ac15410191e4ff3ddf6"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleX/4c968d30b9d0d4a693d9eaaef0881c20f8d7d0e0/paddlex/inference/models/object_detection/processors.py",
+      "sha256": "de2bb4f14f01619435c65df09272d978619c045c915cba465990dc4c32ac3540"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleX/4c968d30b9d0d4a693d9eaaef0881c20f8d7d0e0/paddlex/inference/models/common/vision/processors.py",
+      "sha256": "e6010780c1221990c989a1ad599b39bc471b96c286c35af2200b9e0552a66063"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleX/4c968d30b9d0d4a693d9eaaef0881c20f8d7d0e0/paddlex/inference/models/common/vision/funcs.py",
+      "sha256": "fa3d0c3bbc6d5cf016da27132eac4cabb089d1a96fc706984776c805d6237fb6"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleX/4c968d30b9d0d4a693d9eaaef0881c20f8d7d0e0/paddlex/inference/models/object_detection/predictor.py",
+      "sha256": "e7b1421d33c3f78d20e820c92df8c766ad978b8dbaeac8f0fdd1bbc3b1a9581e"
+    },
+    {
+      "url": "https://huggingface.co/PaddlePaddle/PP-DocLayoutV3/resolve/241f8bdfc77a7c7bee915a5057aaee58c235a8d3/inference.yml",
+      "sha256": "506fcfac13b3b546ae40d7886b44126420f392adb694e3f8bb6a6286a1f90fdc"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/modules/imgproc/src/resize.cpp",
+      "sha256": "60e44ab978fda269c19055659d0f1d7cdd32c1bfce8853ceb8dd6166833ee177"
+    }
+  ],
+  "cases": [
+    {
+      "name": "odd_portrait",
+      "width": 37,
+      "height": 59,
+      "clockwise_quarter_turns": 0,
+      "input_rgb_sha256": "844c0cd659f90993eb8163592930af9136dad3ab49025e02d0907814443b52b1",
+      "output_rgb_sha256": "12b0793982d3bc6748279d0630cfaf1d12e54f3e6b506acc28280498382c6c5b",
+      "png_sha256": "5530524b7b4bbe6dc7c3e5645d96650fb5bae766ccf93f4a602f5cd66734011e",
+      "im_shape": [800.0, 800.0],
+      "scale_factor": [13.559322357177734, 21.62162208557129],
+      "linear_negative_control_max_error_u8": 39
+    },
+    {
+      "name": "odd_landscape",
+      "width": 1603,
+      "height": 901,
+      "clockwise_quarter_turns": 0,
+      "input_rgb_sha256": "1f8f28e32b85c3cd8248c3866201ba5512a122ecbb2ac0afb426b9399c438ca3",
+      "output_rgb_sha256": "5f5dac024ba91393335d1de4c83da8da298db98e5e2ff99fabbab7abb477106c",
+      "png_sha256": "60327fe61ebe5abaa422adf6b573445b669be1bbf343011666bb09e8aee1e184",
+      "im_shape": [800.0, 800.0],
+      "scale_factor": [0.8879023194313049, 0.49906426668167114],
+      "linear_negative_control_max_error_u8": 39
+    },
+    {
+      "name": "rotated_portrait",
+      "width": 59,
+      "height": 37,
+      "clockwise_quarter_turns": 1,
+      "input_rgb_sha256": "56bcb4ba7b2a772aceb5d71dbd144b0bbb12e47383727d9bec1eb7eae76584b4",
+      "output_rgb_sha256": "8edc114d80b0fbc6fb640bf6d3c8af47878959c0d16fe7ddf11253719d7ac7c9",
+      "png_sha256": "39067d76723e20e366d7767e6173a395f5530e3ed7c6d35f9eb0b38c192ce95c",
+      "im_shape": [800.0, 800.0],
+      "scale_factor": [21.62162208557129, 13.559322357177734],
+      "linear_negative_control_max_error_u8": 39
+    },
+    {
+      "name": "saturated_edges",
+      "width": 13,
+      "height": 11,
+      "clockwise_quarter_turns": 0,
+      "input_rgb_sha256": "7426d06998df5ba2870f1af4ff7bf0ad82e38fea264b6e38f876cc7fef94f678",
+      "output_rgb_sha256": "94382c9ca96a8dbd7628225596fa859ccf7f2ad39b98362f80eb2f683453b1dc",
+      "png_sha256": "c0b369ab3658e81ce23e880ee85353ce1a9dec9e2624cace12fa4e8bd496d372",
+      "im_shape": [800.0, 800.0],
+      "scale_factor": [72.7272720336914, 61.53845977783203],
+      "linear_negative_control_max_error_u8": 55
+    },
+    {
+      "name": "identity",
+      "width": 800,
+      "height": 800,
+      "clockwise_quarter_turns": 0,
+      "input_rgb_sha256": "63d519c9320a0cc414f20b1b1b558e90c98c232f7160d4e84f63c182d11fa772",
+      "output_rgb_sha256": "63d519c9320a0cc414f20b1b1b558e90c98c232f7160d4e84f63c182d11fa772",
+      "png_sha256": "08dd72650d54053d73d8782bad7f96f02df33d1b1a39b032246526bb3e7128c3",
+      "im_shape": [800.0, 800.0],
+      "scale_factor": [1.0, 1.0],
+      "linear_negative_control_max_error_u8": 0
+    }
+  ]
+}

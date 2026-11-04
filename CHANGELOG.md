@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
+  Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
+  Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
+  Hash-bound first-divergence and sub-block diagnostics retain original prefixes, paired observer controls and failed qualification.
+
 - **(benchmarks): Reproduce olmOCR comparisons with the original offline evaluator.** (#2331)
   Pin all 984 PDFs and 6,090 tests; preserve model activation evidence, failures and complete group results.
 
@@ -44,6 +49,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(pdf): Reuse each page's words and ruling paths across both ruled-table detectors.** (#2429)
+  Strict and bordered detection retain their existing thresholds and precedence.
+
+- **(bindings): Regenerate the bindings with Alef 0.122.2.**
+  The Swift `TesseractConfig` DTO ignores unknown keys, while the Rust config keeps rejecting them and still accepts a
+  `language` string and the legacy boolean `thresholding_method`. Python option enums subclass `StrEnum`. The Node
+  binding's fallible conversions return their results directly, so clippy accepts them.
+
+- **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
+  Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
+
+- Minimum supported versions raised: Node.js 22, Ruby 3.3, PHP 8.3, Go 1.27, Java 25, Android API 24, Dart 3.13, macOS 26, Rust 1.99.
+- **(python): Set the package minimum and native stable ABI target to Python 3.11 (`abi3-py311`).**
+- **(swift): Preserve the macOS 26 deployment minimum in regenerated packages.**
+- **(go): Implement `json.Marshaler` for 50 DTOs.**
+  Their 74 required collection fields now encode nil slices/maps as `[]`/`{}`.
+  Anonymous embedding can promote these methods and omit a wrapper's extra fields.
+  Use a named field or define the wrapper's own `MarshalJSON` to preserve those fields.
+- **(bindings): Align generated surfaces and tool pins with Alef 0.115.9.**
+  Swift decoders honor field-level serde defaults, and Kotlin Android uses Android Gradle Plugin 9.5.0.
+
+- **(rust): Upgrade Sceptre to 0.10.0 and ONNX Runtime bindings to rc.15.**
+  Refresh Crawlberg 1.12.4 and Liter LLM 2.4.4 across workspace and standalone consumer locks.
+
+- **(rust): Require Rust 1.98 and upgrade mail-parser to 1.0.**
+  Email extraction uses read-only parser views while retaining attachment limits, nested-message
+  payloads and malformed-base64 recovery. The pinned Rust toolchain remains 1.99.1.
+
+- **(rust): Upgrade parking_lot to 0.13 and refresh compatible dependencies.**
+  Public registry accessors now return parking_lot 0.13 lock types. ZIP advances to 9.2 and
+  HTML conversion, encoding and 7z dependencies receive their latest compatible fixes.
+
+- **(ci): Restrict CI and governance validation to `main`.**
+  Skip jobs for other branches and tags, including manual dispatches, and remove pull-request validation triggers.
+  Pin benchmark source checkouts to the dispatched main revision.
 
 - **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
   Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
@@ -82,6 +123,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Windows builds verified Tesseract source; Linux and macOS provisioning checks selected runtimes and real decoding.
 
 ### Security
+
+- **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
+  Bound the unique retained bytes for plain embedded JPEGs while preserving repeated paints. (#2339)
+
+- **(pdf): Honor OCR image decode limits when retrying embedded scans after pipeline failure.**
+  Whole-document retries use the tighter explicit limit and stop when extraction is cancelled. (#2339)
+
+- **(excel): Upgrade Calamine to 0.38.0 for RUSTSEC-2026-0436.**
+  Fixes a parser panic and unbounded allocation when reading malformed CFB/OLE2 spreadsheets.
 
 - **(build): Update the zlib build dependency to 1.1.31 for RUSTSEC-2026-0418.**
 
@@ -128,6 +178,352 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
+
+- **(pdf): Fit OCR page rasters to the native allocation budget before rendering.** (#2491)
+  DPI selection accounts for the actual raster dimensions, PNG workspace and any CMYK or spot planes.
+
+- **(ocr): Keep warnings from failed PDF rasterization out of later extraction results.**
+
+- **(pdf): Enforce the request's raster budget before allocating layout-only page images.** (#2491)
+  The native check uses the actual page dimensions and final render DPI, including the 72 DPI floor.
+
+- **(pdf): Preserve the space after a raised footnote number at the start of its definition.** (#2443)
+
+- **(ocr): Recover complete tables on sideways PDF scans with a cached orientation model.** (#2314)
+  The implicit Tesseract retry accepts a confident complete table and maps it to the PDF page.
+
+- **(pdf): Preserve raised numeric suffixes when native glyph edges slightly overlap.** (#2489)
+  Keep negative exponents and squared labels with their bases in Markdown.
+
+- **(ocr): Keep cover and map labels in the page text.** (#2431)
+  Restore dictionary-filtered lines when every word matches the rejected candidate at its original position.
+  A shared header keeps sparse ledgers with recurring numeric columns eligible.
+  The same shape rule applies to Tesseract and PaddleOCR.
+
+- **(docker): Stop storing the binary twice in the core and full images.**
+  Remove a `chmod` that changed nothing but copied the whole binary into another layer.
+
+- **(pdf): Preserve long Form text when the caller marks the Form invocation as placed PDF content.** (#2310)
+
+- **(pdf): Recover text missing from a partial invisible scan layer.** (#2425)
+  In Plain Auto extraction with built-in Tesseract, check a single simple scan for uncovered text
+  bands and trailing words. Keep the native result unless OCR preserves its text and adds readable content.
+
+- **(pdf): Keep aligned financial amounts with their labels.** (#2315)
+  Preserve complete native PDF rows in plain text and keep proven financial body rows out of Markdown headers.
+
+- **(pdf): Preserve characters mapped by multiline ToUnicode ranges.** (#2476)
+  Keep destination arrays together so their entries cannot be mistaken for separate character ranges.
+
+- **(pdf): Keep row-painted table values with their labels across wide gutters in plain text.** (#2343)
+  Preserve blank value cells and wrapped labels when source order confirms the visual pairs.
+
+- **(tokenizers): Preserve callback errors when registering a tokenizer backend.** (#2374)
+
+- **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
+  Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
+
+- **(ocr): Keep rows together in standalone sparse OCR page text.** (#2432)
+  A single accepted table can supply Plain and Djot page rows when it retains every recognized token occurrence.
+
+- **(pdf): Keep ruled table rows on the correct side of a section divider.** (#2376)
+  Use exact shared row edges when both the original and corrected sections pass native table admission.
+
+- **(ocr): Skip automatic PaddleOCR on uniform PDF page rasters.** (#2430)
+  Faint text and usable embedded images remain eligible for fallback.
+
+- **(pdf): Expose complete native table headers as column labels.** (#2332)
+  A single fully labeled header row survives in the structured table when its original grid still matches.
+
+- **(dart): Fix compilation of the generated SDK.**
+  Keep the unsigned-value checks aligned with the types emitted by Flutter Rust Bridge.
+
+- **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
+  Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
+
+- **(pdf): Render Latin text on hosts without a matching font.** (#2347)
+  Use the bundled DejaVu Sans face for covered Latin glyphs after embedded and system font lookup fails.
+
+- **(tests): Check the specific blank-PDF image decode warning.** (#2427)
+  Full-feature tests allow unrelated OCR fallback diagnostics on blank pages.
+
+- **(structured): Apply the caller's raster budget to PDF pages.** (#2352)
+  Check the canvas, CMYK and spot-color planes, and PNG encoding allowance before allocating the page raster.
+
+- **(pdf): Report an undecodable painted image when OCR sees a blank page.** (#2427)
+  The warning names the affected page when neither decoding nor raw image recovery can supply the image.
+
+- **(pdf): Render scanned images with a singleton DeviceGray color-space array.** (#2427)
+  This also covers CCITT Group 4 images that omit Rows and wrap the filter and parameters in arrays.
+
+- **(docx): Return complete hyperlink labels for links split across styled runs.** Redaction can match the full label.
+  With redaction disabled, the label shows the complete first occurrence. URI deduplication stays the same.
+
+- **(redaction): Redact source IDs in HTML heading metadata.** (#2363)
+
+- **(redaction): Redact annotation authors and decoded QR payloads.** Cover the structured fields alongside the
+  document text while preserving unrelated annotation and QR metadata.
+
+- **(redaction): Distinguish generated Markdown tags from source text.** Preserve genuine inline formatting while
+  redacting literal tag names in annotations and raw source blocks.
+
+- **(pdf): Preserve word and line breaks when layout reorders upright PDF text.** (#2373)
+  Keep table cells searchable and leave adjacent source glyphs attached.
+
+- **(redaction): Redact repeated terms split by Djot inline styling.** Return verified redacted plain text for
+  supported Djot documents and pages with a format warning. Reject opaque output, including raw page-marker blocks.
+
+- **(windows): Bundle the Microsoft runtime dependencies of PHP, CLI, C FFI, and Elixir releases.** (#2370)
+  Verify hard and delayed DLL imports and runtime notices in the final archives before upload.
+
+- **(redaction): Rebuild verified HTML from redacted plain text.** (#2361)
+  Cover repeated terms split by inline styling while keeping HTML output and reporting the loss of original formatting.
+  Reject HTML whose original text cannot be verified or whose captured content changes during post-processing.
+
+- **(pdf): Keep witnessed prime marks beside their operands.** (#2443)
+  Preserve literal glyphs when both original neighboring spans survive the PDF layout passes.
+
+- **(pdf): Keep same-baseline small caps out of script markup.** (#2443)
+  Preserve genuine scripts and their byte ranges when assembling native PDF text.
+
+- **(redaction): Explain when a post-processor changes the document pages.** (#2447)
+  Redaction rejects added, removed, or renumbered pages and reports that the post-processor changed them.
+
+- **(redaction): Validate Markdown projection edges and remove emptied inline wrappers on Drop.** (#2446)
+  Reject unverified source gaps, including reference definitions at the document edges.
+  Remove delimiters owned by fully redacted inline spans while preserving unrelated markup and original finding offsets.
+
+- **(rust): Restore strict Clippy and no-ORT PDF feature builds.**
+  Keep script fixture geometry bit-exact and compile the OCR structure wrapper only where it is used.
+
+- **(pdf): Keep proved native superscript suffixes with their base text across paragraph grouping.** (#2275)
+  Preserve original glyph geometry and unrelated paragraphs; overlapping suffixes retain their existing behavior.
+  Attach surviving suffix records after semantic refinement to preserve references, list boundaries and existing scripts.
+  Keep existing script annotations when a new suffix would exceed the legacy base search window.
+  Release discarded hierarchy data before constructing script-preserving paragraphs.
+  Leave stacked fractions and incomplete raised cohorts unassociated, preserving their original records and annotations.
+  Reject opposing fraction records even when their native semantic or style metadata differs.
+
+- **(redaction): Cover repeated inline-styled terms in Markdown and DOCX/PDF output.** (#2361)
+  Verify each rendered occurrence against its own plain backup before retaining formatting or returning a plain fallback.
+  Preserve untrusted HTML-derived Markdown obligations through processor edits and keep original finding offsets.
+  Keep the projection available with standalone redaction and runtime-free processing.
+  Preserve literal handling for inputs without an internal document body.
+
+- **(pdf, pptx): Write one page marker for every page and slide, an empty one included.** (GH#2422)
+  With `pages.insert_page_markers` on, a PDF page with no content got no marker in the structured path.
+  A PPTX deck got one marker for all its slides.
+  Expected change: output for these documents now holds one marker per page or slide.
+  A three-slide deck shows markers 1, 2 and 3.
+  A page or slide that opens with a list gets its marker on its own line before the list,
+  in Markdown and HTML as in the other formats.
+  A slide that fails to parse still gets its marker.
+
+- **(tests): Keep cache-depth and DOCX list regressions compatible with strict Clippy checks.**
+
+- **(ocr): Fetch and read the document orientation model at one revision, so a synced cache is complete offline.** (GH#2417)
+  The orientation detector, the PaddleOCR model manifest and the table models now share one pinned revision of the model repository.
+  A cache that the manifest or the cache warm fills holds every file the engine reads. Caches that hold the table models at the older revision download them once more.
+
+- **(pdf): Apply the ordinary span page-bounds policy to configured spans.** (#2379)
+  Keep partial overlaps and the 2-point MediaBox tolerance while preserving custom merging.
+  Raw character extraction retains off-page characters and PDF coordinates for inspection.
+
+- **(pdf): Keep body text placed inside Form XObjects in spans and characters.** (#2310, #2380)
+  Judge each placed group against the visible page text after clipping, in either paint order.
+  Keep the 800-character minimum and half-duplicate threshold; characters use the span verdict.
+  Duplicate matching still treats punctuation and spacing differences as equivalent in matching lines.
+  Column-painted tables with repeated labels, skewed symbol grids, and mostly duplicated groups can still lose
+  unique text. Each extraction view now uses its own page dimensions for figure and wrapper clipping.
+
+- **(pdf): Recognize escaped PlacedPDF form tags and keep cached output independent of earlier page reads.** (#2378)
+  Preserve a child's own verdict after its parent's placed scope ends, including inside a placed page scope.
+
+- **(pdf): Keep nested Form text independent of earlier page reads at the recursion limit.** (#2377)
+
+- **(pdf): Omit generated image placeholders when image extraction is disabled.** (#2386)
+  Preserve recognized image text and the legacy PDF image-extraction opt-in.
+
+- **(pdf): Keep cached Form spans tied to the destination page clipping context.** (#2382)
+
+- **(tests): Preserve literal list-boundary comments in multiline and indented code during output-parity checks.**
+
+- **(tests): Compare visible list and image text consistently across Markdown and HTML output.**
+
+- **(docx): Preserve ordered and bullet item kinds at each level of a shared numbering definition.**
+
+- **(tests): Check preserved source ordinals as ordered Markdown in image and DOCX list regressions.**
+
+- **(python): Preserve existing enum stringification when targeting Python 3.11.**
+
+- **(tests): Assert public `IoError` for missing files in the CrewAI integration CI checks.**
+
+- **(tests): Borrow fenced-code expectations in Markdown round-trip checks.**
+
+- **(ci): Run Go lint with the locked Go 1.27 toolchain and a compatible linter.**
+
+- **(swift): Build release artifacts for the declared macOS 26 minimum.**
+
+- **(formula): Honor `XBERG_CACHE_DIR` for formula recognition models.** (#2409)
+  Preserve explicit model directories and the Hugging Face cache fallback when the override is unset.
+
+- **(tests): Respect optional PDF column metadata in page snapshot checks.**
+  Preserve canonical table equality and require all 16 distinct output-mode combinations.
+
+- **(markdown): Preserve source decimal list starts, gaps, and nested list boundaries.** (#2387)
+  Keep literal clause labels and necessary default-mode escapes in prose, code, and link destinations.
+  Retain structural list separators without changing the unescaped-prose option.
+  Restart unlabelled continuations before the CommonMark nine-digit ordinal limit is exceeded.
+  Render flat alphabetic clauses as paragraphs when their own source list also contains decimal clauses.
+
+- **(redaction): Preserve current formatted edits across supported paragraphs.** (#2361)
+  Keep original paragraph whitespace and surrounding literal formatting while redacting current text.
+  Split, escaped and code findings retain complete source coverage and semantic hash/token identities.
+
+- **(ci): Bound PNG decoding in the V3 parity capture.**
+  Use audited image decoders with default security limits before validating parity inputs.
+  Preserve the decoder and security-budget sources with the selected producer inputs.
+
+- **(tesseract): Keep routine native and WASM build progress out of Cargo warnings.**
+  Preserve native link directives and actionable fallback diagnostics for strict downstream builds.
+
+- **(ci): Align Python imports and UTC aliases with the Python 3.11 baseline.**
+  Use the native exception-group builtin and canonical import ordering in CI helpers.
+
+- **(ci): Check no-runtime test feature invariants at compile time.**
+  Keep the email Clippy gate passing without suppressing its constant-assertion check.
+
+- **(pdf): Recognize escaped PlacedPDF names in page-level text decisions.** (#2378)
+  Apply the existing parsed page policy to escaped names; form and cross-page cache handling remain separate.
+
+- **(redaction): Check raw and decoded findings before returning edited formatted text.** (#2358, #2363)
+  Preserve semantic token and hash identity, reject incomplete overlap coverage, and bound literal planning work.
+  Reject unsupported syntax in witnessed formatted-only edits while retaining trusted generated Markdown behavior.
+
+- **(redaction): Keep source tag names redactable in Markdown and preserve edited output.** (#2358)
+  Decline tag-syntax exemptions for raw blocks and rendered annotation values; preserve renderer-owned styles elsewhere.
+  Return current formatted-only and same-frame page edits through warned literal fallbacks.
+  Retain changed-content precedence when processors edit conflicting plain and formatted views.
+
+- **(redaction): Preserve current text after legitimate post-processor edits.** (#2358)
+  Discard unproved generated Markdown with a warning and return current redacted plain text.
+  Keep page and result identity guards, and preserve unchanged formatting after later no-op processors.
+
+- **(redaction): Preserve verified generated Markdown formatting while redacting its content.** (#2358)
+  Treat superscript and underline syntax separately from source text, including per-page output.
+  Use an explicit plain-text fallback when a match crosses generated syntax; keep literal and code text redactable.
+
+- **(markdown): Render document superscript and underline annotations with standard inline HTML.** (#2358)
+  Emit `<sup>` and `<u>` while retaining source escaping, nested formatting and table-cell scripts.
+  Preserve those styles when DOCX/PDF writers parse the postprocessed Markdown; leave code and malformed tags literal.
+  The HTML converter's pre-rendered Markdown and explicit conversion options retain their existing notation.
+
+- **(ci): Keep publish workflow contract imports in canonical order.**
+  Preserve the test assertions while satisfying the pinned Python import-order gate.
+
+- **(pdf): Preserve real operators and operands across content-stream comments.** (#2399)
+  Skip comment bytes before dispatch and EOF recovery so they cannot become marked-content tags or text operators.
+
+- **(keywords): Preserve source token order and merge possessive variants in YAKE results.** (#2388)
+  Stop inventing repeated prefixes around apostrophes while preserving contractions and genuine repeated names.
+
+- **(markdown): Keep frontmatter in metadata and out of rendered body, elements, and chunks.** (#2392)
+  Preserve typed YAML and TOML values without emitting Rust debug representations as document text.
+
+- **(llm): Sanitize provider schema names while preserving caller prompts and JSON Schema references.** (#2385)
+
+- **(plugin): Refresh local source and root served-skill pins during bundle generation.**
+  Verify both locks before bundle and public-skill checks while preserving remote imports.
+  Keep the checks in Xberg's task overrides so toolchain synchronization preserves them.
+
+- **(python): Preserve typed extraction errors, including progress-enabled calls.** (#2383)
+  Load canonical Rust error metadata before generating public APIs and reuse typed conversion in progress adapters.
+  Mark test setup overrides for strict Python type checking across supported interpreter versions.
+
+- **(publish): Authenticate NuGet publishing with short-lived trusted-publisher credentials for `naaman-xberg`.**
+
+- **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
+  Use fixed-support cubic resizing and ordered single-image forwards while validating paired rank-bearing rows and masks.
+  Capture tasks require one executed test and two forwards with complete named tensor artifacts and matching sizes and hashes.
+  Bind preserved producer sources to compiled bytes before constructing the model.
+  Decode captured PNGs from hashed bytes and reject input changes during a forward.
+  Restore Clippy-clean V3 and ORT test builds without changing inference or capture behavior.
+  Public detection ordering and model defaults stay unchanged; model-quality qualification remains pending.
+
+- **(ci): Build Windows Python wheels with the reviewed Visual Studio 2022 runtime.** (#2368)
+  Pin smoke and release wheel jobs to the runner that provides the licensed CRT redistribution source.
+
+- **(ocr): Compile the standalone Sceptre ORT feature with its existing discovery module.** (#2364)
+  Check the isolated feature closure in CI so other engines cannot mask the required module gate.
+
+- **(dependencies): Require released Sceptre 0.10.1 across Rust dependency graphs.** (#2364)
+  Refresh workspace, Ruby, Elixir and Rust E2E locks while retaining the current ONNX Runtime pins.
+  Rust E2E and Elixir resolve Windows-sys edges from 0.59.0 to 0.61.2; Ruby resolves them from 0.61.2 to 0.59.0.
+  Ruby's phonemizer dependency resolves image 0.24.9 in place of 0.25.10.
+
+- **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
+  Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.
+
+- **(ci): Run frozen caption contracts with Python 3.13.18.** (GH#2353)
+  Select the locked CI version leg while preserving the repository Python baseline.
+
+- **(python): Bundle the required Microsoft C++ runtime in Windows wheels.** (GH#2368)
+  Validate transitive and delayed PE imports without relying on the build host's installed runtime.
+  Missing or unsupported Visual Studio installations name the required 2022 edition before resolving runtime paths.
+
+- **(ocr): Invert backend auto-rotation before PDF upright correction in each geometry frame.** (#2356)
+  Keep word, table, formula and public OCR boxes aligned with the final processed-raster dimensions.
+  Publish normalized representative-page metadata while retaining its original orientation provenance.
+  The new metadata key `ocr_backend_rotation_undone: true` marks a page whose returned geometry is already upright.
+
+- **(bindings): Preserve shared exception families and declare Kotlin JNI resource dependencies.** (GH#2366)
+  Java, C#, and PHP exceptions expose shared family interfaces; Python and Ruby `IoError` remains catchable
+  as both `LoadError` and `XbergError`. Adopt Alef 0.115.14 across local development and CI, link Swift
+  OpenDirectory on macOS, and refresh the generated Maven and Gradle tooling defaults.
+
+- **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
+
+- **(swift): The Swift package requires macOS 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+
+- **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
+  Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.
+
+- **(dependencies): Replace the Candle fork with registry 0.11.1.** (#2333)
+  Workspace, Elixir, Ruby and Rust E2E locks use the released ZIP 9 dependency chain.
+
+- **(ocr): Honor cancellation after sparse OCR retries complete.** (#2345)
+  Return cancellation before selecting retry text or retaining primary text after a retry error.
+
+- **(benchmarks): Bind ParseBench runs to their Python harness sources.** (#2332)
+  Reject changed or unbound runner code before extraction; preserve older plans and results for read-only audits.
+
+- **(ci): Validate benchmark checkouts against the immutable workflow revision.** (#2344)
+  Keep shell contract tests aligned with main-only benchmark dispatch and reject the former branch override.
+
+- **(ocr): Declare the image table stitching fixture's known header metadata.** (#2354)
+  Keep its header-retention assertion aligned with the explicit-header contract without promoting body rows.
+
+- **(ci): Keep only the latest main run for each CI workflow.** (#2346)
+  Cancel superseded runs through stable workflow-ref groups, including GPU runs and docs deployments, instead of retaining an obsolete-commit backlog.
+
+- **(ocr): Map scaled, rotated PDF OCR geometry through its processed image frame.** (#2332)
+  Preserve preprocessing metadata while aligning word, table and formula coordinates with the page raster.
+  Keep the backend-free PDF OCR pipeline compilable and cover it in the narrow feature matrix.
+
+- **(pdf): Preserve native table header roles through grid conversion.** (#2332)
+  Source row and cell flags survive merged-cell placement and HTML rendering, including tables without spans.
+
+- **(pdf): Keep prose-flanked multiplication dots in their source sentence.** (#2275)
+  Inline symbols retain ordinary formatting while leading bullets and footnotes keep their roles.
+
+- **(benchmarks): Distinguish ParseBench renderer warnings from model failures.** (#2332)
+  Retain renderer diagnostics while rejecting genuine model and table-recognition fallbacks.
+
+- **(pdf): Retry detached pages from bounded embedded JPEG/JP2 bytes after raster OCR fails.** (#2339)
+  Recovery preserves page numbers, cancellation and original source image identities.
+
+- **(ci): Gate formula test helpers with the features required by their callers.**
 
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)

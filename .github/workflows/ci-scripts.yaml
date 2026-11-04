@@ -7,10 +7,12 @@ on:
       - "scripts/**"
       - "docker/Dockerfile.*"
       - "tools/**/*.sh"
+      - "tools/benchmark-harness/caption_export/**"
       - "integrations/scripts/**"
       - ".editorconfig"
       - "mise-tasks/**"
       - ".github/workflows/ci-scripts.yaml"
+      - ".github/workflows/publish.yaml"
       - "mise.toml"
       - "mise.lock"
   workflow_dispatch:
@@ -31,7 +33,33 @@ env:
   PESTER_VERSION: "6.2.0"
 
 jobs:
+  caption-export:
+    if: github.ref == 'refs/heads/main'
+    name: Offline caption tooling contracts
+    env:
+      MISE_AUTO_INSTALL: "false"
+      MISE_ENV: ci
+      MISE_PYTHON_VERSION: "3.13.18"
+    # The locked Linux Torch distribution includes CUDA dependencies; these CPU tests use the macOS wheel. ~keep
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup pinned Python tooling
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+
+      - name: Prepare frozen caption test dependencies
+        run: |
+          mise install python uv
+          mise exec -- uv sync --locked --project tools/benchmark-harness/caption_export --group dev --python python
+
+      - name: Run caption export and diagnostic tests
+        run: mise run caption:test -- --basetemp "$RUNNER_TEMP/caption-tests" -o "cache_dir=$RUNNER_TEMP/caption-pytest-cache"
+
   bats:
+    if: github.ref == 'refs/heads/main'
     name: Bats on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -58,6 +86,7 @@ jobs:
             --print-output-on-failure
 
   pester:
+    if: github.ref == 'refs/heads/main'
     name: Pester on windows-latest
     # windows-latest only. These scripts exist to run on Windows, and the path semantics their
     # assertions depend on -- backslash separators, case-insensitive comparison -- only differ
@@ -66,6 +95,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Setup pinned Python for Windows closure contracts
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          tools: python
 
       - name: Install Pester
         id: pester
@@ -80,7 +114,12 @@ jobs:
           module-path: ${{ steps.pester.outputs.module-path }}
           version: ${{ env.PESTER_VERSION }}
 
+      - name: Run Windows artifact closure contracts
+        shell: pwsh
+        run: python scripts/ci/test_windows_raw_wrappers.py
+
   format:
+    if: github.ref == 'refs/heads/main'
     name: Shell formatting
     runs-on: ubuntu-latest
     steps:

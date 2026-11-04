@@ -4,6 +4,8 @@
 //! representation.  The resulting tree can be serialized to CommonMark, HTML,
 //! or any other format comrak supports via `comrak::format_commonmark` etc.
 
+mod source_lists;
+
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -20,6 +22,17 @@ use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, is_body_element,
     is_container_end, parse_metadata_entries, sorted_inline_annotations, valid_math_annotation,
 };
+
+pub(super) fn admonition_alert_type(kind: &str) -> Option<comrak::nodes::AlertType> {
+    match kind.to_lowercase().as_str() {
+        "note" => Some(comrak::nodes::AlertType::Note),
+        "tip" | "hint" => Some(comrak::nodes::AlertType::Tip),
+        "important" => Some(comrak::nodes::AlertType::Important),
+        "warning" | "warn" => Some(comrak::nodes::AlertType::Warning),
+        "caution" | "danger" | "error" => Some(comrak::nodes::AlertType::Caution),
+        _ => None,
+    }
+}
 
 /// Minimum valid ATX heading depth (CommonMark `#`).
 const MIN_HEADING_LEVEL: u8 = 1;
@@ -984,6 +997,7 @@ fn strip_redundant_list_marker<'a>(
 struct ContainerEntry<'a> {
     node: &'a AstNode<'a>,
     kind: ContainerKind,
+    empty_list_cursor: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1016,6 +1030,11 @@ fn build_comrak_ast_with_table_mode<'a>(
     let footnotes = FootnoteCollector::new(doc);
     let mut state = RenderState::default();
     let consolidated = consolidate_paragraphs(&doc.elements);
+    let paragraph_items = if table_mode == TableRenderMode::Markdown {
+        source_lists::paragraph_items(&doc.elements)
+    } else {
+        HashSet::new()
+    };
 
     tracing::debug!(
         total_elements = doc.elements.len(),
@@ -1135,64 +1154,41 @@ fn build_comrak_ast_with_table_mode<'a>(
             }
 
             ElementKind::ListItem { ordered } => {
-                // comrak's CommonMark writer takes the marker style and the running
-                // number from the *enclosing* `List` node alone -- an `Item`'s own
-                // `NodeList` is not consulted -- and CommonMark cannot express a
-                // lettered or parenthesized marker like "B." or "(a)" as a list
-                // ordinal at all. So when the source label survived, the label is
-                // written as leading text and the enclosing list is forced to
-                // bulleted: emitting it as an ordered list would print a synthesized
-                // "1." beside the real "B.", renumbering a document whose clauses are
-                // cross-referenced by their printed label. A bullet defers to the
-                // label instead of competing with it.
                 let source_label =
                     list_item_source_label_from_attributes(elem_attributes).filter(|label| !label.is_empty());
-                let numbered = ordered && source_label.is_none();
-                let list_type = if numbered {
-                    comrak::nodes::ListType::Ordered
-                } else {
-                    comrak::nodes::ListType::Bullet
-                };
-                let item_list = comrak::nodes::NodeList {
-                    list_type,
+                let ordinal = source_label.filter(|_| ordered).and_then(source_lists::decimal_ordinal);
+                let numbered = ordered && (source_label.is_none() || ordinal.is_some());
+                let item_list = NodeList {
+                    list_type: if numbered {
+                        comrak::nodes::ListType::Ordered
+                    } else {
+                        comrak::nodes::ListType::Bullet
+                    },
                     bullet_char: b'-',
-                    start: 1,
+                    start: ordinal.unwrap_or(1),
                     tight: true,
                     ..Default::default()
                 };
-                let item = mk(arena, NodeValue::Item(item_list));
-                let item_para = mk(arena, NodeValue::Paragraph);
-                if let Some(label) = source_label {
+                let (item, item_para, list_parent) = if orig_idx.is_some_and(|index| paragraph_items.contains(&index)) {
+                    (None, source_lists::paragraph(arena, parent, &mut container_stack), None)
+                } else {
+                    let (list_parent, item_list) =
+                        source_lists::item_parent(arena, parent, &mut container_stack, item_list, ordinal);
+                    (
+                        Some(mk(arena, NodeValue::Item(item_list))),
+                        mk(arena, NodeValue::Paragraph),
+                        Some(list_parent),
+                    )
+                };
+                if let Some(label) = source_label.filter(|_| ordinal.is_none()) {
                     item_para.append(mk_text(arena, &format!("{label} ")));
                 }
                 let (item_text, item_annotations) = strip_redundant_list_marker(elem_text, elem_annotations);
                 build_inlines(arena, item_para, item_text, item_annotations.as_ref());
-                item.append(item_para);
-
-                let list_parent = if matches!(parent.data.borrow().value, NodeValue::List(..)) {
-                    // A run opened by `ListStart` is already numbered; a labelled item
-                    // joining it has to demote the whole run, or comrak resumes counting
-                    // around it.
-                    if !numbered && let NodeValue::List(list) = &mut parent.data.borrow_mut().value {
-                        list.list_type = comrak::nodes::ListType::Bullet;
-                        list.bullet_char = b'-';
-                    }
-                    parent
-                } else {
-                    let implicit_list = mk(
-                        arena,
-                        NodeValue::List(comrak::nodes::NodeList {
-                            list_type,
-                            bullet_char: b'-',
-                            start: 1,
-                            tight: true,
-                            ..Default::default()
-                        }),
-                    );
-                    parent.append(implicit_list);
-                    implicit_list
-                };
-                list_parent.append(item);
+                if let (Some(item), Some(list_parent)) = (item, list_parent) {
+                    item.append(item_para);
+                    list_parent.append(item);
+                }
             }
 
             ElementKind::Code => {
@@ -1247,8 +1243,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                         parent.append(table_node);
                         continue;
                     }
+                    #[cfg(feature = "pdf")]
+                    let headerless_pdf = doc.source_format == "pdf"
+                        && elem_attributes.is_some_and(|attributes| {
+                            attributes.contains_key(crate::types::internal::NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE)
+                        });
+                    #[cfg(not(feature = "pdf"))]
+                    let headerless_pdf = false;
                     let has_header = table.has_header_row()
                         || (table_mode == TableRenderMode::Markdown
+                            && !headerless_pdf
                             && !matches!(doc.source_format.as_str(), "csv" | "orgmode" | "typst"));
                     match build_table(arena, &table.cells, has_header, elem_attributes, table_mode) {
                         Some(table_node) => {
@@ -1397,14 +1401,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                     .unwrap_or("note");
                 let title = elem_attributes.and_then(|attrs| attrs.get("title").map(|s| s.as_str()));
 
-                let alert_type = match kind_str.to_lowercase().as_str() {
-                    "note" => Some(comrak::nodes::AlertType::Note),
-                    "tip" | "hint" => Some(comrak::nodes::AlertType::Tip),
-                    "important" => Some(comrak::nodes::AlertType::Important),
-                    "warning" | "warn" => Some(comrak::nodes::AlertType::Warning),
-                    "caution" | "danger" | "error" => Some(comrak::nodes::AlertType::Caution),
-                    _ => None,
-                };
+                let alert_type = admonition_alert_type(kind_str);
 
                 if let Some(at) = alert_type {
                     let alert = mk(
@@ -1529,6 +1526,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 container_stack.push(ContainerEntry {
                     node: list_node,
                     kind: ContainerKind::List,
+                    empty_list_cursor: false,
                 });
             }
 
@@ -1541,6 +1539,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 container_stack.push(ContainerEntry {
                     node: bq,
                     kind: ContainerKind::BlockQuote,
+                    empty_list_cursor: false,
                 });
             }
 
@@ -1551,6 +1550,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 container_stack.push(ContainerEntry {
                     node: parent,
                     kind: ContainerKind::Group,
+                    empty_list_cursor: false,
                 });
             }
 
@@ -1628,7 +1628,10 @@ fn pop_container(stack: &mut Vec<ContainerEntry<'_>>, target: ContainerKind) {
                 | (ContainerKind::BlockQuote, ContainerKind::BlockQuote)
                 | (ContainerKind::Group, ContainerKind::Group)
         ) {
-            stack.remove(i);
+            let entry = stack.remove(i);
+            if entry.empty_list_cursor && entry.node.first_child().is_none() {
+                entry.node.detach();
+            }
             return;
         }
     }
