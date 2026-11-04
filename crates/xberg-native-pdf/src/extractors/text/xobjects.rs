@@ -395,11 +395,14 @@ impl<'doc> TextExtractor<'doc> {
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
                 let has_placed_tag = Self::has_placed_tag(&stream_data);
+                let enclosing_hold = self.placed_hold;
+                // The page pre-scan cannot count text behind a Do operator. ~keep
+                let inherits_unheld_placed_scope =
+                    !has_placed_tag && self.inside_placed_pdf && !self.placed_pdf_keep && enclosing_hold == 0;
                 let page_bound_before = self.page_bound_forms;
-                if has_placed_tag {
+                if has_placed_tag || inherits_unheld_placed_scope {
                     self.page_bound_forms += 1;
                 }
-                let enclosing_hold = self.placed_hold;
                 let enclosing_hold_scope = self.placed_hold_scope_start;
                 // An outer page scope must not keep a parent's hold active after
                 // the parent's own placed scope ends. ~keep
@@ -407,7 +410,7 @@ impl<'doc> TextExtractor<'doc> {
                     .marked_content_stack
                     .get(enclosing_hold_scope..)
                     .is_some_and(|stack| stack.iter().any(|context| context.is_placed_pdf));
-                if has_placed_tag && (enclosing_hold == 0 || !inside_held_scope) {
+                if inherits_unheld_placed_scope || (has_placed_tag && (enclosing_hold == 0 || !inside_held_scope)) {
                     self.placed_hold_groups += 1;
                     self.placed_hold = self.placed_hold_groups;
                     self.placed_hold_scope_start = self.marked_content_stack.len();
