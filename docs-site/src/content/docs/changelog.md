@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Report an undecodable painted image when OCR sees a blank page.** (#2427)
+  The warning names the affected page when neither decoding nor raw image recovery can supply the image.
+
 - **(pdf): Render scanned images with a singleton DeviceGray color-space array.** (#2427)
   This also covers CCITT Group 4 images that omit Rows and wrap the filter and parameters in arrays.
 

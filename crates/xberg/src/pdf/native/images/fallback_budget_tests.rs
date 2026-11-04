@@ -67,6 +67,24 @@ fn image_stream_document(streams: Vec<Stream>) -> xberg_native_pdf::PdfDocument 
 }
 
 #[test]
+fn one_undecodable_enumerated_xobject_sets_the_failure_flag() {
+    let broken = Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Image", "Width" => 8, "Height" => 8,
+            "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8, "Filter" => "FlateDecode",
+        },
+        b"This is not zlib compressed data".to_vec(),
+    );
+    for (painted, expected) in [(0, false), (1, true), (2, false)] {
+        let doc = image_stream_document(vec![broken.clone(); painted]);
+        assert_eq!(doc.page_image_handles(0).unwrap().len(), painted);
+        let (images, sole_failure) = page_ocr_fallback_image_bytes(&doc, 0);
+        assert_eq!(images.len(), 0);
+        assert_eq!(sole_failure, expected, "{painted} painted XObjects");
+    }
+}
+
+#[test]
 fn jpeg2000_fallback_preserves_compressed_pixels_without_png_reencoding() {
     let doc = image_document(120, 40, false);
     let images =
@@ -107,7 +125,8 @@ fn jpeg2000_behind_an_outer_filter_is_not_treated_as_direct_compressed_bytes() {
 #[test]
 fn unlimited_legacy_recovery_retains_valid_outer_filtered_jpeg2000() {
     let doc = image_document(120, 40, true);
-    let images = page_ocr_fallback_image_bytes(&doc, 0);
+    let (images, sole_failure) = page_ocr_fallback_image_bytes(&doc, 0);
+    assert!(!sole_failure);
     assert_eq!(images.len(), 1);
     assert_eq!(images[0].format, "png");
     let decoded = image::load_from_memory(&images[0].bytes).unwrap();
@@ -146,7 +165,7 @@ fn bounded_fallback_applies_one_inclusive_copy_limit_to_distinct_image_objects()
         handles.iter().map(|handle| handle.paint_order).collect::<Vec<_>>(),
         vec![0, 1]
     );
-    let legacy = page_ocr_fallback_image_bytes(&doc, 0);
+    let (legacy, _) = page_ocr_fallback_image_bytes(&doc, 0);
     assert_eq!(legacy.len(), 2, "both distinct JPEG 2000 streams must decode");
     for image in legacy {
         let decoded = image::load_from_memory(&image.bytes).unwrap();
