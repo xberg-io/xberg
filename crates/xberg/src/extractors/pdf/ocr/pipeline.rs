@@ -3545,7 +3545,22 @@ pub(super) async fn extract_with_ocr_for_page(
             #[cfg(feature = "pdf")]
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
+                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                let normalize_recovered_table = xobject_document.is_some()
+                    && orientation_retry.is_some()
+                    && !base_ocr_config.auto_rotate
+                    && !ocr_result.tables.is_empty()
+                    && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
+                        .is_some_and(|angle| angle != 0);
                 undo_upright_raster_correction(&mut ocr_result, correction_degrees, upright_width, upright_height);
+                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                if normalize_recovered_table {
+                    // The detached stage's owner will place raw tables using the render raster. ~keep
+                    super::orientation_retry::scale_recovered_table_to_raster(
+                        &mut ocr_result,
+                        (encoded_batch[offset].2, encoded_batch[offset].3),
+                    );
+                }
             }
             // #1575: capture once, from the first page that has any -- see this function's
             // `backend_additional_metadata` declaration for why a single representative page
