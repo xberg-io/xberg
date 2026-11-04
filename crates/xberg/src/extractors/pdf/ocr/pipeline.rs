@@ -2916,16 +2916,21 @@ pub(super) async fn extract_with_ocr_for_page(
 
     let configured_batch_size = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
 
-    let batch_size = if images.is_none() {
+    // #2428: the page window holds up to two pages per recognition slot. Every held page counts as one page
+    // of the free-memory estimate that sized the lockstep batch, so the window never holds more pages than
+    // that estimate allows, and the slot count stays the batch width it was. ~keep
+    let window_pages = super::page_window::HELD_PAGES_PER_SLOT.saturating_mul(configured_batch_size);
+    let held_pages = if images.is_none() {
         adapt_batch_size_to_memory(
-            configured_batch_size,
+            window_pages,
             content.map(|b| b.len()).unwrap_or(0),
             UNMEASURED_OCR_PAGE_WORKING_SET_BYTES,
         )
         .await
     } else {
-        configured_batch_size
+        window_pages
     };
+    let batch_size = configured_batch_size.min(held_pages);
 
     if batch_size < configured_batch_size {
         tracing::info!(
@@ -3198,7 +3203,7 @@ pub(super) async fn extract_with_ocr_for_page(
     let recognition_slots = batch_size;
     #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
     let recognition_slots = 1;
-    let mut window = super::page_window::PageWindow::new(total_pages, recognition_slots);
+    let mut window = super::page_window::PageWindow::new(total_pages, recognition_slots, held_pages);
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut join_set: JoinSet<(usize, u32, u32, u32, crate::Result<crate::types::ExtractedDocument>)> = JoinSet::new();
 

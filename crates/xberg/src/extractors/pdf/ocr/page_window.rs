@@ -6,9 +6,9 @@ use std::ops::Range;
 
 use super::rendering::EncodedPage;
 
-/// Pages the window holds per recognition slot: one recognizing and one rendered ahead or finished behind a
-/// slower earlier page. ~keep
-const HELD_PAGES_PER_SLOT: usize = 2;
+/// Pages the window holds per recognition slot at most: one recognizing and one rendered ahead or finished
+/// behind a slower earlier page. ~keep
+pub(super) const HELD_PAGES_PER_SLOT: usize = 2;
 
 /// What recognition returned for one page.
 pub(super) struct PageRecognition {
@@ -33,6 +33,7 @@ pub(super) struct ReadyPages {
 pub(super) struct PageWindow {
     total_pages: usize,
     recognition_slots: usize,
+    held_pages: usize,
     first_held: usize,
     held: VecDeque<(EncodedPage, Option<PageRecognition>)>,
     next_to_recognize: usize,
@@ -41,10 +42,15 @@ pub(super) struct PageWindow {
 }
 
 impl PageWindow {
-    pub(super) fn new(total_pages: usize, recognition_slots: usize) -> Self {
+    /// A window for `total_pages` pages with `recognition_slots` pages recognizing at once. It holds at most
+    /// `held_pages` pages, counting pages rendered ahead, recognizing and finished behind a slower page. The
+    /// hold limit is never below one slot count and never above [`HELD_PAGES_PER_SLOT`] per slot.
+    pub(super) fn new(total_pages: usize, recognition_slots: usize, held_pages: usize) -> Self {
+        let recognition_slots = recognition_slots.max(1);
         Self {
             total_pages,
-            recognition_slots: recognition_slots.max(1),
+            recognition_slots,
+            held_pages: held_pages.clamp(recognition_slots, HELD_PAGES_PER_SLOT.saturating_mul(recognition_slots)),
             first_held: 0,
             held: VecDeque::new(),
             next_to_recognize: 0,
@@ -53,17 +59,16 @@ impl PageWindow {
         }
     }
 
-    /// The pages to render next: at most one slot count at a time, none past the hold limit or after a
-    /// render error.
+    /// The pages to render next: one slot count (fewer only at the end of the document), once that whole
+    /// batch fits under the hold limit. Rendering a page each time one leaves the window would render pages
+    /// one at a time instead of as a parallel batch. None after a render error.
     pub(super) fn pages_to_render(&self) -> Range<usize> {
         let start = self.first_held + self.held.len();
-        if self.render_error.is_some() {
+        let end = (start + self.recognition_slots).min(self.total_pages);
+        if self.render_error.is_some() || end > self.first_held + self.held_pages {
             return start..start;
         }
-        let end = (start + self.recognition_slots)
-            .min(self.first_held + HELD_PAGES_PER_SLOT * self.recognition_slots)
-            .min(self.total_pages);
-        start..end.max(start)
+        start..end
     }
 
     /// Store the pages a render of [`Self::pages_to_render`] returned. A render that returns a different
@@ -97,7 +102,12 @@ impl PageWindow {
     }
 
     /// The rendered page `page_idx`, which the window holds from its render until it leaves in a ready batch.
-    #[cfg(all(feature = "ocr", feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
     pub(super) fn held_page(&self, page_idx: usize) -> &EncodedPage {
         &self.held[page_idx - self.first_held].0
     }
@@ -166,9 +176,14 @@ mod tests {
         std::iter::from_fn(|| window.next_to_recognize().map(|page| page.0)).collect()
     }
 
+    /// A window that memory does not narrow: it may hold two pages per slot.
+    fn unbounded(total_pages: usize, recognition_slots: usize) -> PageWindow {
+        PageWindow::new(total_pages, recognition_slots, usize::MAX)
+    }
+
     #[test]
     fn a_finished_page_frees_its_slot_for_the_next_page_before_the_others_finish() {
-        let mut window = PageWindow::new(6, 2);
+        let mut window = unbounded(6, 2);
         window.push_rendered(rendered(window.pages_to_render()));
         assert_eq!(launch_all(&mut window), vec![0, 1]);
         window.push_rendered(rendered(window.pages_to_render()));
@@ -185,7 +200,7 @@ mod tests {
 
     #[test]
     fn ready_pages_come_back_in_page_order_when_recognition_finishes_out_of_order() {
-        let mut window = PageWindow::new(3, 3);
+        let mut window = unbounded(3, 3);
         window.push_rendered(rendered(window.pages_to_render()));
         assert_eq!(launch_all(&mut window), vec![0, 1, 2]);
         window.finish(2, recognized("two"));
@@ -209,7 +224,7 @@ mod tests {
 
     #[test]
     fn the_window_holds_at_most_two_pages_per_slot_and_renders_one_slot_count_at_a_time() {
-        let mut window = PageWindow::new(100, 4);
+        let mut window = unbounded(100, 4);
         assert_eq!(window.pages_to_render(), 0..4);
         window.push_rendered(rendered(0..4));
         assert_eq!(window.pages_to_render(), 4..8);
@@ -219,12 +234,72 @@ mod tests {
         assert_eq!(launch_all(&mut window), vec![0, 1, 2, 3]);
         window.finish(0, recognized("zero"));
         assert_eq!(window.take_ready().expect("page 0").encoded.len(), 1);
-        assert_eq!(window.pages_to_render(), 8..9);
+        assert!(
+            window.pages_to_render().is_empty(),
+            "seven pages held: no room for a batch of four"
+        );
+    }
+
+    #[test]
+    fn pages_render_in_batches_of_one_slot_count_once_a_whole_batch_fits() {
+        let mut window = unbounded(12, 4);
+        window.push_rendered(rendered(window.pages_to_render()));
+        window.push_rendered(rendered(window.pages_to_render()));
+        assert_eq!(launch_all(&mut window), vec![0, 1, 2, 3]);
+        for page in 0..3 {
+            window.finish(page, recognized("done"));
+            assert!(window.take_ready().is_some(), "page {page} leaves the window");
+            assert!(
+                window.pages_to_render().is_empty(),
+                "after page {page} leaves, a single page must not render alone"
+            );
+        }
+        window.finish(3, recognized("done"));
+        assert!(window.take_ready().is_some(), "page 3 leaves the window");
+        assert_eq!(window.pages_to_render(), 8..12);
+
+        let mut short = unbounded(6, 4);
+        short.push_rendered(rendered(short.pages_to_render()));
+        assert_eq!(
+            short.pages_to_render(),
+            4..6,
+            "the last batch is the rest of the document"
+        );
+    }
+
+    #[test]
+    fn a_hold_limit_of_one_slot_count_renders_nothing_ahead() {
+        let mut window = PageWindow::new(12, 4, 4);
+        assert_eq!(window.pages_to_render(), 0..4);
+        window.push_rendered(rendered(0..4));
+        assert!(
+            window.pages_to_render().is_empty(),
+            "four pages held of four allowed: nothing renders ahead"
+        );
+        assert_eq!(launch_all(&mut window), vec![0, 1, 2, 3]);
+        for page in 0..4 {
+            window.finish(page, recognized("done"));
+        }
+        assert_eq!(window.take_ready().expect("pages 0 to 3").encoded.len(), 4);
+        assert_eq!(window.pages_to_render(), 4..8);
+    }
+
+    #[test]
+    fn the_hold_limit_stays_between_one_slot_count_and_two_pages_per_slot() {
+        let narrow = PageWindow::new(12, 4, 1);
+        assert_eq!(
+            narrow.held_pages, 4,
+            "a window must hold one slot count to recognize at all"
+        );
+        let wide = PageWindow::new(12, 4, 100);
+        assert_eq!(wide.held_pages, 8, "a window holds two pages per slot at most");
+        let between = PageWindow::new(12, 4, 6);
+        assert_eq!(between.held_pages, 6);
     }
 
     #[test]
     fn a_render_error_waits_until_every_earlier_page_has_left_the_window() {
-        let mut window = PageWindow::new(4, 2);
+        let mut window = unbounded(4, 2);
         window.push_rendered(rendered(window.pages_to_render()));
         window.hold_render_error(crate::XbergError::Parsing {
             message: "render failed".to_string(),
@@ -243,7 +318,7 @@ mod tests {
 
     #[test]
     fn a_render_that_returns_fewer_pages_than_asked_becomes_a_render_error() {
-        let mut window = PageWindow::new(4, 2);
+        let mut window = unbounded(4, 2);
         window.push_rendered(rendered(0..1));
         assert!(window.pages_to_render().is_empty(), "no render after a failure");
         assert_eq!(launch_all(&mut window), Vec::<usize>::new(), "no short render is held");
