@@ -688,7 +688,9 @@ fn compute_formatted_content_observed(
         crate::core::config::OutputFormat::Plain => None,
         crate::core::config::OutputFormat::Markdown => {
             if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("markdown") {
-                doc.pre_rendered_content.take()
+                let text = doc.pre_rendered_content.take()?;
+                observer.formatted_from_source(true, &text, false);
+                Some(text)
             } else {
                 let text = crate::rendering::render_markdown(doc);
                 observer.formatted_from_source(true, &text, crate::rendering::markdown_tag_exemptions_are_owned(doc));

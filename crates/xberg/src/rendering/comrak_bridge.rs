@@ -23,6 +23,17 @@ use super::common::{
     is_container_end, parse_metadata_entries, sorted_inline_annotations, valid_math_annotation,
 };
 
+pub(super) fn admonition_alert_type(kind: &str) -> Option<comrak::nodes::AlertType> {
+    match kind.to_lowercase().as_str() {
+        "note" => Some(comrak::nodes::AlertType::Note),
+        "tip" | "hint" => Some(comrak::nodes::AlertType::Tip),
+        "important" => Some(comrak::nodes::AlertType::Important),
+        "warning" | "warn" => Some(comrak::nodes::AlertType::Warning),
+        "caution" | "danger" | "error" => Some(comrak::nodes::AlertType::Caution),
+        _ => None,
+    }
+}
+
 /// Minimum valid ATX heading depth (CommonMark `#`).
 const MIN_HEADING_LEVEL: u8 = 1;
 
@@ -1382,14 +1393,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                     .unwrap_or("note");
                 let title = elem_attributes.and_then(|attrs| attrs.get("title").map(|s| s.as_str()));
 
-                let alert_type = match kind_str.to_lowercase().as_str() {
-                    "note" => Some(comrak::nodes::AlertType::Note),
-                    "tip" | "hint" => Some(comrak::nodes::AlertType::Tip),
-                    "important" => Some(comrak::nodes::AlertType::Important),
-                    "warning" | "warn" => Some(comrak::nodes::AlertType::Warning),
-                    "caution" | "danger" | "error" => Some(comrak::nodes::AlertType::Caution),
-                    _ => None,
-                };
+                let alert_type = admonition_alert_type(kind_str);
 
                 if let Some(at) = alert_type {
                     let alert = mk(

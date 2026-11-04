@@ -69,7 +69,14 @@ impl DerivedResult {
         }
         let context = self.context.as_ref()?;
         let identity = self.identity.as_ref()?;
-        if !Arc::ptr_eq(identity, &context.identity) || context.validate(&self.document).is_err() {
+        // Observation cannot turn an originally untrusted rendering into literal authority. ~keep
+        let untrusted = (context.capture.formatted.is_some() && !context.capture.tag_exemptions)
+            || context
+                .capture
+                .pages
+                .iter()
+                .any(|page| !page.literal && !page.tag_exemptions);
+        if untrusted || !Arc::ptr_eq(identity, &context.identity) || context.validate(&self.document).is_err() {
             return None;
         }
         Some(ProcessorWitness {

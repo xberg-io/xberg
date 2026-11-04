@@ -386,35 +386,70 @@ impl RedactionPass<'_> {
         } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
-            plans.formatted = Some(
-                match content_matches(text, self.matches_for(text), surfaces.formatted_tag_exemptions()) {
-                    Some(matches) => FormattedPlan::Preserve(matches),
-                    None => FormattedPlan::Discard,
-                },
-            );
+            plans.formatted =
+                Some(self.plan_markdown(text, Some(&doc.content), surfaces.formatted_tag_exemptions(), limits)?);
         }
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
             if !surfaces.page_markdown(index) {
                 continue;
             }
-            let plan = self.plan_page(&page.content, index, surfaces)?;
+            let plan = self.plan_page(&page.content, index, surfaces, limits)?;
             plans.pages.insert(index, plan);
         }
         Ok(plans)
     }
 
-    fn plan_page(&self, text: &str, index: usize, surfaces: &impl RedactionSurfaces) -> Result<PagePlan> {
+    fn applicable_matches(&self, text: &str) -> Vec<PatternMatch> {
+        self.matches_for(text)
+            .into_iter()
+            .filter(|finding| is_applicable(text, finding))
+            .collect()
+    }
+
+    fn plan_markdown(
+        &self,
+        text: &str,
+        plain: Option<&str>,
+        tag_exemptions: bool,
+        limits: &SecurityLimits,
+    ) -> Result<FormattedPlan> {
+        let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
+        let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(invalid)?;
+        let sensitive = match_ranges(&self.applicable_matches(&projection.text));
+        if let Some(matches) = content_matches(text, self.applicable_matches(text), tag_exemptions)
+            && projection.covered(&sensitive, &match_ranges(&matches))
+        {
+            return Ok(FormattedPlan::Preserve(matches));
+        }
+        let plain =
+            plain.ok_or_else(|| crate::XbergError::validation("Generated Markdown has no verified plain backup"))?;
+        let selected = self.applicable_matches(plain);
+        let correspondence = projection.on_plain(plain).ok_or_else(invalid)?;
+        if !correspondence.covered(&sensitive, &match_ranges(&selected)) {
+            return Err(invalid());
+        }
+        Ok(FormattedPlan::Discard)
+    }
+
+    fn plan_page(
+        &self,
+        text: &str,
+        index: usize,
+        surfaces: &impl RedactionSurfaces,
+        limits: &SecurityLimits,
+    ) -> Result<PagePlan> {
+        let source = surfaces.page_backup(index);
         if !surfaces.page_is_literal(index)
-            && let Some(matches) = content_matches(text, self.matches_for(text), surfaces.page_tag_exemptions(index))
+            && let FormattedPlan::Preserve(matches) =
+                self.plan_markdown(text, source, surfaces.page_tag_exemptions(index), limits)?
         {
             return Ok(PagePlan::Preserve(matches));
         }
-        let source = surfaces
-            .page_backup(index)
+        let source = source
             .ok_or_else(|| crate::XbergError::validation("Generated Markdown page has no verified plain backup"))?;
         Ok(PagePlan::Plain {
             source: source.to_owned(),
-            matches: self.matches_for(source),
+            matches: self.applicable_matches(source),
         })
     }
 
@@ -604,6 +639,7 @@ impl RedactionPass<'_> {
     /// Rewrite every text surface of `doc`, recursing into embedded
     /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
     fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        let incoming_warnings = doc.processing_warnings.len();
         self.redact_primary_surfaces(doc, depth);
 
         self.redact_chunks(doc);
@@ -631,7 +667,7 @@ impl RedactionPass<'_> {
             }
         }
 
-        self.redact_secondary_text_fields(doc, depth);
+        self.redact_secondary_text_fields(doc, depth, incoming_warnings);
     }
 
     /// Rewrite chunk text, keeping chunk byte ranges consistent when the
@@ -668,7 +704,7 @@ impl RedactionPass<'_> {
     /// This is an allowlist of *fields*, but it is meant to be exhaustive over
     /// the text surfaces of [`ExtractedDocument`]; when a new text field is
     /// added there it must be added here too.
-    fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+    fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize, incoming_warnings: usize) {
         self.redact_tables(doc);
         self.redact_pages(doc, depth);
         self.redact_elements(doc);
@@ -678,7 +714,7 @@ impl RedactionPass<'_> {
         self.redact_nested_documents(doc, depth);
         self.redact_references(doc);
         self.redact_metadata(doc);
-        self.redact_processing_warnings(doc);
+        self.redact_processing_warnings(doc, incoming_warnings);
 
         if let Some(structured) = doc.structured_output.as_mut() {
             self.redact_json_value(structured);
@@ -1147,8 +1183,9 @@ impl RedactionPass<'_> {
 
     /// Rewrite processing-warning messages: they can embed source paths or other
     /// diagnostic detail carrying a person's name (e.g. a home-directory path).
-    fn redact_processing_warnings(&mut self, doc: &mut ExtractedDocument) {
-        for warning in doc.processing_warnings.iter_mut() {
+    fn redact_processing_warnings(&mut self, doc: &mut ExtractedDocument, incoming: usize) {
+        // Static diagnostics produced by this pass carry no source data or replacement identity. ~keep
+        for warning in doc.processing_warnings.iter_mut().take(incoming) {
             let redacted = self.redact(&warning.message);
             warning.message = std::borrow::Cow::Owned(redacted);
         }
@@ -1176,6 +1213,10 @@ impl RedactionPass<'_> {
 /// NER backends report offsets the engine did not compute itself; a stale or
 /// shifted span must be skipped rather than rewriting an unrelated region of
 /// the document — and must not be reported as redacted either.
+fn match_ranges(matches: &[PatternMatch]) -> Vec<std::ops::Range<usize>> {
+    matches.iter().map(|finding| finding.start..finding.end).collect()
+}
+
 fn is_applicable(text: &str, m: &PatternMatch) -> bool {
     m.start < m.end
         && m.end <= text.len()

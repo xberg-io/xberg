@@ -26,6 +26,8 @@ mod markdown;
 #[cfg(feature = "pdf")]
 mod pdf;
 mod plain;
+#[cfg(feature = "redaction")]
+mod redaction_projection;
 pub(crate) mod table_math;
 pub(crate) mod table_scripts;
 
@@ -48,6 +50,8 @@ pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown};
 #[cfg(feature = "pdf")]
 pub(crate) use pdf::render_pdf;
 pub(crate) use plain::render_plain;
+#[cfg(feature = "redaction")]
+pub(crate) use redaction_projection::VisibleMarkdown;
 
 #[cfg(all(test, feature = "office", feature = "pdf"))]
 mod inline_html_writer_tests;
