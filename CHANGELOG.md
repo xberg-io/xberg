@@ -50,9 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(bindings): Regenerate the bindings with Alef 0.122.1.**
+- **(bindings): Regenerate the bindings with Alef 0.122.2.**
   The Swift `TesseractConfig` DTO ignores unknown keys, while the Rust config keeps rejecting them and still accepts a
-  `language` string and the legacy boolean `thresholding_method`. Python option enums subclass `StrEnum`.
+  `language` string and the legacy boolean `thresholding_method`. Python option enums subclass `StrEnum`. The Node
+  binding's fallible conversions return their results directly, so clippy accepts them.
 
 - **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
   Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
