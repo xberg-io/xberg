@@ -1,6 +1,10 @@
 #![cfg(feature = "pdf")]
 
+mod helpers;
+
+use helpers::extract_bytes_document_blocking;
 use lopdf::{Document, Object, Stream, dictionary};
+use xberg::core::config::{ExtractionConfig, OutputFormat, PdfBackend, PdfConfig};
 use xberg_native_pdf::PdfDocument;
 use xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig;
 
@@ -10,8 +14,8 @@ const COLS: usize = 3;
 const TOP: usize = 680;
 const CELL_HEIGHT: usize = 30;
 
-fn expected_rows() -> Vec<Vec<String>> {
-    (0..ROWS)
+fn expected_rows(row_count: usize) -> Vec<Vec<String>> {
+    (0..row_count)
         .map(|row| (0..COLS).map(|col| format!("R{row}C{col}")).collect())
         .collect()
 }
@@ -59,7 +63,7 @@ fn ruled_content(sections: &[(usize, usize)]) -> String {
             content.push_str(&format!("{x} {bottom} m {x} {upper} l S\n"));
         }
     }
-    for (row, cells) in expected_rows().iter().take(row_count).enumerate() {
+    for (row, cells) in expected_rows(row_count).iter().enumerate() {
         for (column, value) in cells.iter().enumerate() {
             let x = left + column * cell_width + 8;
             let y = TOP - (row + 1) * CELL_HEIGHT + 11;
@@ -78,7 +82,7 @@ struct CapturedSection {
 #[test]
 fn should_place_each_admitted_row_on_its_side_of_the_pdf_section_rule() {
     let actual = capture_native_sections(&[(0, 3), (3, 6)]);
-    let expected = expected_rows();
+    let expected = expected_rows(ROWS);
     assert_eq!(
         actual.iter().flat_map(|section| &section.rows).collect::<Vec<_>>(),
         expected.iter().collect::<Vec<_>>()
@@ -104,10 +108,42 @@ fn should_keep_the_same_six_rows_in_one_grid_when_vertical_rules_cross() {
     assert_eq!(
         capture_native_sections(&[(0, 6)]),
         [CapturedSection {
-            rows: expected_rows(),
+            rows: expected_rows(ROWS),
             vertical_bounds: (500.0, 680.0),
         }]
     );
+}
+
+#[test]
+fn undersized_ruled_section_keeps_all_rows_in_native_and_core() {
+    let sections = [(0, 3), (3, 4), (4, 7)];
+    let rows = expected_rows(7);
+    let expected = [rows[..3].to_vec(), rows[3..].to_vec()];
+    let native: Vec<_> = capture_native_sections(&sections)
+        .into_iter()
+        .map(|section| section.rows)
+        .collect();
+    assert_eq!(native, expected);
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        output_format: OutputFormat::Markdown,
+        pdf_options: Some(PdfConfig {
+            backend: PdfBackend::Native,
+            extract_tables: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = extract_bytes_document_blocking(&ruled_pdf(&sections), "application/pdf", &config)
+        .expect("extract the synthetic PDF through Core");
+    let core: Vec<_> = result.tables.into_iter().map(|table| table.cells).collect();
+    assert_eq!(core, expected);
+    assert_eq!(result.content.matches(PROSE).count(), 1);
+    for value in rows.iter().flatten() {
+        assert_eq!(result.content.matches(value).count(), 1, "{value} in public output");
+    }
 }
 
 fn capture_native_sections(sections: &[(usize, usize)]) -> Vec<CapturedSection> {

@@ -3854,7 +3854,12 @@ fn split_table_at_section_dividers(
     }
 
     let Some(legacy_sections) = build_table_sections(&table, &split_after, config.min_table_cells) else {
-        return vec![table];
+        let exact = exact_section_cuts(&row_bounds, &divider_ys, &split_after);
+        return split_around_undersized_sections(
+            table,
+            exact.as_deref().unwrap_or(&split_after),
+            config.min_table_cells,
+        );
     };
     let Some(exact) = exact_section_cuts(&row_bounds, &divider_ys, &split_after) else {
         return legacy_sections;
@@ -3927,6 +3932,48 @@ fn passes_section_admission(table: &Table) -> bool {
     is_valid_table(table) && table.is_real_grid() && !crate::document::looks_like_prose_table(table)
 }
 
+fn split_around_undersized_sections(table: Table, split_after: &[usize], min_cells: usize) -> Vec<Table> {
+    // This fallback can partition an admitted grid, but must not admit a previously rejected one. ~keep
+    if !has_complete_section_rows(&table) || !passes_section_admission(&table) {
+        return vec![table];
+    }
+    let cuts = coalesced_section_cuts(&table.rows, split_after, min_cells);
+    if cuts.is_empty() {
+        return vec![table];
+    }
+    build_table_sections(&table, &cuts, min_cells)
+        .filter(|sections| sections.iter().all(passes_section_admission))
+        .unwrap_or_else(|| vec![table])
+}
+
+fn coalesced_section_cuts(rows: &[TableRow], split_after: &[usize], min_cells: usize) -> Vec<usize> {
+    let mut cuts = Vec::new();
+    let mut start = 0;
+    let mut filled = 0;
+    for end in split_after
+        .iter()
+        .map(|index| index + 1)
+        .chain(std::iter::once(rows.len()))
+    {
+        filled += filled_section_cells(&rows[start..end]);
+        start = end;
+        if filled >= min_cells {
+            cuts.push(end - 1);
+            filled = 0;
+        }
+    }
+    // A trailing short range stays with the last admitted range. ~keep
+    cuts.pop();
+    cuts
+}
+
+fn filled_section_cells(rows: &[TableRow]) -> usize {
+    rows.iter()
+        .flat_map(|row| &row.cells)
+        .filter(|cell| !cell.text.is_empty())
+        .count()
+}
+
 fn build_table_sections(table: &Table, split_after: &[usize], min_cells: usize) -> Option<Vec<Table>> {
     let num_cols = table.col_count;
     let all_rows = &table.rows;
@@ -3944,13 +3991,7 @@ fn build_table_sections(table: &Table, split_after: &[usize], min_cells: usize) 
     }
 
     // Splitting is optional; keep the admitted table if any resulting section would disappear. ~keep
-    if sub_tables.iter().any(|rows| {
-        rows.iter()
-            .flat_map(|row| &row.cells)
-            .filter(|cell| !cell.text.is_empty())
-            .count()
-            < min_cells
-    }) {
+    if sub_tables.iter().any(|rows| filled_section_cells(rows) < min_cells) {
         return None;
     }
 
@@ -9018,6 +9059,57 @@ mod tests {
         for (i, t) in tables.iter().enumerate() {
             assert_eq!(t.col_count, 3, "Table {} should have 3 columns, got {}", i, t.col_count);
         }
+    }
+
+    #[test]
+    fn should_preserve_valid_sections_around_an_undersized_section() {
+        let mut rows = Vec::new();
+        for row_index in 0..7 {
+            let mut row = TableRow::new(false);
+            for column in 0..3 {
+                let mut cell = TableCell::new(format!("R{row_index}C{column}"), false);
+                cell.bbox = Some(Rect::new(
+                    10.0 + column as f32 * 30.0,
+                    10.0 + row_index as f32 * 10.0,
+                    30.0,
+                    10.0,
+                ));
+                row.cells.push(cell);
+            }
+            rows.push(row);
+        }
+        let table = Table {
+            rows,
+            col_count: 3,
+            has_header: false,
+            bbox: Some(Rect::new(10.0, 10.0, 90.0, 70.0)),
+        };
+        let original = header_source_diagnostic::rows(&table.rows);
+        let horizontal: Vec<_> = [20.0, 40.0, 50.0]
+            .into_iter()
+            .map(|coord| Edge {
+                coord,
+                start: 10.0,
+                end: 100.0,
+            })
+            .collect();
+        let vertical: Vec<_> = [(10.0, 40.0), (40.0, 50.0), (50.0, 80.0)]
+            .into_iter()
+            .flat_map(|(start, end)| {
+                [10.0, 40.0, 70.0, 100.0]
+                    .into_iter()
+                    .map(move |coord| Edge { coord, start, end })
+            })
+            .collect();
+        let parts = split_table_at_section_dividers(table, &horizontal, &vertical, &TableDetectionConfig::default());
+        let lengths: Vec<_> = parts.iter().map(|part| part.rows.len()).collect();
+        assert_eq!(lengths, [3, 4], "the small section must not veto both valid sections");
+        let retained: Vec<_> = parts.into_iter().flat_map(|part| part.rows).collect();
+        assert_eq!(
+            header_source_diagnostic::rows(&retained),
+            original,
+            "every cell and its metadata survives once"
+        );
     }
 
     // -----------------------------------------------------------------

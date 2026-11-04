@@ -53,6 +53,7 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
 
 #[derive(Default)]
 struct NativeTableMetadata {
+    ruled: bool,
     grid: Option<crate::types::TableGrid>,
     scripts: Option<crate::pdf::native::table::scripts::TableScripts>,
     complete_leading_header: bool,
@@ -724,6 +725,7 @@ pub(crate) fn extract_all_from_native_document(
                         (
                             entry.table,
                             NativeTableMetadata {
+                                ruled: true,
                                 grid: entry.grid,
                                 scripts: entry.scripts,
                                 complete_leading_header: entry.complete_leading_header,
@@ -960,6 +962,7 @@ pub(crate) fn extract_all_from_native_document(
 
         match crate::pdf::structure::pipeline::extract_document_structure_from_native_pages(
             native_pages,
+            native_table_grids.iter().take_while(|metadata| metadata.ruled).count(),
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,
                 tables: &tables,
