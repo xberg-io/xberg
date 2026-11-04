@@ -249,7 +249,9 @@ fn has_stacked_counterpart(spans: &[TextSpan], base: usize, members: &[usize]) -
     spans.iter().any(|lower| {
         let shift = baseline(base) - baseline(lower);
         let ratio = lower.font_size / base.font_size;
-        same_context(base, lower)
+        // Opposing geometry invalidates the attachment proof even when semantic or style metadata differs. ~keep
+        super::has_valid_span_geometry(lower)
+            && super::has_same_rotation(base, lower)
             && (super::INLINE_SCRIPT_MIN_FONT_RATIO..=super::INLINE_SCRIPT_MAX_FONT_RATIO).contains(&ratio)
             && shift > 0.0
             && shift <= base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
