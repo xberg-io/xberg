@@ -745,7 +745,6 @@ impl SyncExtractor for HtmlExtractor {
 
         if cfg!(feature = "redaction")
             && config.redaction.is_some()
-            && matches!(config.output_format, OutputFormat::Markdown)
             && let (Some(metadata), Some(structure)) = (html_metadata.as_mut(), doc_structure.as_ref())
         {
             normalize_redaction_headings(metadata, structure);

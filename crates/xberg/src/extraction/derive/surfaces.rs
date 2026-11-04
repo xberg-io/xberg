@@ -142,6 +142,14 @@ impl ProcessingDocument for ExtractedDocument {
 }
 
 #[cfg(feature = "redaction")]
+pub(crate) struct HtmlHeadingSource {
+    pub level: u8,
+    pub text: String,
+    pub styled_metadata: Option<String>,
+    pub unproved_markup: bool,
+}
+
+#[cfg(feature = "redaction")]
 pub(crate) trait RedactionSurfaces: Send + Sync {
     fn validate(&self, _document: &ExtractedDocument) -> crate::Result<()> {
         Ok(())
@@ -176,6 +184,9 @@ pub(crate) trait RedactionSurfaces: Send + Sync {
     fn formatted_tag_exemptions(&self) -> bool {
         false
     }
+    fn html_heading_sources(&self) -> Option<&[HtmlHeadingSource]> {
+        None
+    }
     fn formatted_plain_annotation_separator(&self) -> Option<usize> {
         None
     }
@@ -196,5 +207,7 @@ impl RedactionSurfaces for () {}
 mod capture;
 #[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
 pub(crate) use capture::DerivedResult;
+#[cfg(all(test, feature = "redaction"))]
+pub(crate) use capture::derive_with_surfaces;
 #[cfg(feature = "redaction")]
-pub(crate) use capture::{ProcessorWitness, SurfaceContext, derive_with_surfaces};
+pub(crate) use capture::{ProcessorWitness, SurfaceContext, derive_with_configured_surfaces};

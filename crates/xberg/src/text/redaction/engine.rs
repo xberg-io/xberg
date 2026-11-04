@@ -427,6 +427,9 @@ impl<'a> RedactionPass<'a> {
         surfaces: &'a impl RedactionSurfaces,
         limits: &SecurityLimits,
     ) -> Result<SurfacePlans<'a>> {
+        if surfaces.formatted_markdown() || surfaces.html_heading_sources().is_some() {
+            self.verify_html_heading_redaction(doc, surfaces.html_heading_sources(), limits)?;
+        }
         if let Some(kind) = surfaces.formatted_markup() {
             return self.plan_verified_surfaces(doc, surfaces, limits, kind);
         }
@@ -450,18 +453,14 @@ impl<'a> RedactionPass<'a> {
         } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
-            let plan = self.plan_markdown(
+            plans.formatted = Some(self.plan_markdown(
                 text,
                 Some(&doc.content),
                 surfaces.formatted_tag_exemptions(),
                 surfaces.formatted_owned_tags(),
                 surfaces.formatted_plain_annotation_separator(),
                 limits,
-            )?;
-            if matches!(plan, FormattedPlan::Discard) {
-                self.verify_html_heading_redaction(doc, limits)?;
-            }
-            plans.formatted = Some(plan);
+            )?);
         }
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
             if !surfaces.page_markdown(index) {
@@ -473,14 +472,41 @@ impl<'a> RedactionPass<'a> {
         Ok(plans)
     }
 
-    fn verify_html_heading_redaction(&self, doc: &ExtractedDocument, limits: &SecurityLimits) -> Result<()> {
+    fn verify_html_heading_redaction(
+        &self,
+        doc: &ExtractedDocument,
+        sources: Option<&[crate::extraction::derive::surfaces::HtmlHeadingSource]>,
+        limits: &SecurityLimits,
+    ) -> Result<()> {
+        let unproved = || crate::XbergError::validation("Cannot prove complete styled HTML heading redaction");
+        let sources = sources.unwrap_or_default();
+        if sources
+            .iter()
+            .any(|source| source.unproved_markup && !self.applicable_matches(&source.text).is_empty())
+        {
+            return Err(unproved());
+        }
+
         let Some(html) = doc.metadata.format.as_ref().and_then(|format| format.html()) else {
             return Ok(());
         };
-        for heading in &html.headers {
+        let paired = sources.len() == html.headers.len();
+        for (index, heading) in html.headers.iter().enumerate() {
             let text = &heading.text;
-            let unproved = || crate::XbergError::validation("Cannot prove complete styled HTML heading redaction");
+            let source = sources
+                .get(index)
+                .filter(|source| paired && source.level == heading.level);
+            if source.is_some_and(|source| source.text == *text) {
+                continue;
+            }
             let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(unproved)?;
+            if source.is_some_and(|source| {
+                source.styled_metadata.as_deref() == Some(text)
+                    && projection.text != source.text
+                    && !self.applicable_matches(&source.text).is_empty()
+            }) {
+                return Err(unproved());
+            }
             let sensitive = match_ranges(&self.applicable_matches(&projection.text));
             if !projection.covered(&sensitive, &match_ranges(&self.applicable_matches(text))) {
                 return Err(unproved());

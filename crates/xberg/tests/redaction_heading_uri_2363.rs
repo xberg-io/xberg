@@ -195,3 +195,46 @@ async fn unproved_formatted_heading_cannot_leak_through_plain_fallback() {
             .contains("Cannot prove complete styled HTML heading redaction")
     );
 }
+
+#[tokio::test]
+async fn unsupported_superscript_delimiter_cannot_hide_the_semantic_heading() {
+    let input = b"<h2>Jane <sup>Doe</sup></h2>";
+    let mut options = config(false);
+    options.html_options = Some(html_to_markdown_rs::ConversionOptions {
+        extract_metadata: true,
+        sup_symbol: "!".to_string(),
+        ..Default::default()
+    });
+    let baseline = extract(ExtractInput::from_bytes(input, "text/html", None), &options)
+        .await
+        .unwrap();
+    assert!(baseline.results[0].content.contains("Jane !Doe!"));
+    assert_eq!(headings(&baseline.results[0])[0].text, "Jane !Doe!");
+
+    options.redaction = config(true).redaction;
+    for (format, metadata) in [
+        (OutputFormat::Markdown, true),
+        (OutputFormat::Markdown, false),
+        (OutputFormat::Plain, true),
+    ] {
+        options.output_format = format;
+        options.html_options.as_mut().unwrap().extract_metadata = metadata;
+        let error = extract(ExtractInput::from_bytes(input, "text/html", None), &options)
+            .await
+            .expect_err("a renderer-owned unsupported delimiter must not hide a match");
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot prove complete styled HTML heading redaction")
+        );
+    }
+
+    options.output_format = OutputFormat::Markdown;
+    let literal = extract(
+        ExtractInput::from_bytes(b"<h2>Jane !Doe!</h2>", "text/html", None),
+        &options,
+    )
+    .await
+    .expect("literal exclamation marks do not represent a structured superscript");
+    assert_eq!(headings(&literal.results[0])[0].text, "Jane !Doe!");
+}

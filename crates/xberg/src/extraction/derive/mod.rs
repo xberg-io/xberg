@@ -871,7 +871,7 @@ pub fn derive_extraction_result(
     derive(doc, include_document_structure, output_format, true, &mut ())
 }
 
-#[cfg(feature = "redaction")]
+#[cfg(all(test, feature = "redaction"))]
 pub(crate) use surfaces::derive_with_surfaces;
 
 /// Derive the document that the registry hands to a registered public renderer.

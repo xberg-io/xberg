@@ -621,10 +621,10 @@ async fn run_pipeline_impl(
     };
 
     #[cfg(feature = "redaction")]
-    let mut result = crate::extraction::derive::derive_with_surfaces(
+    let mut result = crate::extraction::derive::surfaces::derive_with_configured_surfaces(
         doc,
         include_structure,
-        config.output_format.clone(),
+        config,
         capture_redaction,
     );
     #[cfg(not(feature = "redaction"))]
