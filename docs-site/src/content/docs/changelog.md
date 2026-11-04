@@ -167,6 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(redaction): Cover repeated inline-styled terms in Markdown and DOCX/PDF output.** (#2361)
   Verify each rendered occurrence against its own plain backup before retaining formatting or returning a plain fallback.
   Preserve untrusted HTML-derived Markdown obligations through processor edits and keep original finding offsets.
+  Keep the projection available with standalone redaction and runtime-free processing.
 
 - **(pdf, pptx): Write one page marker for every page and slide, an empty one included.** (GH#2422)
   With `pages.insert_page_markers` on, a PDF page with no content got no marker in the structured path.

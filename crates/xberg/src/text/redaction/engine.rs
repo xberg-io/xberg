@@ -1207,16 +1207,16 @@ impl RedactionPass<'_> {
     }
 }
 
+fn match_ranges(matches: &[PatternMatch]) -> Vec<std::ops::Range<usize>> {
+    matches.iter().map(|finding| finding.start..finding.end).collect()
+}
+
 /// A match is applied only when its span is a valid slice of `text` that still
 /// holds exactly the matched text.
 ///
 /// NER backends report offsets the engine did not compute itself; a stale or
 /// shifted span must be skipped rather than rewriting an unrelated region of
 /// the document — and must not be reported as redacted either.
-fn match_ranges(matches: &[PatternMatch]) -> Vec<std::ops::Range<usize>> {
-    matches.iter().map(|finding| finding.start..finding.end).collect()
-}
-
 fn is_applicable(text: &str, m: &PatternMatch) -> bool {
     m.start < m.end
         && m.end <= text.len()
