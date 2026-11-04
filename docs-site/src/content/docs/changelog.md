@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(windows): Bundle the Microsoft runtime dependencies of PHP, CLI, C FFI, and Elixir releases.** (#2370)
+  Verify hard and delayed DLL imports and runtime notices in the final archives before upload.
+
 - **(redaction): Rebuild verified HTML from redacted plain text.** (#2361)
   Cover repeated terms split by inline styling while keeping HTML output and reporting the loss of original formatting.
   Reject HTML whose original text cannot be verified or whose captured content changes during post-processing.

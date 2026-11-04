@@ -3,15 +3,29 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import fnmatch
 import hashlib
 import json
 import os
 import re
+import stat
 import struct
 import subprocess
+import tarfile
 import zipfile
+from ctypes import wintypes
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Sequence
+
+_WINDOWS_GET_FILE_ATTRIBUTES = None
+if os.name == "nt":
+    _WINDOWS_GET_FILE_ATTRIBUTES = ctypes.WinDLL("kernel32", use_last_error=True).GetFileAttributesW
+    _WINDOWS_GET_FILE_ATTRIBUTES.argtypes = [wintypes.LPCWSTR]
+    _WINDOWS_GET_FILE_ATTRIBUTES.restype = wintypes.DWORD
 
 SYSTEM_DLLS = frozenset(
     [
@@ -71,6 +85,8 @@ MSVC_PREFIXES = ("msvcp", "vcruntime", "concrt", "vcomp")
 VS2022_EDITIONS = ("Community", "Professional", "Enterprise")
 REDIST_TERMS = "https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution#visual-c-runtime-files"
 RUNTIME_TERMS = "https://visualstudio.microsoft.com/license-terms/vs2022-cruntime/"
+PHP_QUERY_TIMEOUT_SECONDS = 10
+RAW_CRT_NOTICE = "MICROSOFT_VC_RUNTIME.json"
 
 
 class PeImage:
@@ -175,11 +191,12 @@ def roots(files: dict[str, tuple[str, bytes]], native_glob: str) -> list[str]:
     return found
 
 
-def audit(
+def _audit_graph(
     files: dict[str, tuple[str, bytes]],
     native_glob: str,
-    required: str = "onnxruntime.dll",
-    forbidden: str = "directml.dll",
+    required: str,
+    forbidden: str,
+    allow_external: Callable[[str, str], bool],
 ) -> dict[str, int]:
     native = roots(files, native_glob)
     machines = {PurePosixPath(key).parent: PeImage(files[key][1]).machine for key in native}
@@ -200,9 +217,239 @@ def audit(
             edges += 1
             if dependency == forbidden.lower():
                 raise ValueError(f"{name} imports forbidden {dependency}")
-            if not external(dependency) and str(directory / dependency) not in files:
+            if not allow_external(key, dependency) and str(directory / dependency) not in files:
                 raise ValueError(f"{name} missing wheel-local dependency {dependency}")
     return {"files": inspected, "edges": edges, "roots": len(native)}
+
+
+def audit(
+    files: dict[str, tuple[str, bytes]],
+    native_glob: str,
+    required: str = "onnxruntime.dll",
+    forbidden: str = "directml.dll",
+) -> dict[str, int]:
+    return _audit_graph(files, native_glob, required, forbidden, lambda _key, name: external(name))
+
+
+def _raw_member_paths(members: Sequence[tuple[str, bool]]) -> list[str]:
+    names = []
+    seen = set()
+    for name, linked in members:
+        if linked:
+            raise ValueError(f"artifact links are forbidden: {name}")
+        path = PurePosixPath(name)
+        if (
+            not name
+            or path.is_absolute()
+            or ".." in path.parts
+            or any(ord(c) < 32 or c in '\\:<>"|?*' for c in name)
+            or any(part.endswith((".", " ")) for part in path.parts)
+            or any(
+                re.fullmatch(r"con|prn|aux|nul|(?:com|lpt)[1-9¹²³]", part.split(".")[0].rstrip(" "), re.IGNORECASE)
+                for part in path.parts
+            )
+        ):
+            raise ValueError(f"unsafe artifact member: {name}")
+        normalized = str(path)
+        if normalized.casefold() in seen:
+            raise ValueError(f"duplicate artifact member: {name}")
+        seen.add(normalized.casefold())
+        names.append(normalized)
+    return names
+
+
+def _raw_member_selected(name: str, selected: set[str] | None) -> bool:
+    return name.lower().endswith((".dll", ".exe", ".pyd")) if selected is None else name.lower() in selected
+
+
+def _windows_file_attributes(path: Path) -> int:
+    if _WINDOWS_GET_FILE_ATTRIBUTES is None:
+        return 0
+    attributes = _WINDOWS_GET_FILE_ATTRIBUTES(str(path))
+    if attributes == 0xFFFFFFFF:
+        raise ctypes.WinError(ctypes.get_last_error())
+    return attributes
+
+
+def raw_path_mode(path: Path) -> int:
+    # Windows lstat can resolve reparse points that are not name surrogates.
+    if _windows_file_attributes(path) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+        raise ValueError(f"artifact links are forbidden (Windows reparse point): {path}")
+    mode = path.lstat().st_mode
+    if stat.S_ISLNK(mode):
+        raise ValueError(f"artifact links are forbidden: {path}")
+    return mode
+
+
+def raw_directory_members(root: Path) -> list[tuple[Path, str, bool]]:
+    paths = []
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        if not stat.S_ISDIR(raw_path_mode(directory)):
+            raise ValueError(f"artifact directory changed: {directory}")
+        children = []
+        for path in directory.iterdir():
+            mode = raw_path_mode(path)
+            if stat.S_ISDIR(mode):
+                children.append(path)
+            paths.append((path, stat.S_ISREG(mode)))
+        pending.extend(reversed(children))
+    names = _raw_member_paths([(path.relative_to(root).as_posix(), False) for path, _ in paths])
+    return [(path, name, regular) for (path, regular), name in zip(paths, names, strict=True)]
+
+
+def _raw_directory_entries(root: Path, selected: set[str] | None) -> Iterator[tuple[str, bytes]]:
+    for path, name, regular in raw_directory_members(root):
+        if regular and _raw_member_selected(name, selected):
+            yield name, path.read_bytes()
+
+
+def raw_zip_members(archive: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]]:
+    members = archive.infolist()
+    names = _raw_member_paths([(member.orig_filename, stat.S_ISLNK(member.external_attr >> 16)) for member in members])
+    return list(zip(members, names, strict=True))
+
+
+def _raw_zip_entries(path: Path, selected: set[str] | None) -> Iterator[tuple[str, bytes]]:
+    with zipfile.ZipFile(path) as archive:
+        for member, name in raw_zip_members(archive):
+            if not member.is_dir() and _raw_member_selected(name, selected):
+                yield name, archive.read(member)
+
+
+def raw_tar_members(archive: tarfile.TarFile) -> list[tuple[tarfile.TarInfo, str]]:
+    members = archive.getmembers()
+    names = _raw_member_paths([(member.name, member.issym() or member.islnk()) for member in members])
+    for member, name in zip(members, names, strict=True):
+        if not member.isfile() and not member.isdir():
+            raise ValueError(f"unsupported artifact member: {name}")
+    return list(zip(members, names, strict=True))
+
+
+def _raw_tar_entries(path: Path, selected: set[str] | None) -> Iterator[tuple[str, bytes]]:
+    with tarfile.open(path) as archive:
+        for member, name in raw_tar_members(archive):
+            if member.isfile() and _raw_member_selected(name, selected):
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise ValueError(f"unreadable artifact member: {name}")
+                with stream:
+                    yield name, stream.read()
+
+
+def _raw_artifact_files(artifact: Path, selected: set[str] | None = None) -> dict[str, tuple[str, bytes]]:
+    if stat.S_ISDIR(raw_path_mode(artifact)):
+        entries = _raw_directory_entries(artifact, selected)
+    elif artifact.name.lower().endswith((".tar.gz", ".tgz")):
+        entries = _raw_tar_entries(artifact, selected)
+    else:
+        entries = _raw_zip_entries(artifact, selected)
+    return {name.lower(): (name, data) for name, data in entries}
+
+
+def _php_query(host: Path) -> dict[str, int]:
+    code = (
+        'echo json_encode(["version_id"=>PHP_VERSION_ID,"zts"=>PHP_ZTS,"debug"=>PHP_DEBUG,"int_size"=>PHP_INT_SIZE]);'
+    )
+    try:
+        result = subprocess.run(
+            [str(host), "-n", "-r", code],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=PHP_QUERY_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("PHP host command failed") from error
+    if result.returncode != 0:
+        raise ValueError("PHP host command failed")
+    try:
+        info = json.loads(result.stdout)
+    except (ValueError, TypeError) as error:
+        raise ValueError("PHP host JSON is invalid") from error
+    fields = ("version_id", "zts", "debug", "int_size")
+    if not isinstance(info, dict) or any(type(info.get(field)) is not int for field in fields):
+        raise ValueError("PHP host JSON fields must be integers")
+    return info
+
+
+def _php_host_abi(host: Path, version: str | None, machine: int) -> str:
+    if version is None or re.fullmatch(r"8\.\d+", version) is None:
+        raise ValueError("PHP host version must specify the expected PHP 8 minor")
+    image = PeImage(host.read_bytes())
+    if image.machine != machine:
+        raise ValueError("PHP host PE architecture mismatch")
+    if "php8.dll" not in image.imports():
+        raise ValueError("PHP host must import php8.dll")
+    libraries = [path for path in host.parent.iterdir() if path.is_file() and path.name.lower() == "php8.dll"]
+    if len(libraries) != 1:
+        raise ValueError("PHP host runtime DLL missing or ambiguous")
+    if PeImage(libraries[0].read_bytes()).machine != machine:
+        raise ValueError("PHP host PE architecture mismatch")
+    info = _php_query(host)
+    major, minor = map(int, version.split("."))
+    if info["version_id"] // 100 != major * 100 + minor:
+        raise ValueError("PHP host version mismatch")
+    if info["zts"] != 0:
+        raise ValueError("PHP host thread safety must be NTS")
+    if info["debug"] != 0:
+        raise ValueError("PHP host debug runtime is not supported")
+    if info["int_size"] != {0x8664: 8, 0xAA64: 8, 0x14C: 4}.get(machine):
+        raise ValueError("PHP host pointer width mismatch")
+    return "php8.dll"
+
+
+def audit_artifact(
+    artifact: Path,
+    native_glob: str,
+    required: str = "onnxruntime.dll",
+    forbidden: str = "directml.dll",
+    *,
+    artifact_kind: str = "wheel",
+    php_host: Path | None = None,
+    php_version: str | None = None,
+    require_crt_notices: bool = False,
+) -> dict[str, int]:
+    if artifact_kind == "wheel":
+        if php_host is not None or php_version is not None:
+            raise ValueError("PHP host is only supported for raw artifacts")
+        if require_crt_notices:
+            raise ValueError("raw CRT notices are only supported for raw artifacts")
+        return audit(artifact_files(artifact), native_glob, required, forbidden)
+    if artifact_kind != "raw":
+        raise ValueError("unknown artifact kind")
+    files = _raw_artifact_files(artifact)
+    allowed = raw_external_policy(files, roots(files, native_glob), php_host, php_version)
+    result = _audit_graph(files, native_glob, required, forbidden, allowed)
+    if require_crt_notices:
+        audit_raw_crt_notices(artifact, files)
+    return result
+
+
+def raw_external_policy(
+    files: dict[str, tuple[str, bytes]],
+    native: list[str],
+    php_host: Path | None,
+    php_version: str | None,
+) -> Callable[[str, str], bool]:
+    host_abi = None
+    if php_host is not None:
+        if any(PurePosixPath(key).name != "xberg.dll" for key in native):
+            raise ValueError("PHP host requires xberg.dll native roots")
+        machines = {PeImage(files[key][1]).machine for key in native}
+        if len(machines) != 1:
+            raise ValueError("PHP host PE architecture mismatch")
+        host_abi = _php_host_abi(php_host, php_version, machines.pop())
+    elif php_version is not None:
+        raise ValueError("PHP host executable is required")
+
+    def allowed(key: str, name: str) -> bool:
+        return (external(name) and re.fullmatch(r"python3(?:\d+)?\.dll", name) is None) or (
+            key in native and name == host_abi
+        )
+
+    return allowed
 
 
 def installed_redist_directory() -> Path:
@@ -277,47 +524,59 @@ def runtime_file(crt: Path, dependency: str, machine: int) -> tuple[Path, bytes]
     return path, data
 
 
-def stage(root: Path, native_glob: str, source: str | None) -> dict[str, list[str]]:
-    files = artifact_files(root)
-    roots(files, native_glob)
+def plan_crt(
+    files: dict[str, tuple[str, bytes]],
+    source: str | None,
+    *,
+    verify_shipped_crt: bool = False,
+) -> tuple[dict[str, bytes], list[dict[str, str]]]:
     queue = list(files)
     added = {}
     provenance = {}
     directories = {}
+
+    def require(key: str, dependency: str, machine: int) -> None:
+        if machine not in directories:
+            directories[machine] = crt_directory(machine, source)
+        path, data = runtime_file(directories[machine], dependency, machine)
+        destination = str(PurePosixPath(key).parent / dependency)
+        name = files[destination][0] if destination in files else str(PurePosixPath(files[key][0]).parent / path.name)
+        provenance[destination] = {
+            "file": name,
+            "source": "/".join(path.parts[-7:]),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        }
+        if destination in files:
+            if files[destination][1] != data:
+                raise ValueError(f"CRT byte collision: {dependency}")
+            return
+        files[destination] = (name, data)
+        added[destination] = data
+        queue.append(destination)
+
     while queue:
         key = queue.pop()
         image = PeImage(files[key][1])
         for dependency in image.imports():
-            if not dependency.startswith(MSVC_PREFIXES):
-                continue
-            if image.machine not in directories:
-                directories[image.machine] = crt_directory(image.machine, source)
-            path, data = runtime_file(directories[image.machine], dependency, image.machine)
-            destination = str(PurePosixPath(key).parent / dependency)
-            name = files[destination][0] if destination in files else str(PurePosixPath(key).parent / path.name)
-            provenance[destination] = {
-                "file": name,
-                "source": "/".join(path.parts[-7:]),
-                "sha256": hashlib.sha256(data).hexdigest(),
-            }
-            if destination in files:
-                if files[destination][1] != data:
-                    raise ValueError(f"CRT byte collision: {dependency}")
-                continue
-            files[destination] = (name, data)
-            added[destination] = data
-            queue.append(destination)
+            if dependency.startswith(MSVC_PREFIXES):
+                require(key, dependency, image.machine)
+    if verify_shipped_crt:
+        for key, (_, data) in files.items():
+            name = PurePosixPath(key).name
+            if key not in provenance and name.endswith(".dll") and name.startswith(MSVC_PREFIXES):
+                require(key, name, PeImage(data).machine)
+    return added, [provenance[key] for key in sorted(provenance)]
+
+
+def stage(root: Path, native_glob: str, source: str | None) -> dict[str, list[str]]:
+    files = artifact_files(root)
+    roots(files, native_glob)
+    added, provenance = plan_crt(files, source)
     audit(files, native_glob)
-    return write_staged(root, files, added, [provenance[key] for key in sorted(provenance)])
+    return write_staged(root, files, added, provenance)
 
 
-def notice_plan(root: Path, provenance: list[dict[str, str]]) -> tuple[Path, bytes] | None:
-    if not provenance:
-        return None
-    dist_info = list(root.glob("*.dist-info"))
-    if len(dist_info) != 1:
-        raise ValueError("expected one wheel dist-info for Microsoft notices")
-    notice = dist_info[0] / "licenses/MICROSOFT_VC_RUNTIME.json"
+def runtime_notice_bytes(provenance: list[dict[str, str]]) -> bytes:
     payload = {
         "component": "Microsoft Visual C++ Runtime",
         "copyright": "Microsoft Corporation",
@@ -328,7 +587,45 @@ def notice_plan(root: Path, provenance: list[dict[str, str]]) -> tuple[Path, byt
         "applicable licensed Visual Studio terms. Preserve these notices.",
         "files": provenance,
     }
-    data = (json.dumps(payload, indent=2) + "\n").encode()
+    return (json.dumps(payload, indent=2) + "\n").encode()
+
+
+def audit_raw_crt_notices(artifact: Path, files: dict[str, tuple[str, bytes]]) -> None:
+    expected = {}
+    for key, (name, data) in files.items():
+        path = PurePosixPath(key)
+        if path.name.startswith(MSVC_PREFIXES) and path.suffix == ".dll":
+            notice = str(path.parent / RAW_CRT_NOTICE.lower())
+            expected.setdefault(notice, {})[PurePosixPath(name).name] = hashlib.sha256(data).hexdigest()
+    if not expected:
+        return
+    notices = _raw_artifact_files(artifact, set(expected))
+    for key, digests in expected.items():
+        if key not in notices:
+            raise ValueError(f"missing Microsoft runtime notice: {key}")
+        data = notices[key][1]
+        payload = json.loads(data)
+        rows = payload.get("files") if isinstance(payload, dict) else None
+        if not isinstance(rows, list) or any(
+            not isinstance(row, dict)
+            or set(row) != {"file", "source", "sha256"}
+            or any(not isinstance(value, str) for value in row.values())
+            for row in rows
+        ):
+            raise ValueError(f"invalid Microsoft runtime notice: {key}")
+        recorded = {row["file"]: row["sha256"] for row in rows}
+        if len(recorded) != len(rows) or recorded != digests or data != runtime_notice_bytes(rows):
+            raise ValueError(f"Microsoft runtime notice does not match shipped DLLs: {key}")
+
+
+def notice_plan(root: Path, provenance: list[dict[str, str]]) -> tuple[Path, bytes] | None:
+    if not provenance:
+        return None
+    dist_info = list(root.glob("*.dist-info"))
+    if len(dist_info) != 1:
+        raise ValueError("expected one wheel dist-info for Microsoft notices")
+    notice = dist_info[0] / "licenses/MICROSOFT_VC_RUNTIME.json"
+    data = runtime_notice_bytes(provenance)
     if notice.exists():
         if notice.read_bytes() != data:
             raise ValueError("Microsoft runtime notice collision; rebuild the wheel from clean inputs")
@@ -362,6 +659,10 @@ def main() -> None:
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--native-glob", default="*.pyd")
     parser.add_argument("--crt-dir")
+    parser.add_argument("--artifact-kind", choices=["wheel", "raw"], default="wheel")
+    parser.add_argument("--php-host", type=Path)
+    parser.add_argument("--php-version")
+    parser.add_argument("--require-crt-notices", action="store_true")
     parser.add_argument("--required", default="onnxruntime.dll")
     parser.add_argument("--forbidden", default="DirectML.dll")
     args = parser.parse_args()
@@ -369,7 +670,16 @@ def main() -> None:
         if args.mode == "stage":
             print(json.dumps(stage(args.artifact, args.native_glob, args.crt_dir)))
         else:
-            result = audit(artifact_files(args.artifact), args.native_glob, args.required, args.forbidden)
+            result = audit_artifact(
+                args.artifact,
+                args.native_glob,
+                args.required,
+                args.forbidden,
+                artifact_kind=args.artifact_kind,
+                php_host=args.php_host,
+                php_version=args.php_version,
+                require_crt_notices=args.require_crt_notices,
+            )
             print(
                 f"Verified {result['files']} PE files, {result['edges']} import edges, {result['roots']} native roots"
             )
@@ -380,6 +690,7 @@ def main() -> None:
         struct.error,
         subprocess.CalledProcessError,
         zipfile.BadZipFile,
+        tarfile.TarError,
     ) as error:
         parser.exit(1, f"Windows wheel closure: {error}\n")
 
