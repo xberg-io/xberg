@@ -1755,6 +1755,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     XObjectRecoveryContext {
                         budget: &mut xobject_recovery_budget,
                         blank_raster_warnings: trigger.draw_failed.then_some(&mut accumulated_warnings),
+                        no_admitted_images: None,
                     },
                 )
                 .await?
@@ -2362,6 +2363,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         preprocessing,
         ocr_confidence,
         recognition_noise_verdicts,
+        _no_admitted_images,
     ) = Box::pin(extract_with_ocr_for_page(
         content,
         images,
@@ -2494,6 +2496,9 @@ fn attach_page_segmentation_modes(
 /// `detached_page` -- the open document a detached page image came from. Only the
 /// embedded-image retry reads it, at `page_index_offset`, so a caller that hands in a
 /// detached page without `content` still gets the retry of a blank or failed page (#1912).
+///
+/// The final return flag records when the primary's existing detached-page XObject recovery
+/// admitted no alternate image bytes. It remains false when the recovery was not checked.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 // Each parameter is independently documented above and forwarded verbatim by every caller
 // (see `run_ocr_pipeline_for_page`); bundling them into a params struct would only move the
@@ -2527,6 +2532,7 @@ pub(super) async fn extract_with_ocr_for_page(
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
+    bool,
 )> {
     use crate::plugins::registry::get_ocr_backend_registry;
     use image::ImageEncoder;
@@ -2577,10 +2583,24 @@ pub(super) async fn extract_with_ocr_for_page(
 
     #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
     let can_retry_orientation;
+    #[cfg(feature = "pdf")]
+    let mut no_admitted_images = false;
+    #[cfg(not(feature = "pdf"))]
+    let no_admitted_images = false;
+    #[cfg(all(feature = "pdf", not(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))))]
+    let can_prove_no_admitted_images = false;
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    let can_prove_no_admitted_images;
     let backend = {
         let registry = get_ocr_backend_registry();
         let registry = registry.read();
         let backend = registry.get(&base_ocr_config.backend)?;
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        {
+            can_prove_no_admitted_images = detached_page.is_some()
+                && images.is_some_and(|images| images.len() == 1)
+                && registry.is_builtin_tesseract(&backend);
+        }
         #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
         {
             can_retry_orientation = !has_layout_detections && registry.is_builtin_tesseract(&backend);
@@ -2699,6 +2719,7 @@ pub(super) async fn extract_with_ocr_for_page(
             ahash::AHashMap::new(),
             // Same reasoning: this route never calls `accept_or_reject_ocr_page` per page.
             Vec::new(),
+            false,
         ));
     }
     let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
@@ -3541,6 +3562,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         XObjectRecoveryContext {
                             budget: &mut xobject_recovery_budget,
                             blank_raster_warnings: xobject_trigger.draw_failed.then_some(&mut image_fallback_warnings),
+                            no_admitted_images: can_prove_no_admitted_images.then_some(&mut no_admitted_images),
                         },
                     )
                     .await?
@@ -4295,6 +4317,7 @@ pub(super) async fn extract_with_ocr_for_page(
         preprocessing_by_page,
         ocr_confidence_by_page,
         recognition_noise_verdicts,
+        no_admitted_images,
     ))
 }
 /// Build an [`crate::types::ExtractedImage`] for a full-page OCR raster.
@@ -4862,6 +4885,7 @@ pub(super) async fn collect_pipeline_xobject_pages(
         let context = XObjectRecoveryContext {
             budget,
             blank_raster_warnings: None,
+            no_admitted_images: None,
         };
         let Some(recovery) =
             recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await?
@@ -5289,6 +5313,36 @@ struct PipelineStageInputs<'a> {
     detached_page: Option<DetachedOcrPage<'a>>,
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn can_skip_blank_automatic_paddle_raster(images: Option<&[image::DynamicImage]>) -> bool {
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    {
+        let Some([image]) = images else {
+            return false;
+        };
+        if !crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .has_builtin_paddle()
+        {
+            return false;
+        }
+        // Sampled ink can miss faint or sparse text. Check the retained raster exactly. ~keep
+        let bytes = image.as_bytes();
+        let channels = match image.color() {
+            image::ColorType::Rgb8 => 3,
+            image::ColorType::Rgba8 if bytes.get(3) == Some(&255) => 4,
+            _ => return false,
+        };
+        let mut pixels = bytes.chunks_exact(channels);
+        pixels.next().is_some_and(|first| pixels.all(|pixel| pixel == first))
+    }
+    #[cfg(not(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+    {
+        let _ = images;
+        false
+    }
+}
+
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
 /// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -5370,6 +5424,13 @@ async fn run_ocr_pipeline_stages(
     // silently replaced by a lower-quality earlier result (issue #1339).
     let mut stage_failures: Vec<(String, String)> = Vec::new();
 
+    let automatic_paddle = inputs.detached_page.is_some()
+        && ocr_config.pipeline.is_none()
+        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        && ocr_config.backend == "tesseract"
+        && matches!(available_stages.as_slice(), [first, second]
+            if first.backend == "tesseract" && second.backend == "paddleocr");
+
     for stage in &available_stages {
         let mut stage_ocr = ocr_config.clone();
         stage_ocr.backend = stage.backend.clone();
@@ -5429,6 +5490,7 @@ async fn run_ocr_pipeline_stages(
                 stage_preprocessing,
                 stage_ocr_confidence,
                 stage_recognition_noise_verdicts,
+                no_admitted_images,
             )) => {
                 let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
                 let score = pipeline_stage_score(text_score, mean_conf);
@@ -5466,7 +5528,20 @@ async fn run_ocr_pipeline_stages(
                     merge_ocr_page_failures(stage_page_failures, stage_doc.ocr_page_failures.clone());
                 }
 
-                if score >= pipeline.quality_thresholds.pipeline_min_quality {
+                let skip_automatic_paddle = automatic_paddle
+                    && no_admitted_images
+                    && text.trim().is_empty()
+                    && stage_page_texts.iter().all(|text| text.trim().is_empty())
+                    && stage_tables.is_empty()
+                    && stage_ocr_elements.is_empty()
+                    && stage_formulas.is_empty()
+                    && stage_doc.as_ref().is_none_or(|doc| doc.ocr_page_failures.is_empty())
+                    && can_skip_blank_automatic_paddle_raster(inputs.images);
+                if skip_automatic_paddle && config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
+
+                if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,
                         &stage_recognition_noise_verdicts,
