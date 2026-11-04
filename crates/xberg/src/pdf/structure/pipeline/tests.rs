@@ -3802,6 +3802,7 @@ fn monospace_style_transition_remains_a_boundary() {
 
 fn line(segments: Vec<SegmentData>) -> PdfLine {
     PdfLine {
+        native_scripts: Vec::new(),
         segments,
         baseline_y: 0.0,
         dominant_font_size: 12.0,

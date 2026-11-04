@@ -1,0 +1,301 @@
+use super::*;
+use xberg_native_pdf::geometry::Rect;
+
+fn span(text: &str, x: f32, y: f32, width: f32, size: f32) -> TextSpan {
+    TextSpan {
+        text: text.to_owned(),
+        bbox: Rect::new(x, y, width, size),
+        font_size: size,
+        ..Default::default()
+    }
+}
+
+fn page(spans: Vec<TextSpan>) -> NativePageSegments {
+    NativePageSegments::from_final_spans(spans, &HashMap::new(), ArtifactRetention::default())
+}
+
+#[test]
+fn should_leave_measured_author_overlap_unsupported_regardless_of_final_offsets() {
+    let mut base = span(
+        "Author",
+        94.29801177978516,
+        697.1630249023438,
+        91.20623016357422,
+        11.9552001953125,
+    );
+    let script = span(
+        "1",
+        185.50401306152344,
+        701.5010375976562,
+        4.234514236450195,
+        7.970099925994873,
+    );
+    assert!(script.bbox.x < base.bbox.right());
+    assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
+    base.char_widths = vec![base.bbox.width / 6.0; 6];
+    assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
+    base.char_x_offsets = vec![94.29801, 110.0, 125.0, 140.0, 155.0, 170.0];
+    let captured = page(vec![base, script]);
+    assert_eq!(
+        captured.owners.len(),
+        0,
+        "final offsets do not certify their native provenance"
+    );
+    assert_eq!(captured.segments[1].baseline_y.to_bits(), 1143955473);
+}
+
+#[test]
+fn should_leave_measured_ordinal_overlap_unsupported_regardless_of_final_offsets() {
+    let mut base = span(
+        "1",
+        117.74600219726562,
+        661.489990234375,
+        5.479450225830078,
+        10.958900451660156,
+    );
+    let suffix = span(
+        "st",
+        123.22500610351562,
+        665.448974609375,
+        5.116690635681152,
+        7.671199798583984,
+    );
+    assert_eq!(page(vec![base.clone(), suffix.clone()]).owners.len(), 0);
+    base.char_x_offsets = vec![base.bbox.x];
+    assert_eq!(page(vec![base.clone(), suffix.clone()]).owners.len(), 0);
+    base.text = "1 conference".to_owned();
+    base.bbox.width = 80.0;
+    base.char_x_offsets = (0..12).map(|i| base.bbox.x + i as f32 * 5.0).collect();
+    assert_eq!(
+        page(vec![base, suffix]).owners.len(),
+        0,
+        "interior insertion is unsupported"
+    );
+}
+
+#[test]
+fn should_leave_measured_affiliation_prefix_unowned() {
+    let marker = span(
+        "1",
+        89.53799438476562,
+        674.801025390625,
+        4.234514236450195,
+        7.970099925994873,
+    );
+    let base = span(
+        "University",
+        94.2699966430664,
+        670.4630126953125,
+        86.85453033447266,
+        11.9552001953125,
+    );
+    let captured = page(vec![marker, base]);
+    assert_eq!(captured.owners.len(), 0);
+    assert_eq!(
+        captured.segments.iter().map(|s| s.text.as_str()).collect::<Vec<_>>(),
+        ["1", "University"]
+    );
+}
+
+#[test]
+fn should_reject_ambiguous_bases_and_unrelated_small_raised_text() {
+    let base = span("Author", 100.0, 700.0, 40.0, 12.0);
+    let suffix = span("1", 140.0, 704.5, 4.0, 8.0);
+    assert_eq!(page(vec![base.clone(), base.clone(), suffix.clone()]).owners.len(), 0);
+    let mut other_column = suffix.clone();
+    other_column.bbox.x = 350.0;
+    assert_eq!(page(vec![base.clone(), other_column]).owners.len(), 0);
+    let mut unrelated = suffix.clone();
+    unrelated.bbox.y = 720.0;
+    assert_eq!(page(vec![base.clone(), unrelated]).owners.len(), 0);
+    let mut rotated = suffix.clone();
+    rotated.rotation_degrees = 90.0;
+    assert_eq!(page(vec![base.clone(), rotated]).owners.len(), 0);
+    let ordinary_subscript = span("2", 140.0, 697.0, 4.0, 8.0);
+    assert_eq!(page(vec![base, ordinary_subscript]).owners.len(), 0);
+}
+
+#[test]
+fn should_reject_changed_or_removed_endpoints_and_incomplete_runs() {
+    let captured = page(vec![
+        span("Author", 100.0, 700.0, 40.0, 12.0),
+        span("1", 140.0, 704.5, 4.0, 8.0),
+        span(",", 144.0, 704.5, 2.0, 8.0),
+        span("2", 146.0, 704.5, 4.0, 8.0),
+    ]);
+    assert_eq!(captured.owners.len(), 3);
+    assert_eq!(captured.valid_owners(&captured.segments).len(), 3);
+    assert_eq!(captured.valid_owners(&captured.segments[..3]).len(), 0);
+    let mut changed = captured.segments.clone();
+    changed[0].text.push('!');
+    assert_eq!(captured.valid_owners(&changed).len(), 0);
+    let mut scoped = span("2", 140.0, 704.5, 4.0, 8.0);
+    scoped.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1));
+    assert_eq!(
+        page(vec![span("Author", 100.0, 700.0, 40.0, 12.0), scoped])
+            .owners
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn should_reject_numeric_note_boundary_and_changed_scope_role_or_nonfinite_geometry() {
+    let base = span("Parameter 1", 100.0, 700.0, 40.0, 12.0);
+    let suffix = span("2", 140.0, 704.5, 4.0, 8.0);
+    let note = span("2", 100.0, 300.0, 4.0, 8.0);
+    let body = span("Independent footnote body", 108.0, 300.0, 100.0, 8.0);
+    assert_eq!(page(vec![base.clone(), suffix.clone(), note, body]).owners.len(), 0);
+    let mut nonfinite = suffix.clone();
+    nonfinite.text_rise = f32::NAN;
+    assert_eq!(page(vec![base.clone(), nonfinite]).owners.len(), 0);
+    let mut role = suffix.clone();
+    role.heading_level = Some(2);
+    assert_eq!(page(vec![base.clone(), role]).owners.len(), 0);
+    let mut mirrored = suffix;
+    mirrored.mirrored = true;
+    assert_eq!(page(vec![base, mirrored]).owners.len(), 0);
+}
+
+#[test]
+fn should_reject_overlap_when_prior_script_rejoining_synthesizes_terminal_origins() {
+    let mut original = span("AlphaBeta", 100.0, 700.0, 80.0, 12.0);
+    original.char_widths = vec![80.0 / 9.0; 9];
+    assert_eq!(
+        original.char_x_offsets.len(),
+        0,
+        "the source has no native glyph origins"
+    );
+    let transformed = super::super::rejoin_inline_scripts_inner(
+        vec![
+            original,
+            span("2", 140.0, 703.0, 4.0, 8.0),
+            span("3", 179.9999, 704.5, 4.0, 8.0),
+        ],
+        ScriptGeometry::Preserve,
+    );
+    let fragment = transformed
+        .iter()
+        .find(|source| source.text == "Beta")
+        .expect("earlier script splits the base");
+    assert_eq!(
+        fragment.char_x_offsets.len(),
+        4,
+        "split_span supplied width-scaled origins"
+    );
+    assert!(fragment.char_x_offsets.last().is_some_and(|origin| *origin < 179.9999));
+    assert!(
+        179.9999 < fragment.bbox.right(),
+        "later marker overlaps the terminal fragment"
+    );
+    let captured = page(transformed);
+    assert_eq!(
+        captured.owners.len(),
+        0,
+        "transformed estimates cannot prove native terminal insertion"
+    );
+}
+
+#[test]
+fn should_reject_a_complete_run_when_later_member_has_a_different_unique_base() {
+    let captured = page(vec![
+        span("A", 100.0, 700.0, 40.0, 12.0),
+        span("B", 110.0, 700.0, 34.0, 12.0),
+        span("1", 140.0, 704.5, 4.0, 8.0),
+        span("2", 144.0, 704.5, 4.0, 8.0),
+    ]);
+    let a_run: Vec<_> = captured
+        .owners
+        .iter()
+        .filter(|owner| owner.base_ordinal == 0)
+        .map(|owner| owner.script_ordinal)
+        .collect();
+    assert_eq!(
+        a_run,
+        Vec::<usize>::new(),
+        "A cannot own a complete run whose second member belongs uniquely to B"
+    );
+    assert!(
+        captured
+            .owners
+            .iter()
+            .all(|owner| owner.base_ordinal == 1 && owner.script_ordinal == 3),
+        "only an independently proved B suffix may survive conservative run rejection"
+    );
+}
+
+#[test]
+fn should_reject_complete_run_when_later_member_has_a_different_projected_role() {
+    let mut later = span("2", 144.0, 704.5, 4.0, 8.0);
+    later.mcid = Some(7);
+    let roles = HashMap::from([(7, Some(2))]);
+    let captured = NativePageSegments::from_final_spans(
+        vec![
+            span("A", 100.0, 700.0, 40.0, 12.0),
+            span("1", 140.0, 704.5, 4.0, 8.0),
+            later,
+        ],
+        &roles,
+        ArtifactRetention::default(),
+    );
+    assert_eq!(captured.segments[0].assigned_role, None);
+    assert_eq!(captured.segments[1].assigned_role, None);
+    assert_eq!(captured.segments[2].assigned_role, Some(2));
+    assert_eq!(
+        captured.owners.len(),
+        0,
+        "each complete-run member must match the base's projected role"
+    );
+}
+
+#[test]
+fn should_accept_measured_nonoverlapping_ordinal_without_claiming_native_glyph_origins() {
+    let base = span(
+        "4",
+        193.9890594482422,
+        599.6990356445312,
+        4.981300354003906,
+        9.962599754333496,
+    );
+    let suffix = span(
+        "th",
+        198.97105407714844,
+        603.3140258789062,
+        5.425617218017578,
+        6.973800182342529,
+    );
+    assert!(suffix.bbox.x > base.bbox.right());
+    assert_eq!(base.char_x_offsets.len(), 0);
+    let captured = page(vec![base, suffix]);
+    assert_eq!(captured.owners.len(), 1);
+    assert_eq!(
+        (captured.owners[0].base_ordinal, captured.owners[0].script_ordinal),
+        (0, 1)
+    );
+    assert_eq!(captured.segments[1].baseline_y.to_bits(), 1142346777);
+}
+
+#[test]
+fn should_reject_complete_run_when_later_member_has_incompatible_native_context() {
+    let ordinary = span("2", 144.0, 704.5, 4.0, 8.0);
+    let mut scoped = ordinary.clone();
+    scoped.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1));
+    let mut heading = ordinary.clone();
+    heading.heading_level = Some(2);
+    let mut rotated = ordinary.clone();
+    rotated.rotation_degrees = 90.0;
+    let mut mirrored = ordinary;
+    mirrored.mirrored = true;
+    for later in [scoped, heading, rotated, mirrored] {
+        let captured = page(vec![
+            span("A", 100.0, 700.0, 40.0, 12.0),
+            span("1", 140.0, 704.5, 4.0, 8.0),
+            later,
+        ]);
+        assert_eq!(
+            captured.owners.len(),
+            0,
+            "an incompatible member must invalidate the complete run"
+        );
+    }
+}

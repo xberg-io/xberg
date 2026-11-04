@@ -960,7 +960,11 @@ fn annotated_segments_need_space(
     previous_word: &str,
     next: &crate::pdf::hierarchy::SegmentData,
     next_word: &str,
+    native_scripts: &[&crate::pdf::native::hierarchy::script_evidence::ScriptOwner],
 ) -> bool {
+    if native_scripts.iter().any(|owner| owner.follows(previous, next)) {
+        return false;
+    }
     let explicit_space = previous.text.ends_with(char::is_whitespace) || next.text.starts_with(char::is_whitespace);
     if !explicit_space && super::pipeline::is_script_run_of(previous, next) {
         return false;
@@ -968,7 +972,10 @@ fn annotated_segments_need_space(
     segments_need_space(previous, previous_word, next, next_word)
 }
 
-fn segment_script_kind(segments: &[&crate::pdf::hierarchy::SegmentData], index: usize) -> Option<AnnotationKind> {
+pub(super) fn segment_script_kind(
+    segments: &[&crate::pdf::hierarchy::SegmentData],
+    index: usize,
+) -> Option<AnnotationKind> {
     let script = segments[index];
     segments[..index]
         .iter()
@@ -988,7 +995,8 @@ fn segment_script_kind(segments: &[&crate::pdf::hierarchy::SegmentData], index: 
 
 fn paragraph_has_scripts(para: &PdfParagraph) -> bool {
     let segments: Vec<_> = para.lines.iter().flat_map(|line| &line.segments).collect();
-    (0..segments.len()).any(|index| segment_script_kind(&segments, index).is_some())
+    para.lines.iter().any(|line| !line.valid_native_scripts().is_empty())
+        || (0..segments.len()).any(|index| segment_script_kind(&segments, index).is_some())
 }
 
 /// Extract plain text and inline annotations (bold/italic) from a paragraph.
@@ -1005,6 +1013,14 @@ fn extract_text_and_annotations(
         return (String::new(), Vec::new());
     }
 
+    let native_scripts: Vec<_> = para.lines.iter().flat_map(|line| line.valid_native_scripts()).collect();
+    let script_kind = |index| {
+        native_scripts
+            .iter()
+            .any(|owner| owner.matches_script(all_segments[index]))
+            .then_some(AnnotationKind::Superscript)
+            .or_else(|| segment_script_kind(&all_segments, index))
+    };
     let mut text = String::new();
     let mut annotations = Vec::new();
     let mut i = 0;
@@ -1012,13 +1028,13 @@ fn extract_text_and_annotations(
     while i < all_segments.len() {
         let bold = all_segments[i].is_bold;
         let italic = all_segments[i].is_italic;
-        let script = segment_script_kind(&all_segments, i);
+        let script = script_kind(i);
 
         let run_start = i;
         while i < all_segments.len()
             && all_segments[i].is_bold == bold
             && all_segments[i].is_italic == italic
-            && segment_script_kind(&all_segments, i) == script
+            && script_kind(i) == script
         {
             i += 1;
         }
@@ -1043,7 +1059,7 @@ fn extract_text_and_annotations(
                 }
                 LineBreakHyphen::KeepHyphen => {}
                 LineBreakHyphen::NotApplicable => {
-                    if annotated_segments_need_space(prev_seg, prev_last, next_seg, next_first) {
+                    if annotated_segments_need_space(prev_seg, prev_last, next_seg, next_first, &native_scripts) {
                         text.push(' ');
                     }
                 }
@@ -1076,6 +1092,7 @@ fn extract_text_and_annotations(
                             prev,
                             all_segments[seg_idx],
                             word,
+                            &native_scripts,
                         ) {
                             text.push(' ');
                         }
@@ -1478,6 +1495,7 @@ mod tests {
 
     fn make_paragraph_at(text: &str, heading_level: Option<u8>, baseline_y: f32) -> PdfParagraph {
         let lines = vec![PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y,
                 ..plain_segment(text)
@@ -2371,6 +2389,7 @@ mod tests {
     #[test]
     fn test_bold_list_annotation_is_shifted_after_unicode_bullet() {
         let lines = vec![PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![bold_segment("• Bold item")],
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2446,6 +2465,7 @@ mod tests {
     #[test]
     fn split_ordered_marker_and_body_render_as_one_clean_item() {
         let lines = vec![PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![plain_segment("I."), plain_segment("Split body")],
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2478,6 +2498,7 @@ mod tests {
         ];
 
         let line = PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2565,6 +2586,7 @@ mod tests {
         let segments = vec![bold_segment("This"), bold_segment(" is"), bold_segment(" bold")];
 
         let line = PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2629,6 +2651,7 @@ mod tests {
             .split_whitespace()
             .enumerate()
             .map(|(i, word)| PdfLine {
+                native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     text: word.to_string(),
                     x: i as f32 * 50.0,
@@ -2751,6 +2774,7 @@ mod tests {
     fn suspended_hyphen_across_style_run_boundary_is_not_welded() {
         let segments = vec![plain_segment("CV- "), bold_segment("en boiler")];
         let line = PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2774,6 +2798,7 @@ mod tests {
             plain_segment("en installatiewerkzaamheden"),
         ];
         let line = PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2800,6 +2825,7 @@ mod tests {
             ("a cost-", "effective option", "a cost-effective option"),
         ] {
             let first = PdfLine {
+                native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     baseline_y: 700.0,
                     ..plain_segment(trailing)
@@ -2810,6 +2836,7 @@ mod tests {
                 is_monospace: false,
             };
             let second = PdfLine {
+                native_scripts: Vec::new(),
                 segments: vec![SegmentData {
                     baseline_y: 685.0,
                     ..plain_segment(leading)
@@ -2832,6 +2859,7 @@ mod tests {
     #[test]
     fn a_genuine_wrap_hyphen_at_a_line_break_is_still_joined() {
         let first = PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 700.0,
                 ..plain_segment("adjuvant Mon-")
@@ -2842,6 +2870,7 @@ mod tests {
             is_monospace: false,
         };
         let second = PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 685.0,
                 ..plain_segment("tanide was used")
@@ -2864,6 +2893,7 @@ mod tests {
     fn suspended_hyphen_is_not_welded_in_list_item_plain_join() {
         let segments = vec![plain_segment("montage- "), plain_segment("en installatiehandleiding")];
         let line = PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: 12.0,
@@ -2890,6 +2920,7 @@ mod tests {
     #[test]
     fn genuine_line_wrap_hyphen_still_joins_across_visual_line_break() {
         let line1 = PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 700.0,
                 ..plain_segment("Zie de installatie-")
@@ -2900,6 +2931,7 @@ mod tests {
             is_monospace: false,
         };
         let line2 = PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![SegmentData {
                 baseline_y: 686.0,
                 ..plain_segment("handleiding voor details")
