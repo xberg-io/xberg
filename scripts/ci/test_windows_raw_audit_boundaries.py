@@ -133,13 +133,14 @@ class RawMemberBoundaries(unittest.TestCase):
             with zipfile.ZipFile(output, "w") as archive:
                 for name, data in entries:
                     info = zipfile.ZipInfo(name)
+                    # ZipInfo normalizes Windows separators before writing the filename.
+                    info.filename = name
                     if link and name == member:
                         info.create_system = 3
                         info.external_attr = (stat.S_IFLNK | 0o777) << 16
                     archive.writestr(info, data)
             with zipfile.ZipFile(output) as archive:
-                assert len(archive.infolist()) == len(entries)
-                assert member in archive.namelist()
+                assert [info.orig_filename for info in archive.infolist()] == [name for name, _ in entries]
         else:
             with tarfile.open(output, "w:gz") as archive:
                 for name, data in entries:
@@ -170,7 +171,9 @@ class RawMemberBoundaries(unittest.TestCase):
         self.reject(".zip", "C:/outside.txt", "unsafe artifact member")
 
     def test_zip_rejects_backslash_members(self) -> None:
-        self.reject(".zip", "..\\outside.txt", "unsafe artifact member")
+        with mock.patch.object(zipfile.os, "sep", "\\"):
+            assert zipfile.ZipInfo("payload\\outside.txt").filename == "payload/outside.txt"
+            self.reject(".zip", "payload\\outside.txt", "unsafe artifact member")
 
     def test_zip_rejects_duplicate_casefolded_non_pe_members(self) -> None:
         self.reject(".zip", "notice.txt", "duplicate artifact member", duplicate=True)
