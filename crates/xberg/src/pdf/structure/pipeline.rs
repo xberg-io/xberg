@@ -60,6 +60,8 @@ const SPARSE_FONT_TIER_TOLERANCE: f32 = 0.5;
 // unique document title; reserve H1 for a title and emit these sections as H2. ~keep
 const SPARSE_REPEATED_TIER_HEADING_LEVEL: u8 = 2;
 
+mod script_evidence;
+
 type HeadingMap = Vec<(f32, Option<u8>)>;
 
 /// Lowercased `(left, right)` word pairs the document itself writes as a single
@@ -2896,6 +2898,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
         let is_monospace = segments.iter().all(|s| s.is_monospace);
         super::types::PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y,
             dominant_font_size,
@@ -3475,7 +3478,36 @@ pub(crate) fn extract_document_structure_from_segments(
 }
 
 fn build_document_structure(
+    all_page_segments: Vec<Vec<SegmentData>>,
+    config: SegmentStructureConfig<'_>,
+    #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
+) -> Result<crate::types::internal::InternalDocument> {
+    build_document_structure_with_native(
+        all_page_segments,
+        None,
+        config,
+        #[cfg(feature = "layout-detection")]
+        loaders,
+    )
+}
+
+pub(crate) fn extract_document_structure_from_native_pages(
+    native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
+    config: SegmentStructureConfig<'_>,
+) -> Result<crate::types::internal::InternalDocument> {
+    let segments = native_pages.iter().map(|page| page.segments.clone()).collect();
+    build_document_structure_with_native(
+        segments,
+        Some(native_pages),
+        config,
+        #[cfg(feature = "layout-detection")]
+        TABLE_MODEL_LOADERS,
+    )
+}
+
+fn build_document_structure_with_native(
     mut all_page_segments: Vec<Vec<SegmentData>>,
+    native_pages: Option<Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>>,
     config: SegmentStructureConfig<'_>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
 ) -> Result<crate::types::internal::InternalDocument> {
@@ -4058,6 +4090,11 @@ fn build_document_structure(
     // Native semantic roles are finalized in source order before the
     // independent layout geometry projection controls final reading order.
     reorder_pages_by_layout_region(&mut all_page_paragraphs);
+    if let Some(native_pages) = native_pages {
+        for (paragraphs, page) in all_page_paragraphs.iter_mut().zip(native_pages) {
+            script_evidence::associate_surviving_suffixes(paragraphs, &page);
+        }
+    }
 
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(

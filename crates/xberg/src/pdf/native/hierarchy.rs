@@ -18,6 +18,8 @@ use super::span_geometry::{has_same_rotation, is_horizontal_ltr, upright_advance
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
+pub(crate) mod script_evidence;
+
 const COLUMN_BRIDGE_FRACTION: f32 = 0.6;
 const MIN_COLUMN_GUTTER_PTS: f32 = 8.0;
 const MIN_COLUMN_SIDE_SPANS: usize = 2;
@@ -1009,6 +1011,15 @@ fn extract_segments_from_page_inner(
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<SegmentData>> {
+    let spans = extract_final_spans_from_page(doc, page_index, script_geometry)?;
+    Ok(project_final_spans(spans, mcid_roles, artifacts, script_geometry))
+}
+
+fn extract_final_spans_from_page(
+    doc: &mut NativeDocument,
+    page_index: usize,
+    script_geometry: ScriptGeometry,
+) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
     let extracted = if script_geometry == ScriptGeometry::Preserve {
         doc.doc
@@ -1036,8 +1047,15 @@ fn extract_segments_from_page_inner(
         );
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
     }
-    let spans = rejoin_inline_scripts_inner(page_text_data.spans, script_geometry);
+    Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
+}
 
+fn project_final_spans(
+    spans: Vec<xberg_native_pdf::layout::TextSpan>,
+    mcid_roles: &HashMap<u32, Option<u8>>,
+    artifacts: ArtifactRetention,
+    script_geometry: ScriptGeometry,
+) -> Vec<SegmentData> {
     let segments: Vec<SegmentData> = spans
         .into_iter()
         .filter(|span| {
@@ -1050,36 +1068,42 @@ fn extract_segments_from_page_inner(
             }
             !span.text.trim().is_empty()
         })
-        .map(|span| {
-            let is_bold = span.font_weight == xberg_native_pdf::layout::text_block::FontWeight::Bold;
-            let bbox = &span.bbox;
-
-            let pdf_baseline_y = if script_geometry == ScriptGeometry::Preserve {
-                bbox.y + span.text_rise * span.font_size
-            } else {
-                bbox.y
-            };
-
-            let assigned_role = span.mcid.and_then(|mcid| mcid_roles.get(&mcid).copied()).flatten();
-
-            SegmentData {
-                text: span.text,
-                x: bbox.x,
-                y: pdf_baseline_y,
-                width: bbox.width,
-                height: bbox.height,
-                font_size: span.font_size,
-                is_bold,
-                is_italic: span.is_italic,
-                is_monospace: span.is_monospace,
-                baseline_y: pdf_baseline_y,
-                rotation_degrees: span.rotation_degrees,
-                assigned_role,
-            }
-        })
+        .map(|span| project_final_span(span, mcid_roles, script_geometry))
         .collect();
 
-    Ok(dedupe_redrawn_segments(segments))
+    dedupe_redrawn_segments(segments)
+}
+
+fn project_final_span(
+    span: xberg_native_pdf::layout::TextSpan,
+    mcid_roles: &HashMap<u32, Option<u8>>,
+    script_geometry: ScriptGeometry,
+) -> SegmentData {
+    let is_bold = span.font_weight == xberg_native_pdf::layout::text_block::FontWeight::Bold;
+    let bbox = &span.bbox;
+
+    let pdf_baseline_y = if script_geometry == ScriptGeometry::Preserve {
+        bbox.y + span.text_rise * span.font_size
+    } else {
+        bbox.y
+    };
+
+    let assigned_role = span.mcid.and_then(|mcid| mcid_roles.get(&mcid).copied()).flatten();
+
+    SegmentData {
+        text: span.text,
+        x: bbox.x,
+        y: pdf_baseline_y,
+        width: bbox.width,
+        height: bbox.height,
+        font_size: span.font_size,
+        is_bold,
+        is_italic: span.is_italic,
+        is_monospace: span.is_monospace,
+        baseline_y: pdf_baseline_y,
+        rotation_degrees: span.rotation_degrees,
+        assigned_role,
+    }
 }
 
 /// Reorder `spans` by the structure tree when the page holds RTL text and the tree supplies
@@ -1217,11 +1241,76 @@ fn extract_segments_with_structure_tree(
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
+    extract_pages_with_structure_tree(
+        doc,
+        artifacts,
+        script_geometry,
+        extract_segments_from_page_inner,
+        |segments| {
+            segments
+                .iter()
+                .filter(|segment| segment.assigned_role.is_some())
+                .count()
+        },
+    )
+}
+
+fn extract_pages_with_structure_tree<T>(
+    doc: &mut NativeDocument,
+    artifacts: ArtifactRetention,
+    script_geometry: ScriptGeometry,
+    extract_page: impl Fn(
+        &mut NativeDocument,
+        usize,
+        &HashMap<u32, Option<u8>>,
+        ArtifactRetention,
+        ScriptGeometry,
+    ) -> Result<T>,
+    count_roles: impl Fn(&T) -> usize,
+) -> Result<(Vec<T>, bool)> {
+    let Some(all_page_content) = reliable_heading_content(doc) else {
+        return Ok((Vec::new(), false));
+    };
+
+    let page_count = doc.doc.page_count().map_err(|e| {
+        crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
+    })?;
+
+    let mut all_pages: Vec<T> = Vec::with_capacity(page_count);
+    let mut total_role_assigned = 0usize;
+
+    for page_idx in 0..page_count {
+        let mcid_roles: HashMap<u32, Option<u8>> = all_page_content
+            .get(&(page_idx as u32))
+            .map(|contents| {
+                contents
+                    .iter()
+                    .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let segments = extract_page(doc, page_idx, &mcid_roles, artifacts, script_geometry)?;
+        total_role_assigned += count_roles(&segments);
+        all_pages.push(segments);
+    }
+
+    tracing::debug!(
+        page_count,
+        total_role_assigned,
+        "xberg_native_pdf: structure tree heading detection complete"
+    );
+    Ok((all_pages, true))
+}
+
+fn reliable_heading_content(
+    doc: &NativeDocument,
+) -> Option<HashMap<u32, Vec<xberg_native_pdf::structure::OrderedContent>>> {
     let mark_info = match doc.doc.mark_info() {
         Ok(mi) => mi,
         Err(e) => {
             tracing::debug!("xberg_native_pdf: mark_info() failed, skipping structure tree: {e}");
-            return Ok((Vec::new(), false));
+            return None;
         }
     };
 
@@ -1231,18 +1320,18 @@ fn extract_segments_with_structure_tree(
             suspects = mark_info.suspects,
             "xberg_native_pdf: structure tree not reliable, falling back to font-size clustering"
         );
-        return Ok((Vec::new(), false));
+        return None;
     }
 
     let struct_tree = match doc.doc.structure_tree() {
         Ok(Some(tree)) => tree,
         Ok(None) => {
             tracing::debug!("xberg_native_pdf: no structure tree found despite marked=true");
-            return Ok((Vec::new(), false));
+            return None;
         }
         Err(e) => {
             tracing::debug!("xberg_native_pdf: structure_tree() failed: {e}");
-            return Ok((Vec::new(), false));
+            return None;
         }
     };
 
@@ -1259,38 +1348,10 @@ fn extract_segments_with_structure_tree(
             heading_count,
             "xberg_native_pdf: structure tree has too few heading elements (< 3), falling back to font-size clustering"
         );
-        return Ok((Vec::new(), false));
+        return None;
     }
 
-    let page_count = doc.doc.page_count().map_err(|e| {
-        crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
-    })?;
-
-    let mut all_pages: Vec<Vec<SegmentData>> = Vec::with_capacity(page_count);
-    let mut total_role_assigned = 0usize;
-
-    for page_idx in 0..page_count {
-        let mcid_roles: HashMap<u32, Option<u8>> = all_page_content
-            .get(&(page_idx as u32))
-            .map(|contents| {
-                contents
-                    .iter()
-                    .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let segments = extract_segments_from_page_inner(doc, page_idx, &mcid_roles, artifacts, script_geometry)?;
-        total_role_assigned += segments.iter().filter(|s| s.assigned_role.is_some()).count();
-        all_pages.push(segments);
-    }
-
-    tracing::debug!(
-        page_count,
-        total_role_assigned,
-        "xberg_native_pdf: structure tree heading detection complete"
-    );
-    Ok((all_pages, true))
+    Some(all_page_content)
 }
 
 /// Extract text segments from all pages of a PDF document using xberg_native_pdf.
@@ -1310,6 +1371,7 @@ fn extract_segments_with_structure_tree(
 /// # Returns
 ///
 /// Tuple of (per-page segment vectors, structure-tree-used flag).
+#[cfg(test)]
 pub(crate) fn extract_all_segments(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,

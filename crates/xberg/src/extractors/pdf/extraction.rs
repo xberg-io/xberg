@@ -56,10 +56,15 @@ type NativeTableMetadata = (
     Option<crate::pdf::native::table::scripts::TableScripts>,
 );
 
+struct NativeHierarchySegments {
+    pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
+    used_structure_tree: bool,
+}
+
 type TableExtractionResult = (
     Vec<Table>,
     Vec<NativeTableMetadata>,
-    Option<crate::pdf::native::table::ExtractedHierarchySegments>,
+    Option<NativeHierarchySegments>,
     Vec<crate::types::ProcessingWarning>,
 );
 
@@ -477,7 +482,7 @@ pub(crate) fn append_annotation_fallback_elements(
     }
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", test))]
 fn retain_segments_inside_page_margins(
     segments: &mut Vec<crate::pdf::hierarchy::SegmentData>,
     page_bottom: f32,
@@ -653,20 +658,25 @@ pub(crate) fn extract_all_from_native_document(
                     Ok(extraction) => {
                         native_grids.resize_with(combined.len() + extraction.tables.len(), || (None, None));
                         combined.extend(extraction.tables);
-                        let mut hierarchy_segments = extraction.hierarchy_segments;
+                        drop((
+                            extraction.hierarchy_segments.pages,
+                            extraction.hierarchy_segments.used_structure_tree,
+                        ));
                         if retain_hierarchy_segments {
-                            // Table cells use flattened script geometry; structured prose must
-                            // retain the original font sizes and baselines even when no table survives. ~keep
-                            let (pages, used_structure_tree) = crate::pdf::native::hierarchy::extract_all_segments(
-                                &mut doc, artifacts,
-                            )
-                            .map_err(|error| {
-                                crate::XbergError::parsing(format!("PDF hierarchy extraction failed: {error}"))
-                            })?;
-                            hierarchy_segments.pages = pages;
-                            hierarchy_segments.used_structure_tree = used_structure_tree;
+                            let (pages, used_structure_tree) =
+                                crate::pdf::native::hierarchy::script_evidence::extract_all_segment_carriers(
+                                    &mut doc, artifacts,
+                                )
+                                .map_err(|error| {
+                                    crate::XbergError::parsing(format!("PDF hierarchy extraction failed: {error}"))
+                                })?;
+                            Some(NativeHierarchySegments {
+                                pages,
+                                used_structure_tree,
+                            })
+                        } else {
+                            None
                         }
-                        retain_hierarchy_segments.then_some(hierarchy_segments)
                     }
                     Err(error) => {
                         tracing::warn!("xberg_native_pdf heuristic table extraction failed, skipping tables: {error}");
@@ -795,17 +805,16 @@ pub(crate) fn extract_all_from_native_document(
             })
             .unwrap_or((true, false, false, false, false));
 
-        let (mut all_page_segments, used_structure_tree) = match extracted_hierarchy_segments.take() {
+        let (mut native_pages, used_structure_tree) = match extracted_hierarchy_segments.take() {
             Some(segments) => (segments.pages, segments.used_structure_tree),
-            None => crate::pdf::native::hierarchy::extract_all_segments(&mut doc, artifacts).map_err(|e| {
-                crate::error::XbergError::Parsing {
-                    message: format!("xberg_native_pdf hierarchy extraction failed: {e}"),
-                    source: None,
-                }
+            None => crate::pdf::native::hierarchy::script_evidence::extract_all_segment_carriers(&mut doc, artifacts)
+                .map_err(|e| crate::error::XbergError::Parsing {
+                message: format!("xberg_native_pdf hierarchy extraction failed: {e}"),
+                source: None,
             })?,
         };
 
-        for (page_index, segments) in all_page_segments.iter_mut().enumerate() {
+        for (page_index, page) in native_pages.iter_mut().enumerate() {
             let (llx, lower_y, urx, upper_y) =
                 doc.doc
                     .get_page_media_box(page_index)
@@ -816,7 +825,14 @@ pub(crate) fn extract_all_from_native_document(
                         ),
                         source: None,
                     })?;
-            retain_segments_inside_page_margins(segments, lower_y.min(upper_y), lower_y.max(upper_y), margins);
+            page.retain_segments(|segment| {
+                crate::pdf::native::text::baseline_is_inside_page_margins(
+                    segment.baseline_y,
+                    lower_y.min(upper_y),
+                    lower_y.max(upper_y),
+                    margins,
+                )
+            });
 
             // Fail closed by omission (GH#1654): a page whose `/Rotate` is present but
             // malformed gets no record at all rather than a silently-degraded
@@ -847,7 +863,7 @@ pub(crate) fn extract_all_from_native_document(
             }
         }
 
-        let total_segs: usize = all_page_segments.iter().map(|s| s.len()).sum();
+        let total_segs: usize = native_pages.iter().map(|page| page.segments.len()).sum();
         tracing::debug!(
             total_segs,
             k,
@@ -858,8 +874,8 @@ pub(crate) fn extract_all_from_native_document(
         let image_anchor = image_anchor(config);
         let inject_placeholders = images_extraction_enabled && image_anchor != ImageAnchor::None;
 
-        match crate::pdf::structure::extract_document_structure_from_segments(
-            all_page_segments,
+        match crate::pdf::structure::pipeline::extract_document_structure_from_native_pages(
+            native_pages,
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,
                 tables: &tables,

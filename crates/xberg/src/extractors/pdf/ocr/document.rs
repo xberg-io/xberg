@@ -2977,6 +2977,7 @@ mod tests {
             assigned_role: None,
         };
         let line = crate::pdf::structure::types::PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![segment],
             baseline_y: 0.0,
             dominant_font_size: 12.0,
