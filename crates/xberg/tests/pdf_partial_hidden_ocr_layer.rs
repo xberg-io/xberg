@@ -291,3 +291,25 @@ async fn explicit_page_ocr_opt_out_keeps_the_partial_native_layer() {
     assert!(!automatic.metadata.ocr_used);
     assert_eq!(words(&automatic), expected(PARTIAL));
 }
+
+#[tokio::test]
+async fn unknown_hidden_font_keeps_the_existing_native_result() {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, PARTIAL, 1.0, 0.0, 3, None);
+    assert_eq!(operators.matches("/F1 ").count(), 1);
+    let pdf = page_pdf(operators.replace("/F1 ", "/Z9 "), Some(make_raster()));
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    assert_eq!(words(&native), expected(PARTIAL));
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+    assert!(!automatic.metadata.ocr_used);
+    assert_eq!(automatic.content, native.content);
+    assert_eq!(words(&automatic), words(&native));
+}
