@@ -82,6 +82,9 @@ pub(super) async fn try_replace(
     if !original.tables.is_empty() || !original.formulas.is_empty() {
         return Ok(());
     }
+    let Some(quality) = RecognitionQuality::from_result(original) else {
+        return Ok(());
+    };
     let defaults = crate::extractors::security::SecurityLimits::default();
     let limits = config.security_limits.as_ref().unwrap_or(&defaults);
     let byte_limit = ocr.security_limits.as_ref().map_or(limits.max_content_size, |ocr| {
@@ -101,22 +104,71 @@ pub(super) async fn try_replace(
             .min(MAX_STRIPS),
         cancel: config.cancel_token.as_ref(),
     };
-    if let Some(mut recovered) = recover(attempt, backend, ocr).await?
-        && recovered.content.split_whitespace().count() > original.content.split_whitespace().count()
+    if let Some((recovered, strips)) = recover(attempt, backend, ocr).await?
+        && should_replace(&original.content, quality, &recovered)
     {
-        let mut warnings = std::mem::take(&mut original.processing_warnings);
-        warnings.append(&mut recovered.processing_warnings);
-        recovered.processing_warnings = warnings;
-        *original = recovered;
+        apply_recovery(original, recovered, page, strips);
     }
     Ok(())
+}
+
+fn should_replace(original_text: &str, quality: RecognitionQuality, recovered: &TextAccumulator) -> bool {
+    recovered.psm == Some(quality.psm)
+        && recovered.words > quality.words
+        && recovered.text.split_whitespace().count() > original_text.split_whitespace().count()
+        && recovered.confidence_sum > quality.mean_confidence * f64::from(recovered.words)
+        && recovered.worst_dictionary_invalid <= quality.dictionary_invalid
+        && u64::from(recovered.low_confidence_words) * u64::from(quality.words)
+            <= u64::from(quality.low_confidence_words) * u64::from(recovered.words)
+}
+
+fn apply_recovery(original: &mut ExtractedDocument, recovered: TextAccumulator, page: usize, strips: usize) {
+    use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
+
+    original.content = recovered.text;
+    original.ocr_elements = None;
+    original.ocr_internal_document = Some(super::document::flat_ocr_page_document(&original.content));
+    original.metadata.image_preprocessing = None;
+    let additional = &mut original.metadata.additional;
+    // Neither the old raster frame nor the old word percentiles describe the recovered text. ~keep
+    for key in [
+        OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY,
+        "median_word_conf",
+        "p10_word_conf",
+        "word_iterator_skipped_count",
+        "dictionary_filtered_line_count",
+        "non_text_block_word_count",
+    ] {
+        additional.remove(key);
+    }
+    let words = f64::from(recovered.words);
+    additional.extend([
+        (Cow::Borrowed("word_count"), recovered.words.into()),
+        (
+            Cow::Borrowed("mean_text_conf"),
+            (recovered.confidence_sum / words).into(),
+        ),
+        (
+            Cow::Borrowed("low_conf_word_count"),
+            recovered.low_confidence_words.into(),
+        ),
+        (
+            Cow::Borrowed(DICTIONARY_INVALID),
+            (recovered.dictionary_invalid_sum / words).into(),
+        ),
+    ]);
+    original.processing_warnings.push(ProcessingWarning {
+        source: Cow::Borrowed("ocr"),
+        message: Cow::Owned(format!("Page {} OCR used {strips} source-image strips.", page + 1)),
+    });
 }
 
 async fn recover(
     attempt: Attempt<'_>,
     backend: &Arc<dyn OcrBackend>,
     config: &OcrConfig,
-) -> crate::Result<Option<ExtractedDocument>> {
+) -> crate::Result<Option<(TextAccumulator, usize)>> {
     let cancelled = || attempt.cancel.is_some_and(CancellationToken::is_cancelled);
     if cancelled() {
         return Err(crate::XbergError::Cancelled);
@@ -171,7 +223,7 @@ async fn recover(
             return Ok(None);
         }
     }
-    Ok(output.finish(attempt.page, strip_count))
+    Ok(Some((output, strip_count)))
 }
 
 async fn wait_for_cancel(cancel: Option<&CancellationToken>) {
@@ -418,14 +470,49 @@ impl LineFootprint {
     }
 }
 
+const DICTIONARY_INVALID: &str = crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY;
+
+struct RecognitionQuality {
+    psm: i32,
+    words: u32,
+    mean_confidence: f64,
+    low_confidence_words: u32,
+    dictionary_invalid: f64,
+}
+
+impl RecognitionQuality {
+    fn from_result(result: &ExtractedDocument) -> Option<Self> {
+        let metadata = &result.metadata.additional;
+        let words = super::word_count_of(metadata).filter(|&words| words > 0)?;
+        let crate::types::FormatMetadata::Ocr(format) = result.metadata.format.as_ref()? else {
+            return None;
+        };
+        Some(Self {
+            psm: format.psm,
+            words,
+            mean_confidence: super::mean_text_conf_of(metadata).filter(|mean| (0.0..=100.0).contains(mean))?,
+            low_confidence_words: metadata
+                .get("low_conf_word_count")?
+                .as_u64()
+                .and_then(|count| u32::try_from(count).ok())
+                .filter(|&count| count <= words)?,
+            dictionary_invalid: metadata
+                .get(DICTIONARY_INVALID)?
+                .as_f64()
+                .filter(|ratio| (0.0..=1.0).contains(ratio))?,
+        })
+    }
+}
+
 #[derive(Default)]
 struct TextAccumulator {
+    psm: Option<i32>,
     text: String,
     words: u32,
+    low_confidence_words: u32,
     confidence_sum: f64,
     dictionary_invalid_sum: f64,
-    dictionary_words: u32,
-    format: Option<crate::types::FormatMetadata>,
+    worst_dictionary_invalid: f64,
 }
 
 impl TextAccumulator {
@@ -435,70 +522,51 @@ impl TextAccumulator {
             || !result.tables.is_empty()
             || !result.formulas.is_empty()
             || !result.processing_warnings.is_empty()
+            || result.metadata.error.is_some()
+            || result
+                .metadata
+                .image_preprocessing
+                .as_ref()
+                .is_some_and(|metadata| metadata.resize_error.is_some())
+            || [
+                "word_iterator_skipped_count",
+                "dictionary_filtered_line_count",
+                "non_text_block_word_count",
+            ]
+            .iter()
+            .any(|key| {
+                result
+                    .metadata
+                    .additional
+                    .get(*key)
+                    .is_some_and(|count| count.as_u64() != Some(0))
+            })
             || self.text.len().saturating_add(text.len()).saturating_add(1) > MAX_OUTPUT_BYTES
         {
             return false;
         }
-        let Some(words) = super::word_count_of(&result.metadata.additional) else {
+        let Some(quality) = RecognitionQuality::from_result(&result) else {
             return false;
         };
-        let Some(confidence) = super::mean_text_conf_of(&result.metadata.additional) else {
+        let Some(total_words) = self.words.checked_add(quality.words) else {
             return false;
         };
-        let Some(total_words) = self.words.checked_add(words) else {
-            return false;
-        };
-        if words == 0 || confidence > 100.0 {
+        if self.psm.is_some_and(|psm| psm != quality.psm) {
             return false;
         }
+        self.psm = Some(quality.psm);
         if !self.text.is_empty() {
             self.text.push('\n');
         }
         self.text.push_str(text);
-        self.format = self.format.take().or(result.metadata.format);
         self.words = total_words;
-        self.confidence_sum += confidence * f64::from(words);
-        if let Some(ratio) = result
-            .metadata
-            .additional
-            .get(crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY)
-            .and_then(serde_json::Value::as_f64)
-            .filter(|ratio| (0.0..=1.0).contains(ratio))
-        {
-            self.dictionary_invalid_sum += ratio * f64::from(words);
-            self.dictionary_words += words;
-        }
+        self.low_confidence_words += quality.low_confidence_words;
+        self.confidence_sum += quality.mean_confidence * f64::from(quality.words);
+        // Use the worst strip for acceptance. The reported ratio weights by retained word count,
+        // because the backend does not expose the dictionary-specific denominator. ~keep
+        self.worst_dictionary_invalid = self.worst_dictionary_invalid.max(quality.dictionary_invalid);
+        self.dictionary_invalid_sum += quality.dictionary_invalid * f64::from(quality.words);
         true
-    }
-
-    fn finish(self, page: usize, strips: usize) -> Option<ExtractedDocument> {
-        if self.words == 0 {
-            return None;
-        }
-        let mut result = ExtractedDocument {
-            content: self.text,
-            ..Default::default()
-        };
-        result.metadata.format = self.format;
-        result
-            .metadata
-            .additional
-            .insert(Cow::Borrowed("word_count"), self.words.into());
-        result.metadata.additional.insert(
-            Cow::Borrowed("mean_text_conf"),
-            (self.confidence_sum / f64::from(self.words)).into(),
-        );
-        if self.dictionary_words == self.words {
-            result.metadata.additional.insert(
-                Cow::Borrowed(crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY),
-                (self.dictionary_invalid_sum / f64::from(self.words)).into(),
-            );
-        }
-        result.processing_warnings.push(ProcessingWarning {
-            source: Cow::Borrowed("ocr"),
-            message: Cow::Owned(format!("Page {} OCR used {strips} source-image strips.", page + 1)),
-        });
-        Some(result)
     }
 }
 
@@ -511,6 +579,102 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../fixtures/repros/tall-scan-strips/strict-tall.pdf"
     ));
+
+    fn recognized(content: &str, mean: f64, invalid: f64, words: u32) -> ExtractedDocument {
+        let mut result = ExtractedDocument {
+            content: content.into(),
+            ..Default::default()
+        };
+        result.metadata.format = Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
+            language: "eng".into(),
+            psm: 11,
+            output_format: "markdown".into(),
+            table_count: 0,
+            table_rows: None,
+            table_cols: None,
+        }));
+        result.metadata.additional.extend([
+            (Cow::Borrowed("mean_text_conf"), mean.into()),
+            (Cow::Borrowed("word_count"), words.into()),
+            (Cow::Borrowed("low_conf_word_count"), 0.into()),
+            (
+                Cow::Borrowed(crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY),
+                invalid.into(),
+            ),
+        ]);
+        result
+    }
+
+    #[test]
+    fn more_low_confidence_or_dictionary_invalid_words_do_not_replace_original() {
+        let original = recognized("The clean original", 96.0, 0.0, 3);
+        let low_confidence = recognized("The clean original has more words", 72.0, 0.0, 6);
+        let invalid_words = recognized("The clean original xzzz yyzz", 98.0, 0.4, 5);
+        for candidate in [low_confidence, invalid_words] {
+            let mut recovered = TextAccumulator::default();
+            assert!(recovered.add(candidate));
+            assert!(!should_replace(
+                &original.content,
+                RecognitionQuality::from_result(&original).unwrap(),
+                &recovered
+            ));
+        }
+    }
+
+    #[test]
+    fn strip_reports_incomplete_word_iteration_and_is_rejected() {
+        let mut result = recognized("The clean original has more words", 98.0, 0.0, 6);
+        result
+            .metadata
+            .additional
+            .insert(Cow::Borrowed("word_iterator_skipped_count"), 1.into());
+        let mut recovered = TextAccumulator::default();
+        assert!(!recovered.add(result));
+        assert!(recovered.text.is_empty());
+    }
+
+    #[test]
+    fn accepted_recovery_updates_text_metrics_and_keeps_page_diagnostics() {
+        let mut original = recognized("The clean original", 90.0, 0.1, 3);
+        original.mime_type = Cow::Borrowed("application/pdf");
+        original.metadata.extraction_duration_ms = Some(21);
+        original.metadata.additional.insert(Cow::Borrowed("psm"), "11".into());
+        original
+            .metadata
+            .additional
+            .insert(Cow::Borrowed("median_word_conf"), 88.into());
+        original.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("ocr"),
+            message: Cow::Borrowed("original diagnostic"),
+        });
+        let mut recovered = TextAccumulator::default();
+        assert!(recovered.add(recognized("The clean original", 94.0, 0.0, 3)));
+        assert!(recovered.add(recognized("has more words", 96.0, 0.0, 3)));
+        assert!(should_replace(
+            &original.content,
+            RecognitionQuality::from_result(&original).unwrap(),
+            &recovered
+        ));
+        apply_recovery(&mut original, recovered, 1, 2);
+
+        assert_eq!(original.content, "The clean original\nhas more words");
+        assert_eq!(original.mime_type, "application/pdf");
+        assert_eq!(original.metadata.extraction_duration_ms, Some(21));
+        assert_eq!(original.metadata.additional["psm"], "11");
+        assert!(matches!(
+            original.metadata.format,
+            Some(crate::types::FormatMetadata::Ocr(format)) if format.psm == 11
+        ));
+        assert_eq!(original.metadata.additional["word_count"], 6);
+        assert_eq!(original.metadata.additional["mean_text_conf"], 95.0);
+        assert_eq!(original.metadata.additional["low_conf_word_count"], 0);
+        assert!(!original.metadata.additional.contains_key("median_word_conf"));
+        assert_eq!(original.processing_warnings[0].message, "original diagnostic");
+        assert_eq!(
+            original.processing_warnings[1].message,
+            "Page 2 OCR used 2 source-image strips."
+        );
+    }
 
     #[test]
     fn gray_source_requires_exact_stream_end_and_size() {

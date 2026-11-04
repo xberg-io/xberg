@@ -75,7 +75,12 @@ fn assert_image_text(document: &ExtractedDocument, used_strips: bool) {
 
 #[test]
 fn tall_scan_recovers_every_source_line_once_in_order() {
-    assert_image_text(&extract(TALL, &extraction_config()), true);
+    let document = extract(TALL, &extraction_config());
+    assert_image_text(&document, true);
+    assert_eq!(
+        document.metadata.additional.get("ocr_page_segmentation_modes"),
+        Some(&serde_json::json!([{ "page_number": 1, "psm": 11 }]))
+    );
 }
 
 #[test]
@@ -96,6 +101,9 @@ fn mixed_pdf_preserves_the_native_page_and_recovers_the_tall_scan() {
     assert_eq!(words(&pages[0].content), words(&native));
     assert_eq!(words(&pages[1].content), words(ORACLE));
     assert_eq!(words(&document.content), words(&format!("{native}{ORACLE}")));
+    let confidence = pages[1].ocr_confidence.as_ref().expect("mixed OCR page confidence");
+    assert_eq!(confidence.word_count, 440);
+    assert_eq!(confidence.backend, "tesseract");
 }
 
 #[test]
