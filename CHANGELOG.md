@@ -165,6 +165,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve word and line breaks when layout reorders upright PDF text.** (#2373)
+  Keep table cells searchable and leave adjacent source glyphs attached.
+
 - **(redaction): Redact repeated terms split by Djot inline styling.** Return verified redacted plain text for
   supported Djot documents and pages with a format warning. Reject opaque output, including raw page-marker blocks.
 

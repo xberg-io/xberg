@@ -1010,7 +1010,8 @@ fn apply_reading_order_reordering(
     page_config: Option<&crate::core::config::PageConfig>,
     margins: crate::pdf::native::text::PageMarginFractions,
 ) -> Result<(String, Vec<crate::types::PageBoundary>, Vec<String>)> {
-    use crate::extractors::pdf::reading_order;
+    use crate::extractors::pdf::{reading_order, rotation::page_has_rotated_spans};
+    use crate::pdf::native::text::{assemble_upright_layout_text, extract_spans_from_page, rotation_span};
 
     let page_count = doc.doc.page_count().map_err(|e| crate::error::XbergError::Parsing {
         message: format!("reading-order reordering: failed to get page count: {e}"),
@@ -1031,24 +1032,28 @@ fn apply_reading_order_reordering(
     let mut reordered_pages = Vec::with_capacity(page_count);
 
     for (page_idx, hints) in layout_hints_per_page.iter().enumerate().take(page_count) {
-        let (spans, reordered_sparse_columns) =
-            crate::pdf::native::text::extract_spans_from_page(&mut doc.doc, page_idx, margins).map_err(|e| {
-                crate::error::XbergError::Parsing {
-                    message: format!(
-                        "reading-order reordering: failed to extract spans from page {}: {e}",
-                        page_idx + 1
-                    ),
-                    source: None,
-                }
+        let (native_spans, reordered_sparse_columns) = extract_spans_from_page(&mut doc.doc, page_idx, margins)
+            .map_err(|e| crate::error::XbergError::Parsing {
+                message: format!(
+                    "reading-order reordering: failed to extract spans from page {}: {e}",
+                    page_idx + 1
+                ),
+                source: None,
             })?;
 
+        let spans: Vec<_> = native_spans.iter().map(rotation_span).collect();
         let span_order: Vec<usize> = if hints.is_empty() || (reordered_sparse_columns && hints.len() == 1) {
             (0..spans.len()).collect()
         } else {
             reading_order::reorder_spans_by_layout(&spans, hints)
         };
 
-        reordered_pages.push(reading_order::assemble_reading_order_text(&spans, &span_order));
+        let text = if page_has_rotated_spans(&spans) {
+            reading_order::assemble_reading_order_text(&spans, &span_order)
+        } else {
+            assemble_upright_layout_text(&native_spans, &span_order)
+        };
+        reordered_pages.push(text);
     }
 
     if reordered_pages.is_empty() {
@@ -1583,6 +1588,89 @@ mod tests {
         super::apply_reordered_text_to_page_contents(&mut page_contents, vec!["ignored".to_string()]);
 
         assert!(page_contents.is_none(), "None page_contents must stay None");
+    }
+
+    #[cfg(feature = "layout-detection")]
+    fn layout_spacing_pdf() -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut document = Document::with_version("1.5");
+        let pages_id = document.new_object_id();
+        let font = document.add_object(dictionary! {
+            "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+        });
+        let mut kids = Vec::new();
+        for number in 1..=2 {
+            let stream = format!(
+                "BT /F1 11 Tf 72 700 Td (Page {number} starts here.) Tj ET\n\
+                 BT /F1 11 Tf 72 684 Td (A separate body line.) Tj ET\n\
+                 BT /F1 11 Tf 72 620 Td (Model) Tj ET\n\
+                 BT /F1 11 Tf 200 620 Td (Recall) Tj ET\n\
+                 BT /F1 11 Tf 330 620 Td (Precision) Tj ET\n\
+                 BT /F1 11 Tf 460 620 Td (Latency) Tj ET\n\
+                 BT /F1 11 Tf 72 602 Td (alpha) Tj ET\n\
+                 BT /F1 11 Tf 200 602 Td (0.91) Tj ET\n\
+                 BT /F1 11 Tf 330 602 Td (0.88) Tj ET\n\
+                 BT /F1 11 Tf 460 602 Td (12ms) Tj ET"
+            );
+            let content = document.add_object(Stream::new(dictionary! {}, stream.into_bytes()));
+            let page = document.add_object(dictionary! {
+                "Type" => "Page", "Parent" => pages_id, "Contents" => content,
+                "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+                "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+            });
+            kids.push(Object::Reference(page));
+        }
+        document.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! { "Type" => "Pages", "Count" => 2, "Kids" => kids }),
+        );
+        let catalog = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        document.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).expect("layout spacing PDF must serialize");
+        bytes
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn should_preserve_body_and_table_separators_in_selected_layout_order() {
+        use crate::pdf::native::{NativeDocument, text::PageMarginFractions};
+        use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
+
+        let hint = |class_name, bottom, top| LayoutHint {
+            class_name,
+            confidence: 0.9,
+            left: 70.0,
+            bottom,
+            right: 550.0,
+            top,
+        };
+        let page_hints = vec![
+            hint(LayoutHintClass::Text, 680.0, 730.0),
+            hint(LayoutHintClass::Table, 590.0, 640.0),
+        ];
+        let mut doc = NativeDocument::open_bytes(&layout_spacing_pdf()).expect("layout spacing PDF must open");
+        let margins = PageMarginFractions { top: 0.0, bottom: 0.0 };
+        let (content, boundaries, pages) =
+            super::apply_reading_order_reordering(&mut doc, "", &[page_hints.clone(), page_hints], None, margins)
+                .expect("layout order must assemble both pages");
+
+        assert_eq!(pages.len(), 2);
+        assert_eq!(boundaries.len(), 2);
+        for (index, (page, boundary)) in pages.iter().zip(&boundaries).enumerate() {
+            assert_eq!(boundary.page_number as usize, index + 1);
+            assert_eq!(&content[boundary.byte_start..boundary.byte_end], page);
+            assert_eq!(
+                page.lines().filter(|line| !line.is_empty()).collect::<Vec<_>>(),
+                [
+                    format!("Page {} starts here.", index + 1).as_str(),
+                    "A separate body line.",
+                    "Model Recall Precision Latency",
+                    "alpha 0.91 0.88 12ms",
+                ]
+            );
+        }
     }
 
     /// Boundaries produced alongside reordered text must index it exactly:
