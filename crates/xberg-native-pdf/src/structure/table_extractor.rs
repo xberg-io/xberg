@@ -845,7 +845,7 @@ fn is_uax9_numeral(c: char) -> bool {
 /// separator into a run the sort already placed correctly, turning one wrong
 /// cell into two. Full UAX #9 resolution in the cell sorter is a larger design
 /// question than this defect.
-fn is_numeric_run(text: &str) -> bool {
+pub fn is_numeric_run(text: &str) -> bool {
     let mut saw_numeral = false;
     for c in text.trim().chars() {
         if is_uax9_numeral(c) {

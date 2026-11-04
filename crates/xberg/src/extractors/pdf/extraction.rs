@@ -47,9 +47,12 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
     pub(crate) page_config: Option<&'a crate::core::config::PageConfig>,
 }
 
+/// Per native table: its spanned grid, its script annotations, and whether the detector marked a
+/// header row (`None` for a heuristic table, whose rows show whether it has one). ~keep
 type NativeTableMetadata = (
     Option<crate::types::TableGrid>,
     Option<crate::pdf::native::table::scripts::TableScripts>,
+    Option<bool>,
 );
 
 type TableExtractionResult = (
@@ -76,7 +79,7 @@ fn attach_native_table_grids(
     let sidecars: Vec<_> = tables
         .iter()
         .zip(grids)
-        .filter_map(|(table, (grid, _))| {
+        .filter_map(|(table, (grid, _, _))| {
             grid.as_ref()
                 .map(|grid| crate::pdf::structure::table_grid::TableGridSidecar {
                     table: table.clone(),
@@ -91,7 +94,7 @@ fn attach_native_table_grids(
             continue;
         };
         let index = table_index as usize;
-        let Some((table, (_, scripts))) = tables.get(index).zip(grids.get(index)) else {
+        let Some((table, (_, scripts, _))) = tables.get(index).zip(grids.get(index)) else {
             continue;
         };
         if let Some(scripts) = scripts
@@ -108,6 +111,72 @@ fn attach_native_table_grids(
                 encoded,
             );
         }
+    }
+    Ok(())
+}
+
+/// Put an empty header row above each label-row table (GH#2315), after every table pass has run.
+/// A native table qualifies when it has no spanned grid, no header row (the detector's mark, or
+/// for a heuristic table its rows), two or more rows and a first row of a label and numbers. The
+/// structured document's copy gains the row only while it still holds the cells the table had
+/// when built, so a table that a pass merged, split or rewrote keeps its output, and the passes
+/// measure each table as built. Script annotations of a changed copy move down one row. ~keep
+fn add_label_row_headers(
+    tables: &mut [Table],
+    grids: &[NativeTableMetadata],
+    document: Option<&mut crate::types::internal::InternalDocument>,
+) -> Result<()> {
+    use crate::pdf::table_reconstruct::{add_empty_header_row, has_detected_header, is_label_row_table};
+    let label_row_tables: Vec<usize> = tables
+        .iter()
+        .zip(grids)
+        .enumerate()
+        .filter(|(_, (table, (grid, _, header_row)))| {
+            grid.is_none()
+                && is_label_row_table(&table.cells)
+                && !header_row.unwrap_or_else(|| has_detected_header(&table.cells, true))
+        })
+        .map(|(index, _)| index)
+        .collect();
+    if label_row_tables.is_empty() {
+        return Ok(());
+    }
+    if let Some(document) = document {
+        let mut changed = ahash::AHashSet::new();
+        for (index, table) in document.tables.iter_mut().enumerate() {
+            let built = label_row_tables
+                .iter()
+                .any(|&native| tables[native].page_number == table.page_number && tables[native].cells == table.cells);
+            if built {
+                add_empty_header_row(table);
+                changed.insert(index as u32);
+            }
+        }
+        for element in &mut document.elements {
+            let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
+                continue;
+            };
+            if !changed.contains(&table_index) {
+                continue;
+            }
+            let Some(encoded) = element.attributes.as_mut().and_then(|attributes| {
+                attributes.get_mut(crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE)
+            }) else {
+                continue;
+            };
+            let mut annotations: Vec<crate::rendering::table_scripts::CellScriptAnnotation> =
+                serde_json::from_str(encoded).map_err(|error| {
+                    crate::XbergError::parsing(format!("Failed to read PDF table scripts: {error}"))
+                })?;
+            for annotation in &mut annotations {
+                annotation.row += 1;
+            }
+            *encoded = serde_json::to_string(&annotations)
+                .map_err(|error| crate::XbergError::parsing(format!("Failed to retain PDF table scripts: {error}")))?;
+        }
+    }
+    for index in label_row_tables {
+        add_empty_header_row(&mut tables[index]);
     }
     Ok(())
 }
@@ -632,7 +701,7 @@ pub(crate) fn extract_all_from_native_document(
                 warnings.extend(bordered_warnings);
                 let (mut combined, mut native_grids): (Vec<_>, Vec<_>) = extracted_tables
                     .into_iter()
-                    .map(|entry| (entry.table, (entry.grid, entry.scripts)))
+                    .map(|entry| (entry.table, (entry.grid, entry.scripts, Some(entry.header_row))))
                     .unzip();
                 let covered_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
                 let hierarchy_segments = match crate::pdf::native::table::extract_tables_heuristic(
@@ -642,7 +711,7 @@ pub(crate) fn extract_all_from_native_document(
                     artifacts,
                 ) {
                     Ok(extraction) => {
-                        native_grids.resize_with(combined.len() + extraction.tables.len(), || (None, None));
+                        native_grids.resize_with(combined.len() + extraction.tables.len(), || (None, None, None));
                         combined.extend(extraction.tables);
                         let mut hierarchy_segments = extraction.hierarchy_segments;
                         if retain_hierarchy_segments {
@@ -944,6 +1013,10 @@ pub(crate) fn extract_all_from_native_document(
         None
     });
 
+    let mut tables = tables;
+    let mut pre_rendered_doc = pre_rendered_doc;
+    add_label_row_headers(&mut tables, &native_table_grids, pre_rendered_doc.as_mut())?;
+
     Ok((
         pdf_metadata,
         native_text,
@@ -1098,10 +1171,103 @@ fn join_pages_with_boundaries(
 #[cfg(test)]
 mod tests {
     use super::{
-        hierarchy_cluster_count, map_native_text_error, needs_structured_extraction, page_has_exact_text_block,
-        retain_segments_inside_page_margins, table_stage_failure_warning,
+        add_label_row_headers, hierarchy_cluster_count, map_native_text_error, needs_structured_extraction,
+        page_has_exact_text_block, retain_segments_inside_page_margins, table_stage_failure_warning,
     };
     use crate::core::config::OutputFormat;
+
+    fn label_table(rows: &[&[&str]]) -> crate::types::Table {
+        let cells: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        crate::types::Table {
+            markdown: crate::pdf::table_reconstruct::table_to_markdown(&cells),
+            cells,
+            page_number: 1,
+            ..Default::default()
+        }
+    }
+
+    /// GH#2315: after the table passes, a label-row table gains an empty header row in the flat
+    /// tables and in the structured copy that still holds its cells, and its script annotations
+    /// move down one row. A copy a pass rewrote, a table with a detector header row, and a table
+    /// whose first row is text keep their output. ~keep
+    #[test]
+    fn an_empty_header_row_goes_on_the_label_row_tables_that_reach_the_end_as_built_gh2315() {
+        use crate::rendering::table_scripts::{CellScriptAnnotation, TABLE_CELL_SCRIPTS_ATTRIBUTE};
+        use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+        use crate::types::{AnnotationKind, TextAnnotation};
+        let label = label_table(&[&["Cash", "1,204", "1,263"], &["Debt", "3,106", "3,165"]]);
+        let rewritten = label_table(&[&["Cash", "1,204", "1,263"], &["Debt", "3,106", "3,166"]]);
+        let headed = label_table(&[&["Assets", "2019", "2020"], &["Cash", "1,204", "1,263"]]);
+        let text_first = label_table(&[&["Region", "Year", "Total"], &["North", "2019", "1,204"]]);
+        let mut tables = vec![label.clone(), label.clone(), headed.clone(), text_first.clone()];
+        let grids = vec![
+            (None, None, None),
+            (None, None, None),
+            (None, None, Some(true)),
+            (None, None, None),
+        ];
+
+        let mut document = InternalDocument::default();
+        let annotations = vec![CellScriptAnnotation {
+            row: 1,
+            col: 1,
+            annotation: TextAnnotation {
+                start: 1,
+                end: 2,
+                kind: AnnotationKind::Superscript,
+            },
+        }];
+        for table in [label.clone(), rewritten.clone(), headed.clone(), text_first.clone()] {
+            let table_index = document.push_table(table);
+            let mut element = InternalElement::text(ElementKind::Table { table_index }, "", 0);
+            let mut attributes = ahash::AHashMap::new();
+            attributes.insert(
+                TABLE_CELL_SCRIPTS_ATTRIBUTE.to_string(),
+                serde_json::to_string(&annotations).unwrap(),
+            );
+            element.attributes = Some(attributes);
+            document.elements.push(element);
+        }
+
+        add_label_row_headers(&mut tables, &grids, Some(&mut document)).unwrap();
+
+        let mut expected = vec![vec![String::new(); 3]];
+        expected.extend(label.cells.clone());
+        assert_eq!(tables[0].cells, expected);
+        assert_eq!(
+            tables[0].markdown,
+            crate::pdf::table_reconstruct::table_to_markdown(&expected)
+        );
+        assert_eq!(tables[1].cells, expected);
+        assert_eq!(tables[2].cells, headed.cells, "a detector header row stays the header");
+        assert_eq!(tables[3].cells, text_first.cells, "a text first row stays the header");
+
+        assert_eq!(document.tables[0].cells, expected);
+        assert_eq!(
+            document.tables[1].cells, rewritten.cells,
+            "a copy a pass rewrote keeps its output"
+        );
+        assert_eq!(document.tables[2].cells, headed.cells);
+        assert_eq!(document.tables[3].cells, text_first.cells);
+        let rows = |index: usize| -> Vec<usize> {
+            let encoded = &document.elements[index].attributes.as_ref().unwrap()[TABLE_CELL_SCRIPTS_ATTRIBUTE];
+            serde_json::from_str::<Vec<CellScriptAnnotation>>(encoded)
+                .unwrap()
+                .iter()
+                .map(|annotation| annotation.row)
+                .collect()
+        };
+        assert_eq!(
+            rows(0),
+            [2],
+            "the annotation stays on its cell below the empty header row"
+        );
+        assert_eq!(rows(1), [1]);
+        assert_eq!(rows(2), [1]);
+    }
 
     #[test]
     fn native_text_cancellation_remains_a_typed_cancellation() {

@@ -421,6 +421,58 @@ pub(crate) fn post_process_table_with_columns(
     post_process_table_inner(table, min_columns, layout_guided, Some(column_positions))
 }
 
+/// Whether [`post_process_table`] finds a header row in `table`. When it finds none, its
+/// gates read the first data row as the header (GH#2315). ~keep
+pub(crate) fn has_detected_header(table: &[Vec<String>], layout_guided: bool) -> bool {
+    let rows: Vec<Vec<String>> = table.iter().filter(|row| row_has_text(row)).cloned().collect();
+    find_data_start(&rows, layout_guided) > 0
+}
+
+/// Whether a table with no header row is a label-row table (GH#2315): it has two or more rows,
+/// and its first row is a text label followed by numbers. The plain reading order keeps such a
+/// row on one line, and Markdown keeps it in the body under an empty header row. ~keep
+pub(crate) fn is_label_row_table(rows: &[Vec<String>]) -> bool {
+    matches!(rows, [first, _, ..] if is_label_row(first))
+}
+
+/// Put an empty header row above the rows of `table`, so its first row moves into the Markdown
+/// body. Every other line of the Markdown stays as it was. A table whose Markdown has no
+/// separator line stays unchanged. ~keep
+pub(crate) fn add_empty_header_row(table: &mut crate::types::Table) {
+    let Some(first) = table.cells.first() else {
+        return;
+    };
+    let mut lines = table.markdown.split('\n');
+    let (Some(header), Some(separator)) = (lines.next(), lines.next()) else {
+        return;
+    };
+    let empty = vec![String::new(); first.len()];
+    let rendered = table_to_markdown(&[empty.clone(), first.clone()]);
+    let empty_line = rendered.lines().next().unwrap_or_default();
+    let mut markdown = [empty_line, separator, header].join("\n");
+    for line in lines {
+        markdown.push('\n');
+        markdown.push_str(line);
+    }
+    table.markdown = markdown;
+    table.cells.insert(0, empty);
+}
+
+/// Whether `row` is a text label followed by one or more numbers and nothing else. ~keep
+fn is_label_row(row: &[String]) -> bool {
+    use xberg_native_pdf::structure::table_extractor::is_numeric_run;
+    let mut cells = row.iter().map(|cell| cell.trim()).filter(|cell| !cell.is_empty());
+    let Some(label) = cells.next() else {
+        return false;
+    };
+    let values: Vec<&str> = cells.collect();
+    label.chars().any(char::is_alphabetic) && !values.is_empty() && values.into_iter().all(is_numeric_run)
+}
+
+fn row_has_text(row: &[String]) -> bool {
+    row.iter().any(|cell| !cell.trim().is_empty())
+}
+
 fn min_columns_for(layout_guided: bool, allow_single_column: bool) -> usize {
     if allow_single_column {
         1
@@ -497,7 +549,7 @@ fn post_process_table_inner(
     layout_guided: bool,
     mut column_positions: Option<&mut Vec<u32>>,
 ) -> Option<Vec<Vec<String>>> {
-    table.retain(|row| row.iter().any(|cell| !cell.trim().is_empty()));
+    table.retain(|row| row_has_text(row));
     if table.is_empty() {
         tracing::debug!(
             target: "xberg::table_reconstruct",
@@ -2940,6 +2992,68 @@ fn is_ascii_digits(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rows_of(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    /// GH#2315: only a table whose first row is a label and numbers is a label-row table. ~keep
+    #[test]
+    fn only_a_first_row_of_a_label_and_numbers_makes_a_label_row_table_gh2315() {
+        assert!(is_label_row_table(&rows_of(&[
+            &["Cash", "1,204", "", "1.5"],
+            &["Debt", "3,106", "", "2.5"]
+        ])));
+        assert!(
+            !is_label_row_table(&rows_of(&[&["Cash", "1,204", "1,263"]])),
+            "a table of one row keeps it as the header"
+        );
+        for first in [
+            &["Region", "Year", "Total"][..],
+            &["", "2019", "2020"],
+            &["Ages", "18-24", "1,204"],
+            &["Cash", "$1,204", "1,263"],
+            &["1,204", "1,263", "1,322"],
+            &["Cash", "", ""],
+        ] {
+            assert!(
+                !is_label_row_table(&rows_of(&[first, &["Debt", "3,106", "3,165"]])),
+                "a first row {first:?} stays the header"
+            );
+        }
+    }
+
+    /// GH#2315: the empty header row moves the first row into the Markdown body and keeps every
+    /// other line; the result is what the renderer makes of the rows with the empty row. ~keep
+    #[test]
+    fn an_empty_header_row_moves_the_first_row_into_the_markdown_body_gh2315() {
+        let cells = rows_of(&[&["Cash", "1,204"], &["Debt", "3,106"], &["Total", "4,310"]]);
+        let mut table = crate::types::Table {
+            markdown: table_to_markdown(&cells),
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        };
+        add_empty_header_row(&mut table);
+        let mut expected = vec![vec![String::new(); 2]];
+        expected.extend(cells.clone());
+        assert_eq!(table.cells, expected);
+        assert_eq!(table.markdown, table_to_markdown(&expected));
+
+        let mut no_separator = crate::types::Table {
+            markdown: "| Cash | 1,204 |".to_string(),
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        };
+        add_empty_header_row(&mut no_separator);
+        assert_eq!(
+            no_separator.cells, cells,
+            "Markdown without a separator line stays unchanged"
+        );
+    }
 
     #[cfg(feature = "pdf")]
     fn make_seg(text: &str, x: f32, y: f32, width: f32, height: f32) -> SegmentData {

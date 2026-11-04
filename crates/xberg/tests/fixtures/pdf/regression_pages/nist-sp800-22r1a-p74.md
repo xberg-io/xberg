@@ -76,8 +76,9 @@ following probabilities:
 
 16 24 2 2  More accurate, but also more complicated, expressions are given in [3]. These expressions yield the
 
-| π 0 | 0.364091 |
+|  |  |
 | --- | --- |
+| π 0 | 0.364091 |
 | π 1 | 0.185659 |
 | π2 | 0.139381 |
 | π 3 | 0.100571 |

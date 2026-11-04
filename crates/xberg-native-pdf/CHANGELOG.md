@@ -12,6 +12,11 @@ and in the upstream project itself.
 
 ## [Unreleased]
 
+### Added
+
+- **(pdf): The XY-cut keeps each row of a label and number table on one line.**
+  `XYCutStrategy` has a new public field `keep_table_rows` (default `true`) and the builder `with_keep_table_rows`. A caller that builds the strategy as a struct literal must set the field. `structure::table_extractor::is_numeric_run` is now public. (GH#2315)
+
 ### Changed
 
 - **(pdf): Native font metrics retain their 16-bit glyph-count API with the updated font parser.**

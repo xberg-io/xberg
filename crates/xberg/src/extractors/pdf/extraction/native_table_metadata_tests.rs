@@ -65,7 +65,7 @@ fn native_grid_attaches_to_the_same_final_table() {
     let original = table();
     let geometry = grid(&original, true);
     let mut doc = document(original.clone(), None);
-    attach_native_table_grids(&mut doc, &[original], &[(Some(geometry.clone()), None)]).unwrap();
+    attach_native_table_grids(&mut doc, &[original], &[(Some(geometry.clone()), None, None)]).unwrap();
     assert_eq!(retained(&doc), Some(geometry));
 }
 
@@ -78,7 +78,7 @@ fn native_grid_does_not_attach_after_final_cells_are_edited() {
     attach_native_table_grids(
         &mut doc,
         std::slice::from_ref(&original),
-        &[(Some(grid(&original, true)), None)],
+        &[(Some(grid(&original, true)), None, None)],
     )
     .unwrap();
     assert_eq!(retained(&doc), None);
@@ -94,7 +94,7 @@ fn original_index_does_not_replace_recognized_table_geometry() {
     attach_native_table_grids(
         &mut doc,
         std::slice::from_ref(&original),
-        &[(Some(grid(&original, true)), None)],
+        &[(Some(grid(&original, true)), None, None)],
     )
     .unwrap();
     assert_eq!(retained(&doc), Some(geometry));
@@ -108,7 +108,7 @@ fn native_grid_preserves_already_valid_recognizer_metadata() {
     attach_native_table_grids(
         &mut doc,
         std::slice::from_ref(&original),
-        &[(Some(grid(&original, true)), None)],
+        &[(Some(grid(&original, true)), None, None)],
     )
     .unwrap();
     assert_eq!(retained(&doc), Some(recognized));

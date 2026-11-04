@@ -129,6 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Each row of a label and number table stays on one line.**
+  In plain output, the reading order no longer cuts a table between its label column and its number columns, so a row's label is followed by its own numbers instead of every label coming before every number. Two forms side by side and two prose columns still read column by column. A table with no header row whose first row is a label followed by numbers now starts with an empty header row, in its cells and in its Markdown, so that the first row stays in the body. Other tables keep their first row as the header. (GH#2315)
+
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
 

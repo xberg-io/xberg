@@ -32,6 +32,7 @@ use crate::error::Result;
 use crate::geometry::Rect;
 use crate::layout::TextSpan;
 use crate::pipeline::{OrderedTextSpan, ReadingOrderInfo};
+use crate::structure::table_extractor::is_numeric_run;
 
 /// Maximum density-array length for XY-cut projection profiles.
 ///
@@ -250,6 +251,13 @@ pub struct XYCutStrategy {
     /// Callers with row-dominant layouts can override via
     /// `with_prefer_horizontal(false)`.
     pub prefer_horizontal: bool,
+
+    /// Keep each row of a label and number table on one line (default: true). Every column
+    /// cut then asks `cuts_table_rows` first, and a pair on one exact baseline counts.
+    /// The hierarchy segment order turns this off (GH#2315): the heuristic table detector
+    /// builds each table's cells from that order, so a table outside the label-row rule
+    /// keeps its cells. ~keep
+    pub keep_table_rows: bool,
 }
 
 /// Cap on `partition_indexed` recursion depth. Real layouts nest only a few
@@ -371,6 +379,7 @@ impl Default for XYCutStrategy {
             // validated against the full CI corpus, not a local tweak. ~keep
             min_valley_width: Self::DEFAULT_MIN_VALLEY_WIDTH,
             prefer_horizontal: true,
+            keep_table_rows: true,
         }
     }
 }
@@ -401,6 +410,12 @@ impl XYCutStrategy {
     /// Enable or disable horizontal partitioning first preference.
     pub fn with_prefer_horizontal(mut self, prefer: bool) -> Self {
         self.prefer_horizontal = prefer;
+        self
+    }
+
+    /// Enable or disable keeping each row of a label and number table on one line.
+    pub fn with_keep_table_rows(mut self, keep: bool) -> Self {
+        self.keep_table_rows = keep;
         self
     }
 
@@ -835,8 +850,13 @@ impl XYCutStrategy {
         //
         // Classify once and pass to both prose detectors below; each gated on
         // `classify_region_kind == Prose` and re-ran the same line clustering. ~keep
+        //
+        // GH#2315: each column cut below first asks `cuts_table_rows`, because a table's
+        // label column and number columns pass the prose detectors as two columns too. ~keep
         let region_kind = self.classify_region_kind(all_spans, indices);
-        if let Some(gutter_x) = self.detect_two_column_prose(all_spans, indices, region_kind) {
+        if let Some(gutter_x) = self.detect_two_column_prose(all_spans, indices, region_kind)
+            && !self.cuts_table_rows(all_spans, indices, gutter_x)
+        {
             if let Some((above, below)) = self.find_vertical_split_indexed(all_spans, indices) {
                 tracing::trace!(
                     above = above.len(),
@@ -874,7 +894,9 @@ impl XYCutStrategy {
         // the body across the peel — both halves then lose
         // enough gutter signal that the column cut never reaches
         // them on recursion. ~keep
-        if let Some(gutter_x) = self.detect_narrow_gutter_prose(all_spans, indices, region_kind) {
+        if let Some(gutter_x) = self.detect_narrow_gutter_prose(all_spans, indices, region_kind)
+            && !self.cuts_table_rows(all_spans, indices, gutter_x)
+        {
             let (left, right): (Vec<usize>, Vec<usize>) = indices
                 .iter()
                 .copied()
@@ -2039,6 +2061,12 @@ impl XYCutStrategy {
         Some((left, right))
     }
 
+    /// True when `keep_table_rows` is on and the cut at `split_x` would separate a table's
+    /// label column from its number columns (GH#2315). ~keep
+    fn cuts_table_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
+        self.keep_table_rows && self.cuts_label_value_rows(all_spans, indices, split_x)
+    }
+
     /// True when the cut at `split_x` would separate short label/value pairs that share a
     /// row but sit a hair off each other's baseline (a key-value form, a numbered list's
     /// marker from its text, a table's row header from its cells): at least
@@ -2046,8 +2074,10 @@ impl XYCutStrategy {
     /// have one side narrower than `LABEL_RUN_MAX_EM`. Prose columns fail the width test --
     /// a column line is a full column wide -- so a real gutter is unaffected. Cutting here
     /// would read every label before any value, so the caller falls back to a row cut.
-    /// Rows on one exact baseline are not counted: they were never joined by the line
-    /// grouping either, and their handling is left as it was. ~keep
+    /// With `keep_table_rows`, a pair on one exact baseline counts when the run right of the
+    /// cut is a number (GH#2315): a table row, where two label/value forms side by side on one
+    /// baseline grid put a label there. A region of two such rows is a table when both pair.
+    /// Without it, rows on one exact baseline are not counted. ~keep
     fn cuts_label_value_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
         let lines = group_indices_into_lines(all_spans, indices);
         let extent = |line: &[usize]| -> (f32, f32, f32, f32) {
@@ -2077,7 +2107,10 @@ impl XYCutStrategy {
             let (left_min, left_max, left_y, left_font) = extent(&pair[0]);
             let (right_min, right_max, right_y, right_font) = extent(&pair[1]);
             let offset = (left_y - right_y).abs();
-            if left_max > split_x || right_min < split_x || offset == 0.0 || offset > XYCUT_LINE_Y_TOLERANCE_PTS {
+            if left_max > split_x || right_min < split_x || offset > XYCUT_LINE_Y_TOLERANCE_PTS {
+                continue;
+            }
+            if offset == 0.0 && !(self.keep_table_rows && pair[1].iter().all(|&i| is_numeric_run(&all_spans[i].text))) {
                 continue;
             }
             paired_rows += 1;
@@ -2089,9 +2122,12 @@ impl XYCutStrategy {
         // Two columns of different leading meet within a point of each other's baseline by
         // chance now and then; a form pairs (nearly) every row. Require the pairs to cover at
         // least half of the sparser side's lines. ~keep
-        paired_rows >= MIN_LABEL_VALUE_ROWS
-            && short_rows * 5 >= paired_rows * 3
-            && paired_rows * 2 >= left_lines.min(right_lines)
+        let min_rows = if self.keep_table_rows {
+            MIN_LABEL_VALUE_ROWS.min(left_lines.max(2))
+        } else {
+            MIN_LABEL_VALUE_ROWS
+        };
+        paired_rows >= min_rows && short_rows * 5 >= paired_rows * 3 && paired_rows * 2 >= left_lines.min(right_lines)
     }
 
     /// Fallback column split: find the deepest trough between the two
@@ -4835,6 +4871,236 @@ mod tests {
         assert!(
             last_left < first_right,
             "every left span precedes every right span: {order:?}"
+        );
+    }
+
+    /// A number with thousands separators, as a statement prints it.
+    fn grouped_number(value: u32) -> String {
+        let digits = value.to_string();
+        let mut out = String::new();
+        for (k, c) in digits.chars().enumerate() {
+            if k > 0 && (digits.len() - k).is_multiple_of(3) {
+                out.push(',');
+            }
+            out.push(c);
+        }
+        out
+    }
+
+    /// GH#2315 table geometry at 10pt: a label at x=72 and `cols` right-aligned numbers ending
+    /// at `last_x + step * j`, one row every `lead` pt, the numbers `offset` pt above the label.
+    /// Returns the spans and each row's indices, label first. ~keep
+    fn label_number_table(
+        rows: usize,
+        cols: usize,
+        lead: f32,
+        offset: f32,
+        label_suffix: &str,
+        (last_x, step): (f32, f32),
+    ) -> (Vec<TextSpan>, Vec<Vec<usize>>) {
+        const LABELS: [&str; 10] = [
+            "Cash and equivalents",
+            "Accounts receivable",
+            "Inventory",
+            "Prepaid expenses",
+            "Total current assets",
+            "Property and equipment",
+            "Accounts payable",
+            "Accrued liabilities",
+            "Long-term debt",
+            "Total liabilities",
+        ];
+        let mut spans = Vec::new();
+        let mut row_indices = Vec::new();
+        for row in 0..rows {
+            let y = 700.0 - lead * row as f32;
+            let label = format!("{}{label_suffix}", LABELS[row % LABELS.len()]);
+            let mut indices = vec![spans.len()];
+            spans.push(make_span_text(72.0, y, label.len() as f32 * 5.0, 10.0, &label, 10.0));
+            for col in 0..cols {
+                let text = grouped_number(1204 + 317 * row as u32 + 59 * col as u32);
+                let width = text.len() as f32 * 5.0;
+                let right = last_x + step * col as f32;
+                indices.push(spans.len());
+                spans.push(make_span_text(right - width, y + offset, width, 10.0, &text, 10.0));
+            }
+            row_indices.push(indices);
+        }
+        (spans, row_indices)
+    }
+
+    fn reading_order(spans: &[TextSpan]) -> Vec<usize> {
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        XYCutStrategy::new()
+            .partition_indexed(spans, &indices)
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
+    /// Each fixture names the column cut that read every label before every number at the
+    /// base; the order must now be row by row, each label followed by its own numbers. ~keep
+    #[test]
+    fn label_number_tables_read_row_by_row_gh2315() {
+        let cases = [
+            (
+                "ten rows, one baseline",
+                label_number_table(10, 4, 22.0, 0.0, "", (330.0, 70.0)),
+            ),
+            (
+                "ten rows, hair offset",
+                label_number_table(10, 4, 22.0, 0.3, "", (330.0, 70.0)),
+            ),
+            ("three rows", label_number_table(3, 4, 22.0, 0.0, "", (330.0, 70.0))),
+            ("two rows", label_number_table(2, 4, 22.0, 0.0, "", (330.0, 70.0))),
+            (
+                "one value column",
+                label_number_table(10, 1, 22.0, 0.0, "", (330.0, 70.0)),
+            ),
+            ("tight leading", label_number_table(10, 4, 12.0, 0.0, "", (330.0, 70.0))),
+            (
+                "25 rows of six",
+                label_number_table(25, 6, 18.0, 0.0, " for the period", (290.0, 60.0)),
+            ),
+        ];
+        for (name, (spans, rows)) in cases {
+            let expected: Vec<usize> = rows.into_iter().flatten().collect();
+            assert_eq!(reading_order(&spans), expected, "{name}: each row must stay whole");
+        }
+    }
+
+    /// The judgement each column cut asks: on one exact baseline a label followed by a number
+    /// pairs, and the region refuses the cut. ~keep
+    #[test]
+    fn exact_baseline_number_rows_pair_across_the_cut_gh2315() {
+        let strategy = XYCutStrategy::new();
+        for rows in [2, 3, 10] {
+            let (spans, _) = label_number_table(rows, 4, 22.0, 0.0, "", (330.0, 70.0));
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            assert!(
+                strategy.cuts_label_value_rows(&spans, &indices, 200.0),
+                "{rows} label/number rows on one baseline must pair across the cut"
+            );
+        }
+    }
+
+    /// A table the narrow-gutter detector reads as two columns: equal labels put every row's
+    /// widest gap at one x, and three stray lines above stop the line-start detector. ~keep
+    #[test]
+    fn narrow_gutter_table_reads_row_by_row_gh2315() {
+        let mut spans = Vec::new();
+        spans.push(make_span_text(145.0, 760.0, 95.0, 10.0, "Title text spanning", 10.0));
+        spans.push(make_span_text(
+            214.0,
+            745.0,
+            140.0,
+            10.0,
+            "Caption that wraps somewhere",
+            10.0,
+        ));
+        spans.push(make_span_text(455.0, 730.0, 15.0, 10.0, "(1)", 10.0));
+        let first_row = spans.len();
+        let mut expected = Vec::new();
+        for row in 0..14u32 {
+            let y = 700.0 - 18.0 * row as f32;
+            let label = format!("Line item {:02}", row + 1);
+            expected.push(spans.len());
+            spans.push(make_span_text(72.0, y, 60.0, 10.0, &label, 10.0));
+            let value = grouped_number(1204 + 317 * row);
+            expected.push(spans.len());
+            spans.push(make_span_text(305.0, y, 25.0, 10.0, &value, 10.0));
+        }
+        let strategy = XYCutStrategy::new();
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert!(
+            strategy.detect_two_column_prose(&spans, &indices, kind).is_none()
+                && strategy.detect_narrow_gutter_prose(&spans, &indices, kind).is_some(),
+            "precondition: only the narrow-gutter detector fires ({kind:?})"
+        );
+        let order: Vec<usize> = reading_order(&spans).into_iter().filter(|&i| i >= first_row).collect();
+        assert_eq!(order, expected, "each row must stay whole");
+    }
+
+    /// Two label/value forms side by side on one baseline grid: right of the gutter each line
+    /// starts with a label, not a number, so the forms stay two columns. ~keep
+    fn two_forms_on_one_grid() -> (Vec<TextSpan>, usize) {
+        let mut spans = Vec::new();
+        let mut left_count = 0;
+        for (x0, side) in [(72.0, 0), (320.0, 1)] {
+            for line in 0..40 {
+                let y = 720.0 - 12.0 * line as f32;
+                let label = format!("Field {}", ["abcde", "bcdea", "cdeab", "deabc", "eabcd"][line % 5]);
+                spans.push(make_span_text(x0, y, 50.0, 10.0, &label, 10.0));
+                let value = grouped_number(100 + 977 * line as u32);
+                spans.push(make_span_text(
+                    x0 + 120.0,
+                    y,
+                    value.len() as f32 * 5.0,
+                    10.0,
+                    &value,
+                    10.0,
+                ));
+            }
+            if side == 0 {
+                left_count = spans.len();
+            }
+        }
+        (spans, left_count)
+    }
+
+    /// With `keep_table_rows` off, as the table detector's order runs, each column cut reads as
+    /// before the GH#2315 rule: every label before every number. Each fixture is cut by a
+    /// different branch the rule gates: a prose detector, the exact-baseline pair and the
+    /// two-row minimum of the projection cut. ~keep
+    #[test]
+    fn table_rows_off_keeps_the_column_cut_gh2315() {
+        let cases = [
+            (
+                "ten rows, hair offset",
+                label_number_table(10, 4, 22.0, 0.3, "", (330.0, 70.0)),
+            ),
+            ("three rows", label_number_table(3, 4, 22.0, 0.0, "", (330.0, 70.0))),
+            (
+                "two rows, hair offset",
+                label_number_table(2, 4, 22.0, 0.3, "", (330.0, 70.0)),
+            ),
+        ];
+        for (name, (spans, rows)) in cases {
+            let labels: Vec<usize> = rows.iter().map(|row| row[0]).collect();
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            let order: Vec<usize> = XYCutStrategy::new()
+                .with_keep_table_rows(false)
+                .partition_indexed(&spans, &indices)
+                .into_iter()
+                .flatten()
+                .collect();
+            let last_label = order.iter().rposition(|i| labels.contains(i));
+            let first_number = order.iter().position(|i| !labels.contains(i));
+            assert!(
+                last_label < first_number,
+                "{name}: every label before every number: {order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_forms_on_one_baseline_grid_stay_two_columns_gh2315() {
+        let (spans, left_count) = two_forms_on_one_grid();
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        assert!(
+            !XYCutStrategy::new().cuts_label_value_rows(&spans, &indices, 290.0),
+            "a label right of the gutter must not pair with the value left of it"
+        );
+        let order = reading_order(&spans);
+        let last_left = order.iter().rposition(|&i| i < left_count).expect("left spans present");
+        let first_right = order
+            .iter()
+            .position(|&i| i >= left_count)
+            .expect("right spans present");
+        assert!(
+            last_left < first_right,
+            "the left form precedes the right form: {order:?}"
         );
     }
 }

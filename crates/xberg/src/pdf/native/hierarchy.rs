@@ -474,7 +474,12 @@ fn apply_xy_cut_if_column_aware(
     if let Some(gutter_x) = xberg_native_pdf::pipeline::reading_order::detect_column_gutter(spans.as_slice()) {
         context = context.with_column_gutter(gutter_x);
     }
-    match XYCutStrategy::new().apply(spans.clone(), &context) {
+    // The heuristic table detector builds each table's cells from this order, so the table
+    // rows rule of the plain reading order stays off here (GH#2315). ~keep
+    match XYCutStrategy::new()
+        .with_keep_table_rows(false)
+        .apply(spans.clone(), &context)
+    {
         Ok(ordered) => *spans = ordered.into_iter().map(|item| item.span).collect(),
         Err(error) => tracing::debug!(
             page = page_index,
@@ -1689,6 +1694,70 @@ mod tests {
             super::select_reading_order(&prose_columns(), 612.0, 792.0),
             ReadingOrder::ColumnAware
         );
+    }
+
+    /// Two prose columns at 10pt above a label and number table, below y=620: three rows,
+    /// each a label at x=72 and four numbers right-aligned at x=330 to x=540, one row every
+    /// 22pt. Returns the spans and the indices of the table's labels. ~keep
+    fn prose_above_label_number_table() -> (Vec<TextSpan>, Vec<usize>) {
+        let mut spans = prose_columns();
+        let mut labels = Vec::new();
+        for (row, label) in ["Cash and equivalents", "Accounts receivable", "Inventory"]
+            .into_iter()
+            .enumerate()
+        {
+            let y = 600.0 - row as f32 * 22.0;
+            labels.push(spans.len());
+            spans.push(text_span(label, 72.0, y, label.len() as f32 * 5.0));
+            for column in 0..4 {
+                let value = format!("{},{:03}", row + 1, 204 + 59 * column);
+                let right = 330.0 + 70.0 * column as f32;
+                spans.push(text_span(&value, right - 25.0, y, 25.0));
+            }
+        }
+        for span in &mut spans {
+            span.font_size = 10.0;
+            span.bbox.height = 10.0;
+        }
+        (spans, labels)
+    }
+
+    /// GH#2315: the heuristic table detector builds its cells from the segments of this
+    /// order, so the XY-cut here keeps the column cut a table had before the table rows rule:
+    /// every label of the table before its numbers. The plain reading order, with the rule on,
+    /// reads the same table row by row. ~keep
+    #[test]
+    fn hierarchy_xy_cut_keeps_the_table_column_cut_gh2315() {
+        use xberg_native_pdf::pipeline::{ReadingOrderContext, ReadingOrderStrategy, XYCutStrategy};
+        let (spans, labels) = prose_above_label_number_table();
+        assert_eq!(
+            super::select_reading_order(&spans, 612.0, 792.0),
+            ReadingOrder::ColumnAware,
+            "precondition: the page takes the XY-cut"
+        );
+        let table_order = |ordered: &[TextSpan]| -> Vec<bool> {
+            ordered
+                .iter()
+                .filter(|span| span.bbox.y < 620.0)
+                .map(|span| labels.iter().any(|&label| spans[label].text == span.text))
+                .collect()
+        };
+        let rule_on: Vec<TextSpan> = XYCutStrategy::new()
+            .apply(spans.clone(), &ReadingOrderContext::new())
+            .unwrap()
+            .into_iter()
+            .map(|item| item.span)
+            .collect();
+        assert_eq!(
+            table_order(&rule_on),
+            [true, false, false, false, false].repeat(3),
+            "precondition: with the rule on, the table reads row by row"
+        );
+        let mut ordered = spans.clone();
+        super::apply_xy_cut_if_column_aware(&mut ordered, 612.0, 792.0, 0);
+        let mut expected = vec![true; 3];
+        expected.extend([false; 12]);
+        assert_eq!(table_order(&ordered), expected, "every label before every number");
     }
 
     /// Page width shared by the GH#1397 element-path fixtures below, matching

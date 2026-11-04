@@ -30,6 +30,8 @@ pub(crate) struct NativeTable {
     pub table: Table,
     pub grid: Option<crate::types::TableGrid>,
     pub scripts: Option<scripts::TableScripts>,
+    /// Whether the detector marked a header row in the table (GH#2315). ~keep
+    pub header_row: bool,
 }
 
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
@@ -192,6 +194,7 @@ pub(crate) fn extract_tables_native(doc: &mut NativeDocument) -> Result<(Vec<Nat
             let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
             all_tables.push(NativeTable {
                 scripts,
+                header_row: extracted_table.rows.iter().any(|row| row.is_header),
                 table: Table {
                     cells,
                     markdown,
@@ -320,6 +323,7 @@ pub(crate) fn extract_tables_bordered(
             let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
             all_tables.push(NativeTable {
                 scripts,
+                header_row: extracted_table.rows.iter().any(|row| row.is_header),
                 table: Table {
                     cells,
                     markdown,
