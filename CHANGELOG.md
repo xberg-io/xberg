@@ -179,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
 
 - **(pdf): Render Latin text on hosts without a matching font.** (#2347)
-  Use the bundled DejaVu Sans face for covered Latin glyphs after embedded and system font lookup fails.
+  Use the bundled DejaVu Sans face, Regular or Bold, after embedded and system font lookup fails. A run draws every character the face covers.
 
 - **(tests): Check the specific blank-PDF image decode warning.** (#2427)
   Full-feature tests allow unrelated OCR fallback diagnostics on blank pages.

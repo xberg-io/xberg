@@ -237,19 +237,30 @@ fn system_fontdb() -> std::sync::Arc<fontdb::Database> {
         .clone()
 }
 
-fn bundled_latin_face(text: &str) -> Option<Arc<Vec<u8>>> {
-    use crate::fonts::{bundled::DEJAVU_SANS, encoding::is_winansi_char};
+/// The DejaVu Sans face bundled in this crate, for a run whose font is not
+/// embedded and matches no face in the font database.
+///
+/// The face goes through [`cached_face`], so it is parsed once per process.
+/// The run takes the face when the face has a glyph for one or more of its
+/// visible characters. A character the face lacks then takes the per-glyph
+/// fallback of `render_unicode_text`, as it does for a system face. ~keep
+fn bundled_latin_face(text: &str, bold: bool) -> Option<(FaceKey, Arc<Vec<u8>>, u32)> {
+    use crate::fonts::bundled::{DEJAVU_SANS, DEJAVU_SANS_BOLD};
 
-    let face = OutlineFace::new(DEJAVU_SANS, 0)?;
-    if !text
-        .chars()
-        .all(|ch| ch.is_whitespace() || (is_winansi_char(ch) && face.glyph_index(ch).is_some()))
-    {
-        return None;
-    }
-
-    static BYTES: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
-    Some(Arc::clone(BYTES.get_or_init(|| Arc::new(DEJAVU_SANS.to_vec()))))
+    static REGULAR: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
+    static BOLD: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
+    let (cell, bytes) = if bold {
+        (&BOLD, DEJAVU_SANS_BOLD)
+    } else {
+        (&REGULAR, DEJAVU_SANS)
+    };
+    let data = Arc::clone(cell.get_or_init(|| Arc::new(bytes.to_vec())));
+    let key = FaceKey::BundledSans { bold };
+    let face = cached_face(key, Arc::clone(&data), 0)?;
+    let charmap = face.font().charmap();
+    let mut visible = text.chars().filter(|ch| !ch.is_whitespace()).peekable();
+    let drawable = visible.peek().is_none() || visible.any(|ch| charmap.map(ch).is_some());
+    drawable.then_some((key, data, 0))
 }
 
 /// Process-wide cache mapping fontdb::ID → (font bytes, face index).
@@ -282,7 +293,7 @@ fn cached_font_bytes(id: fontdb::ID, db: &fontdb::Database) -> Option<(Arc<Vec<u
     result
 }
 
-/// Parsed font faces cached by fontdb ID.
+/// Parsed font faces, cached by [`FaceKey`] and face index.
 ///
 /// Only owned data lives here: the font bytes, the `harfrust::Font` (an owned,
 /// `Arc`-backed handle whose shared state holds the prepared shaping tables),
@@ -344,22 +355,31 @@ impl CachedFace {
     }
 }
 
-static FACE_CACHE: std::sync::OnceLock<
-    std::sync::Mutex<std::collections::HashMap<(fontdb::ID, u32), Arc<CachedFace>>>,
-> = std::sync::OnceLock::new();
+/// Where a non-embedded face comes from, and its key in [`FACE_CACHE`].
+///
+/// A database `ID` is an index into that database, so a face that lives
+/// outside the database needs a key of its own. ~keep
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum FaceKey {
+    Database(fontdb::ID),
+    BundledSans { bold: bool },
+}
 
-fn cached_face(id: fontdb::ID, data: Arc<Vec<u8>>, index: u32) -> Option<Arc<CachedFace>> {
+static FACE_CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<(FaceKey, u32), Arc<CachedFace>>>> =
+    std::sync::OnceLock::new();
+
+fn cached_face(key: FaceKey, data: Arc<Vec<u8>>, index: u32) -> Option<Arc<CachedFace>> {
     let cache = FACE_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
     {
         let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(entry) = guard.get(&(id, index)) {
+        if let Some(entry) = guard.get(&(key, index)) {
             return Some(entry.clone());
         }
     }
     let face = CachedFace::new(data, index)?;
     let arc = Arc::new(face);
     let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
-    guard.insert((id, index), arc.clone());
+    guard.insert((key, index), arc.clone());
     Some(arc)
 }
 
@@ -665,95 +685,97 @@ impl TextRasterizer {
         }
 
         let pdf_font_name = gs.font_name.as_deref().unwrap_or("Helvetica");
-        let font_data_and_index: Option<(Option<fontdb::ID>, Arc<Vec<u8>>, u32, bool)> =
-            if let Some(ref info) = font_info {
-                if let Some(ref embedded) = info.embedded_font_data {
-                    // Simple (non-Type0) TrueType subsets whose sole cmap subtable
-                    // is a byte-indexed table must be rendered by feeding the raw
-                    // PDF content bytes to the embedded cmap directly — the PDF
-                    // byte is the cmap input under the font's declared encoding
-                    // (ISO 32000-1 §9.6.6.4). Unicode shaping against these fonts
-                    // is unreliable: even if a space or punctuation happens to
-                    // share a codepoint with a cmap key, shaping for letters
-                    // resolves to .notdef and the system-font fallback picks up
-                    // unrelated glyphs. Bypass the Unicode shaping path entirely
-                    // for this subtype so the byte→GID route is taken for every
-                    // `Tj` / `TJ` call, not just the ones whose decoded Unicode
-                    // happens to miss the cmap.
-                    // Classify the embedded font's cmap tables. Computed
-                    // locally on every call — a cheap zero-copy `skrifa::FontRef`
-                    // probe; the process-wide memoisation was removed as
-                    // unsound under concurrency. ~keep
-                    let (is_byte_indexed, has_unicode_cmap) = classify_embedded_font(embedded);
-                    if info.subtype != "Type0" && is_byte_indexed {
-                        tracing::trace!("Using embedded PDF font with byte-indexed cmap (simple TrueType subset)");
-                        return self.render_cid_direct(
-                            pixmap,
-                            text,
-                            info,
-                            embedded,
-                            0,
-                            &paint,
-                            base_transform,
-                            gs,
-                            clip_mask,
-                        );
-                    }
+        let font_data_and_index: Option<(Option<FaceKey>, Arc<Vec<u8>>, u32, bool)> = if let Some(ref info) = font_info
+        {
+            if let Some(ref embedded) = info.embedded_font_data {
+                // Simple (non-Type0) TrueType subsets whose sole cmap subtable
+                // is a byte-indexed table must be rendered by feeding the raw
+                // PDF content bytes to the embedded cmap directly — the PDF
+                // byte is the cmap input under the font's declared encoding
+                // (ISO 32000-1 §9.6.6.4). Unicode shaping against these fonts
+                // is unreliable: even if a space or punctuation happens to
+                // share a codepoint with a cmap key, shaping for letters
+                // resolves to .notdef and the system-font fallback picks up
+                // unrelated glyphs. Bypass the Unicode shaping path entirely
+                // for this subtype so the byte→GID route is taken for every
+                // `Tj` / `TJ` call, not just the ones whose decoded Unicode
+                // happens to miss the cmap.
+                // Classify the embedded font's cmap tables. Computed
+                // locally on every call — a cheap zero-copy `skrifa::FontRef`
+                // probe; the process-wide memoisation was removed as
+                // unsound under concurrency. ~keep
+                let (is_byte_indexed, has_unicode_cmap) = classify_embedded_font(embedded);
+                if info.subtype != "Type0" && is_byte_indexed {
+                    tracing::trace!("Using embedded PDF font with byte-indexed cmap (simple TrueType subset)");
+                    return self.render_cid_direct(
+                        pixmap,
+                        text,
+                        info,
+                        embedded,
+                        0,
+                        &paint,
+                        base_transform,
+                        gs,
+                        clip_mask,
+                    );
+                }
 
-                    if has_unicode_cmap {
-                        tracing::trace!("Using embedded PDF font data");
-                        Some((None, Arc::clone(embedded), 0, false))
-                    } else if info.subtype == "Type0"
-                        && info.cid_to_gid_map.is_some()
-                        && info.cid_font_type.as_deref() == Some("CIDFontType2")
-                    {
-                        tracing::trace!("Using embedded PDF font with CIDToGIDMap (CIDFontType2)");
-                        Some((None, Arc::clone(embedded), 0, true))
-                    } else if info.cff_gid_map.is_some()
-                        || (info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0"))
-                    {
-                        // CFF font — use direct GID rendering.
-                        //
-                        // For simple (non-Type0) CFF fonts the `cff_gid_map` is
-                        // built at load time by
-                        // [`crate::fonts::cff_encoding::parse_cff_gid_mapping_with_pdf_encoding`],
-                        // which uses the PDF font dictionary's `/Encoding`
-                        // (typically WinAnsi) as the byte → glyph-name source
-                        // and the CFF Charset as the glyph-name → GID resolver
-                        // (ISO 32000-1 §9.6.6). The subsetter's own CFF Encoding
-                        // table is *not* consulted directly — sparse subsetter
-                        // CFF Encoding tables would silently drop most content
-                        // bytes to `.notdef` otherwise.
-                        //
-                        // Type0 + CIDFontType0 (CFF / OpenType-CFF): Identity-H
-                        // emission means the content-stream's 2-byte codes ARE
-                        // the GIDs in the CFF charset; bypass harfrust Unicode
-                        // shaping (which round-trips CID→Unicode→GID through
-                        // the patched cmap and can drift on CFF charset
-                        // positions) and feed the raw codes to
-                        // render_cid_direct (G3-h). `OutlineFace` (skrifa) handles
-                        // CFF outlines for sfnt-wrapped OpenType-CFF (OTTO); raw
-                        // CFF streams were already wrapped by
-                        // `font_dict::wrap_cff_in_opentype` at load time. ~keep
-                        tracing::trace!("Using embedded CFF PDF font with direct GID mapping");
-                        Some((None, Arc::clone(embedded), 0, true))
-                    } else {
-                        tracing::trace!("Embedded PDF font lacks usable cmap, falling back to system font");
-                        self.load_font_data(&info.base_font)
-                            .map(|(id, d, i)| (Some(id), d, i, false))
-                    }
+                if has_unicode_cmap {
+                    tracing::trace!("Using embedded PDF font data");
+                    Some((None, Arc::clone(embedded), 0, false))
+                } else if info.subtype == "Type0"
+                    && info.cid_to_gid_map.is_some()
+                    && info.cid_font_type.as_deref() == Some("CIDFontType2")
+                {
+                    tracing::trace!("Using embedded PDF font with CIDToGIDMap (CIDFontType2)");
+                    Some((None, Arc::clone(embedded), 0, true))
+                } else if info.cff_gid_map.is_some()
+                    || (info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0"))
+                {
+                    // CFF font — use direct GID rendering.
+                    //
+                    // For simple (non-Type0) CFF fonts the `cff_gid_map` is
+                    // built at load time by
+                    // [`crate::fonts::cff_encoding::parse_cff_gid_mapping_with_pdf_encoding`],
+                    // which uses the PDF font dictionary's `/Encoding`
+                    // (typically WinAnsi) as the byte → glyph-name source
+                    // and the CFF Charset as the glyph-name → GID resolver
+                    // (ISO 32000-1 §9.6.6). The subsetter's own CFF Encoding
+                    // table is *not* consulted directly — sparse subsetter
+                    // CFF Encoding tables would silently drop most content
+                    // bytes to `.notdef` otherwise.
+                    //
+                    // Type0 + CIDFontType0 (CFF / OpenType-CFF): Identity-H
+                    // emission means the content-stream's 2-byte codes ARE
+                    // the GIDs in the CFF charset; bypass harfrust Unicode
+                    // shaping (which round-trips CID→Unicode→GID through
+                    // the patched cmap and can drift on CFF charset
+                    // positions) and feed the raw codes to
+                    // render_cid_direct (G3-h). `OutlineFace` (skrifa) handles
+                    // CFF outlines for sfnt-wrapped OpenType-CFF (OTTO); raw
+                    // CFF streams were already wrapped by
+                    // `font_dict::wrap_cff_in_opentype` at load time. ~keep
+                    tracing::trace!("Using embedded CFF PDF font with direct GID mapping");
+                    Some((None, Arc::clone(embedded), 0, true))
                 } else {
+                    tracing::trace!("Embedded PDF font lacks usable cmap, falling back to system font");
                     self.load_font_data(&info.base_font)
-                        .map(|(id, d, i)| (Some(id), d, i, false))
+                        .map(|(id, d, i)| (Some(FaceKey::Database(id)), d, i, false))
                 }
             } else {
-                self.load_font_data(pdf_font_name)
-                    .map(|(id, d, i)| (Some(id), d, i, false))
-            };
+                self.load_font_data(&info.base_font)
+                    .map(|(id, d, i)| (Some(FaceKey::Database(id)), d, i, false))
+            }
+        } else {
+            self.load_font_data(pdf_font_name)
+                .map(|(id, d, i)| (Some(FaceKey::Database(id)), d, i, false))
+        };
 
-        let font_data_and_index =
-            font_data_and_index.or_else(|| bundled_latin_face(&unicode_text).map(|font| (None, font, 0, false)));
-        if let Some((font_id, font_data, index, use_cid_to_gid)) = font_data_and_index {
+        let font_data_and_index = font_data_and_index.or_else(|| {
+            let bold = font_info.as_ref().is_some_and(|info| info.is_bold());
+            bundled_latin_face(&unicode_text, bold).map(|(key, font, index)| (Some(key), font, index, false))
+        });
+        if let Some((face_key, font_data, index, use_cid_to_gid)) = font_data_and_index {
             if use_cid_to_gid {
                 // Direct CIDToGIDMap/CFF rendering — bypass harfrust, use `OutlineFace`
                 // (skrifa) for glyph outlines ~keep
@@ -784,7 +806,7 @@ impl TextRasterizer {
                                 &unicode_text,
                                 text,
                                 font_info.as_deref(),
-                                Some(fb_id),
+                                Some(FaceKey::Database(fb_id)),
                                 fallback_data,
                                 fallback_idx,
                                 &paint,
@@ -806,7 +828,7 @@ impl TextRasterizer {
                 &unicode_text,
                 text,
                 font_info.as_deref(),
-                font_id,
+                face_key,
                 font_data,
                 index,
                 &paint,
@@ -1103,7 +1125,7 @@ impl TextRasterizer {
         text: &str,
         bytes: &[u8],
         font_info: Option<&crate::fonts::FontInfo>,
-        font_id: Option<fontdb::ID>,
+        face_key: Option<FaceKey>,
         font_data: Arc<Vec<u8>>,
         index: u32,
         paint: &Paint,
@@ -1117,9 +1139,10 @@ impl TextRasterizer {
         let h_scale = gs.horizontal_scaling / 100.0;
 
         // 1. Resolve faces — prefer process-wide cache to avoid re-parsing font tables
-        //    on every text segment.  Embedded fonts (font_id == None) are not cached
+        //    on every text segment.  Embedded fonts (face_key == None) are not cached
         //    because they are unique per-PDF and typically only rendered once. ~keep
-        let cached_arc: Option<Arc<CachedFace>> = font_id.and_then(|id| cached_face(id, Arc::clone(&font_data), index));
+        let cached_arc: Option<Arc<CachedFace>> =
+            face_key.and_then(|key| cached_face(key, Arc::clone(&font_data), index));
 
         // `FontRef` and the outline/charmap views are cheap table-directory
         // parses, so they are built here in both branches rather than stored.
@@ -1151,7 +1174,7 @@ impl TextRasterizer {
                             text,
                             bytes,
                             font_info,
-                            Some(fb_id),
+                            Some(FaceKey::Database(fb_id)),
                             fallback_data,
                             fallback_index,
                             paint,
@@ -1454,7 +1477,7 @@ impl TextRasterizer {
                 // get_cjk_fallback_cached() hits a process-wide OnceLock after the
                 // first call — no fontdb queries or font clones on subsequent glyphs. ~keep
                 if let Some((cjk_id, cjk_arc, cjk_index)) = get_cjk_fallback_cached(self.font_db()) {
-                    if let Some(cjk_cached) = cached_face(cjk_id, cjk_arc, cjk_index) {
+                    if let Some(cjk_cached) = cached_face(FaceKey::Database(cjk_id), cjk_arc, cjk_index) {
                         let cjk_face = cjk_cached.outline_face();
                         if let Some(cjk_glyph_id) = cjk_face.glyph_index(char_at_pos) {
                             let mut cjk_pb = PathBuilder::new();
