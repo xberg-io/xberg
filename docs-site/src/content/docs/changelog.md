@@ -122,6 +122,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
+  Bound the unique retained bytes for plain embedded JPEGs while preserving repeated paints. (#2339)
+
 - **(pdf): Honor OCR image decode limits when retrying embedded scans after pipeline failure.**
   Whole-document retries use the tighter explicit limit and stop when extraction is cancelled. (#2339)
 
