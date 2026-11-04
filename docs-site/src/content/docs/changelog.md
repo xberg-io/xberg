@@ -174,6 +174,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Expose complete native table headers as column labels.** (#2332)
   A single fully labeled header row survives in the structured table when its original grid still matches.
 
+- **(dart): Fix compilation of the generated SDK.**
+  Keep the unsigned-value checks aligned with the types emitted by Flutter Rust Bridge.
+
 - **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
   Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
 

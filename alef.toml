@@ -2472,6 +2472,8 @@ exclude_functions = [
 pubspec_name = "xberg"
 lib_name = "xberg"
 style = "frb"
+# FRB omits this unreferenced mirror, so no Dart type exists for the u64 guard. ~keep
+exclude_types = ["ChunkClassificationEnrichmentConfig"]
 # Wrapper defaults must not re-enable the ORT feature on mobile. Desktop core
 # capabilities remain selected by the explicit desktop dependency override below. ~keep
 excluded_default_features = [
