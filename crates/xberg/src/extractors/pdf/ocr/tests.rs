@@ -10182,7 +10182,7 @@ Name: ___
                 6,
                 9,
                 &crate::core::config::OcrConfig::default(),
-                &mut budget,
+                XObjectRecoveryContext::with_budget(&mut budget, None),
             )
             .await
             .expect("both retries must succeed");
@@ -10215,7 +10215,7 @@ Name: ___
             6,
             9,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect("bounded recovery must succeed");
@@ -10255,7 +10255,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("nonempty recovery output above max_content_size must fail closed");
@@ -10282,7 +10282,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("structured recovery text above max_content_size must fail closed");
@@ -10426,7 +10426,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("recovery tables above max_table_cells must fail closed");
@@ -10457,7 +10457,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("more XObject attempts than max_iterations must fail closed");

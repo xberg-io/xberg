@@ -57,13 +57,12 @@ use super::document::{
 use super::rendering::EncodedPage;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 use super::rendering::{
-    OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryContext,
-    XObjectRecoveryOutcome, clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr,
-    open_pdf_for_page_ocr, page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry,
-    pre_rendered_page_source_dpi, recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects,
-    render_full_pdf_ocr_batch, render_selected_pages_from_document, share_rendered_page_images,
-    single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
-    whole_page_raster_for_ocr_page,
+    OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryOutcome,
+    clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
+    page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
+    recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch,
+    render_selected_pages_from_document, share_rendered_page_images, single_block_for_ocr_page, valid_page_indices,
+    validate_png_encode_pages_individually, whole_page_raster_for_ocr_page,
 };
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::scoring::{
@@ -1756,6 +1755,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         budget: &mut xobject_recovery_budget,
                         blank_raster_warnings: trigger.draw_failed.then_some(&mut accumulated_warnings),
                         no_admitted_images: None,
+                        cancel_token: config.cancel_token.as_ref(),
                     },
                 )
                 .await?
@@ -3563,6 +3563,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             budget: &mut xobject_recovery_budget,
                             blank_raster_warnings: xobject_trigger.draw_failed.then_some(&mut image_fallback_warnings),
                             no_admitted_images: can_prove_no_admitted_images.then_some(&mut no_admitted_images),
+                            cancel_token: config.cancel_token.as_ref(),
                         },
                     )
                     .await?
@@ -4872,6 +4873,35 @@ impl PipelineXObjectRecoveryOutcome {
             || !self.formulas.is_empty()
     }
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) struct XObjectRecoveryContext<'a> {
+    pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
+    pub(super) blank_raster_warnings: Option<&'a mut Vec<crate::types::ProcessingWarning>>,
+    pub(super) no_admitted_images: Option<&'a mut bool>,
+    pub(super) cancel_token: Option<&'a crate::cancellation::CancellationToken>,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+impl<'a> XObjectRecoveryContext<'a> {
+    pub(super) fn with_budget(
+        budget: &'a mut crate::extractors::security::SecurityBudget,
+        cancel_token: Option<&'a crate::cancellation::CancellationToken>,
+    ) -> Self {
+        Self {
+            budget,
+            blank_raster_warnings: None,
+            no_admitted_images: None,
+            cancel_token,
+        }
+    }
+
+    pub(super) fn check_cancelled(&self) -> crate::Result<()> {
+        if self.cancel_token.is_some_and(|token| token.is_cancelled()) {
+            return Err(crate::XbergError::Cancelled);
+        }
+        Ok(())
+    }
+}
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) async fn collect_pipeline_xobject_pages(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
@@ -4879,17 +4909,17 @@ pub(super) async fn collect_pipeline_xobject_pages(
     page_count: usize,
     ocr_config: &crate::core::config::OcrConfig,
     budget: &mut crate::extractors::security::SecurityBudget,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
     for page_idx in 0..page_count {
-        let context = XObjectRecoveryContext {
-            budget,
-            blank_raster_warnings: None,
-            no_admitted_images: None,
-        };
-        let Some(recovery) =
-            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await?
-        else {
+        let context = XObjectRecoveryContext::with_budget(budget, cancel_token);
+        let recovery =
+            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await;
+        if cancel_token.is_some_and(|token| token.is_cancelled()) {
+            return Err(crate::XbergError::Cancelled);
+        }
+        let Some(recovery) = recovery? else {
             continue;
         };
         append_pipeline_xobject_page(&mut outcome, recovery, page_idx, page_idx, false);
@@ -4963,6 +4993,17 @@ fn join_pipeline_xobject_text_at_offset(
     Ok(text)
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn xobject_recovery_content_cap(
+    config: &ExtractionConfig,
+    ocr_config: &crate::core::config::OcrConfig,
+) -> Option<usize> {
+    [config.security_limits.as_ref(), ocr_config.security_limits.as_ref()]
+        .into_iter()
+        .flatten()
+        .map(|limits| limits.max_content_size)
+        .min()
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) async fn recover_pipeline_document_from_image_xobjects(
     content: Option<&[u8]>,
     config: &ExtractionConfig,
@@ -4972,6 +5013,10 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
     let Some(content) = content else {
         return Ok(None);
     };
+    let cancel_token = config.cancel_token.as_ref();
+    if cancel_token.is_some_and(|token| token.is_cancelled()) {
+        return Err(crate::XbergError::Cancelled);
+    }
     let backend = {
         let registry = crate::plugins::registry::get_ocr_backend_registry();
         let registry = registry.read();
@@ -4984,8 +5029,27 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
         return Ok(None);
     };
 
+    let mut recovery_ocr_config = std::borrow::Cow::Borrowed(ocr_config);
+    if let (Some(outer_limits), Some(cap)) = (
+        config.security_limits.as_ref(),
+        xobject_recovery_content_cap(config, ocr_config),
+    ) {
+        recovery_ocr_config
+            .to_mut()
+            .security_limits
+            .get_or_insert_with(|| outer_limits.clone())
+            .max_content_size = cap;
+    }
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
-    let mut outcome = collect_pipeline_xobject_pages(&backend, &doc, page_count, ocr_config, &mut budget).await?;
+    let mut outcome = collect_pipeline_xobject_pages(
+        &backend,
+        &doc,
+        page_count,
+        &recovery_ocr_config,
+        &mut budget,
+        cancel_token,
+    )
+    .await?;
     if !outcome.has_content() {
         return Ok(None);
     }
@@ -5019,12 +5083,8 @@ async fn recover_pipeline_page_from_image_xobjects(
     }
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
     let mut limits = config.security_limits.clone().unwrap_or_default();
-    if let Some(ocr_limits) = &ocr_config.security_limits {
-        limits.max_content_size = if config.security_limits.is_some() {
-            limits.max_content_size.min(ocr_limits.max_content_size)
-        } else {
-            ocr_limits.max_content_size
-        };
+    if let Some(cap) = xobject_recovery_content_cap(config, ocr_config) {
+        limits.max_content_size = cap;
     }
     let mut recovery_ocr_config = ocr_config.clone();
     recovery_ocr_config.security_limits = Some(limits);
@@ -5034,7 +5094,7 @@ async fn recover_pipeline_page_from_image_xobjects(
         page_idx,
         page_count,
         &recovery_ocr_config,
-        &mut budget,
+        XObjectRecoveryContext::with_budget(&mut budget, config.cancel_token.as_ref()),
     )
     .await?;
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {

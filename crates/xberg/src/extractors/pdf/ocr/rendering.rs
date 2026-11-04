@@ -1,3 +1,6 @@
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+use super::pipeline::XObjectRecoveryContext;
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) type EncodedPage = (usize, std::sync::Arc<Vec<u8>>, u32, u32);
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -378,7 +381,7 @@ pub(super) async fn recover_image_xobjects(
     page_idx: usize,
     total_pages: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    budget: &mut crate::extractors::security::SecurityBudget,
+    context: XObjectRecoveryContext<'_>,
 ) -> crate::Result<XObjectRecoveryOutcome> {
     let mut outcome = XObjectRecoveryOutcome {
         text: String::new(),
@@ -391,10 +394,13 @@ pub(super) async fn recover_image_xobjects(
         image_preprocessing: None,
     };
     for fallback in fallback_images {
-        budget.step()?;
+        context.check_cancelled()?;
+        context.budget.step()?;
         let recovery =
-            collect_xobject_recovery_result(backend, fallback, page_idx, ocr_config, budget, &mut outcome).await;
+            collect_xobject_recovery_result(backend, fallback, page_idx, ocr_config, context.budget, &mut outcome)
+                .await;
         crate::engine::seams::emit_ocr_page(page_idx + 1, total_pages, backend.name());
+        context.check_cancelled()?;
         recovery?;
         outcome.images.push(crate::types::ExtractedImage {
             data: fallback.bytes.clone(),
@@ -558,13 +564,6 @@ fn ocr_document_text(document: &crate::types::internal::InternalDocument) -> Str
     }
     text
 }
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) struct XObjectRecoveryContext<'a> {
-    pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
-    pub(super) blank_raster_warnings: Option<&'a mut Vec<crate::types::ProcessingWarning>>,
-    pub(super) no_admitted_images: Option<&'a mut bool>,
-}
-
 /// OCR a page's embedded image XObjects directly, bypassing the whole-page rasterizer.
 ///
 /// Used when the page render came back blank (see [`page_needs_xobject_fallback`]) but the
@@ -591,10 +590,16 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     page_idx: usize,
     total_pages: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    context: XObjectRecoveryContext<'_>,
+    mut context: XObjectRecoveryContext<'_>,
 ) -> crate::Result<Option<XObjectRecoveryOutcome>> {
+    context.check_cancelled()?;
     let (fallback_images, single_enumerated_xobject_unrecoverable) =
-        crate::pdf::native::images::page_ocr_fallback_image_bytes(render_doc, page_idx, context.no_admitted_images);
+        crate::pdf::native::images::page_ocr_fallback_image_bytes(
+            render_doc,
+            page_idx,
+            context.no_admitted_images.as_deref_mut(),
+        );
+    context.check_cancelled()?;
     if fallback_images.is_empty() {
         if single_enumerated_xobject_unrecoverable && let Some(warnings) = context.blank_raster_warnings {
             crate::core::diagnostics::push_warning_deduped(
@@ -613,16 +618,9 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();
     let ocr_config =
         super::pipeline::ocr_config_with_page_rotation_hint(ocr_config, 0, None, whole_page_raster, false, false);
-    recover_image_xobjects(
-        backend,
-        &fallback_images,
-        page_idx,
-        total_pages,
-        &ocr_config,
-        context.budget,
-    )
-    .await
-    .map(Some)
+    recover_image_xobjects(backend, &fallback_images, page_idx, total_pages, &ocr_config, context)
+        .await
+        .map(Some)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -632,11 +630,13 @@ pub(super) async fn recover_page_text_from_bounded_image_xobjects(
     page_idx: usize,
     total_pages: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    budget: &mut crate::extractors::security::SecurityBudget,
+    context: XObjectRecoveryContext<'_>,
 ) -> crate::Result<Option<XObjectRecoveryOutcome>> {
+    context.check_cancelled()?;
     let limits = ocr_config.security_limits.clone().unwrap_or_default();
     let fallback_images =
         crate::pdf::native::images::page_ocr_fallback_image_bytes_with_limits(render_doc, page_idx, &limits);
+    context.check_cancelled()?;
     if fallback_images.is_empty() {
         return Ok(None);
     }
@@ -644,7 +644,7 @@ pub(super) async fn recover_page_text_from_bounded_image_xobjects(
     let ocr_config =
         super::pipeline::ocr_config_with_page_rotation_hint(ocr_config, 0, None, whole_page_raster, false, false);
     let mut recovery =
-        recover_image_xobjects(backend, &fallback_images, page_idx, total_pages, &ocr_config, budget).await?;
+        recover_image_xobjects(backend, &fallback_images, page_idx, total_pages, &ocr_config, context).await?;
     for (image, fallback) in recovery.images.iter_mut().zip(&fallback_images) {
         image.description = Some(format!(
             "recovered from raw image XObject ({}) after all page OCR stages failed",
