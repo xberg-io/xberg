@@ -299,3 +299,136 @@ fn should_reject_complete_run_when_later_member_has_incompatible_native_context(
         );
     }
 }
+
+#[test]
+fn should_reject_a_raised_fraction_numerator_beside_a_baseline_delimiter() {
+    if let Some(directory) = std::env::var_os("XBERG_SCRIPT_AMBIGUITY_RECEIPTS") {
+        record_actual_ambiguous_native_owner_context(&std::path::PathBuf::from(directory));
+    }
+    let captured = page(vec![
+        span("sin(", 100.0, 700.0, 40.0, 12.0),
+        span("ω", 140.0, 704.5, 4.0, 8.0),
+        span("2", 140.0, 695.5, 4.0, 8.0),
+        span(")", 145.0, 700.0, 3.0, 12.0),
+    ]);
+    assert_eq!(captured.owners.len(), 0, "a stacked numerator is not a proved exponent");
+}
+
+#[test]
+fn should_reject_a_decimal_cohort_with_a_nearby_unclaimed_point() {
+    let captured = page(vec![
+        span("10", 100.0, 700.0, 20.0, 12.0),
+        span("2", 120.0, 704.5, 0.25, 8.0),
+        span(".", 120.25, 704.5000610351562, 0.25, 8.0),
+        span("58", 120.5, 704.5, 0.5, 8.0),
+    ]);
+    assert_eq!(
+        captured.owners.len(),
+        0,
+        "a decimal point cannot be omitted from its cohort"
+    );
+}
+
+#[test]
+fn should_preserve_unpaired_greek_and_numeric_exponents() {
+    for (base, script) in [("x", "ω"), ("10", "9")] {
+        let captured = page(vec![
+            span(base, 100.0, 700.0, 20.0, 12.0),
+            span(script, 120.0, 704.5, 4.0, 8.0),
+            span("unrelated lower text", 200.0, 695.5, 30.0, 8.0),
+        ]);
+        assert_eq!(captured.owners.len(), 1, "an unpaired exponent remains supported");
+        assert_eq!(captured.owners[0].base.text, base);
+        assert_eq!(captured.owners[0].script.text, script);
+    }
+}
+
+#[test]
+fn should_keep_decimal_exponents_complete_or_leave_them_unassociated() {
+    for scripts in [
+        vec![span("2.58", 120.0, 704.5, 4.0, 8.0)],
+        vec![
+            span("2", 120.0, 704.5, 0.25, 8.0),
+            span(".", 120.25, 704.5, 0.25, 8.0),
+            span("58", 120.5, 704.5, 0.5, 8.0),
+        ],
+    ] {
+        let original: String = scripts.iter().map(|script| script.text.as_str()).collect();
+        let mut spans = vec![span("10", 100.0, 700.0, 20.0, 12.0)];
+        spans.extend(scripts);
+        let captured = page(spans);
+        let associated: String = captured.owners.iter().map(|owner| owner.script.text.as_str()).collect();
+        assert!(
+            associated.is_empty() || associated == original,
+            "accept the entire decimal or none"
+        );
+        assert_eq!(
+            captured
+                .segments
+                .iter()
+                .skip(1)
+                .map(|s| s.text.as_str())
+                .collect::<String>(),
+            "2.58"
+        );
+    }
+}
+
+fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
+    use sha2::{Digest, Sha256};
+    let root = std::env::var_os("XBERG_SCRIPT_RETENTION_FIXTURE_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents"));
+    std::fs::create_dir_all(&output).expect("owner receipt directory");
+    for (name, hash) in [
+        (
+            "arxiv-2405.00569v2-p9.pdf",
+            "92339e619eb9397ffe4550f1b1342cafe7b2b70f90ba13e8b07b048d8216ae64",
+        ),
+        (
+            "gutenberg-36670-p169.pdf",
+            "70ae20eae453381732868eb65ef868bea7bbd3c36e2774401ccb52e2b1539c0e",
+        ),
+        (
+            "gutenberg-38769-p500.pdf",
+            "950d23bb5d8f1c47c6a8cca4e23d2230f883a12b4dbf5cf12793f1f9c1512a4b",
+        ),
+        (
+            "ntrs-20040081236-p13.pdf",
+            "71cd7420f93701108312f7b8bd1ba0b1c55665386e1e4051ae2a05782e639308",
+        ),
+    ] {
+        let bytes = std::fs::read(root.join("pdf/regression_pages").join(name)).expect("mandatory ambiguity fixture");
+        assert_eq!(hex::encode(Sha256::digest(&bytes)), hash);
+        let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("native source");
+        let (pages, used_tree) =
+            extract_all_segment_carriers(&mut doc, ArtifactRetention::default()).expect("actual native carriers");
+        assert_eq!(pages.len(), 1);
+        assert!(!pages[0].owners.is_empty(), "the observed lane must actually be active");
+        let neighbors =
+            super::super::extract_final_spans_from_page(&mut doc, 0, ScriptGeometry::Preserve).expect("neighbor spans");
+        let owners: Vec<_> = pages[0]
+            .owners
+            .iter()
+            .map(|owner| {
+                serde_json::json!({
+                    "base_final_span_ordinal":owner.base_ordinal,
+                    "script_final_span_ordinal":owner.script_ordinal,
+                    "base_snapshot":owner.base_source.as_ref(),
+                    "script_snapshot":owner.script_source.as_ref(),
+                })
+            })
+            .collect();
+        let record = serde_json::json!({
+            "fixture":name,"sha256":hash,"used_structure_tree":used_tree,
+            "capture_path":"extract_all_segment_carriers; exact final-span snapshots, not original native IDs",
+            "owners":owners,"independently_reextracted_final_spans":neighbors,
+            "neighbor_read_limitation":"A second final-span read supplies context; its ordinal is not asserted to be the first extraction's original native identity."
+        });
+        std::fs::write(
+            output.join(format!("{name}.owner-context.json")),
+            serde_json::to_vec_pretty(&record).expect("serialize owner context"),
+        )
+        .expect("write owner context");
+    }
+}
