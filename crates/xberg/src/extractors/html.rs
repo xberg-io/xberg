@@ -204,6 +204,71 @@ impl HtmlExtractor {
     }
 }
 
+// The converter renders heading metadata but keeps semantic text and byte offsets
+// in its structured heading. Use that source only when it reproduces the metadata.
+fn normalize_redaction_headings(
+    metadata: &mut HtmlMetadata,
+    structure: &html_to_markdown_rs::types::DocumentStructure,
+) {
+    use html_to_markdown_rs::types::NodeContent;
+
+    let headings = structure.nodes.iter().filter_map(|node| match &node.content {
+        NodeContent::Heading { level, text } => Some((node, *level, text)),
+        _ => None,
+    });
+    if headings.clone().count() != metadata.headers.len() {
+        return;
+    }
+
+    for (header, (node, level, text)) in metadata.headers.iter_mut().zip(headings) {
+        let id = node
+            .attributes
+            .as_ref()
+            .and_then(|attrs| attrs.get("id"))
+            .map(String::as_str);
+        if header.level == level
+            && header.id.as_deref() == id
+            && matches_superscript_heading(&header.text, text, &node.annotations)
+        {
+            header.text.clone_from(text);
+        }
+    }
+}
+
+fn matches_superscript_heading(
+    rendered: &str,
+    text: &str,
+    annotations: &[html_to_markdown_rs::types::TextAnnotation],
+) -> bool {
+    use html_to_markdown_rs::types::AnnotationKind;
+
+    let [annotation] = annotations else {
+        return false;
+    };
+    let range = annotation.start as usize..annotation.end as usize;
+    if !matches!(annotation.kind, AnnotationKind::Superscript)
+        || range.is_empty()
+        || text.contains(['^', '\\', '\n', '\r'])
+    {
+        return false;
+    }
+    let Some((before, payload, after)) = text
+        .get(..range.start)
+        .zip(text.get(range.clone()))
+        .zip(text.get(range.end..))
+        .map(|((before, payload), after)| (before, payload, after))
+    else {
+        return false;
+    };
+    !payload.chars().any(char::is_whitespace)
+        && rendered
+            .strip_prefix(before)
+            .and_then(|rest| rest.strip_prefix('^'))
+            .and_then(|rest| rest.strip_suffix(after))
+            .and_then(|rest| rest.strip_suffix('^'))
+            == Some(payload)
+}
+
 /// Map html-to-markdown annotations to xberg annotations.
 fn map_annotations(annotations: &[html_to_markdown_rs::types::TextAnnotation]) -> Vec<TextAnnotation> {
     annotations
@@ -671,12 +736,20 @@ impl SyncExtractor for HtmlExtractor {
         // their `doc.tables` entries. Converting it a second time only added duplicate,
         // unreferenced entries to `doc.tables` (and double-counted cells against the security
         // budget) without adding anything to rendered output.
-        let (content_text, html_metadata, _table_data, doc_structure) =
+        let (content_text, mut html_metadata, _table_data, doc_structure) =
             crate::extraction::html::convert_html_to_markdown_with_tables(
                 &html,
                 html_options,
                 Some(config.output_format.clone()),
             )?;
+
+        if cfg!(feature = "redaction")
+            && config.redaction.is_some()
+            && matches!(config.output_format, OutputFormat::Markdown)
+            && let (Some(metadata), Some(structure)) = (html_metadata.as_mut(), doc_structure.as_ref())
+        {
+            normalize_redaction_headings(metadata, structure);
+        }
 
         let mut budget = SecurityBudget::from_config(config);
 
@@ -868,6 +941,34 @@ impl InternalDocumentExtractor for HtmlExtractor {
 mod tests {
     use super::*;
     use crate::extractors::security::SecurityLimits;
+
+    #[test]
+    fn redaction_heading_source_requires_matching_identity_and_exact_markup() {
+        let html = "<h2 id='owned'>Jane <sup>Doe</sup></h2>";
+        let (_, metadata, _, structure) =
+            crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
+        let metadata = metadata.unwrap();
+        let structure = structure.unwrap();
+        assert_eq!(metadata.headers[0].text, "Jane ^Doe^");
+
+        let mut matching = metadata.clone();
+        normalize_redaction_headings(&mut matching, &structure);
+        assert_eq!(matching.headers[0].text, "Jane Doe");
+
+        for (level, id, rendered) in [
+            (3, "owned", "Jane ^Doe^"),
+            (2, "other", "Jane ^Doe^"),
+            (2, "owned", "Jane ^Doe^^"),
+        ] {
+            let mut unproved = metadata.clone();
+            let header = &mut unproved.headers[0];
+            header.level = level;
+            header.id = Some(id.to_string());
+            header.text = rendered.to_string();
+            normalize_redaction_headings(&mut unproved, &structure);
+            assert_eq!(unproved.headers[0].text, rendered);
+        }
+    }
 
     /// Helper to extract tables from HTML using the unified converter.
     fn extract_tables(html: &str) -> Vec<Table> {

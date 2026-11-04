@@ -179,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Cover terms split by a superscript in HTML headings or font changes in PDF text.** (#2363)
+  When the verified plain rendering covers the crossing, return it with the term redacted.
+
 - **(pdf): Fit OCR page rasters to the native allocation budget before rendering.** (#2491)
   DPI selection accounts for the actual raster dimensions, PNG workspace and any CMYK or spot planes.
 

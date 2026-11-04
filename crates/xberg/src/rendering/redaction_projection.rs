@@ -413,7 +413,7 @@ impl VisibleMarkdown {
 
     // Consume complete streams, never search for a repeated value. Whitespace runs are
     // associated without changing either string supplied to the configured matchers. ~keep
-    pub fn on_plain(&self, plain: &str) -> Option<Self> {
+    pub fn on_plain(&self, plain: &str, mut annotation_separator: Option<usize>) -> Option<Self> {
         let mut source = plain.char_indices().peekable();
         let mut visible = self.text.char_indices().peekable();
         let mut result = Self {
@@ -422,10 +422,23 @@ impl VisibleMarkdown {
             atoms: Vec::new(),
             budget: self.budget.clone(),
         };
+        if !self.text.starts_with(char::is_whitespace) {
+            while let Some((_, character)) = source.next_if(|(_, character)| character.is_whitespace()) {
+                if !result.budget.spend(0, character.len_utf8()) {
+                    return None;
+                }
+            }
+        }
         let mut atoms = self.atoms.iter().peekable();
         while let Some((visible_start, character)) = visible.peek().copied() {
             if result.budget.failed {
                 return None;
+            }
+            if source
+                .next_if(|(index, character)| Some(*index) == annotation_separator && *character == ':')
+                .is_some()
+            {
+                annotation_separator = None;
             }
             let (start, actual) = source.peek().copied()?;
             if let Some(label) = atoms.next_if(|label| label.visible.start == visible_start) {
@@ -457,7 +470,10 @@ impl VisibleMarkdown {
                 result.push(character, Some(start..start + actual.len_utf8()), true);
             }
         }
-        (!result.budget.failed && atoms.next().is_none() && source.next().is_none()).then_some(result)
+        let trailing_whitespace =
+            source.all(|(_, character)| character.is_whitespace() && result.budget.spend(0, character.len_utf8()));
+        (!result.budget.failed && atoms.next().is_none() && annotation_separator.is_none() && trailing_whitespace)
+            .then_some(result)
     }
 }
 
@@ -513,4 +529,29 @@ fn source_range(node: &AstNode<'_>, markdown: &str, lines: &[usize]) -> Option<R
         .checked_add(position.end.column)?;
     markdown.get(start..end)?;
     Some(start..end)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_correspondence_ignores_only_the_certified_annotation_separator() {
+        let limits = SecurityLimits::default();
+        let markdown = "Jane **Doe**\n\n## Annotations\n\n- **Link** (page 1): safe";
+        let plain = "  Jane Doe\n\nAnnotations:\nLink (page 1): safe";
+        let projection = VisibleMarkdown::parse(markdown, &limits).unwrap();
+        let separator = plain.find(":\n").unwrap();
+
+        assert!(projection.on_plain(plain, None).is_none());
+        assert!(projection.on_plain(plain, Some(separator + 1)).is_none());
+        let proven = projection.on_plain(plain, Some(separator)).expect("verified separator");
+        assert!(proven.covered(&[0..8], &[2..10]));
+
+        let fake = "  Jane Doe:\n\nAnnotations:\nLink (page 1): safe";
+        assert!(
+            projection.on_plain(fake, Some(fake.rfind(":\n").unwrap())).is_none(),
+            "a colon in the source body cannot borrow the appendix certificate"
+        );
+    }
 }

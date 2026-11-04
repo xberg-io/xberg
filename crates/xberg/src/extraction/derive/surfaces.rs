@@ -40,6 +40,7 @@ pub(crate) trait DerivationObserver {
         None
     }
     fn formatted_tag_ranges(&mut self, _ranges: Option<Vec<Range<usize>>>) {}
+    fn formatted_plain_annotation_separator(&mut self, _offset: Option<usize>) {}
     fn page_tag_ranges(&mut self, _ranges: Option<Vec<Range<usize>>>) {}
     fn page(&mut self, _index: usize, _number: u32, _rendered: &str, _plain: String) {}
     fn formatted_from_source(&mut self, markdown: bool, text: &str, _tag_exemptions: bool) {
@@ -174,6 +175,9 @@ pub(crate) trait RedactionSurfaces: Send + Sync {
     }
     fn formatted_tag_exemptions(&self) -> bool {
         false
+    }
+    fn formatted_plain_annotation_separator(&self) -> Option<usize> {
+        None
     }
     fn formatted_literal_backup(&self) -> Option<&str> {
         None

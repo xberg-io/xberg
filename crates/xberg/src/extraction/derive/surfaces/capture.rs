@@ -62,6 +62,7 @@ pub(crate) struct SurfaceCapture {
     pages: Vec<PageSurface>,
     tag_exemptions: bool,
     remaining_tag_proof: usize,
+    plain_annotation_separator: Option<usize>,
     owned_tags: Option<Vec<Range<usize>>>,
 }
 
@@ -95,6 +96,9 @@ impl DerivationObserver for SurfaceCapture {
 
     fn formatted_tag_ranges(&mut self, ranges: Option<Vec<Range<usize>>>) {
         self.owned_tags = ranges;
+    }
+    fn formatted_plain_annotation_separator(&mut self, offset: Option<usize>) {
+        self.plain_annotation_separator = offset;
     }
     fn page_tag_ranges(&mut self, ranges: Option<Vec<Range<usize>>>) {
         if let Some(page) = self.pages.last_mut() {
@@ -219,6 +223,9 @@ impl RedactionSurfaces for SurfaceContext {
     }
     fn discard_formatted(&self) -> bool {
         self.formatted_invalidated
+    }
+    fn formatted_plain_annotation_separator(&self) -> Option<usize> {
+        self.capture.plain_annotation_separator
     }
     fn formatted_owned_tags(&self) -> Option<&[Range<usize>]> {
         self.capture.owned_tags.as_deref()

@@ -450,13 +450,18 @@ impl<'a> RedactionPass<'a> {
         } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
-            plans.formatted = Some(self.plan_markdown(
+            let plan = self.plan_markdown(
                 text,
                 Some(&doc.content),
                 surfaces.formatted_tag_exemptions(),
                 surfaces.formatted_owned_tags(),
+                surfaces.formatted_plain_annotation_separator(),
                 limits,
-            )?);
+            )?;
+            if matches!(plan, FormattedPlan::Discard) {
+                self.verify_html_heading_redaction(doc, limits)?;
+            }
+            plans.formatted = Some(plan);
         }
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
             if !surfaces.page_markdown(index) {
@@ -466,6 +471,22 @@ impl<'a> RedactionPass<'a> {
             plans.pages.insert(index, plan);
         }
         Ok(plans)
+    }
+
+    fn verify_html_heading_redaction(&self, doc: &ExtractedDocument, limits: &SecurityLimits) -> Result<()> {
+        let Some(html) = doc.metadata.format.as_ref().and_then(|format| format.html()) else {
+            return Ok(());
+        };
+        for heading in &html.headers {
+            let text = &heading.text;
+            let unproved = || crate::XbergError::validation("Cannot prove complete styled HTML heading redaction");
+            let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(unproved)?;
+            let sensitive = match_ranges(&self.applicable_matches(&projection.text));
+            if !projection.covered(&sensitive, &match_ranges(&self.applicable_matches(text))) {
+                return Err(unproved());
+            }
+        }
+        Ok(())
     }
 
     fn applicable_matches(&self, text: &str) -> Vec<PatternMatch> {
@@ -481,6 +502,7 @@ impl<'a> RedactionPass<'a> {
         plain: Option<&str>,
         tag_exemptions: bool,
         owned_tags: Option<&[std::ops::Range<usize>]>,
+        plain_annotation_separator: Option<usize>,
         limits: &SecurityLimits,
     ) -> Result<FormattedPlan> {
         let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
@@ -494,7 +516,9 @@ impl<'a> RedactionPass<'a> {
         let plain =
             plain.ok_or_else(|| crate::XbergError::validation("Generated Markdown has no verified plain backup"))?;
         let selected = self.applicable_matches(plain);
-        let correspondence = projection.on_plain(plain).ok_or_else(invalid)?;
+        let correspondence = projection
+            .on_plain(plain, plain_annotation_separator)
+            .ok_or_else(invalid)?;
         if !correspondence.covered(&sensitive, &match_ranges(&selected)) {
             return Err(invalid());
         }
@@ -589,6 +613,7 @@ impl<'a> RedactionPass<'a> {
                 source,
                 surfaces.page_tag_exemptions(index),
                 surfaces.page_owned_tags(index),
+                None,
                 limits,
             )?
         {
