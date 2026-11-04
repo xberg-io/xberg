@@ -280,7 +280,6 @@ impl PdfDocument {
             font_name_set_cache: Mutex::new(BoundedEntryCache::new(256)),
             font_set_donated_cache: Mutex::new(BoundedEntryCache::new(256)),
             font_fingerprint_donated_cache: Mutex::new(BoundedEntryCache::new(256)),
-            font_name_set_donated_cache: Mutex::new(BoundedEntryCache::new(256)),
             #[cfg(test)]
             donation_call_count: AtomicUsize::new(0),
             #[cfg(test)]

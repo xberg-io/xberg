@@ -809,3 +809,80 @@ fn donated_truetype_cmap_is_reused_not_recomputed_per_page() {
          {PAGES} times"
     );
 }
+
+fn font_name_cache_collision_pdf() -> Vec<u8> {
+    let page = |font_id| {
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] \
+             /Resources << /Font << /F1 {font_id} 0 R >> >> /Contents 9 0 R >>"
+        )
+    };
+    let font = |glyph| {
+        format!(
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+             /Encoding << /Type /Encoding /Differences [65 /{glyph}] >> >>"
+        )
+    };
+    let text = "BT /F1 12 Tf 20 100 Td (A) Tj ET";
+    let stream = format!("<< /Length {} >>\nstream\n{text}\nendstream", text.len());
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>",
+        &[
+            (3, page(6).as_bytes()),
+            (4, page(7).as_bytes()),
+            (5, page(8).as_bytes()),
+            (6, font("a").as_bytes()),
+            (7, font("a").as_bytes()),
+            (8, font("b").as_bytes()),
+            (9, stream.as_bytes()),
+        ],
+    )
+}
+
+fn read_name_cache_fixture_page(doc: &PdfDocument, page: usize) -> String {
+    let mut extractor = crate::extractors::TextExtractor::new();
+    doc.load_fonts(&doc.get_page_resources(page).expect("page resources"), &mut extractor)
+        .expect("load page fonts");
+    let content = doc.get_page_content_data(page).expect("page content");
+    extractor
+        .extract_text_spans(&content)
+        .expect("extract page spans")
+        .into_iter()
+        .map(|span| span.text)
+        .collect()
+}
+
+#[test]
+fn font_name_cache_replacement_preserves_verified_font_identity() {
+    use super::super::fonts::FONT_NAME_SET_AFTER_VERIFY;
+    use std::sync::mpsc::sync_channel;
+    use std::time::Duration;
+
+    let doc = PdfDocument::from_bytes(font_name_cache_collision_pdf()).expect("open fixture");
+    assert_eq!(doc.page_count().expect("page count"), 3);
+    assert_eq!(read_name_cache_fixture_page(&doc, 0).trim(), "a");
+
+    let (verified, awaiting_verified) = sync_channel(1);
+    let (replaced, awaiting_replacement) = sync_channel(1);
+    let timeout = Duration::from_secs(5);
+    let aliased_text = std::thread::scope(|scope| {
+        let doc = &doc;
+        let reader = scope.spawn(move || {
+            FONT_NAME_SET_AFTER_VERIFY.set(Some(Box::new(move || {
+                verified.send(()).expect("signal verified cache hit");
+                awaiting_replacement
+                    .recv_timeout(timeout)
+                    .expect("wait for name cache replacement");
+            })));
+            read_name_cache_fixture_page(doc, 1)
+        });
+        awaiting_verified
+            .recv_timeout(timeout)
+            .expect("wait for the alias font to verify");
+        assert_eq!(read_name_cache_fixture_page(doc, 2).trim(), "b");
+        replaced.send(()).expect("resume the alias font read");
+        reader.join().expect("reader finishes")
+    });
+    assert_eq!(aliased_text.trim(), "a");
+}

@@ -6,6 +6,12 @@
 
 use super::*;
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static FONT_NAME_SET_AFTER_VERIFY: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 impl PdfDocument {
     /// Resolve an object reference.
     ///
@@ -581,12 +587,9 @@ impl PdfDocument {
                     return Ok(());
                 }
 
-                // Layer 4: Name-based font set cache with spot-check verification.
-                // Pages in the same document often use the same font names mapped to
-                // different ObjectRefs but identical base fonts (e.g., 764 pages each
-                // creating T1_0→Helvetica, T1_1→Times-Roman with unique object numbers).
-                // Cache the resolved font set by sorted font names, then on subsequent
-                // pages verify ONE font via load+hash to confirm the mapping is the same. ~keep
+                // Layer 4 reuses identical font sets across different object references.
+                // Read the identity and donated fonts from one entry so a concurrent
+                // replacement for the same resource names cannot pair different sets. ~keep
                 let name_hash = {
                     use std::hash::{Hash, Hasher};
                     let mut font_names: Vec<&str> = font_dict.keys().map(|k| k.as_str()).collect();
@@ -604,7 +607,7 @@ impl PdfDocument {
                 let mut sorted_font_entries: Vec<(&String, &Object)> = font_dict.iter().collect();
                 sorted_font_entries.sort_by_key(|(name, _)| name.as_str());
 
-                if let Some((cached_set, check_hash)) = cached_name_set {
+                if let Some((donated_fonts, check_hash)) = cached_name_set {
                     // Verify the cached font set by computing a combined identity hash
                     // over ALL reference fonts in the current Resources dict (sorted by
                     // name). This prevents false cache hits when pages reuse the same
@@ -613,22 +616,12 @@ impl PdfDocument {
                     // lets differing sibling fonts (F2, F3 …) slip through unchecked.
                     // Fixes the regression described above. ~keep
                     if self.font_set_identity_hash(&sorted_font_entries) == Some(check_hash) {
-                        let donated_opt = self
-                            .font_name_set_donated_cache
-                            .lock_or_recover()
-                            .get(&name_hash)
-                            .cloned();
-                        match &donated_opt {
-                            Some(donated) => {
-                                for (name, font_arc) in donated.iter() {
-                                    extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
-                                }
-                            }
-                            None => {
-                                for (name, font_arc) in cached_set.iter() {
-                                    extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
-                                }
-                            }
+                        #[cfg(test)]
+                        if let Some(after_verify) = FONT_NAME_SET_AFTER_VERIFY.take() {
+                            after_verify();
+                        }
+                        for (name, font_arc) in donated_fonts.iter() {
+                            extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
                         }
                         self.share_truetype_cmaps_counted(extractor);
                         return Ok(());
@@ -798,10 +791,7 @@ impl PdfDocument {
                 {
                     self.font_name_set_cache
                         .lock_or_recover()
-                        .insert(name_hash, (Arc::new(resolved), combined_check_hash));
-                    self.font_name_set_donated_cache
-                        .lock_or_recover()
-                        .insert(name_hash, Arc::new(donated));
+                        .insert(name_hash, (Arc::new(donated), combined_check_hash));
                 }
 
                 return Ok(());

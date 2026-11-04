@@ -613,10 +613,10 @@ pub struct PdfDocument {
     /// Name-based font set cache keyed by hash of sorted font names.
     /// Catches pages with different font ObjectRefs but the same font name→base font
     /// mapping (common in PDFs that create new font objects per page).
-    /// Stores the resolved font set (Arc-wrapped to avoid cloning) plus a combined
-    /// identity hash over ALL fonts for verification before reuse. Bounded at 256 entries.
+    /// One entry pairs the donated font set with the combined identity hash over
+    /// all its fonts for verification before reuse. Bounded at 256 entries.
     font_name_set_cache: Mutex<BoundedEntryCache<u64, (Arc<Vec<(String, Arc<crate::fonts::FontInfo>)>>, u64)>>,
-    /// Donated companions to `font_set_cache`/`font_fingerprint_cache`/`font_name_set_cache`,
+    /// Donated companions to `font_set_cache` and `font_fingerprint_cache`,
     /// keyed identically. Holds the SAME dictionary's font set after TrueType cmap donation
     /// has run only among fonts that dictionary itself resolves — never against fonts a
     /// sibling dictionary (a different page, or a Form XObject) happens to have contributed
@@ -628,8 +628,6 @@ pub struct PdfDocument {
     font_set_donated_cache: Mutex<BoundedEntryCache<ObjectRef, Vec<(String, Arc<crate::fonts::FontInfo>)>>>,
     /// Donated companion to `font_fingerprint_cache`. See `font_set_donated_cache`.
     font_fingerprint_donated_cache: Mutex<BoundedEntryCache<u64, Vec<(String, Arc<crate::fonts::FontInfo>)>>>,
-    /// Donated companion to `font_name_set_cache`. See `font_set_donated_cache`.
-    font_name_set_donated_cache: Mutex<BoundedEntryCache<u64, Arc<Vec<(String, Arc<crate::fonts::FontInfo>)>>>>,
     /// Counts calls to `donate_truetype_cmaps_within_set`, i.e. actual donation
     /// work rather than a cache hit. Test-only: proves donation runs once per
     /// font set across repeated page reads instead of once per page. ~keep
