@@ -38,7 +38,7 @@ log y = ax(log 1 − log ax) = −ax log ax.
 
 ϵ ϵ
 
-ydx
+y dx
 
 ax
 

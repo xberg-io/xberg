@@ -102,7 +102,7 @@ As seen in Table 1, DISYRE is robust to the choice of the
 
 0.19 0.27 0.22 0.30 0.69 0.67
 
-stepsize hyper-parameter. We opted for stepsize = 25 in
+step size hyper-parameter. We opted for step size = 25 in
 
 DISYRE f.w. (Ours)
 

@@ -1167,6 +1167,9 @@ fn gap_has_intervening_glyph(ink_boxes: &[Rect], left: &Rect, right: &Rect) -> b
     })
 }
 
+/// Largest gap, in em, that the intra-word kerning guard treats as kerning inside a word.
+const KERNING_GUARD_MAX_EM: f32 = 0.2;
+
 fn should_insert_space(
     preceding_text: &str,
     following_text: &str,
@@ -1421,29 +1424,47 @@ fn should_insert_space(
     // fallback (`font_size * 0.25`) is a wider, deliberately
     // conservative value that already separates real word gaps from
     // kerning at the consensus level. ~keep
+    //
+    // The ceiling also never exceeds 0.2 em when the two letters at the
+    // boundary are both Latin lowercase, outside a ligature boundary and a
+    // monospace font. A font whose space glyph is wider than 0.25 em
+    // (Helvetica: 0.281 em) would otherwise push the ceiling to 0.211 em and
+    // swallow justified word gaps of 0.205-0.21 em that carry no space glyph and
+    // no TJ offset ("Learned" + "from" -> "Learnedfrom"). Greek and other
+    // lowercase letters keep the wide ceiling: math sets them with thin
+    // side-bearing gaps of that size (`θh`, `λδ`), and a split there breaks a
+    // formula term. ~keep
+    let prev_last = preceding_text.chars().last();
+    let next_first = following_text.chars().next();
+    let latin_word_pair = matches!(
+        (prev_last, next_first),
+        (Some(pc), Some(nc)) if pc.is_ascii_lowercase() && nc.is_ascii_lowercase()
+    );
     let kerning_guard_threshold = if fonts.contains_key(font_name) {
-        Some(geometric_threshold * 1.5)
+        let ceiling = geometric_threshold * 1.5;
+        if latin_word_pair && !ligature_boundary && !is_monospace_font(font_name) {
+            Some(ceiling.min(font_size * KERNING_GUARD_MAX_EM))
+        } else {
+            Some(ceiling)
+        }
     } else {
         None
     };
+    // Use is_lowercase on both sides: LaTeX/microtype intra-word kerning
+    // occurs within lowercase letter runs. Real word boundaries in
+    // professional PDFs frequently involve uppercase letters (headings,
+    // abbreviations, proper nouns) — those fall through to the consensus
+    // path, avoiding word-gluing like "APPENDIXA" or "OLIVERA.". ~keep
     if let Some(thr) = kerning_guard_threshold
         && gap_pt < thr
+        && let (Some(pc), Some(nc)) = (prev_last, next_first)
+        && pc.is_lowercase()
+        && nc.is_lowercase()
     {
-        let prev_last = preceding_text.chars().last();
-        let next_first = following_text.chars().next();
-        if let (Some(pc), Some(nc)) = (prev_last, next_first) {
-            // Use is_lowercase on both sides: LaTeX/microtype intra-word kerning
-            // occurs within lowercase letter runs. Real word boundaries in
-            // professional PDFs frequently involve uppercase letters (headings,
-            // abbreviations, proper nouns) — those fall through to the consensus
-            // path, avoiding word-gluing like "APPENDIXA" or "OLIVERA.". ~keep
-            if pc.is_lowercase() && nc.is_lowercase() {
-                tracing::trace!(
-                    "intra-word kerning guard: suppressing space between '{pc}' and '{nc}' (gap={gap_pt:.2}pt < {thr:.2}pt, threshold = 0.75× space-glyph width)"
-                );
-                return SpaceDecision::no_space(SpaceSource::IntraWordKerning, 0.9);
-            }
-        }
+        tracing::trace!(
+            "intra-word kerning guard: suppressing space between '{pc}' and '{nc}' (gap={gap_pt:.2}pt < {thr:.2}pt, threshold = 0.75× space-glyph width, capped at 0.2 em for Latin pairs)"
+        );
+        return SpaceDecision::no_space(SpaceSource::IntraWordKerning, 0.9);
     }
 
     if tj_offset_triggered && geometric_suggests_space {

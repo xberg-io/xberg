@@ -2,7 +2,7 @@ PLOS COMPUTATIONAL BIOLOGY
 Cdjoknt sensktkvktkes at stead{-state kn ODE models of bkocjemkcal reactkon networks
 
 23. Vkllaverde CF, Fro˺jlkcj F, Wekndl D, Jasenauer J, Banga JR. Bencjmarkkng ortkmkzatkon metjods for rarameter estkmatkon kn large kknetkc models. Bkoknformatkcs. 223:; 35*5+::32ˣ:3:. jttrs://dok.org/32. 32;3/bkoknformatkcs/bt{736
-24. Raue C, Scjkllkng M, Bacjmann J, Matteson C, Scjelke M, Kascjek D, et al. Lessons Learnedfrom Suantktatkve D{namkcal Modelkng kn S{stems Bkolog{. RLoS ONE. 2233; :*;+:e74335. jttrs://dok.org/
+24. Raue C, Scjkllkng M, Bacjmann J, Matteson C, Scjelke M, Kascjek D, et al. Lessons Learned from Suantktatkve D{namkcal Modelkng kn S{stems Bkolog{. RLoS ONE. 2233; :*;+:e74335. jttrs://dok.org/
 32.3373/journal.rone.2274335 RMKD: 242;:642
 
 25. Naumann U. Tje Crt of Dkfferentkatkng Comruter Rrograms: Cn Kntroductkon to Clgorktjmkc Dkfferentkatkon. No. 24 kn Software, Envkronments, and Tools. Rjkladelrjka, RC: SKCM; 2232. Cvaklable from: jttr:// bookstore.skam.org/se24.

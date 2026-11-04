@@ -830,6 +830,93 @@ fn test_space_decision_digit_digit_gap_threshold() {
     );
 }
 
+/// A Helvetica-style font whose space glyph is 281 units wide puts the
+/// intra-word kerning ceiling at 0.211 em. A justified line with no space glyph
+/// and no TJ offset can set a real word gap just under that, at 0.21 em. The
+/// ceiling stops at 0.2 em, so that gap still reads as a word boundary. A gap
+/// of 0.15 em stays suppressed as kerning inside a word. A gap of 0.21 em
+/// between two Greek letters, set in a formula, stays suppressed.
+#[test]
+fn test_space_decision_wide_space_font_word_gap_below_kerning_ceiling() {
+    let config = SpanMergingConfig::default();
+    let mut font = create_test_font();
+    font.base_font = "Helvetica".to_string();
+    font.subtype = "Type1".to_string();
+    font.first_char = Some(32);
+    font.widths = Some(vec![281.0; 96]);
+    assert_eq!(font.get_space_glyph_width(), 281.0);
+    let mut fonts = std::collections::HashMap::new();
+    fonts.insert("F0".to_string(), std::sync::Arc::new(font));
+
+    let word_gap = 1.6776;
+    let decision = should_insert_space(
+        "Learned", "from", word_gap, 8.0, "F0", &fonts, false, &config, None, None, 8.0, 8.0,
+    );
+    assert!(
+        decision.insert_space,
+        "a 0.21 em gap between two lowercase words is a word gap, got: {decision:?}"
+    );
+
+    let decision = should_insert_space(
+        "λ", "δ", word_gap, 8.0, "F0", &fonts, false, &config, None, None, 8.0, 8.0,
+    );
+    assert!(
+        !decision.insert_space,
+        "a 0.21 em gap between two Greek letters stays a math side-bearing gap, got: {decision:?}"
+    );
+
+    let kerning_gap = 1.2;
+    let decision = should_insert_space(
+        "cha",
+        "nge",
+        kerning_gap,
+        8.0,
+        "F0",
+        &fonts,
+        false,
+        &config,
+        None,
+        None,
+        8.0,
+        8.0,
+    );
+    assert!(
+        !decision.insert_space,
+        "a 0.15 em gap inside a word stays kerning, got: {decision:?}"
+    );
+}
+
+/// The 0.2 em cap on the kerning guard does not reach a ligature boundary or
+/// a monospace font. Each keeps its own wider ceiling, so a gap that the cap
+/// would turn into a space stays suppressed there.
+#[test]
+fn test_space_decision_kerning_cap_skips_ligature_and_monospace() {
+    let config = SpanMergingConfig::default();
+    let mut fonts = std::collections::HashMap::new();
+    for (name, base_font) in [("F0", "Helvetica"), ("Courier", "Courier")] {
+        let mut font = create_test_font();
+        font.base_font = base_font.to_string();
+        font.subtype = "Type1".to_string();
+        font.first_char = Some(32);
+        font.widths = Some(vec![if name == "F0" { 281.0 } else { 600.0 }; 96]);
+        fonts.insert(name.to_string(), std::sync::Arc::new(font));
+    }
+
+    let ligature = should_insert_space("di", "fi", 2.0, 8.0, "F0", &fonts, false, &config, None, None, 8.0, 8.0);
+    assert!(
+        !ligature.insert_space,
+        "a 0.25 em gap before a ligature stays suppressed, got: {ligature:?}"
+    );
+
+    let monospace = should_insert_space(
+        "ab", "cd", 6.0, 8.0, "Courier", &fonts, false, &config, None, None, 8.0, 8.0,
+    );
+    assert!(
+        !monospace.insert_space,
+        "a 0.75 em gap in a monospace font stays suppressed, got: {monospace:?}"
+    );
+}
+
 /// Test split boundary merging with space insertion
 ///
 /// When split_boundary_before=true, it indicates the span is part of a boundary
