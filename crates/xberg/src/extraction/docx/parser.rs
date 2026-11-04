@@ -1917,6 +1917,11 @@ impl TableContext {
     }
 }
 
+mod hyperlink_occurrence;
+use hyperlink_occurrence::ExplicitHyperlink;
+
+pub(crate) type BodyHyperlinks = AHashMap<usize, Vec<Range<usize>>>;
+
 /// Output of [`DocxParser::parse_body_elements`], the element-dispatch loop shared by
 /// the main document body, headers/footers, and footnotes/endnotes (#85).
 ///
@@ -1926,6 +1931,7 @@ impl TableContext {
 /// is already flattened elsewhere in this parser).
 #[derive(Debug, Default)]
 struct BodyParseOutputs {
+    hyperlinks: BodyHyperlinks,
     paragraphs: Vec<Paragraph>,
     note_refs_by_paragraph: AHashMap<usize, Vec<NoteRef>>,
     note_refs_by_table: AHashMap<usize, Vec<NoteRef>>,
@@ -3031,7 +3037,7 @@ impl<R: Read + Seek> DocxParser<R> {
         })
     }
 
-    fn parse(mut self, budget: &mut SecurityBudget) -> Result<Document, DocxParseError> {
+    fn parse(mut self, budget: &mut SecurityBudget) -> Result<(Document, BodyHyperlinks), DocxParseError> {
         let mut document = Document::new();
 
         if let Ok(rels_xml) = self.read_file("word/_rels/document.xml.rels") {
@@ -3039,7 +3045,7 @@ impl<R: Read + Seek> DocxParser<R> {
         }
 
         let document_xml = self.read_file("word/document.xml")?;
-        let comment_ref_ids = self.parse_document_xml(&document_xml, &mut document, budget)?;
+        let (comment_ref_ids, hyperlinks) = self.parse_document_xml(&document_xml, &mut document, budget)?;
 
         if let Ok(comments_xml) = self.read_file("word/comments.xml") {
             self.parse_comments(&comments_xml, &mut document.comments, budget, &mut document.warnings)?;
@@ -3101,7 +3107,7 @@ impl<R: Read + Seek> DocxParser<R> {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
-        Ok(document)
+        Ok((document, hyperlinks))
     }
 
     /// Parse relationship file to get rId → target mappings for hyperlinks and images.
@@ -3164,17 +3170,16 @@ impl<R: Read + Seek> DocxParser<R> {
     /// DOCX body-like content, then additionally keeps the page-break/section/
     /// revision output that's only meaningful at the main-body level.
     ///
-    /// Returns the `w:commentReference` ids seen in the body, for the caller to
-    /// validate against `word/comments.xml`.
+    /// Returns the comment ids for validation and proven explicit hyperlink run ranges.
     fn parse_document_xml(
         &self,
         xml: &str,
         document: &mut Document,
         budget: &mut SecurityBudget,
-    ) -> Result<Vec<String>, DocxParseError> {
+    ) -> Result<(Vec<String>, BodyHyperlinks), DocxParseError> {
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(false);
-        let mut out = self.parse_body_elements(&mut reader, None, budget, &mut document.warnings)?;
+        let mut out = self.parse_body_elements(&mut reader, None, budget, &mut document.warnings, true)?;
         insert_missing_inline_drawing_page_breaks(
             &mut out.elements,
             &out.drawings,
@@ -3190,7 +3195,7 @@ impl<R: Read + Seek> DocxParser<R> {
         document.elements = out.elements;
         document.sections = out.sections.into_iter().map(|section| section.properties).collect();
         document.revisions = out.revisions;
-        Ok(out.comment_ref_ids)
+        Ok((out.comment_ref_ids, out.hyperlinks))
     }
 
     /// Shared element-dispatch loop for DOCX body-like content (#85): paragraphs,
@@ -3218,6 +3223,7 @@ impl<R: Read + Seek> DocxParser<R> {
         stop_tag: Option<String>,
         budget: &mut SecurityBudget,
         warnings: &mut Vec<crate::types::ProcessingWarning>,
+        track_hyperlinks: bool,
     ) -> Result<BodyParseOutputs, DocxParseError> {
         use crate::types::revisions::{
             DiffLine, DocumentRevision, PropertyChange, RevisionAnchor, RevisionDelta, RevisionKind,
@@ -3234,6 +3240,7 @@ impl<R: Read + Seek> DocxParser<R> {
         let mut field_instruction = String::new();
         let mut field_hyperlink_stack: Vec<Option<String>> = Vec::new();
         let mut current_hyperlink_url: Option<String> = None;
+        let mut hyperlink_scope = ExplicitHyperlink::default();
         let mut toc = TocState::default();
         let mut placeholder = PlaceholderState::default();
         let mut table_stack: Vec<TableContext> = Vec::new();
@@ -3271,6 +3278,7 @@ impl<R: Read + Seek> DocxParser<R> {
                 Ok(Event::Start(ref e)) => {
                     budget.enter()?;
                     let name = e.name();
+                    hyperlink_scope.reject_unsupported(name.as_ref());
                     if Some(name.as_ref()) == stop_tag.as_deref() {
                         stop_depth += 1;
                     }
@@ -3458,6 +3466,11 @@ impl<R: Read + Seek> DocxParser<R> {
                             apply_paragraph_property(e, &mut table_stack, &mut current_paragraph);
                         }
                         "w:hyperlink" => {
+                            let can_witness = track_hyperlinks
+                                && table_stack.is_empty()
+                                && current_hyperlink_url.is_none()
+                                && field_hyperlink_stack.is_empty()
+                                && !placeholder.active();
                             let mut has_relationship_id = false;
                             let mut relationship_url: Option<String> = None;
                             let mut anchor: Option<String> = None;
@@ -3490,6 +3503,11 @@ impl<R: Read + Seek> DocxParser<R> {
                                 (true, None, None) => current_hyperlink_url = None,
                                 (false, None, None) => {}
                             }
+                            hyperlink_scope.open(
+                                can_witness.then_some(current_paragraph.as_ref()).flatten(),
+                                current_hyperlink_url.as_deref(),
+                                out.paragraphs.len(),
+                            );
                         }
                         "w:drawing" => {
                             // `parse_drawing` now threads `budget` through and balances its
@@ -3568,6 +3586,7 @@ impl<R: Read + Seek> DocxParser<R> {
                 }
                 Ok(Event::Empty(ref e)) => {
                     let name = e.name();
+                    hyperlink_scope.reject_unsupported(name.as_ref());
                     match name.as_ref() {
                         "w:fldChar" => {
                             apply_fld_char(
@@ -3921,6 +3940,11 @@ impl<R: Read + Seek> DocxParser<R> {
                             }
                         }
                         "w:hyperlink" => {
+                            hyperlink_scope.close(
+                                table_stack.is_empty().then_some(current_paragraph.as_ref()).flatten(),
+                                out.paragraphs.len(),
+                                &mut out.hyperlinks,
+                            );
                             current_hyperlink_url = None;
                         }
                         "w:ins" if revision_kind == Some(RevisionKind::Insertion) => {
@@ -4169,7 +4193,7 @@ impl<R: Read + Seek> DocxParser<R> {
     ) -> Result<(), DocxParseError> {
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(false);
-        let out = self.parse_body_elements(&mut reader, None, budget, warnings)?;
+        let out = self.parse_body_elements(&mut reader, None, budget, warnings, false)?;
         header_footer.paragraphs = out.paragraphs;
         header_footer.tables = out.tables;
         Ok(())
@@ -4213,7 +4237,7 @@ impl<R: Read + Seek> DocxParser<R> {
                         }
                     }
                     let stop_tag = e.name().as_ref().to_string();
-                    let out = self.parse_body_elements(&mut reader, Some(stop_tag), budget, warnings)?;
+                    let out = self.parse_body_elements(&mut reader, Some(stop_tag), budget, warnings, false)?;
 
                     if !is_separator && id != "-1" && id != "0" {
                         let mut paragraphs = out.paragraphs;
@@ -4269,7 +4293,8 @@ impl<R: Read + Seek> DocxParser<R> {
                             _ => {}
                         }
                     }
-                    let out = self.parse_body_elements(&mut reader, Some("w:comment".to_string()), budget, warnings)?;
+                    let out =
+                        self.parse_body_elements(&mut reader, Some("w:comment".to_string()), budget, warnings, false)?;
                     let mut paragraphs = out.paragraphs;
                     for table in out.tables {
                         for row in table.rows {
@@ -4327,11 +4352,20 @@ impl From<SecurityError> for DocxParseError {
 /// compression ratio; callers read it from `ExtractionConfig.security_limits` (falling
 /// back to `SecurityLimits::default()`) so the limits are configurable rather than
 /// hardcoded ceilings baked into the parser.
+#[cfg(test)]
 pub(crate) fn parse_document(
     bytes: &[u8],
     budget: &mut SecurityBudget,
     limits: &SecurityLimits,
 ) -> crate::error::Result<Document> {
+    parse_document_with_hyperlinks(bytes, budget, limits).map(|(document, _)| document)
+}
+
+pub(crate) fn parse_document_with_hyperlinks(
+    bytes: &[u8],
+    budget: &mut SecurityBudget,
+    limits: &SecurityLimits,
+) -> crate::error::Result<(Document, BodyHyperlinks)> {
     let cursor = Cursor::new(bytes);
     let parser = DocxParser::new(cursor, limits)
         .map_err(|e| crate::error::XbergError::parsing(format!("DOCX parsing failed: {}", e)))?;
