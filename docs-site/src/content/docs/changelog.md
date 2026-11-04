@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep witnessed prime marks beside their operands.** (#2443)
+  Preserve literal glyphs when both original neighboring spans survive the PDF layout passes.
+
 - **(pdf): Keep same-baseline small caps out of script markup.** (#2443)
   Preserve genuine scripts and their byte ranges when assembling native PDF text.
 
