@@ -3853,11 +3853,86 @@ fn split_table_at_section_dividers(
         return vec![table];
     }
 
+    let Some(legacy_sections) = build_table_sections(&table, &split_after, config.min_table_cells) else {
+        return vec![table];
+    };
+    let Some(exact) = exact_section_cuts(&row_bounds, &divider_ys, &split_after) else {
+        return legacy_sections;
+    };
+
+    // The new cut can move a row only within an already admitted rectangular split. ~keep
+    if !has_complete_section_rows(&table)
+        || !passes_section_admission(&table)
+        || !legacy_sections.iter().all(passes_section_admission)
+    {
+        return legacy_sections;
+    }
+    build_table_sections(&table, &exact, config.min_table_cells)
+        .filter(|sections| sections.iter().all(passes_section_admission))
+        .unwrap_or(legacy_sections)
+}
+
+fn exact_section_cuts(row_bounds: &[Option<(f32, f32)>], divider_ys: &[f32], legacy: &[usize]) -> Option<Vec<usize>> {
+    let mut exact: Vec<_> = divider_ys
+        .iter()
+        .map(|divider| {
+            let mut hits = row_bounds.windows(2).enumerate().filter_map(|(index, pair)| {
+                let [Some((lo, hi)), Some((next_lo, next_hi))] = pair else {
+                    return None;
+                };
+                let upper_first = lo.total_cmp(divider).is_eq() && next_hi.total_cmp(divider).is_eq();
+                let lower_first = hi.total_cmp(divider).is_eq() && next_lo.total_cmp(divider).is_eq();
+                (divider.is_finite() && lo < hi && next_lo < next_hi && (upper_first || lower_first))
+                    .then_some((index, upper_first))
+            });
+            let (index, upper_first) = hits.next()?;
+            if hits.next().is_some() {
+                return None;
+            }
+            let (before, after) = row_bounds.split_at(index + 1);
+            let (upper, lower) = if upper_first { (before, after) } else { (after, before) };
+            let above = upper
+                .iter()
+                .all(|row| finite_section_row(*row).is_some_and(|(lo, _)| lo >= *divider));
+            let below = lower
+                .iter()
+                .all(|row| finite_section_row(*row).is_some_and(|(_, hi)| hi <= *divider));
+            (above && below).then_some(index)
+        })
+        .collect::<Option<_>>()?;
+    exact.sort_unstable();
+    exact.dedup();
+    (exact.len() == legacy.len() && exact != legacy).then_some(exact)
+}
+
+fn finite_section_row(row: Option<(f32, f32)>) -> Option<(f32, f32)> {
+    row.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo < hi)
+}
+
+fn has_complete_section_rows(table: &Table) -> bool {
+    table.rows.iter().all(|row| {
+        row.cells.len() == table.col_count
+            && row.cells.iter().all(|cell| {
+                !cell.text.trim().is_empty()
+                    && cell.rowspan == 1
+                    && cell.colspan == 1
+                    && cell
+                        .bbox
+                        .is_some_and(|bounds| bounds.top().is_finite() && bounds.bottom().is_finite())
+            })
+    })
+}
+
+fn passes_section_admission(table: &Table) -> bool {
+    is_valid_table(table) && table.is_real_grid() && !crate::document::looks_like_prose_table(table)
+}
+
+fn build_table_sections(table: &Table, split_after: &[usize], min_cells: usize) -> Option<Vec<Table>> {
     let num_cols = table.col_count;
     let all_rows = &table.rows;
     let mut sub_tables = Vec::new();
     let mut start = 0;
-    for &split_idx in &split_after {
+    for &split_idx in split_after {
         let end = split_idx + 1;
         if end > start {
             sub_tables.push(&all_rows[start..end]);
@@ -3874,9 +3949,9 @@ fn split_table_at_section_dividers(
             .flat_map(|row| &row.cells)
             .filter(|cell| !cell.text.is_empty())
             .count()
-            < config.min_table_cells
+            < min_cells
     }) {
-        return vec![table];
+        return None;
     }
 
     let mut result = Vec::new();
@@ -3909,11 +3984,7 @@ fn split_table_at_section_dividers(
         });
     }
 
-    if result.is_empty() {
-        return vec![table];
-    }
-
-    result
+    (!result.is_empty()).then_some(result)
 }
 
 /// Maximum vertical gap (in points) between two table bboxes to consider them
@@ -8848,6 +8919,44 @@ mod tests {
             cells.contains(&"z"),
             "body column past the header rule stays in the table: {cells:?}"
         );
+    }
+
+    #[test]
+    fn exact_section_cut_rejects_a_nonadjacent_crossing_row() {
+        let divider = [590.0];
+        let legacy = [0];
+        let rows = [
+            Some((550.0, 680.0)),
+            Some((590.0, 620.0)),
+            Some((560.0, 590.0)),
+            Some((530.0, 560.0)),
+        ];
+        assert_eq!(exact_section_cuts(&rows, &divider, &legacy), None);
+    }
+
+    #[test]
+    fn exact_section_cut_rejects_unknown_and_wrong_side_rows() {
+        let divider = [590.0];
+        let legacy = [0];
+        for first in [None, Some((510.0, 530.0))] {
+            let rows = [first, Some((590.0, 620.0)), Some((560.0, 590.0)), Some((530.0, 560.0))];
+            assert_eq!(exact_section_cuts(&rows, &divider, &legacy), None);
+        }
+    }
+
+    #[test]
+    fn exact_section_cut_accepts_contained_rows_in_both_orders() {
+        let divider = [590.0];
+        let legacy = [0];
+        let mut rows = [
+            Some((620.0, 650.0)),
+            Some((590.0, 620.0)),
+            Some((560.0, 590.0)),
+            Some((530.0, 560.0)),
+        ];
+        assert_eq!(exact_section_cuts(&rows, &divider, &legacy), Some(vec![1]));
+        rows.reverse();
+        assert_eq!(exact_section_cuts(&rows, &divider, &legacy), Some(vec![1]));
     }
 
     #[test]
