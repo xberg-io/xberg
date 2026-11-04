@@ -113,14 +113,14 @@ fn run_context_survives(
     let Some(&base) = positions.get(&base_key) else {
         return false;
     };
-    if let Some(right) = owner.literal_prime_right() {
-        if !paragraphs[base].lines.iter().any(|line| {
+    if let Some(right) = owner.literal_prime_right()
+        && !paragraphs[base].lines.iter().any(|line| {
             line.segments
                 .windows(2)
                 .any(|pair| SegmentKey::from(&pair[0]) == base_key && SegmentKey::from(&pair[1]) == *right)
-        }) {
-            return false;
-        }
+        })
+    {
+        return false;
     }
     owner.run_members().iter().all(|key| {
         positions.get(key).is_some_and(|&script| {
