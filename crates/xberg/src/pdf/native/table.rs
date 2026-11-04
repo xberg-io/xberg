@@ -30,6 +30,7 @@ pub(crate) struct NativeTable {
     pub table: Table,
     pub grid: Option<crate::types::TableGrid>,
     pub scripts: Option<scripts::TableScripts>,
+    pub complete_leading_header: bool,
 }
 
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
@@ -192,6 +193,7 @@ pub(crate) fn extract_tables_native(doc: &mut NativeDocument) -> Result<(Vec<Nat
             let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
             all_tables.push(NativeTable {
                 scripts,
+                complete_leading_header: complete_leading_header(&extracted_table),
                 table: Table {
                     cells,
                     markdown,
@@ -320,6 +322,7 @@ pub(crate) fn extract_tables_bordered(
             let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
             all_tables.push(NativeTable {
                 scripts,
+                complete_leading_header: complete_leading_header(&extracted_table),
                 table: Table {
                     cells,
                     markdown,
@@ -2307,6 +2310,23 @@ fn is_script_run_of(previous: &xberg_native_pdf::layout::TextSpan, next: &xberg_
 
     crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
+}
+
+fn complete_leading_header(table: &xberg_native_pdf::structure::table_extractor::Table) -> bool {
+    let Some((first, body)) = table.rows.split_first() else {
+        return false;
+    };
+    !first.cells.is_empty()
+        && first.cells.len() == table.col_count
+        && first.cells.iter().all(|cell| {
+            (first.is_header || cell.is_header)
+                && cell.rowspan == 1
+                && cell.colspan == 1
+                && !cell.text.trim().is_empty()
+        })
+        && body
+            .iter()
+            .all(|row| !row.is_header && row.cells.iter().all(|cell| !cell.is_header))
 }
 
 /// Convert a xberg_native_pdf `ExtractedTable` to xberg's cell grid and markdown.

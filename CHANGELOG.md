@@ -169,6 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Expose complete native table headers as column labels.** (#2332)
+  A single fully labeled header row survives in the structured table when its original grid still matches.
+
 - **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
   Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
 

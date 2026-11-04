@@ -143,3 +143,20 @@ fn invalid_source_grid_does_not_attach() {
     attach_table_grids(&mut doc, &[source]).unwrap();
     assert_eq!(retained_grid(&table, doc.elements[0].attributes.as_ref()), None);
 }
+
+#[test]
+fn geometry_only_attach_does_not_import_source_columns() {
+    let table = table();
+    let mut source = sidecar(&table);
+    source.table.columns = source.table.cells.first().cloned();
+    let expected_grid = source.grid.clone();
+    let mut doc = document(vec![table.clone()]);
+
+    attach_table_grids(&mut doc, &[source]).unwrap();
+
+    assert_eq!(
+        retained_grid(&table, doc.elements[0].attributes.as_ref()),
+        Some(expected_grid)
+    );
+    assert_eq!(doc.tables[0].columns, None);
+}
