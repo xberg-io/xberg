@@ -172,6 +172,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
+  Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
+
 - **(ocr): Keep rows together in standalone sparse OCR page text.** (#2432)
   A single accepted table can supply Plain and Djot page rows when it retains every recognized token occurrence.
 
