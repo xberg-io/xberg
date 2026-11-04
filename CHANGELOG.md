@@ -162,6 +162,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf, pptx): Write one page marker for every page and slide, an empty one included.** (GH#2422)
+  With `pages.insert_page_markers` on, a PDF page with no content got no marker in the structured path.
+  A PPTX deck got one marker for all its slides.
+  Expected change: output for these documents now holds one marker per page or slide.
+  A three-slide deck shows markers 1, 2 and 3.
+  A page or slide that opens with a list gets its marker on its own line before the list,
+  in Markdown and HTML as in the other formats.
+  A slide that fails to parse still gets its marker.
+
 - **(tests): Keep cache-depth and DOCX list regressions compatible with strict Clippy checks.**
 
 - **(ocr): Fetch and read the document orientation model at one revision, so a synced cache is complete offline.** (GH#2417)

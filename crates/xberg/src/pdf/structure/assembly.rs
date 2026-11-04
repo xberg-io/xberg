@@ -113,7 +113,8 @@ pub(crate) fn assemble_internal_document(
         }
     }
 
-    let doc = builder.build();
+    let mut doc = builder.build();
+    doc.page_numbers = (1..=pages.len() as u32).collect();
     tracing::debug!(
         output_elements = doc.elements.len(),
         "assemble_internal_document complete"
