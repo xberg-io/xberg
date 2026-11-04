@@ -3,7 +3,7 @@
 //! Format: 4-letter bank code + 2-letter ISO country code + 2-character
 //! location code + optional 3-character branch code (total 8 or 11 chars).
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -13,13 +13,22 @@ static RE_SWIFT: Lazy<Regex> =
 
 /// Find all SWIFT/BIC code spans in `text` (8 or 11 uppercase alphanumeric characters).
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    RE_SWIFT
-        .find_iter(text)
-        .map(|m| PatternMatch {
+    super::collect_matches(text, &PiiCategory::SwiftBic)
+}
+
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
+    for m in RE_SWIFT.find_iter(text) {
+        let matched = BorrowedMatch {
             start: m.start(),
             end: m.end(),
-            category: PiiCategory::SwiftBic,
-            text: text[m.start()..m.end()].to_string(),
-        })
-        .collect()
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        eligible(matched)?;
+    }
+    Ok(())
 }

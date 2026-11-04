@@ -206,3 +206,135 @@ end
     assert_eq!(cmap.get(&0x4E03).as_deref(), Some("\u{4E03}"), "七");
     assert_eq!(cmap.get(&0x4E05).as_deref(), Some("\u{4E05}"), "丅");
 }
+
+#[test]
+fn multiline_array_maps_positions_without_treating_destinations_as_ranges() {
+    let data = b"beginbfrange\n<68><6B>[ % a closing ] in this comment is ignored\r\n\
+                 <0068><0069><006A>\r\n<006B>]<20><20><0020>\nendbfrange\n\
+                 beginbfchar\n<6B><0078>\nendbfchar";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    for (code, expected) in [(0x68, "h"), (0x69, "i"), (0x6A, "j"), (0x6B, "x"), (0x20, " ")] {
+        assert_eq!(cmap.get(&code).as_deref(), Some(expected), "code {code:02X}");
+    }
+    assert_eq!(cmap.get(&0x6C), None);
+}
+
+#[test]
+fn array_opener_can_follow_source_codes_on_a_later_line() {
+    let data = b"beginbfrange\r<40><42> % range header\r% comment before array\r\
+                 [<0041><0042><0043>]\rendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+    assert_eq!(cmap.get(&0x40).as_deref(), Some("A"));
+    assert_eq!(cmap.get(&0x41).as_deref(), Some("B"));
+    assert_eq!(cmap.get(&0x42).as_deref(), Some("C"));
+    assert_eq!(cmap.get(&0x43), None);
+}
+
+#[test]
+fn unterminated_array_never_maps_its_continuations_as_sequential_ranges() {
+    let data = b"beginbfrange\n<10><13>[\n<0068><0069><006A>\nendbfrange\n\
+                 beginbfchar\n<50><0050>\nendbfchar";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    for code in [0x10, 0x11, 0x12, 0x13, 0x68, 0x69, 0x6A] {
+        assert_eq!(cmap.get(&code), None, "code {code:02X}");
+    }
+    assert_eq!(cmap.get(&0x50).as_deref(), Some("P"));
+}
+
+#[test]
+fn malformed_array_never_maps_its_continuations_as_sequential_ranges() {
+    let data = b"beginbfrange\n<10><13>[\n<0068><0069><006A> invalid ]\n<50><50><0050>\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    for code in [0x10, 0x11, 0x12, 0x13, 0x68, 0x69, 0x6A] {
+        assert_eq!(cmap.get(&code), None, "code {code:02X}");
+    }
+    assert_eq!(cmap.get(&0x50).as_deref(), Some("P"));
+}
+
+#[test]
+fn short_multiline_array_preserves_only_its_available_mappings() {
+    let data = b"beginbfrange\n<10><13>[\n<0041><0042>\n]\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
+    assert_eq!(cmap.get(&0x11).as_deref(), Some("B"));
+    assert_eq!(cmap.get(&0x12), None);
+    assert_eq!(cmap.get(&0x13), None);
+}
+
+#[test]
+fn compact_range_before_array_does_not_hide_the_later_mapping() {
+    let data = b"beginbfrange\n<10><10><0041><10><11>[<0042><0043>]\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    assert_eq!(cmap.get(&0x10).as_deref(), Some("B"));
+    assert_eq!(cmap.get(&0x11).as_deref(), Some("C"));
+}
+
+#[test]
+fn malformed_hex_does_not_shift_later_multiline_array_entries() {
+    let data = b"beginbfrange\n<10><12>[\n<0041><GG><0043>\n]\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
+    assert_eq!(cmap.get(&0x11), None);
+    assert_eq!(cmap.get(&0x12).as_deref(), Some("C"));
+}
+
+#[test]
+fn nested_invalid_arrays_do_not_create_unrelated_mappings() {
+    let data = b"beginbfrange\n<10><11>[\n<20><21>[<0041><0042>]\n]\n<50><50><0050>\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    for code in [0x10, 0x11, 0x20, 0x21] {
+        assert_eq!(cmap.get(&code), None, "code {code:02X}");
+    }
+    assert_eq!(cmap.get(&0x50).as_deref(), Some("P"));
+}
+
+#[test]
+fn sequential_mapping_before_multiline_array_keeps_its_distinct_source() {
+    let data = b"beginbfrange\n<20><20><0020> <10><11>[\n<0041><0042>]\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    assert_eq!(cmap.get(&0x20).as_deref(), Some(" "));
+    assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
+    assert_eq!(cmap.get(&0x11).as_deref(), Some("B"));
+}
+
+#[test]
+fn comment_with_bf_markers_does_not_change_section_order_or_close_an_array() {
+    let data = b"% beginbfchar <20><005A> endbfchar\r\n\
+                 beginbfchar\n<10><0058>\nendbfchar\n\
+                 beginbfrange\n<10><11>[\n<0041> % endbfrange\r\n<0042>]endbfrange\n\
+                 beginbfchar\n<11><0043> % endbfchar <21><005A>\nendbfchar";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
+    assert_eq!(cmap.get(&0x11).as_deref(), Some("C"));
+    assert_eq!(cmap.get(&0x20), None);
+    assert_eq!(cmap.get(&0x21), None);
+}
+
+#[test]
+fn bfchar_after_comment_on_cr_only_line_keeps_its_mapping() {
+    let data = b"beginbfchar\r<10><0041> % comment\r<11><0042>\rendbfchar";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+
+    assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
+    assert_eq!(cmap.get(&0x11).as_deref(), Some("B"));
+}
+
+#[test]
+fn bfchar_preserves_legacy_whitespace_between_hex_operands_across_bare_cr() {
+    for comment in ["", " % comment between source and destination"] {
+        let data = format!("beginbfchar\r<10>{comment}\r<0041>\r<11><0042>\rendbfchar");
+        let cmap = parse_tounicode_cmap(data.as_bytes()).unwrap();
+
+        assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
+        assert_eq!(cmap.get(&0x11).as_deref(), Some("B"));
+    }
+}

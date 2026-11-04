@@ -621,38 +621,33 @@ fn render_layout_page(
     normalize_for_ocr: bool,
     budget: RenderBudget<'_>,
 ) -> std::result::Result<image::RgbImage, String> {
-    // The page's own MediaBox dimensions (pre-rotation, matching `get_page_dimensions_pt`),
-    // not the possibly-swapped `page_width_pts`/`page_height_pts` above, which flip for a
-    // 90/270-rotated page under `normalize_for_ocr == false` -- `effective_pdf_render_dpi`
-    // only needs an aspect-insensitive area budget from `max_image_dimension`.
-    let (media_width_pt, media_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_index);
-    // `normalize_for_ocr` marks this render as OCR input (see `GatedPageHandling`), so it
-    // must make the same scan-density render-DPI decision the non-layout OCR routes make via
-    // `crate::image::dpi::pdf_ocr_render_dpi` -- otherwise a scanned page renders at a
-    // different DPI depending on whether layout detection is on (#1828). The plain
-    // `effective_pdf_render_dpi` stays in place for the markdown-structure render, which is
-    // never OCR input and must not change. ~keep
-    let render_dpi = if normalize_for_ocr {
-        crate::image::dpi::pdf_ocr_render_dpi(doc, page_index, budget.images_config, budget.security_limits)
+    // OCR and layout-only renders retain their distinct DPI policies.
+    let rendered = if normalize_for_ocr {
+        crate::pdf::render::render_pdf_ocr_page(doc, page_index, budget.images_config, budget.security_limits)
     } else {
-        crate::image::dpi::effective_pdf_render_dpi(
+        let (media_width_pt, media_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_index);
+        let render_dpi = crate::image::dpi::effective_pdf_render_dpi(
             budget.images_config,
             f64::from(media_width_pt),
             f64::from(media_height_pt),
+        );
+        crate::pdf::render::render_page_with_safeguards(
+            doc,
+            page_index,
+            render_dpi.max(1) as u32,
+            Some(budget.security_limits.max_content_size),
         )
-    };
-    let rendered = crate::pdf::render::render_page_with_safeguards(doc, page_index, render_dpi.max(1) as u32).map_err(
-        |error| {
-            tracing::warn!(
-                page = page_index + 1,
-                page_width_pts,
-                page_height_pts,
-                error = %error,
-                "layout runner: skipping page with render failure, returning empty detections"
-            );
-            format!("page {} failed to render: {error}", page_index + 1)
-        },
-    )?;
+    }
+    .map_err(|error| {
+        tracing::warn!(
+            page = page_index + 1,
+            page_width_pts,
+            page_height_pts,
+            error = %error,
+            "layout runner: skipping page with render failure, returning empty detections"
+        );
+        format!("page {} failed to render: {error}", page_index + 1)
+    })?;
 
     let rendered_data = if normalize_for_ocr {
         crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
@@ -1473,6 +1468,10 @@ mod tests {
     }
 
     fn rotated_pdf(inherited: bool, rotation: i64) -> Vec<u8> {
+        pdf_with_media_box(inherited, rotation, &[0, 0, 200, 100])
+    }
+
+    fn pdf_with_media_box(inherited: bool, rotation: i64, media_box: &[i64]) -> Vec<u8> {
         use lopdf::{Document, Object, Stream, dictionary};
 
         let mut document = Document::with_version("1.5");
@@ -1483,7 +1482,7 @@ mod tests {
         let mut page = dictionary! {
             "Type" => "Page",
             "Parent" => pages_id,
-            "MediaBox" => vec![0.into(), 0.into(), 200.into(), 100.into()],
+            "MediaBox" => media_box.iter().copied().map(Object::from).collect::<Vec<_>>(),
             "Resources" => dictionary! {},
             "Contents" => content_id,
         };
@@ -1557,8 +1556,8 @@ mod tests {
 
     fn assert_xberg_native_pdf_applies_rotation(bytes: Vec<u8>) {
         let document = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("fixture PDF must open");
-        let rendered =
-            crate::pdf::render::render_page_with_safeguards(&document, 0, 72).expect("rotated fixture must render");
+        let rendered = crate::pdf::render::render_page_with_safeguards(&document, 0, 72, None)
+            .expect("rotated fixture must render");
         let rotations = crate::pdf::render::get_page_rotations(&document, 1);
         let (media_width, media_height) = document
             .get_page_media_box(0)
@@ -2252,9 +2251,86 @@ mod tests {
         );
     }
 
+    #[test]
+    fn layout_render_rejects_over_budget_raster_at_final_dpi() {
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 2 << 20,
+            ..Default::default()
+        };
+        let budget = RenderBudget {
+            security_limits: &security_limits,
+            images_config: None,
+        };
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[0, 0, 20000, 8]))
+            .expect("long narrow fixture must open");
+
+        let pages = render_layout_chunk(&doc, &[0], 0, 1, None, GatedPageHandling::SkipRender, budget);
+        let failure = pages[0]
+            .render_failure
+            .as_deref()
+            .expect("budget must reject the raster");
+        assert!(
+            failure.contains("PDF raster 20000x8 exceeds security_limits.max_content_size"),
+            "native render must reject the exact raster at the 72 DPI floor: {failure}"
+        );
+        assert!(pages[0].image.is_none());
+    }
+
+    #[test]
+    fn layout_render_uses_native_dimensions_for_malformed_media_box_budget() {
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 27 << 20,
+            ..Default::default()
+        };
+        let budget = RenderBudget {
+            security_limits: &security_limits,
+            images_config: None,
+        };
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[-100, 0]))
+            .expect("short MediaBox fixture must open");
+        assert_eq!(crate::pdf::render::get_page_dimensions_pt(&doc, 0), (612.0, 792.0));
+
+        let pages = render_layout_chunk(&doc, &[0], 0, 1, None, GatedPageHandling::SkipRender, budget);
+        let failure = pages[0]
+            .render_failure
+            .as_deref()
+            .expect("budget must reject the raster");
+        assert!(
+            failure.contains("PDF raster 1484x1650 exceeds security_limits.max_content_size"),
+            "native render must reject the true raster instead of estimating from Letter: {failure}"
+        );
+        assert!(pages[0].image.is_none());
+    }
+
+    #[test]
+    fn layout_ocr_uses_native_dpi_budget_with_malformed_media_box() {
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 27 << 20,
+            ..Default::default()
+        };
+        let budget = RenderBudget {
+            security_limits: &security_limits,
+            images_config: None,
+        };
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[-100, 0]))
+            .expect("short MediaBox fixture must open");
+
+        let pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::RenderWithoutInference,
+            budget,
+        );
+        let image = pages[0].image.as_ref().expect("native dimensions fit at reduced DPI");
+        assert_eq!(image.dimensions(), (1444, 1606));
+    }
+
     /// #1828: `render_layout_chunk`'s OCR-input render (`GatedPageHandling::RenderWithoutInference`,
     /// i.e. `normalize_for_ocr`) must make the same scan-density render-DPI decision the
-    /// non-layout OCR routes make (`crate::image::dpi::pdf_ocr_render_dpi`), not the plain
+    /// non-layout OCR routes make (`crate::pdf::render::render_pdf_ocr_page`), not the plain
     /// `effective_pdf_render_dpi` the markdown-structure render (`SkipRender`) uses. A scan page
     /// (one full-page 400x400px raster over a 100x100pt page, 288 dpi) renders its OCR input at
     /// that density -- 400x400px, not the 150 dpi default's ~208x208px -- while the same page's

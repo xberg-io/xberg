@@ -37,8 +37,47 @@ def metric_applicability(result: dict, options: dict) -> dict:
     return {"grits_con": True, "table_record_match": not options.get("trm_unsupported", False)}
 
 
+def _model_failure(text: str, source: str | None = None) -> bool:
+    """Require model context, not renderer wording such as 'layout is preserved'."""
+    model = source in {"layout", "pdf_tables", "native_pdf_layout", "layout-ocr"} or any(
+        token in text
+        for token in (
+            "tatr",
+            "rtdetr",
+            "rt-detr",
+            "table model",
+            "onnx",
+            "inference",
+            "layout detection",
+            "layout model",
+            "layout engine",
+            "layout runner",
+            "layout_runner",
+            "layout-for-markdown",
+            "layout-based table recognition",
+            "layout region plan",
+            "xberg::layout:",
+        )
+    )
+    failure = any(
+        token in text
+        for token in (
+            "unavailable",
+            "not available",
+            "failed",
+            "skipped",
+            "fallback",
+            "not compiled",
+            "unsupported",
+            "could not be loaded",
+            "could not be prepared",
+        )
+    )
+    return model and failure
+
+
 def validate_diagnostics(result: dict, stderr: str, arm: str) -> None:
-    """Reject actual SDK model fallback diagnostics in model arms."""
+    """Reject actual model fallbacks while leaving other SDK warnings in their artifacts."""
     if arm == "native_html":
         return
     warnings = result.get("processing_warnings", [])
@@ -46,23 +85,10 @@ def validate_diagnostics(result: dict, stderr: str, arm: str) -> None:
         raise ValueError("invalid SDK processing warnings")
     for warning in warnings:
         text = f"{warning['source']} {warning['message']}".lower()
-        if any(token in text for token in ("layout", "tatr", "table model", "onnx", "inference")):
+        if _model_failure(text, str(warning["source"]).lower()):
             raise ValueError(f"model fallback diagnostic: {text}")
     for line in stderr.lower().splitlines():
-        model = any(token in line for token in ("layout", "tatr", "rtdetr", "rt-detr", "table model", "onnx"))
-        failure = any(
-            token in line
-            for token in (
-                "unavailable",
-                "not available",
-                "failed",
-                "skipped",
-                "fallback",
-                "not compiled",
-                "unsupported",
-            )
-        )
-        if model and failure:
+        if _model_failure(line):
             raise ValueError(f"model fallback diagnostic: {line}")
 
 
@@ -91,3 +117,43 @@ def verify_bound_files(assets: list[dict]) -> None:
     for asset in assets:
         if _digest(Path(asset["file"])) != asset["sha256"]:
             raise ValueError(f"bound artifact changed: {asset['file']}")
+
+
+def _runtime_source_files(root: Path, imported: list[str]) -> dict[str, Path]:
+    root = root.resolve()
+    files = {str(path.relative_to(root)): path for path in sorted(root.rglob("*.py"))}
+    if not {"runner.py", "contracts.py", "safeguards.py", "official.py"} <= files.keys():
+        raise ValueError("incomplete runtime source inventory")
+    for path in [*files.values(), *(Path(name) for name in imported)]:
+        resolved = path.resolve()
+        if not resolved.is_relative_to(root) or str(resolved.relative_to(root)) not in files:
+            raise ValueError("imported runtime source does not match runner package")
+    return files
+
+
+def runtime_source_pins(root: Path, imported: list[str]) -> dict:
+    """Bind the complete own Python inventory and the modules actually imported by the runner."""
+    files = _runtime_source_files(root, imported)
+    return {"version": 1, "files": {name: _digest(path) for name, path in files.items()}}
+
+
+def verify_runtime_source_pins(root: Path, pins: dict | None, imported: list[str]) -> None:
+    """Require a fresh source-bound plan before any extraction can execute."""
+    if not isinstance(pins, dict) or pins.get("version") != 1 or not pins.get("files"):
+        raise ValueError("frozen plan lacks supported runtime source pins; refreeze before execution")
+    expected = pins["files"]
+    if not isinstance(expected, dict):
+        raise ValueError("invalid runtime source pins; refreeze before execution")
+    files = {str(path.relative_to(root)): path for path in sorted(root.rglob("*.py"))}
+    if set(expected) != set(files):
+        raise ValueError("runtime source inventory changed; refreeze before execution")
+    files = _runtime_source_files(root, imported)
+    for name, path in files.items():
+        _verify_runtime_source(name, path, expected[name])
+
+
+def _verify_runtime_source(name: str, path: Path, digest: str) -> None:
+    try:
+        verify_bound_files([{"file": str(path), "sha256": digest}])
+    except (OSError, ValueError) as error:
+        raise ValueError(f"runtime source changed: {name}; refreeze before execution") from error

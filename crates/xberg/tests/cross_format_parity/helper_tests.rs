@@ -283,3 +283,111 @@ fn test_strip_inline_code() {
     assert_eq!(strip_inline_code("no code here"), "no code here");
     assert_eq!(strip_inline_code("`all code`"), "");
 }
+
+#[test]
+fn list_boundaries_do_not_add_semantic_words_or_paragraphs() {
+    let markdown = "Before.\n\n<!-- end list -->\n\n- Item\n\n<!-- end list -->\n\nAfter.\n";
+    assert_eq!(tokenize(&strip_markdown(markdown)), ["before", "item", "after"]);
+    assert_eq!(
+        count_blocks(markdown),
+        HashMap::from([("paragraphs".into(), 2), ("list_items".into(), 1)])
+    );
+}
+
+#[test]
+fn list_boundary_literals_remain_in_inline_and_fenced_code() {
+    for fence in ["````", "~~~~"] {
+        let markdown =
+            format!("{fence}text\n<!-- end list -->\n```\n<!-- end list -->\n{fence}\n\n`<!-- end list -->`\n");
+        let stripped = strip_markdown(&markdown);
+        assert_eq!(stripped.matches("<!-- end list -->").count(), 3);
+        assert_eq!(count_blocks(&markdown).get("code_blocks"), Some(&1));
+    }
+    assert_eq!(strip_markdown("``<!-- end list -->``\n"), "<!-- end list -->\n");
+    assert_eq!(count_blocks("`<!-- end list -->`\n").get("paragraphs"), Some(&1));
+}
+
+#[test]
+fn only_canonical_standalone_list_boundaries_are_ignored() {
+    let markdown = "Body <!-- end list --> text\n<!-- another comment -->\n";
+    assert_eq!(strip_markdown(markdown), markdown);
+}
+
+#[test]
+fn html_images_keep_only_visible_alt_and_body_text() {
+    let html = r#"<p>Before</p><img src="hidden.png" title="Hidden title" alt="Duck &amp; paper"><p>Caption</p>"#;
+    assert_eq!(tokenize(&strip_html(html)), ["before", "duck", "paper", "caption"]);
+}
+
+#[test]
+fn html_image_attributes_respect_quotes_case_and_unquoted_values() {
+    for image in [
+        r#"<IMG title="hidden > title" ALT='Duck &gt; paper' src="hidden.png">"#,
+        r#"<img alt="Duck &gt; paper" title='hidden > title'/>"#,
+    ] {
+        assert_eq!(strip_html(image).trim(), "Duck > paper");
+    }
+    assert_eq!(strip_html("<img disabled alt=Duck src=hidden.png>").trim(), "Duck");
+    assert_eq!(
+        tokenize(&strip_html("<p title='hidden > attribute'>Body</p><img src='hidden'>")),
+        ["body"]
+    );
+}
+
+#[test]
+fn html_entities_are_decoded_once_in_text_and_image_alts() {
+    let html = "<p>&amp;lt; &copy; &#x1F986; &#65; &nbsp;</p><img alt='&amp;lt; &copy; &#x1F986; &#65; &nbsp;'>";
+    let plain = strip_html(html);
+    assert_eq!(
+        plain.split_whitespace().collect::<Vec<_>>(),
+        ["&lt;", "©", "🦆", "A", "&lt;", "©", "🦆", "A"]
+    );
+}
+
+#[test]
+fn html_comments_and_other_attributes_do_not_leak_semantic_words() {
+    let html = "<!-- hidden > words --><p alt='hidden alt'>Body alt=visible</p><img alt='Duck' data-alt='hidden'>";
+    assert_eq!(tokenize(&strip_html(html)), ["body", "alt=visible", "duck"]);
+}
+
+#[test]
+fn list_and_image_parity_preserves_the_same_semantic_tokens() {
+    let markdown = "- Item\n\n<!-- end list -->\n\n![Duck & paper](duck.png)\n\nCaption\n";
+    let html = "<ul><li>Item</li></ul><img src='duck.png' alt='Duck &amp; paper'><p>Caption</p>";
+    let markdown_tokens = tokenize(&strip_markdown(markdown));
+    let html_tokens = tokenize(&strip_html(html));
+    assert_eq!(markdown_tokens, ["item", "duck", "paper", "caption"]);
+    assert_eq!(html_tokens, markdown_tokens);
+    assert_eq!(token_f1(&markdown_tokens, &html_tokens), 1.0);
+}
+
+#[test]
+fn multiline_inline_code_keeps_a_standalone_list_boundary_literal() {
+    let markdown = "Before `first\n    <!-- end list -->\nlast` after.\n\n<!-- end list -->\n";
+    let code_spans: Vec<_> = pulldown_cmark::Parser::new(markdown)
+        .filter_map(|event| match event {
+            pulldown_cmark::Event::Code(code) => Some(code.into_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(code_spans.len(), 1);
+    assert_eq!(
+        code_spans[0].split_whitespace().collect::<Vec<_>>(),
+        ["first", "<!--", "end", "list", "-->", "last"]
+    );
+    assert_eq!(
+        strip_markdown(markdown),
+        "Before first\n<!-- end list -->\nlast after.\n\n"
+    );
+    assert_eq!(count_blocks(markdown), HashMap::from([("paragraphs".into(), 1)]));
+}
+
+#[test]
+fn indented_code_keeps_a_list_boundary_literal_but_html_comments_do_not() {
+    let markdown = "    <!-- end list -->\n\n<!-- end list -->\n\nAfter.\n";
+    assert_eq!(tokenize(&strip_markdown(markdown)), ["end", "list", "after"]);
+    assert_eq!(
+        count_blocks(markdown),
+        HashMap::from([("code_blocks".into(), 1), ("paragraphs".into(), 1)])
+    );
+}

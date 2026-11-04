@@ -32,7 +32,7 @@
     "directory": "integrations/node/llamaindex-xberg"
   },
   "engines": {
-    "node": ">=20.15"
+    "node": ">=22"
   },
   "type": "module",
   "main": "./dist/index.cjs",

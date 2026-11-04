@@ -10,8 +10,8 @@ name: xberg
 
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:5c39696cf46f9dabada4de547cf7b610394f57c4002ed5d2055fc83521fa3141
-Source-Hash: blake3:a6076da32e6bfe3750e87d00b1c57c1dafffe1958ab6f8b6768e4a94fae3b20a
+Content-Hash: blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a
+Source-Hash: blake3:1e46ba9bed26e6452c3c82c60b33a2fde65ced1c447fbee44693532abe509487
 Schema-Version: v1
 -->
 
@@ -314,16 +314,16 @@ config = ExtractionConfig(force_ocr=True)  # OCR even if text is extractable
 
 ### Python
 
-`extract` / `extract_batch` raise a plain `RuntimeError` on failure — the typed `XbergError` subclasses are not raised by these entry points, so catch `RuntimeError`. Per-input failures during `extract_batch` are reported non-fatally in `result.errors`.
+`extract` / `extract_batch` raise an exported `XbergError` subclass, such as `ParsingError`, `SecurityError`, or `ValidationError`, including calls with `on_progress`. Catch `XbergError` for extraction failures. Per-input failures during `extract_batch` are reported non-fatally in `result.errors`.
 
 ```python
-from xberg import ExtractInput, extract, ExtractionConfig
+from xberg import ExtractInput, extract, ExtractionConfig, XbergError
 
 try:
     result = await extract(ExtractInput(uri="file.pdf"), ExtractionConfig())
     for err in result.errors:
         print(f"Per-input error: {err}")
-except RuntimeError as e:
+except XbergError as e:
     print(f"Extraction failed: {e}")
 ```
 
@@ -367,7 +367,7 @@ match extract(ExtractInput::from_uri("file.pdf"), &config).await {
 2. **Async-only**: Python and Node have no sync variants — always `await extract(...)`. Rust `extract` is async; use `#[tokio::main]` or an async context.
 3. **Build the input**: pass an `ExtractInput`, not a bare path. Use `ExtractInput(uri=...)` / `ExtractInput::from_uri(...)` (Python/Rust) or `{ kind: "uri", uri: "..." }` (Node); for bytes use `kind="bytes"` with `bytes`/`mime_type`.
 4. **Python ChunkingConfig fields**: construct with `max_characters` and `overlap` (defaults 1000 / 200); these are also the readable attributes. When passing config as a dict/JSON, the `max_chars` / `max_overlap` aliases are also accepted. Node uses `maxCharacters` / `overlap`; Rust struct fields are `max_characters` / `overlap`.
-5. **Python errors**: `extract` / `extract_batch` raise a plain `RuntimeError` on failure, not typed `XbergError` subclasses — catch `RuntimeError`. Node throws plain `Error` (no typed error subclasses).
+5. **Python errors**: catch `XbergError` or a specific exported subclass for `extract` / `extract_batch` failures, including calls with `on_progress`. Node throws plain `Error` (no typed error subclasses).
 6. **Rust extract signature**: `extract(input, &config)` — the config is a reference. Use `&ExtractionConfig::default()` for defaults.
 7. **CLI --format vs --content-format**: `--format` controls CLI output (`text`, `json`, or `toon`). `--content-format` controls content rendering (`plain`, `markdown`, `djot`, `html`, `json`, or `doctags`).
 8. **Config file field names**: Use snake_case in TOML/YAML/JSON config files — `[chunking]` fields are `max_characters` and `overlap`; other fields use names like `output_format`, `pdf_options`.

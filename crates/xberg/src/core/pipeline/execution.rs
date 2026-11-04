@@ -17,12 +17,48 @@ use tracing::Instrument;
 type PostProcessorHandle = Arc<dyn crate::plugins::PostProcessor>;
 type ProcessorStage = (ProcessingStage, Arc<Vec<PostProcessorHandle>>);
 
+async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocument>(
+    result: &mut R,
+    config: &ExtractionConfig,
+    processor: &PostProcessorHandle,
+    _builtin_redaction: Option<&PostProcessorHandle>,
+) -> Result<()> {
+    #[cfg(feature = "redaction")]
+    if _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor)) {
+        let outcome = if let (document, Some(surfaces)) = result.redaction_parts()? {
+            crate::plugins::processor::builtin::redaction::RedactionProcessor
+                .process_with_surfaces(document, config, surfaces)
+                .await
+        } else {
+            processor.process(result.document_mut(), config).await
+        };
+        result.seal_processor_witness();
+        if outcome.is_ok() {
+            result.seal_redacted_markup()?;
+        }
+        return outcome;
+    }
+    #[cfg(feature = "redaction")]
+    {
+        let witness = result.processor_witness();
+        let outcome = processor.process(result.document_mut(), config).await;
+        result.observe_processor(witness);
+        result.validate_sealed_markup(config)?;
+        outcome
+    }
+    #[cfg(not(feature = "redaction"))]
+    {
+        processor.process(result.document_mut(), config).await
+    }
+}
+
 /// Execute registered post-processors for the supplied stages.
-pub(super) async fn execute_processor_stages(
-    result: &mut ExtractedDocument,
+pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfaces::ProcessingDocument>(
+    result: &mut R,
     config: &ExtractionConfig,
     pp_config: &Option<&crate::core::config::PostProcessorConfig>,
     stages: &[ProcessorStage],
+    _builtin_redaction: Option<&PostProcessorHandle>,
 ) -> Result<()> {
     for (_stage, processors_arc) in stages {
         #[cfg(feature = "otel")]
@@ -43,14 +79,15 @@ pub(super) async fn execute_processor_stages(
 
             let should_run = should_processor_run(pp_config, processor_name);
 
-            if should_run && processor.should_process(result, config) {
+            if should_run && processor.should_process(result.document(), config) {
                 #[cfg(feature = "otel")]
                 let processor_span = crate::telemetry::spans::pipeline_processor_span(stage_name, processor_name);
 
+                let invocation = invoke_processor(result, config, processor, _builtin_redaction);
                 #[cfg(feature = "otel")]
-                let process_result = processor.process(result, config).instrument(processor_span).await;
+                let process_result = invocation.instrument(processor_span).await;
                 #[cfg(not(feature = "otel"))]
-                let process_result = processor.process(result, config).await;
+                let process_result = invocation.await;
 
                 match process_result {
                     Ok(_) => {}
@@ -61,7 +98,7 @@ pub(super) async fn execute_processor_stages(
                     }
                     Err(err) => {
                         let error_msg = err.to_string();
-                        result.processing_warnings.push(ProcessingWarning {
+                        result.document_mut().processing_warnings.push(ProcessingWarning {
                             source: Cow::Owned(processor_name.to_string()),
                             message: Cow::Owned(error_msg),
                         });
@@ -88,7 +125,10 @@ pub(super) async fn execute_processor_stages(
 }
 
 /// Determine if a processor should run based on configuration.
-fn should_processor_run(pp_config: &Option<&crate::core::config::PostProcessorConfig>, processor_name: &str) -> bool {
+pub(super) fn should_processor_run(
+    pp_config: &Option<&crate::core::config::PostProcessorConfig>,
+    processor_name: &str,
+) -> bool {
     if let Some(config) = pp_config {
         if let Some(ref enabled_set) = config.enabled_set {
             enabled_set.contains(processor_name)
@@ -142,3 +182,24 @@ pub(super) async fn execute_validators(result: &ExtractedDocument, config: &Extr
         validate_all.await
     }
 }
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+mod redaction_surface_tests;
+
+#[cfg(all(test, not(feature = "tokio-runtime")))]
+mod no_runtime_surface_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+mod processor_mutation_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime", feature = "office"))]
+mod review_regression_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
+mod literal_selection_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime", feature = "html"))]
+mod untrusted_html_mutation_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime", feature = "html"))]
+mod html_surface_mutation_tests;

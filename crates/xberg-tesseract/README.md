@@ -72,7 +72,7 @@ image = "0.25.5"
 
 When building with static linking, the crate will compile Tesseract and Leptonica from source. You need:
 
-- Rust 1.85.0 or later
+- Rust 1.99.0 or later
 - A C++ compiler (e.g., gcc, clang, MSVC on Windows)
 - CMake 3.x or later
 - Internet connection (for downloading Tesseract source code)
@@ -81,7 +81,7 @@ When building with static linking, the crate will compile Tesseract and Leptonic
 
 When using dynamic linking with system-installed libraries, you need:
 
-- Rust 1.85.0 or later
+- Rust 1.99.0 or later
 - Tesseract 5.x and Leptonica libraries installed on your system (see Installation section)
 - A C++17 compiler to build the small exception-safety shim
 - `pkg-config` on Linux, macOS, and MinGW, or vcpkg on Windows MSVC

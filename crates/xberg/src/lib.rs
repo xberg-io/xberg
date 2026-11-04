@@ -195,6 +195,7 @@ pub mod doctor;
 
 #[cfg(any(
     paddle_ocr,
+    feature = "sceptre-ocr-ort",
     feature = "embeddings",
     feature = "reranker",
     feature = "onnx-runtime",

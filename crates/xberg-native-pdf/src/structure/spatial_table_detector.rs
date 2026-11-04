@@ -1434,7 +1434,7 @@ fn has_split_modal_column_groups(grid: &GridStructure, most_common_count: usize)
         active_columns |= mask;
         let mut bits = mask;
         while bits != 0 {
-            let bit = bits & bits.wrapping_neg();
+            let bit = bits.isolate_lowest_one();
             let col = bit.trailing_zeros() as usize;
             adjacency[col] |= mask;
             bits &= !bit;
@@ -1445,12 +1445,12 @@ fn has_split_modal_column_groups(grid: &GridStructure, most_common_count: usize)
     let mut significant_components = 0usize;
 
     while remaining != 0 {
-        let seed_bit = remaining & remaining.wrapping_neg();
+        let seed_bit = remaining.isolate_lowest_one();
         let mut component: u128 = 0;
         let mut frontier: u128 = seed_bit;
 
         while frontier != 0 {
-            let bit = frontier & frontier.wrapping_neg();
+            let bit = frontier.isolate_lowest_one();
             frontier &= !bit;
 
             if component & bit != 0 {
@@ -2924,6 +2924,12 @@ fn split_rows_by_text_positions(
                     })
                     .collect();
 
+                #[cfg(test)]
+                header_source_diagnostic::event("intersection_split_membership", || {
+                    serde_json::json!({
+                        "source_row": row_idx, "output_row": result.len(), "column": ci, "source_span_ids": matching_indices,
+                    })
+                });
                 let cell_text = extract_cell_text(&matching_indices, spans);
                 let mcids: Vec<u32> = matching_indices
                     .iter()
@@ -3079,16 +3085,34 @@ fn detect_tables_from_intersections(
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
+        #[cfg(test)]
+        header_source_diagnostic::grid(group_cells, xs, ys, &v_edges, cells_are_intersections);
         let Some((table_rows, row_cell_span_indices)) =
             assign_spans_to_intersection_grid(group_cells, xs, ys, *num_cols, spans, &v_edges, cells_are_intersections)
         else {
             continue;
         };
+        #[cfg(test)]
+        header_source_diagnostic::event("intersection_assigned", || {
+            serde_json::json!({
+                "rows": header_source_diagnostic::rows(&table_rows), "source_span_ids": row_cell_span_indices,
+            })
+        });
         let sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        #[cfg(test)]
+        header_source_diagnostic::event("intersection_finalized", || {
+            header_source_diagnostic::tables(&sub_tables)
+        });
         tables.extend(sub_tables);
     }
 
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_before_merge", || {
+        header_source_diagnostic::tables(&tables)
+    });
     merge_vertically_adjacent_tables(&mut tables);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
 
     // Post-merge: split tables at section dividers — full-width horizontal
     // lines that indicate separate form sections within a single grid.
@@ -3098,7 +3122,18 @@ fn detect_tables_from_intersections(
     let (mut h_edges, mut v_edges) = extract_edges(lines);
     snap_and_merge(&mut h_edges);
     snap_edges(&mut v_edges);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_divider_edges", || {
+        serde_json::json!({
+            "horizontal": h_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
+            "vertical": v_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
+        })
+    });
     tables = split_tables_at_section_dividers(tables, &h_edges, &v_edges, config);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_section_split", || {
+        header_source_diagnostic::tables(&tables)
+    });
 
     // GH#1358 fix, gated by `BUCKET_TABLE_GRID_IN_ROTATED_FRAME`: applied last
     // so every physical/page-space step above (grid building, row splitting,
@@ -3109,6 +3144,8 @@ fn detect_tables_from_intersections(
         tables = tables.into_iter().map(reorient_table_to_rotated_frame).collect();
     }
 
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_final", || header_source_diagnostic::tables(&tables));
     tables
 }
 
@@ -3599,8 +3636,16 @@ fn finalize_intersection_tables(
     num_cols: usize,
 ) -> Vec<Table> {
     let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_rows_split", || {
+        header_source_diagnostic::rows(&table_rows)
+    });
 
     strip_form_numbering_artifacts(&mut table_rows);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_rows_stripped", || {
+        header_source_diagnostic::rows(&table_rows)
+    });
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();
@@ -3808,11 +3853,133 @@ fn split_table_at_section_dividers(
         return vec![table];
     }
 
+    let Some(legacy_sections) = build_table_sections(&table, &split_after, config.min_table_cells) else {
+        let exact = exact_section_cuts(&row_bounds, &divider_ys, &split_after);
+        return split_around_undersized_sections(
+            table,
+            exact.as_deref().unwrap_or(&split_after),
+            config.min_table_cells,
+        );
+    };
+    let Some(exact) = exact_section_cuts(&row_bounds, &divider_ys, &split_after) else {
+        return legacy_sections;
+    };
+
+    // The new cut can move a row only within an already admitted rectangular split. ~keep
+    if !has_complete_section_rows(&table)
+        || !passes_section_admission(&table)
+        || !legacy_sections.iter().all(passes_section_admission)
+    {
+        return legacy_sections;
+    }
+    build_table_sections(&table, &exact, config.min_table_cells)
+        .filter(|sections| sections.iter().all(passes_section_admission))
+        .unwrap_or(legacy_sections)
+}
+
+fn exact_section_cuts(row_bounds: &[Option<(f32, f32)>], divider_ys: &[f32], legacy: &[usize]) -> Option<Vec<usize>> {
+    let mut exact: Vec<_> = divider_ys
+        .iter()
+        .map(|divider| {
+            let mut hits = row_bounds.windows(2).enumerate().filter_map(|(index, pair)| {
+                let [Some((lo, hi)), Some((next_lo, next_hi))] = pair else {
+                    return None;
+                };
+                let upper_first = lo.total_cmp(divider).is_eq() && next_hi.total_cmp(divider).is_eq();
+                let lower_first = hi.total_cmp(divider).is_eq() && next_lo.total_cmp(divider).is_eq();
+                (divider.is_finite() && lo < hi && next_lo < next_hi && (upper_first || lower_first))
+                    .then_some((index, upper_first))
+            });
+            let (index, upper_first) = hits.next()?;
+            if hits.next().is_some() {
+                return None;
+            }
+            let (before, after) = row_bounds.split_at(index + 1);
+            let (upper, lower) = if upper_first { (before, after) } else { (after, before) };
+            let above = upper
+                .iter()
+                .all(|row| finite_section_row(*row).is_some_and(|(lo, _)| lo >= *divider));
+            let below = lower
+                .iter()
+                .all(|row| finite_section_row(*row).is_some_and(|(_, hi)| hi <= *divider));
+            (above && below).then_some(index)
+        })
+        .collect::<Option<_>>()?;
+    exact.sort_unstable();
+    exact.dedup();
+    (exact.len() == legacy.len() && exact != legacy).then_some(exact)
+}
+
+fn finite_section_row(row: Option<(f32, f32)>) -> Option<(f32, f32)> {
+    row.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo < hi)
+}
+
+fn has_complete_section_rows(table: &Table) -> bool {
+    table.rows.iter().all(|row| {
+        row.cells.len() == table.col_count
+            && row.cells.iter().all(|cell| {
+                !cell.text.trim().is_empty()
+                    && cell.rowspan == 1
+                    && cell.colspan == 1
+                    && cell
+                        .bbox
+                        .is_some_and(|bounds| bounds.top().is_finite() && bounds.bottom().is_finite())
+            })
+    })
+}
+
+fn passes_section_admission(table: &Table) -> bool {
+    is_valid_table(table) && table.is_real_grid() && !crate::document::looks_like_prose_table(table)
+}
+
+fn split_around_undersized_sections(table: Table, split_after: &[usize], min_cells: usize) -> Vec<Table> {
+    // This fallback can partition an admitted grid, but must not admit a previously rejected one. ~keep
+    if !has_complete_section_rows(&table) || !passes_section_admission(&table) {
+        return vec![table];
+    }
+    let cuts = coalesced_section_cuts(&table.rows, split_after, min_cells);
+    if cuts.is_empty() {
+        return vec![table];
+    }
+    build_table_sections(&table, &cuts, min_cells)
+        .filter(|sections| sections.iter().all(passes_section_admission))
+        .unwrap_or_else(|| vec![table])
+}
+
+fn coalesced_section_cuts(rows: &[TableRow], split_after: &[usize], min_cells: usize) -> Vec<usize> {
+    let mut cuts = Vec::new();
+    let mut start = 0;
+    let mut filled = 0;
+    for end in split_after
+        .iter()
+        .map(|index| index + 1)
+        .chain(std::iter::once(rows.len()))
+    {
+        filled += filled_section_cells(&rows[start..end]);
+        start = end;
+        if filled >= min_cells {
+            cuts.push(end - 1);
+            filled = 0;
+        }
+    }
+    // A trailing short range stays with the last admitted range. ~keep
+    cuts.pop();
+    cuts
+}
+
+fn filled_section_cells(rows: &[TableRow]) -> usize {
+    rows.iter()
+        .flat_map(|row| &row.cells)
+        .filter(|cell| !cell.text.is_empty())
+        .count()
+}
+
+fn build_table_sections(table: &Table, split_after: &[usize], min_cells: usize) -> Option<Vec<Table>> {
     let num_cols = table.col_count;
-    let all_rows = table.rows;
+    let all_rows = &table.rows;
     let mut sub_tables = Vec::new();
     let mut start = 0;
-    for &split_idx in &split_after {
+    for &split_idx in split_after {
         let end = split_idx + 1;
         if end > start {
             sub_tables.push(&all_rows[start..end]);
@@ -3823,17 +3990,14 @@ fn split_table_at_section_dividers(
         sub_tables.push(&all_rows[start..]);
     }
 
+    // Splitting is optional; keep the admitted table if any resulting section would disappear. ~keep
+    if sub_tables.iter().any(|rows| filled_section_cells(rows) < min_cells) {
+        return None;
+    }
+
     let mut result = Vec::new();
     for sub_rows_slice in sub_tables {
         let sub_rows: Vec<TableRow> = sub_rows_slice.to_vec();
-        let filled: usize = sub_rows
-            .iter()
-            .flat_map(|r| r.cells.iter())
-            .filter(|c| !c.text.is_empty())
-            .count();
-        if filled < config.min_table_cells {
-            continue;
-        }
         let mut min_x = f32::INFINITY;
         let mut min_y = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
@@ -3861,17 +4025,7 @@ fn split_table_at_section_dividers(
         });
     }
 
-    if result.is_empty() {
-        // Don't lose data; return original if all sub-tables were too small. ~keep
-        return vec![Table {
-            rows: all_rows,
-            has_header: false,
-            col_count: num_cols,
-            bbox: Some(bbox),
-        }];
-    }
-
-    result
+    (!result.is_empty()).then_some(result)
 }
 
 /// Maximum vertical gap (in points) between two table bboxes to consider them
@@ -8809,6 +8963,44 @@ mod tests {
     }
 
     #[test]
+    fn exact_section_cut_rejects_a_nonadjacent_crossing_row() {
+        let divider = [590.0];
+        let legacy = [0];
+        let rows = [
+            Some((550.0, 680.0)),
+            Some((590.0, 620.0)),
+            Some((560.0, 590.0)),
+            Some((530.0, 560.0)),
+        ];
+        assert_eq!(exact_section_cuts(&rows, &divider, &legacy), None);
+    }
+
+    #[test]
+    fn exact_section_cut_rejects_unknown_and_wrong_side_rows() {
+        let divider = [590.0];
+        let legacy = [0];
+        for first in [None, Some((510.0, 530.0))] {
+            let rows = [first, Some((590.0, 620.0)), Some((560.0, 590.0)), Some((530.0, 560.0))];
+            assert_eq!(exact_section_cuts(&rows, &divider, &legacy), None);
+        }
+    }
+
+    #[test]
+    fn exact_section_cut_accepts_contained_rows_in_both_orders() {
+        let divider = [590.0];
+        let legacy = [0];
+        let mut rows = [
+            Some((620.0, 650.0)),
+            Some((590.0, 620.0)),
+            Some((560.0, 590.0)),
+            Some((530.0, 560.0)),
+        ];
+        assert_eq!(exact_section_cuts(&rows, &divider, &legacy), Some(vec![1]));
+        rows.reverse();
+        assert_eq!(exact_section_cuts(&rows, &divider, &legacy), Some(vec![1]));
+    }
+
+    #[test]
     fn test_split_table_at_section_dividers() {
         // Simulate a multi-section form with 3 sections separated by
         // full-width H-lines.  Each section has its OWN vertical grid lines
@@ -8867,6 +9059,57 @@ mod tests {
         for (i, t) in tables.iter().enumerate() {
             assert_eq!(t.col_count, 3, "Table {} should have 3 columns, got {}", i, t.col_count);
         }
+    }
+
+    #[test]
+    fn should_preserve_valid_sections_around_an_undersized_section() {
+        let mut rows = Vec::new();
+        for row_index in 0..7 {
+            let mut row = TableRow::new(false);
+            for column in 0..3 {
+                let mut cell = TableCell::new(format!("R{row_index}C{column}"), false);
+                cell.bbox = Some(Rect::new(
+                    10.0 + column as f32 * 30.0,
+                    10.0 + row_index as f32 * 10.0,
+                    30.0,
+                    10.0,
+                ));
+                row.cells.push(cell);
+            }
+            rows.push(row);
+        }
+        let table = Table {
+            rows,
+            col_count: 3,
+            has_header: false,
+            bbox: Some(Rect::new(10.0, 10.0, 90.0, 70.0)),
+        };
+        let original = header_source_diagnostic::rows(&table.rows);
+        let horizontal: Vec<_> = [20.0, 40.0, 50.0]
+            .into_iter()
+            .map(|coord| Edge {
+                coord,
+                start: 10.0,
+                end: 100.0,
+            })
+            .collect();
+        let vertical: Vec<_> = [(10.0, 40.0), (40.0, 50.0), (50.0, 80.0)]
+            .into_iter()
+            .flat_map(|(start, end)| {
+                [10.0, 40.0, 70.0, 100.0]
+                    .into_iter()
+                    .map(move |coord| Edge { coord, start, end })
+            })
+            .collect();
+        let parts = split_table_at_section_dividers(table, &horizontal, &vertical, &TableDetectionConfig::default());
+        let lengths: Vec<_> = parts.iter().map(|part| part.rows.len()).collect();
+        assert_eq!(lengths, [3, 4], "the small section must not veto both valid sections");
+        let retained: Vec<_> = parts.into_iter().flat_map(|part| part.rows).collect();
+        assert_eq!(
+            header_source_diagnostic::rows(&retained),
+            original,
+            "every cell and its metadata survives once"
+        );
     }
 
     // -----------------------------------------------------------------
@@ -9806,3 +10049,11 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "spatial_table_detector/header_source_diagnostic.rs"]
+pub(crate) mod header_source_diagnostic;
+
+#[cfg(test)]
+#[path = "spatial_table_detector/section_conservation_tests.rs"]
+mod section_conservation_tests;

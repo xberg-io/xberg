@@ -259,8 +259,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "slanet_wired",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/table/SLANeXt_wired.onnx",
         local_filename: "slanet_wired.onnx",
         sha256_checksum: "64990fa026a7e2e2c2d4ad2c810bc9c6992da76d5f91b54771dfc900927ca3d0",
@@ -268,8 +268,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "slanet_wireless",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/table/SLANeXt_wireless.onnx",
         local_filename: "slanet_wireless.onnx",
         sha256_checksum: "b29ae2b4fe0ff8bbf7efd73fda0951227eb1abaedcaa046ad016191c779b7766",
@@ -277,8 +277,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "slanet_plus",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/table/SLANet_plus.onnx",
         local_filename: "slanet_plus.onnx",
         sha256_checksum: "e48a401a4ebcddd47fe3822427db24d867a557324f58e438692f588bbe9231de",
@@ -286,8 +286,8 @@ const MODELS: &[ModelDefinition] = &[
     },
     ModelDefinition {
         model_type: "table_classifier",
-        hf_repo_id: "xberg-io/paddleocr-onnx-models",
-        hf_revision: "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443",
+        hf_repo_id: model_download::PADDLE_MODELS_REPO_ID,
+        hf_revision: model_download::PADDLE_MODELS_REVISION,
         remote_filename: "v2/classifiers/PP-LCNet_x1_0_table_cls.onnx",
         local_filename: "table_cls.onnx",
         sha256_checksum: "f02bf087e924dadfb109e3b7887d7d56dc961b80e08c64cacf1030f97345b3c3",
@@ -622,6 +622,96 @@ impl LayoutModelManager {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn should_pin_the_paddle_models_repository_at_the_one_shared_revision() {
+        let paddle_pins: Vec<_> = pinned_repo_revisions()
+            .into_iter()
+            .filter(|(repo, _)| *repo == model_download::PADDLE_MODELS_REPO_ID)
+            .collect();
+
+        assert_eq!(
+            paddle_pins,
+            vec![(
+                model_download::PADDLE_MODELS_REPO_ID,
+                model_download::PADDLE_MODELS_REVISION
+            )]
+        );
+    }
+
+    #[cfg(paddle_ocr)]
+    const TABLE_CACHE_ROOT: &str = "XBERG_TABLE_MODEL_CACHE_ROOT";
+    #[cfg(paddle_ocr)]
+    const TABLE_MODEL_FILES: [(&str, &str); 4] = [
+        ("slanet_wired", "v2/table/SLANeXt_wired.onnx"),
+        ("slanet_wireless", "v2/table/SLANeXt_wireless.onnx"),
+        ("slanet_plus", "v2/table/SLANet_plus.onnx"),
+        ("table_classifier", "v2/classifiers/PP-LCNet_x1_0_table_cls.onnx"),
+    ];
+
+    #[cfg(paddle_ocr)]
+    #[test]
+    fn should_read_every_table_model_where_the_paddle_cache_warm_writes_it() {
+        let cache = TempDir::new().unwrap();
+        let paddle = crate::paddle_ocr::ModelManager::new(cache.path().to_path_buf());
+        let manifest = LayoutModelManager::manifest();
+        for (_, file) in TABLE_MODEL_FILES {
+            let written = paddle.manifest_cache_path(file);
+            let relative = written
+                .strip_prefix(cache.path())
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            assert!(
+                manifest.iter().any(|entry| entry.relative_path == relative),
+                "the layout manifest lists {relative}"
+            );
+            std::fs::create_dir_all(written.parent().unwrap()).unwrap();
+            std::fs::write(&written, b"cached table model").unwrap();
+        }
+
+        crate::utils::test_support::run_child_test(
+            "layout::model_manager::tests::table_reads_find_the_paddle_files_child",
+            TABLE_CACHE_ROOT,
+            cache.path(),
+            |command| {
+                command
+                    .env("HF_HUB_CACHE", cache.path())
+                    .env("HF_HUB_OFFLINE", "1")
+                    .env_remove("HUGGINGFACE_HUB_OFFLINE");
+            },
+        );
+    }
+
+    /// Runs the layout manager's own readers for the four table model files, offline, against
+    /// stand-in files at the paths the paddle manager writes. A lookup at the shared revision finds a
+    /// file and cannot repair its content offline; a lookup at any other revision finds nothing. ~keep
+    #[cfg(paddle_ocr)]
+    #[test]
+    #[ignore = "run in an isolated subprocess by should_read_every_table_model_where_the_paddle_cache_warm_writes_it"]
+    fn table_reads_find_the_paddle_files_child() {
+        if crate::utils::test_support::child_test_root(TABLE_CACHE_ROOT).is_none() {
+            return;
+        }
+        let manager = LayoutModelManager::new(None);
+        let revision = crate::paddle_ocr::ModelManager::pinned_revision();
+
+        let miss = manager.ensure_rtdetr_model().unwrap_err().to_string();
+        assert!(miss.contains("not available in the local cache"), "{miss}");
+
+        let readers = [
+            ("slanet_wired", manager.ensure_slanet_model("slanet_wired")),
+            ("slanet_wireless", manager.ensure_slanet_model("slanet_wireless")),
+            ("slanet_plus", manager.ensure_slanet_model("slanet_plus")),
+            ("table_classifier", manager.ensure_table_classifier()),
+        ];
+        assert_eq!(readers.len(), TABLE_MODEL_FILES.len());
+        for (name, result) in readers {
+            let hit = result.unwrap_err().to_string();
+            assert!(hit.contains("cannot refresh"), "{name}: {hit}");
+            assert!(hit.contains(&format!("@{revision}")), "{name}: {hit}");
+        }
+    }
 
     #[test]
     fn cache_only_capability_checks_do_not_create_directories() {

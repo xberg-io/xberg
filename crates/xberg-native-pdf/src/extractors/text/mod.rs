@@ -2177,6 +2177,8 @@ pub struct TextExtractor<'doc> {
     cached_xobject_refs: HashMap<String, Option<ObjectRef>>,
     /// Current XObject recursion depth (0 = page level)
     xobject_depth: u32,
+    /// Required nesting below this scope; None means a descendant hit the depth limit.
+    xobject_subtree_depth: Option<u32>,
     /// Number of XObjects decoded on this page (for budget limiting)
     xobject_decode_count: u32,
     /// Configuration for text extraction heuristics
@@ -2243,6 +2245,26 @@ pub struct TextExtractor<'doc> {
     /// flips this on only when the placed text dominates and the non-placed text
     /// is negligible. pymupdf/pdftotext likewise extract the body in that case.
     placed_pdf_keep: bool,
+    /// Group of the form that holds `/PlacedPDF` text back now, or 0. When the
+    /// page verdict drops placed text, a form with its own `/PlacedPDF` tag holds
+    /// its placed text instead, and the page judges the group once it is done.
+    placed_hold: u32,
+    /// First marked-content stack entry belonging to the form that opened the hold.
+    placed_hold_scope_start: usize,
+    /// Number of hold groups opened on this page.
+    placed_hold_groups: u32,
+    /// This span run only reads verdicts for a char run: it skips the form span
+    /// cache, so it opens the groups of the char run, which has no cache.
+    verdict_run: bool,
+    /// Hold group of each entry in `spans`, or 0 for text that is not held.
+    /// Empty while the page holds nothing.
+    span_holds: Vec<u32>,
+    /// Hold group of each entry in `chars`, as `span_holds` is for `spans`.
+    char_holds: Vec<u32>,
+    /// Count of form paints whose result depends on the page that painted them: a
+    /// form that carries a `/PlacedPDF` tag, or a form that the processed guard
+    /// skipped. A form whose run moved this count is not cached.
+    page_bound_forms: u32,
     /// Ink / separation names to exclude from extraction.
     ///
     /// When a `cs` operator sets a Separation or DeviceN color space whose ink name(s)

@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 import shutil
-from builtins import ExceptionGroup
 from pathlib import Path
 from typing import TYPE_CHECKING
 

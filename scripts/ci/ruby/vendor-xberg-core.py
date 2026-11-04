@@ -51,6 +51,20 @@ def get_workspace_version(repo_root: Path) -> str:
     return data.get("workspace", {}).get("package", {}).get("version", "4.0.0")
 
 
+def get_workspace_rust_version(repo_root: Path) -> str:
+    """Read the required Rust release from the source workspace before vendoring."""
+    manifest = repo_root / "Cargo.toml"
+    description = f"{manifest}: workspace.package.rust-version must name a Rust release, such as 1.98"
+    try:
+        version = read_toml(manifest)["workspace"]["package"]["rust-version"]
+    except (KeyError, TypeError):
+        raise ValueError(description) from None
+    component = r"(?:0|[1-9][0-9]*)"
+    if not isinstance(version, str) or not re.fullmatch(rf"{component}\.{component}(?:\.{component})?", version):
+        raise ValueError(description)
+    return version
+
+
 def format_dependency(name: str, dep_spec: object) -> str:
     """Format a dependency spec for Cargo.toml."""
     if isinstance(dep_spec, str):
@@ -195,7 +209,7 @@ def replace_workspace_deps_in_toml(toml_path: Path, workspace_deps: dict[str, ob
 
 
 def generate_vendor_cargo_toml(
-    repo_root: Path, workspace_deps: dict[str, object], core_version: str, copied_crates: list[str]
+    repo_root: Path, workspace_deps: dict[str, object], core_version: str, copied_crates: list[str], rust_version: str
 ) -> None:
     """Generate vendor/Cargo.toml with workspace setup.
 
@@ -204,6 +218,7 @@ def generate_vendor_cargo_toml(
         workspace_deps: Workspace dependencies from Cargo.toml
         core_version: Core version string
         copied_crates: List of crates that were successfully copied
+        rust_version: Rust release required by the source workspace
     """
     deps_lines: list[str] = []
     for name, dep_spec in sorted(workspace_deps.items()):
@@ -224,7 +239,7 @@ members = [{members_str}]
 [workspace.package]
 version = "{core_version}"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "{rust_version}"
 authors = ["Na'aman Hirschfeld <naaman@xberg.io>"]
 license = "MIT"
 repository = "https://github.com/xberg-io/xberg"
@@ -293,7 +308,7 @@ def _clean_build_artifacts(vendor_base: Path, copied_crates: list[str]) -> None:
 
 
 def _update_crate_cargo_tomls(
-    vendor_base: Path, copied_crates: list[str], core_version: str, workspace_deps: dict[str, object]
+    vendor_base: Path, copied_crates: list[str], core_version: str, workspace_deps: dict[str, object], rust_version: str
 ) -> None:
     """Replace workspace = true fields in each copied crate's Cargo.toml."""
     for crate_dir in copied_crates:
@@ -304,7 +319,9 @@ def _update_crate_cargo_tomls(
 
             content = re.sub(r"^version\.workspace = true$", f'version = "{core_version}"', content, flags=re.MULTILINE)
             content = re.sub(r"^edition\.workspace = true$", 'edition = "2024"', content, flags=re.MULTILINE)
-            content = re.sub(r"^rust-version\.workspace = true$", 'rust-version = "1.91"', content, flags=re.MULTILINE)
+            content = re.sub(
+                r"^rust-version\.workspace = true$", f'rust-version = "{rust_version}"', content, flags=re.MULTILINE
+            )
             content = re.sub(
                 r"^authors\.workspace = true$",
                 'authors = ["Na\'aman Hirschfeld <naaman@xberg.io>"]',
@@ -399,6 +416,7 @@ def main() -> None:
 
     workspace_deps: dict[str, object] = get_workspace_deps(repo_root)
     core_version: str = get_workspace_version(repo_root)
+    rust_version = get_workspace_rust_version(repo_root)
 
     print(f"Core version: {core_version}")
     print(f"Workspace dependencies: {len(workspace_deps)}")
@@ -421,10 +439,10 @@ def main() -> None:
     copied_crates: list[str] = _copy_crates_to_vendor(repo_root, vendor_base, crates_to_copy)
 
     _clean_build_artifacts(vendor_base, copied_crates)
-    _update_crate_cargo_tomls(vendor_base, copied_crates, core_version, workspace_deps)
+    _update_crate_cargo_tomls(vendor_base, copied_crates, core_version, workspace_deps, rust_version)
     _relink_local_crate_paths(vendor_base, copied_crates)
 
-    generate_vendor_cargo_toml(repo_root, workspace_deps, core_version, copied_crates)
+    generate_vendor_cargo_toml(repo_root, workspace_deps, core_version, copied_crates, rust_version)
     print("Generated vendor/Cargo.toml")
 
     _update_native_extension_toml(repo_root)

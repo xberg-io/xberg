@@ -14,6 +14,8 @@
 
 pub mod engine;
 pub(crate) mod external;
+mod formatted;
+mod literal_leaf;
 pub mod patterns;
 #[cfg(feature = "redaction-rehydrate")]
 pub mod rehydration;
@@ -21,6 +23,7 @@ pub mod strategy;
 
 #[cfg(feature = "redaction-rehydrate")]
 pub use engine::redact_capturing_rehydration_map;
+pub(crate) use engine::validate_nested_markup;
 pub use engine::{redact, redact_external, redact_with_entities};
 pub use external::{parse_external_findings, parse_external_findings_bounded};
 #[cfg(feature = "redaction-rehydrate")]

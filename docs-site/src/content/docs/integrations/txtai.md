@@ -42,7 +42,7 @@ flowchart LR
 pip install txtai-xberg
 ```
 
-Requires Python 3.10+. Install the `txtai` extra if txtai isn't already present:
+Requires Python 3.11+. Install the `txtai` extra if txtai isn't already present:
 
 ```bash
 pip install "txtai-xberg[txtai]"

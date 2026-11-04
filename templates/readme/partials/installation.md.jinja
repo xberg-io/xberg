@@ -185,7 +185,7 @@ The built artifacts are emitted under `target/release/` (`lib{{ package_name | r
 
 ### System Requirements
 {% if language == "python" %}
-- **Python 3.10+** required
+- **Python 3.11+** required
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "typescript" %}
@@ -201,7 +201,7 @@ Pre-built binaries available for:
 - Windows (x64)
 
 {% elif language == "go" %}
-- **Go 1.19+** required
+- **Go 1.27+** required
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "java" %}
@@ -215,12 +215,12 @@ Pre-built binaries available for:
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "ruby" %}
-- **Ruby 3.2.0 or higher** required (including Ruby 4.x)
+- **Ruby 3.3.0 or higher** required (including Ruby 4.x)
 - Ruby 4.0+ is fully supported with no code changes required
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "php" %}
-- **PHP 8.2+** required
+- **PHP 8.3+** required
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "csharp" %}
@@ -228,7 +228,7 @@ Pre-built binaries available for:
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "elixir" %}
-- **Elixir 1.14+** and **Erlang/OTP 26+** required
+- **Elixir 1.17+** and **Erlang/OTP 26+** required
 - Pre-compiled NIFs bundled via `rustler_precompiled` for macOS (arm64, x64), Linux (x64, arm64), and Windows (x64)
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
@@ -246,7 +246,7 @@ Pre-built binaries available for:
 - Native runtime delivered via `flutter_rust_bridge` with bundled binaries for the supported platforms
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "swift" %}
-- **Swift 6.0+** (`swift-tools-version: 6.0`) on macOS 13+ or iOS 16+
+- **Swift 6.2+** (`swift-tools-version: 6.2`) on macOS 26+ or iOS 16+
 - Native runtime delivered through the C FFI surface from `xberg-ffi`; published artifacts ship as a binary target
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality

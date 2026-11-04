@@ -769,6 +769,7 @@ pub fn parse_color_space(obj: &crate::object::Object) -> Result<ColorSpace> {
         Object::Array(arr) if !arr.is_empty() => {
             if let Some(name) = arr[0].as_name() {
                 match name {
+                    "DeviceGray" if arr.len() == 1 => Ok(ColorSpace::DeviceGray),
                     "Indexed" => Ok(ColorSpace::Indexed),
                     "CalGray" => Ok(ColorSpace::CalGray),
                     "CalRGB" => Ok(ColorSpace::CalRGB),
@@ -4131,6 +4132,74 @@ impl<'doc> PdfImageHandle<'doc> {
         }
     }
 
+    /// Share the stored payload for a plain JPEG that the legacy image extractor passes through.
+    ///
+    /// The returned identity is local to this PDF. Other streams still need the normal decoder.
+    #[doc(hidden)]
+    pub fn plain_stored_jpeg_for_ocr_recovery(&self) -> Option<(ObjectRef, bytes::Bytes)> {
+        use crate::object::Object;
+
+        let PdfImageSource::XObject(object_ref) = self.source else {
+            return None;
+        };
+        if self.doc.is_encrypted()
+            || self.filter_chain.as_slice() != [PdfFilter::DCTDecode]
+            || self.bits_per_component != 8
+        {
+            return None;
+        }
+
+        let Object::Stream { dict, data } = self.doc.load_object(object_ref).ok()? else {
+            return None;
+        };
+        let color = dict.get("ColorSpace").and_then(Object::as_name)?;
+        if !matches!(color, "DeviceGray" | "DeviceRGB") || self.color_space_resources.contains_key(color) {
+            return None;
+        }
+        let filter_name = match dict.get("Filter") {
+            Some(Object::Array(filters)) if filters.len() == 1 => filters[0].as_name(),
+            Some(filter) => filter.as_name(),
+            None => None,
+        };
+        if filter_name != Some("DCTDecode")
+            || ["Decode", "DecodeParms", "ImageMask", "Mask", "SMask", "SMaskInData"]
+                .iter()
+                .any(|key| dict.contains_key(*key))
+        {
+            return None;
+        }
+        crate::decoders::check_output_cap(
+            "DCTDecode",
+            data.len(),
+            crate::decoders::default_max_decompressed_size(),
+        )
+        .ok()?;
+        Some((object_ref, data))
+    }
+
+    /// Return stored stream bytes subject to an inclusive allocation limit.
+    ///
+    /// A zero limit permits only an empty stream. Filters and pixel decoders are
+    /// not run; the limit applies to the actual stored bytes, not `/Length`.
+    pub fn raw_compressed_bytes_with_limit(&self, max_bytes: usize) -> Result<Vec<u8>> {
+        let bounded_copy = |data: &[u8]| {
+            if data.len() > max_bytes {
+                return Err(crate::error::Error::Image(format!(
+                    "stored image stream requires {} bytes, exceeding limit {max_bytes}",
+                    data.len()
+                )));
+            }
+            Ok(data.to_vec())
+        };
+        match &self.source {
+            PdfImageSource::XObject(obj_ref) => match self.doc.load_object(*obj_ref)? {
+                crate::object::Object::Stream { data, .. } => bounded_copy(&data),
+                _ => Err(crate::error::Error::Image("XObject is not a stream".to_string())),
+            },
+            PdfImageSource::Inline { compressed_bytes, .. } => bounded_copy(compressed_bytes),
+        }
+    }
+
     /// For an Indexed image, the de-indexed *base* colour space.
     ///
     /// When [`color_space`](Self::color_space) is [`ColorSpace::Indexed`] the
@@ -4143,6 +4212,10 @@ impl<'doc> PdfImageHandle<'doc> {
         self.indexed_base
     }
 }
+
+#[cfg(test)]
+#[path = "image_raw_bytes_limit_tests.rs"]
+mod raw_bytes_limit_tests;
 
 impl std::fmt::Debug for PdfImageHandle<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -18,6 +18,8 @@ use super::span_geometry::{has_same_rotation, is_horizontal_ltr, upright_advance
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
+pub(crate) mod script_evidence;
+
 const COLUMN_BRIDGE_FRACTION: f32 = 0.6;
 const MIN_COLUMN_GUTTER_PTS: f32 = 8.0;
 const MIN_COLUMN_SIDE_SPANS: usize = 2;
@@ -50,6 +52,8 @@ const INLINE_SCRIPT_SAME_BASELINE_TOLERANCE_EM: f32 = 0.02;
 const INLINE_SCRIPT_MAX_CHARS: usize = 4;
 const INLINE_SCRIPT_MIN_WIDTH_COVERAGE: f32 = 0.7;
 const INLINE_SCRIPT_MAX_WIDTH_COVERAGE: f32 = 1.3;
+// Centered operators can cross baseline bands; compare centers at the structure path's half-point inline precision. ~keep
+const INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ScriptGeometry {
@@ -400,6 +404,7 @@ fn reorder_page_reading_order(
 ) {
     let Some(gutter_x) = two_up_gutter(spans, page_width, page_height) else {
         reorder_single_page_reading_order(spans, page_width, page_height, page_index);
+        preserve_inline_prose_symbol_order(spans);
         return;
     };
     let (mut left, mut right): (Vec<_>, Vec<_>) = spans
@@ -411,6 +416,7 @@ fn reorder_page_reading_order(
     reorder_single_page_reading_order(&mut right, page_width - gutter_x, page_height, page_index);
     spans.extend(left);
     spans.extend(right);
+    preserve_inline_prose_symbol_order(spans);
 }
 
 /// Reorder one page's spans into reading order for the element-based
@@ -518,7 +524,7 @@ fn rejoin_inline_scripts_inner(
     }
 
     if by_base.is_empty() {
-        return spans;
+        return rejoin_inline_prose_symbols(spans);
     }
 
     let mut repaired = Vec::with_capacity(spans.len());
@@ -531,7 +537,150 @@ fn rejoin_inline_scripts_inner(
             None => repaired.push(span.clone()),
         }
     }
-    repaired
+    rejoin_inline_prose_symbols(repaired)
+}
+
+fn inline_symbol_center(span: &xberg_native_pdf::layout::TextSpan) -> Option<f32> {
+    if !has_valid_span_geometry(span)
+        || !is_horizontal_ltr(span)
+        || span.artifact_type.is_some()
+        || span.text.trim().is_empty()
+    {
+        return None;
+    }
+    let center = span.bbox.y + span.text_rise * span.font_size + span.bbox.height * 0.5;
+    center.is_finite().then_some(center)
+}
+
+fn same_inline_prose_style(
+    left: &xberg_native_pdf::layout::TextSpan,
+    right: &xberg_native_pdf::layout::TextSpan,
+) -> bool {
+    left.font_name == right.font_name
+        && left.font_size == right.font_size
+        && left.font_weight == right.font_weight
+        && left.is_italic == right.is_italic
+        && left.color == right.color
+        && !left.is_monospace
+        && !right.is_monospace
+        && left.mcid_scope == right.mcid_scope
+        && ((left.bbox.y + left.text_rise * left.font_size) - (right.bbox.y + right.text_rise * right.font_size)).abs()
+            <= INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS
+}
+
+fn is_two_sided_inline_prose_symbol(
+    left: &xberg_native_pdf::layout::TextSpan,
+    symbol: &xberg_native_pdf::layout::TextSpan,
+    right: &xberg_native_pdf::layout::TextSpan,
+) -> bool {
+    if !matches!(symbol.text.as_str(), "•" | "·")
+        || !same_inline_prose_style(left, right)
+        || symbol.mcid_scope != left.mcid_scope
+        || symbol.font_weight != left.font_weight
+        || symbol.is_italic != left.is_italic
+        || symbol.color != left.color
+        || !left.text.ends_with(char::is_whitespace)
+        || !right.text.starts_with(char::is_alphabetic)
+    {
+        return false;
+    }
+    let left_gap = symbol.bbox.x - (left.bbox.x + left.bbox.width);
+    let right_gap = right.bbox.x - (symbol.bbox.x + symbol.bbox.width);
+    let gaps = 0.0..=symbol.bbox.width;
+    gaps.contains(&left_gap) && gaps.contains(&right_gap) && prose_like(&format!("{} {}", left.text, right.text), 0, 2)
+}
+
+fn collect_inline_prose_symbol_pairs(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    row: &mut [usize],
+    pairs: &mut Vec<(usize, usize)>,
+) {
+    row.sort_by(|&left, &right| spans[left].bbox.x.total_cmp(&spans[right].bbox.x));
+    for (position, triple) in row.windows(3).enumerate() {
+        let [left, symbol, right] = [triple[0], triple[1], triple[2]];
+        let overlaps_left = position.checked_sub(1).is_some_and(|previous| {
+            let previous = &spans[row[previous]];
+            previous.bbox.x + previous.bbox.width > spans[left].bbox.x
+        });
+        let overlaps_right = row
+            .get(position + 3)
+            .is_some_and(|&next| spans[next].bbox.x < spans[right].bbox.x + spans[right].bbox.width);
+        if left < right
+            && !overlaps_left
+            && !overlaps_right
+            && is_two_sided_inline_prose_symbol(&spans[left], &spans[symbol], &spans[right])
+        {
+            pairs.push((left, symbol));
+        }
+    }
+}
+
+fn inline_prose_symbol_pairs(spans: &[xberg_native_pdf::layout::TextSpan]) -> Vec<(usize, usize)> {
+    let mut centers: Vec<_> = spans
+        .iter()
+        .enumerate()
+        .filter_map(|(index, span)| inline_symbol_center(span).map(|center| (index, center)))
+        .collect();
+    centers.sort_by(|left, right| right.1.total_cmp(&left.1));
+    let mut pairs = Vec::new();
+    let mut row = Vec::new();
+    let mut anchor = f32::NAN;
+    for (index, center) in centers {
+        if !row.is_empty() && (anchor - center).abs() > INLINE_SYMBOL_ALIGNMENT_TOLERANCE_PTS {
+            collect_inline_prose_symbol_pairs(spans, &mut row, &mut pairs);
+            row.clear();
+        }
+        if row.is_empty() {
+            anchor = center;
+        }
+        row.push(index);
+    }
+    collect_inline_prose_symbol_pairs(spans, &mut row, &mut pairs);
+    pairs
+}
+
+fn preserve_inline_prose_symbol_order(spans: &mut Vec<xberg_native_pdf::layout::TextSpan>) {
+    let pairs = inline_prose_symbol_pairs(spans);
+    if pairs.iter().all(|&(left, symbol)| left + 1 == symbol) {
+        return;
+    }
+    let symbols: std::collections::HashSet<_> = pairs.iter().map(|&(_, symbol)| symbol).collect();
+    let after_left: HashMap<_, _> = pairs.into_iter().collect();
+    let mut slots: Vec<_> = spans.drain(..).map(Some).collect();
+    for index in 0..slots.len() {
+        if symbols.contains(&index) {
+            continue;
+        }
+        spans.push(slots[index].take().expect("unconsumed source span"));
+        if let Some(&symbol) = after_left.get(&index) {
+            spans.push(slots[symbol].take().expect("unique inline symbol"));
+        }
+    }
+}
+
+// Script ownership must consume the original character geometry before an ordinary operator is folded into prose. ~keep
+fn rejoin_inline_prose_symbols(
+    spans: Vec<xberg_native_pdf::layout::TextSpan>,
+) -> Vec<xberg_native_pdf::layout::TextSpan> {
+    let pairs = inline_prose_symbol_pairs(&spans);
+    if pairs.is_empty() {
+        return spans;
+    }
+    let symbols: std::collections::HashSet<_> = pairs.iter().map(|&(_, symbol)| symbol).collect();
+    let after_left: HashMap<_, _> = pairs.into_iter().collect();
+    let mut slots: Vec<_> = spans.into_iter().map(Some).collect();
+    let mut joined = Vec::with_capacity(slots.len() - symbols.len());
+    for index in 0..slots.len() {
+        if symbols.contains(&index) {
+            continue;
+        }
+        let mut span = slots[index].take().expect("unconsumed source span");
+        if let Some(&symbol) = after_left.get(&index) {
+            append_span_text(&mut span, slots[symbol].as_ref().expect("unique inline symbol"));
+        }
+        joined.push(span);
+    }
+    joined
 }
 
 fn find_inline_script_base(
@@ -862,6 +1011,24 @@ fn extract_segments_from_page_inner(
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<SegmentData>> {
+    let spans = extract_final_spans_from_page(doc, page_index, script_geometry)?;
+    Ok(project_final_spans(spans, mcid_roles, artifacts, script_geometry))
+}
+
+fn extract_final_spans_from_page(
+    doc: &mut NativeDocument,
+    page_index: usize,
+    script_geometry: ScriptGeometry,
+) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
+    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None)
+}
+
+fn extract_final_spans_from_page_with_primes(
+    doc: &mut NativeDocument,
+    page_index: usize,
+    script_geometry: ScriptGeometry,
+    prime_witnesses: Option<&mut Vec<script_evidence::LiteralPrimeWitness>>,
+) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
     let extracted = if script_geometry == ScriptGeometry::Preserve {
         doc.doc
@@ -879,6 +1046,12 @@ fn extract_segments_from_page_inner(
             return Ok(Vec::new());
         }
     };
+    if let Some(witnesses) = prime_witnesses {
+        let captured = script_evidence::capture_literal_primes(&page_text_data.spans);
+        if !captured.is_empty() && matches!(doc.doc.get_page_rotation(page_index), Ok(0)) {
+            *witnesses = captured;
+        }
+    }
     let used_structure_order = apply_rtl_structure_order(doc, page_index, &mut page_text_data.spans);
     if !used_structure_order {
         reorder_page_reading_order(
@@ -889,8 +1062,15 @@ fn extract_segments_from_page_inner(
         );
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
     }
-    let spans = rejoin_inline_scripts_inner(page_text_data.spans, script_geometry);
+    Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
+}
 
+fn project_final_spans(
+    spans: Vec<xberg_native_pdf::layout::TextSpan>,
+    mcid_roles: &HashMap<u32, Option<u8>>,
+    artifacts: ArtifactRetention,
+    script_geometry: ScriptGeometry,
+) -> Vec<SegmentData> {
     let segments: Vec<SegmentData> = spans
         .into_iter()
         .filter(|span| {
@@ -903,36 +1083,42 @@ fn extract_segments_from_page_inner(
             }
             !span.text.trim().is_empty()
         })
-        .map(|span| {
-            let is_bold = span.font_weight == xberg_native_pdf::layout::text_block::FontWeight::Bold;
-            let bbox = &span.bbox;
-
-            let pdf_baseline_y = if script_geometry == ScriptGeometry::Preserve {
-                bbox.y + span.text_rise * span.font_size
-            } else {
-                bbox.y
-            };
-
-            let assigned_role = span.mcid.and_then(|mcid| mcid_roles.get(&mcid).copied()).flatten();
-
-            SegmentData {
-                text: span.text,
-                x: bbox.x,
-                y: pdf_baseline_y,
-                width: bbox.width,
-                height: bbox.height,
-                font_size: span.font_size,
-                is_bold,
-                is_italic: span.is_italic,
-                is_monospace: span.is_monospace,
-                baseline_y: pdf_baseline_y,
-                rotation_degrees: span.rotation_degrees,
-                assigned_role,
-            }
-        })
+        .map(|span| project_final_span(span, mcid_roles, script_geometry))
         .collect();
 
-    Ok(dedupe_redrawn_segments(segments))
+    dedupe_redrawn_segments(segments)
+}
+
+fn project_final_span(
+    span: xberg_native_pdf::layout::TextSpan,
+    mcid_roles: &HashMap<u32, Option<u8>>,
+    script_geometry: ScriptGeometry,
+) -> SegmentData {
+    let is_bold = span.font_weight == xberg_native_pdf::layout::text_block::FontWeight::Bold;
+    let bbox = &span.bbox;
+
+    let pdf_baseline_y = if script_geometry == ScriptGeometry::Preserve {
+        bbox.y + span.text_rise * span.font_size
+    } else {
+        bbox.y
+    };
+
+    let assigned_role = span.mcid.and_then(|mcid| mcid_roles.get(&mcid).copied()).flatten();
+
+    SegmentData {
+        text: span.text,
+        x: bbox.x,
+        y: pdf_baseline_y,
+        width: bbox.width,
+        height: bbox.height,
+        font_size: span.font_size,
+        is_bold,
+        is_italic: span.is_italic,
+        is_monospace: span.is_monospace,
+        baseline_y: pdf_baseline_y,
+        rotation_degrees: span.rotation_degrees,
+        assigned_role,
+    }
 }
 
 /// Reorder `spans` by the structure tree when the page holds RTL text and the tree supplies
@@ -1070,11 +1256,76 @@ fn extract_segments_with_structure_tree(
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
+    extract_pages_with_structure_tree(
+        doc,
+        artifacts,
+        script_geometry,
+        extract_segments_from_page_inner,
+        |segments| {
+            segments
+                .iter()
+                .filter(|segment| segment.assigned_role.is_some())
+                .count()
+        },
+    )
+}
+
+fn extract_pages_with_structure_tree<T>(
+    doc: &mut NativeDocument,
+    artifacts: ArtifactRetention,
+    script_geometry: ScriptGeometry,
+    extract_page: impl Fn(
+        &mut NativeDocument,
+        usize,
+        &HashMap<u32, Option<u8>>,
+        ArtifactRetention,
+        ScriptGeometry,
+    ) -> Result<T>,
+    count_roles: impl Fn(&T) -> usize,
+) -> Result<(Vec<T>, bool)> {
+    let Some(all_page_content) = reliable_heading_content(doc) else {
+        return Ok((Vec::new(), false));
+    };
+
+    let page_count = doc.doc.page_count().map_err(|e| {
+        crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
+    })?;
+
+    let mut all_pages: Vec<T> = Vec::with_capacity(page_count);
+    let mut total_role_assigned = 0usize;
+
+    for page_idx in 0..page_count {
+        let mcid_roles: HashMap<u32, Option<u8>> = all_page_content
+            .get(&(page_idx as u32))
+            .map(|contents| {
+                contents
+                    .iter()
+                    .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let segments = extract_page(doc, page_idx, &mcid_roles, artifacts, script_geometry)?;
+        total_role_assigned += count_roles(&segments);
+        all_pages.push(segments);
+    }
+
+    tracing::debug!(
+        page_count,
+        total_role_assigned,
+        "xberg_native_pdf: structure tree heading detection complete"
+    );
+    Ok((all_pages, true))
+}
+
+fn reliable_heading_content(
+    doc: &NativeDocument,
+) -> Option<HashMap<u32, Vec<xberg_native_pdf::structure::OrderedContent>>> {
     let mark_info = match doc.doc.mark_info() {
         Ok(mi) => mi,
         Err(e) => {
             tracing::debug!("xberg_native_pdf: mark_info() failed, skipping structure tree: {e}");
-            return Ok((Vec::new(), false));
+            return None;
         }
     };
 
@@ -1084,18 +1335,18 @@ fn extract_segments_with_structure_tree(
             suspects = mark_info.suspects,
             "xberg_native_pdf: structure tree not reliable, falling back to font-size clustering"
         );
-        return Ok((Vec::new(), false));
+        return None;
     }
 
     let struct_tree = match doc.doc.structure_tree() {
         Ok(Some(tree)) => tree,
         Ok(None) => {
             tracing::debug!("xberg_native_pdf: no structure tree found despite marked=true");
-            return Ok((Vec::new(), false));
+            return None;
         }
         Err(e) => {
             tracing::debug!("xberg_native_pdf: structure_tree() failed: {e}");
-            return Ok((Vec::new(), false));
+            return None;
         }
     };
 
@@ -1112,38 +1363,10 @@ fn extract_segments_with_structure_tree(
             heading_count,
             "xberg_native_pdf: structure tree has too few heading elements (< 3), falling back to font-size clustering"
         );
-        return Ok((Vec::new(), false));
+        return None;
     }
 
-    let page_count = doc.doc.page_count().map_err(|e| {
-        crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
-    })?;
-
-    let mut all_pages: Vec<Vec<SegmentData>> = Vec::with_capacity(page_count);
-    let mut total_role_assigned = 0usize;
-
-    for page_idx in 0..page_count {
-        let mcid_roles: HashMap<u32, Option<u8>> = all_page_content
-            .get(&(page_idx as u32))
-            .map(|contents| {
-                contents
-                    .iter()
-                    .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let segments = extract_segments_from_page_inner(doc, page_idx, &mcid_roles, artifacts, script_geometry)?;
-        total_role_assigned += segments.iter().filter(|s| s.assigned_role.is_some()).count();
-        all_pages.push(segments);
-    }
-
-    tracing::debug!(
-        page_count,
-        total_role_assigned,
-        "xberg_native_pdf: structure tree heading detection complete"
-    );
-    Ok((all_pages, true))
+    Some(all_page_content)
 }
 
 /// Extract text segments from all pages of a PDF document using xberg_native_pdf.
@@ -1163,6 +1386,7 @@ fn extract_segments_with_structure_tree(
 /// # Returns
 ///
 /// Tuple of (per-page segment vectors, structure-tree-used flag).
+#[cfg(test)]
 pub(crate) fn extract_all_segments(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,
@@ -1413,6 +1637,10 @@ fn walk_struct_elem_resolved(
         walk_struct_kids(doc, k_obj, page_id_map, effective_page, by_page, depth + 1);
     }
 }
+
+#[cfg(test)]
+#[path = "inline_dot_row_tests.rs"]
+mod inline_dot_row_tests;
 
 #[cfg(test)]
 mod tests {

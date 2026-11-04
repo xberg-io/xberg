@@ -10240,10 +10240,11 @@ Name: ___
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     fn fallback_test_images(count: usize) -> Vec<crate::pdf::native::images::PageFallbackImage> {
         (0..count)
-            .map(|_| crate::pdf::native::images::PageFallbackImage {
+            .map(|paint_order| crate::pdf::native::images::PageFallbackImage {
                 bytes: bytes::Bytes::from_static(b"ignored image bytes"),
                 format: "jpeg",
                 recovery: crate::pdf::native::images::XObjectRecovery::EmbeddedJpeg,
+                paint_order,
             })
             .collect()
     }
@@ -10328,7 +10329,7 @@ Name: ___
                 6,
                 9,
                 &crate::core::config::OcrConfig::default(),
-                &mut budget,
+                XObjectRecoveryContext::with_budget(&mut budget, None),
             )
             .await
             .expect("both retries must succeed");
@@ -10361,7 +10362,7 @@ Name: ___
             6,
             9,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect("bounded recovery must succeed");
@@ -10401,7 +10402,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("nonempty recovery output above max_content_size must fail closed");
@@ -10428,7 +10429,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("structured recovery text above max_content_size must fail closed");
@@ -10572,7 +10573,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("recovery tables above max_table_cells must fail closed");
@@ -10603,7 +10604,7 @@ Name: ___
             0,
             1,
             &crate::core::config::OcrConfig::default(),
-            &mut budget,
+            XObjectRecoveryContext::with_budget(&mut budget, None),
         )
         .await
         .expect_err("more XObject attempts than max_iterations must fail closed");
@@ -11714,6 +11715,78 @@ Name: ___
         fn shutdown(&self) -> crate::Result<()> {
             Ok(())
         }
+    }
+
+    #[cfg(all(feature = "ocr", feature = "pdf", feature = "tokio-runtime"))]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn failed_later_ocr_batch_discards_earlier_render_warnings() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+        use crate::extractors::security::SecurityLimits;
+        use crate::pdf::render::{record_render_warning, take_xberg_native_pdf_render_warnings};
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let pdf = two_page_pdf_second_page_rotated(90);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let backend = Arc::new(CountingOcrBackend { calls: calls.clone() });
+        crate::plugins::register_ocr_backend(backend).unwrap();
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "cancel-counting-backend".to_string(),
+                ..Default::default()
+            }),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(1),
+                max_concurrent_ocr: None,
+            }),
+            security_limits: Some(SecurityLimits {
+                max_content_size: 256 * 1024 + 6 * 12,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        record_render_warning(crate::core::diagnostics::warning("outside-request", "external warning"));
+
+        let run_ocr = async |pdf: &[u8]| {
+            extract_with_ocr(
+                Some(pdf),
+                None,
+                #[cfg(feature = "layout-detection")]
+                None,
+                &config,
+                None,
+            )
+            .await
+        };
+        let failed = run_ocr(&pdf).await;
+        let failed_call_count = calls.load(Ordering::SeqCst);
+        let failed_warnings = take_xberg_native_pdf_render_warnings();
+        let single_page = crate::pdf::render::build_minimal_pdf_with_mediabox(100.0, 200.0);
+        let succeeded = run_ocr(&single_page).await;
+        let success_warnings = take_xberg_native_pdf_render_warnings();
+        crate::plugins::unregister_ocr_backend("cancel-counting-backend").unwrap();
+
+        let error = failed.expect_err("rotating the second page must exceed the budget");
+        assert!(
+            error.to_string().contains("security_limits.max_content_size"),
+            "{error}"
+        );
+        assert_eq!(failed_call_count, 1, "the first batch must reach OCR");
+        assert_eq!(
+            failed_warnings.len(),
+            1,
+            "only the external warning may remain: {failed_warnings:?}"
+        );
+        assert_eq!(failed_warnings[0].source, "outside-request");
+        assert_eq!(failed_warnings[0].message, "external warning");
+        succeeded.expect("the unrotated page must OCR within the limit");
+        assert_eq!(success_warnings.len(), 1);
+        assert_eq!(success_warnings[0].source, "pdf-render");
+        assert_eq!(
+            success_warnings[0].message,
+            "Page 1 OCR render DPI was reduced from 150 to 1 to fit security_limits.max_content_size"
+        );
     }
 
     /// GH: `extraction_timeout_secs` firing calls `config.cancel_token.cancel()`, but the

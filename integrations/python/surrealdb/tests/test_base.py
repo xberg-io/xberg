@@ -1,6 +1,6 @@
 """Tests for _base module helpers."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -29,7 +29,7 @@ def test_parse_datetime_none_returns_none() -> None:
 
 
 def test_parse_datetime_returns_datetime_object_as_is() -> None:
-    dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    dt = datetime(2024, 1, 1, tzinfo=UTC)
     assert _parse_datetime(dt) is dt
 
 
@@ -42,7 +42,7 @@ def test_parse_datetime_parses_iso_string_with_tz() -> None:
 def test_parse_datetime_adds_utc_to_naive_iso_string() -> None:
     result = _parse_datetime("2024-01-01T00:00:00")
     assert isinstance(result, datetime)
-    assert result.tzinfo == timezone.utc
+    assert result.tzinfo == UTC
 
 
 def test_parse_datetime_invalid_string_returns_none() -> None:

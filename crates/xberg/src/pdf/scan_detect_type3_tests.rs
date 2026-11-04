@@ -168,7 +168,7 @@ fn gh1782_routes_only_when_unmapped_type3_glyphs_dominate() {
             .join(name);
         let bytes = std::fs::read(path).expect("read synthetic fixture");
         let mut native = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("open native fixture");
-        let (_, _, _, metadata) = crate::pdf::native::text::extract_text_and_metadata(&mut native, None)
+        let (_, _, _, metadata, _) = crate::pdf::native::text::extract_text_and_metadata(&mut native, None)
             .expect("extract native fixture with metadata");
         let expected_one_indexed = expected.iter().map(|index| *index as u32 + 1).collect::<Vec<_>>();
         assert_eq!(metadata.pdf_specific.fabricated_text_pages, Some(expected_one_indexed));

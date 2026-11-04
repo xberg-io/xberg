@@ -1,4 +1,4 @@
-baseline = "v1.12.1"
+baseline = "v1.13.0"
 task_sets = [
   "alef-bindings",
   "alef-version",
@@ -12,3 +12,11 @@ task_sets = [
   "plugin",
   "rust",
 ]
+
+[task_overrides]
+"plugin:generate" = "Refresh plugin source and root served-skill pins after Xberg public skill export"
+"plugin:verify" = "Check plugin source and root served-skill locks before Xberg artifact verification"
+
+[overrides."github:xberg-io/alef"]
+version = "0.122.2"
+reason = "Alef 0.122.2 generates the Swift TesseractConfig DTO through [crates.swift] lenient_serde_types and clippy-clean Node conversions"

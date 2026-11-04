@@ -96,6 +96,12 @@ impl PageWindow {
         Some(self.held[position].0.clone())
     }
 
+    /// The rendered page `page_idx`, which the window holds from its render until it leaves in a ready batch.
+    #[cfg(all(feature = "ocr", feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(super) fn held_page(&self, page_idx: usize) -> &EncodedPage {
+        &self.held[page_idx - self.first_held].0
+    }
+
     /// Record the recognition of `page_idx` and free its slot.
     pub(super) fn finish(&mut self, page_idx: usize, recognition: PageRecognition) {
         self.in_flight -= 1;

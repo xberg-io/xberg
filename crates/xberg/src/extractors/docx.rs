@@ -87,6 +87,7 @@ fn note_key(note_type: crate::extraction::docx::parser::NoteType, id: &str) -> S
 /// Image data is still extracted separately by the caller.
 fn build_internal_document(
     doc: &crate::extraction::docx::parser::Document,
+    hyperlinks: &crate::extraction::docx::parser::BodyHyperlinks,
     inject_placeholders: bool,
 ) -> InternalDocument {
     use crate::types::document_structure::ContentLayer;
@@ -97,7 +98,6 @@ fn build_internal_document(
     let mut builder = InternalDocumentBuilder::new("docx");
 
     let mut current_list_numbering_id: Option<i64> = None;
-    let mut current_list_ordered: bool = false;
     let mut current_list_nesting_level: i64 = 0;
     let mut open_list_count: i64 = 0;
     let mut current_page = 1;
@@ -205,7 +205,6 @@ fn build_internal_document(
                             }
                             builder.push_list(is_ordered);
                             current_list_numbering_id = Some(nid);
-                            current_list_ordered = is_ordered;
                             current_list_nesting_level = nlvl;
                             open_list_count = 1;
                         } else if nlvl > current_list_nesting_level {
@@ -223,13 +222,8 @@ fn build_internal_document(
                             }
                             current_list_nesting_level = nlvl;
                         }
-                        let li_idx = builder.push_list_item(
-                            &text,
-                            current_list_ordered,
-                            annotations.clone(),
-                            Some(current_page),
-                            None,
-                        );
+                        let li_idx =
+                            builder.push_list_item(&text, is_ordered, annotations.clone(), Some(current_page), None);
                         if let Some(label) = doc.list_labels.get(idx) {
                             word_list_labels.insert(li_idx, label.as_str());
                         }
@@ -269,7 +263,8 @@ fn build_internal_document(
                         bookmark_elements.entry(bookmark.clone()).or_insert(elem_idx);
                     }
 
-                    for run in &paragraph.runs {
+                    let mut links = hyperlinks.get(idx).into_iter().flatten().peekable();
+                    for (run_index, run) in paragraph.runs.iter().enumerate() {
                         if run.math_latex.is_some() || run.text.is_empty() {
                             continue;
                         }
@@ -285,7 +280,17 @@ fn build_internal_document(
                                 };
                                 pending_anchor_links.push((elem_idx, anchor_key.to_string(), kind));
                             }
-                            builder.push_uri(ExtractedUri::hyperlink(url.as_str(), Some(run.text.clone())));
+                            let label = links.next_if(|range| range.start == run_index).map_or_else(
+                                || run.text.clone(),
+                                |range| {
+                                    paragraph.runs[range.clone()]
+                                        .iter()
+                                        .map(|run| run.text.as_str())
+                                        .collect()
+                                },
+                            );
+                            // Preserve URI admission counts and the later first-target dedup. ~keep
+                            builder.push_uri(ExtractedUri::hyperlink(url.as_str(), Some(label)));
                         }
                     }
 
@@ -828,7 +833,8 @@ fn parse_docx_core(
     mut budget: SecurityBudget,
     limits: crate::extractors::security::SecurityLimits,
 ) -> crate::error::Result<DocxParseResult> {
-    let mut doc = crate::extraction::docx::parser::parse_document(content, &mut budget, &limits)?;
+    let (mut doc, hyperlinks) =
+        crate::extraction::docx::parser::parse_document_with_hyperlinks(content, &mut budget, &limits)?;
     // `is_markdown` gates `to_markdown()` vs. `to_plain_text()` for the flat text; DocTags takes
     // the markdown branch because it wants the same rendered shape. It no longer has any bearing
     // on image page numbers: those come from `Document::drawing_page_numbers()`, walked from the
@@ -859,7 +865,7 @@ fn parse_docx_core(
         None
     };
 
-    let mut internal_doc = build_internal_document(&doc, inject_placeholders);
+    let mut internal_doc = build_internal_document(&doc, &hyperlinks, inject_placeholders);
     if !doc.revisions.is_empty() {
         internal_doc.revisions = Some(std::mem::take(&mut doc.revisions));
     }
@@ -1488,6 +1494,9 @@ impl InternalDocumentExtractor for DocxExtractor {
         50
     }
 }
+
+#[cfg(test)]
+mod list_kind_tests;
 
 #[cfg(test)]
 mod tests {

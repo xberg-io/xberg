@@ -2,10 +2,10 @@
 # Refresh it with `ai-rulez lock`; `ai-rulez generate --locked` fails when it is stale.
 
 version = 1
-ai_rulez_version = '5.9.2'
+ai_rulez_version = '5.10.0'
 scope = 'all'
 outputs_pinned = true
-tree = 'sha256:0980bed5252bbe87750d1c87c9a806277fed2813c18786c5c5846ee77c277cdb'
+tree = 'sha256:922cc57e24a76461b5f6848a0bfc874cfdb349eaf4dd3bcb4a5337733bc9b9ca'
 
 [[item]]
 kind = 'command'
@@ -23,7 +23,7 @@ digest = 'sha256:5f8f6a9e4b3eaf59645ba3311129405c69668df0a423c43024296a455e1b057
 kind = 'skill'
 id = 'xberg'
 path = 'skills/xberg'
-digest = 'sha256:74d6e669dcea621da983a18276eedc9331b6db403098ba631bc95807bb390c9c'
+digest = 'sha256:bd91ca1d5c4875499bbe4b2923592628c62b3ce83b3edc0a8e4d268b5333c18a'
 
 [[item]]
 kind = 'skill'

@@ -23,12 +23,32 @@ mod document;
 mod markdown;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use markdown::strip_embedded_gfm_tables;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod hidden_layer;
+#[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+mod orientation_retry;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod page_window;
 mod pipeline;
 mod plausibility;
 mod rendering;
 mod scoring;
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod tall_geometry;
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod tall_source;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) use pipeline::probe_incomplete_hidden_layers;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use plausibility::scan_text_plausibility;
@@ -113,3 +133,9 @@ mod tests;
 
 #[cfg(all(test, feature = "tokio-runtime", any(feature = "ocr", feature = "ocr-pipeline")))]
 mod raw_transcript_tests;
+
+#[cfg(all(test, feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod combined_rotation_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+mod batch_metadata_tests;

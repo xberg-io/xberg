@@ -5,7 +5,7 @@
 //! (space, dot, hyphen). Length is constrained to 7–15 digits so that
 //! generic 4-digit numbers and credit-card chunks are excluded.
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -25,20 +25,27 @@ static RE_PHONE: Lazy<Regex> = Lazy::new(|| {
 
 /// Find all phone number spans in `text` (international E.164 and North American formats).
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    RE_PHONE
-        .find_iter(text)
-        .filter_map(|m| {
-            let raw = m.as_str();
-            let digit_count = raw.chars().filter(|c| c.is_ascii_digit()).count();
-            if !(7..=15).contains(&digit_count) {
-                return None;
-            }
-            Some(PatternMatch {
-                start: m.start(),
-                end: m.end(),
-                category: PiiCategory::Phone,
-                text: raw.to_string(),
-            })
-        })
-        .collect()
+    super::collect_matches(text, &PiiCategory::Phone)
+}
+
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
+    for m in RE_PHONE.find_iter(text) {
+        let matched = BorrowedMatch {
+            start: m.start(),
+            end: m.end(),
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        let raw = m.as_str();
+        let digit_count = raw.chars().filter(|c| c.is_ascii_digit()).count();
+        if !(7..=15).contains(&digit_count) {
+            continue;
+        }
+        eligible(matched)?;
+    }
+    Ok(())
 }

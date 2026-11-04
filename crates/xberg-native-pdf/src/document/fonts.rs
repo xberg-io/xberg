@@ -6,6 +6,20 @@
 
 use super::*;
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static FONT_NAME_SET_AFTER_VERIFY: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+type FontSet = Vec<(String, Arc<crate::fonts::FontInfo>)>;
+
+pub(super) struct NamedFontSet {
+    identity: u64,
+    resolved: FontSet,
+    donated: FontSet,
+}
+
 impl PdfDocument {
     /// Resolve an object reference.
     ///
@@ -507,6 +521,8 @@ impl PdfDocument {
         };
 
         if let Some(font_obj) = resources_dict.get("Font") {
+            // Existing fonts can change the winning donor in this scope. ~keep
+            let reuse_donations = !extractor.has_fonts();
             let font_dict_ref = font_obj.as_reference();
             let font_dict_obj = if let Some(font_ref) = font_dict_ref {
                 self.load_object(font_ref)?
@@ -519,12 +535,15 @@ impl PdfDocument {
             if let Some(font_dict_ref) = font_dict_ref {
                 let cached_set_opt = self.font_set_cache.lock_or_recover().get(&font_dict_ref).cloned();
                 if let Some(cached_set) = cached_set_opt {
-                    let to_add = self
-                        .font_set_donated_cache
-                        .lock_or_recover()
-                        .get(&font_dict_ref)
-                        .cloned()
-                        .unwrap_or(cached_set);
+                    let to_add = if reuse_donations {
+                        self.font_set_donated_cache
+                            .lock_or_recover()
+                            .get(&font_dict_ref)
+                            .cloned()
+                            .unwrap_or(cached_set)
+                    } else {
+                        cached_set
+                    };
                     for (name, font_arc) in &to_add {
                         extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
                     }
@@ -571,9 +590,13 @@ impl PdfDocument {
                 let cached_fingerprint_opt =
                     fingerprint.and_then(|key| self.font_fingerprint_cache.lock_or_recover().get(&key).cloned());
                 if let Some(cached_set) = cached_fingerprint_opt {
-                    let to_add = fingerprint
-                        .and_then(|key| self.font_fingerprint_donated_cache.lock_or_recover().get(&key).cloned())
-                        .unwrap_or(cached_set);
+                    let to_add = if reuse_donations {
+                        fingerprint
+                            .and_then(|key| self.font_fingerprint_donated_cache.lock_or_recover().get(&key).cloned())
+                            .unwrap_or(cached_set)
+                    } else {
+                        cached_set
+                    };
                     for (name, font_arc) in &to_add {
                         extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
                     }
@@ -581,12 +604,9 @@ impl PdfDocument {
                     return Ok(());
                 }
 
-                // Layer 4: Name-based font set cache with spot-check verification.
-                // Pages in the same document often use the same font names mapped to
-                // different ObjectRefs but identical base fonts (e.g., 764 pages each
-                // creating T1_0→Helvetica, T1_1→Times-Roman with unique object numbers).
-                // Cache the resolved font set by sorted font names, then on subsequent
-                // pages verify ONE font via load+hash to confirm the mapping is the same. ~keep
+                // Layer 4 reuses identical font sets across different object references.
+                // Read the identity and donated fonts from one entry so a concurrent
+                // replacement for the same resource names cannot pair different sets. ~keep
                 let name_hash = {
                     use std::hash::{Hash, Hasher};
                     let mut font_names: Vec<&str> = font_dict.keys().map(|k| k.as_str()).collect();
@@ -604,7 +624,7 @@ impl PdfDocument {
                 let mut sorted_font_entries: Vec<(&String, &Object)> = font_dict.iter().collect();
                 sorted_font_entries.sort_by_key(|(name, _)| name.as_str());
 
-                if let Some((cached_set, check_hash)) = cached_name_set {
+                if let Some(cached) = cached_name_set {
                     // Verify the cached font set by computing a combined identity hash
                     // over ALL reference fonts in the current Resources dict (sorted by
                     // name). This prevents false cache hits when pages reuse the same
@@ -612,23 +632,18 @@ impl PdfDocument {
                     // spot-check is insufficient because it only guards one entry
                     // lets differing sibling fonts (F2, F3 …) slip through unchecked.
                     // Fixes the regression described above. ~keep
-                    if self.font_set_identity_hash(&sorted_font_entries) == Some(check_hash) {
-                        let donated_opt = self
-                            .font_name_set_donated_cache
-                            .lock_or_recover()
-                            .get(&name_hash)
-                            .cloned();
-                        match &donated_opt {
-                            Some(donated) => {
-                                for (name, font_arc) in donated.iter() {
-                                    extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
-                                }
-                            }
-                            None => {
-                                for (name, font_arc) in cached_set.iter() {
-                                    extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
-                                }
-                            }
+                    if self.font_set_identity_hash(&sorted_font_entries) == Some(cached.identity) {
+                        #[cfg(test)]
+                        if let Some(after_verify) = FONT_NAME_SET_AFTER_VERIFY.take() {
+                            after_verify();
+                        }
+                        let to_add = if reuse_donations {
+                            &cached.donated
+                        } else {
+                            &cached.resolved
+                        };
+                        for (name, font_arc) in to_add.iter() {
+                            extractor.add_font_shared(name.clone(), Arc::clone(font_arc));
                         }
                         self.share_truetype_cmaps_counted(extractor);
                         return Ok(());
@@ -796,12 +811,14 @@ impl PdfDocument {
                 // names with different per-page subsets. ~keep
                 if !all_from_cache && let Some(combined_check_hash) = self.font_set_identity_hash(&sorted_font_entries)
                 {
-                    self.font_name_set_cache
-                        .lock_or_recover()
-                        .insert(name_hash, (Arc::new(resolved), combined_check_hash));
-                    self.font_name_set_donated_cache
-                        .lock_or_recover()
-                        .insert(name_hash, Arc::new(donated));
+                    self.font_name_set_cache.lock_or_recover().insert(
+                        name_hash,
+                        Arc::new(NamedFontSet {
+                            identity: combined_check_hash,
+                            resolved,
+                            donated,
+                        }),
+                    );
                 }
 
                 return Ok(());

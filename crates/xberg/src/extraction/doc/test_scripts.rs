@@ -187,7 +187,10 @@ async fn should_preserve_doc_script_markers_through_public_markdown_extraction()
         );
         actual.push(output.results[0].content.clone());
     }
-    assert_eq!(actual, ["7,2 x 10^9^/l; H~2~O\n", "7,2 x 10^9^/l; H~2~O\n"]);
+    assert_eq!(
+        actual,
+        ["7,2 x 10<sup>9</sup>/l; H~2~O\n", "7,2 x 10<sup>9</sup>/l; H~2~O\n"]
+    );
 }
 
 #[tokio::test]
@@ -296,7 +299,7 @@ async fn should_preserve_scripts_in_adjacent_doc_footnotes_gh2275() {
 
 async fn assert_subdocument_script_output(bytes: &[u8], prefix: &str, config: &ExtractionConfig) {
     for (format, superscript, subscript) in [
-        (OutputFormat::Markdown, "^9^", "H~2~O"),
+        (OutputFormat::Markdown, "<sup>9</sup>", "H~2~O"),
         (OutputFormat::Djot, "^9^", "H~2~O"),
         (OutputFormat::Html, "<sup>9</sup>", "H<sub>2</sub>O"),
     ] {

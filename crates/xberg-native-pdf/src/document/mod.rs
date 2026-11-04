@@ -14,8 +14,8 @@ use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Mutex, Weak};
 
 pub(crate) use crate::cache::MutexExt;
 
@@ -164,6 +164,60 @@ const FORWARD_GAP_K: f32 = 1.25;
 const SAME_LINE_REORDER_MAX_GAP_FACTOR: f32 = 3.0;
 
 pub(crate) use crate::cache::BoundedEntryCache;
+
+type ExtractorFonts = HashMap<String, Arc<crate::fonts::FontInfo>>;
+
+pub(crate) struct CachedFormSpans {
+    /// Includes this Form and the deepest descendant visited by the complete run.
+    pub(crate) required_depth: u32,
+    pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
+    /// Weak references retain allocation identity without retaining font data.
+    fonts: Vec<(String, Weak<crate::fonts::FontInfo>)>,
+    local_scope: bool,
+}
+
+impl CachedFormSpans {
+    pub(crate) fn new(
+        required_depth: u32,
+        spans: Option<Vec<crate::layout::TextSpan>>,
+        inherited: &ExtractorFonts,
+        active: &ExtractorFonts,
+    ) -> Self {
+        let local_scope = inherited.is_empty();
+        let scope = if local_scope { active } else { inherited };
+        let mut fonts: Vec<_> = scope
+            .iter()
+            .map(|(name, font)| (name.clone(), Arc::downgrade(font)))
+            .collect();
+        if local_scope {
+            fonts.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
+        }
+        Self {
+            required_depth,
+            spans,
+            fonts,
+            local_scope,
+        }
+    }
+
+    pub(crate) fn matches_inherited_fonts(&self, inherited: &ExtractorFonts) -> bool {
+        if self.local_scope {
+            // Fonts already loaded by this Form add no caller dependency if
+            // every incoming binding points to the very same allocation. ~keep
+            return inherited.iter().all(|(name, current)| {
+                self.fonts
+                    .binary_search_by(|(cached, _)| cached.cmp(name))
+                    .is_ok_and(|index| std::ptr::eq(self.fonts[index].1.as_ptr(), Arc::as_ptr(current)))
+            });
+        }
+        self.fonts.len() == inherited.len()
+            && self.fonts.iter().all(|(name, cached)| {
+                inherited
+                    .get(name)
+                    .is_some_and(|current| std::ptr::eq(cached.as_ptr(), Arc::as_ptr(current)))
+            })
+    }
+}
 
 /// Size-bounded object cache with FIFO eviction.
 ///
@@ -606,10 +660,10 @@ pub struct PdfDocument {
     /// Name-based font set cache keyed by hash of sorted font names.
     /// Catches pages with different font ObjectRefs but the same font name→base font
     /// mapping (common in PDFs that create new font objects per page).
-    /// Stores the resolved font set (Arc-wrapped to avoid cloning) plus a combined
-    /// identity hash over ALL fonts for verification before reuse. Bounded at 256 entries.
-    font_name_set_cache: Mutex<BoundedEntryCache<u64, (Arc<Vec<(String, Arc<crate::fonts::FontInfo>)>>, u64)>>,
-    /// Donated companions to `font_set_cache`/`font_fingerprint_cache`/`font_name_set_cache`,
+    /// One entry pairs both font sets with their combined identity hash.
+    /// Bounded at 256 entries.
+    font_name_set_cache: Mutex<BoundedEntryCache<u64, Arc<fonts::NamedFontSet>>>,
+    /// Donated companions to `font_set_cache` and `font_fingerprint_cache`,
     /// keyed identically. Holds the SAME dictionary's font set after TrueType cmap donation
     /// has run only among fonts that dictionary itself resolves — never against fonts a
     /// sibling dictionary (a different page, or a Form XObject) happens to have contributed
@@ -621,8 +675,6 @@ pub struct PdfDocument {
     font_set_donated_cache: Mutex<BoundedEntryCache<ObjectRef, Vec<(String, Arc<crate::fonts::FontInfo>)>>>,
     /// Donated companion to `font_fingerprint_cache`. See `font_set_donated_cache`.
     font_fingerprint_donated_cache: Mutex<BoundedEntryCache<u64, Vec<(String, Arc<crate::fonts::FontInfo>)>>>,
-    /// Donated companion to `font_name_set_cache`. See `font_set_donated_cache`.
-    font_name_set_donated_cache: Mutex<BoundedEntryCache<u64, Arc<Vec<(String, Arc<crate::fonts::FontInfo>)>>>>,
     /// Counts calls to `donate_truetype_cmaps_within_set`, i.e. actual donation
     /// work rather than a cache hit. Test-only: proves donation runs once per
     /// font set across repeated page reads instead of once per page. ~keep
@@ -733,13 +785,12 @@ pub struct PdfDocument {
     pub(crate) xobject_stream_cache: Mutex<HashMap<ObjectRef, std::sync::Arc<Vec<u8>>>>,
     pub(crate) xobject_stream_cache_bytes: AtomicUsize,
     /// Cache of extracted TextSpan results from self-contained Form XObjects
-    /// (those with own /Resources/Font). None = processed but no spans.
-    /// Key is `(ObjectRef, [i64; 6])` where the array encodes the caller's CTM
-    /// as millipoint-rounded integers, allowing the same Form XObject to cache
-    /// distinct results for each unique CTM it is painted with.
+    /// (those with own /Resources/Font), with the nesting required for a complete run.
+    /// Key includes the object, millipoint-rounded caller CTM, and exact page-area
+    /// bits used by the figure/wrapper clipping policy. A hit also requires the
+    /// same inherited font scope, since it can supply glyph mappings.
     /// Bounded at [`DEFAULT_XOBJECT_CACHE_MAX_ENTRIES`] entries with FIFO eviction.
-    pub(crate) xobject_spans_cache:
-        Mutex<BoundedEntryCache<(ObjectRef, [i64; 6]), Option<Vec<crate::layout::TextSpan>>>>,
+    pub(crate) xobject_spans_cache: Mutex<BoundedEntryCache<(ObjectRef, [i64; 6], Option<u32>), CachedFormSpans>>,
     /// Cache of extracted images from Form XObjects (keyed by ObjectRef).
     /// Images are stored without CTM applied — caller applies its own CTM.
     /// Bounded at [`DEFAULT_XOBJECT_CACHE_MAX_ENTRIES`] entries with FIFO eviction.
@@ -1401,7 +1452,7 @@ fn first_in_use_uncompressed(xref: &crate::xref::CrossRefTable) -> Option<Object
 /// preprints) without disturbing legitimate data tables — sailing scores,
 /// IRS forms, and the CJK traffic-volume grid all stay well below both
 /// bars.
-fn looks_like_prose_table(table: &crate::structure::Table) -> bool {
+pub(crate) fn looks_like_prose_table(table: &crate::structure::Table) -> bool {
     let mut total = 0usize;
     let mut sentence_tails = 0usize;
     let mut lower_starts = 0usize;
