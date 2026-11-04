@@ -460,5 +460,32 @@ fn render_djot_math(literal: &str, display: bool) -> String {
     format!("{dollar}{fence}{before}{literal}{after}{fence}")
 }
 
+/// The same private body supplies the canonical plain text when we discard Djot rendering.
+pub(crate) fn has_djot_plain_body(doc: &InternalDocument) -> bool {
+    use crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE;
+    doc.annotations.as_ref().is_none_or(Vec::is_empty)
+        && doc.elements.len() <= crate::extractors::security::SecurityLimits::default().max_iterations
+        && doc.elements.iter().all(|element| {
+            !is_body_element(element)
+                || (matches!(
+                    element.kind,
+                    ElementKind::Title
+                        | ElementKind::Heading { .. }
+                        | ElementKind::Paragraph
+                        | ElementKind::ListStart { .. }
+                        | ElementKind::ListItem { .. }
+                        | ElementKind::ListEnd
+                        | ElementKind::QuoteStart
+                        | ElementKind::QuoteEnd
+                        | ElementKind::GroupStart
+                        | ElementKind::GroupEnd
+                        | ElementKind::PageBreak
+                ) && element
+                    .attributes
+                    .as_ref()
+                    .is_none_or(|attributes| !attributes.contains_key(MARKDOWN_PLAIN_TEXT_ATTRIBUTE)))
+        })
+}
+
 #[cfg(test)]
 mod tests;

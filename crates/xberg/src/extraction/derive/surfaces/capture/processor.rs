@@ -107,9 +107,9 @@ impl DerivedResult {
         {
             return;
         }
-        if let Some(html) = &context.capture.html {
-            // HTML witnesses record a change without advancing the original preimage. ~keep
-            context.html_mutated |= !context.html_preimage_matches(&self.document, html);
+        if let Some(markup) = &context.capture.markup {
+            // Verified markup witnesses record a change without advancing the original preimage. ~keep
+            context.markup_mutated |= !context.markup_preimage_matches(&self.document, markup);
             return;
         }
         if !context.page_shape_matches(&self.document) {

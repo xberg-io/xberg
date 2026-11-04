@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Redact repeated terms split by Djot inline styling.** Return verified redacted plain text for
+  supported Djot documents and pages with a format warning. Reject opaque output, including raw page-marker blocks.
+
 - **(windows): Bundle the Microsoft runtime dependencies of PHP, CLI, C FFI, and Elixir releases.** (#2370)
   Verify hard and delayed DLL imports and runtime notices in the final archives before upload.
 

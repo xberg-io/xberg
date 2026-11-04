@@ -31,7 +31,7 @@ mod redaction_projection;
 pub(crate) mod table_math;
 pub(crate) mod table_scripts;
 
-pub(crate) use djot::render_djot;
+pub(crate) use djot::{has_djot_plain_body, render_djot};
 pub(crate) use doctags::render_doctags;
 #[cfg(feature = "office")]
 pub(crate) use docx::render_docx;
