@@ -1407,7 +1407,7 @@ fn first_in_use_uncompressed(xref: &crate::xref::CrossRefTable) -> Option<Object
 /// preprints) without disturbing legitimate data tables — sailing scores,
 /// IRS forms, and the CJK traffic-volume grid all stay well below both
 /// bars.
-fn looks_like_prose_table(table: &crate::structure::Table) -> bool {
+pub(crate) fn looks_like_prose_table(table: &crate::structure::Table) -> bool {
     let mut total = 0usize;
     let mut sentence_tails = 0usize;
     let mut lower_starts = 0usize;

@@ -171,6 +171,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep ruled table rows on the correct side of a section divider.** (#2376)
+  Use exact shared row edges when both the original and corrected sections pass native table admission.
+
 - **(ocr): Skip automatic PaddleOCR on uniform PDF page rasters.** (#2430)
   Faint text and usable embedded images remain eligible for fallback.
 
