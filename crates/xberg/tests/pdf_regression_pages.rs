@@ -358,6 +358,16 @@ fn regression_page_keeps_squared_suffix_with_its_row_label() {
     assert_regression_page_has_script("plos-journal.pone.0311664-p14.pdf", "R<sup>2</sup> 0.355");
 }
 
+#[test]
+fn regression_page_keeps_raised_footnote_number_separate_from_ers_definition() {
+    assert_regression_page_has_script("fr-2025-04604-nofa-p5.pdf", "\n\n4 The ERS document");
+}
+
+#[test]
+fn regression_page_keeps_raised_footnote_number_separate_from_cms_definition() {
+    assert_regression_page_has_script("fr-2026-08190-hcbs-p18.pdf", "\n\n56 Available at");
+}
+
 /// Negative controls: each broken corpus must fail and name its problem.
 mod input_checks {
     use super::*;

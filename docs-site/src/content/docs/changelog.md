@@ -181,6 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve the space after a raised footnote number at the start of its definition.** (#2443)
+
 - **(ocr): Recover complete tables on sideways PDF scans with a cached orientation model.** (#2314)
   The implicit Tesseract retry accepts a confident complete table and maps it to the PDF page.
 

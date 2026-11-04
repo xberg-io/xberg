@@ -5,7 +5,9 @@
 
 use std::borrow::Cow;
 
-use super::lines::{crosses_visual_line_break, needs_space_between, segments_need_space};
+use super::lines::{
+    crosses_visual_line_break, needs_space_between, raised_numeric_prefix_has_word_gap, segments_need_space,
+};
 use super::text_repair::finalize_hyphens;
 use super::types::{LayoutHintClass, LayoutRegionPath, LayoutRegionTag, PdfParagraph};
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
@@ -961,12 +963,14 @@ fn annotated_segments_need_space(
     next: &crate::pdf::hierarchy::SegmentData,
     next_word: &str,
     native_scripts: &[&crate::pdf::native::hierarchy::script_evidence::ScriptOwner],
+    starts_paragraph: bool,
 ) -> bool {
     if native_scripts.iter().any(|owner| owner.follows(previous, next)) {
         return false;
     }
     let explicit_space = previous.text.ends_with(char::is_whitespace) || next.text.starts_with(char::is_whitespace);
-    if !explicit_space && super::pipeline::is_script_run_of(previous, next) {
+    let script_boundary = starts_paragraph && raised_numeric_prefix_has_word_gap(previous, next);
+    if !explicit_space && !script_boundary && super::pipeline::is_script_run_of(previous, next) {
         return false;
     }
     segments_need_space(previous, previous_word, next, next_word)
@@ -1090,7 +1094,14 @@ fn extract_text_and_annotations(
                 }
                 LineBreakHyphen::KeepHyphen => {}
                 LineBreakHyphen::NotApplicable => {
-                    if annotated_segments_need_space(prev_seg, prev_last, next_seg, next_first, &native_scripts) {
+                    if annotated_segments_need_space(
+                        prev_seg,
+                        prev_last,
+                        next_seg,
+                        next_first,
+                        &native_scripts,
+                        run_start == 1,
+                    ) {
                         text.push(' ');
                     }
                 }
@@ -1127,6 +1138,7 @@ fn extract_text_and_annotations(
                             all_segments[seg_idx],
                             word,
                             &native_scripts,
+                            prev_seg_idx == 0,
                         ) {
                             text.push(' ');
                         }
