@@ -707,21 +707,17 @@ pub(crate) fn extract_all_from_native_document(
     let (mut tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
         crate::pdf::native::guard_native_panic(
             || -> Result<TableExtractionResult> {
-                let mut warnings = Vec::new();
-                let (mut extracted_tables, native_warnings) =
-                    crate::pdf::native::table::extract_tables_native(&mut doc).unwrap_or_else(|e| {
-                        tracing::warn!("xberg_native_pdf native table extraction failed, skipping tables: {e}");
-                        (Vec::new(), vec![table_stage_failure_warning("native", &e)])
+                let (extracted_tables, mut warnings) = crate::pdf::native::table::extract_ruled_tables(&doc)
+                    .unwrap_or_else(|error| {
+                        tracing::warn!("xberg_native_pdf ruled table extraction failed: {error}");
+                        (
+                            Vec::new(),
+                            vec![
+                                table_stage_failure_warning("native", &error),
+                                table_stage_failure_warning("bordered", &error),
+                            ],
+                        )
                     });
-                warnings.extend(native_warnings);
-                let (bordered, bordered_warnings) =
-                    crate::pdf::native::table::extract_tables_bordered(&mut doc, &std::collections::HashSet::new())
-                        .unwrap_or_else(|e| {
-                            tracing::warn!("xberg_native_pdf bordered table extraction failed, skipping tables: {e}");
-                            (Vec::new(), vec![table_stage_failure_warning("bordered", &e)])
-                        });
-                crate::pdf::native::table::append_bordered_tables(&mut extracted_tables, bordered);
-                warnings.extend(bordered_warnings);
                 let (mut combined, mut native_grids): (Vec<_>, Vec<_>) = extracted_tables
                     .into_iter()
                     .map(|entry| {

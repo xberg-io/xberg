@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(pdf): Reuse each page's words and ruling paths across both ruled-table detectors.** (#2429)
+  Strict and bordered detection retain their existing thresholds and precedence.
+
 - **(bindings): Regenerate the bindings with Alef 0.122.2.**
   The Swift `TesseractConfig` DTO ignores unknown keys, while the Rust config keeps rejecting them and still accepts a
   `language` string and the legacy boolean `thresholding_method`. Python option enums subclass `StrEnum`. The Node

@@ -501,6 +501,17 @@ impl PdfDocument {
         page_index: usize,
         config: crate::structure::spatial_table_detector::TableDetectionConfig,
     ) -> Result<Vec<crate::structure::table_extractor::Table>> {
+        let [tables] = self.extract_tables_with_configs(page_index, [&config])?;
+        Ok(tables)
+    }
+
+    /// Extract tables with independent configurations using one page's words and ruling paths.
+    /// Results follow the order of the supplied configurations.
+    pub fn extract_tables_with_configs<const N: usize>(
+        &self,
+        page_index: usize,
+        configs: [&crate::structure::spatial_table_detector::TableDetectionConfig; N],
+    ) -> Result<[Vec<crate::structure::table_extractor::Table>; N]> {
         use crate::structure::spatial_table_detector::detect_tables_with_lines;
 
         // Use words instead of spans for better granularity.
@@ -549,10 +560,12 @@ impl PdfDocument {
         // `detect_tables_with_lines` directly with no post-filter at all, so
         // it was already able to fabricate/garble tables on any prose-shaped
         // spatial candidate, independent of anything else in this function. ~keep
-        Ok(detect_tables_with_lines(&spans, &lines, &config)
-            .into_iter()
-            .filter(|t| t.is_real_grid() && !looks_like_prose_table(t))
-            .collect())
+        Ok(configs.map(|config| {
+            detect_tables_with_lines(&spans, &lines, config)
+                .into_iter()
+                .filter(|t| t.is_real_grid() && !looks_like_prose_table(t))
+                .collect()
+        }))
     }
 
     /// Extract tables from a specific rectangular region of a page.

@@ -1,12 +1,8 @@
 //! Native table detection using the xberg_native_pdf backend.
 //!
-//! Three entry points:
-//!
-//! - [`extract_tables_native`] — xberg_native_pdf's built-in `extract_tables_with_config`
-//!   in strict mode. High precision, requires explicit table grid with 3+ columns.
-//! - [`extract_tables_bordered`] — relaxed Lines-strategy pass for bordered tables
-//!   with 2+ columns. Catches 2-column data tables (label/value) whose cells are
-//!   delimited by stroke lines that `strict()` skips due to `min_table_columns=3`.
+//! - [`extract_ruled_tables`] — strict and relaxed Lines-strategy passes that
+//!   share the same page words and ruling paths. The strict pass requires at least
+//!   three columns and the relaxed pass catches two-column bordered tables.
 //! - [`extract_tables_heuristic`] — text-layer fallback that reuses the same
 //!   spatial reconstruction the layout-detection path uses, but without
 //!   requiring layout hints. Catches tables that xberg_native_pdf's grid detector
@@ -120,140 +116,17 @@ enum HeuristicTableRejection {
     EmptyMarkdown,
 }
 
-/// Extract tables from all pages using xberg_native_pdf's native table detection.
-///
-/// Uses `TableDetectionConfig::strict()` to reduce false positives from
-/// paragraph text being misidentified as tables.
-///
-/// # Arguments
-///
-/// * `doc` - Mutable reference to the native document
-///
-/// # Returns
-///
-/// A `Vec<Table>` containing all detected tables with cells, markdown, and bounding boxes,
-/// together with a `Vec<ProcessingWarning>` describing any pages whose native table detection
-/// failed (issue #74). A per-page failure is skipped rather than aborting the whole document,
-/// so without a warning that page would be silently indistinguishable from a page that simply
-/// has no table.
-pub(crate) fn extract_tables_native(doc: &mut NativeDocument) -> Result<(Vec<NativeTable>, Vec<ProcessingWarning>)> {
-    let page_count = doc
-        .doc
-        .page_count()
-        .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
-
-    let config = xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig::strict();
-    let mut all_tables = Vec::new();
-    let mut warnings = Vec::new();
-
-    for page_idx in 0..page_count {
-        let page_number = (page_idx + 1) as u32;
-        let extracted = match doc.doc.extract_tables_with_config(page_idx, config.clone()) {
-            Ok(tables) => tables,
-            Err(e) => {
-                tracing::warn!(page = page_idx, "xberg_native_pdf extract_tables failed: {e}");
-                warnings.push(native_table_extraction_failure_warning(page_number, &e));
-                continue;
-            }
-        };
-
-        let source_spans = if extracted.is_empty() {
-            scripts::PageSpans::default()
-        } else {
-            scripts::page_spans(doc, page_idx, &mut warnings)
-        };
-        for extracted_table in extracted {
-            if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
-                continue;
-            }
-
-            let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
-
-            if cells.is_empty() || markdown.trim().is_empty() {
-                continue;
-            }
-
-            if cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
-                tracing::debug!(
-                    page = page_idx,
-                    rows = cells.len(),
-                    cols = cells.first().map(|r| r.len()).unwrap_or(0),
-                    "Skipping table below minimum dimensions (need ≥2 rows and ≥2 cols)"
-                );
-                continue;
-            }
-
-            let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
-                x0: rect.x as f64,
-                y0: rect.y as f64,
-                x1: (rect.x + rect.width) as f64,
-                y1: (rect.y + rect.height) as f64,
-            });
-
-            let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
-            all_tables.push(NativeTable {
-                scripts,
-                complete_leading_header: complete_leading_header(&extracted_table),
-                table: Table {
-                    cells,
-                    markdown,
-                    page_number,
-                    bounding_box,
-                    ..Default::default()
-                },
-                grid,
-            });
-        }
-    }
-
-    Ok((all_tables, warnings))
-}
-
-/// Build the `ProcessingWarning` for a page whose native (strict-mode) table detection
-/// failed (issue #74). Named per page and cause so the warning is actionable without
-/// leaking internal file paths or system details.
-fn native_table_extraction_failure_warning(page_number: u32, error: &xberg_native_pdf::Error) -> ProcessingWarning {
-    ProcessingWarning {
-        source: std::borrow::Cow::Borrowed("pdf_tables"),
-        message: std::borrow::Cow::Owned(format!(
-            "table extraction failed for page {page_number}: {error}; tables on this page were skipped"
-        )),
-    }
-}
-
-/// Extract bordered tables from all pages using a relaxed Lines-strategy config.
-///
-/// Targets 2-column tables whose cells are delimited by stroke/fill rectangles
-/// (the `re` PDF operator or explicit `m/l` paths) that `extract_tables_native`
-/// misses because `strict()` requires ≥ 3 columns.
-///
-/// Uses `TableStrategy::Lines` for both axes — path primitives only, no text-
-/// edge heuristics — so this pass does not introduce new text-based false positives.
-/// The relaxed thresholds:
-///
-/// - `min_table_columns = 2` (vs 3 in strict)
-/// - `min_table_cells = 4` (vs 6 in strict)
-/// - `regular_row_ratio = 0.5` (vs 0.8 in strict)
-///
-/// `skip_pages` (1-indexed) suppresses this pass on pages where a higher-priority
-/// detector already produced a result. Pass an empty set to run on every page.
-///
-/// # Returns
-///
-/// A `Vec<Table>` of detected bordered tables, together with a `Vec<ProcessingWarning>`
-/// describing any (non-skipped) pages whose bordered-table detection failed (issue #74).
-pub(crate) fn extract_tables_bordered(
-    doc: &mut NativeDocument,
-    skip_pages: &HashSet<u32>,
-) -> Result<(Vec<NativeTable>, Vec<ProcessingWarning>)> {
+/// Run both ruled detectors on each page, then keep strict detections first
+/// and append bordered detections outside their regions.
+pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTable>, Vec<ProcessingWarning>)> {
     use xberg_native_pdf::structure::spatial_table_detector::{TableDetectionConfig, TableStrategy};
 
     let page_count = doc
         .doc
         .page_count()
         .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
-
-    let config = TableDetectionConfig {
+    let strict_config = TableDetectionConfig::strict();
+    let bordered_config = TableDetectionConfig {
         enabled: true,
         horizontal_strategy: TableStrategy::Lines,
         vertical_strategy: TableStrategy::Lines,
@@ -268,74 +141,86 @@ pub(crate) fn extract_tables_bordered(
         text_fallback: false,
     };
 
-    let mut all_tables = Vec::new();
-    let mut warnings = Vec::new();
-
+    let mut strict = Vec::new();
+    let mut bordered = Vec::new();
+    let mut strict_warnings = Vec::new();
+    let mut bordered_warnings = Vec::new();
     for page_idx in 0..page_count {
         let page_number = (page_idx + 1) as u32;
-        if skip_pages.contains(&page_number) {
-            continue;
-        }
-
-        let extracted = match doc.doc.extract_tables_with_config(page_idx, config.clone()) {
-            Ok(tables) => tables,
-            Err(e) => {
-                tracing::warn!(page = page_idx, "xberg_native_pdf bordered extract_tables failed: {e}");
-                warnings.push(bordered_table_extraction_failure_warning(page_number, &e));
-                continue;
+        match doc
+            .doc
+            .extract_tables_with_configs(page_idx, [&strict_config, &bordered_config])
+        {
+            Ok([strict_tables, bordered_tables]) => {
+                append_page_tables(doc, page_idx, strict_tables, &mut strict, &mut strict_warnings);
+                append_page_tables(doc, page_idx, bordered_tables, &mut bordered, &mut bordered_warnings);
             }
-        };
-
-        let source_spans = if extracted.is_empty() {
-            scripts::PageSpans::default()
-        } else {
-            scripts::page_spans(doc, page_idx, &mut warnings)
-        };
-        for extracted_table in extracted {
-            if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
-                continue;
-            }
-
-            let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
-
-            if cells.is_empty() || markdown.trim().is_empty() {
-                continue;
-            }
-
-            if cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
-                tracing::debug!(
+            Err(error) => {
+                tracing::warn!(
                     page = page_idx,
-                    rows = cells.len(),
-                    cols = cells.first().map(|r| r.len()).unwrap_or(0),
-                    "Skipping bordered table below minimum dimensions"
+                    "xberg_native_pdf ruled table extraction failed: {error}"
                 );
-                continue;
+                strict_warnings.push(native_table_extraction_failure_warning(page_number, &error));
+                bordered_warnings.push(bordered_table_extraction_failure_warning(page_number, &error));
             }
-
-            let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
-                x0: rect.x as f64,
-                y0: rect.y as f64,
-                x1: (rect.x + rect.width) as f64,
-                y1: (rect.y + rect.height) as f64,
-            });
-
-            let scripts = scripts::capture(&extracted_table, &cells, &source_spans);
-            all_tables.push(NativeTable {
-                scripts,
-                complete_leading_header: complete_leading_header(&extracted_table),
-                table: Table {
-                    cells,
-                    markdown,
-                    page_number,
-                    bounding_box,
-                    ..Default::default()
-                },
-                grid,
-            });
         }
     }
 
-    Ok((all_tables, warnings))
+    append_bordered_tables(&mut strict, bordered);
+    strict_warnings.extend(bordered_warnings);
+    Ok((strict, strict_warnings))
+}
+
+fn append_page_tables(
+    doc: &NativeDocument,
+    page_idx: usize,
+    extracted: Vec<xberg_native_pdf::structure::table_extractor::Table>,
+    tables: &mut Vec<NativeTable>,
+    warnings: &mut Vec<ProcessingWarning>,
+) {
+    if extracted.is_empty() {
+        return;
+    }
+    let source_spans = scripts::page_spans(doc, page_idx, warnings);
+    for extracted_table in extracted {
+        if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
+            continue;
+        }
+        let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
+        if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
+            continue;
+        }
+        let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
+            x0: rect.x as f64,
+            y0: rect.y as f64,
+            x1: (rect.x + rect.width) as f64,
+            y1: (rect.y + rect.height) as f64,
+        });
+        tables.push(NativeTable {
+            scripts: scripts::capture(&extracted_table, &cells, &source_spans),
+            complete_leading_header: complete_leading_header(&extracted_table),
+            table: Table {
+                cells,
+                markdown,
+                page_number: (page_idx + 1) as u32,
+                bounding_box,
+                ..Default::default()
+            },
+            grid,
+        });
+    }
+}
+
+/// Build the `ProcessingWarning` for a page whose native (strict-mode) table detection
+/// failed (issue #74). Named per page and cause so the warning is actionable without
+/// leaking internal file paths or system details.
+fn native_table_extraction_failure_warning(page_number: u32, error: &xberg_native_pdf::Error) -> ProcessingWarning {
+    ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("pdf_tables"),
+        message: std::borrow::Cow::Owned(format!(
+            "table extraction failed for page {page_number}: {error}; tables on this page were skipped"
+        )),
+    }
 }
 
 /// Build the `ProcessingWarning` for a page whose bordered (relaxed Lines-strategy)
@@ -4373,12 +4258,8 @@ mod tests {
     /// Build a 2-column, 5-row stroke-bordered table (outer rect + one
     /// vertical divider + four horizontal dividers) as raw PDF bytes.
     ///
-    /// Hand-built rather than via the (now-removed) `DocumentBuilder`
-    /// writer: the two tests below assert on the GRID structure derived
-    /// from the stroked lines (row/column counts), not on exact text
-    /// placement, so a minimal `re`/`m`/`l`/`S` content stream reproduces
-    /// the same geometry the writer used to emit. Coordinates match the
-    /// original writer-built fixture exactly: outer border
+    /// A minimal `re`/`m`/`l`/`S` content stream reproduces the original
+    /// writer-built fixture geometry: outer border
     /// `50,550` to `400,750` (350x200), vertical divider at `x=200`,
     /// horizontal dividers at `y=710,670,630,590`.
     fn build_two_column_bordered_table_pdf() -> Vec<u8> {
@@ -4449,43 +4330,22 @@ mod tests {
         pdf
     }
 
-    /// `extract_tables_native` (strict, min_table_columns=3) must NOT detect a
-    /// 2-column bordered table. Regression baseline for issue #964.
     #[test]
-    fn extract_tables_native_misses_two_column_bordered_table() {
+    fn ruled_detectors_keep_the_two_column_bordered_table() {
         let bytes = build_two_column_bordered_table_pdf();
-        let mut doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
-        let (tables, warnings) = extract_tables_native(&mut doc).expect("extract_tables_native must not error");
-        assert!(
-            tables.is_empty(),
-            "extract_tables_native (strict, min 3 cols) must not detect a 2-column table; got: {tables:?}"
-        );
-        assert_eq!(
-            warnings.len(),
-            0,
-            "a page with no table (not a failure) must not produce a warning; got: {warnings:?}"
-        );
-    }
-
-    /// `extract_tables_bordered` (relaxed, min_table_columns=2) must detect the
-    /// 2-column stroke-bordered table that `extract_tables_native` skips.
-    #[test]
-    fn extract_tables_bordered_detects_two_column_bordered_table() {
-        let bytes = build_two_column_bordered_table_pdf();
-        let mut doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
-        let skip = HashSet::new();
-        let (tables, warnings) =
-            extract_tables_bordered(&mut doc, &skip).expect("extract_tables_bordered must not error");
-        assert!(
-            !tables.is_empty(),
-            "extract_tables_bordered must detect the 2-column stroke-bordered table"
-        );
+        let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+        let (tables, warnings) = extract_ruled_tables(&doc).expect("extract ruled tables");
+        assert_eq!(tables.len(), 1);
         let table = &tables[0].table;
-        assert_eq!(table.cells.len(), 5, "expected 5 rows, got {}", table.cells.len());
-        assert!(
-            table.cells.iter().all(|row| row.len() == 2),
-            "all rows must have 2 columns; rows: {:?}",
-            table.cells.iter().map(|r| r.len()).collect::<Vec<_>>()
+        assert_eq!(
+            table.cells,
+            [
+                ["Item", "Status"],
+                ["8", "Not correct"],
+                ["27", "Incomplete"],
+                ["29,30", "Missing data"],
+                ["45", "Fixed"],
+            ],
         );
         assert_eq!(table.page_number, 1);
         assert!(!table.markdown.trim().is_empty(), "must produce non-empty markdown");
@@ -4493,26 +4353,6 @@ mod tests {
             warnings.len(),
             0,
             "a successfully detected table must not produce a warning; got: {warnings:?}"
-        );
-    }
-
-    /// `extract_tables_bordered` must skip pages listed in `skip_pages`.
-    #[test]
-    fn extract_tables_bordered_skip_pages_honored() {
-        let bytes = build_two_column_bordered_table_pdf();
-        let mut doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
-        let mut skip = HashSet::new();
-        skip.insert(1u32);
-        let (tables, warnings) =
-            extract_tables_bordered(&mut doc, &skip).expect("extract_tables_bordered must not error");
-        assert!(
-            tables.is_empty(),
-            "skip_pages={{1}} must suppress the only page; got: {tables:?}"
-        );
-        assert_eq!(
-            warnings.len(),
-            0,
-            "a page suppressed by skip_pages must not produce a warning; got: {warnings:?}"
         );
     }
 

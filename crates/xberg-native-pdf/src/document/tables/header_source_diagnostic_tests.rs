@@ -6,6 +6,52 @@ use std::io::Write;
 use std::path::Path;
 
 #[test]
+fn table_configurations_share_one_page_input_and_keep_independent_results() {
+    let bytes =
+        include_bytes!("../../../../../fixtures/repros/table-snapshot-consistency/fixture/wildomar-p17-repro.pdf");
+    let document = PdfDocument::from_bytes(bytes.to_vec()).expect("parse real ruled-table fixture");
+    let strict = TableDetectionConfig::strict();
+    let disabled = TableDetectionConfig {
+        enabled: false,
+        ..strict.clone()
+    };
+    let relaxed = TableDetectionConfig::relaxed();
+    let configs = [&strict, &relaxed, &disabled];
+    let separate = configs.map(|config| {
+        document
+            .extract_tables_with_config(0, config.clone())
+            .expect("detect independently")
+    });
+    assert!(!separate[0].is_empty(), "fixture must exercise actual table extraction");
+    assert!(separate[2].is_empty());
+
+    let (combined, events) = header_source_diagnostic::capture(|| {
+        document
+            .extract_tables_with_configs(0, configs)
+            .expect("detect all configurations from one input")
+    });
+    assert_eq!(
+        combined
+            .each_ref()
+            .map(|tables| header_source_diagnostic::tables(tables)),
+        separate
+            .each_ref()
+            .map(|tables| header_source_diagnostic::tables(tables)),
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event["stage"] == "table_word_spans")
+            .count(),
+        1
+    );
+    assert_eq!(
+        events.iter().filter(|event| event["stage"] == "filtered_paths").count(),
+        1
+    );
+}
+
+#[test]
 #[ignore = "opt-in native source capture; requires an empty /tmp output directory"]
 fn capture_wildomar_native_header_sources() {
     let output = std::env::var_os("XBERG_WILDOMAR_DIAGNOSTIC_DIR").expect("set XBERG_WILDOMAR_DIAGNOSTIC_DIR");
