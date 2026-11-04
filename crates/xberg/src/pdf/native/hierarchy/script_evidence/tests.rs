@@ -322,7 +322,7 @@ fn should_reject_stacked_counterparts_with_unproved_native_context_or_style() {
     let mut scoped = lower.clone();
     scoped.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1));
     let mut rotated_page = lower.clone();
-    rotated_page.page_rotation_applied = true;
+    rotated_page.page_rotation_applied = 90;
     let mut monospace = lower;
     monospace.is_monospace = true;
     let counts: Vec<_> = [heading, scoped, rotated_page, monospace]
