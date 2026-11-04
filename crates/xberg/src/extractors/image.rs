@@ -1391,11 +1391,15 @@ fn sparse_table_page_text(
     use crate::core::config::OutputFormat;
     use crate::types::internal::ElementKind;
 
-    let ([element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+    // The standalone builder always keeps an empty source-image reference. ~keep
+    let ([image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
         return None;
     };
     // TIFF without page tracking can share the standalone page transcript across frames. ~keep
     if !source.ocr_text_claimed_by_tables
+        || !matches!(image.kind, ElementKind::Image { image_index: 0 })
+        || !image.text.is_empty()
+        || !doc.images.is_empty()
         || !matches!(element.kind, ElementKind::Table { table_index: 0 })
         || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot)
         || mime_type.to_lowercase().contains("tiff")
