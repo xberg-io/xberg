@@ -23,6 +23,8 @@ mod document;
 mod markdown;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use markdown::strip_embedded_gfm_tables;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+mod page_window;
 mod pipeline;
 mod plausibility;
 mod rendering;

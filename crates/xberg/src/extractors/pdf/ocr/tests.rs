@@ -5497,6 +5497,153 @@ pub(super) mod tests {
         );
     }
 
+    /// A backend for the #2428 tests: it reads the page index from the PNG width (`10 + index`), awaits
+    /// `answer(index)` and answers with its text, or with `page <index>` when it returns `None`.
+    #[cfg(feature = "ocr")]
+    type PageAnswer = std::pin::Pin<Box<dyn std::future::Future<Output = Option<String>> + Send>>;
+
+    #[cfg(feature = "ocr")]
+    struct PageIndexBackend {
+        name: &'static str,
+        answer: fn(usize) -> PageAnswer,
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for PageIndexBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            _: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            let width = image::load_from_memory(image_bytes).expect("a PNG page").width();
+            let index = (width - 10) as usize;
+            let content = (self.answer)(index).await.unwrap_or_else(|| format!("page {index}"));
+            Ok(crate::types::ExtractedDocument {
+                content,
+                ..Default::default()
+            })
+        }
+        fn confidence_semantics(&self) -> crate::plugins::ConfidenceSemantics {
+            crate::plugins::ConfidenceSemantics::Uncalibrated
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for PageIndexBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Runs `extract_with_ocr_for_page` over `pages` pre-rendered pages with a thread budget of `threads` and
+    /// the backend above, and returns the page texts.
+    #[cfg(feature = "ocr")]
+    async fn page_texts_with_page_index_backend(backend: PageIndexBackend, pages: u32, threads: usize) -> Vec<String> {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+        let name = backend.name;
+        crate::plugins::register_ocr_backend(std::sync::Arc::new(backend)).unwrap();
+        #[allow(clippy::needless_update)]
+        let config = ExtractionConfig {
+            use_cache: false,
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(threads),
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: name.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let images: Vec<_> = (0..pages).map(|i| image::DynamicImage::new_rgb8(10 + i, 10)).collect();
+        let result = extract_with_ocr_for_page(
+            None,
+            Some(&images),
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+            0,
+            false,
+            None,
+            None,
+            0,
+            None,
+        )
+        .await;
+        crate::plugins::unregister_ocr_backend(name).unwrap();
+        result.expect("OCR run").6
+    }
+
+    /// #2428: with a thread budget of two, page 2 must start while page 0 still recognizes. Lockstep
+    /// batches start page 2 only after the whole first batch (pages 0 and 1) finished, so page 0 waits
+    /// out its timeout and answers `lockstep`.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn extract_with_ocr_for_page_starts_a_page_while_an_earlier_page_still_recognizes() {
+        static PAGE_TWO_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        PAGE_TWO_STARTED.store(false, std::sync::atomic::Ordering::SeqCst);
+        let backend = PageIndexBackend {
+            name: "page-window-overlap-test-backend",
+            answer: |index| {
+                Box::pin(async move {
+                    if index == 2 {
+                        PAGE_TWO_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
+                    if index != 0 {
+                        return None;
+                    }
+                    for _ in 0..300 {
+                        if PAGE_TWO_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
+                            return Some("streamed".to_string());
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    }
+                    Some("lockstep".to_string())
+                })
+            },
+        };
+        let texts = page_texts_with_page_index_backend(backend, 3, 2).await;
+        assert_eq!(texts, vec!["streamed", "page 1", "page 2"]);
+    }
+
+    /// #2428: pages that finish out of order still come back in page order. Page 0 is the slowest and
+    /// page 3 the fastest.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn extract_with_ocr_for_page_keeps_page_order_when_pages_finish_out_of_order() {
+        let backend = PageIndexBackend {
+            name: "page-window-order-test-backend",
+            answer: |index| {
+                Box::pin(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(40 * (4 - index.min(4)) as u64)).await;
+                    None
+                })
+            },
+        };
+        let texts = page_texts_with_page_index_backend(backend, 6, 4).await;
+        let expected: Vec<String> = (0..6).map(|i| format!("page {i}")).collect();
+        assert_eq!(texts, expected);
+    }
+
     /// #1575: a rendered PDF page's own OCR backend warnings (e.g. Tesseract's
     /// dictionary-filter removal notice) and its `additional` metadata (psm, language) reached
     /// the caller for a standalone image (`extractors::image`, which assigns the whole OCR

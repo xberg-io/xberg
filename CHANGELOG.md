@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(pdf): OCR of scanned PDF pages no longer waits for a whole batch of pages.** (GH#2428)
+  A page starts recognition as soon as an earlier page frees a slot, and the next pages render while others
+  recognize. Page order and page text do not change.
 - **(ci): Run ParseBench and olmOCR harness controls in benchmark script validation.**
   Initialize the pinned corpus metadata without downloading benchmark PDF datasets.
 - **(dependencies): Update Liter LLM to 2.4.2 and refresh Rust dependency locks.**

@@ -300,6 +300,36 @@ pub(crate) fn describe_page_failure(error: &crate::XbergError) -> String {
     }
 }
 
+/// Record one page's backend result. A failed call degrades to an empty document, so the blank-page
+/// image-XObject fallback still gets its chance before the failure is reported (#1444).
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn page_recognition(
+    document_page_number: usize,
+    upright_correction: (u32, u32, u32),
+    result: crate::Result<crate::types::ExtractedDocument>,
+) -> super::page_window::PageRecognition {
+    match result {
+        Ok(document) => super::page_window::PageRecognition {
+            upright_correction,
+            document,
+            error: None,
+        },
+        Err(error) => {
+            let described = describe_page_failure(&error);
+            tracing::warn!(
+                page = document_page_number,
+                error = %described,
+                "OCR backend failed for page"
+            );
+            super::page_window::PageRecognition {
+                upright_correction,
+                document: crate::types::ExtractedDocument::default(),
+                error: Some(described),
+            }
+        }
+    }
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn push_mixed_ocr_page_failure_warning(
     warnings: &mut Vec<crate::types::ProcessingWarning>,
@@ -2883,71 +2913,15 @@ pub(super) async fn extract_with_ocr_for_page(
         crate::core::diagnostics::push_warning_deduped(&mut backend_page_warnings, warning);
     }
 
-    for batch_start in (0..total_pages).step_by(batch_size) {
-        let batch_end = (batch_start + batch_size).min(total_pages);
-
-        #[allow(unused_variables)]
-        let (batch_slice, encoded_batch) = if let Some(imgs) = images {
-            let slice: Cow<'_, [image::DynamicImage]> = Cow::Borrowed(&imgs[batch_start..batch_end]);
-            let default_security_limits = crate::extractors::security::SecurityLimits::default();
-            let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-            // One page at a time. `max_content_size` bounds what a single page may cost to
-            // render and encode; summing a whole batch against it made that per-image ceiling a
-            // function of the thread budget. On the parallel encode path below, five US Letter
-            // pages at the default 150 dpi already cross the default limit, so an eight-page
-            // batch was refused whole and every page the caller had already rendered was
-            // dropped (#1731). Matches the per-page check the mixed native-and-OCR route runs
-            // at its own encode step. The batch's own footprint is bounded by `batch_size`,
-            // which the thread budget decides; `max_content_size` does not bound it. ~keep
-            validate_png_encode_pages_individually(slice.iter(), security_limits)?;
-            #[allow(clippy::type_complexity)]
-            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = slice
-                .par_iter()
-                .enumerate()
-                .map(|(offset, image)| {
-                    let page_idx = batch_start + offset;
-                    let default_security_limits = crate::extractors::security::SecurityLimits::default();
-                    let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                    let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
-                    let (width, height) = rgb_image.dimensions();
-                    let mut image_bytes = Cursor::new(Vec::new());
-                    let encoder = PngEncoder::new(&mut image_bytes);
-                    encoder
-                        .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
-                        .map_err(|e| crate::XbergError::Parsing {
-                            message: format!("Failed to encode image: {}", e),
-                            source: None,
-                        })?;
-                    Ok((page_idx, Arc::new(image_bytes.into_inner()), width, height))
-                })
-                .collect();
-            #[allow(clippy::type_complexity)]
-            #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-            let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = slice
-                .iter()
-                .enumerate()
-                .map(|(offset, image)| {
-                    let page_idx = batch_start + offset;
-                    let default_security_limits = crate::extractors::security::SecurityLimits::default();
-                    let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                    let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
-                    let (width, height) = rgb_image.dimensions();
-                    let mut image_bytes = Cursor::new(Vec::new());
-                    let encoder = PngEncoder::new(&mut image_bytes);
-                    encoder
-                        .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
-                        .map_err(|e| crate::XbergError::Parsing {
-                            message: format!("Failed to encode image: {}", e),
-                            source: None,
-                        })?;
-                    Ok((page_idx, Arc::new(image_bytes.into_inner()), width, height))
-                })
-                .collect();
-            (Some(slice), encoded?)
-        } else {
+    // #2428: render and recognition overlap. Pages stream through a window instead of lockstep batches: a
+    // finished page frees its recognition slot for the next rendered page at once, and pages reach the
+    // per-page pass below in page order. ~keep
+    let render_pages = |pages: std::ops::Range<usize>| -> crate::Result<Vec<EncodedPage>> {
+        let default_security_limits = crate::extractors::security::SecurityLimits::default();
+        let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
+        let Some(imgs) = images else {
             #[cfg(feature = "pdf")]
-            let encoded = {
+            {
                 let (doc, _, page_rotations) =
                     lazy_pdf_render_state
                         .as_ref()
@@ -2955,162 +2929,323 @@ pub(super) async fn extract_with_ocr_for_page(
                             message: "PDF content is required for OCR rendering but was not provided".to_string(),
                             source: None,
                         })?;
-                let default_security_limits = crate::extractors::security::SecurityLimits::default();
-                let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                render_full_pdf_ocr_batch(
-                    doc,
-                    page_rotations,
-                    batch_start..batch_end,
-                    security_limits,
-                    config.images.as_ref(),
-                )?
-            };
-            #[cfg(not(feature = "pdf"))]
-            let encoded: Vec<(usize, Arc<Vec<u8>>, u32, u32)> = Vec::new();
-            (None::<Cow<'_, [image::DynamicImage]>>, encoded)
-        };
-
-        let batch_count = encoded_batch.len();
-        let mut batch_ocr_results: Vec<Option<crate::types::ExtractedDocument>> = vec![None; batch_count];
-        // Backend error text for a page whose OCR call failed, if any (#1444). The page's
-        // entry in `batch_ocr_results` is an empty document in that case, so the blank-page
-        // image-XObject fallback below gets its chance before the failure is reported.
-        let mut batch_page_errors: Vec<Option<String>> = vec![None; batch_count];
-        // (correction_degrees, upright_width, upright_height) applied by
-        // `upright_raster_for_backend` before this page's backend call, so the matching
-        // `undo_upright_raster_correction` below maps the result back correctly (#643).
-        let mut batch_upright_correction: Vec<(u32, u32, u32)> = vec![(0, 0, 0); batch_count];
-
-        // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
-        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-        {
-            let mut join_set: JoinSet<(usize, u32, u32, u32, crate::Result<crate::types::ExtractedDocument>)> =
-                JoinSet::new();
-            for (page_idx, image_data, width, height) in &encoded_batch {
-                let idx = *page_idx;
-                let cancel_token = config.cancel_token.clone();
-                // Every iteration must spawn exactly one task: the drain loop below and the
-                // `for offset in 0..batch_count` pass after it both index `batch_ocr_results`
-                // by position and `.expect()` a `Some` at every offset (#1620-style
-                // invariant), so a cancelled page still needs an entry -- it just skips the
-                // real OCR work to get it. ~keep
-                if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    join_set.spawn(crate::engine::seams::inherit_progress(async move {
-                        (idx, 0, 0, 0, Err(crate::XbergError::Cancelled))
-                    }));
-                    continue;
-                }
-                let backend_clone = std::sync::Arc::clone(&backend);
-                #[cfg(feature = "pdf")]
-                let page_rotation_degrees = if page_rotation_override != 0 {
-                    page_rotation_override
-                } else {
-                    lazy_pdf_render_state
-                        .as_ref()
-                        .and_then(|(_, _, rotations)| rotations.get(*page_idx))
-                        .or_else(|| external_image_page_rotations.as_ref().and_then(|r| r.get(*page_idx)))
-                        .copied()
-                        .unwrap_or(0)
-                };
-                #[cfg(not(feature = "pdf"))]
-                let page_rotation_degrees: u32 = 0;
-                // `lazy_pdf_render_state` marks the branch that rendered the pages itself (it is
-                // only opened when `images.is_none()`, see its `let` above). Pre-rendered images
-                // reach the same answer from the source document's MediaBox instead, and stay
-                // hint-free when they are not a whole-page render of it (#1753).
-                #[cfg(feature = "pdf")]
-                let source_dpi = page_ocr_hints.as_ref().and_then(|hints| hints.source_dpi).or_else(|| {
-                    lazy_pdf_render_state
-                        .as_ref()
-                        .and_then(|(doc, _, _)| rendered_page_source_dpi(doc, *page_idx, *width))
-                        .or_else(|| {
-                            external_image_page_dimensions
-                                .and_then(|dimensions| dimensions.get(*page_idx))
-                                .and_then(|dimensions| pre_rendered_page_source_dpi(*dimensions, *width, *height))
-                        })
-                });
-                #[cfg(not(feature = "pdf"))]
-                let source_dpi: Option<f64> = None;
-                #[cfg(feature = "pdf")]
-                let whole_page_raster = page_ocr_hints
-                    .as_ref()
-                    .filter(|hints| hints.known_full_page_scan)
-                    .map_or_else(
-                        || {
-                            whole_page_raster_for_ocr_page(
-                                lazy_pdf_render_state.as_ref(),
-                                &mut fallback_pdf_state,
-                                content,
-                                *page_idx,
-                            )
-                        },
-                        |_| true,
-                    );
-                #[cfg(not(feature = "pdf"))]
-                let whole_page_raster = false;
-                #[cfg(feature = "pdf")]
-                let prefer_single_block = single_block_for_ocr_page(
-                    page_ocr_hints
-                        .as_ref()
-                        .and_then(|hints| hints.single_block_pages.as_deref()),
-                    page_index_offset + *page_idx + 1,
-                    lazy_pdf_render_state.as_ref(),
-                    &mut fallback_pdf_state,
-                    content,
-                    *page_idx,
-                );
-                #[cfg(not(feature = "pdf"))]
-                let prefer_single_block = false;
-                let config_clone = ocr_config_with_page_rotation_hint(
-                    &ocr_config_owned,
-                    page_rotation_degrees,
-                    source_dpi,
-                    whole_page_raster,
-                    prefer_single_block,
-                    has_layout_detections,
-                )
-                .into_owned();
-                let original_config = ocr_config_owned.clone();
-                // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
-                // is always `0` above in that build), so there is nothing to correct upright.
-                #[cfg(feature = "pdf")]
-                let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
-                    image_data,
-                    *width,
-                    *height,
-                    page_rotation_degrees,
-                    orientation_handling,
-                    config.security_limits.as_ref(),
-                )?;
-                #[cfg(not(feature = "pdf"))]
-                let (upright_data, upright_width, upright_height, correction_degrees) =
-                    (Arc::clone(image_data), *width, *height, 0u32);
-                join_set.spawn(crate::engine::seams::inherit_progress(async move {
-                    if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                        return (
-                            idx,
-                            correction_degrees,
-                            upright_width,
-                            upright_height,
-                            Err(crate::XbergError::Cancelled),
-                        );
-                    }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                        &backend_clone,
-                        upright_data,
-                        &original_config,
-                        &config_clone,
-                        crate::extractors::image::SparseRetryPolicy {
-                            whole_page_raster,
-                            allow_standard_retry: false,
-                        },
-                        cancel_token.as_ref(),
-                    )
-                    .await;
-                    (idx, correction_degrees, upright_width, upright_height, result)
-                }));
+                return render_full_pdf_ocr_batch(doc, page_rotations, pages, security_limits, config.images.as_ref());
             }
-            while let Some(join_result) = join_set.join_next().await {
+            #[cfg(not(feature = "pdf"))]
+            return Ok(Vec::new());
+        };
+        let first_page = pages.start;
+        let slice = &imgs[pages];
+        // One page at a time. `max_content_size` bounds what a single page may cost to
+        // render and encode; summing a whole batch against it made that per-image ceiling a
+        // function of the thread budget. On the parallel encode path below, five US Letter
+        // pages at the default 150 dpi already cross the default limit, so an eight-page
+        // batch was refused whole and every page the caller had already rendered was
+        // dropped (#1731). Matches the per-page check the mixed native-and-OCR route runs
+        // at its own encode step. The batch's own footprint is bounded by `batch_size`,
+        // which the thread budget decides; `max_content_size` does not bound it. ~keep
+        validate_png_encode_pages_individually(slice.iter(), security_limits)?;
+        let encode_page = |offset: usize, image: &image::DynamicImage| -> crate::Result<EncodedPage> {
+            let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
+            let (width, height) = rgb_image.dimensions();
+            let mut image_bytes = Cursor::new(Vec::new());
+            let encoder = PngEncoder::new(&mut image_bytes);
+            encoder
+                .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
+                .map_err(|e| crate::XbergError::Parsing {
+                    message: format!("Failed to encode image: {}", e),
+                    source: None,
+                })?;
+            Ok((first_page + offset, Arc::new(image_bytes.into_inner()), width, height))
+        };
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        return slice
+            .par_iter()
+            .enumerate()
+            .map(|(offset, image)| encode_page(offset, image))
+            .collect();
+        #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+        return slice
+            .iter()
+            .enumerate()
+            .map(|(offset, image)| encode_page(offset, image))
+            .collect();
+    };
+
+    // Without tokio there is no task to run a page beside another, so one page recognizes at a time.
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let recognition_slots = batch_size;
+    #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+    let recognition_slots = 1;
+    let mut window = super::page_window::PageWindow::new(total_pages, recognition_slots);
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut join_set: JoinSet<(usize, u32, u32, u32, crate::Result<crate::types::ExtractedDocument>)> = JoinSet::new();
+
+    loop {
+        let ready = loop {
+            while let Some((page_idx, image_data, width, height)) = window.next_to_recognize() {
+                // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
+                #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                {
+                    let idx = page_idx;
+                    let cancel_token = config.cancel_token.clone();
+                    // Every launched page must spawn exactly one task: the window hands a page to the
+                    // per-page pass below only once its recognition is recorded, so a cancelled page
+                    // still needs an entry -- it just skips the real OCR work to get it. ~keep
+                    if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                        join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                            (idx, 0, 0, 0, Err(crate::XbergError::Cancelled))
+                        }));
+                        continue;
+                    }
+                    let backend_clone = std::sync::Arc::clone(&backend);
+                    #[cfg(feature = "pdf")]
+                    let page_rotation_degrees = if page_rotation_override != 0 {
+                        page_rotation_override
+                    } else {
+                        lazy_pdf_render_state
+                            .as_ref()
+                            .and_then(|(_, _, rotations)| rotations.get(page_idx))
+                            .or_else(|| external_image_page_rotations.as_ref().and_then(|r| r.get(page_idx)))
+                            .copied()
+                            .unwrap_or(0)
+                    };
+                    #[cfg(not(feature = "pdf"))]
+                    let page_rotation_degrees: u32 = 0;
+                    // `lazy_pdf_render_state` marks the branch that rendered the pages itself (it is
+                    // only opened when `images.is_none()`, see its `let` above). Pre-rendered images
+                    // reach the same answer from the source document's MediaBox instead, and stay
+                    // hint-free when they are not a whole-page render of it (#1753).
+                    #[cfg(feature = "pdf")]
+                    let source_dpi = page_ocr_hints.as_ref().and_then(|hints| hints.source_dpi).or_else(|| {
+                        lazy_pdf_render_state
+                            .as_ref()
+                            .and_then(|(doc, _, _)| rendered_page_source_dpi(doc, page_idx, width))
+                            .or_else(|| {
+                                external_image_page_dimensions
+                                    .and_then(|dimensions| dimensions.get(page_idx))
+                                    .and_then(|dimensions| pre_rendered_page_source_dpi(*dimensions, width, height))
+                            })
+                    });
+                    #[cfg(not(feature = "pdf"))]
+                    let source_dpi: Option<f64> = None;
+                    #[cfg(feature = "pdf")]
+                    let whole_page_raster = page_ocr_hints
+                        .as_ref()
+                        .filter(|hints| hints.known_full_page_scan)
+                        .map_or_else(
+                            || {
+                                whole_page_raster_for_ocr_page(
+                                    lazy_pdf_render_state.as_ref(),
+                                    &mut fallback_pdf_state,
+                                    content,
+                                    page_idx,
+                                )
+                            },
+                            |_| true,
+                        );
+                    #[cfg(not(feature = "pdf"))]
+                    let whole_page_raster = false;
+                    #[cfg(feature = "pdf")]
+                    let prefer_single_block = single_block_for_ocr_page(
+                        page_ocr_hints
+                            .as_ref()
+                            .and_then(|hints| hints.single_block_pages.as_deref()),
+                        page_index_offset + page_idx + 1,
+                        lazy_pdf_render_state.as_ref(),
+                        &mut fallback_pdf_state,
+                        content,
+                        page_idx,
+                    );
+                    #[cfg(not(feature = "pdf"))]
+                    let prefer_single_block = false;
+                    let config_clone = ocr_config_with_page_rotation_hint(
+                        &ocr_config_owned,
+                        page_rotation_degrees,
+                        source_dpi,
+                        whole_page_raster,
+                        prefer_single_block,
+                        has_layout_detections,
+                    )
+                    .into_owned();
+                    let original_config = ocr_config_owned.clone();
+                    // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
+                    // is always `0` above in that build), so there is nothing to correct upright.
+                    #[cfg(feature = "pdf")]
+                    let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
+                        &image_data,
+                        width,
+                        height,
+                        page_rotation_degrees,
+                        orientation_handling,
+                        config.security_limits.as_ref(),
+                    )?;
+                    #[cfg(not(feature = "pdf"))]
+                    let (upright_data, upright_width, upright_height, correction_degrees) =
+                        (Arc::clone(&image_data), width, height, 0u32);
+                    join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                        if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                            return (
+                                idx,
+                                correction_degrees,
+                                upright_width,
+                                upright_height,
+                                Err(crate::XbergError::Cancelled),
+                            );
+                        }
+                        let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                            &backend_clone,
+                            upright_data,
+                            &original_config,
+                            &config_clone,
+                            crate::extractors::image::SparseRetryPolicy {
+                                whole_page_raster,
+                                allow_standard_retry: false,
+                            },
+                            cancel_token.as_ref(),
+                        )
+                        .await;
+                        (idx, correction_degrees, upright_width, upright_height, result)
+                    }));
+                }
+                #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+                {
+                    #[cfg(feature = "pdf")]
+                    let page_rotation_degrees = if page_rotation_override != 0 {
+                        page_rotation_override
+                    } else {
+                        lazy_pdf_render_state
+                            .as_ref()
+                            .and_then(|(_, _, rotations)| rotations.get(page_idx))
+                            .or_else(|| external_image_page_rotations.as_ref().and_then(|r| r.get(page_idx)))
+                            .copied()
+                            .unwrap_or(0)
+                    };
+                    #[cfg(not(feature = "pdf"))]
+                    let page_rotation_degrees: u32 = 0;
+                    // See the JoinSet branch above for both derivations.
+                    #[cfg(feature = "pdf")]
+                    let source_dpi = page_ocr_hints.as_ref().and_then(|hints| hints.source_dpi).or_else(|| {
+                        lazy_pdf_render_state
+                            .as_ref()
+                            .and_then(|(doc, _, _)| rendered_page_source_dpi(doc, page_idx, width))
+                            .or_else(|| {
+                                external_image_page_dimensions
+                                    .and_then(|dimensions| dimensions.get(page_idx))
+                                    .and_then(|dimensions| pre_rendered_page_source_dpi(*dimensions, width, height))
+                            })
+                    });
+                    #[cfg(not(feature = "pdf"))]
+                    let source_dpi: Option<f64> = None;
+                    #[cfg(feature = "pdf")]
+                    let whole_page_raster = page_ocr_hints
+                        .as_ref()
+                        .filter(|hints| hints.known_full_page_scan)
+                        .map_or_else(
+                            || {
+                                whole_page_raster_for_ocr_page(
+                                    lazy_pdf_render_state.as_ref(),
+                                    &mut fallback_pdf_state,
+                                    content,
+                                    page_idx,
+                                )
+                            },
+                            |_| true,
+                        );
+                    #[cfg(not(feature = "pdf"))]
+                    let whole_page_raster = false;
+                    #[cfg(feature = "pdf")]
+                    let prefer_single_block = single_block_for_ocr_page(
+                        page_ocr_hints
+                            .as_ref()
+                            .and_then(|hints| hints.single_block_pages.as_deref()),
+                        page_index_offset + page_idx + 1,
+                        lazy_pdf_render_state.as_ref(),
+                        &mut fallback_pdf_state,
+                        content,
+                        page_idx,
+                    );
+                    #[cfg(not(feature = "pdf"))]
+                    let prefer_single_block = false;
+                    let config_for_page = ocr_config_with_page_rotation_hint(
+                        &ocr_config_owned,
+                        page_rotation_degrees,
+                        source_dpi,
+                        whole_page_raster,
+                        prefer_single_block,
+                        has_layout_detections,
+                    );
+                    #[cfg(feature = "pdf")]
+                    let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
+                        &image_data,
+                        width,
+                        height,
+                        page_rotation_degrees,
+                        orientation_handling,
+                        config.security_limits.as_ref(),
+                    )?;
+                    #[cfg(not(feature = "pdf"))]
+                    let (upright_data, upright_width, upright_height, correction_degrees) =
+                        (Arc::clone(&image_data), width, height, 0u32);
+                    // A cancelled page still needs a recognition entry -- see the ~keep comment on the
+                    // sibling `JoinSet` branch above -- so this skips the backend call rather than
+                    // breaking the loop.
+                    let ocr_result = if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                        Err(crate::XbergError::Cancelled)
+                    } else {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                                backend,
+                                upright_data,
+                                &ocr_config_owned,
+                                config_for_page.as_ref(),
+                                crate::extractors::image::SparseRetryPolicy {
+                                    whole_page_raster,
+                                    allow_standard_retry: false,
+                                },
+                                config.cancel_token.as_ref(),
+                            )
+                            .await
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            backend
+                                .process_image(upright_data.as_slice(), config_for_page.as_ref())
+                                .await
+                        }
+                    };
+                    crate::engine::seams::emit_ocr_page(
+                        page_index_offset + page_idx + 1,
+                        progress_total_pages,
+                        backend_name.as_str(),
+                    );
+                    window.finish(
+                        page_idx,
+                        page_recognition(
+                            page_index_offset + page_idx + 1,
+                            (correction_degrees, upright_width, upright_height),
+                            ocr_result,
+                        ),
+                    );
+                }
+            }
+            if let Some(ready) = window.take_ready() {
+                break Some(ready);
+            }
+            if let Some(error) = window.take_render_error() {
+                return Err(error.into());
+            }
+            let pages = window.pages_to_render();
+            if !pages.is_empty() {
+                match render_pages(pages) {
+                    Ok(rendered) => window.push_rendered(rendered),
+                    Err(error) => window.hold_render_error(error),
+                }
+                continue;
+            }
+            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Some(join_result) = join_set.join_next().await {
                 let (page_idx, correction_degrees, upright_width, upright_height, ocr_result) =
                     join_result.map_err(|e| crate::XbergError::Plugin {
                         message: format!("OCR task panicked: {}", e),
@@ -3121,151 +3256,36 @@ pub(super) async fn extract_with_ocr_for_page(
                     progress_total_pages,
                     backend_name.as_str(),
                 );
-                batch_upright_correction[page_idx - batch_start] = (correction_degrees, upright_width, upright_height);
-                match ocr_result {
-                    Ok(document) => batch_ocr_results[page_idx - batch_start] = Some(document),
-                    Err(error) => {
-                        let described = describe_page_failure(&error);
-                        tracing::warn!(
-                            page = page_index_offset + page_idx + 1,
-                            error = %described,
-                            "OCR backend failed for page"
-                        );
-                        batch_page_errors[page_idx - batch_start] = Some(described);
-                        batch_ocr_results[page_idx - batch_start] = Some(crate::types::ExtractedDocument::default());
-                    }
-                }
+                window.finish(
+                    page_idx,
+                    page_recognition(
+                        page_index_offset + page_idx + 1,
+                        (correction_degrees, upright_width, upright_height),
+                        ocr_result,
+                    ),
+                );
+                continue;
             }
-        }
-        #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-        {
-            for (page_idx, image_data, width, height) in &encoded_batch {
-                #[cfg(feature = "pdf")]
-                let page_rotation_degrees = if page_rotation_override != 0 {
-                    page_rotation_override
-                } else {
-                    lazy_pdf_render_state
-                        .as_ref()
-                        .and_then(|(_, _, rotations)| rotations.get(*page_idx))
-                        .or_else(|| external_image_page_rotations.as_ref().and_then(|r| r.get(*page_idx)))
-                        .copied()
-                        .unwrap_or(0)
-                };
-                #[cfg(not(feature = "pdf"))]
-                let page_rotation_degrees: u32 = 0;
-                // See the JoinSet branch above for both derivations.
-                #[cfg(feature = "pdf")]
-                let source_dpi = page_ocr_hints.as_ref().and_then(|hints| hints.source_dpi).or_else(|| {
-                    lazy_pdf_render_state
-                        .as_ref()
-                        .and_then(|(doc, _, _)| rendered_page_source_dpi(doc, *page_idx, *width))
-                        .or_else(|| {
-                            external_image_page_dimensions
-                                .and_then(|dimensions| dimensions.get(*page_idx))
-                                .and_then(|dimensions| pre_rendered_page_source_dpi(*dimensions, *width, *height))
-                        })
-                });
-                #[cfg(not(feature = "pdf"))]
-                let source_dpi: Option<f64> = None;
-                #[cfg(feature = "pdf")]
-                let whole_page_raster = page_ocr_hints
-                    .as_ref()
-                    .filter(|hints| hints.known_full_page_scan)
-                    .map_or_else(
-                        || {
-                            whole_page_raster_for_ocr_page(
-                                lazy_pdf_render_state.as_ref(),
-                                &mut fallback_pdf_state,
-                                content,
-                                *page_idx,
-                            )
-                        },
-                        |_| true,
-                    );
-                #[cfg(not(feature = "pdf"))]
-                let whole_page_raster = false;
-                #[cfg(feature = "pdf")]
-                let prefer_single_block = single_block_for_ocr_page(
-                    page_ocr_hints
-                        .as_ref()
-                        .and_then(|hints| hints.single_block_pages.as_deref()),
-                    page_index_offset + *page_idx + 1,
-                    lazy_pdf_render_state.as_ref(),
-                    &mut fallback_pdf_state,
-                    content,
-                    *page_idx,
-                );
-                #[cfg(not(feature = "pdf"))]
-                let prefer_single_block = false;
-                let config_for_page = ocr_config_with_page_rotation_hint(
-                    &ocr_config_owned,
-                    page_rotation_degrees,
-                    source_dpi,
-                    whole_page_raster,
-                    prefer_single_block,
-                    has_layout_detections,
-                );
-                #[cfg(feature = "pdf")]
-                let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
-                    image_data,
-                    *width,
-                    *height,
-                    page_rotation_degrees,
-                    orientation_handling,
-                    config.security_limits.as_ref(),
-                )?;
-                #[cfg(not(feature = "pdf"))]
-                let (upright_data, upright_width, upright_height, correction_degrees) =
-                    (Arc::clone(image_data), *width, *height, 0u32);
-                // A cancelled page still needs a `batch_ocr_results` entry -- see the ~keep
-                // comment on the sibling `JoinSet` branch above -- so this skips the backend
-                // call rather than breaking the loop.
-                let ocr_result = if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    Err(crate::XbergError::Cancelled)
-                } else {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                            backend,
-                            upright_data,
-                            &ocr_config_owned,
-                            config_for_page.as_ref(),
-                            crate::extractors::image::SparseRetryPolicy {
-                                whole_page_raster,
-                                allow_standard_retry: false,
-                            },
-                            config.cancel_token.as_ref(),
-                        )
-                        .await
-                    }
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        backend
-                            .process_image(upright_data.as_slice(), config_for_page.as_ref())
-                            .await
-                    }
-                };
-                crate::engine::seams::emit_ocr_page(
-                    page_index_offset + *page_idx + 1,
-                    progress_total_pages,
-                    backend_name.as_str(),
-                );
-                batch_upright_correction[page_idx - batch_start] = (correction_degrees, upright_width, upright_height);
-                match ocr_result {
-                    Ok(document) => batch_ocr_results[page_idx - batch_start] = Some(document),
-                    Err(error) => {
-                        let described = describe_page_failure(&error);
-                        tracing::warn!(
-                            page = page_index_offset + page_idx + 1,
-                            error = %described,
-                            "OCR backend failed for page"
-                        );
-                        batch_page_errors[page_idx - batch_start] = Some(described);
-                        batch_ocr_results[page_idx - batch_start] = Some(crate::types::ExtractedDocument::default());
-                    }
-                }
-            }
-        }
+            break None;
+        };
+        let Some(ready) = ready else {
+            break;
+        };
+        let batch_start = ready.first_page;
+        let encoded_batch = ready.encoded;
+        let batch_count = encoded_batch.len();
+        let mut batch_ocr_results = ready.documents;
+        // Backend error text for a page whose OCR call failed, if any (#1444). The page's
+        // entry in `batch_ocr_results` is an empty document in that case, so the blank-page
+        // image-XObject fallback below gets its chance before the failure is reported.
+        let mut batch_page_errors = ready.errors;
+        // (correction_degrees, upright_width, upright_height) applied by
+        // `upright_raster_for_backend` before this page's backend call, so the matching
+        // `undo_upright_raster_correction` below maps the result back correctly (#643).
+        let batch_upright_correction = ready.upright_corrections;
+        #[allow(unused_variables)]
+        let batch_slice: Option<Cow<'_, [image::DynamicImage]>> =
+            images.map(|imgs| Cow::Borrowed(&imgs[batch_start..batch_start + batch_count]));
 
         for offset in 0..batch_count {
             let page_idx = batch_start + offset;
