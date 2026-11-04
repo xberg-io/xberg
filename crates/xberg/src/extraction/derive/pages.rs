@@ -7,7 +7,7 @@ use crate::types::ocr_elements::{OcrConfidence, OcrElement};
 use crate::types::page::PageContent;
 use crate::types::tables::Table;
 
-use super::surfaces::HtmlPageBody;
+use super::surfaces::MarkupPageBody;
 
 pub(super) fn derive_pages(
     doc: &mut InternalDocument,
@@ -216,21 +216,21 @@ pub(super) fn apply_page_content_format(
 ) -> Option<Vec<PageContent>> {
     use crate::core::config::OutputFormat;
 
-    let observe_html = observer.captures_html()
-        && (matches!(output_format, OutputFormat::Html)
+    let observe_markup = observer.captures_verified_markup()
+        && (matches!(output_format, OutputFormat::Html | OutputFormat::Djot)
             || matches!(output_format, OutputFormat::Custom(name) if name == "html"));
     let renderer: Option<fn(&InternalDocument) -> String> = match output_format {
         OutputFormat::Markdown => Some(crate::rendering::render_markdown),
         OutputFormat::Djot => Some(crate::rendering::render_djot),
         OutputFormat::Html => Some(crate::rendering::render_html),
         OutputFormat::DocTags => Some(crate::rendering::render_doctags),
-        OutputFormat::Custom(_) if observe_html => None,
+        OutputFormat::Custom(_) if observe_markup => None,
         OutputFormat::Plain | OutputFormat::Json | OutputFormat::Custom(_) => return pages,
     };
 
     let pages = pages?;
     let elements_by_page = compute_page_membership(doc);
-    if elements_by_page.is_empty() && !observe_html {
+    if elements_by_page.is_empty() && !observe_markup {
         return Some(pages);
     }
 
@@ -240,7 +240,7 @@ pub(super) fn apply_page_content_format(
         .map(|(index, page)| match elements_by_page.get(&page.page_number) {
             Some(elem_indices) => render_sub_page(page, elem_indices, doc, renderer, (index, output_format), observer),
             None => {
-                if observe_html {
+                if observe_markup {
                     // No page body was rendered. Only an empty original has no unproved payload. ~keep
                     observe_literal_page(&page, index, "", observer);
                 }
@@ -373,21 +373,29 @@ fn render_observed_page(
 ) -> PageContent {
     use crate::core::config::OutputFormat;
     let rendered = match renderer {
-        Some(_) if matches!(format, OutputFormat::Html) && observer.captures_html() => {
+        Some(renderer)
+            if observer.captures_verified_markup() && matches!(format, OutputFormat::Html | OutputFormat::Djot) =>
+        {
             let plain = crate::rendering::render_plain(doc);
-            let (rendered, verified) = crate::rendering::render_html_checked(doc, Some(&plain));
+            let (rendered, verified) = if matches!(format, OutputFormat::Html) {
+                crate::rendering::render_html_checked(doc, Some(&plain))
+            } else {
+                let rendered = renderer(doc);
+                let verified = crate::rendering::has_djot_plain_body(doc);
+                (rendered, verified)
+            };
             if rendered.is_empty() {
                 observe_literal_page(&page, index, &plain, observer);
             } else {
                 let body = if verified {
-                    HtmlPageBody::Rendered(
+                    MarkupPageBody::Rendered(
                         #[cfg(feature = "redaction")]
                         plain,
                     )
                 } else {
-                    HtmlPageBody::Unverified
+                    MarkupPageBody::Unverified
                 };
-                observer.page_html(index, &rendered, body);
+                observer.page_markup(index, &rendered, body);
             }
             rendered
         }
@@ -420,11 +428,11 @@ fn observe_literal_page(
     observer: &mut impl super::surfaces::DerivationObserver,
 ) {
     let body = if page.content == plain {
-        HtmlPageBody::Literal
+        MarkupPageBody::Literal
     } else {
-        HtmlPageBody::Unverified
+        MarkupPageBody::Unverified
     };
-    observer.page_html(index, &page.content, body);
+    observer.page_markup(index, &page.content, body);
 }
 
 /// Extract `OcrElement` entries from OCR-typed internal elements.

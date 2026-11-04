@@ -79,6 +79,19 @@ impl RedactionProcessor {
             });
         }
 
+        use crate::core::config::OutputFormat;
+        let djot = matches!(&config.output_format, OutputFormat::Djot)
+            || matches!(&config.output_format, OutputFormat::Custom(name) if name == "djot");
+        if djot
+            && result.formatted_content.is_some()
+            && surfaces.formatted_markup() != Some(crate::extraction::derive::surfaces::VerifiedMarkup::Djot)
+        {
+            return Err(crate::XbergError::Plugin {
+                plugin_name: self.name().into(),
+                message: "Djot redaction requires verified renderer output".into(),
+            });
+        }
+
         tracing::info!(
             target: "xberg::redaction",
             strategy = ?redaction_config.strategy,

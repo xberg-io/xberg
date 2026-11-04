@@ -34,7 +34,7 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
         };
         result.seal_processor_witness();
         if outcome.is_ok() {
-            result.seal_redacted_html()?;
+            result.seal_redacted_markup()?;
         }
         return outcome;
     }
@@ -43,7 +43,7 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
         let witness = result.processor_witness();
         let outcome = processor.process(result.document_mut(), config).await;
         result.observe_processor(witness);
-        result.validate_sealed_html(config)?;
+        result.validate_sealed_markup(config)?;
         outcome
     }
     #[cfg(not(feature = "redaction"))]
@@ -125,7 +125,10 @@ pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfa
 }
 
 /// Determine if a processor should run based on configuration.
-fn should_processor_run(pp_config: &Option<&crate::core::config::PostProcessorConfig>, processor_name: &str) -> bool {
+pub(super) fn should_processor_run(
+    pp_config: &Option<&crate::core::config::PostProcessorConfig>,
+    processor_name: &str,
+) -> bool {
     if let Some(config) = pp_config {
         if let Some(ref enabled_set) = config.enabled_set {
             enabled_set.contains(processor_name)

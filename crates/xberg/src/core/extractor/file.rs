@@ -501,7 +501,13 @@ pub(crate) async fn extract_with_candidates(
                         ),
                     );
                 }
-                let result = Box::pin(crate::core::pipeline::run_pipeline(doc, config)).await?;
+                let builtin_html = candidate.is_builtin() && candidate.plugin().name() == "html-extractor";
+                let result = Box::pin(crate::core::pipeline::run_pipeline_from_extractor(
+                    doc,
+                    config,
+                    builtin_html,
+                ))
+                .await?;
                 return Ok(result);
             }
             Err(e) if index + 1 < candidate_count && is_extractor_fallback_eligible(&e) => {
@@ -886,7 +892,13 @@ pub(in crate::core::extractor) async fn extract_bytes_with_extractor_and_layout_
 
     ensure_builtin_extraction_method(&mut doc, is_builtin);
 
-    let result = Box::pin(crate::core::pipeline::run_pipeline(doc, config)).await?;
+    let builtin_html = is_builtin && extractor.name() == "html-extractor";
+    let result = Box::pin(crate::core::pipeline::run_pipeline_from_extractor(
+        doc,
+        config,
+        builtin_html,
+    ))
+    .await?;
     Ok(result)
 }
 

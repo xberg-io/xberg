@@ -702,19 +702,13 @@ fn compute_formatted_content_observed(
                 Some(text)
             }
         }
-        crate::core::config::OutputFormat::Djot => {
-            if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("djot") {
-                doc.pre_rendered_content.take()
-            } else {
-                Some(crate::rendering::render_djot(doc))
-            }
-        }
+        crate::core::config::OutputFormat::Djot => surfaces::derive_djot(doc, observer, plain_from_ir),
         crate::core::config::OutputFormat::Html => {
             let (rendered, verified) =
                 if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("html") {
                     (doc.pre_rendered_content.take()?, false)
                 } else {
-                    crate::rendering::render_html_checked(doc, observer.captures_html().then_some(plain))
+                    crate::rendering::render_html_checked(doc, observer.captures_verified_markup().then_some(plain))
                 };
             observer.formatted_html(&rendered, verified);
             Some(rendered)
@@ -750,7 +744,7 @@ fn compute_custom_formatted_content(
     crate::plugins::ensure_renderers_initialized();
     let registry = crate::plugins::registry::get_renderer_registry();
     let registry = registry.read();
-    if observer.captures_html() && registry.renders_html(name) {
+    if observer.captures_verified_markup() && registry.renders_html(name) {
         let (rendered, verified) = crate::rendering::render_html_checked(doc, Some(plain));
         observer.formatted_html(&rendered, verified);
         return Some(rendered);

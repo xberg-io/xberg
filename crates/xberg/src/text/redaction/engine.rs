@@ -32,7 +32,7 @@ use super::formatted::{
 };
 use crate::Result;
 use crate::core::config::redaction::{ExternalRedactionFinding, RedactionConfig, RedactionOffsetEncoding};
-use crate::extraction::derive::surfaces::RedactionSurfaces;
+use crate::extraction::derive::surfaces::{RedactionSurfaces, VerifiedMarkup};
 use crate::extractors::security::SecurityLimits;
 use crate::types::ExtractedDocument;
 use crate::types::entity::{Entity, EntityCategory};
@@ -306,7 +306,14 @@ fn redact_pass(
             "HTML redaction requires verified renderer output",
         ));
     }
-    validate_nested_html(result, limits.max_iterations)?;
+    if result.metadata.output_format.as_deref() == Some("djot")
+        && surfaces.formatted_markup() != Some(VerifiedMarkup::Djot)
+    {
+        return Err(crate::XbergError::validation(
+            "Djot redaction requires verified renderer output",
+        ));
+    }
+    validate_nested_markup(result, limits.max_iterations)?;
     let active = if include_configured_sources {
         active_categories(config)
     } else {
@@ -314,7 +321,7 @@ fn redact_pass(
     };
     let categories: Vec<PiiCategory> = active.iter().cloned().collect();
     let custom = if include_configured_sources {
-        compile_custom(config, surfaces.formatted_html())?
+        compile_custom(config, surfaces.formatted_markup().is_some())?
     } else {
         CompiledCustom::default()
     };
@@ -356,12 +363,12 @@ fn redact_pass(
     Ok(pass.counter)
 }
 
-pub(crate) fn validate_nested_html(doc: &ExtractedDocument, max_iterations: usize) -> Result<()> {
+pub(crate) fn validate_nested_markup(doc: &ExtractedDocument, max_iterations: usize) -> Result<()> {
     let mut remaining = max_iterations;
-    reject_nested_html(doc, 0, &mut remaining)
+    reject_nested_markup(doc, 0, &mut remaining)
 }
 
-fn reject_nested_html(doc: &ExtractedDocument, depth: usize, remaining: &mut usize) -> Result<()> {
+fn reject_nested_markup(doc: &ExtractedDocument, depth: usize, remaining: &mut usize) -> Result<()> {
     let images = doc.images.as_deref().unwrap_or_default();
     let children = doc.children.as_deref().unwrap_or_default();
     *remaining = remaining
@@ -383,7 +390,12 @@ fn reject_nested_html(doc: &ExtractedDocument, depth: usize, remaining: &mut usi
                 "Nested HTML redaction requires verified renderer output",
             ));
         }
-        reject_nested_html(nested, depth + 1, remaining)?;
+        if nested.metadata.output_format.as_deref() == Some("djot") {
+            return Err(crate::XbergError::validation(
+                "Nested Djot redaction requires verified renderer output",
+            ));
+        }
+        reject_nested_markup(nested, depth + 1, remaining)?;
     }
     Ok(())
 }
@@ -415,8 +427,8 @@ impl<'a> RedactionPass<'a> {
         surfaces: &'a impl RedactionSurfaces,
         limits: &SecurityLimits,
     ) -> Result<SurfacePlans<'a>> {
-        if surfaces.formatted_html() {
-            return self.plan_html_surfaces(doc, surfaces, limits);
+        if let Some(kind) = surfaces.formatted_markup() {
+            return self.plan_verified_surfaces(doc, surfaces, limits, kind);
         }
         let mut plans = SurfacePlans::default();
         if let Some(source) = surfaces.formatted_literal_backup() {
@@ -483,12 +495,14 @@ impl<'a> RedactionPass<'a> {
         Ok(FormattedPlan::Discard)
     }
 
-    fn plan_html_surfaces(
+    fn plan_verified_surfaces(
         &self,
         doc: &ExtractedDocument,
         surfaces: &'a impl RedactionSurfaces,
         limits: &SecurityLimits,
+        kind: VerifiedMarkup,
     ) -> Result<SurfacePlans<'a>> {
+        let html = kind == VerifiedMarkup::Html;
         let budget = HtmlBudget::new(limits);
         let plan = |plain: &str, render_html| {
             if plain.len() > limits.max_content_size || plain.len() > u32::MAX as usize {
@@ -503,12 +517,15 @@ impl<'a> RedactionPass<'a> {
             )
         };
         let mut plans = SurfacePlans {
-            formatted: Some(FormattedPlan::Html(plan(&doc.content, true)?)),
+            formatted: Some(FormattedPlan::VerifiedMarkup {
+                plan: plan(&doc.content, html)?,
+                kind,
+            }),
             ..SurfacePlans::default()
         };
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
-            let source = surfaces.page_html_backup(index);
-            let plan = plan(source.unwrap_or(&page.content), source.is_some())?;
+            let source = surfaces.page_markup_backup(index);
+            let plan = plan(source.unwrap_or(&page.content), html && source.is_some())?;
             plans.pages.insert(index, PagePlan::Html { plan, source });
         }
         Ok(plans)
@@ -740,14 +757,24 @@ impl<'a> RedactionPass<'a> {
                 );
                 return;
             }
-            Some(FormattedPlan::Html(plan)) => {
+            Some(FormattedPlan::VerifiedMarkup { plan, kind }) => {
                 (doc.content, doc.formatted_content) = self.apply_html_plan(&doc.content, plan);
-                crate::core::diagnostics::push_warning(
-                    &mut doc.processing_warnings,
-                    "output_format",
-                    "HTML was rebuilt from verified redacted plain text. Original formatting was removed. \
-                     Finding offsets refer to the original plain text",
-                );
+                if kind == VerifiedMarkup::Djot
+                    && let Some(pages) = doc.metadata.pages.as_mut()
+                {
+                    pages.boundaries = None;
+                }
+                let message = match kind {
+                    VerifiedMarkup::Html => {
+                        "HTML was rebuilt from verified redacted plain text. Original formatting was removed. \
+                         Finding offsets refer to the original plain text"
+                    }
+                    VerifiedMarkup::Djot => {
+                        "Djot rendering was discarded. Verified redacted plain text is returned. \
+                         Finding offsets refer to the original plain text"
+                    }
+                };
+                crate::core::diagnostics::push_warning(&mut doc.processing_warnings, "output_format", message);
                 return;
             }
             plan => plan,

@@ -6,7 +6,10 @@ pub(super) enum FormattedPlan {
     Discard,
     ProcessorDiscard,
     Literal(super::literal_leaf::plan::LiteralPlan),
-    Html(HtmlPlan),
+    VerifiedMarkup {
+        plan: HtmlPlan,
+        kind: crate::extraction::derive::surfaces::VerifiedMarkup,
+    },
 }
 
 pub(super) enum PagePlan<'s> {
