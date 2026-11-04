@@ -562,6 +562,7 @@ fn ocr_document_text(document: &crate::types::internal::InternalDocument) -> Str
 pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
     pub(super) blank_raster_warnings: Option<&'a mut Vec<crate::types::ProcessingWarning>>,
+    pub(super) no_admitted_images: Option<&'a mut bool>,
 }
 
 /// OCR a page's embedded image XObjects directly, bypassing the whole-page rasterizer.
@@ -593,7 +594,7 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     context: XObjectRecoveryContext<'_>,
 ) -> crate::Result<Option<XObjectRecoveryOutcome>> {
     let (fallback_images, single_enumerated_xobject_unrecoverable) =
-        crate::pdf::native::images::page_ocr_fallback_image_bytes(render_doc, page_idx);
+        crate::pdf::native::images::page_ocr_fallback_image_bytes(render_doc, page_idx, context.no_admitted_images);
     if fallback_images.is_empty() {
         if single_enumerated_xobject_unrecoverable && let Some(warnings) = context.blank_raster_warnings {
             crate::core::diagnostics::push_warning_deduped(

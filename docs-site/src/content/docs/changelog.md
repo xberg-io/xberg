@@ -174,6 +174,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep ruled table rows on the correct side of a section divider.** (#2376)
   Use exact shared row edges when both the original and corrected sections pass native table admission.
 
+- **(ocr): Skip automatic PaddleOCR on uniform PDF page rasters.** (#2430)
+  Faint text and usable embedded images remain eligible for fallback.
+
 - **(pdf): Expose complete native table headers as column labels.** (#2332)
   A single fully labeled header row survives in the structured table when its original grid still matches.
 

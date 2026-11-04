@@ -286,6 +286,7 @@ pub(crate) fn page_ocr_fallback_image_bytes_with_limits(
 pub(crate) fn page_ocr_fallback_image_bytes(
     doc: &xberg_native_pdf::PdfDocument,
     page_idx: usize,
+    no_admitted_images: Option<&mut bool>,
 ) -> (Vec<PageFallbackImage>, bool) {
     let handles = match doc.page_image_handles(page_idx) {
         Ok(h) => h,
@@ -297,6 +298,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
 
     let mut out = Vec::with_capacity(handles.len());
     let mut single_enumerated_xobject_failed = false;
+    let mut recovery_complete = true;
     for handle in &handles {
         match handle.decode() {
             Ok(img) => match img.data() {
@@ -315,6 +317,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                             paint_order: handle.paint_order,
                         }),
                         Err(error) => {
+                            recovery_complete = false;
                             tracing::debug!(page = page_idx, "force_ocr fallback: raw re-encode failed: {error}");
                         }
                     }
@@ -327,23 +330,10 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                     Some(xberg_native_pdf::PdfFilter::DCTDecode) | Some(xberg_native_pdf::PdfFilter::JPXDecode)
                 );
                 if passthrough {
-                    match handle.raw_compressed_bytes() {
-                        Ok(raw) if matches!(detect_image_format_from_bytes(&raw), "jpeg" | "jpeg2000") => {
-                            let format = detect_image_format_from_bytes(&raw);
-                            out.push(PageFallbackImage {
-                                bytes: Bytes::from(raw),
-                                format,
-                                recovery: XObjectRecovery::RawCompressedStream,
-                                paint_order: handle.paint_order,
-                            });
-                        }
-                        Ok(_) => {
-                            tracing::debug!(
-                                page = page_idx,
-                                "force_ocr fallback: raw bytes not a recognizable JPEG/JP2"
-                            );
-                        }
+                    match recover_raw_jpeg_or_jp2(handle, page_idx) {
+                        Ok(image) => out.extend(image),
                         Err(error) => {
+                            recovery_complete = false;
                             tracing::debug!(
                                 page = page_idx,
                                 "force_ocr fallback: raw_compressed_bytes failed: {error}"
@@ -360,7 +350,33 @@ pub(crate) fn page_ocr_fallback_image_bytes(
         }
     }
     let single_enumerated_xobject_unrecoverable = single_enumerated_xobject_failed && out.is_empty();
+    if let Some(no_admitted_images) = no_admitted_images {
+        // Evidence is limited to the existing best-effort recovery pass. ~keep
+        *no_admitted_images = recovery_complete && out.is_empty();
+    }
     (out, single_enumerated_xobject_unrecoverable)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn recover_raw_jpeg_or_jp2(
+    handle: &xberg_native_pdf::PdfImageHandle<'_>,
+    page_idx: usize,
+) -> xberg_native_pdf::Result<Option<PageFallbackImage>> {
+    let raw = handle.raw_compressed_bytes()?;
+    let format = detect_image_format_from_bytes(&raw);
+    if !matches!(format, "jpeg" | "jpeg2000") {
+        tracing::debug!(
+            page = page_idx,
+            "force_ocr fallback: raw bytes not a recognizable JPEG/JP2"
+        );
+        return Ok(None);
+    }
+    Ok(Some(PageFallbackImage {
+        bytes: Bytes::from(raw),
+        format,
+        recovery: XObjectRecovery::RawCompressedStream,
+        paint_order: handle.paint_order,
+    }))
 }
 
 /// Page numbers (1-based) whose PDF-space dimensions are known and whose native text layer is
