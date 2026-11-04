@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Redact annotation authors and decoded QR payloads.** Cover the structured fields alongside the
+  document text while preserving unrelated annotation and QR metadata.
+
 - **(redaction): Distinguish generated Markdown tags from source text.** Preserve genuine inline formatting while
   redacting literal tag names in annotations and raw source blocks.
 

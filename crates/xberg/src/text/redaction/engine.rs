@@ -1088,6 +1088,9 @@ impl<'a> RedactionPass<'a> {
             for image in images.iter_mut() {
                 self.redact_optional(&mut image.caption);
                 self.redact_optional(&mut image.description);
+                for code in image.qr_codes.iter_mut().flatten() {
+                    self.redact_in_place(&mut code.payload);
+                }
                 if let Some(ocr_doc) = image.ocr_result.as_mut()
                     && depth < MAX_NESTED_DOCUMENT_DEPTH
                 {
@@ -1118,6 +1121,7 @@ impl<'a> RedactionPass<'a> {
         if let Some(annotations) = doc.annotations.as_mut() {
             for annotation in annotations.iter_mut() {
                 self.redact_optional(&mut annotation.content);
+                self.redact_optional(&mut annotation.author);
             }
         }
 
