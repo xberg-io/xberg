@@ -1450,6 +1450,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             source: None,
         })?;
         let orientation_handling = backend.page_orientation_handling();
+        #[cfg(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let try_tall_source = !mixed_route_layout_active
+            && super::tall_source::supports(config, &ocr_config_resolved)
+            && crate::plugins::registry::get_ocr_backend_registry()
+                .read()
+                .is_builtin_tesseract(backend);
         let batch_slice = &page_images;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
@@ -1581,6 +1592,31 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "pdf",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                let result = {
+                    let mut result = result;
+                    if try_tall_source
+                        && correction_degrees == 0
+                        && let Ok(extraction_result) = &mut result
+                        && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
+                    {
+                        super::tall_source::try_replace(
+                            extraction_result,
+                            backend,
+                            config,
+                            &ocr_config_resolved,
+                            (&render_doc, page_idx),
+                            raster,
+                        )
+                        .await?;
+                    }
+                    result
+                };
                 crate::engine::seams::emit_ocr_page(page_idx + 1, page_rotations.len(), backend.name());
                 let mut extraction_result = match result {
                     Ok(extraction_result) => extraction_result,
@@ -2702,6 +2738,15 @@ pub(super) async fn extract_with_ocr_for_page(
     // means legibility; anything else (`Uncalibrated`, `None`) must never be turned into a
     // normalized confidence, or a page-rejection gate downstream would compare it against an
     // absolute floor it was never calibrated against (see `resolve_confidence_semantics`).
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let try_tall_source = !has_layout_detections
+        && super::tall_source::supports(config, base_ocr_config)
+        && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
     let backend_confidence_semantics = backend.confidence_semantics();
     // Owned up front: the per-page summaries below outlive the borrow-heavy OCR loop, and
     // the backend that actually produced a page is part of what `ocr_confidence` reports. ~keep
@@ -3299,6 +3344,34 @@ pub(super) async fn extract_with_ocr_for_page(
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "pdf",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                let ocr_result = {
+                    let mut ocr_result = ocr_result;
+                    if try_tall_source
+                        && correction_degrees == 0
+                        && let Ok(document) = &mut ocr_result
+                        && let Some(source) = lazy_pdf_render_state
+                            .as_ref()
+                            .map(|(pdf, _, _)| (pdf, page_idx))
+                            .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
+                    {
+                        super::tall_source::try_replace(
+                            document,
+                            &backend,
+                            config,
+                            base_ocr_config,
+                            source,
+                            &encoded_batch[page_idx - batch_start],
+                        )
+                        .await?;
+                    }
+                    ocr_result
+                };
                 crate::engine::seams::emit_ocr_page(
                     page_index_offset + page_idx + 1,
                     progress_total_pages,

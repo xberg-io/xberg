@@ -114,7 +114,7 @@ pub(super) fn needs_ocr(
     Some(!is_cancelled() && has_uncovered_text(&preview, handle.bbox, &boxes))
 }
 
-fn page_frame_and_contents(doc: &PdfDocument, page: usize) -> Option<(Rect, Object)> {
+pub(super) fn page_frame_and_contents(doc: &PdfDocument, page: usize) -> Option<(Rect, Object)> {
     if doc.is_encrypted()
         || !matches!(
             doc.get_page_rotation_status(page).ok()?,
@@ -234,13 +234,13 @@ fn hidden_text_image_name(content: &[u8], font_is_known: impl Fn(&str) -> bool) 
 }
 
 #[derive(Clone, Copy)]
-enum StreamFilters {
+pub(super) enum StreamFilters {
     Raw,
     Flate,
     Ascii85Flate,
 }
 
-fn stream_filters(filter: Option<&Object>) -> Option<StreamFilters> {
+pub(super) fn stream_filters(filter: Option<&Object>) -> Option<StreamFilters> {
     match filter {
         None => Some(StreamFilters::Raw),
         Some(filter) if filter.as_name() == Some("FlateDecode") => Some(StreamFilters::Flate),
@@ -251,7 +251,12 @@ fn stream_filters(filter: Option<&Object>) -> Option<StreamFilters> {
     }
 }
 
-fn decode_probe_stream(data: &[u8], filters: StreamFilters, output_limit: usize, byte_limit: usize) -> Option<Vec<u8>> {
+pub(super) fn decode_probe_stream(
+    data: &[u8],
+    filters: StreamFilters,
+    output_limit: usize,
+    byte_limit: usize,
+) -> Option<Vec<u8>> {
     // Native's decoder rejects output that reaches its exclusive limit.
     let limit = output_limit
         .checked_add(1)?
