@@ -78,31 +78,23 @@ async fn forced_pdf_ocr_warns_when_the_only_painted_image_cannot_decode() {
 async fn unused_broken_image_does_not_warn_on_a_blank_pdf_page() {
     let result = public_pdf_result(b"", false).await;
     assert_eq!(result.content.trim(), "");
-    assert_no_image_decode_warning(&result);
+    assert_no_image_decode_warning(&result.processing_warnings);
 }
 
-fn assert_no_image_decode_warning(document: &ExtractedDocument) {
+fn assert_no_image_decode_warning(warnings: &[ProcessingWarning]) {
     assert!(
-        document
-            .processing_warnings
-            .iter()
-            .all(|warning| warning.message != WARNING),
-        "unexpected painted-image decode warning on blank PDF: {:?}",
-        document.processing_warnings
+        warnings.iter().all(|warning| warning.message != WARNING),
+        "unexpected painted-image decode warning on blank PDF: {warnings:?}"
     );
 }
 
 #[test]
 #[should_panic(expected = "unexpected painted-image decode warning on blank PDF")]
 fn blank_page_warning_oracle_rejects_the_painted_image_message() {
-    let document = ExtractedDocument {
-        processing_warnings: vec![ProcessingWarning {
-            source: "ocr".into(),
-            message: WARNING.into(),
-        }],
-        ..Default::default()
-    };
-    assert_no_image_decode_warning(&document);
+    assert_no_image_decode_warning(&[ProcessingWarning {
+        source: "ocr".into(),
+        message: WARNING.into(),
+    }]);
 }
 
 #[tokio::test]
