@@ -17,7 +17,7 @@
 //! - `parse_bfchar_line`'s `step_by(4)` loop (its final, longer-than-8-bytes
 //!   branch), which slices `&dst_hex[i..end]` directly, with no upstream
 //!   validation.
-//! - `parse_bfrange_line`'s array-form counterpart, the same `step_by(4)`
+//! - the bfrange parser's array-form counterpart, the same `step_by(4)`
 //!   shape over each array entry.
 //!
 //! The `dst_hex.len() == 8` branch in both functions (the UTF-16 surrogate
@@ -68,8 +68,8 @@ fn bfchar_dst_with_invalid_utf8_in_step_by_branch_does_not_panic() {
     );
 }
 
-/// Same defect shape, reproduced through `parse_bfrange_line`'s ARRAY-form
-/// `step_by(4)` loop — a distinct regex and code path (`beginbfrange`'s
+/// Same defect shape, reproduced through the bfrange parser's ARRAY-form
+/// `step_by(4)` loop — a distinct code path (`beginbfrange`'s
 /// `[<...>]` array form) from the bfchar case above, so it needs its own
 /// coverage. With the fix, the corrupted array entry never even reaches the
 /// `step_by` loop: it is filtered out of `dst_hexes` at the capture

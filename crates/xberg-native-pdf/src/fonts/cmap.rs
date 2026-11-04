@@ -31,7 +31,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 mod line_parsers;
-use line_parsers::{parse_bfchar_line, parse_bfrange_line, parse_codespacerange_line_width, parse_notdefrange_line};
+use line_parsers::{parse_bfchar_line, parse_bfrange_section, parse_codespacerange_line_width, parse_notdefrange_line};
 
 /// A range entry for efficient binary search lookups.
 ///
@@ -575,11 +575,11 @@ fn has_any_cmap_structural_keyword(content: &str) -> bool {
 /// maps nothing, and that is not evidence of corruption.
 ///
 /// Everything else — a `begin…` block with no matching `end…` before EOF, a
-/// bfchar/bfrange/notdefrange line with malformed hex or an unmappable code
-/// point, a bfrange array whose entry count disagrees with its declared
-/// range — is DEGRADED: the malformed section or line is dropped, a
-/// `tracing::warn!` is emitted so the defect is diagnosable, and parsing
-/// continues with whatever the rest of the stream yields. ~keep
+/// bfchar or notdefrange line or a bfrange entry with malformed hex or an
+/// unmappable code point, a bfrange array whose entry count disagrees with
+/// its declared range — is DEGRADED: the malformed section, line or entry is
+/// dropped, a `tracing::warn!` is emitted so the defect is diagnosable, and
+/// parsing continues with whatever the rest of the stream yields. ~keep
 ///
 /// # Examples
 ///
@@ -685,19 +685,18 @@ fn apply_bfchar_section(cmap: &mut CMap, section: &str) {
             cmap.insert(src, dst);
         }
     }
-    warn_on_malformed_lines("bfchar", attempted, malformed);
+    warn_on_malformed("bfchar", "lines", attempted, malformed);
 }
 
-/// Apply one `beginbfrange`/`endbfrange` section's mappings to `cmap`. Split
-/// out of `parse_tounicode_cmap` purely to keep that function within the
-/// repository's line-length guideline; behavior and evaluation order are
-/// unchanged. ~keep
+/// Apply one `beginbfrange`/`endbfrange` section's mappings to `cmap`, in
+/// document order. The section is parsed as one token stream, not line by
+/// line; see `parse_bfrange_section`. ~keep
 fn apply_bfrange_section(cmap: &mut CMap, section: &str) {
-    let mut attempted = 0usize;
+    let entries = parse_bfrange_section(section);
+    let attempted = entries.len();
     let mut malformed = 0usize;
-    for line in significant_lines(section) {
-        attempted += 1;
-        let Some(mappings) = parse_bfrange_line(line) else {
+    for entry in entries {
+        let Some(mappings) = entry else {
             malformed += 1;
             continue;
         };
@@ -706,7 +705,7 @@ fn apply_bfrange_section(cmap: &mut CMap, section: &str) {
             cmap.insert(src, dst);
         }
     }
-    warn_on_malformed_lines("bfrange", attempted, malformed);
+    warn_on_malformed("bfrange", "entries", attempted, malformed);
 }
 
 /// Apply every `beginnotdefrange`/`endnotdefrange` section's fallback
@@ -741,7 +740,7 @@ fn apply_notdefrange_section(cmap: &mut CMap, section: &str) {
             }
         }
     }
-    warn_on_malformed_lines("notdefrange", attempted, malformed);
+    warn_on_malformed("notdefrange", "lines", attempted, malformed);
 }
 
 enum BfSectionKind {
@@ -760,19 +759,21 @@ pub(crate) fn significant_lines(section: &str) -> impl Iterator<Item = &str> {
 }
 
 /// Emit one aggregated `tracing::warn!` for a `begin…end` block that had at
-/// least one line which failed to parse into any mapping — malformed hex, an
-/// unmappable code point, or a line matching none of the recognized formats
-/// (§9.10.3). One warning per block avoids spamming the log per malformed
-/// line while still surfacing the defect (DEGRADED: the malformed lines are
-/// dropped, parsing continues with everything else in the block). ~keep
-fn warn_on_malformed_lines(section_kind: &str, attempted: usize, malformed: usize) {
+/// least one line or entry (`unit`) which failed to parse into any mapping —
+/// malformed hex, an unmappable code point, or text matching none of the
+/// recognized formats (§9.10.3). One warning per block avoids spamming the
+/// log per malformed item while still surfacing the defect (DEGRADED: the
+/// malformed items are dropped, parsing continues with everything else in
+/// the block). ~keep
+fn warn_on_malformed(section_kind: &str, unit: &str, attempted: usize, malformed: usize) {
     if malformed > 0 {
         tracing::warn!(
-            "ToUnicode CMap: {} of {} {} line(s) failed to parse (malformed hex or unmappable \
+            "ToUnicode CMap: {} of {} {} {} failed to parse (malformed hex or unmappable \
              code point); those entries are skipped",
             malformed,
             attempted,
-            section_kind
+            section_kind,
+            unit
         );
     }
 }

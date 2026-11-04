@@ -118,24 +118,27 @@ fn test_parse_bfchar_multiple_pairs_per_line() {
 }
 
 #[test]
-fn test_parse_bfrange_line() {
-    let result = parse_bfrange_line("<0041> <0043> <0041>").unwrap();
-    assert_eq!(result.len(), 3);
-    assert_eq!(result[0], (0x41, "A".to_string()));
-    assert_eq!(result[1], (0x42, "B".to_string()));
-    assert_eq!(result[2], (0x43, "C".to_string()));
-}
-
-#[test]
-fn test_parse_bfrange_line_single_char() {
-    let result = parse_bfrange_line("<0041> <0041> <0041>").unwrap();
+fn test_parse_bfrange_section() {
+    let result = parse_bfrange_section("<0041> <0043> <0041>");
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0], (0x41, "A".to_string()));
+    let mappings = result[0].as_ref().unwrap();
+    assert_eq!(mappings.len(), 3);
+    assert_eq!(mappings[0], (0x41, "A".to_string()));
+    assert_eq!(mappings[1], (0x42, "B".to_string()));
+    assert_eq!(mappings[2], (0x43, "C".to_string()));
 }
 
 #[test]
-fn test_parse_bfrange_line_invalid() {
-    assert!(parse_bfrange_line("invalid").is_none());
+fn test_parse_bfrange_section_single_char() {
+    let result = parse_bfrange_section("<0041> <0041> <0041>");
+    assert_eq!(result, vec![Some(vec![(0x41, "A".to_string())])]);
+}
+
+#[test]
+fn test_parse_bfrange_section_invalid() {
+    assert_eq!(parse_bfrange_section("invalid"), vec![None]);
+    assert_eq!(parse_bfrange_section("<0041> <0042>"), vec![None]);
+    assert!(parse_bfrange_section(" % only a comment\n").is_empty());
 }
 
 #[test]
@@ -209,6 +212,39 @@ fn test_parse_bfrange_array_mixed() {
     assert_eq!(cmap.get(&0x10).as_deref(), Some("A"));
     assert_eq!(cmap.get(&0x11).as_deref(), Some("fi"));
     assert_eq!(cmap.get(&0x12).as_deref(), Some("C"));
+}
+
+/// A writer can break a long destination array over several lines (GH#2476).
+/// Each continuation line holds three hex strings, the same shape as a
+/// sequential `<lo> <hi> <dst>` entry, so a line-based reader maps the codes
+/// two letters ahead.
+#[test]
+fn test_parse_bfrange_array_over_several_lines() {
+    let data = b"beginbfrange\n<61> <67> [\n<0061> <0062> <0063>\n% a comment inside the array\n\
+                 <0064> <0065> <0066>\n<0067>]\n<68> <69> <0068>\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+    let decoded: String = (0x61..=0x69).map(|code| cmap.get(&code).unwrap_or_default()).collect();
+    assert_eq!(decoded, "abcdefghi");
+}
+
+#[test]
+fn test_parse_bfrange_two_entries_on_one_line() {
+    let data = b"beginbfrange\n<41> <42> <0061> <43> <43> [<0063>]\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+    assert_eq!(cmap.get(&0x41).as_deref(), Some("a"));
+    assert_eq!(cmap.get(&0x42).as_deref(), Some("b"));
+    assert_eq!(cmap.get(&0x43).as_deref(), Some("c"));
+}
+
+/// A token that does not fit the entry grammar drops that one entry; the
+/// next entry still parses.
+#[test]
+fn test_parse_bfrange_malformed_entry_keeps_the_next_entry() {
+    let data = b"beginbfrange\n<41> <42> 7\n<43> <43> <0063>\n<44> <45> [<0064> <46> <46> <0066>\nendbfrange";
+    let cmap = parse_tounicode_cmap(data).unwrap();
+    assert_eq!(cmap.get(&0x41), None);
+    assert_eq!(cmap.get(&0x43).as_deref(), Some("c"));
+    assert_eq!(cmap.get(&0x44), None, "an array with no closing bracket is dropped");
 }
 
 #[test]

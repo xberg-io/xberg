@@ -129,6 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Decode a ToUnicode CMap whose bfrange array spans several lines.** (#2476)
+  The text of such a font no longer comes out shifted ("Bkoknformatkcs" for "Bioinformatics"). Two bfrange entries on one line now both map.
+
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
 

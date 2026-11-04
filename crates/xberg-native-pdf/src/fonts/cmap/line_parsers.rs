@@ -1,9 +1,11 @@
-//! Line-level parsers for the `begincodespacerange`, `beginbfchar`, `beginbfrange` and
-//! `beginnotdefrange` sections of a ToUnicode CMap.
+//! Parsers for the `begincodespacerange`, `beginbfchar`, `beginbfrange` and
+//! `beginnotdefrange` sections of a ToUnicode CMap. The bfrange parser reads
+//! a whole section as a token stream; the others read one line at a time.
 //!
 //! Split out of `cmap.rs` purely for file size (GH#1567); the parsers are unchanged. ~keep
 
 use super::{decode_utf16_surrogate_pair, parse_escape_sequence};
+use crate::lexer::{self, Token, skip_ws};
 use regex::Regex;
 
 /// Parse a `begincodespacerange` line and return the maximum code byte-width found.
@@ -141,56 +143,108 @@ pub(super) fn parse_bfchar_line(line: &str) -> Vec<(u32, String)> {
     results
 }
 
-/// Parse a bfrange line: `<start> <end> <dst>`
+/// The part of a bfrange entry read so far.
+enum BfrangeEntry<'a> {
+    /// Nothing read; the next hex string is the first code of the range.
+    Empty,
+    /// `<lo>` read.
+    Lo(&'a str),
+    /// `<lo> <hi>` read; next is `<dst>` or `[`.
+    Range(&'a str, &'a str),
+    /// `<lo> <hi> [` read, with the destinations up to here.
+    Array(&'a str, &'a str, Vec<&'a str>),
+}
+
+/// Parse the body of one `beginbfrange`/`endbfrange` section.
 ///
-/// Example: `<0020> <007E> <0020>` maps codes 0x20-0x7E to Unicode U+0020-U+007E.
-///
-/// There are two formats:
+/// Returns one item per entry in document order: the entry's mappings, or
+/// `None` for a malformed entry. An entry has two forms (ISO 32000-1 §9.10.3):
 /// 1. `<start> <end> <dst>` - Sequential mapping starting at dst
 /// 2. `<start> <end> [<dst1> <dst2> ...]` - Array of individual destinations
 ///
-/// This function supports both formats and flexible whitespace within angle brackets.
-pub(super) fn parse_bfrange_line(line: &str) -> Option<Vec<(u32, String)>> {
-    static RE_SEQ: std::sync::LazyLock<Regex> =
-        std::sync::LazyLock::new(|| Regex::new(r"<([^>]*)>\s*<([^>]*)>\s*<([^>]*)>").unwrap());
-    static RE_ARRAY: std::sync::LazyLock<Regex> =
-        std::sync::LazyLock::new(|| Regex::new(r"<([^>]*)>\s*<([^>]*)>\s*\[((?:\s*<[^>]+>\s*)+)\]").unwrap());
-
-    if let Some(caps) = RE_ARRAY.captures(line) {
-        return parse_bfrange_array_form(&caps);
+/// The body is one token stream, read with the crate's PDF lexer: line
+/// breaks and `%` comments separate tokens and carry no structure. A writer
+/// can break a long destination array over many lines, and each
+/// continuation line then looks like a sequential entry (GH#2476). A token
+/// that does not fit the grammar drops the entry it interrupts, and parsing
+/// continues at the next token. ~keep
+pub(super) fn parse_bfrange_section(section: &str) -> Vec<Option<Vec<(u32, String)>>> {
+    let mut entries = Vec::new();
+    let mut entry = BfrangeEntry::Empty;
+    let mut input = section.as_bytes();
+    loop {
+        let rest = skip_ws(input).map_or(input, |(rest, _)| rest);
+        if rest.is_empty() {
+            break;
+        }
+        let (after, token) = match lexer::token(rest) {
+            Ok((after, token)) => (after, Some(token)),
+            // No token starts here (a bare word, or a lossy-decoded
+            // U+FFFD). Skip to the next whitespace or delimiter and treat
+            // the run as one token that does not fit. ~keep
+            Err(_) => {
+                let len = rest
+                    .iter()
+                    .skip(1)
+                    .position(|b| b.is_ascii_whitespace() || b"<>[]%".contains(b))
+                    .map_or(rest.len(), |pos| pos + 1);
+                (&rest[len..], None)
+            }
+        };
+        input = after;
+        entry = match (entry, token) {
+            (BfrangeEntry::Empty, Some(Token::HexString(lo))) => BfrangeEntry::Lo(hex_str(lo)),
+            (BfrangeEntry::Lo(lo), Some(Token::HexString(hi))) => BfrangeEntry::Range(lo, hex_str(hi)),
+            (BfrangeEntry::Range(lo, hi), Some(Token::HexString(dst))) => {
+                entries.push(parse_bfrange_sequential_form(lo, hi, hex_str(dst)));
+                BfrangeEntry::Empty
+            }
+            (BfrangeEntry::Range(lo, hi), Some(Token::ArrayStart)) => BfrangeEntry::Array(lo, hi, Vec::new()),
+            (BfrangeEntry::Array(lo, hi, mut dsts), Some(Token::HexString(dst))) => {
+                dsts.push(hex_str(dst));
+                BfrangeEntry::Array(lo, hi, dsts)
+            }
+            (BfrangeEntry::Array(lo, hi, dsts), Some(Token::ArrayEnd)) => {
+                entries.push(parse_bfrange_array_form(lo, hi, &dsts));
+                BfrangeEntry::Empty
+            }
+            (_, _) => {
+                entries.push(None);
+                BfrangeEntry::Empty
+            }
+        };
     }
-
-    if let Some(caps) = RE_SEQ.captures(line) {
-        return parse_bfrange_sequential_form(&caps);
+    if !matches!(entry, BfrangeEntry::Empty) {
+        entries.push(None);
     }
+    entries
+}
 
-    None
+/// The text of a hex string token. The lexer cuts the token at the ASCII
+/// `<` and `>` of a UTF-8 section, so the bytes are always UTF-8; the empty
+/// fallback fails the hex checks downstream like any other bad hex. ~keep
+fn hex_str(bytes: &[u8]) -> &str {
+    std::str::from_utf8(bytes).unwrap_or("")
 }
 
 /// Parse the `<start> <end> [<dst1> <dst2> ...]` bfrange form: an explicit
-/// array of individual destinations, one per code in `start..=end`. Split
-/// out of `parse_bfrange_line` purely to keep that function within the
-/// repository's line-length guideline; behavior, `?`-propagated abort
-/// semantics, and per-entry `continue`-skip semantics are all unchanged. ~keep
-fn parse_bfrange_array_form(caps: &regex::Captures) -> Option<Vec<(u32, String)>> {
-    let start_str = caps[1].trim().replace(char::is_whitespace, "");
-    let end_str = caps[2].trim().replace(char::is_whitespace, "");
+/// array of individual destinations, one per code in `start..=end`.
+/// Returns `None` when `start`, `end` or a destination is malformed hex. ~keep
+fn parse_bfrange_array_form(start_hex: &str, end_hex: &str, dsts: &[&str]) -> Option<Vec<(u32, String)>> {
+    let start_str = start_hex.replace(char::is_whitespace, "");
+    let end_str = end_hex.replace(char::is_whitespace, "");
     let start = u32::from_str_radix(&start_str, 16).ok()?;
     let end = u32::from_str_radix(&end_str, 16).ok()?;
-    let array_str = &caps[3];
 
-    static RE_HEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| Regex::new(r"<([^>]*)>").unwrap());
     // Drop any array entry that is not pure ASCII hex (e.g. a lossy-decoded
     // U+FFFD from invalid UTF-8 in the raw stream) before it can reach the
     // byte-index slices below. See `is_ascii_hex_digits`. A dropped entry
     // shrinks `dst_hexes` below `range_size`, which the existing
     // size-mismatch warning already surfaces. ~keep
-    let dst_hexes: Vec<String> = RE_HEX
-        .captures_iter(array_str)
-        .filter_map(|cap| {
-            let s = cap.get(1).unwrap().as_str().trim().replace(char::is_whitespace, "");
-            if is_ascii_hex_digits(&s) { Some(s) } else { None }
-        })
+    let dst_hexes: Vec<String> = dsts
+        .iter()
+        .map(|dst| dst.replace(char::is_whitespace, ""))
+        .filter(|s| is_ascii_hex_digits(s))
         .collect();
 
     let mut result = Vec::new();
@@ -234,9 +288,9 @@ fn parse_bfrange_array_form(caps: &regex::Captures) -> Option<Vec<(u32, String)>
 
 /// Decode one bfrange array entry (a single `<dstN>` hex string) to its
 /// Unicode string. The outer `Option` (propagated with `?` by the caller)
-/// is this entry's *abort-the-whole-line* signal — a malformed hex digit
+/// is the *drop-the-whole-bfrange-entry* signal — a malformed hex digit
 /// sequence, matching the original inline `.ok()?` sites. The inner
-/// `Option` is this entry's *skip-just-this-entry* signal — a
+/// `Option` is the *skip-just-this-destination* signal — a
 /// well-formed-hex but otherwise unusable value, matching the original
 /// inline `continue` sites. Split out of `parse_bfrange_array_form` purely
 /// to keep nesting within the repository's guideline; behavior is
@@ -290,13 +344,11 @@ fn decode_bfrange_array_entry(dst_hex: &str) -> Option<Option<String>> {
 }
 
 /// Parse the `<start> <end> <dst>` bfrange form: a sequential mapping
-/// starting at `dst` and incrementing per code in `start..=end`. Split out
-/// of `parse_bfrange_line` purely to keep that function within the
-/// repository's line-length guideline; behavior is unchanged. ~keep
-fn parse_bfrange_sequential_form(caps: &regex::Captures) -> Option<Vec<(u32, String)>> {
-    let start_str = caps[1].trim().replace(char::is_whitespace, "");
-    let end_str = caps[2].trim().replace(char::is_whitespace, "");
-    let dst_start_str = caps[3].trim().replace(char::is_whitespace, "");
+/// starting at `dst` and incrementing per code in `start..=end`. ~keep
+fn parse_bfrange_sequential_form(start_hex: &str, end_hex: &str, dst_hex: &str) -> Option<Vec<(u32, String)>> {
+    let start_str = start_hex.replace(char::is_whitespace, "");
+    let end_str = end_hex.replace(char::is_whitespace, "");
+    let dst_start_str = dst_hex.replace(char::is_whitespace, "");
     let start = u32::from_str_radix(&start_str, 16).ok()?;
     let end = u32::from_str_radix(&end_str, 16).ok()?;
     let dst_start = u32::from_str_radix(&dst_start_str, 16).ok()?;

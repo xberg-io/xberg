@@ -1,7 +1,7 @@
 //! Regression test for a `ToUnicode` CMap `bfrange` ARRAY-form parser
 //! underflow/overflow.
 //!
-//! `fonts::cmap::parse_bfrange_line`'s array branch used to compute
+//! The `fonts::cmap` bfrange parser's array branch used to compute
 //! `let range_size = (end - start + 1) as usize;` directly from `start`/`end`,
 //! which are `u32::from_str_radix` results parsed from attacker-controlled hex
 //! in the font's `/ToUnicode` stream (ISO 32000-1:2008 §9.10.3). A reversed
