@@ -562,6 +562,67 @@ fn choose_safe_dpi(w_pt: f32, h_pt: f32, base_dpi: u32) -> u32 {
     (base_dpi as f32 * factor).max(72.0) as u32
 }
 
+/// Points per inch in PDF user space: a MediaBox is expressed in these units, so a page's
+/// width in inches is its width in points divided by this.
+const POINTS_PER_INCH: f64 = 72.0;
+
+/// Live bytes per pixel of the RGBA render of a page.
+const PAGE_RASTER_RGBA_BYTES_PER_PIXEL: u64 = 4;
+/// Live bytes per pixel of the RGB copy made from the RGBA render.
+const PAGE_RASTER_RGB_BYTES_PER_PIXEL: u64 = 3;
+/// Live bytes per pixel while the page raster is encoded to PNG.
+pub(crate) const PAGE_RASTER_PNG_BYTES_PER_PIXEL: u64 = 4;
+/// Fixed allowance, in bytes, for the PNG encoder state.
+pub(crate) const PAGE_RASTER_PNG_FIXED_BYTES: u64 = 256 * 1024;
+
+/// Pixel size of a page rendered at `dpi`, and the live bytes its raster needs,
+/// or `None` for the bytes when the count overflows.
+fn page_raster_budget(dpi: i32, page_width_pt: f64, page_height_pt: f64) -> (u128, u128, Option<u128>) {
+    let pixels = |extent_pt: f64| ((extent_pt / POINTS_PER_INCH) * f64::from(dpi)).ceil().max(1.0) as u128;
+    let (width, height) = (pixels(page_width_pt), pixels(page_height_pt));
+    let bytes_per_pixel = u128::from(
+        PAGE_RASTER_RGBA_BYTES_PER_PIXEL + PAGE_RASTER_RGB_BYTES_PER_PIXEL + PAGE_RASTER_PNG_BYTES_PER_PIXEL,
+    );
+    let bytes = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(bytes_per_pixel))
+        .and_then(|bytes| bytes.checked_add(u128::from(PAGE_RASTER_PNG_FIXED_BYTES)));
+    (width, height, bytes)
+}
+
+/// The highest DPI at or below `requested_dpi` whose page raster fits
+/// `max_content_size`, or `None` when the page does not fit even at 1 dpi.
+///
+/// Every page render applies this one budget: the OCR route, the structured
+/// rasterizer, and the public page render. ~keep
+pub(crate) fn fit_page_render_dpi(
+    requested_dpi: i32,
+    page_width_pt: f64,
+    page_height_pt: f64,
+    max_content_size: usize,
+) -> Option<i32> {
+    let fits = |dpi: i32| {
+        page_raster_budget(dpi, page_width_pt, page_height_pt)
+            .2
+            .is_some_and(|bytes| bytes <= max_content_size as u128)
+    };
+    if fits(requested_dpi) {
+        return Some(requested_dpi);
+    }
+
+    let mut low = 1;
+    let mut high = requested_dpi.max(1);
+    while low < high {
+        let middle = low + (high - low + 1) / 2;
+        if fits(middle) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    fits(low).then_some(low)
+}
+
 /// Fetch page MediaBox (in points) with a sane Letter fallback.
 pub(crate) fn get_page_dimensions_pt(doc: &xberg_native_pdf::PdfDocument, page_index: usize) -> (f32, f32) {
     doc.get_page_media_box(page_index)
@@ -591,10 +652,6 @@ pub(crate) fn get_page_dimensions_pt(doc: &xberg_native_pdf::PdfDocument, page_i
 /// "resolution unknown" behaviour instead of adopting a fabricated one.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn rendered_page_dpi(rendered_width_px: u32, page_width_pt: f32) -> Option<f64> {
-    /// Points per inch in PDF user space: a MediaBox is expressed in these units, so a page's
-    /// width in inches is its width in points divided by this.
-    const POINTS_PER_INCH: f64 = 72.0;
-
     let page_width_pt = f64::from(page_width_pt);
     if rendered_width_px == 0 || !page_width_pt.is_finite() || page_width_pt <= 0.0 {
         return None;
@@ -1000,21 +1057,52 @@ pub(crate) fn document_page_count(doc: &xberg_native_pdf::PdfDocument) -> Result
 /// render every page from a single parsed handle. `page_index` is assumed to be
 /// in range; out-of-range indices surface as the underlying rasterizer error.
 ///
+/// The DPI is lowered until the page raster fits
+/// `security_limits.max_content_size`. A reduction comes back as a `pdf-render`
+/// warning beside the PNG, not in the thread's render-warning buffer, because a
+/// caller with no warning channel would leave it there for a later extraction
+/// on the same thread to report as its own.
+///
 /// # Errors
 ///
-/// Returns `XbergError::Parsing` if the page cannot be rendered.
+/// Returns `XbergError::Validation` if the page does not fit
+/// `security_limits.max_content_size` even at 1 dpi, and
+/// `XbergError::Parsing` if the page cannot be rendered.
 pub(crate) fn render_open_pdf_page_to_png(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     dpi: Option<i32>,
-) -> Result<Vec<u8>> {
-    let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    let rendered = render_page_with_safeguards(doc, page_index, render_dpi).map_err(|e| XbergError::Parsing {
-        message: format!("Failed to render page {page_index}: {e}"),
-        source: None,
-    })?;
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> Result<(Vec<u8>, Option<ProcessingWarning>)> {
+    let requested_dpi = dpi.unwrap_or(150).max(1);
+    let (page_width_pt, page_height_pt) = get_page_dimensions_pt(doc, page_index);
+    let (page_width_pt, page_height_pt) = (f64::from(page_width_pt), f64::from(page_height_pt));
+    let max_content_size = security_limits.max_content_size;
+    let Some(render_dpi) = fit_page_render_dpi(requested_dpi, page_width_pt, page_height_pt, max_content_size) else {
+        let (width, height, _) = page_raster_budget(1, page_width_pt, page_height_pt);
+        return Err(XbergError::validation(format!(
+            "Page {} needs more image-processing bytes than security_limits.max_content_size \
+             ({max_content_size} bytes) allows, even at {width}x{height} pixels (1 dpi); raise \
+             security_limits.max_content_size to render it",
+            page_index + 1
+        )));
+    };
+    let reduction = (render_dpi < requested_dpi).then(|| {
+        warning(
+            "pdf-render",
+            format!(
+                "Page {} render DPI was reduced from {requested_dpi} to {render_dpi} to fit security_limits.max_content_size",
+                page_index + 1
+            ),
+        )
+    });
+    let rendered =
+        render_page_with_safeguards(doc, page_index, render_dpi as u32).map_err(|e| XbergError::Parsing {
+            message: format!("Failed to render page {page_index}: {e}"),
+            source: None,
+        })?;
 
-    Ok(rendered.data)
+    Ok((rendered.data, reduction))
 }
 
 /// An open PDF document that can render multiple pages without reparsing the file.
@@ -1048,12 +1136,14 @@ impl PdfRenderSession {
         self.page_count
     }
 
-    /// Render a zero-based page index to PNG bytes.
+    /// Render a zero-based page index to PNG bytes, within the default
+    /// `SecurityLimits::max_content_size`.
     ///
     /// # Errors
     ///
     /// Returns `XbergError::Parsing` if `page_index` is out of range or the page
-    /// cannot be rendered.
+    /// cannot be rendered, and `XbergError::Validation` if the page does not fit
+    /// the default `SecurityLimits::max_content_size` even at 1 dpi.
     pub fn render_page_to_png(&self, page_index: usize, dpi: Option<i32>) -> Result<Vec<u8>> {
         if page_index >= self.page_count {
             return Err(XbergError::Parsing {
@@ -1065,7 +1155,16 @@ impl PdfRenderSession {
             });
         }
 
-        render_open_pdf_page_to_png(&self.document, page_index, dpi)
+        let (png, reduction) = render_open_pdf_page_to_png(
+            &self.document,
+            page_index,
+            dpi,
+            &crate::extractors::security::SecurityLimits::default(),
+        )?;
+        if let Some(reduction) = reduction {
+            record_render_warning(reduction);
+        }
+        Ok(png)
     }
 }
 
@@ -1076,7 +1175,9 @@ impl PdfRenderSession {
 ///
 /// For pages with extreme dimensions (very wide vector diagrams, etc.) the
 /// effective DPI may be automatically reduced to avoid rasterizer failure.
-/// A warning is logged when this happens.
+/// A warning is logged when this happens. The DPI is also lowered until the
+/// page fits the default `SecurityLimits::max_content_size`; that reduction is
+/// reported by [`take_xberg_native_pdf_render_warnings`].
 ///
 /// # Arguments
 ///
@@ -1088,7 +1189,9 @@ impl PdfRenderSession {
 /// # Errors
 ///
 /// Returns `XbergError::Parsing` if the PDF cannot be opened, authenticated,
-/// or rendered, or if `page_index` is out of range.
+/// or rendered, or if `page_index` is out of range, and
+/// `XbergError::Validation` if the page does not fit the default
+/// `SecurityLimits::max_content_size` even at 1 dpi.
 pub fn render_pdf_page_to_png(
     pdf_bytes: &[u8],
     page_index: usize,
@@ -1372,6 +1475,50 @@ mod tests {
         assert_eq!(rendered_page_dpi(1275, -612.0), None);
         assert_eq!(rendered_page_dpi(1275, f32::NAN), None);
         assert_eq!(rendered_page_dpi(0, 612.0), None);
+    }
+
+    /// The highest fitting DPI is kept: one DPI more does not fit.
+    #[test]
+    fn fit_page_render_dpi_keeps_the_highest_dpi_that_fits() {
+        const LIMIT: usize = 20 * 1024 * 1024;
+        assert_eq!(fit_page_render_dpi(72, 612.0, 792.0, LIMIT), Some(72));
+        let dpi = fit_page_render_dpi(200, 1000.0, 1000.0, LIMIT).expect("a lower DPI fits");
+        assert!(dpi < 200);
+        let bytes = |dpi| page_raster_budget(dpi, 1000.0, 1000.0).2.expect("no overflow");
+        assert!(bytes(dpi) <= LIMIT as u128);
+        assert!(bytes(dpi + 1) > LIMIT as u128);
+    }
+
+    /// The encoder allowance alone is 256 KiB, so no DPI fits a 64 KiB limit.
+    #[test]
+    fn fit_page_render_dpi_finds_none_when_no_dpi_fits() {
+        assert_eq!(fit_page_render_dpi(200, 612.0, 792.0, 64 * 1024), None);
+    }
+
+    /// The public page render has no limits parameter: it applies the default
+    /// `max_content_size`. A 1000 x 1000 pt page at 600 dpi is 8334 x 8334
+    /// pixels, over the 100 MiB default, so it renders at a lower DPI.
+    #[test]
+    fn public_page_render_fits_the_default_content_limit() {
+        let pdf = build_minimal_pdf_with_mediabox(1000.0, 1000.0);
+        let _ = take_xberg_native_pdf_render_warnings();
+        let png = render_pdf_page_to_png(&pdf, 0, Some(600), None).expect("a lower DPI fits the default limit");
+        let warnings = take_xberg_native_pdf_render_warnings();
+        assert!(
+            warnings.iter().any(|w| w.source == "pdf-render"
+                && w.message.contains("reduced from 600")
+                && w.message.contains("security_limits.max_content_size")),
+            "the DPI reduction must be reported: {warnings:?}"
+        );
+        let page = image::load_from_memory(&png).expect("a real PNG");
+        let bytes = u128::from(page.width()) * u128::from(page.height()) * 11 + 256 * 1024;
+        let limit = crate::extractors::security::SecurityLimits::default().max_content_size as u128;
+        assert!(
+            bytes <= limit,
+            "{}x{} must fit {limit} bytes",
+            page.width(),
+            page.height()
+        );
     }
 
     #[test]

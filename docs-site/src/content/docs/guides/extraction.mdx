@@ -748,6 +748,7 @@ for page_index in 0..count {
 ```
 
 `dpi` defaults to 150 when passed `None`. `password` unlocks encrypted PDFs.
+If a page at the requested DPI needs more image memory than the default `security_limits.max_content_size` (100 MiB), the render uses the highest DPI that fits and records a `pdf-render` warning.
 
 ### DPI Configuration
 

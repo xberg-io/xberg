@@ -57,7 +57,7 @@ use super::document::{
 use super::rendering::EncodedPage;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 use super::rendering::{
-    OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryOutcome,
+    PAGE_RASTER_PNG_BYTES_PER_PIXEL, PAGE_RASTER_PNG_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryOutcome,
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
     recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch, render_selected_pages_from_document,
@@ -4404,8 +4404,8 @@ pub(super) fn ocr_page_working_set_bytes(
 pub(super) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> crate::Result<u64> {
     let source = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
     let conversion = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
-    let output = crate::extraction::image_decode::decoded_byte_count(width, height, OCR_PNG_ENCODE_BYTES_PER_PIXEL)?
-        .checked_add(OCR_PNG_ENCODE_FIXED_BYTES)
+    let output = crate::extraction::image_decode::decoded_byte_count(width, height, PAGE_RASTER_PNG_BYTES_PER_PIXEL)?
+        .checked_add(PAGE_RASTER_PNG_FIXED_BYTES)
         .ok_or_else(|| crate::extraction::image_decode::image_dimension_error(width, height, u64::MAX, u64::MAX))?;
     Ok(source + conversion + output)
 }

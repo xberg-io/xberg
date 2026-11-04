@@ -83,6 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(pdf): Page rendering applies `security_limits.max_content_size`.** (#2352)
+  Structured extraction and the parse memo lower the render DPI until the page fits the caller's limit, as OCR already does. A page that does not fit even at 1 dpi is refused with an error that names the limit. The public page render applies the default limit, so a very large page at a high DPI now comes back at a lower DPI, and the render warnings report each reduction with the `pdf-render` source.
+
 - **(build): Update the zlib build dependency to 1.1.31 for RUSTSEC-2026-0418.**
 
 - **(rendering): Avoid quadratic work when rendering user-controlled HTML table cells.**

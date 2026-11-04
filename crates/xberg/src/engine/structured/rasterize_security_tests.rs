@@ -197,3 +197,100 @@ fn legacy_rendering_and_default_parse_memo_remain_byte_identical() {
     assert_eq!(cached.len(), 1);
     assert_eq!(cached[0].png_bytes, direct[0].png_bytes);
 }
+
+/// A 1000 x 1000 pt page: 2778 x 2778 pixels at 200 dpi, over a 20 MiB page budget.
+#[cfg(feature = "pdf")]
+const BIG_PAGE_PT: f32 = 1000.0;
+#[cfg(feature = "pdf")]
+const PAGE_LIMIT: usize = 20 * 1024 * 1024;
+
+/// Pixel size of a rendered page, and whether the OCR route's page budget
+/// (11 live bytes per pixel and 256 KiB for the encoder) fits `limit`.
+#[cfg(feature = "pdf")]
+fn page_fits(png: &[u8], limit: usize) -> (u32, u32, bool) {
+    let page = image::load_from_memory(png).expect("the returned page is a real PNG");
+    let bytes = u64::from(page.width()) * u64::from(page.height()) * 11 + 256 * 1024;
+    (page.width(), page.height(), bytes <= limit as u64)
+}
+
+#[cfg(feature = "pdf")]
+fn assert_page_budget_error(message: &str, expected_limit: usize) {
+    assert!(message.contains("security_limits.max_content_size"), "{message}");
+    assert!(message.contains(&format!("({expected_limit} bytes)")), "{message}");
+    assert!(message.contains("raise security_limits.max_content_size"), "{message}");
+}
+
+#[cfg(feature = "pdf")]
+#[tokio::test]
+async fn pdf_page_over_the_caller_limit_renders_at_a_lower_dpi_that_fits_it() {
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(BIG_PAGE_PT, BIG_PAGE_PT);
+    let pages = pages_for_call_with_security_limits(
+        &pdf,
+        "application/pdf",
+        StructuredCallMode::VisionOnly,
+        200,
+        &limits(PAGE_LIMIT),
+    )
+    .await
+    .expect("a lower DPI fits the caller's limit");
+    assert_eq!(pages.len(), 1);
+    let (width, height, fits) = page_fits(&pages[0].png_bytes, PAGE_LIMIT);
+    assert!(fits, "a {width}x{height} page must fit {PAGE_LIMIT} bytes");
+    assert!(
+        width < 2778,
+        "the page must render below the requested 200 dpi, got {width}px wide"
+    );
+}
+
+#[cfg(feature = "pdf")]
+#[tokio::test]
+async fn pdf_page_that_fits_the_caller_limit_at_no_dpi_is_refused_naming_the_limit() {
+    const TINY_LIMIT: usize = 64 * 1024;
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(BIG_PAGE_PT, BIG_PAGE_PT);
+    let error = pages_for_call_with_security_limits(
+        &pdf,
+        "application/pdf",
+        StructuredCallMode::VisionOnly,
+        200,
+        &limits(TINY_LIMIT),
+    )
+    .await
+    .expect_err("the encoder allowance alone exceeds 64 KiB");
+    assert!(matches!(error, RasterizeError::Pdf(_)), "{error:?}");
+    assert_page_budget_error(&error.to_string(), TINY_LIMIT);
+}
+
+#[cfg(feature = "pdf")]
+#[test]
+fn parse_memo_renders_pdf_pages_within_its_own_limits() {
+    let pdf: Arc<[u8]> = Arc::from(crate::pdf::render::build_minimal_pdf_with_mediabox(
+        BIG_PAGE_PT,
+        BIG_PAGE_PT,
+    ));
+    let memo = ParsedDocument::from_bytes_with_security_limits(pdf.clone(), &limits(PAGE_LIMIT))
+        .expect("construct a memo with a 20 MiB limit");
+    let pages = memo.rendered_pages(200).expect("a lower DPI fits the memo's limit");
+    let (width, height, fits) = page_fits(&pages[0].png_bytes, PAGE_LIMIT);
+    assert!(fits, "a {width}x{height} page must fit {PAGE_LIMIT} bytes");
+
+    let strict = ParsedDocument::from_bytes_with_security_limits(pdf, &limits(64 * 1024))
+        .expect("construct a memo with a 64 KiB limit");
+    let error = strict.rendered_pages(200).expect_err("no DPI fits 64 KiB");
+    assert_page_budget_error(&error.to_string(), 64 * 1024);
+}
+
+/// The structured result has no warning channel, so a DPI reduction must not
+/// stay in the thread's render-warning buffer, where a later extraction on the
+/// same thread would report it as its own.
+#[cfg(feature = "pdf")]
+#[test]
+fn structured_pdf_render_leaves_no_dpi_reduction_warning_on_the_thread() {
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(BIG_PAGE_PT, BIG_PAGE_PT);
+    let _ = crate::pdf::render::take_xberg_native_pdf_render_warnings();
+    render_all_pages(&pdf, "application/pdf", 200, &limits(PAGE_LIMIT)).expect("a lower DPI fits the caller's limit");
+    let left = crate::pdf::render::take_xberg_native_pdf_render_warnings();
+    assert!(
+        left.iter().all(|w| !w.message.contains("render DPI was reduced")),
+        "the reduction must not stay on the thread: {left:?}"
+    );
+}

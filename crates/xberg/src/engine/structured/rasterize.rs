@@ -67,8 +67,9 @@ pub async fn pages_for_call(
 
 /// Render pages with caller-selected image decoding and PNG encoding limits.
 ///
-/// Only `max_content_size` applies to image inputs. PDF rendering retains its
-/// existing behavior; this method does not enforce PDF page or memory limits.
+/// Only `max_content_size` applies. A PDF page renders at the highest DPI up to
+/// `dpi` whose raster fits it, and is refused when no DPI fits; an image input
+/// is refused when its decode does not fit.
 /// Nonvision call modes return without decoding, regardless of the limits.
 pub async fn pages_for_call_with_security_limits(
     bytes: &[u8],
@@ -162,7 +163,7 @@ pub(crate) fn render_all_pages_with_options(
 ) -> Result<Vec<PageImage>, RasterizeError> {
     let mime_lc = mime.to_ascii_lowercase();
     if mime_lc == "application/pdf" {
-        render_pdf(bytes, dpi)
+        render_pdf(bytes, dpi, security_limits)
     } else if mime_lc.starts_with("image/") {
         render_image(bytes, security_limits, options)
     } else {
@@ -170,7 +171,7 @@ pub(crate) fn render_all_pages_with_options(
     }
 }
 
-fn render_pdf(bytes: &[u8], dpi: u32) -> Result<Vec<PageImage>, RasterizeError> {
+fn render_pdf(bytes: &[u8], dpi: u32, security_limits: &SecurityLimits) -> Result<Vec<PageImage>, RasterizeError> {
     let document = crate::pdf::render::open_pdf_document(bytes, None)
         .map_err(|e| RasterizeError::Pdf(format!("failed to open PDF: {e}")))?;
 
@@ -180,8 +181,10 @@ fn render_pdf(bytes: &[u8], dpi: u32) -> Result<Vec<PageImage>, RasterizeError> 
     let mut pages = Vec::with_capacity(page_count);
 
     for page_idx in 0..page_count {
-        let png_bytes = crate::pdf::render::render_open_pdf_page_to_png(&document, page_idx, Some(dpi as i32))
-            .map_err(|e| RasterizeError::Pdf(format!("failed to render page {}: {e}", page_idx + 1)))?;
+        // A page image has no warning field: a DPI reduction shows only in its pixel size.
+        let (png_bytes, _reduction) =
+            crate::pdf::render::render_open_pdf_page_to_png(&document, page_idx, Some(dpi as i32), security_limits)
+                .map_err(|e| RasterizeError::Pdf(format!("failed to render page {}: {e}", page_idx + 1)))?;
 
         pages.push(PageImage {
             page_number: (page_idx + 1) as u32,

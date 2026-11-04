@@ -171,7 +171,7 @@ pub(super) const INK_BLANK_MAX_DARK_RATIO: f64 = 0.0001;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) const MAX_INK_PROBE_TEXT_CHARS: usize = 200;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) use crate::image::dpi::{OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES};
+pub(super) use crate::pdf::render::{PAGE_RASTER_PNG_BYTES_PER_PIXEL, PAGE_RASTER_PNG_FIXED_BYTES};
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn validate_png_encode_batch_peak<'a>(
     images: impl IntoIterator<Item = &'a image::DynamicImage>,
@@ -201,9 +201,9 @@ pub(super) fn validate_png_encode_batch_peak<'a>(
         let output = crate::extraction::image_decode::decoded_byte_count(
             dimensions.0,
             dimensions.1,
-            OCR_PNG_ENCODE_BYTES_PER_PIXEL,
+            PAGE_RASTER_PNG_BYTES_PER_PIXEL,
         )?
-        .checked_add(OCR_PNG_ENCODE_FIXED_BYTES)
+        .checked_add(PAGE_RASTER_PNG_FIXED_BYTES)
         .ok_or_else(|| {
             crate::extraction::image_decode::image_dimension_error(dimensions.0, dimensions.1, u64::MAX, u64::MAX)
         })?;
@@ -262,8 +262,8 @@ pub(super) fn clone_rgb_for_png_encode(
     crate::extraction::image_decode::validate_dynamic_image_additional_live_bytes(
         image,
         security_limits,
-        3 + OCR_PNG_ENCODE_BYTES_PER_PIXEL,
-        OCR_PNG_ENCODE_FIXED_BYTES,
+        3 + PAGE_RASTER_PNG_BYTES_PER_PIXEL,
+        PAGE_RASTER_PNG_FIXED_BYTES,
     )?;
     Ok(image.to_rgb8())
 }
