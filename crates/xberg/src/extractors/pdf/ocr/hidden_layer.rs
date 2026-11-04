@@ -43,7 +43,7 @@ pub(super) fn stock_backend(config: &ExtractionConfig) -> Option<Arc<dyn OcrBack
 }
 
 fn preserves_requested_projection(config: &ExtractionConfig) -> bool {
-    #[cfg(feature = "layout-detection")]
+    #[cfg(feature = "layout-types")]
     if config.layout.is_some() {
         return false;
     }
