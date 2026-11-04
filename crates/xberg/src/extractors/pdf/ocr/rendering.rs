@@ -598,6 +598,7 @@ pub(super) async fn recover_page_text_from_image_xobjects(
             render_doc,
             page_idx,
             context.no_admitted_images.as_deref_mut(),
+            context.stored_jpegs.as_deref_mut(),
         );
     context.check_cancelled()?;
     if fallback_images.is_empty() {

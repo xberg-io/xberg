@@ -1755,6 +1755,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         budget: &mut xobject_recovery_budget,
                         blank_raster_warnings: trigger.draw_failed.then_some(&mut accumulated_warnings),
                         no_admitted_images: None,
+                        stored_jpegs: None,
                         cancel_token: config.cancel_token.as_ref(),
                     },
                 )
@@ -3563,6 +3564,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             budget: &mut xobject_recovery_budget,
                             blank_raster_warnings: xobject_trigger.draw_failed.then_some(&mut image_fallback_warnings),
                             no_admitted_images: can_prove_no_admitted_images.then_some(&mut no_admitted_images),
+                            stored_jpegs: None,
                             cancel_token: config.cancel_token.as_ref(),
                         },
                     )
@@ -4878,6 +4880,7 @@ pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
     pub(super) blank_raster_warnings: Option<&'a mut Vec<crate::types::ProcessingWarning>>,
     pub(super) no_admitted_images: Option<&'a mut bool>,
+    pub(super) stored_jpegs: Option<&'a mut crate::pdf::native::images::StoredJpegRecoveryBudget>,
     pub(super) cancel_token: Option<&'a crate::cancellation::CancellationToken>,
 }
 
@@ -4891,6 +4894,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             budget,
             blank_raster_warnings: None,
             no_admitted_images: None,
+            stored_jpegs: None,
             cancel_token,
         }
     }
@@ -4912,8 +4916,11 @@ pub(super) async fn collect_pipeline_xobject_pages(
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
+    let limits = ocr_config.security_limits.clone().unwrap_or_default();
+    let mut stored_jpegs = crate::pdf::native::images::StoredJpegRecoveryBudget::new(limits.max_content_size);
     for page_idx in 0..page_count {
-        let context = XObjectRecoveryContext::with_budget(budget, cancel_token);
+        let mut context = XObjectRecoveryContext::with_budget(budget, cancel_token);
+        context.stored_jpegs = Some(&mut stored_jpegs);
         let recovery =
             recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await;
         if cancel_token.is_some_and(|token| token.is_cancelled()) {
@@ -4923,6 +4930,15 @@ pub(super) async fn collect_pipeline_xobject_pages(
             continue;
         };
         append_pipeline_xobject_page(&mut outcome, recovery, page_idx, page_idx, false);
+    }
+    if stored_jpegs.skipped_payload() {
+        outcome.warnings.push(crate::core::diagnostics::warning(
+            "ocr",
+            concat!(
+                "Some embedded JPEG images were skipped during OCR recovery because ",
+                "the retained encoded payload limit was reached."
+            ),
+        ));
     }
     Ok(outcome)
 }

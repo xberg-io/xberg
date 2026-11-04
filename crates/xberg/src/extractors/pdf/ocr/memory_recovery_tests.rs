@@ -803,3 +803,6 @@ async fn detached_recovery_stops_after_first_of_two_jpegs_on_cancellation() {
 async fn whole_document_recovery_stops_after_first_of_two_jpegs_on_cancellation() {
     assert_recovery_stops_after_first_of_two_jpegs(false).await;
 }
+
+#[path = "stored_jpeg_recovery_tests.rs"]
+mod stored_jpeg_recovery_tests;

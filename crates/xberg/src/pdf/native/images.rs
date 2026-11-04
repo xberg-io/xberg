@@ -263,6 +263,57 @@ pub(crate) fn page_ocr_fallback_image_bytes_with_limits(
     images
 }
 
+/// Tracks the unique stored JPEG payloads retained by one whole-document OCR retry.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) struct StoredJpegRecoveryBudget {
+    remaining: usize,
+    admitted: std::collections::HashMap<xberg_native_pdf::object::ObjectRef, Bytes>,
+    skipped_payload: bool,
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl StoredJpegRecoveryBudget {
+    pub(crate) fn new(max_bytes: usize) -> Self {
+        Self {
+            remaining: max_bytes,
+            admitted: std::collections::HashMap::new(),
+            skipped_payload: false,
+        }
+    }
+
+    pub(crate) fn skipped_payload(&self) -> bool {
+        self.skipped_payload
+    }
+
+    /// Return whether this is a plain stored JPEG, even if its bytes were refused.
+    fn push_if_plain(
+        &mut self,
+        handle: &xberg_native_pdf::PdfImageHandle<'_>,
+        out: &mut Vec<PageFallbackImage>,
+    ) -> bool {
+        let Some((source, data)) = handle.plain_stored_jpeg_for_ocr_recovery() else {
+            return false;
+        };
+        let bytes = if let Some(existing) = self.admitted.get(&source) {
+            existing.clone()
+        } else if let Some(remaining) = self.remaining.checked_sub(data.len()) {
+            self.remaining = remaining;
+            self.admitted.insert(source, data.clone());
+            data
+        } else {
+            self.skipped_payload = true;
+            return true;
+        };
+        out.push(PageFallbackImage {
+            bytes,
+            format: "jpeg",
+            recovery: XObjectRecovery::EmbeddedJpeg,
+            paint_order: handle.paint_order,
+        });
+        true
+    }
+}
+
 /// Collect OCR-ready image bytes for every image XObject on `page_idx`, for use as a
 /// `force_ocr` fallback when whole-page rasterization silently dropped an undecodable
 /// image (issue #1355).
@@ -287,6 +338,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
     doc: &xberg_native_pdf::PdfDocument,
     page_idx: usize,
     no_admitted_images: Option<&mut bool>,
+    mut stored_jpegs: Option<&mut StoredJpegRecoveryBudget>,
 ) -> (Vec<PageFallbackImage>, bool) {
     let handles = match doc.page_image_handles(page_idx) {
         Ok(h) => h,
@@ -295,11 +347,16 @@ pub(crate) fn page_ocr_fallback_image_bytes(
             return (Vec::new(), false);
         }
     };
-
     let mut out = Vec::with_capacity(handles.len());
     let mut single_enumerated_xobject_failed = false;
     let mut recovery_complete = true;
     for handle in &handles {
+        if stored_jpegs
+            .as_deref_mut()
+            .is_some_and(|budget| budget.push_if_plain(handle, &mut out))
+        {
+            continue;
+        }
         match handle.decode() {
             Ok(img) => match img.data() {
                 xberg_native_pdf::extractors::ImageData::Jpeg(jpeg_bytes) => out.push(PageFallbackImage {
@@ -352,7 +409,8 @@ pub(crate) fn page_ocr_fallback_image_bytes(
     let single_enumerated_xobject_unrecoverable = single_enumerated_xobject_failed && out.is_empty();
     if let Some(no_admitted_images) = no_admitted_images {
         // Evidence is limited to the existing best-effort recovery pass. ~keep
-        *no_admitted_images = recovery_complete && out.is_empty();
+        *no_admitted_images =
+            recovery_complete && out.is_empty() && !stored_jpegs.is_some_and(|budget| budget.skipped_payload());
     }
     (out, single_enumerated_xobject_unrecoverable)
 }
