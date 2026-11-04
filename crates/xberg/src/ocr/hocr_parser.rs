@@ -20,6 +20,7 @@ use std::collections::HashSet;
 
 use memchr::memchr;
 
+use crate::ocr::table::ExactTableRows;
 use crate::ocr::table::tsv_parser::text_without_underscore_marks;
 use crate::table_core::HocrWord;
 use crate::types::extraction::BoundingBox;
@@ -192,16 +193,17 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
         HocrLinePolicy {
             dictionary_filter,
             protected_words: None,
+            table_rows: None,
         },
     )
 }
 
 type PositionedWord = ([u32; 4], String);
 
-#[derive(Clone, Copy)]
 struct HocrLinePolicy<'a> {
     dictionary_filter: Option<&'a DictionaryLineFilter<'a>>,
     protected_words: Option<&'a HashSet<PositionedWord>>,
+    table_rows: Option<(&'a BoundingBox, ExactTableRows)>,
 }
 
 pub(crate) fn parse_hocr_preserving_rejected_table_words(
@@ -231,11 +233,31 @@ pub(crate) fn parse_hocr_preserving_rejected_table_words(
         HocrLinePolicy {
             dictionary_filter: Some(dictionary_filter),
             protected_words: Some(&protected_words),
+            table_rows: None,
         },
     )
 }
 
-fn parse_hocr_document(hocr_html: &str, page_offset: u32, line_policy: HocrLinePolicy<'_>) -> HocrParseResult {
+/// Remove exact table rows while the parser still has each physical line's word boxes.
+pub(crate) fn parse_hocr_without_claimed_table_rows(
+    hocr_html: &str,
+    page_offset: u32,
+    bbox: &BoundingBox,
+    cells: &[Vec<String>],
+) -> InternalDocument {
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter: None,
+            protected_words: None,
+            table_rows: Some((bbox, ExactTableRows::new(cells))),
+        },
+    )
+    .document
+}
+
+fn parse_hocr_document(hocr_html: &str, page_offset: u32, mut line_policy: HocrLinePolicy<'_>) -> HocrParseResult {
     let mut doc = InternalDocument::new("ocr");
     doc.mime_type = "application/x-hocr".to_string();
 
@@ -305,7 +327,7 @@ fn parse_hocr_document(hocr_html: &str, page_offset: u32, line_policy: HocrLineP
                 last_page.unwrap_or(page_offset),
                 element_index,
                 &par_tag_name,
-                line_policy,
+                &mut line_policy,
                 &mut retained_word_confidence_stats,
             );
             pos = end_pos;
@@ -739,7 +761,7 @@ fn parse_paragraph(
     page: u32,
     element_index: u32,
     par_tag: &str,
-    line_policy: HocrLinePolicy<'_>,
+    line_policy: &mut HocrLinePolicy<'_>,
     retained_word_confidence_stats: &mut RetainedWordConfidenceStats,
 ) -> (Option<InternalElement>, usize, usize) {
     let bytes = html.as_bytes();
@@ -851,6 +873,13 @@ fn parse_paragraph(
                 "removed OCR line(s) whose dictionary-checkable words are mostly not real words"
             );
         }
+    }
+
+    if let Some((bbox, rows)) = line_policy.table_rows.as_mut() {
+        lines.retain(|line| {
+            !line_is_inside_table(line, bbox)
+                || !rows.claim(line.words.iter().flat_map(|word| word.text.split_whitespace()))
+        });
     }
 
     let all_words: Vec<&HocrWordInfo> = lines.iter().flat_map(|l| l.words.iter()).collect();
@@ -1066,6 +1095,18 @@ fn parse_paragraph(
     }
 
     (Some(elem), pos, removed_line_count)
+}
+
+fn line_is_inside_table(line: &HocrLineInfo, bbox: &BoundingBox) -> bool {
+    !line.words.is_empty()
+        && line.words.iter().all(|word| {
+            word.x0 < word.x1
+                && word.y0 < word.y1
+                && f64::from(word.x0) >= bbox.x0
+                && f64::from(word.y0) >= bbox.y0
+                && f64::from(word.x1) <= bbox.x1
+                && f64::from(word.y1) <= bbox.y1
+        })
 }
 
 /// Check if a tag's class attribute contains the given class name.
@@ -2124,6 +2165,44 @@ mod tests {
         assert_eq!(attrs.get(HOCR_X_DESCENDERS_ATTRIBUTE), Some(&"6".to_string()));
         assert_eq!(attrs.get(HOCR_BASELINE_SLOPE_ATTRIBUTE), Some(&"0.01".to_string()));
         assert_eq!(attrs.get(HOCR_BASELINE_CONST_ATTRIBUTE), Some(&"-18".to_string()));
+    }
+
+    #[test]
+    fn claimed_row_does_not_affect_retained_line_geometry_or_style() {
+        let hocr = r#"<div class="ocr_page" title="ppageno 0">
+            <p class="ocr_par">
+                <span class="ocr_line" title="baseline 0 -3; x_size 17">
+                    <span class="ocrx_word" title="bbox 10 10 50 30; x_wconf 92; x_fsize 16">Retained</span>
+                </span>
+                <span class="ocr_line" title="baseline 0 -10; x_size 35">
+                    <span class="ocrx_word" title="bbox 10 40 80 70; x_wconf 83; x_fsize 32">Claimed</span>
+                </span>
+            </p>
+        </div>"#;
+        let retained_box = BoundingBox {
+            x0: 10.0,
+            y0: 10.0,
+            x1: 50.0,
+            y1: 30.0,
+        };
+        let table_box = BoundingBox {
+            x1: 80.0,
+            y1: 70.0,
+            ..retained_box
+        };
+        let cells = vec![vec!["Claimed".to_string()]];
+        let doc = parse_hocr_without_claimed_table_rows(hocr, 4, &table_box, &cells);
+
+        assert_eq!(doc.elements.len(), 1);
+        let line = &doc.elements[0];
+        assert_eq!(line.text, "Retained");
+        assert_eq!(line.bbox, Some(retained_box));
+        assert_eq!(line.page, Some(4));
+        assert_eq!(line.ocr_confidence.as_ref().unwrap().recognition, 0.92);
+        let attrs = line.attributes.as_ref().unwrap();
+        assert_eq!(attrs[HOCR_LINE_FONT_SIZES_ATTRIBUTE], "16");
+        assert_eq!(attrs[HOCR_LINE_X_HEIGHTS_ATTRIBUTE], "17");
+        assert_eq!(attrs[HOCR_BASELINE_CONST_ATTRIBUTE], "-3");
     }
 
     #[test]

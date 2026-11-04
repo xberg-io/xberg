@@ -20,7 +20,7 @@ use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tesseract_element
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::{
     DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_preserving_rejected_table_words,
-    parse_hocr_to_internal_document_with_page_offset_and_stats,
+    parse_hocr_to_internal_document_with_page_offset_and_stats, parse_hocr_without_claimed_table_rows,
 };
 use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
@@ -29,13 +29,14 @@ use crate::ocr::table::has_table_grid;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
-    TableWords, drop_document_elements_claimed_by_tables, extract_table_words_from_tsv, extract_words_from_tsv,
-    orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild,
-    table_to_markdown,
+    TableWords, drop_document_elements_claimed_by_tables, element_center_within_table, extract_table_words_from_tsv,
+    extract_words_from_tsv, orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask,
+    should_adopt_table_rebuild, table_retains_region_words, table_to_markdown,
 };
 #[cfg(test)]
 use crate::ocr::types::BatchItemResult;
 use crate::ocr::types::TesseractConfig;
+use crate::types::extraction::BoundingBox;
 use crate::types::internal::{ElementKind, InternalDocument};
 use crate::types::{OcrExtractionResult, OcrTable, OcrTableBoundingBox};
 use std::collections::HashMap;
@@ -895,17 +896,45 @@ fn flatten_hocr_elements_to_text(elements: &[crate::types::internal::InternalEle
 fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable]) {
     drop_document_elements_claimed_by_tables(
         document,
-        tables.iter().filter_map(|table| {
-            let bbox = table.bounding_box.as_ref()?;
-            let bbox = crate::types::extraction::BoundingBox {
-                x0: bbox.left as f64,
-                y0: bbox.top as f64,
-                x1: bbox.right as f64,
-                y1: bbox.bottom as f64,
-            };
-            Some((bbox, table.cells.as_slice()))
-        }),
+        tables
+            .iter()
+            .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
     )
+}
+
+fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {
+    let bbox = table.bounding_box.as_ref()?;
+    Some(BoundingBox {
+        x0: f64::from(bbox.left),
+        y0: f64::from(bbox.top),
+        x1: f64::from(bbox.right),
+        y1: f64::from(bbox.bottom),
+    })
+}
+
+fn reconcile_grouped_hocr_table_rows(
+    hocr: &str,
+    document: &InternalDocument,
+    tables: &[OcrTable],
+    page_number: u32,
+) -> Option<InternalDocument> {
+    let [table] = tables else {
+        return None;
+    };
+    let bbox = ocr_table_bbox(table)?;
+    let groups_table_lines = document
+        .elements
+        .iter()
+        .any(|element| element.text.trim().contains('\n') && element_center_within_table(element, &bbox));
+    if !groups_table_lines || table_retains_region_words(&document.elements, &bbox, &table.cells) {
+        return None;
+    }
+    Some(parse_hocr_without_claimed_table_rows(
+        hocr,
+        page_number,
+        &bbox,
+        &table.cells,
+    ))
 }
 
 /// Minimum confidence for accepting orientation detection results.
@@ -2127,7 +2156,7 @@ pub(super) fn perform_ocr(
     };
 
     let mut hocr_document: Option<InternalDocument> = None;
-    let mut filtered_hocr = None;
+    let mut hocr_for_tables = None;
     let mut dictionary_filtered_line_count = 0usize;
     let mut retained_hocr_confidence_stats = None;
 
@@ -2153,8 +2182,15 @@ pub(super) fn perform_ocr(
                 config.page_number,
             );
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
-            if config.enable_table_detection && dictionary_filtered_line_count > 0 {
-                filtered_hocr = Some(hocr);
+            if config.enable_table_detection
+                && (dictionary_filtered_line_count > 0
+                    || parse_result
+                        .document
+                        .elements
+                        .iter()
+                        .any(|element| element.text.contains('\n')))
+            {
+                hocr_for_tables = Some(hocr);
             }
             let content = flatten_hocr_elements_to_text(&parse_result.document.elements);
             retained_hocr_confidence_stats = Some(parse_result.retained_word_confidence_stats);
@@ -2455,7 +2491,7 @@ pub(super) fn perform_ocr(
                     region_index,
                     "OCR table region has no row or column that relates two cells; keeping it as text"
                 );
-                if filtered_hocr.is_some() {
+                if dictionary_filtered_line_count > 0 && hocr_for_tables.is_some() {
                     rejected_regions.push(region.read_boxes);
                 }
                 continue;
@@ -2494,13 +2530,9 @@ pub(super) fn perform_ocr(
     }
 
     // Restore supported lines before paragraphs are flattened or claimed by accepted tables. ~keep
-    if let Some(hocr) = filtered_hocr.filter(|_| !rejected_regions.is_empty()) {
-        let restored = parse_hocr_preserving_rejected_table_words(
-            &hocr,
-            &dictionary_filter,
-            config.page_number,
-            &rejected_regions,
-        );
+    if let Some(hocr) = hocr_for_tables.as_deref().filter(|_| !rejected_regions.is_empty()) {
+        let restored =
+            parse_hocr_preserving_rejected_table_words(hocr, &dictionary_filter, config.page_number, &rejected_regions);
         if restored.dictionary_filtered_line_count < dictionary_filtered_line_count {
             content =
                 strip_control_characters(&flatten_hocr_elements_to_text(&restored.document.elements)).into_owned();
@@ -2517,7 +2549,16 @@ pub(super) fn perform_ocr(
         }
     }
     if let Some(document) = hocr_document.as_mut() {
-        filter_elements_covered_by_tables(document, &tables);
+        // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
+        let reconciled = hocr_for_tables
+            .as_deref()
+            .filter(|_| dictionary_filtered_line_count == 0)
+            .and_then(|hocr| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number));
+        if let Some(reconciled) = reconciled {
+            *document = reconciled;
+        } else {
+            filter_elements_covered_by_tables(document, &tables);
+        }
     }
 
     let is_markdown_output = extraction_config

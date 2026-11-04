@@ -143,3 +143,36 @@ fn ruled_table_stays_one_table_with_each_cell_once() {
         }
     }
 }
+
+#[test]
+#[cfg(feature = "pdf")]
+fn lossy_ruled_table_claims_complete_rows_from_one_hocr_paragraph() {
+    let bytes = include_bytes!("data/ocr_layout/ruled_table.png");
+    let cells = [
+        ["", "Qty", "Price", "Total"],
+        ["Anvil", "14", "12.50", "50.00"],
+        ["Bucket", "10", "3.20", "32.00"],
+        ["Chisel", "27", "5.75", "40.25"],
+        ["Ladder", "32", "48.00", "96.00"],
+    ];
+    for format in FORMATS {
+        let mut cfg = config(format.clone());
+        let tesseract = cfg.ocr.as_mut().unwrap().tesseract_config.as_mut().unwrap();
+        tesseract.psm = Some(3);
+        tesseract.table_min_confidence = 89.0;
+        let doc = extract_bytes_document_blocking(bytes, "image/png", &cfg).expect("OCR extraction");
+
+        assert_eq!(doc.tables.len(), 1, "{format:?}");
+        assert_eq!(doc.tables[0].cells, cells, "{format:?}");
+        let expected = match format {
+            OutputFormat::Plain => {
+                "Item Qty Price Total\n\n Qty Price Total\nAnvil 14 12.50 50.00\nBucket 10 3.20 32.00\nChisel 27 5.75 40.25\nLadder 32 48.00 96.00"
+            }
+            OutputFormat::Markdown => {
+                "Item Qty Price Total\n\n|  | Qty | Price | Total |\n| --- | --- | --- | --- |\n| Anvil | 14 | 12.50 | 50.00 |\n| Bucket | 10 | 3.20 | 32.00 |\n| Chisel | 27 | 5.75 | 40.25 |\n| Ladder | 32 | 48.00 | 96.00 |"
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(doc.content.trim_end(), expected, "{format:?}");
+    }
+}

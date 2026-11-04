@@ -84,25 +84,43 @@ fn claim_matching_table_rows(
     cells: &[Vec<String>],
     claimed_lines: &mut HashSet<usize>,
 ) {
-    let mut row_counts = HashMap::new();
-    for row in cells {
-        let tokens: Vec<_> = row.iter().flat_map(|cell| cell.split_whitespace()).collect();
-        if !tokens.is_empty() {
-            *row_counts.entry(tokens).or_insert(0usize) += 1;
-        }
-    }
+    let mut rows = ExactTableRows::new(cells);
     for (index, element) in elements.iter().enumerate() {
-        if !element_center_within_table(element, bbox) || element.text.trim().contains(['\n', '\r']) {
-            continue;
-        }
-        let tokens: Vec<_> = element.text.split_whitespace().collect();
-        if let Some(remaining) = row_counts.get_mut(&tokens)
-            && *remaining > 0
-            && claimed_lines.insert(index)
+        if !claimed_lines.contains(&index)
+            && element_center_within_table(element, bbox)
+            && !element.text.trim().contains(['\n', '\r'])
+            && rows.claim(element.text.split_whitespace())
         {
-            *remaining -= 1;
+            claimed_lines.insert(index);
         }
     }
+}
+
+pub(crate) struct ExactTableRows(HashMap<String, usize>);
+
+impl ExactTableRows {
+    pub(crate) fn new(cells: &[Vec<String>]) -> Self {
+        let mut rows = HashMap::new();
+        for row in cells {
+            let tokens = row_tokens(row.iter().flat_map(|cell| cell.split_whitespace()));
+            if !tokens.is_empty() {
+                *rows.entry(tokens).or_default() += 1;
+            }
+        }
+        Self(rows)
+    }
+
+    pub(crate) fn claim<'a>(&mut self, tokens: impl Iterator<Item = &'a str>) -> bool {
+        let Some(remaining) = self.0.get_mut(&row_tokens(tokens)).filter(|count| **count > 0) else {
+            return false;
+        };
+        *remaining -= 1;
+        true
+    }
+}
+
+fn row_tokens<'a>(tokens: impl Iterator<Item = &'a str>) -> String {
+    tokens.collect::<Vec<_>>().join(" ")
 }
 
 /// [`drop_elements_claimed_by_tables`] over a page document, recording in
@@ -123,7 +141,7 @@ pub(crate) fn drop_document_elements_claimed_by_tables<'a>(
 /// judged for word retention against exactly the elements it would remove — two copies of this test
 /// could disagree and make the retention check answer about a different set of lines than the filter
 /// then deletes. An element with no geometry is not covered by any table. ~keep
-fn element_center_within_table(element: &InternalElement, table_bbox: &BoundingBox) -> bool {
+pub(crate) fn element_center_within_table(element: &InternalElement, table_bbox: &BoundingBox) -> bool {
     let Some(bbox) = element.bbox.as_ref() else {
         return false;
     };
@@ -145,7 +163,11 @@ fn element_center_within_table(element: &InternalElement, table_bbox: &BoundingB
 /// Judged by [`should_adopt_table_rebuild`], the same absolute word-count rule the standalone-image
 /// rebuild uses (GH#1599), and against the table's non-empty cell tokens rather than its markdown,
 /// whose `|`/`---` syntax would pad the count. ~keep
-fn table_retains_region_words(elements: &[InternalElement], table_bbox: &BoundingBox, cells: &[Vec<String>]) -> bool {
+pub(crate) fn table_retains_region_words(
+    elements: &[InternalElement],
+    table_bbox: &BoundingBox,
+    cells: &[Vec<String>],
+) -> bool {
     let region_text = elements
         .iter()
         .filter(|element| element_center_within_table(element, table_bbox))
