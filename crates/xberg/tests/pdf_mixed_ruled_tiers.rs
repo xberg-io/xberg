@@ -47,19 +47,30 @@ fn expected_cells(grid: Grid) -> Vec<Vec<String>> {
         .collect()
 }
 
-fn append_grid(content: &mut String, grid: Grid) {
+fn append_grid(content: &mut String, grid: Grid, header: Option<&[&str]>) {
     let left = 60;
     let right = left + grid.columns * CELL_WIDTH;
     let bottom = grid.top - ROWS * CELL_HEIGHT;
     for row in 0..=ROWS {
         let y = grid.top - row * CELL_HEIGHT;
-        content.push_str(&format!("{left} {y} m {right} {y} l S\n"));
+        let (start, end) = if header.is_none() || row == ROWS {
+            (left, right)
+        } else {
+            // Non-touching outer corners route to the existing clustered-grid detector.
+            let end_gap = if row > 1 {
+                CELL_WIDTH * 3 / 4
+            } else {
+                4 * usize::from(grid.columns > 2)
+            };
+            (left + 4, right - end_gap)
+        };
+        content.push_str(&format!("{start} {y} m {end} {y} l S\n"));
     }
     for col in 0..=grid.columns {
         let x = left + col * CELL_WIDTH;
         content.push_str(&format!("{x} {bottom} m {x} {} l S\n", grid.top));
     }
-    for (row, cells) in expected_cells(grid).iter().enumerate() {
+    for (row, cells) in expected_cells_with_header(grid, header).iter().enumerate() {
         for (col, text) in cells.iter().enumerate() {
             let x = left + col * CELL_WIDTH + 8;
             let y = grid.top - (row + 1) * CELL_HEIGHT + 11;
@@ -68,7 +79,19 @@ fn append_grid(content: &mut String, grid: Grid) {
     }
 }
 
+fn expected_cells_with_header(grid: Grid, header: Option<&[&str]>) -> Vec<Vec<String>> {
+    let mut cells = expected_cells(grid);
+    if let Some(labels) = header {
+        cells[0] = labels.iter().map(|label| (*label).to_owned()).collect();
+    }
+    cells
+}
+
 fn ruled_pdf(grids: &[Grid]) -> Vec<u8> {
+    ruled_pdf_with_header(grids, None)
+}
+
+fn ruled_pdf_with_header(grids: &[Grid], header: Option<&[&str]>) -> Vec<u8> {
     let mut pdf = Document::with_version("1.7");
     let pages = pdf.new_object_id();
     let font = pdf.add_object(dictionary! {
@@ -76,7 +99,7 @@ fn ruled_pdf(grids: &[Grid]) -> Vec<u8> {
     });
     let mut content = String::from("1 w 0 0 0 RG\n");
     for grid in grids {
-        append_grid(&mut content, *grid);
+        append_grid(&mut content, *grid, header);
     }
     let stream = pdf.add_object(Stream::new(dictionary! {}, content.into_bytes()));
     let page = pdf.add_object(dictionary! {
@@ -190,6 +213,7 @@ fn assert_public_tables(grids: &[Grid]) {
         assert_eq!(matches.len(), 1, "exact {} cell matrix must occur once", grid.prefix);
         let table = matches[0];
         assert_eq!(table.page_number, 1);
+        assert_eq!(table.columns, None, "unmarked ruled rows do not declare column labels");
         assert_eq!(table.cells.len(), ROWS);
         assert_eq!(
             table.cells.iter().map(Vec::len).collect::<Vec<_>>(),
@@ -236,4 +260,108 @@ fn should_preserve_bordered_table_without_strict_detection() {
 #[test]
 fn should_keep_two_separate_strict_regions_without_duplicate_relaxed_detections() {
     assert_public_tables(&[STRICT, SECOND_STRICT]);
+}
+
+fn assert_public_columns_preserve_native_header(grid: Grid, detector: TableDetectionConfig) {
+    let header = Some(&["Item", "Count", "Status"][..grid.columns]);
+    let bytes = ruled_pdf_with_header(&[grid], header);
+    let native = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("native opens ruled PDF");
+    let source = native
+        .extract_tables_with_config(0, detector)
+        .expect("native table detection");
+    assert_eq!(source.len(), 1);
+    let expected = expected_cells_with_header(grid, header);
+    assert_eq!(
+        source[0].rows[0]
+            .cells
+            .iter()
+            .map(|cell| cell.text.as_str())
+            .collect::<Vec<_>>(),
+        expected[0]
+    );
+    let source_roles: Vec<_> = source[0]
+        .rows
+        .iter()
+        .enumerate()
+        .flat_map(|(row, source)| {
+            source
+                .cells
+                .iter()
+                .enumerate()
+                .map(move |(column, cell)| (row as u32, column as u32, source.is_header || cell.is_header))
+        })
+        .collect();
+    assert_eq!(
+        source_roles.iter().filter(|(_, _, is_header)| *is_header).count(),
+        grid.columns,
+        "fixture must have exactly one complete header row in the actual producer"
+    );
+
+    let cases = [
+        (OutputFormat::Html, true),
+        (OutputFormat::Markdown, true),
+        (OutputFormat::Plain, false),
+    ];
+    for (format, structure) in cases {
+        let config = ExtractionConfig {
+            use_cache: false,
+            disable_ocr: true,
+            output_format: format.clone(),
+            include_document_structure: structure,
+            pdf_options: Some(PdfConfig {
+                backend: PdfBackend::Native,
+                extract_tables: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("public extraction");
+        assert_eq!(result.tables.len(), 1, "{format:?}");
+        assert_eq!(result.tables[0].cells, expected, "{format:?}");
+        assert_eq!(
+            result.tables[0].columns.as_ref(),
+            expected.first(),
+            "{format:?}: complete native header must also label the public table columns"
+        );
+        let output = result.formatted_content.as_deref().unwrap_or(&result.content);
+        for value in expected.iter().flatten() {
+            assert_eq!(output.matches(value).count(), 1, "{format:?}: {value} must occur once");
+        }
+        if structure {
+            assert_public_grid_roles(&result.document.expect("public structured extraction"), &source_roles);
+        } else {
+            assert!(result.document.is_none());
+        }
+    }
+}
+
+fn assert_public_grid_roles(document: &xberg::types::DocumentStructure, source_roles: &[(u32, u32, bool)]) {
+    let grids: Vec<_> = document
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            xberg::types::NodeContent::Table { grid } => Some(grid),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(grids.len(), 1);
+    assert_eq!(
+        grids[0]
+            .cells
+            .iter()
+            .map(|cell| (cell.row, cell.col, cell.is_header))
+            .collect::<Vec<_>>(),
+        source_roles,
+        "public grid roles must exactly match the native producer"
+    );
+}
+
+#[test]
+fn should_expose_strict_ruled_table_column_labels_alongside_grid_roles() {
+    assert_public_columns_preserve_native_header(STRICT, TableDetectionConfig::strict());
+}
+
+#[test]
+fn should_expose_bordered_ruled_table_column_labels_alongside_grid_roles() {
+    assert_public_columns_preserve_native_header(BORDERED, bordered_config());
 }

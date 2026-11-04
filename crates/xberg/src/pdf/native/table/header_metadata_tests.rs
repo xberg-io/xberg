@@ -1,4 +1,4 @@
-use super::convert_extracted_table;
+use super::{complete_leading_header, convert_extracted_table};
 use crate::core::config::OutputFormat;
 use crate::extraction::derive::derive_extraction_result;
 use crate::types::document_structure::NodeContent;
@@ -310,4 +310,34 @@ fn opposite_positive_header_roles_match_their_source_page_after_sidecar_reorderi
     assert_eq!(html.matches("<td>page-a</td>").count(), 1);
     assert_eq!(html.matches("<th>page-d</th>").count(), 1);
     assert_eq!(html.matches("<td>page-d</td>").count(), 1);
+}
+
+#[test]
+fn complete_leading_header_requires_all_named_unspanned_slots_and_one_tier() {
+    let source = native(
+        vec![
+            row(vec![cell("Item", true, 1, 1), cell("Count", true, 1, 1)], false),
+            row(vec![cell("Anvil", false, 1, 1), cell("12", false, 1, 1)], false),
+        ],
+        false,
+        2,
+    );
+    assert!(complete_leading_header(&source));
+
+    let mut unproved = source.clone();
+    unproved.has_header = true;
+    unproved.rows[0].cells[0].is_header = false;
+    assert!(!complete_leading_header(&unproved));
+
+    let mut blank = source.clone();
+    blank.rows[0].cells[0].text.clear();
+    assert!(!complete_leading_header(&blank));
+
+    let mut spanning = source.clone();
+    spanning.rows[0].cells[0].colspan = 2;
+    assert!(!complete_leading_header(&spanning));
+
+    let mut multi_tier = source;
+    multi_tier.rows[1].is_header = true;
+    assert!(!complete_leading_header(&multi_tier));
 }

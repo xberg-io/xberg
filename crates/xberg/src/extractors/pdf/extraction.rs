@@ -51,10 +51,28 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
     pub(crate) page_config: Option<&'a crate::core::config::PageConfig>,
 }
 
-type NativeTableMetadata = (
-    Option<crate::types::TableGrid>,
-    Option<crate::pdf::native::table::scripts::TableScripts>,
-);
+#[derive(Default)]
+struct NativeTableMetadata {
+    grid: Option<crate::types::TableGrid>,
+    scripts: Option<crate::pdf::native::table::scripts::TableScripts>,
+    complete_leading_header: bool,
+}
+
+impl NativeTableMetadata {
+    fn retain_column_labels(&self, table: &mut Table) {
+        if table.columns.is_none()
+            && self.complete_leading_header
+            && self
+                .grid
+                .as_ref()
+                .is_some_and(|grid| crate::extraction::derive::native_grid_matches_table(table, grid))
+            && let Some(labels) = table.cells.first()
+            && labels.iter().all(|label| !label.trim().is_empty())
+        {
+            table.columns = Some(labels.clone());
+        }
+    }
+}
 
 struct NativeHierarchySegments {
     pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
@@ -85,25 +103,27 @@ fn attach_native_table_grids(
     let sidecars: Vec<_> = tables
         .iter()
         .zip(grids)
-        .filter_map(|(table, (grid, _))| {
-            grid.as_ref()
+        .filter_map(|(table, metadata)| {
+            metadata
+                .grid
+                .as_ref()
                 .map(|grid| crate::pdf::structure::table_grid::TableGridSidecar {
                     table: table.clone(),
                     grid: grid.clone(),
                 })
         })
         .collect();
-    crate::pdf::structure::table_grid::attach_table_grids(document, &sidecars)
+    crate::pdf::structure::table_grid::attach_ruled_table_grids(document, &sidecars)
         .map_err(|error| crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}")))?;
     for element in &mut document.elements {
         let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
             continue;
         };
         let index = table_index as usize;
-        let Some((table, (_, scripts))) = tables.get(index).zip(grids.get(index)) else {
+        let Some((table, metadata)) = tables.get(index).zip(grids.get(index)) else {
             continue;
         };
-        if let Some(scripts) = scripts
+        if let Some(scripts) = &metadata.scripts
             && scripts.cells == table.cells
             && document
                 .tables
@@ -626,7 +646,7 @@ pub(crate) fn extract_all_from_native_document(
         .pdf_options
         .as_ref()
         .is_some_and(|o| o.allow_single_column_tables);
-    let (tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
+    let (mut tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
         crate::pdf::native::guard_native_panic(
             || -> Result<TableExtractionResult> {
                 let mut warnings = Vec::new();
@@ -646,7 +666,16 @@ pub(crate) fn extract_all_from_native_document(
                 warnings.extend(bordered_warnings);
                 let (mut combined, mut native_grids): (Vec<_>, Vec<_>) = extracted_tables
                     .into_iter()
-                    .map(|entry| (entry.table, (entry.grid, entry.scripts)))
+                    .map(|entry| {
+                        (
+                            entry.table,
+                            NativeTableMetadata {
+                                grid: entry.grid,
+                                scripts: entry.scripts,
+                                complete_leading_header: entry.complete_leading_header,
+                            },
+                        )
+                    })
                     .unzip();
                 let covered_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
                 let hierarchy_segments = match crate::pdf::native::table::extract_tables_heuristic(
@@ -656,7 +685,8 @@ pub(crate) fn extract_all_from_native_document(
                     artifacts,
                 ) {
                     Ok(extraction) => {
-                        native_grids.resize_with(combined.len() + extraction.tables.len(), || (None, None));
+                        native_grids
+                            .resize_with(combined.len() + extraction.tables.len(), NativeTableMetadata::default);
                         combined.extend(extraction.tables);
                         drop((
                             extraction.hierarchy_segments.pages,
@@ -777,7 +807,7 @@ pub(crate) fn extract_all_from_native_document(
     // once `assign_hierarchy_to_pages` has run, since that happens after this function
     // returns and the `NativeDocument` this loop reads from is dropped. ~keep
     let mut pdf_page_coordinate_frames: Vec<crate::types::internal::PdfPageCoordinateFrame> = Vec::new();
-    let pre_rendered_doc = if needs_structured && !config.force_ocr {
+    let mut pre_rendered_doc = if needs_structured && !config.force_ocr {
         let k = hierarchy_cluster_count(config);
 
         // `HierarchyConfig::include_bbox` (default `true`): when explicitly disabled,
@@ -914,7 +944,6 @@ pub(crate) fn extract_all_from_native_document(
         ) {
             Ok(mut structured_doc) if !structured_doc.elements.is_empty() => {
                 extraction_warnings.append(&mut structured_doc.processing_warnings);
-                attach_native_table_grids(&mut structured_doc, &tables, &native_table_grids)?;
                 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
                 if image_anchor == ImageAnchor::OcrTextOnly {
                     anchor_images_as_ocr_text(&mut structured_doc);
@@ -950,6 +979,14 @@ pub(crate) fn extract_all_from_native_document(
     } else {
         None
     };
+
+    // Column labels describe the retained table, never guide repairs or stitching. ~keep
+    for (table, metadata) in tables.iter_mut().zip(&native_table_grids) {
+        metadata.retain_column_labels(table);
+    }
+    if let Some(document) = &mut pre_rendered_doc {
+        attach_native_table_grids(document, &tables, &native_table_grids)?;
+    }
 
     let has_font_encoding_issues = false;
 
