@@ -85,11 +85,10 @@ fn preserves_existing_scripts(
                 after.extend(children.iter().map(|owner| owner.script.as_ref()));
             }
         }
-        // New records consume the shared lookback window. Reject the transfer
-        // before mutation if any original script classification would change. ~keep
+        // New records can displace or replace a legacy base in the lookback.
+        // Preserve both its joining classification and its emitted markup. ~keep
         original_positions.into_iter().all(|(old, new)| {
-            super::super::assembly::segment_script_kind(&before, old)
-                == super::super::assembly::segment_script_kind(&after, new)
+            super::super::assembly::segment_script(&before, old) == super::super::assembly::segment_script(&after, new)
         })
     })
 }
