@@ -1285,7 +1285,8 @@
           "type": "object"
         },
         "features": {
-          "description": "Exact Cargo feature set enabled for this component.",
+          "default": [],
+          "description": "Exact Cargo feature set enabled for this component. Required and non-empty unless the\ncomponent is a Go producer or names its own `source_manifest` crate.",
           "items": {
             "type": "string"
           },
@@ -1294,6 +1295,13 @@
         "name": {
           "description": "Stable component name used in manifests and release assets.",
           "type": "string"
+        },
+        "producer_dir": {
+          "description": "Directory where the producer crate is generated and built from\n(`cargo build --manifest-path <producer_dir>/Cargo.toml`).\n\nDefaults to `crates/<core>-<name>-component`. Relative to the directory containing\n`alef.toml`; must not contain `..`. For Go producers it is the Go module directory.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "producer_language": {
           "$ref": "#/$defs/ComponentProducerLanguage",
@@ -1305,6 +1313,13 @@
             "$ref": "#/$defs/ComponentProvidesConfig"
           },
           "type": "array"
+        },
+        "source_manifest": {
+          "description": "Path to the `Cargo.toml` of the crate that holds this component's `implementation` types.\n\nDefaults to the `[[crates]]` core crate. When set, the generated producer keeps its path\ndependency on the core crate (the contract trait home) and additionally depends on this\ncrate, named by its `[package] name`. The component's `features` go on this source crate\n(so they must be defined there) and `default_features` applies to both dependencies; the\ncore crate gets no features. When the manifest resolves to the core crate itself, a single\ndependency carrying the features is emitted as usual. Rust producers only. Relative to the\ndirectory containing `alef.toml`.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "targets": {
           "default": null,
@@ -1320,8 +1335,7 @@
       },
       "required": [
         "name",
-        "provides",
-        "features"
+        "provides"
       ],
       "type": "object"
     },
@@ -5581,6 +5595,13 @@
             "$ref": "#/$defs/FfiTargetDepOverride"
           },
           "type": "array"
+        },
+        "visitor_context_accessors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Callback-only borrowed string-map accessors, keyed by visitor context type.\nAn accessor is evaluated only when called on the context during its callback.",
+          "type": "object"
         }
       },
       "type": "object"
@@ -8621,7 +8642,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.122.1/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8753,6 +8774,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.122.1",
-  "x-alef-version": "0.122.1"
+  "version": "0.123.0",
+  "x-alef-version": "0.123.0"
 }

@@ -6,7 +6,7 @@
 # for. 0.83.0 additionally fixes the php/napi/pyo3 mirror defaults, the elixir bytes
 # hop and the typescript/wasm mock-url builder that this repo's e2e legs were red on.
 # ~keep
-alef_version = "0.122.2"
+alef_version = "0.123.0"
 # Alef 0.115.5 emits a redundant PathBuf conversion closure in the Dart bridge. ~keep
 # This supported allow-list applies only to generated Rust bindings. ~keep
 extra_clippy_allows = ["redundant_closure"]
@@ -5743,6 +5743,7 @@ clear_fn = "clear_reranker_backends"
 
 [[crates.trait_bridges]]
 trait_name = "TokenizerBackend"
+ffi_skip_methods = ["try_count_tokens"]
 exclude_languages = ["php:callbacks"]
 super_trait = "xberg::plugins::Plugin"
 registry_getter = "xberg::plugins::registry::get_tokenizer_backend_registry"
@@ -5761,3 +5762,6 @@ id = "adrlint"
 git = "https://github.com/Goldziher/adrlint.git"
 revision = "v0"
 hooks = ["adrlint-lint", "adrlint-format-check", "adrlint-lock-check"]
+
+[extensions.python_host_aliases.crates.xberg.traits.TokenizerBackend]
+try_count_tokens = { fallback = "count_tokens", python_only = true }
