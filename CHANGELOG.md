@@ -165,6 +165,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(rust): Restore strict Clippy and no-ORT PDF feature builds.**
+  Keep script fixture geometry bit-exact and compile the OCR structure wrapper only where it is used.
+
 - **(pdf): Keep proved native superscript suffixes with their base text across paragraph grouping.** (#2275)
   Preserve original glyph geometry and unrelated paragraphs; overlapping suffixes retain their existing behavior.
   Attach surviving suffix records after semantic refinement to preserve references, list boundaries and existing scripts.

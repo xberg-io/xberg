@@ -3461,22 +3461,20 @@ const TABLE_MODEL_LOADERS: TableModelLoaders = TableModelLoaders {
     slanet: crate::layout::take_or_create_slanet,
 };
 
-#[cfg(feature = "layout-detection")]
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn extract_document_structure_from_segments(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
-    build_document_structure(all_page_segments, config, TABLE_MODEL_LOADERS)
+    build_document_structure(
+        all_page_segments,
+        config,
+        #[cfg(feature = "layout-detection")]
+        TABLE_MODEL_LOADERS,
+    )
 }
 
-#[cfg(not(feature = "layout-detection"))]
-pub(crate) fn extract_document_structure_from_segments(
-    all_page_segments: Vec<Vec<SegmentData>>,
-    config: SegmentStructureConfig<'_>,
-) -> Result<crate::types::internal::InternalDocument> {
-    build_document_structure(all_page_segments, config)
-}
-
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 fn build_document_structure(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
