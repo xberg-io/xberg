@@ -558,14 +558,26 @@ async fn run_pipeline_impl(
     #[cfg(not(feature = "chunking"))]
     let chunker_heading_source: Option<String> = None;
 
+    #[cfg(feature = "redaction")]
+    let capture_redaction = processor_stages
+        .as_ref()
+        .is_some_and(|snapshot| snapshot.builtin_redaction().is_some())
+        && (config.redaction.is_some() || crate::text::redaction::external::external_redaction_is_scoped());
+
     #[cfg(feature = "html")]
-    let styled_html_prerender: Option<String> = {
+    let styled_html_prerender: Option<(String, Option<String>)> = {
         use crate::plugins::InternalRenderer as _;
         if config.output_format == crate::core::config::OutputFormat::Html {
             config.html_output.as_ref().and_then(|html_cfg| {
                 match crate::rendering::StyledHtmlRenderer::new(html_cfg.clone()) {
                     Ok(renderer) => match renderer.render(&doc) {
-                        Ok(html) => Some(html),
+                        Ok(html) => {
+                            #[cfg(feature = "redaction")]
+                            let verified_plain = capture_redaction.then(|| renderer.verified_plain(&doc)).flatten();
+                            #[cfg(not(feature = "redaction"))]
+                            let verified_plain = None;
+                            Some((html, verified_plain))
+                        }
                         Err(e) => {
                             tracing::warn!("StyledHtmlRenderer render failed, falling back to default HTML: {e}");
                             None
@@ -593,10 +605,7 @@ async fn run_pipeline_impl(
         doc,
         include_structure,
         config.output_format.clone(),
-        processor_stages
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.builtin_redaction().is_some())
-            && (config.redaction.is_some() || crate::text::redaction::external::external_redaction_is_scoped()),
+        capture_redaction,
     );
     #[cfg(not(feature = "redaction"))]
     let mut result =
@@ -625,8 +634,13 @@ async fn run_pipeline_impl(
     let internal_document_source_content = result.internal_document.is_some().then(|| result.content.clone());
 
     #[cfg(feature = "html")]
-    if let Some(html) = styled_html_prerender {
-        result.formatted_content = Some(html);
+    if let Some((html, _verified_plain)) = styled_html_prerender {
+        #[cfg(feature = "redaction")]
+        result.set_styled_html(html, _verified_plain.as_deref());
+        #[cfg(not(feature = "redaction"))]
+        {
+            result.formatted_content = Some(html);
+        }
     }
 
     // #331: same idea for the rendered output format, which `apply_output_format` swaps into

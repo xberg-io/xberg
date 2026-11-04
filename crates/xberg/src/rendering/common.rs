@@ -745,6 +745,11 @@ pub(crate) fn escape_html_text(input: &str) -> Cow<'_, str> {
         return Cow::Borrowed(input);
     }
     let mut out = String::with_capacity(input.len() + 16);
+    push_html_text(&mut out, input);
+    Cow::Owned(out)
+}
+
+pub(crate) fn push_html_text(out: &mut String, input: &str) {
     for c in input.chars() {
         match c {
             '&' => out.push_str("&amp;"),
@@ -753,7 +758,6 @@ pub(crate) fn escape_html_text(input: &str) -> Cow<'_, str> {
             _ => out.push(c),
         }
     }
-    Cow::Owned(out)
 }
 
 // ~keep Read only by the DOCX and PDF writers, which need `office` and `pdf`; a

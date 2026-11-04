@@ -33,6 +33,9 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
             processor.process(result.document_mut(), config).await
         };
         result.seal_processor_witness();
+        if outcome.is_ok() {
+            result.seal_redacted_html()?;
+        }
         return outcome;
     }
     #[cfg(feature = "redaction")]
@@ -40,6 +43,7 @@ async fn invoke_processor<R: crate::extraction::derive::surfaces::ProcessingDocu
         let witness = result.processor_witness();
         let outcome = processor.process(result.document_mut(), config).await;
         result.observe_processor(witness);
+        result.validate_sealed_html(config)?;
         outcome
     }
     #[cfg(not(feature = "redaction"))]
@@ -193,3 +197,6 @@ mod literal_selection_tests;
 
 #[cfg(all(test, feature = "redaction", feature = "tokio-runtime", feature = "html"))]
 mod untrusted_html_mutation_tests;
+
+#[cfg(all(test, feature = "redaction", feature = "tokio-runtime", feature = "html"))]
+mod html_surface_mutation_tests;

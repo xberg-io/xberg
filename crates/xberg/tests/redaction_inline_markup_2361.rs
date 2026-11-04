@@ -185,8 +185,10 @@ impl xberg::plugins::Plugin for CacheObserver {
 
 #[async_trait::async_trait]
 impl xberg::PostProcessor for CacheObserver {
-    async fn process(&self, _result: &mut ExtractedDocument, _config: &ExtractionConfig) -> xberg::Result<()> {
-        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    async fn process(&self, _result: &mut ExtractedDocument, config: &ExtractionConfig) -> xberg::Result<()> {
+        if config.use_cache {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         Ok(())
     }
 
@@ -254,6 +256,204 @@ async fn cached_file_keeps_redaction_coverage_and_invalidates_changed_terms_2361
     for expected in [2, 2] {
         let result = cached_file(&path, &config).await;
         assert_eq!(normalized(&result.content), "[REDACTED] and [REDACTED] [REDACTED]");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), expected);
+    }
+}
+
+async fn parsed_text(result: &ExtractedDocument) -> String {
+    match result.metadata.output_format.as_deref().expect("actual output format") {
+        "plain" => normalized(&result.content),
+        "json" => {
+            let value: serde_json::Value = serde_json::from_str(&result.content).expect("actual JSON renderer");
+            let body = value["body"].as_array().unwrap();
+            assert_eq!(body.len(), 1);
+            assert_eq!(body[0]["type"], "paragraph");
+            normalized(body[0]["text"].as_str().unwrap())
+        }
+        "doctags" => {
+            let document = roxmltree::Document::parse(&result.content).expect("actual DocTags tree");
+            assert_eq!(document.root_element().tag_name().name(), "doctag");
+            let text = document
+                .descendants()
+                .filter(|node| node.is_text())
+                .filter_map(|node| node.text())
+                .collect::<String>();
+            normalized(&text)
+        }
+        format => {
+            let mime = match format {
+                "markdown" => "text/markdown",
+                "djot" => "text/djot",
+                "html" => "text/html",
+                other => panic!("unexpected output format {other}"),
+            };
+            let config = ExtractionConfig {
+                output_format: OutputFormat::Plain,
+                use_cache: false,
+                ..Default::default()
+            };
+            let response = extract(ExtractInput::from_bytes(result.content.as_bytes(), mime, None), &config)
+                .await
+                .unwrap();
+            assert_eq!(response.results.len(), 1);
+            normalized(&response.results[0].content)
+        }
+    }
+}
+
+#[tokio::test]
+async fn every_text_output_removes_both_tokens_of_repeated_split_terms_2361() {
+    let formats = [
+        OutputFormat::Plain,
+        OutputFormat::Markdown,
+        OutputFormat::Html,
+        OutputFormat::Djot,
+        OutputFormat::Json,
+        OutputFormat::DocTags,
+    ];
+    let mut actual = Vec::new();
+    for format in formats {
+        let result = redacted(MIXED, format.clone()).await;
+        assert!(result.redaction_report.is_some(), "{format}: redaction must execute");
+        actual.push((format.to_string(), parsed_text(&result).await));
+    }
+    let expected = ["plain", "markdown", "html", "djot", "json", "doctags"]
+        .map(|format| (format.to_string(), "[REDACTED] and [REDACTED] end".to_string()));
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn html_without_redaction_preserves_existing_rendered_bytes_2361() {
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        use_cache: false,
+        ..Default::default()
+    };
+    let response = extract(ExtractInput::from_bytes(MIXED, "text/html", None), &config)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    assert_eq!(response.results[0].content, "<p>Jane Doe and Jane <u>Doe</u> end</p>\n");
+    assert!(response.results[0].redaction_report.is_none());
+}
+
+#[tokio::test]
+async fn zero_match_html_preserves_visible_text_and_zero_token_accounting_2361() {
+    let mut config = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        use_cache: false,
+        ..Default::default()
+    };
+    config.redaction = Some(RedactionConfig {
+        strategy: RedactionStrategy::TokenReplace,
+        custom_terms: vec![RedactionTerm::labeled("person", "Jane Doe")],
+        ..Default::default()
+    });
+    let response = extract(
+        ExtractInput::from_bytes(b"<p>safe <u>body</u></p>".as_slice(), "text/html", None),
+        &config,
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.results.len(), 1);
+    let result = &response.results[0];
+    assert_eq!(result.metadata.output_format.as_deref(), Some("html"));
+    assert_eq!(parsed_text(result).await, "safe body");
+    let report = result.redaction_report.as_ref().unwrap();
+    assert_eq!(report.total_redacted, 0);
+    assert_eq!(report.findings.len(), 0);
+    assert_eq!(result.content.matches("[PERSON_").count(), 0);
+    if result.content.starts_with("<pre>") {
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.source == "output_format" && warning.message.contains("formatting"))
+        );
+    }
+}
+
+#[tokio::test]
+async fn styled_html_override_redacts_every_occurrence_through_real_private_producer_2361() {
+    let mut config = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        use_cache: false,
+        html_output: Some(xberg::HtmlOutputConfig {
+            css: Some("p { color: red; }".into()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let before = extract(ExtractInput::from_bytes(MIXED, "text/html", None), &config)
+        .await
+        .unwrap();
+    assert_eq!(before.results.len(), 1);
+    assert!(before.results[0].content.contains("kb-doc"));
+    assert!(before.results[0].content.contains("p { color: red; }"));
+    config.redaction = Some(RedactionConfig {
+        custom_terms: vec![RedactionTerm::labeled("person", "Jane Doe")],
+        ..Default::default()
+    });
+    let response = extract(ExtractInput::from_bytes(MIXED, "text/html", None), &config)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    assert_eq!(response.results[0].metadata.output_format.as_deref(), Some("html"));
+    assert_eq!(parsed_text(&response.results[0]).await, "[REDACTED] and [REDACTED] end");
+    assert_eq!(response.results[0].redaction_report.as_ref().unwrap().total_redacted, 2);
+}
+
+#[tokio::test]
+async fn builtin_custom_html_keeps_requested_syntax_and_complete_redaction_2361() {
+    let result = redacted(MIXED, OutputFormat::Custom("html".into())).await;
+    assert_eq!(result.metadata.output_format.as_deref(), Some("html"));
+    assert_eq!(parsed_text(&result).await, "[REDACTED] and [REDACTED] end");
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn html_cache_hits_keep_verified_redaction_and_changed_term_invalidation_2361() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("private.html");
+    std::fs::write(&path, MIXED).unwrap();
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    xberg::register_post_processor(std::sync::Arc::new(CacheObserver(std::sync::Arc::clone(&calls)))).unwrap();
+    let _registration = CacheRegistration;
+    let mut config = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        use_cache: true,
+        enable_quality_processing: false,
+        cache_namespace: Some(format!(
+            "html2361_{}",
+            directory
+                .path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .trim_start_matches('.')
+        )),
+        redaction: Some(RedactionConfig {
+            custom_terms: vec![RedactionTerm::labeled("person", "Jane Doe")],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    for expected in [1, 1] {
+        let result = cached_file(&path, &config).await;
+        assert_eq!(result.metadata.output_format.as_deref(), Some("html"));
+        assert_eq!(parsed_text(&result).await, "[REDACTED] and [REDACTED] end");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), expected);
+    }
+    config
+        .redaction
+        .as_mut()
+        .unwrap()
+        .custom_terms
+        .push(RedactionTerm::labeled("person", "end"));
+    for expected in [2, 2] {
+        let result = cached_file(&path, &config).await;
+        assert_eq!(parsed_text(&result).await, "[REDACTED] and [REDACTED] [REDACTED]");
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), expected);
     }
 }

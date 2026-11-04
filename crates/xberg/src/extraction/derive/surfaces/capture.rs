@@ -1,4 +1,4 @@
-use super::{DerivationObserver, ProcessingDocument, RedactionSurfaces};
+use super::{DerivationObserver, HtmlPageBody, ProcessingDocument, RedactionSurfaces};
 use crate::types::ExtractedDocument;
 use sha2::{Digest, Sha256};
 use std::ops::{Deref, DerefMut};
@@ -35,9 +35,28 @@ struct PageSurface {
     literal: bool,
 }
 
+struct HtmlSurface {
+    rendered: Fingerprint,
+    verified: bool,
+}
+
+struct HtmlOutputSeal {
+    plain: Fingerprint,
+    formatted: Fingerprint,
+    pages: Vec<Fingerprint>,
+}
+
+struct HtmlPage {
+    index: usize,
+    rendered: Fingerprint,
+    body: HtmlPageBody,
+}
+
 #[derive(Default)]
 pub(crate) struct SurfaceCapture {
     formatted: Option<Fingerprint>,
+    html: Option<HtmlSurface>,
+    html_pages: Vec<HtmlPage>,
     pages: Vec<PageSurface>,
     tag_exemptions: bool,
 }
@@ -46,6 +65,25 @@ impl DerivationObserver for SurfaceCapture {
     fn captures_pages(&self) -> bool {
         true
     }
+    fn captures_html(&self) -> bool {
+        true
+    }
+
+    fn formatted_html(&mut self, rendered: &str, verified: bool) {
+        self.html = Some(HtmlSurface {
+            rendered: Fingerprint::new(rendered),
+            verified,
+        });
+    }
+
+    fn page_html(&mut self, index: usize, rendered: &str, body: HtmlPageBody) {
+        self.html_pages.push(HtmlPage {
+            index,
+            rendered: Fingerprint::new(rendered),
+            body,
+        });
+    }
+
     fn formatted(&mut self, markdown: bool, text: &str) {
         if markdown {
             self.formatted = Some(Fingerprint::new(text));
@@ -82,10 +120,49 @@ pub(crate) struct SurfaceContext {
     prefer_current_plain: bool,
     page_numbers: Option<Vec<u32>>,
     processor_changed_page_shape: bool,
+    html_mutated: bool,
+    html_output_seal: Option<HtmlOutputSeal>,
+}
+
+impl SurfaceContext {
+    fn html_preimage_matches(&self, document: &ExtractedDocument, html: &HtmlSurface) -> bool {
+        let pages = document.pages.as_deref().unwrap_or_default();
+        let pages_verified = self.page_shape_matches(document)
+            && pages.len() == self.capture.html_pages.len()
+            && pages
+                .iter()
+                .zip(&self.capture.html_pages)
+                .enumerate()
+                .all(|(index, (page, proof))| {
+                    proof.index == index
+                        && !matches!(proof.body, HtmlPageBody::Unverified)
+                        && proof.rendered.matches(&page.content)
+                        && page.native_content.is_none()
+                });
+        html.verified
+            && self.plain_document.matches(&document.content)
+            && document
+                .formatted_content
+                .as_deref()
+                .is_some_and(|text| html.rendered.matches(text))
+            && pages_verified
+    }
+
+    fn validate_html(&self, document: &ExtractedDocument, html: &HtmlSurface) -> crate::Result<()> {
+        if !self.html_mutated && self.html_preimage_matches(document, html) {
+            return Ok(());
+        }
+        Err(crate::XbergError::validation(
+            "HTML redaction requires unchanged renderer output and complete verified plain text",
+        ))
+    }
 }
 
 impl RedactionSurfaces for SurfaceContext {
     fn validate(&self, document: &ExtractedDocument) -> crate::Result<()> {
+        if let Some(html) = &self.capture.html {
+            return self.validate_html(document, html);
+        }
         if self.processor_changed_page_shape && !self.page_shape_matches(document) {
             return Err(crate::XbergError::validation(
                 "A post-processor changed the pages of the document, and redaction cannot continue",
@@ -106,6 +183,17 @@ impl RedactionSurfaces for SurfaceContext {
             "Generated Markdown provenance changed before redaction",
         ))
     }
+    fn formatted_html(&self) -> bool {
+        self.capture.html.is_some()
+    }
+
+    fn page_html_backup(&self, index: usize) -> Option<&str> {
+        match &self.capture.html_pages.get(index)?.body {
+            HtmlPageBody::Rendered(plain) => Some(plain),
+            HtmlPageBody::Literal | HtmlPageBody::Unverified => None,
+        }
+    }
+
     fn formatted_markdown(&self) -> bool {
         self.formatted_invalidated || self.capture.formatted.is_some()
     }
@@ -157,7 +245,8 @@ pub(crate) struct DerivedResult {
 
 impl DerivedResult {
     pub(crate) fn new(document: ExtractedDocument, capture: Option<SurfaceCapture>) -> Self {
-        let capture = capture.filter(|capture| capture.formatted.is_some() || !capture.pages.is_empty());
+        let capture = capture
+            .filter(|capture| capture.formatted.is_some() || capture.html.is_some() || !capture.pages.is_empty());
         let identity = capture.as_ref().map(|_| Arc::new(()));
         let context = capture
             .zip(identity.as_ref())
@@ -169,6 +258,8 @@ impl DerivedResult {
                 formatted_literal: None,
                 prefer_current_plain: false,
                 processor_changed_page_shape: false,
+                html_mutated: false,
+                html_output_seal: None,
                 page_numbers: document
                     .pages
                     .as_ref()
@@ -181,6 +272,15 @@ impl DerivedResult {
             context,
         }
     }
+    #[cfg(feature = "html")]
+    pub(crate) fn set_styled_html(&mut self, rendered: String, verified_plain: Option<&str>) {
+        if let Some(context) = &mut self.context {
+            let verified = verified_plain == Some(self.document.content.as_str());
+            context.capture.formatted_html(&rendered, verified);
+        }
+        self.document.formatted_content = Some(rendered);
+    }
+
     pub(crate) fn into_output(
         self,
         requested: crate::core::config::OutputFormat,
@@ -227,6 +327,66 @@ impl ProcessingDocument for DerivedResult {
     fn seal_processor_witness(&mut self) {
         self.witness_active = false;
     }
+    fn seal_redacted_html(&mut self) -> crate::Result<()> {
+        let Some(context) = &mut self.context else {
+            return Ok(());
+        };
+        if context.capture.html.is_none() || self.document.redaction_report.is_none() {
+            return Ok(());
+        }
+        let formatted = self
+            .document
+            .formatted_content
+            .as_deref()
+            .ok_or_else(html_output_changed)?;
+        context.html_output_seal = Some(HtmlOutputSeal {
+            plain: Fingerprint::new(&self.document.content),
+            formatted: Fingerprint::new(formatted),
+            pages: self
+                .document
+                .pages
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .map(|page| Fingerprint::new(&page.content))
+                .collect(),
+        });
+        Ok(())
+    }
+
+    fn validate_sealed_html(&self, config: &crate::ExtractionConfig) -> crate::Result<()> {
+        let Some(context) = &self.context else {
+            return Ok(());
+        };
+        let Some(seal) = &context.html_output_seal else {
+            return Ok(());
+        };
+        let pages = self.document.pages.as_deref().unwrap_or_default();
+        let unchanged = seal.plain.matches(&self.document.content)
+            && self
+                .document
+                .formatted_content
+                .as_deref()
+                .is_some_and(|html| seal.formatted.matches(html))
+            && context.page_shape_matches(&self.document)
+            && pages.len() == seal.pages.len()
+            && pages
+                .iter()
+                .zip(&seal.pages)
+                .all(|(page, hash)| page.native_content.is_none() && hash.matches(&page.content));
+        if !unchanged {
+            return Err(html_output_changed());
+        }
+        let limit = config.security_limits.as_ref().map_or_else(
+            || crate::extractors::security::SecurityLimits::default().max_iterations,
+            |limits| limits.max_iterations,
+        );
+        crate::text::redaction::validate_nested_html(&self.document, limit).map_err(|error| crate::XbergError::Plugin {
+            plugin_name: "redaction".into(),
+            message: error.to_string(),
+        })
+    }
+
     fn redaction_parts(&mut self) -> crate::Result<(&mut ExtractedDocument, Option<&SurfaceContext>)> {
         if self.context.as_ref().is_some_and(|context| {
             !self
@@ -240,6 +400,13 @@ impl ProcessingDocument for DerivedResult {
             });
         }
         Ok((&mut self.document, self.context.as_ref()))
+    }
+}
+
+fn html_output_changed() -> crate::XbergError {
+    crate::XbergError::Plugin {
+        plugin_name: "redaction".into(),
+        message: "A post-processor changed verified HTML after redaction".into(),
     }
 }
 

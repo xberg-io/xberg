@@ -165,6 +165,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Rebuild verified HTML from redacted plain text.** (#2361)
+  Cover repeated terms split by inline styling while keeping HTML output and reporting the loss of original formatting.
+  Reject HTML whose original text cannot be verified or whose captured content changes during post-processing.
+
 - **(pdf): Keep witnessed prime marks beside their operands.** (#2443)
   Preserve literal glyphs when both original neighboring spans survive the PDF layout passes.
 
