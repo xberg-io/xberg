@@ -216,13 +216,19 @@ impl<'doc> TextExtractor<'doc> {
         // verdict pass must walk the form to preserve its groups. ~keep
         let span_cache_open = self.extract_spans && !has_filters && !self.verdict_run && !self.inside_placed_pdf;
         if span_cache_open {
-            let cached_spans = { doc.xobject_spans_cache.lock_or_recover().get(&spans_cache_key).cloned() };
-            if let Some(cached) = cached_spans
-                && cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
-            {
-                self.xobject_subtree_depth = self.xobject_subtree_depth.map(|depth| depth.max(cached.required_depth));
-                if let Some(spans) = cached.spans {
-                    self.spans.extend(spans.iter().cloned());
+            let cached_spans = doc
+                .xobject_spans_cache
+                .lock_or_recover()
+                .get(&spans_cache_key)
+                .filter(|cached| {
+                    cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
+                        && cached.matches_inherited_fonts(&self.fonts)
+                })
+                .map(|cached| (cached.required_depth, cached.spans.clone()));
+            if let Some((required_depth, spans)) = cached_spans {
+                self.xobject_subtree_depth = self.xobject_subtree_depth.map(|depth| depth.max(required_depth));
+                if let Some(spans) = spans {
+                    self.spans.extend(spans);
                 }
                 return Ok(());
             }
@@ -534,13 +540,12 @@ impl<'doc> TextExtractor<'doc> {
                 // The key separates caller CTMs and page-area clipping contexts,
                 // so cached results retain the destination page's clipping policy.
                 //
-                // We still require `has_own_resources` so that font lookups are
-                // self-contained; XObjects that inherit page-level fonts would
-                // produce spans whose glyph mappings depend on caller context. ~keep
+                // Require own resources and the matching caller fonts. A Form
+                // can use inherited glyph mappings even with its own Font dictionary. ~keep
                 // A placed tag or skipped descendant makes the result page-dependent;
                 // an incomplete depth-limited run cannot be shared either. ~keep
                 if let Some(required_depth) = required_depth
-                    && has_own_resources
+                    && let Some(caller_fonts) = &saved_fonts
                     && span_cache_open
                     && self.page_bound_forms == page_bound_before
                 {
@@ -551,10 +556,7 @@ impl<'doc> TextExtractor<'doc> {
                     };
                     doc.xobject_spans_cache.lock_or_recover().insert(
                         spans_cache_key,
-                        crate::document::CachedFormSpans {
-                            required_depth,
-                            spans: new_spans,
-                        },
+                        crate::document::CachedFormSpans::new(required_depth, new_spans, caller_fonts, &self.fonts),
                     );
                 }
 
