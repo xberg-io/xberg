@@ -404,7 +404,7 @@ fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
         let (pages, used_tree) =
             extract_all_segment_carriers(&mut doc, ArtifactRetention::default()).expect("actual native carriers");
         assert_eq!(pages.len(), 1);
-        assert!(!pages[0].owners.is_empty(), "the observed lane must actually be active");
+        assert!(!pages[0].segments.is_empty(), "the actual final spans must be present");
         let neighbors =
             super::super::extract_final_spans_from_page(&mut doc, 0, ScriptGeometry::Preserve).expect("neighbor spans");
         let owners: Vec<_> = pages[0]
