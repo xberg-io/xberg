@@ -12,8 +12,10 @@ use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, 
 use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
 use crate::types::{PageBoundary, PageContent};
 use std::borrow::Cow;
-use std::collections::HashMap;
-use xberg_native_pdf::document::ReadingOrder;
+use std::collections::{HashMap, HashSet};
+use xberg_native_pdf::document::{PageRotation, ReadingOrder};
+use xberg_native_pdf::layout::{RegionClass, TextSpan, classify_region};
+use xberg_native_pdf::structure::McidScope;
 
 /// Per-page fabricated-mapping character counts `(fabricated, total)`, indexed by zero-based
 /// page number, gathered while the main text pass reads each page's raw `ColumnAware` spans.
@@ -2666,6 +2668,127 @@ pub(crate) fn reorder_dense_two_column_page(spans: &mut [xberg_native_pdf::layou
     true
 }
 
+fn is_paired_table_cell(span: &TextSpan, first: &TextSpan) -> bool {
+    is_horizontal_ltr(span)
+        && span.page_rotation_applied == 0
+        && span.text_rise == 0.0
+        && span.mcid.is_none()
+        && span.mcid_scope == first.mcid_scope
+        && span.artifact_type.is_none()
+        && span.heading_level.is_none()
+        && !span.split_boundary_before
+        && !span.offset_semantic
+        && span.font_size == first.font_size
+        && span.font_name == first.font_name
+        && span.font_weight == first.font_weight
+        && span.is_italic == first.is_italic
+        && !span.text.trim().is_empty()
+        && !span.text.contains(['\r', '\n'])
+        && !has_rtl_or_bidi_content(&span.text)
+        && span.bbox.width > 0.0
+        && span.bbox.height > 0.0
+        && [span.bbox.x, span.bbox.y, span.bbox.right(), span.bbox.bottom()]
+            .into_iter()
+            .all(f32::is_finite)
+}
+
+fn paired_table_columns(
+    spans: &[TextSpan],
+    lines: &[SpanLine],
+    left_x: f32,
+    right_x: f32,
+) -> Option<(Vec<usize>, Vec<usize>)> {
+    let mut left = Vec::<usize>::new();
+    let mut right = Vec::<usize>::new();
+    for line in lines {
+        let [label_index, tail @ ..] = line.as_slice() else {
+            return None;
+        };
+        let label = &spans[*label_index];
+        let above = left.last().map(|&index| &spans[index]);
+        if label.bbox.x != left_x
+            || above.is_some_and(|above| above.sequence >= label.sequence || above.bbox.y < label.bbox.bottom())
+        {
+            return None;
+        }
+        left.push(*label_index);
+        match tail {
+            [] => {}
+            [value_index] => {
+                let value = &spans[*value_index];
+                // A producer may paint a wrapped left continuation before the value on
+                // the label's baseline. It must finish that pair before the next pair starts. ~keep
+                if value.bbox.x != right_x
+                    || value.bbox.y != label.bbox.y
+                    || above.is_some_and(|above| above.bbox.y < value.bbox.bottom())
+                    || value.sequence <= label.sequence
+                    || right
+                        .last()
+                        .is_some_and(|&index| spans[index].sequence >= label.sequence)
+                {
+                    return None;
+                }
+                right.push(*value_index);
+            }
+            _ => return None,
+        }
+    }
+    Some((left, right))
+}
+
+/// Recover aligned label/value rows across a corridor too wide for the legacy
+/// dense split. Both table-like columns and the top-level producer order must
+/// agree on the pairs. The caller leaves structured and partial-page reads alone. ~keep
+fn producer_paired_table_order(spans: &[TextSpan], page_index: usize, page_width: f32) -> Option<Vec<usize>> {
+    let first = spans.first()?;
+    if spans.len() < 2 * MIN_DENSE_COLUMN_SPLIT_LINES
+        || !page_width.is_finite()
+        || page_width <= 0.0
+        || !first.font_size.is_finite()
+        || first.font_size <= 0.0
+        || first.mcid_scope != Some(McidScope::Page(u32::try_from(page_index).ok()?))
+    {
+        return None;
+    }
+
+    let other_x = spans.iter().find(|span| span.bbox.x != first.bbox.x)?.bbox.x;
+    let left_x = first.bbox.x.min(other_x);
+    let right_x = first.bbox.x.max(other_x);
+    let legacy_max_gutter = page_width * MAX_DENSE_COLUMN_GUTTER_FRACTION;
+    let mut sequences = HashSet::new();
+    if !spans.iter().all(|span| {
+        (span.bbox.x == right_x || (span.bbox.x == left_x && right_x - span.bbox.right() > legacy_max_gutter))
+            && is_paired_table_cell(span, first)
+            && sequences.insert(span.sequence)
+    }) {
+        return None;
+    }
+
+    let lines = group_into_lines(spans, &spans_sorted_top_to_bottom(spans));
+    let (left, right) = paired_table_columns(spans, &lines, left_x, right_x)?;
+    if right.len() < MIN_DENSE_COLUMN_SPLIT_LINES
+        || right.len() == left.len()
+        || right.len() as f32 / left.len() as f32 <= MAX_CROSS_GUTTER_ROW_PAIRING_FRACTION
+        || lines.iter().flatten().copied().eq(0..spans.len())
+        || classify_region(spans, &left) != RegionClass::Table
+        || classify_region(spans, &right) != RegionClass::Table
+    {
+        return None;
+    }
+    Some(lines.into_iter().flatten().collect())
+}
+
+fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+    matches!(
+        doc.get_page_rotation_status(page_index),
+        Ok(PageRotation::Absent | PageRotation::Valid(0))
+    ) && doc.catalog().is_ok_and(|catalog| {
+        catalog
+            .as_dict()
+            .is_some_and(|dict| !dict.contains_key("StructTreeRoot") && !dict.contains_key("MarkInfo"))
+    })
+}
+
 /// Build a page's `PageText` (spans + derived chars + dimensions), honouring
 /// optional-content (OCG/layer) visibility (issue #67).
 ///
@@ -2849,10 +2972,21 @@ fn extract_page_text_column_aware(
         .is_empty()
         .then(|| crate::pdf::scan_detect::fabricated_char_counts(&page_text_data.spans));
 
+    let span_count = page_text_data.spans.len();
     retain_spans_inside_page_margins(&mut page_text_data.spans, page_bottom, page_top, margins);
 
-    reorder_sparse_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
-    reorder_dense_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
+    let sparse_reordered = reorder_sparse_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
+    let dense_reordered = reorder_dense_two_column_page(&mut page_text_data.spans, page_text_data.page_width);
+    if !sparse_reordered
+        && !dense_reordered
+        && excluded_layers.is_empty()
+        && widgets.is_empty()
+        && span_count == page_text_data.spans.len()
+        && let Some(order) = producer_paired_table_order(&page_text_data.spans, page_index, page_text_data.page_width)
+        && untagged_upright_page(doc, page_index)
+    {
+        apply_span_order(&mut page_text_data.spans, &order);
+    }
 
     let rotation_spans = page_text_data.spans.iter().map(rotation_span).collect::<Vec<_>>();
     let mut text = if let Some(repaired) = crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans) {
@@ -2917,6 +3051,49 @@ mod tests {
             font_size,
             ..TextSpan::default()
         }
+    }
+
+    #[test]
+    fn producer_pairing_rejects_values_overlapping_another_visual_row() {
+        let mut spans = Vec::new();
+        for row in 1..=10 {
+            let y = 750.0 - row as f32 * 24.0;
+            spans.push(span_with_width(&format!("Item {row}"), 72.0, y, 36.0, 10.0, 10.0));
+            if row == 3 {
+                spans.push(span_with_width("wrap", 72.0, y - 12.0, 25.0, 10.0, 10.0));
+            }
+            spans.push(span_with_width(
+                &format!("Value {}", row * 11),
+                360.0,
+                y,
+                46.0,
+                10.0,
+                10.0,
+            ));
+        }
+        for (sequence, span) in spans.iter_mut().enumerate() {
+            span.sequence = sequence;
+            span.mcid_scope = Some(McidScope::Page(0));
+        }
+        spans.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
+        assert!(
+            producer_paired_table_order(&spans, 0, 612.0).is_some(),
+            "ordinary cells must pair"
+        );
+
+        let mut admitted = Vec::new();
+        for (target, height) in [("Value 44", 16.0), ("Value 55", 25.0)] {
+            let mut overlapping = spans.clone();
+            let value = overlapping.iter_mut().find(|s| s.text == target).expect("target value");
+            value.bbox.height = height;
+            if producer_paired_table_order(&overlapping, 0, 612.0).is_some() {
+                admitted.push(target);
+            }
+        }
+        assert!(
+            admitted.is_empty(),
+            "right cells overlapping an earlier wrap or paired label were admitted: {admitted:?}"
+        );
     }
 
     #[cfg(feature = "layout-detection")]

@@ -177,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep row-painted table values with their labels across wide gutters in plain text.** (#2343)
+  Preserve blank value cells and wrapped labels when source order confirms the visual pairs.
+
 - **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
   Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
 
