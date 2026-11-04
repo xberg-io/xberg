@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use xberg_native_pdf::layout::TextSpan;
+use xberg_native_pdf::{fonts::MappingProvenance, layout::TextSpan};
 
 use super::{ArtifactRetention, ScriptGeometry};
 use crate::pdf::hierarchy::SegmentData;
@@ -15,6 +15,7 @@ pub(super) use literal_prime::{LiteralPrimeWitness, capture_literal_primes};
 // that domain; the shared core 0.35em script predicate remains unchanged. ~keep
 const ROW_CANDIDATE_MAX_SHIFT_EM: f32 = 0.5;
 const MAX_CANDIDATE_EDGES: usize = 64;
+const NUMERIC_SUFFIX_OVERHANG_EM: f32 = 0.005;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SegmentKey {
@@ -207,29 +208,57 @@ fn compact_marker(span: &TextSpan) -> bool {
         && span
             .text
             .chars()
-            .all(|ch| ch.is_alphanumeric() || matches!(ch, ',' | '*' | '†' | '‡' | '+' | '-'))
+            .all(|ch| ch.is_alphanumeric() || matches!(ch, ',' | '*' | '†' | '‡' | '+' | '-' | '−'))
         && valid_geometry(span)
 }
 
-// Final offsets may be interpolated or synthesized by split_span, and this
-// native route has no per-glyph authenticity marker. Overlap stays unsupported. ~keep
+fn is_numeric_span(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan) -> bool {
+    let numeric_base = is_numeric_span(&base.text);
+    let numeric_suffix = script.text.strip_prefix('−').map_or_else(
+        || is_numeric_span(&script.text),
+        |digits| numeric_base && (digits.is_empty() || is_numeric_span(digits)),
+    );
+    (numeric_base || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic()))
+        && numeric_suffix
+        && base.sequence.checked_add(1) == Some(script.sequence)
+        && base.mcid == script.mcid
+        && base.provenance == Some(MappingProvenance::ToUnicode)
+        && script.provenance == Some(MappingProvenance::ToUnicode)
+        && !base.split_boundary_before
+        && !script.split_boundary_before
+        && !base.offset_semantic
+        && !script.offset_semantic
+        // Span splitting can synthesize offsets. Do not use those to admit overlap. ~keep
+        && base.char_x_offsets.is_empty()
+}
+
 fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
     let shift = baseline(script) - baseline(base);
     let ratio = script.font_size / base.font_size;
+    let gap = script.bbox.x - base.bbox.right();
+    let supported_gap = if gap < 0.0 || script.text.starts_with('−') {
+        gap >= -base.font_size * NUMERIC_SUFFIX_OVERHANG_EM && has_adjacent_numeric_source(base, script)
+    } else {
+        true
+    };
     same_context(base, script)
         && base.text.chars().any(char::is_alphanumeric)
         && !base.text.ends_with(char::is_whitespace)
         && (super::INLINE_SCRIPT_MIN_FONT_RATIO..=super::INLINE_SCRIPT_MAX_FONT_RATIO).contains(&ratio)
         && shift > base.font_size * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
         && shift <= base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
-        && script.bbox.x >= base.bbox.right()
-        && script.bbox.x - base.bbox.right() <= base.font_size * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM
+        && supported_gap
+        && gap <= base.font_size * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM
 }
 
 fn candidate_bases(spans: &[TextSpan], edges: &[(f32, usize)], script: usize, max_font: f32) -> Option<Vec<usize>> {
     let x = spans[script].bbox.x;
     let start = edges.partition_point(|(right, _)| *right < x - max_font * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM);
-    let end = edges.partition_point(|(right, _)| *right <= x);
+    let end = edges.partition_point(|(right, _)| *right <= x + max_font * NUMERIC_SUFFIX_OVERHANG_EM);
     if end - start > MAX_CANDIDATE_EDGES {
         return None;
     }
@@ -270,7 +299,24 @@ fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usi
         members.push(index);
         right = span.bbox.right();
     }
+    if members.iter().any(|&index| spans[index].text.contains('−')) && !is_complete_signed_exponent(spans, &members) {
+        return None;
+    }
     (!members.is_empty() && members[0] == first).then_some(members)
+}
+
+fn is_complete_signed_exponent(spans: &[TextSpan], members: &[usize]) -> bool {
+    let Some((&first, rest)) = members.split_first() else {
+        return false;
+    };
+    let Some(digits) = spans[first].text.strip_prefix('−') else {
+        return false;
+    };
+    (is_numeric_span(digits) || (digits.is_empty() && !rest.is_empty()))
+        && rest.iter().all(|&index| is_numeric_span(&spans[index].text))
+        && members
+            .windows(2)
+            .all(|pair| spans[pair[0]].sequence.checked_add(1) == Some(spans[pair[1]].sequence))
 }
 
 fn has_stacked_counterpart(spans: &[TextSpan], base: usize, members: &[usize]) -> bool {

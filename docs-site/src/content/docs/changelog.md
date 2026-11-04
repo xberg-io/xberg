@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve raised numeric suffixes when native glyph edges slightly overlap.** (#2489)
+  Keep negative exponents and squared labels with their bases in Markdown.
+
 - **(ocr): Keep cover and map labels in the page text.** (#2431)
   Restore dictionary-filtered lines when every word matches the rejected candidate at its original position.
   A shared header keeps sparse ledgers with recurring numeric columns eligible.

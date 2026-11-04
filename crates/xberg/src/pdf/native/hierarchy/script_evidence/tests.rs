@@ -15,6 +15,24 @@ fn page(spans: Vec<TextSpan>) -> NativePageSegments {
 }
 
 #[test]
+fn should_attach_a_numeric_suffix_with_only_glyph_edge_overhang() {
+    let mut base = span("R", 100.0, 700.0, 20.0, 12.0);
+    base.sequence = 30;
+    base.provenance = Some(MappingProvenance::ToUnicode);
+    let mut script = span("2", 119.96, 704.5, 4.0, 8.0);
+    script.sequence = 31;
+    script.provenance = Some(MappingProvenance::ToUnicode);
+    assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 1);
+
+    script.sequence = 32;
+    assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
+
+    script.sequence = 31;
+    script.bbox.x = 119.9;
+    assert_eq!(page(vec![base, script]).owners.len(), 0);
+}
+
+#[test]
 fn should_leave_measured_author_overlap_unsupported_regardless_of_final_offsets() {
     let mut base = span("Author", 94.298_01, 697.163, 91.206_23, 11.955_2);
     let script = span("1", 185.504_01, 701.501_04, 4.234_514, 7.970_1);
