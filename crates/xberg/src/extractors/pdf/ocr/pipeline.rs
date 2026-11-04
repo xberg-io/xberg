@@ -754,8 +754,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // Pages whose OCR text got the recognition-noise verdict and was not discarded. The caller
     // decides each page on its OCR text alone and puts the layer first only on a replaced page.
     let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
-    // The readable text layers that a page keeps first when its OCR text is judged recognition
-    // noise. A forced page is replaced by definition and keeps none. ~keep
+    // The readable text layers that a replaced page keeps first when its OCR text is judged
+    // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
+    // none. ~keep
     let ocr_output_thresholds = config
         .ocr
         .as_ref()
@@ -2066,17 +2067,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     }
 
     // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
-    // got the noise verdict, now gets its readable text layer first. A page it keeps native
-    // stays as it was. ~keep
-    let mut page_layers_before_noise: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+    // got the noise verdict or confirms the layer, now gets the layer lines that its OCR text
+    // lacks first. A page it keeps native stays as it was. ~keep
+    let mut page_layers_first: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
     if let Some(layers) = page_layers.as_ref() {
-        for page_number in &noise_verdict_pages {
+        for (page_number, text) in &mut accepted_replacements {
             if let Some(layer) = layers.get(page_number)
-                && let Some(text) = accepted_replacements.get_mut(page_number)
-                && let Some(missing) = super::document::layer_lines_absent_from_ocr(layer, text)
+                && let Some(missing) = super::document::layer_lines_to_put_first(
+                    layer,
+                    text,
+                    noise_verdict_pages.contains(page_number),
+                    &ocr_output_thresholds,
+                )
             {
                 *text = format!("{missing}\n\n{text}");
-                page_layers_before_noise.insert(*page_number, missing);
+                page_layers_first.insert(*page_number, missing);
             }
         }
     }
@@ -2190,7 +2195,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         apply_numeric_repair_to_structured_ocr_pages(&mut structured_ocr_pages);
     }
     // The structured page keeps the layer first as well, after the passes above rebuilt it. ~keep
-    for (page_number, layer) in &page_layers_before_noise {
+    for (page_number, layer) in &page_layers_first {
         if accepted_replacements.contains_key(page_number)
             && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
         {
@@ -5531,8 +5536,9 @@ pub(super) fn attach_unread_page_failures(
     doc
 }
 
-/// Put the layer first on each noise page of the returned stage of a whole-document run, after
-/// the stage was scored and chosen on its OCR text alone. A run without layers is unchanged.
+/// Put the layer first on each page of the returned stage of a whole-document run whose OCR text
+/// got the noise verdict or confirms the layer, after the stage was scored and chosen on its OCR
+/// text alone. A run without layers is unchanged.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn with_run_layers_first(
     layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
@@ -5551,11 +5557,7 @@ fn with_run_layers_first(
             &layers,
             verdicts,
             page_index_offset,
-            config
-                .pages
-                .as_ref()
-                .filter(|pages| pages.insert_page_markers)
-                .map(|pages| pages.marker_format.as_str()),
+            config,
         );
     }
     (text, page_texts, doc)

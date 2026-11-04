@@ -1,4 +1,5 @@
-//! A page whose OCR text is judged recognition noise keeps its readable text layer first.
+//! A replaced page keeps its readable text layer first when its OCR text is judged recognition
+//! noise, or when its OCR text confirms a layer that passes the per-page quality check.
 
 use super::document::{clean_native_page_layers, layer_lines_absent_from_ocr};
 use super::scoring::native_layer_is_clean;
@@ -110,6 +111,7 @@ fn should_put_the_layer_before_the_structured_page_and_shift_relationships() {
 fn should_put_the_layer_first_on_the_noise_page_of_a_whole_document_run_only() {
     use super::document::{flat_ocr_page_document, put_layers_first_in_run};
     use super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
     use crate::types::internal::{Relationship, RelationshipKind, RelationshipTarget};
 
     let verdict = |page_index: usize, discarded: bool| OcrPageNoiseVerdict {
@@ -154,7 +156,7 @@ fn should_put_the_layer_first_on_the_noise_page_of_a_whole_document_run_only() {
         &layers,
         &[verdict(1, false), verdict(2, true)],
         0,
-        None,
+        &ExtractionConfig::default(),
     );
     assert_eq!(page_texts[1], "Meeting Notes\n\nxq zv wj");
     assert_eq!(page_texts[0], "page one text");
@@ -537,6 +539,7 @@ async fn should_put_the_layer_first_on_a_noise_page_of_a_single_backend_whole_do
 fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
     use super::document::{flat_ocr_page_document, put_layers_first_in_run};
     use super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
 
     let verdict = |page_index: usize| OcrPageNoiseVerdict {
         page_index,
@@ -564,7 +567,7 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         &layers,
         &[verdict(0), verdict(1)],
         0,
-        None,
+        &ExtractionConfig::default(),
     );
     assert_eq!(page_texts, ["xq zv wj", "Meeting Notes\n\nxq zv wj"]);
     assert_eq!(text, "xq zv wj\n\nMeeting Notes\n\nxq zv wj");
@@ -572,6 +575,14 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
     assert_eq!(texts, ["xq zv wj", "Meeting Notes", "xq zv wj"]);
 
     let mut marked_pages = vec!["xq zv wj".to_string(), "xq zv wj".to_string()];
+    let marked_config = ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "<p{page_num}>".to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
     let mut marked = "<p1>xq zv wj<p2>xq zv wj".to_string();
     put_layers_first_in_run(
         &mut marked,
@@ -580,62 +591,11 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         &layers,
         &[verdict(1)],
         0,
-        Some("<p{page_num}>"),
+        &marked_config,
     );
     assert_eq!(marked, "<p1>xq zv wj<p2>Meeting Notes\n\nxq zv wj");
 }
 
-/// A one-page PDF whose only content is a short readable title in its text layer.
-#[cfg(all(feature = "pdf", feature = "ocr"))]
-fn title_only_pdf(title: &str) -> Vec<u8> {
-    use lopdf::content::{Content, Operation};
-    use lopdf::{Document, Object, Stream, dictionary};
-
-    let mut document = Document::with_version("1.5");
-    let pages_id = document.new_object_id();
-    let font_id = document.add_object(dictionary! {
-        "Type" => "Font",
-        "Subtype" => "Type1",
-        "BaseFont" => "Helvetica",
-    });
-    let content = Content {
-        operations: vec![
-            Operation::new("BT", vec![]),
-            Operation::new("Tf", vec!["F1".into(), 18.into()]),
-            Operation::new("Td", vec![72.into(), 720.into()]),
-            Operation::new("Tj", vec![Object::string_literal(title)]),
-            Operation::new("ET", vec![]),
-        ],
-    };
-    let content_id = document.add_object(Stream::new(
-        dictionary! {},
-        content.encode().expect("the title content must encode"),
-    ));
-    let page_id = document.add_object(dictionary! {
-        "Type" => "Page",
-        "Parent" => pages_id,
-        "Contents" => content_id,
-        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
-        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
-    });
-    document.objects.insert(
-        pages_id,
-        Object::Dictionary(dictionary! {
-            "Type" => "Pages",
-            "Kids" => vec![page_id.into()],
-            "Count" => 1,
-        }),
-    );
-    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
-    document.trailer.set("Root", catalog_id);
-    let mut bytes = Vec::new();
-    document.save_to(&mut bytes).expect("the title PDF must serialize");
-    bytes
-}
-
-/// The extractor sends a page with too little text to the whole-document OCR run. A noise page
-/// there keeps its short readable title first. Read from the extraction result of the extractor,
-/// so a call site that hands the run no layers is caught. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial_test::serial]
@@ -664,7 +624,7 @@ async fn should_keep_the_title_first_when_the_extractor_runs_ocr_on_the_whole_do
         ..Default::default()
     };
     let internal = PdfExtractor::new()
-        .extract_content(&title_only_pdf(TITLE), "application/pdf", &config)
+        .extract_content(&lines_pdf(&[TITLE]), "application/pdf", &config)
         .await;
     crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
     let result = crate::extraction::derive::derive_extraction_result(
@@ -746,6 +706,7 @@ async fn should_give_a_forced_page_the_ocr_text_without_the_text_layer() {
 fn should_not_put_a_layer_on_a_page_the_noise_gate_discarded() {
     use super::document::put_layers_first_in_run;
     use super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
 
     let verdict = |page_index: usize, discarded: bool| OcrPageNoiseVerdict {
         page_index,
@@ -768,7 +729,7 @@ fn should_not_put_a_layer_on_a_page_the_noise_gate_discarded() {
         &layers,
         &[verdict(0, true), verdict(1, false)],
         0,
-        None,
+        &ExtractionConfig::default(),
     );
     assert_eq!(page_texts, ["", "Budget Report\n\nxq zv wj"]);
     assert_eq!(text, "\n\nBudget Report\n\nxq zv wj");
@@ -888,4 +849,631 @@ async fn should_keep_the_title_first_in_the_page_by_page_whole_document_pipeline
     let expected = format!("{TITLE}\n\n{NOISY}");
     assert_eq!(result.0, expected, "the flat text holds the title first");
     assert_eq!(result.5, [expected.as_str()], "the page text holds the title first");
+}
+
+/// Six lines of plain prose: a layer that passes the per-page quality check. ~keep
+const HARBOUR_LAYER: [&str; 6] = [
+    "The committee met on Tuesday to review the annual budget for the harbour district.",
+    "Members agreed that the proposal was sound and asked for a revised timetable.",
+    "The treasurer will prepare the final report before the next quarterly meeting.",
+    "Repairs to the north pier start in March and finish before the summer season.",
+    "A public notice about the closure goes to every household along the coast road.",
+    "The next meeting takes place in the spring at the library on Market Street.",
+];
+
+/// What the OCR backend of the page-route test reads: four of the six layer lines, or all six. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const HARBOUR_PARTIAL_READ: &str = "\
+    The committee met on Tuesday to review the annual budget for the harbour district.\n\
+    Members agreed that the proposal was sound and asked for a revised timetable.\n\
+    The treasurer will prepare the final report before the next quarterly meeting.\n\
+    A public notice about the closure goes to every household along the coast road.";
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const HARBOUR_FULL_READ: &str = "\
+    The committee met on Tuesday to review the annual budget for the harbour district.\n\
+    Members agreed that the proposal was sound and asked for a revised timetable.\n\
+    The treasurer will prepare the final report before the next quarterly meeting.\n\
+    Repairs to the north pier start in March and finish before the summer season.\n\
+    A public notice about the closure goes to every household along the coast road.\n\
+    The next meeting takes place in the spring at the library on Market Street.";
+
+/// Shift every ASCII letter three places, as a wrong `/ToUnicode` map does: the shape of the
+/// text stays clean and no word is a word of the true text. ~keep
+fn rot3(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            'a'..='z' => (((c as u8 - b'a' + 3) % 26) + b'a') as char,
+            'A'..='Z' => (((c as u8 - b'A' + 3) % 26) + b'A') as char,
+            _ => c,
+        })
+        .collect()
+}
+
+#[test]
+fn should_confirm_a_layer_when_the_ocr_text_reads_most_of_its_words() {
+    use super::document::ocr_confirms_layer;
+
+    let thresholds = OcrQualityThresholds::default();
+    let layer = HARBOUR_LAYER.join("\n");
+    let partial = [HARBOUR_LAYER[0], HARBOUR_LAYER[1], HARBOUR_LAYER[2], HARBOUR_LAYER[4]].join("\n");
+    assert!(ocr_confirms_layer(&layer, &partial, &thresholds));
+    assert!(
+        !ocr_confirms_layer(&rot3(&layer), &layer, &thresholds),
+        "a wrong-letter layer shares no word with the OCR read"
+    );
+    assert!(
+        !ocr_confirms_layer(&layer, HARBOUR_LAYER[5], &thresholds),
+        "one line of six is not most of the words"
+    );
+    assert!(
+        !ocr_confirms_layer("Meeting Notes", "Meeting Notes", &thresholds),
+        "a layer that fails the per-page quality check is never confirmed"
+    );
+}
+
+/// Page route (#2439): a page with a correct layer goes to OCR, and the OCR text reads four of its
+/// six lines. The replacement keeps the two lines the OCR text lacks, first, so every word of the
+/// layer stays. A wrong-letter layer gets the OCR text alone, as before. Both the single-backend
+/// route and the pipeline route are driven. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_keep_every_layer_word_when_page_ocr_confirms_the_layer_and_reads_less() {
+    use super::pipeline::extract_mixed_ocr_native;
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
+    use std::sync::Arc;
+
+    const PARTIAL: &str = "layer-test-confirmed-partial-backend";
+    const FULL: &str = "layer-test-confirmed-full-backend";
+    let partial_text = HARBOUR_PARTIAL_READ;
+    let full_text = HARBOUR_LAYER.join("\n");
+    for (name, text) in [(PARTIAL, HARBOUR_PARTIAL_READ), (FULL, HARBOUR_FULL_READ)] {
+        crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+            name,
+            text,
+            noisy: false,
+        }))
+        .unwrap();
+    }
+    let single_backend = |name: &str| ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: name.to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let pipeline = |name: &str| ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: name.to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    paddle_ocr_settings: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: crate::core::config::OcrQualityThresholds {
+                    pipeline_min_quality: 0.0,
+                    ..Default::default()
+                },
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let boundary = |text: &str| {
+        [crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: text.len(),
+            page_number: 1,
+        }]
+    };
+    let layer = HARBOUR_LAYER.join("\n");
+    let wrong = rot3(&layer);
+    let mut results = Vec::new();
+    for (route, config) in [
+        ("single backend", [single_backend(PARTIAL), single_backend(FULL)]),
+        ("pipeline", [pipeline(PARTIAL), pipeline(FULL)]),
+    ] {
+        let confirmed = extract_mixed_ocr_native(&layer, &boundary(&layer), &[1], &pdf, &config[0], None)
+            .await
+            .unwrap();
+        let wrong_letters = extract_mixed_ocr_native(&wrong, &boundary(&wrong), &[1], &pdf, &config[1], None)
+            .await
+            .unwrap();
+        results.push((route, confirmed.0, confirmed.1, wrong_letters.0));
+    }
+    for name in [PARTIAL, FULL] {
+        crate::plugins::unregister_ocr_backend(name).unwrap();
+    }
+
+    for (route, confirmed_text, replaced, wrong_text) in results {
+        assert!(
+            replaced.contains_key(&1),
+            "{route}: the OCR text must replace the page, or this test proves nothing"
+        );
+        assert_eq!(
+            confirmed_text,
+            format!("{}\n{}\n\n{partial_text}", HARBOUR_LAYER[3], HARBOUR_LAYER[5]),
+            "{route}: the two layer lines the OCR text lacks go first"
+        );
+        assert_eq!(
+            wrong_text, full_text,
+            "{route}: a wrong-letter layer gets the OCR text alone"
+        );
+    }
+}
+
+/// A whole-document run (#2439): a page with no noise verdict whose OCR text confirms its layer
+/// gets the layer lines the OCR text lacks first. A wrong-letter layer and a layer the OCR text
+/// does not confirm stay as the OCR text. ~keep
+#[test]
+fn should_put_a_confirmed_layer_first_on_a_page_of_a_whole_document_run() {
+    use super::document::put_layers_first_in_run;
+    use crate::core::config::ExtractionConfig;
+
+    let layer = HARBOUR_LAYER.join("\n");
+    let partial = [HARBOUR_LAYER[0], HARBOUR_LAYER[1], HARBOUR_LAYER[2], HARBOUR_LAYER[4]].join("\n");
+    let mut page_texts = vec![partial.clone(), layer.clone(), HARBOUR_LAYER[5].to_string()];
+    let mut text = page_texts.join("\n\n");
+    let layers = ahash::AHashMap::from([(1, layer.clone()), (2, rot3(&layer)), (3, layer.clone())]);
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        None,
+        &layers,
+        &[],
+        0,
+        &ExtractionConfig::default(),
+    );
+    let first = format!("{}\n{}\n\n{partial}", HARBOUR_LAYER[3], HARBOUR_LAYER[5]);
+    assert_eq!(page_texts, [first.clone(), layer.clone(), HARBOUR_LAYER[5].to_string()]);
+    assert_eq!(text, format!("{first}\n\n{layer}\n\n{}", HARBOUR_LAYER[5]));
+}
+
+/// A whole-document run (#2439): a page whose noise verdict discarded its OCR text keeps no layer,
+/// even when text sits on it later and that text would confirm the layer. ~keep
+#[test]
+fn should_not_put_a_confirmed_layer_on_a_page_the_noise_gate_discarded() {
+    use super::document::put_layers_first_in_run;
+    use super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
+
+    let partial = [HARBOUR_LAYER[0], HARBOUR_LAYER[1], HARBOUR_LAYER[2], HARBOUR_LAYER[4]].join("\n");
+    let mut page_texts = vec![partial.clone()];
+    let mut text = partial.clone();
+    let layers = ahash::AHashMap::from([(1, HARBOUR_LAYER.join("\n"))]);
+    let discarded = OcrPageNoiseVerdict {
+        page_index: 0,
+        low_confidence: true,
+        fragmented_noise: false,
+        dictionary_noise: false,
+        fragmented_word_ratio: 0.0,
+        word_count: 3,
+        mean_confidence: Some(0.2),
+        dict_invalid_word_ratio: None,
+        discarded: true,
+    };
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        None,
+        &layers,
+        &[discarded],
+        0,
+        &ExtractionConfig::default(),
+    );
+    assert_eq!(page_texts, [partial.as_str()]);
+    assert_eq!(text, partial);
+}
+
+/// A line with its longest word misread: one letter added. ~keep
+fn misread_longest_word(line: &str) -> String {
+    let stem = |word: &str| word.trim_end_matches(|c: char| !c.is_alphanumeric()).to_string();
+    let longest = line
+        .split(' ')
+        .map(stem)
+        .max_by_key(|word| word.len())
+        .unwrap_or_default();
+    line.replacen(&longest, &format!("{longest}x"), 1)
+}
+
+/// A whole-document run (#2439): OCR misreads one word on every line of a correct layer. The page
+/// holds each line once, with the layer's words, and not the OCR copy beside it. An OCR line that
+/// the layer lacks stays, and so does an exact read. The structured document drops the copies
+/// too, keeps the other elements and the relationships among them. ~keep
+#[test]
+fn should_keep_each_line_once_when_ocr_misreads_one_word_per_line() {
+    use super::document::{flat_ocr_page_document, put_layers_first_in_run};
+    use crate::core::config::ExtractionConfig;
+    use crate::types::internal::{Relationship, RelationshipKind, RelationshipTarget};
+
+    let layer = HARBOUR_LAYER.join("\n");
+    let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
+    let layers = ahash::AHashMap::from([(1, layer.clone())]);
+    let run = |ocr_text: &str, doc: Option<&mut crate::types::internal::InternalDocument>| {
+        let mut page_texts = vec![ocr_text.to_string()];
+        let mut text = ocr_text.to_string();
+        put_layers_first_in_run(
+            &mut text,
+            &mut page_texts,
+            doc,
+            &layers,
+            &[],
+            0,
+            &ExtractionConfig::default(),
+        );
+        assert_eq!(page_texts[0], text, "the flat text and the page text agree");
+        text
+    };
+
+    assert_eq!(
+        run(&misread.join("\n"), None),
+        layer,
+        "every line once, with the layer's words"
+    );
+
+    let mixed = format!(
+        "{}\n{}\n{}\n{}\n\nStamped received",
+        HARBOUR_LAYER[0], misread[1], misread[2], HARBOUR_LAYER[3]
+    );
+    let mut doc = flat_ocr_page_document(&format!("{}\n\n{}\n{}", misread[1], HARBOUR_LAYER[0], misread[2]));
+    doc.push_element(crate::types::internal::InternalElement::text(
+        crate::types::internal::ElementKind::OcrText {
+            level: crate::types::ocr_elements::OcrElementLevel::Block,
+        },
+        "Stamped received",
+        0,
+    ));
+    for element in &mut doc.elements {
+        element.page = Some(1);
+    }
+    doc.relationships.push(Relationship {
+        source: 2,
+        target: RelationshipTarget::Index(1),
+        kind: RelationshipKind::InternalLink,
+    });
+    doc.relationships.push(Relationship {
+        source: 2,
+        target: RelationshipTarget::Index(0),
+        kind: RelationshipKind::InternalLink,
+    });
+    let text = run(&mixed, Some(&mut doc));
+    let lines: Vec<&str> = text.lines().filter(|line| !line.is_empty()).collect();
+    let mut sorted = lines.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(lines.len(), sorted.len(), "no line twice: {text:?}");
+    assert_eq!(lines.len(), 7, "six layer lines and the OCR-only line: {text:?}");
+    assert!(text.ends_with("Stamped received"), "the OCR-only line stays: {text:?}");
+    for copy in &misread[1..3] {
+        assert!(!text.contains(copy.as_str()), "the OCR copy {copy:?} goes: {text:?}");
+    }
+    let layer_first = [HARBOUR_LAYER[1], HARBOUR_LAYER[2], HARBOUR_LAYER[4], HARBOUR_LAYER[5]].join("\n");
+    let texts: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+    assert_eq!(texts, [layer_first.as_str(), HARBOUR_LAYER[0], "Stamped received"]);
+    assert_eq!(doc.relationships.len(), 1, "the relationship to a dropped element goes");
+    assert_eq!(doc.relationships[0].source, 2);
+    assert!(matches!(doc.relationships[0].target, RelationshipTarget::Index(1)));
+}
+
+/// Six lines of numbers: a layer that passes the per-page quality check and has no word with a
+/// letter. ~keep
+const LEDGER_LAYER: [&str; 6] = [
+    "1042 2087 3315 4471 5530 6694",
+    "7120 8243 9356 1468 2579 3681",
+    "4792 5804 6915 7026 8137 9248",
+    "1359 2460 3571 4682 5793 6804",
+    "7915 8026 9137 1248 2359 3460",
+    "4571 5682 6793 7804 8915 9026",
+];
+
+/// A whole-document run (#2439): a layer of numbers only. The OCR text reads three of the six
+/// lines, so it confirms the layer and the other three lines come back. Numbers that the OCR text
+/// does not hold, and too few numbers, never confirm a layer. ~keep
+#[test]
+fn should_confirm_a_number_only_layer_against_the_ocr_text() {
+    use super::document::{ocr_confirms_layer, put_layers_first_in_run};
+    use crate::core::config::ExtractionConfig;
+
+    let thresholds = OcrQualityThresholds::default();
+    let layer = LEDGER_LAYER.join("\n");
+    let read = LEDGER_LAYER[..3].join("\n");
+    assert!(
+        ocr_confirms_layer(&layer, &read, &thresholds),
+        "the OCR text holds half the numbers"
+    );
+    let other = "9911 8822 7733 6644 5555 4466\n3377 2288 1199 9900 8811 7722";
+    assert!(
+        !ocr_confirms_layer(&layer, other, &thresholds),
+        "garbage shares no number"
+    );
+    assert!(
+        !ocr_confirms_layer(&layer, &LEDGER_LAYER[5].replace("4571", "1111"), &thresholds),
+        "one line of six is not half of the numbers"
+    );
+    assert!(
+        !ocr_confirms_layer("2024 17", "2024 17", &thresholds),
+        "two numbers are too few to confirm a layer"
+    );
+
+    let mut page_texts = vec![read.clone()];
+    let mut text = read.clone();
+    let layers = ahash::AHashMap::from([(1, layer)]);
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        None,
+        &layers,
+        &[],
+        0,
+        &ExtractionConfig::default(),
+    );
+    assert_eq!(
+        text,
+        format!(
+            "{}\n{}\n{}\n\n{read}",
+            LEDGER_LAYER[3], LEDGER_LAYER[4], LEDGER_LAYER[5]
+        )
+    );
+}
+
+/// A page of common nouns in no order that the language check calls implausible: a correct
+/// layer that the check sends to OCR (#2439). ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const NOUN_LINES: [&str; 15] = [
+    "Gather Pebble Lantern",
+    "marble fiddle orchard sprocket ladle quiver tundra bramble",
+    "pewter saddle cobbler thimble garnet basin hollow ferment",
+    "rafter nozzle meadow scaffold parsnip tinder ledger ripple",
+    "kettle bauble furrow gimlet canopy trowel muslin quarry",
+    "lintel spindle hazel pommel barley dowel sorrel wicket",
+    "copper flagon trellis mortar skein gusset paddle rivet",
+    "almond burrow cistern tassel freckle hamper pigeon funnel",
+    "walnut grommet shutter beacon dapple girder lattice nutmeg",
+    "turnip anvil drizzle buckle cinder pantry heron welter",
+    "gravel tumbler lagoon pivot sorghum brisket jigsaw thistle",
+    "velvet cobble ferrule mantle quince sedge ratchet pulley",
+    "wicker tallow ember swivel cudgel prism oxbow kindling",
+    "mitten chisel gourd rampart slate bobbin culvert wren",
+    "pumice clasp jetty mullion gable hearth sluice vellum",
+];
+
+/// What the OCR backend of the extractor test reads: the first ten lines of [`NOUN_LINES`] and one
+/// line that the layer lacks. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const NOUN_READ: &str = "Gather Pebble Lantern\n\
+    marble fiddle orchard sprocket ladle quiver tundra bramble\n\
+    pewter saddle cobbler thimble garnet basin hollow ferment\n\
+    rafter nozzle meadow scaffold parsnip tinder ledger ripple\n\
+    kettle bauble furrow gimlet canopy trowel muslin quarry\n\
+    lintel spindle hazel pommel barley dowel sorrel wicket\n\
+    copper flagon trellis mortar skein gusset paddle rivet\n\
+    almond burrow cistern tassel freckle hamper pigeon funnel\n\
+    walnut grommet shutter beacon dapple girder lattice nutmeg\n\
+    turnip anvil drizzle buckle cinder pantry heron welter\n\
+    Stamped received";
+
+/// A one-page PDF whose text layer holds `lines`, one line each, in Helvetica. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn lines_pdf(lines: &[&str]) -> Vec<u8> {
+    use lopdf::content::{Content, Operation};
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let mut document = Document::with_version("1.5");
+    let pages_id = document.new_object_id();
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+        "Encoding" => "WinAnsiEncoding",
+    });
+    let mut operations = vec![
+        Operation::new("BT", vec![]),
+        Operation::new("Tf", vec!["F1".into(), 13.into()]),
+        Operation::new("TL", vec![16.into()]),
+        Operation::new("Td", vec![72.into(), 730.into()]),
+    ];
+    for line in lines {
+        operations.push(Operation::new("Tj", vec![Object::string_literal(*line)]));
+        operations.push(Operation::new("T*", vec![]));
+    }
+    operations.push(Operation::new("ET", vec![]));
+    let content = Content { operations };
+    let content_id = document.add_object(Stream::new(
+        dictionary! {},
+        content.encode().expect("the page content must encode"),
+    ));
+    let page_id = document.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages_id,
+        "Contents" => content_id,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+    });
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_id.into()],
+            "Count" => 1,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    document.trailer.set("Root", catalog_id);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).expect("the page PDF must serialize");
+    bytes
+}
+
+/// The issue's route (#2439), through the extractor in automatic mode: the language check flags a
+/// page whose layer is correct, OCR reads ten of its fifteen lines plus one line the layer lacks,
+/// and the OCR text replaces the page. The content and the page text keep every word of the
+/// layer, and the OCR line joins them. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_keep_every_layer_word_of_a_page_the_language_check_sends_to_ocr() {
+    use super::plausibility::{PlausibilityVerdict, evaluate_text_plausibility};
+    use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
+    use crate::extractors::pdf::PdfExtractor;
+    use crate::plugins::InternalDocumentExtractor;
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-language-check-backend";
+    const OCR_ONLY: &str = "Stamped received";
+    assert_eq!(
+        evaluate_text_plausibility(&NOUN_LINES.join("\n"), &OcrQualityThresholds::default()),
+        PlausibilityVerdict::Implausible,
+        "the language check must flag the layer, or this test proves nothing"
+    );
+    assert!(NOUN_READ.starts_with(&NOUN_LINES[..10].join("\n")) && NOUN_READ.ends_with(OCR_ONLY));
+    crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+        name: BACKEND,
+        text: NOUN_READ,
+        noisy: false,
+    }))
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let internal = PdfExtractor::new()
+        .extract_content(&lines_pdf(&NOUN_LINES), "application/pdf", &config)
+        .await;
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    let result = crate::extraction::derive::derive_extraction_result(
+        internal.expect("the extractor must return a result"),
+        true,
+        OutputFormat::Plain,
+    );
+
+    let page = result
+        .pages
+        .as_ref()
+        .and_then(|pages| pages.first())
+        .map(|page| page.content.clone())
+        .unwrap_or_default();
+    for (output, text) in [("content", &result.content), ("page", &page)] {
+        assert!(
+            text.contains(OCR_ONLY),
+            "{output}: the OCR text must replace the page, or this test proves nothing: {text:?}"
+        );
+        let have: std::collections::HashSet<String> = text.split_whitespace().map(str::to_lowercase).collect();
+        let lost: Vec<&str> = NOUN_LINES
+            .iter()
+            .flat_map(|line| line.split_whitespace())
+            .filter(|word| !have.contains(&word.to_lowercase()))
+            .collect();
+        assert!(lost.is_empty(), "{output} lost layer words {lost:?}: {text:?}");
+    }
+}
+
+/// A whole-document pipeline run (#2439) whose first stage the pipeline accepts: the OCR text
+/// reads four of the six lines of a correct layer, so the two other lines go first. The
+/// per-page quality check reads the thresholds of the run's config: a config that makes the
+/// layer fail that check gets the OCR text alone. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_put_a_confirmed_layer_first_on_the_accepted_stage_of_a_pipeline_run() {
+    use super::pipeline::{PageOcrHints, run_ocr_pipeline_for_page};
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-accepted-stage-backend";
+    crate::plugins::register_ocr_backend(Arc::new(StageBackend {
+        name: BACKEND,
+        text: HARBOUR_PARTIAL_READ,
+        noisy: false,
+    }))
+    .unwrap();
+    let pipeline = OcrPipelineConfig {
+        stages: vec![OcrPipelineStage {
+            backend: BACKEND.to_string(),
+            priority: 100,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        }],
+        quality_thresholds: OcrQualityThresholds {
+            pipeline_min_quality: 0.0,
+            ..Default::default()
+        },
+    };
+    let config = |thresholds: Option<OcrQualityThresholds>| ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            pipeline: Some(pipeline.clone()),
+            quality_thresholds: thresholds,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let images = [image::DynamicImage::new_rgb8(16, 16)];
+    let run = |config: ExtractionConfig| {
+        let images = &images;
+        let pipeline = pipeline.clone();
+        async move {
+            let hints = PageOcrHints {
+                source_dpi: None,
+                known_full_page_scan: false,
+                single_block_pages: None,
+                native_page_layers: Some(Arc::new(ahash::AHashMap::from([(1, HARBOUR_LAYER.join("\n"))]))),
+            };
+            run_ocr_pipeline_for_page(
+                None,
+                Some(images),
+                #[cfg(feature = "layout-detection")]
+                None,
+                &config,
+                &pipeline,
+                None,
+                0,
+                true,
+                None,
+                Some(hints),
+                0,
+                None,
+            )
+            .await
+            .map(|output| output.0)
+            .expect("the pipeline must return a stage result")
+        }
+    };
+    let confirmed = run(config(None)).await;
+    let strict = OcrQualityThresholds {
+        min_total_non_whitespace: 100_000,
+        min_non_whitespace_per_page: 100_000.0,
+        ..Default::default()
+    };
+    let failing = run(config(Some(strict))).await;
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+
+    assert_eq!(
+        confirmed,
+        format!("{}\n{}\n\n{HARBOUR_PARTIAL_READ}", HARBOUR_LAYER[3], HARBOUR_LAYER[5]),
+        "the accepted stage keeps the two layer lines that the OCR text lacks"
+    );
+    assert_eq!(
+        failing, HARBOUR_PARTIAL_READ,
+        "a layer that fails the quality check of the run's config is not confirmed"
+    );
 }

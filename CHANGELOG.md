@@ -524,6 +524,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Recovery preserves page numbers, cancellation and original source image identities.
 
 - **(ci): Gate formula test helpers with the features required by their callers.**
+- **(pdf): A correct text layer keeps all its words when automatic OCR reads the page.**
+  When automatic OCR replaces a page whose text layer passes the per-page quality check, and the OCR text holds at least half of the layer's words, the page content keeps the layer lines that the OCR text lacks, first. Before, a page that the language check sent to OCR lost the lines that OCR dropped. A text layer that decodes to the wrong letters still gets the OCR text alone, and forced OCR behaves as before. (GH#2439)
 
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
