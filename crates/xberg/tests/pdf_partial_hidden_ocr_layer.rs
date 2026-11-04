@@ -313,3 +313,40 @@ async fn unknown_hidden_font_keeps_the_existing_native_result() {
     assert_eq!(automatic.content, native.content);
     assert_eq!(words(&automatic), words(&native));
 }
+
+#[tokio::test]
+async fn plain_auto_recovers_trailing_picture_words_with_no_missing_rows() {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, COMPLETE, 1.0, 0.0, 3, None);
+    let prefix = "The coastal archive opened its wooden shutters";
+    assert!(LINES[1].1.starts_with(prefix));
+    assert_eq!(operators.matches(LINES[1].1).count(), 1);
+    let pdf = page_pdf(operators.replace(LINES[1].1, prefix), Some(make_raster()));
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    let mut truncated = expected(COMPLETE);
+    let start = 1 + prefix.split_whitespace().count();
+    let end = 1 + LINES[1].1.split_whitespace().count();
+    truncated.drain(start..end);
+    assert_eq!(words(&native), truncated);
+    let forced = extract(
+        &pdf,
+        &ExtractionConfig {
+            force_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    assert_exact_word_inventory(&forced);
+
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert_eq!(words(&automatic), expected(COMPLETE));
+    assert!(automatic.metadata.ocr_used);
+    assert!(automatic.tables.is_empty());
+}

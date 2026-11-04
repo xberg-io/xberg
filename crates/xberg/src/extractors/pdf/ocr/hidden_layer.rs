@@ -15,6 +15,8 @@ use xberg_native_pdf::object::Object;
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_OPERATORS: usize = 4096;
 const MAX_PREVIEW_PIXELS: usize = 1024 * 1024;
+const MIN_TRAILING_INK_RUNS: usize = 4;
+const MIN_TRAILING_WIDTH_IN_LINE_HEIGHTS: usize = 3;
 
 // This lane replaces literal text only. Caller-selected OCR, layout and projection policies
 // retain their original routes. ~keep
@@ -109,7 +111,7 @@ pub(super) fn needs_ocr(
     }
     let samples = source.decode_samples(byte_limit)?;
     let preview = gray_preview(&samples, &source, size)?;
-    Some(!is_cancelled() && has_uncovered_text_band(&preview, handle.bbox, &boxes))
+    Some(!is_cancelled() && has_uncovered_text(&preview, handle.bbox, &boxes))
 }
 
 fn page_frame_and_contents(doc: &PdfDocument, page: usize) -> Option<(Rect, Object)> {
@@ -470,11 +472,12 @@ fn preview_size(bounds: Rect, source: &ImageSource, limit: usize) -> Option<(u32
         return None;
     }
     // Triangle resize holds a vertically resampled RGBA32F buffer. Band scoring
-    // uses a grayscale raster, masks, a pixel-index stack and interval buffers.
+    // uses a grayscale raster, masks including a trailing-text crop, a
+    // pixel-index stack and interval buffers.
     let resize_bytes = (source.width as usize)
         .checked_mul(height as usize)?
         .checked_mul(size_of::<[f32; 4]>())?;
-    let preview_bytes = preview_pixels.checked_mul(3 + 2 * size_of::<usize>() + source.channels)?;
+    let preview_bytes = preview_pixels.checked_mul(4 + 2 * size_of::<usize>() + source.channels)?;
     let intervals = (width as usize)
         .checked_add(height as usize)?
         .checked_mul(4 * size_of::<Band>())?;
@@ -515,7 +518,7 @@ struct Band {
     runs: usize,
 }
 
-fn has_uncovered_text_band(preview: &GrayImage, image: Rect, boxes: &[Rect]) -> bool {
+fn has_uncovered_text(preview: &GrayImage, image: Rect, boxes: &[Rect]) -> bool {
     let (width, height) = (preview.width() as usize, preview.height() as usize);
     let mut histogram = [0; 256];
     for &gray in preview.as_raw() {
@@ -536,26 +539,31 @@ fn has_uncovered_text_band(preview: &GrayImage, image: Rect, boxes: &[Rect]) -> 
     let Some((min_height, max_height, min_width, min_runs)) = bands
         .iter()
         .zip(&coverage)
-        .filter(|(_, state)| **state == BandCoverage::Anchored)
+        .filter(|(_, state)| matches!(state, BandCoverage::Covered { anchored: true, .. }))
         .map(|(band, _)| (band.rows.len(), band.rows.len(), band.columns.len(), band.runs))
         .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1), a.2.min(b.2), a.3.min(b.3)))
     else {
         return false;
     };
-    bands.iter().zip(coverage).any(|(band, state)| {
-        state == BandCoverage::Uncovered
-            && (min_height..=max_height).contains(&band.rows.len())
-            && band.columns.len() >= min_width
-            && band.runs >= min_runs
-            && text_like_band(&mask, width, &band.rows)
+    bands.iter().zip(coverage).any(|(band, state)| match state {
+        BandCoverage::Uncovered => {
+            (min_height..=max_height).contains(&band.rows.len())
+                && band.columns.len() >= min_width
+                && band.runs >= min_runs
+                && text_like_band(&mask, width, &band.rows)
+        }
+        BandCoverage::Covered {
+            native_right,
+            anchored: true,
+        } => has_trailing_text(&mask, width, band, native_right),
+        BandCoverage::Covered { anchored: false, .. } => false,
     })
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 enum BandCoverage {
     Uncovered,
-    Covered,
-    Anchored,
+    Covered { native_right: usize, anchored: bool },
 }
 
 fn band_coverage(
@@ -575,13 +583,52 @@ fn band_coverage(
         if bands.get(first + 1).is_some_and(|next| intersects(&next.rows, &y)) {
             return None;
         }
-        if intersects(&band.columns, &x) {
-            coverage[first] = BandCoverage::Anchored;
-        } else if coverage[first] == BandCoverage::Uncovered {
-            coverage[first] = BandCoverage::Covered;
-        }
+        let (native_right, anchored) = match coverage[first] {
+            BandCoverage::Uncovered => (x.end, false),
+            BandCoverage::Covered { native_right, anchored } => (native_right.max(x.end), anchored),
+        };
+        coverage[first] = BandCoverage::Covered {
+            native_right,
+            anchored: anchored || intersects(&band.columns, &x),
+        };
     }
     Some(coverage)
+}
+
+fn has_trailing_text(mask: &[bool], width: usize, band: &Band, native_right: usize) -> bool {
+    let line_height = band.rows.len();
+    // Allow a line-height gap for ordinary differences between font boxes and raster ink.
+    let start = native_right.saturating_add(line_height);
+    let min_width = MIN_TRAILING_WIDTH_IN_LINE_HEIGHTS * line_height;
+    if band.columns.end.saturating_sub(start) < min_width {
+        return false;
+    }
+
+    let mut first_ink = None;
+    let mut previous_ink = false;
+    let mut runs = 0;
+    for column in start..band.columns.end {
+        let ink = band.rows.clone().any(|row| mask[row * width + column]);
+        if ink && !previous_ink {
+            first_ink.get_or_insert(column);
+            runs += 1;
+        }
+        previous_ink = ink;
+    }
+    let Some(first) = first_ink.filter(|&first| band.columns.end - first >= min_width) else {
+        return false;
+    };
+    if runs < MIN_TRAILING_INK_RUNS {
+        return false;
+    }
+
+    let columns = first..band.columns.end;
+    let mut tail = Vec::with_capacity(columns.len() * line_height);
+    for row in mask[band.rows.start * width..band.rows.end * width].chunks_exact(width) {
+        tail.extend_from_slice(&row[columns.clone()]);
+    }
+    let ink = tail.iter().filter(|&&pixel| pixel).count();
+    lower_mode_mask_has_text_structure(&tail, columns.len(), line_height, ink)
 }
 
 fn bands(mask: &[bool], width: usize) -> Vec<Band> {

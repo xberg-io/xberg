@@ -96,3 +96,31 @@ fn actual_inflate_is_bounded_even_for_tiny_compressed_streams() {
     assert!(malformed_image.decode_samples(4096).is_none());
     assert!(decode_probe_stream(&[b'z'; 32], StreamFilters::Ascii85Flate, 256, 64).is_none());
 }
+
+#[test]
+fn trailing_text_requires_separated_glyphs_past_the_native_box() {
+    let width = 96;
+    let height = 8;
+    let band = super::Band {
+        rows: 0..height,
+        columns: 8..80,
+        runs: 9,
+    };
+    let mut mask = vec![false; width * height];
+    for x in [40, 52, 64, 76] {
+        for row in 0..height {
+            mask[row * width + x] = true;
+        }
+        mask[(height - 1) * width + x..(height - 1) * width + x + 4].fill(true);
+    }
+    assert!(super::has_trailing_text(&mask, width, &band, 24));
+    assert!(!super::has_trailing_text(&mask, width, &band, 72));
+
+    mask.fill(false);
+    for x in [40, 52, 64, 76] {
+        for row in 0..height {
+            mask[row * width + x..row * width + x + 4].fill(true);
+        }
+    }
+    assert!(!super::has_trailing_text(&mask, width, &band, 24));
+}
