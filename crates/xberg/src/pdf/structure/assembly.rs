@@ -1044,14 +1044,16 @@ fn extract_text_and_annotations(
 
     let native_scripts: Vec<_> = para.lines.iter().flat_map(|line| line.valid_native_scripts()).collect();
     let script_at = |index| {
-        native_scripts
+        if let Some(owner) = native_scripts
             .iter()
-            .any(|owner| owner.matches_script(all_segments[index]))
-            .then_some(SegmentScript {
+            .find(|owner| owner.matches_script(all_segments[index]))
+        {
+            return owner.literal_prime_right().is_none().then_some(SegmentScript {
                 kind: AnnotationKind::Superscript,
                 annotate: true,
-            })
-            .or_else(|| segment_script(&all_segments, index))
+            });
+        }
+        segment_script(&all_segments, index)
     };
     let mut text = String::new();
     let mut annotations = Vec::new();

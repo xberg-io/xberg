@@ -359,3 +359,59 @@ fn should_preserve_existing_subscript_when_a_native_suffix_enters_its_lookback()
         "a same-kind replacement base must not erase the existing annotation",
     );
 }
+
+fn literal_prime_paragraphs() -> (NativePageSegments, Vec<PdfParagraph>) {
+    use xberg_native_pdf::{fonts::MappingProvenance, structure::McidScope};
+
+    let mut records = [
+        source("′", 121.0, 704.5, 2.0, 8.0),
+        source("RP", 100.0, 700.0, 20.0, 12.0),
+        source(")", 124.0, 700.0, 4.0, 12.0),
+    ];
+    for (record, sequence) in records.iter_mut().zip([12, 11, 13]) {
+        record.sequence = sequence;
+        record.mcid_scope = Some(McidScope::Page(0));
+        record.provenance = Some(MappingProvenance::ToUnicode);
+    }
+    let page = captured(records.to_vec());
+    assert_eq!(page.valid_owners(&page.segments).len(), 1);
+    let mut left = super::super::blocks_to_paragraphs(vec![page.segments[1].clone()], &[], &[]).remove(0);
+    let mut prime = left.clone();
+    prime.lines[0].baseline_y = 704.5;
+    prime.lines[0].segments = vec![page.segments[0].clone()];
+    left.lines[0].segments.push(page.segments[2].clone());
+    (page, vec![prime, left])
+}
+
+#[test]
+fn should_join_literal_prime_with_its_adjacent_whole_records_without_annotation() {
+    let (page, mut paragraphs) = literal_prime_paragraphs();
+    assert!(associate_surviving_suffixes(&mut paragraphs, &page));
+    assert_eq!(paragraphs.len(), 1);
+    let line = &paragraphs[0].lines[0];
+    assert_eq!(
+        line.segments.iter().map(SegmentKey::from).collect::<Vec<_>>(),
+        [1, 0, 2].map(|index| SegmentKey::from(&page.segments[index])),
+    );
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    assert_eq!(document.elements[0].text, "RP′)");
+    assert!(document.elements[0].annotations.is_empty());
+}
+
+#[test]
+fn should_reject_literal_prime_when_the_right_record_is_no_longer_on_the_same_line() {
+    let (page, mut paragraphs) = literal_prime_paragraphs();
+    let mut right = paragraphs[1].lines[0].clone();
+    right.segments.remove(0);
+    paragraphs[1].lines[0].segments.pop();
+    paragraphs[1].lines.push(right);
+    let original = format!("{paragraphs:?}");
+    assert!(!associate_surviving_suffixes(&mut paragraphs, &page));
+    assert_eq!(format!("{paragraphs:?}"), original);
+}
