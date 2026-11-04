@@ -165,6 +165,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Validate Markdown projection edges and remove emptied inline wrappers on Drop.** (#2446)
+  Reject unverified source gaps, including reference definitions at the document edges.
+  Remove delimiters owned by fully redacted inline spans while preserving unrelated markup and original finding offsets.
+
 - **(rust): Restore strict Clippy and no-ORT PDF feature builds.**
   Keep script fixture geometry bit-exact and compile the OCR structure wrapper only where it is used.
 

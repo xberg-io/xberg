@@ -541,8 +541,11 @@ impl RedactionPass<'_> {
                 strategy: self.config.strategy,
                 replacement_token: replacement.clone(),
             });
-            plan.replacements
-                .push((finding.raw.start, finding.raw.end, replacement));
+            // Drop preflights data and owned syntax removals together; finding spans remain original. ~keep
+            if !matches!(self.config.strategy, crate::types::redaction::RedactionStrategy::Drop) {
+                plan.replacements
+                    .push((finding.raw.start, finding.raw.end, replacement));
+            }
         }
         for (start, end, replacement) in plan.replacements.iter().rev() {
             plan.source.replace_range(*start..*end, replacement);

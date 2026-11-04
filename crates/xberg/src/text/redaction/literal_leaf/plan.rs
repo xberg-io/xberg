@@ -445,6 +445,63 @@ fn collect<'a>(
     Ok(records)
 }
 
+fn reserve_replacement_data(
+    source_len: usize,
+    records: &[Candidate<'_>],
+    selected: &[usize],
+    strategy: RedactionStrategy,
+    limits: Limits,
+    budget: &mut Work,
+) -> Result<usize, Error> {
+    let mut output_bound = source_len;
+    for &index in selected {
+        budget.charge(1, limits)?;
+        let item = &records[index];
+        let replacement = replacement_bound(strategy, item.category)?;
+        output_bound = output_bound.checked_add(replacement).ok_or(Error::Budget)?;
+        let label = item.category.label_bytes();
+        // Strategy token keys/labels and the audit token are copied only after coverage succeeds. ~keep
+        let strings = replacement
+            .checked_mul(3)
+            .and_then(|n| label.checked_mul(5).and_then(|v| n.checked_add(v)))
+            .and_then(|n| n.checked_add(item.identity.len()))
+            .and_then(|n| n.checked_add("0123456789abcdef".len() * 4))
+            .ok_or(Error::Budget)?;
+        budget.reserve(strings, limits)?;
+        budget.charge(strings, limits)?;
+    }
+    Ok(output_bound)
+}
+
+fn planned_rewrites(
+    projection: &projection::Projection<'_>,
+    records: &[Candidate<'_>],
+    selected: &[usize],
+    strategy: RedactionStrategy,
+    limits: Limits,
+    budget: &mut Work,
+) -> Result<(Vec<Range<usize>>, usize), Error> {
+    let count = selected.len();
+    let drop_ranges = if matches!(strategy, RedactionStrategy::Drop) {
+        projection.drop_ranges(selected.iter().map(|&index| records[index].raw.clone()), limits, budget)?
+    } else {
+        Vec::new()
+    };
+    let rewrite_count = if matches!(strategy, RedactionStrategy::Drop) {
+        drop_ranges.len()
+    } else {
+        count
+    };
+    budget.reserve(
+        rewrite_count
+            .saturating_sub(count)
+            .checked_mul(size_of::<(usize, usize, String)>())
+            .ok_or(Error::Budget)?,
+        limits,
+    )?;
+    Ok((drop_ranges, rewrite_count))
+}
+
 fn prepare<'a>(
     source: &str,
     matchers: &Matchers<'a>,
@@ -477,26 +534,12 @@ fn prepare<'a>(
             .ok_or(Error::Budget)?,
         limits,
     )?;
-    let mut output_bound = source.len();
-    for &index in &selected {
-        budget.charge(1, limits)?;
-        let item = &records[index];
-        let replacement = replacement_bound(strategy, item.category)?;
-        output_bound = output_bound.checked_add(replacement).ok_or(Error::Budget)?;
-        let label = item.category.label_bytes();
-        // Strategy token keys/labels and the audit token are copied only after coverage succeeds. ~keep
-        let strings = replacement
-            .checked_mul(3)
-            .and_then(|n| label.checked_mul(5).and_then(|v| n.checked_add(v)))
-            .and_then(|n| n.checked_add(item.identity.len()))
-            .and_then(|n| n.checked_add("0123456789abcdef".len() * 4))
-            .ok_or(Error::Budget)?;
-        budget.reserve(strings, limits)?;
-        budget.charge(strings, limits)?;
-    }
+    let (drop_ranges, rewrite_count) =
+        planned_rewrites(&projection, &records, &selected, strategy, limits, &mut budget)?;
+    let output_bound = reserve_replacement_data(source.len(), &records, &selected, strategy, limits, &mut budget)?;
     budget.charge(
         output_bound
-            .checked_mul(count)
+            .checked_mul(rewrite_count)
             .and_then(|n| n.checked_add(source.len()))
             .ok_or(Error::Budget)?,
         limits,
@@ -507,7 +550,14 @@ fn prepare<'a>(
     output.push_str(source);
     let (mut matches, mut replacements) = (Vec::new(), Vec::new());
     matches.try_reserve_exact(count).map_err(|_| Error::Budget)?;
-    replacements.try_reserve_exact(count).map_err(|_| Error::Budget)?;
+    replacements
+        .try_reserve_exact(rewrite_count)
+        .map_err(|_| Error::Budget)?;
+    replacements.extend(
+        drop_ranges
+            .into_iter()
+            .map(|range| (range.start, range.end, String::new())),
+    );
     for index in selected {
         budget.charge(1, limits)?;
         let item = &records[index];
