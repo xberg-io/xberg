@@ -43,10 +43,13 @@ pub(super) fn stock_backend(config: &ExtractionConfig) -> Option<Arc<dyn OcrBack
 }
 
 fn preserves_requested_projection(config: &ExtractionConfig) -> bool {
+    #[cfg(feature = "layout-detection")]
+    if config.layout.is_some() {
+        return false;
+    }
     config.output_format == OutputFormat::Plain
         && config.ocr_strategy == OcrStrategy::Auto
         && !config.include_document_structure
-        && config.layout.is_none()
         && config.content_filter.is_none()
         && config.images.as_ref().is_none_or(|images| !images.include_page_rasters)
         && config.ocr_near_empty_fallback != Some(false)
@@ -100,9 +103,6 @@ pub(super) fn needs_ocr(
         return None;
     }
     let size = preview_size(handle.bbox, &source, byte_limit)?;
-    if !has_simple_font_resources(doc, page) {
-        return None;
-    }
     let boxes = native_boxes(doc, page, frame)?;
     if is_cancelled() {
         return None;
@@ -149,7 +149,8 @@ fn audited_image_name(doc: &PdfDocument, page: usize, content: &Object, byte_lim
     let filters = stream_filters(dict.get("Filter"))?;
     let output_limit = MAX_CONTENT_BYTES.min(byte_limit / 4);
     let bytes = decode_probe_stream(data, filters, output_limit, byte_limit)?;
-    let source = hidden_text_image_name(&bytes)?;
+    let fonts = simple_font_resources(doc, page)?;
+    let source = hidden_text_image_name(&bytes, |font| fonts.contains_key(font))?;
     // Subsequent Native inspection uses the same immutable single stream. Require
     // its ordinary decoder to agree with the audited bytes before trusting geometry.
     (doc.get_page_content_data(page).ok()? == bytes).then_some(source)
@@ -170,20 +171,22 @@ fn resolved_page_box(doc: &PdfDocument, object: &Object) -> Option<Rect> {
     finite_box(bounds).then_some(bounds)
 }
 
-fn hidden_text_image_name(content: &[u8]) -> Option<String> {
+fn hidden_text_image_name(content: &[u8], font_is_known: impl Fn(&str) -> bool) -> Option<String> {
     let mut mode = 0;
+    let mut known_font = false;
     let mut inside_text = false;
     let mut states = Vec::new();
     let mut image = None;
     let mut hidden = false;
     let complete = visit_complete_content_stream(content, MAX_OPERATORS, |op| {
         match op {
-            Operator::SaveState if !inside_text => states.push(mode),
+            Operator::SaveState if !inside_text => states.push((mode, known_font)),
             Operator::RestoreState if !inside_text => {
-                let Some(previous) = states.pop() else {
+                let Some((previous_mode, previous_font)) = states.pop() else {
                     return false;
                 };
-                mode = previous;
+                mode = previous_mode;
+                known_font = previous_font;
             }
             Operator::Cm { a, b, c, d, e, f }
                 if !inside_text
@@ -199,13 +202,15 @@ fn hidden_text_image_name(content: &[u8]) -> Option<String> {
             Operator::BeginText if !inside_text => inside_text = true,
             Operator::EndText if inside_text => inside_text = false,
             Operator::Tr { render } if inside_text => mode = render,
+            Operator::Tf { font, size } if inside_text && size.is_finite() && size > 0.0 && font_is_known(&font) => {
+                known_font = true;
+            }
             Operator::Tj { .. } | Operator::TJ { .. } | Operator::Quote { .. } | Operator::DoubleQuote { .. }
-                if inside_text && mode == 3 =>
+                if inside_text && mode == 3 && known_font =>
             {
                 hidden = true
             }
-            Operator::Tf { .. }
-            | Operator::Td { .. }
+            Operator::Td { .. }
             | Operator::TD { .. }
             | Operator::Tm { .. }
             | Operator::TStar
@@ -405,35 +410,34 @@ fn covers_frame(image: Rect, frame: Rect) -> bool {
         && w * h >= fw * fh * crate::core::pipeline::FULL_PAGE_IMAGE_AREA_RATIO
 }
 
-fn has_simple_font_resources(doc: &PdfDocument, page: usize) -> bool {
+fn simple_font_resources(doc: &PdfDocument, page: usize) -> Option<std::collections::HashMap<String, Object>> {
     // The optional geometry read must not inflate embedded fonts or CMaps through
     // Native's ordinary text decoder. Simple unembedded Type 1 fonts have no such streams.
-    let fonts = doc
-        .get_page_resources(page)
-        .ok()
-        .and_then(|resources| doc.resolve_object(resources.as_dict()?.get("Font")?).ok());
-    fonts.as_ref().and_then(Object::as_dict).is_some_and(|fonts| {
-        !fonts.is_empty()
-            && fonts.len() <= MAX_OPERATORS
-            && fonts.values().all(|font| {
-                doc.resolve_object(font)
-                    .ok()
-                    .as_ref()
-                    .and_then(Object::as_dict)
-                    .is_some_and(|dict| {
-                        dict.get("Subtype").and_then(Object::as_name) == Some("Type1")
-                            && dict.get("BaseFont").and_then(Object::as_name).is_some()
-                            && !dict.contains_key("FontDescriptor")
-                            && !dict.contains_key("ToUnicode")
-                            && dict.get("Encoding").is_none_or(|encoding| {
-                                matches!(
-                                    encoding.as_name(),
-                                    Some("WinAnsiEncoding" | "MacRomanEncoding" | "StandardEncoding")
-                                )
-                            })
-                    })
-            })
-    })
+    let resources = doc.get_page_resources(page).ok()?;
+    let Object::Dictionary(fonts) = doc.resolve_object(resources.as_dict()?.get("Font")?).ok()? else {
+        return None;
+    };
+    let simple = !fonts.is_empty()
+        && fonts.len() <= MAX_OPERATORS
+        && fonts.values().all(|font| {
+            doc.resolve_object(font)
+                .ok()
+                .as_ref()
+                .and_then(Object::as_dict)
+                .is_some_and(|dict| {
+                    dict.get("Subtype").and_then(Object::as_name) == Some("Type1")
+                        && dict.get("BaseFont").and_then(Object::as_name).is_some()
+                        && !dict.contains_key("FontDescriptor")
+                        && !dict.contains_key("ToUnicode")
+                        && dict.get("Encoding").is_none_or(|encoding| {
+                            matches!(
+                                encoding.as_name(),
+                                Some("WinAnsiEncoding" | "MacRomanEncoding" | "StandardEncoding")
+                            )
+                        })
+                })
+        });
+    simple.then_some(fonts)
 }
 
 fn native_boxes(doc: &PdfDocument, page: usize, frame: Rect) -> Option<Vec<Rect>> {

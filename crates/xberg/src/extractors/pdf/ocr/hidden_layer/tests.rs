@@ -3,6 +3,8 @@ use xberg_native_pdf::content::parser::visit_complete_content_stream;
 
 #[test]
 fn literal_growth_must_preserve_native_order_and_repeated_words() {
+    assert!(!adds_text_preserving_native("Page 7", "Page 7 Page 7"));
+    assert!(!adds_text_preserving_native("Page 7", "Page 7 more words Page 7"));
     let native = "Page 7. naïve total total";
     assert!(adds_text_preserving_native(
         native,
@@ -24,7 +26,10 @@ fn literal_growth_must_preserve_native_order_and_repeated_words() {
 #[test]
 fn source_audit_requires_one_image_and_only_invisible_text_paint() {
     let supported = b"q 612 0 0 792 0 0 cm /Scan Do Q BT /F 12 Tf 3 Tr (layer) Tj ET";
-    assert_eq!(hidden_text_image_name(supported).as_deref(), Some("Scan"));
+    assert_eq!(
+        hidden_text_image_name(supported, |font| font == "F").as_deref(),
+        Some("Scan")
+    );
 
     for unsupported in [
         b"q 612 0 0 792 0 0 cm /Scan Do Q BT /F 12 Tf (visible) Tj ET".as_slice(),
@@ -36,7 +41,7 @@ fn source_audit_requires_one_image_and_only_invisible_text_paint() {
         b"q 612 0 0 792 0 0 cm /Scan Do BT /F 12 Tf 3 Tr (layer) Tj ET",
     ] {
         assert!(
-            hidden_text_image_name(unsupported).is_none(),
+            hidden_text_image_name(unsupported, |font| font == "F").is_none(),
             "{}",
             String::from_utf8_lossy(unsupported)
         );
@@ -44,10 +49,27 @@ fn source_audit_requires_one_image_and_only_invisible_text_paint() {
 }
 
 #[test]
+fn source_audit_tracks_the_bound_font_across_text_objects_and_saved_state() {
+    let audit = |content: &[u8]| hidden_text_image_name(content, |font| font == "F");
+    let retained = b"/Scan Do BT /F 12 Tf 3 Tr ET q BT 0 Tr ET Q BT (layer) Tj ET";
+    assert_eq!(audit(retained).as_deref(), Some("Scan"));
+
+    for unsupported in [
+        b"/Scan Do BT /Missing 12 Tf 3 Tr (layer) Tj ET".as_slice(),
+        b"/Scan Do BT /F 0 Tf 3 Tr (layer) Tj ET",
+        b"/Scan Do BT /F -12 Tf 3 Tr (layer) Tj ET",
+        b"/Scan Do BT 3 Tr (layer) Tj ET",
+        b"/Scan Do q BT /F 12 Tf ET Q BT 3 Tr (layer) Tj ET",
+    ] {
+        assert!(audit(unsupported).is_none(), "{}", String::from_utf8_lossy(unsupported));
+    }
+}
+
+#[test]
 fn complete_source_audit_rejects_truncated_and_over_limit_operator_streams() {
     let supported = b"q 612 0 0 792 0 0 cm /Scan Do Q BT /F 12 Tf 3 Tr (layer) Tj ET";
     let malformed = [supported.as_slice(), b" <"].concat();
-    assert!(hidden_text_image_name(&malformed).is_none());
+    assert!(hidden_text_image_name(&malformed, |font| font == "F").is_none());
     assert!(visit_complete_content_stream(b"q Q", 1, |_| true).is_err());
     assert!(visit_complete_content_stream(b"q Q % whitespace and a comment", 2, |_| true).expect("complete stream"));
 }
