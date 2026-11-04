@@ -33,6 +33,43 @@ fn should_attach_a_numeric_suffix_with_only_glyph_edge_overhang() {
 }
 
 #[test]
+fn should_reject_an_unrelated_record_in_the_overlapping_suffix_run() {
+    let mut base = span("R", 100.0, 700.0, 20.0, 12.0);
+    base.sequence = 30;
+    base.provenance = Some(MappingProvenance::ToUnicode);
+    let mut script = span("2", 119.96, 704.5, 4.0, 8.0);
+    script.sequence = 31;
+    script.provenance = base.provenance;
+    let mut other = span("a", 124.06, 704.5, 4.0, 8.0);
+    other.sequence = 90;
+    other.provenance = base.provenance;
+    assert!(page(vec![base, script, other]).owners.is_empty());
+}
+
+#[test]
+fn should_require_source_continuity_through_a_signed_suffix_run() {
+    let mut base = span("10", 100.0, 700.0, 20.0, 12.0);
+    base.sequence = 30;
+    base.provenance = Some(MappingProvenance::ToUnicode);
+    let mut sign = span("−", 119.96, 704.5, 4.0, 8.0);
+    sign.sequence = 31;
+    sign.provenance = base.provenance;
+    let mut digit = span("4", 123.96, 704.5, 4.0, 8.0);
+    digit.sequence = 32;
+    digit.provenance = base.provenance;
+    assert_eq!(page(vec![base.clone(), sign.clone(), digit.clone()]).owners.len(), 2);
+
+    let mut inferred = digit.clone();
+    inferred.provenance = None;
+    let mut other_marked_content = digit.clone();
+    other_marked_content.mcid = Some(1);
+    digit.split_boundary_before = true;
+    for unsupported in [inferred, other_marked_content, digit] {
+        assert!(page(vec![base.clone(), sign.clone(), unsupported]).owners.is_empty());
+    }
+}
+
+#[test]
 fn should_leave_measured_author_overlap_unsupported_regardless_of_final_offsets() {
     let mut base = span("Author", 94.298_01, 697.163, 91.206_23, 11.955_2);
     let script = span("1", 185.504_01, 701.501_04, 4.234_514, 7.970_1);

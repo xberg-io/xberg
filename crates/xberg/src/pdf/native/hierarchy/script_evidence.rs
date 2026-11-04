@@ -224,16 +224,19 @@ fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan) -> bool {
     );
     (numeric_base || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic()))
         && numeric_suffix
-        && base.sequence.checked_add(1) == Some(script.sequence)
-        && base.mcid == script.mcid
-        && base.provenance == Some(MappingProvenance::ToUnicode)
-        && script.provenance == Some(MappingProvenance::ToUnicode)
-        && !base.split_boundary_before
-        && !script.split_boundary_before
-        && !base.offset_semantic
-        && !script.offset_semantic
-        // Span splitting can synthesize offsets. Do not use those to admit overlap. ~keep
-        && base.char_x_offsets.is_empty()
+        && has_adjacent_source(base, script)
+}
+
+fn has_adjacent_source(left: &TextSpan, right: &TextSpan) -> bool {
+    left.sequence.checked_add(1) == Some(right.sequence)
+        && left.mcid == right.mcid
+        && [left, right].into_iter().all(|span| {
+            span.provenance == Some(MappingProvenance::ToUnicode)
+                && !span.split_boundary_before
+                && !span.offset_semantic
+                // Span splitting can synthesize offsets. Do not use those to admit overlap. ~keep
+                && span.char_x_offsets.is_empty()
+        })
 }
 
 fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
@@ -299,24 +302,29 @@ fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usi
         members.push(index);
         right = span.bbox.right();
     }
-    if members.iter().any(|&index| spans[index].text.contains('−')) && !is_complete_signed_exponent(spans, &members) {
+    if members.first() != Some(&first) {
         return None;
     }
-    (!members.is_empty() && members[0] == first).then_some(members)
+    let has_overhang = spans[first].bbox.x < spans[base].bbox.right();
+    let has_minus = members.iter().any(|&index| spans[index].text.contains('−'));
+    if (has_overhang || has_minus) && !is_complete_numeric_suffix(&spans[base], spans, &members) {
+        return None;
+    }
+    Some(members)
 }
 
-fn is_complete_signed_exponent(spans: &[TextSpan], members: &[usize]) -> bool {
+fn is_complete_numeric_suffix(base: &TextSpan, spans: &[TextSpan], members: &[usize]) -> bool {
     let Some((&first, rest)) = members.split_first() else {
         return false;
     };
-    let Some(digits) = spans[first].text.strip_prefix('−') else {
-        return false;
-    };
-    (is_numeric_span(digits) || (digits.is_empty() && !rest.is_empty()))
+    let first = &spans[first];
+    let digits = first.text.strip_prefix('−').unwrap_or(&first.text);
+    has_adjacent_numeric_source(base, first)
+        && (is_numeric_span(digits) || (digits.is_empty() && !rest.is_empty()))
         && rest.iter().all(|&index| is_numeric_span(&spans[index].text))
         && members
             .windows(2)
-            .all(|pair| spans[pair[0]].sequence.checked_add(1) == Some(spans[pair[1]].sequence))
+            .all(|pair| has_adjacent_source(&spans[pair[0]], &spans[pair[1]]))
 }
 
 fn has_stacked_counterpart(spans: &[TextSpan], base: usize, members: &[usize]) -> bool {
