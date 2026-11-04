@@ -8534,7 +8534,7 @@ fn wire__crate__create_post_processor_dart_impl_impl(
                 decode_DartFn_Inputs_extracted_document_extraction_config_Output_bool_AnyhowException(
                     <flutter_rust_bridge::DartOpaque>::sse_decode(&mut deserializer),
                 );
-            let api_estimated_duration_ms = decode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
+            let api_estimated_duration_ms = decode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
                 <flutter_rust_bridge::DartOpaque>::sse_decode(&mut deserializer),
             );
             let api_priority = decode_DartFn_Inputs__Output_i_64_AnyhowException(
@@ -12448,8 +12448,8 @@ const _: fn() = || {
         let _: String = ArchiveMetadata.format;
         let _: i64 = ArchiveMetadata.file_count;
         let _: Vec<String> = ArchiveMetadata.file_list;
-        let _: i64 = ArchiveMetadata.total_size;
-        let _: Option<i64> = ArchiveMetadata.compressed_size;
+        let _: u64 = ArchiveMetadata.total_size;
+        let _: Option<u64> = ArchiveMetadata.compressed_size;
     }
     {
         let Attributes = None::<crate::Attributes>.unwrap();
@@ -12459,7 +12459,7 @@ const _: fn() = || {
     }
     {
         let AudioMetadata = None::<crate::AudioMetadata>.unwrap();
-        let _: Option<i64> = AudioMetadata.duration_ms;
+        let _: Option<u64> = AudioMetadata.duration_ms;
         let _: Option<String> = AudioMetadata.codec;
         let _: Option<String> = AudioMetadata.container;
         let _: Option<i64> = AudioMetadata.sample_rate_hz;
@@ -12580,7 +12580,7 @@ const _: fn() = || {
         let ChunkInfo = None::<crate::ChunkInfo>.unwrap();
         let _: i64 = ChunkInfo.index;
         let _: crate::PageRange = ChunkInfo.pages;
-        let _: i64 = ChunkInfo.estimated_time_ms;
+        let _: u64 = ChunkInfo.estimated_time_ms;
     }
     {
         let ChunkMetadata = None::<crate::ChunkMetadata>.unwrap();
@@ -12624,8 +12624,8 @@ const _: fn() = || {
             size_bytes,
             threshold_bytes,
         } => {
-            let _: i64 = size_bytes;
-            let _: i64 = threshold_bytes;
+            let _: u64 = size_bytes;
+            let _: u64 = threshold_bytes;
         }
         crate::ChunkingReason::ManyPages { page_count, threshold } => {
             let _: i64 = page_count;
@@ -12636,7 +12636,7 @@ const _: fn() = || {
             let _: bool = force_ocr;
         }
         crate::ChunkingReason::LargeAndManyPages { size_bytes, page_count } => {
-            let _: i64 = size_bytes;
+            let _: u64 = size_bytes;
             let _: i64 = page_count;
         }
     }
@@ -12786,8 +12786,8 @@ const _: fn() = || {
         let _: crate::HtmlToMarkdownRsOutputFormat = ConversionOptions.output_format;
         let _: bool = ConversionOptions.include_document_structure;
         let _: bool = ConversionOptions.extract_images;
-        let _: i64 = ConversionOptions.max_image_size;
-        let _: Option<i64> = ConversionOptions.max_input_size;
+        let _: u64 = ConversionOptions.max_image_size;
+        let _: Option<u64> = ConversionOptions.max_input_size;
         let _: bool = ConversionOptions.capture_svg;
         let _: bool = ConversionOptions.infer_dimensions;
         let _: Option<i64> = ConversionOptions.max_depth;
@@ -12837,12 +12837,12 @@ const _: fn() = || {
         let _: Vec<String> = CrawlConfig.tracking_params;
         let _: std::collections::HashMap<String, String> = CrawlConfig.custom_headers;
         let _: i64 = CrawlConfig.request_timeout;
-        let _: Option<i64> = CrawlConfig.rate_limit_ms;
+        let _: Option<u64> = CrawlConfig.rate_limit_ms;
         let _: i64 = CrawlConfig.max_redirects;
         let _: i64 = CrawlConfig.retry_count;
         let _: Vec<i64> = CrawlConfig.retry_codes;
-        let _: i64 = CrawlConfig.retry_initial_delay_ms;
-        let _: i64 = CrawlConfig.retry_max_delay_ms;
+        let _: u64 = CrawlConfig.retry_initial_delay_ms;
+        let _: u64 = CrawlConfig.retry_max_delay_ms;
         let _: f64 = CrawlConfig.rate_limit_jitter_ratio;
         let _: bool = CrawlConfig.cookies_enabled;
         let _: Option<crate::AuthConfig> = CrawlConfig.auth;
@@ -13033,7 +13033,7 @@ const _: fn() = || {
     {
         let DocumentMetadata = None::<crate::DocumentMetadata>.unwrap();
         let _: String = DocumentMetadata.mime_type;
-        let _: i64 = DocumentMetadata.size_bytes;
+        let _: u64 = DocumentMetadata.size_bytes;
         let _: Option<i64> = DocumentMetadata.page_count;
         let _: bool = DocumentMetadata.force_ocr;
         let _: Option<crate::UserChunkConfig> = DocumentMetadata.user_chunk_config;
@@ -13184,7 +13184,7 @@ const _: fn() = || {
         let _: bool = EmbeddingConfig.show_download_progress;
         let _: Option<String> = EmbeddingConfig.cache_dir;
         let _: Option<crate::AccelerationConfig> = EmbeddingConfig.acceleration;
-        let _: Option<i64> = EmbeddingConfig.max_embed_duration_secs;
+        let _: Option<u64> = EmbeddingConfig.max_embed_duration_secs;
         let _: Option<i64> = EmbeddingConfig.max_sequence_length;
     }
     match None::<crate::EmbeddingModelType>.unwrap() {
@@ -13373,11 +13373,11 @@ const _: fn() = || {
         let _: Option<crate::PostProcessorConfig> = ExtractionConfig.postprocessor;
         let _: Option<crate::ConversionOptions> = ExtractionConfig.html_options;
         let _: Option<crate::HtmlOutputConfig> = ExtractionConfig.html_output;
-        let _: Option<i64> = ExtractionConfig.extraction_timeout_secs;
+        let _: Option<u64> = ExtractionConfig.extraction_timeout_secs;
         let _: Option<i64> = ExtractionConfig.max_concurrent_extractions;
         let _: crate::ResultFormat = ExtractionConfig.result_format;
         let _: Option<crate::SecurityLimits> = ExtractionConfig.security_limits;
-        let _: Option<i64> = ExtractionConfig.max_embedded_file_bytes;
+        let _: Option<u64> = ExtractionConfig.max_embedded_file_bytes;
         let _: crate::OutputFormat = ExtractionConfig.output_format;
         let _: bool = ExtractionConfig.escape_markdown;
         let _: bool = ExtractionConfig.table_anchors;
@@ -13390,7 +13390,7 @@ const _: fn() = || {
         let _: bool = ExtractionConfig.strict_parse;
         let _: Option<crate::AccelerationConfig> = ExtractionConfig.acceleration;
         let _: Option<String> = ExtractionConfig.cache_namespace;
-        let _: Option<i64> = ExtractionConfig.cache_ttl_secs;
+        let _: Option<u64> = ExtractionConfig.cache_ttl_secs;
         let _: Option<crate::EmailConfig> = ExtractionConfig.email;
         let _: Option<crate::CsvConfig> = ExtractionConfig.csv;
         let _: Option<crate::GeoJsonExtractionConfig> = ExtractionConfig.geojson;
@@ -13475,7 +13475,7 @@ const _: fn() = || {
         let _: Option<bool> = FileExtractionConfig.strict_parse;
         let _: Option<crate::LayoutDetectionConfig> = FileExtractionConfig.layout;
         let _: Option<crate::TranscriptionConfig> = FileExtractionConfig.transcription;
-        let _: Option<i64> = FileExtractionConfig.timeout_secs;
+        let _: Option<u64> = FileExtractionConfig.timeout_secs;
         let _: Option<crate::TreeSitterConfig> = FileExtractionConfig.tree_sitter;
         let _: Option<crate::StructuredExtractionConfig> = FileExtractionConfig.structured_extraction;
         let _: Option<crate::UrlExtractionConfig> = FileExtractionConfig.url;
@@ -13634,14 +13634,14 @@ const _: fn() = || {
         let HeuristicsConfig = None::<crate::HeuristicsConfig>.unwrap();
         let _: bool = HeuristicsConfig.enable_pdf_text_heuristics;
         let _: f64 = HeuristicsConfig.text_layer_threshold;
-        let _: i64 = HeuristicsConfig.file_size_threshold_bytes;
+        let _: u64 = HeuristicsConfig.file_size_threshold_bytes;
         let _: i64 = HeuristicsConfig.page_count_threshold;
         let _: i64 = HeuristicsConfig.target_pages_per_chunk;
         let _: i64 = HeuristicsConfig.max_pages_per_chunk;
-        let _: i64 = HeuristicsConfig.disk_processing_threshold_bytes;
+        let _: u64 = HeuristicsConfig.disk_processing_threshold_bytes;
         let _: i64 = HeuristicsConfig.min_chars_per_page;
         let _: i64 = HeuristicsConfig.max_xlsx_sheet_count;
-        let _: i64 = HeuristicsConfig.max_xlsx_workbook_cells;
+        let _: u64 = HeuristicsConfig.max_xlsx_workbook_cells;
         let _: i64 = HeuristicsConfig.max_pptx_embedded_count;
     }
     match None::<crate::HeuristicsError>.unwrap() {
@@ -13853,7 +13853,7 @@ const _: fn() = || {
         let _: bool = LateInteractionConfig.show_download_progress;
         let _: Option<String> = LateInteractionConfig.cache_dir;
         let _: Option<crate::AccelerationConfig> = LateInteractionConfig.acceleration;
-        let _: Option<i64> = LateInteractionConfig.max_embed_duration_secs;
+        let _: Option<u64> = LateInteractionConfig.max_embed_duration_secs;
     }
     {
         let LateInteractionMatch = None::<crate::LateInteractionMatch>.unwrap();
@@ -13932,7 +13932,7 @@ const _: fn() = || {
     {
         let LlmCacheConfig = None::<crate::LlmCacheConfig>.unwrap();
         let _: Option<i64> = LlmCacheConfig.max_entries;
-        let _: Option<i64> = LlmCacheConfig.ttl_seconds;
+        let _: Option<u64> = LlmCacheConfig.ttl_seconds;
         let _: Option<String> = LlmCacheConfig.backend;
         let _: Option<std::collections::HashMap<String, String>> = LlmCacheConfig.backend_config;
     }
@@ -13941,10 +13941,10 @@ const _: fn() = || {
         let _: String = LlmConfig.model;
         let _: Option<String> = LlmConfig.api_key;
         let _: Option<String> = LlmConfig.base_url;
-        let _: Option<i64> = LlmConfig.timeout_secs;
+        let _: Option<u64> = LlmConfig.timeout_secs;
         let _: Option<i64> = LlmConfig.max_retries;
         let _: Option<f64> = LlmConfig.temperature;
-        let _: Option<i64> = LlmConfig.max_tokens;
+        let _: Option<u64> = LlmConfig.max_tokens;
         let _: Option<f64> = LlmConfig.top_p;
         let _: Option<Vec<String>> = LlmConfig.stop;
         let _: Option<i64> = LlmConfig.seed;
@@ -13960,8 +13960,8 @@ const _: fn() = || {
         let _: Option<crate::LlmRateLimitConfig> = LlmConfig.rate_limit;
         let _: Option<bool> = LlmConfig.cost_tracking;
         let _: Option<bool> = LlmConfig.tracing;
-        let _: Option<i64> = LlmConfig.cooldown_secs;
-        let _: Option<i64> = LlmConfig.health_check_secs;
+        let _: Option<u64> = LlmConfig.cooldown_secs;
+        let _: Option<u64> = LlmConfig.health_check_secs;
         let _: Option<crate::BedrockConfig> = LlmConfig.bedrock;
         let _: Option<crate::CredentialProviderConfig> = LlmConfig.credential_provider;
         let _: Option<i64> = LlmConfig.max_concurrency;
@@ -13977,16 +13977,16 @@ const _: fn() = || {
     {
         let LlmRateLimitConfig = None::<crate::LlmRateLimitConfig>.unwrap();
         let _: Option<i64> = LlmRateLimitConfig.rpm;
-        let _: Option<i64> = LlmRateLimitConfig.tpm;
-        let _: Option<i64> = LlmRateLimitConfig.window_seconds;
+        let _: Option<u64> = LlmRateLimitConfig.tpm;
+        let _: Option<u64> = LlmRateLimitConfig.window_seconds;
     }
     {
         let LlmUsage = None::<crate::LlmUsage>.unwrap();
         let _: String = LlmUsage.model;
         let _: String = LlmUsage.source;
-        let _: Option<i64> = LlmUsage.input_tokens;
-        let _: Option<i64> = LlmUsage.output_tokens;
-        let _: Option<i64> = LlmUsage.total_tokens;
+        let _: Option<u64> = LlmUsage.input_tokens;
+        let _: Option<u64> = LlmUsage.output_tokens;
+        let _: Option<u64> = LlmUsage.total_tokens;
         let _: Option<f64> = LlmUsage.estimated_cost;
         let _: Option<String> = LlmUsage.finish_reason;
     }
@@ -14047,7 +14047,7 @@ const _: fn() = || {
         let _: Option<crate::ImagePreprocessingMetadata> = Metadata.image_preprocessing;
         let _: Option<String> = Metadata.json_schema;
         let _: Option<crate::ErrorMetadata> = Metadata.error;
-        let _: Option<i64> = Metadata.extraction_duration_ms;
+        let _: Option<u64> = Metadata.extraction_duration_ms;
         let _: Option<String> = Metadata.category;
         let _: Option<Vec<String>> = Metadata.tags;
         let _: Option<String> = Metadata.document_version;
@@ -14097,8 +14097,8 @@ const _: fn() = || {
             size_bytes,
             threshold_bytes,
         } => {
-            let _: i64 = size_bytes;
-            let _: i64 = threshold_bytes;
+            let _: u64 = size_bytes;
+            let _: u64 = threshold_bytes;
         }
         crate::NoChunkingReason::FewPages { page_count, threshold } => {
             let _: i64 = page_count;
@@ -14773,7 +14773,7 @@ const _: fn() = || {
         let _: bool = RerankerConfig.show_download_progress;
         let _: Option<String> = RerankerConfig.cache_dir;
         let _: Option<crate::AccelerationConfig> = RerankerConfig.acceleration;
-        let _: Option<i64> = RerankerConfig.max_rerank_duration_secs;
+        let _: Option<u64> = RerankerConfig.max_rerank_duration_secs;
     }
     match None::<crate::RerankerModelType>.unwrap() {
         crate::RerankerModelType::Preset { name } => {
@@ -14857,7 +14857,7 @@ const _: fn() = || {
         let _: Vec<String> = ServerConfig.cors_origins;
         let _: i64 = ServerConfig.max_request_body_bytes;
         let _: i64 = ServerConfig.max_multipart_field_bytes;
-        let _: i64 = ServerConfig.job_timeout_secs;
+        let _: u64 = ServerConfig.job_timeout_secs;
     }
     {
         let SitemapUrl = None::<crate::SitemapUrl>.unwrap();
@@ -14879,7 +14879,7 @@ const _: fn() = || {
         let _: bool = SparseEmbeddingConfig.show_download_progress;
         let _: Option<String> = SparseEmbeddingConfig.cache_dir;
         let _: Option<crate::AccelerationConfig> = SparseEmbeddingConfig.acceleration;
-        let _: Option<i64> = SparseEmbeddingConfig.max_embed_duration_secs;
+        let _: Option<u64> = SparseEmbeddingConfig.max_embed_duration_secs;
     }
     match None::<crate::SparseEmbeddingModelType>.unwrap() {
         crate::SparseEmbeddingModelType::Preset { name } => {
@@ -15068,9 +15068,9 @@ const _: fn() = || {
         let _: crate::WhisperModel = TranscriptionConfig.model;
         let _: Option<String> = TranscriptionConfig.language;
         let _: bool = TranscriptionConfig.timestamps;
-        let _: Option<i64> = TranscriptionConfig.max_duration_ms;
-        let _: Option<i64> = TranscriptionConfig.max_bytes;
-        let _: Option<i64> = TranscriptionConfig.timeout_ms;
+        let _: Option<u64> = TranscriptionConfig.max_duration_ms;
+        let _: Option<u64> = TranscriptionConfig.max_bytes;
+        let _: Option<u64> = TranscriptionConfig.timeout_ms;
         let _: Option<String> = TranscriptionConfig.model_cache_dir;
         let _: bool = TranscriptionConfig.allow_network;
         let _: bool = TranscriptionConfig.verify_hash;
@@ -15186,8 +15186,8 @@ const _: fn() = || {
             let _: String = message;
         }
         crate::XbergError::Timeout { elapsed_ms, limit_ms } => {
-            let _: i64 = elapsed_ms;
-            let _: i64 = limit_ms;
+            let _: u64 = elapsed_ms;
+            let _: u64 = limit_ms;
         }
         crate::XbergError::Cancelled => {}
         crate::XbergError::Security { message } => {
@@ -15603,19 +15603,19 @@ fn decode_DartFn_Inputs_extracted_document_Output_String_AnyhowException(
         flutter_rust_bridge::for_generated::convert_into_dart_fn_future(body(dart_opaque.clone(), arg0))
     }
 }
-fn decode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
+fn decode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
     dart_opaque: flutter_rust_bridge::DartOpaque,
-) -> impl Fn(crate::ExtractedDocument) -> flutter_rust_bridge::DartFnFuture<i64> {
+) -> impl Fn(crate::ExtractedDocument) -> flutter_rust_bridge::DartFnFuture<u64> {
     use flutter_rust_bridge::IntoDart;
 
-    async fn body(dart_opaque: flutter_rust_bridge::DartOpaque, arg0: crate::ExtractedDocument) -> i64 {
+    async fn body(dart_opaque: flutter_rust_bridge::DartOpaque, arg0: crate::ExtractedDocument) -> u64 {
         let args = vec![arg0.into_into_dart().into_dart()];
         let message = FLUTTER_RUST_BRIDGE_HANDLER.dart_fn_invoke(dart_opaque, args).await;
 
         let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
         let action = deserializer.cursor.read_u8().unwrap();
         let ans = match action {
-            0 => std::result::Result::Ok(<i64>::sse_decode(&mut deserializer)),
+            0 => std::result::Result::Ok(<u64>::sse_decode(&mut deserializer)),
             1 => std::result::Result::Err(<flutter_rust_bridge::for_generated::anyhow::Error>::sse_decode(
                 &mut deserializer,
             )),
@@ -16426,8 +16426,8 @@ impl SseDecode for crate::ArchiveMetadata {
         let mut var_format = <String>::sse_decode(deserializer);
         let mut var_fileCount = <i64>::sse_decode(deserializer);
         let mut var_fileList = <Vec<String>>::sse_decode(deserializer);
-        let mut var_totalSize = <i64>::sse_decode(deserializer);
-        let mut var_compressedSize = <Option<i64>>::sse_decode(deserializer);
+        let mut var_totalSize = <u64>::sse_decode(deserializer);
+        let mut var_compressedSize = <Option<u64>>::sse_decode(deserializer);
         return crate::ArchiveMetadata {
             format: var_format,
             file_count: var_fileCount,
@@ -16475,7 +16475,7 @@ impl SseDecode for crate::Attributes {
 impl SseDecode for crate::AudioMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_durationMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_durationMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_codec = <Option<String>>::sse_decode(deserializer);
         let mut var_container = <Option<String>>::sse_decode(deserializer);
         let mut var_sampleRateHz = <Option<i64>>::sse_decode(deserializer);
@@ -16900,7 +16900,7 @@ impl SseDecode for crate::ChunkInfo {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_index = <i64>::sse_decode(deserializer);
         let mut var_pages = <crate::PageRange>::sse_decode(deserializer);
-        let mut var_estimatedTimeMs = <i64>::sse_decode(deserializer);
+        let mut var_estimatedTimeMs = <u64>::sse_decode(deserializer);
         return crate::ChunkInfo {
             index: var_index,
             pages: var_pages,
@@ -17042,8 +17042,8 @@ impl SseDecode for crate::ChunkingReason {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_sizeBytes = <i64>::sse_decode(deserializer);
-                let mut var_thresholdBytes = <i64>::sse_decode(deserializer);
+                let mut var_sizeBytes = <u64>::sse_decode(deserializer);
+                let mut var_thresholdBytes = <u64>::sse_decode(deserializer);
                 return crate::ChunkingReason::LargeFile {
                     size_bytes: var_sizeBytes,
                     threshold_bytes: var_thresholdBytes,
@@ -17066,7 +17066,7 @@ impl SseDecode for crate::ChunkingReason {
                 };
             }
             3 => {
-                let mut var_sizeBytes = <i64>::sse_decode(deserializer);
+                let mut var_sizeBytes = <u64>::sse_decode(deserializer);
                 let mut var_pageCount = <i64>::sse_decode(deserializer);
                 return crate::ChunkingReason::LargeAndManyPages {
                     size_bytes: var_sizeBytes,
@@ -17426,8 +17426,8 @@ impl SseDecode for crate::ConversionOptions {
         let mut var_outputFormat = <crate::HtmlToMarkdownRsOutputFormat>::sse_decode(deserializer);
         let mut var_includeDocumentStructure = <bool>::sse_decode(deserializer);
         let mut var_extractImages = <bool>::sse_decode(deserializer);
-        let mut var_maxImageSize = <i64>::sse_decode(deserializer);
-        let mut var_maxInputSize = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxImageSize = <u64>::sse_decode(deserializer);
+        let mut var_maxInputSize = <Option<u64>>::sse_decode(deserializer);
         let mut var_captureSvg = <bool>::sse_decode(deserializer);
         let mut var_inferDimensions = <bool>::sse_decode(deserializer);
         let mut var_maxDepth = <Option<i64>>::sse_decode(deserializer);
@@ -17551,12 +17551,12 @@ impl SseDecode for crate::CrawlConfig {
         let mut var_trackingParams = <Vec<String>>::sse_decode(deserializer);
         let mut var_customHeaders = <std::collections::HashMap<String, String>>::sse_decode(deserializer);
         let mut var_requestTimeout = <i64>::sse_decode(deserializer);
-        let mut var_rateLimitMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_rateLimitMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_maxRedirects = <i64>::sse_decode(deserializer);
         let mut var_retryCount = <i64>::sse_decode(deserializer);
         let mut var_retryCodes = <Vec<i64>>::sse_decode(deserializer);
-        let mut var_retryInitialDelayMs = <i64>::sse_decode(deserializer);
-        let mut var_retryMaxDelayMs = <i64>::sse_decode(deserializer);
+        let mut var_retryInitialDelayMs = <u64>::sse_decode(deserializer);
+        let mut var_retryMaxDelayMs = <u64>::sse_decode(deserializer);
         let mut var_rateLimitJitterRatio = <f64>::sse_decode(deserializer);
         let mut var_cookiesEnabled = <bool>::sse_decode(deserializer);
         let mut var_auth = <Option<crate::AuthConfig>>::sse_decode(deserializer);
@@ -18005,7 +18005,7 @@ impl SseDecode for crate::DocumentMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_mimeType = <String>::sse_decode(deserializer);
-        let mut var_sizeBytes = <i64>::sse_decode(deserializer);
+        let mut var_sizeBytes = <u64>::sse_decode(deserializer);
         let mut var_pageCount = <Option<i64>>::sse_decode(deserializer);
         let mut var_forceOcr = <bool>::sse_decode(deserializer);
         let mut var_userChunkConfig = <Option<crate::UserChunkConfig>>::sse_decode(deserializer);
@@ -18358,7 +18358,7 @@ impl SseDecode for crate::EmbeddingConfig {
         let mut var_showDownloadProgress = <bool>::sse_decode(deserializer);
         let mut var_cacheDir = <Option<String>>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
-        let mut var_maxEmbedDurationSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxEmbedDurationSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_maxSequenceLength = <Option<i64>>::sse_decode(deserializer);
         return crate::EmbeddingConfig {
             model: var_model,
@@ -18803,11 +18803,11 @@ impl SseDecode for crate::ExtractionConfig {
         let mut var_postprocessor = <Option<crate::PostProcessorConfig>>::sse_decode(deserializer);
         let mut var_htmlOptions = <Option<crate::ConversionOptions>>::sse_decode(deserializer);
         let mut var_htmlOutput = <Option<crate::HtmlOutputConfig>>::sse_decode(deserializer);
-        let mut var_extractionTimeoutSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_extractionTimeoutSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_maxConcurrentExtractions = <Option<i64>>::sse_decode(deserializer);
         let mut var_resultFormat = <crate::ResultFormat>::sse_decode(deserializer);
         let mut var_securityLimits = <Option<crate::SecurityLimits>>::sse_decode(deserializer);
-        let mut var_maxEmbeddedFileBytes = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxEmbeddedFileBytes = <Option<u64>>::sse_decode(deserializer);
         let mut var_outputFormat = <crate::OutputFormat>::sse_decode(deserializer);
         let mut var_escapeMarkdown = <bool>::sse_decode(deserializer);
         let mut var_tableAnchors = <bool>::sse_decode(deserializer);
@@ -18820,7 +18820,7 @@ impl SseDecode for crate::ExtractionConfig {
         let mut var_strictParse = <bool>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
         let mut var_cacheNamespace = <Option<String>>::sse_decode(deserializer);
-        let mut var_cacheTtlSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_cacheTtlSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_email = <Option<crate::EmailConfig>>::sse_decode(deserializer);
         let mut var_csv = <Option<crate::CsvConfig>>::sse_decode(deserializer);
         let mut var_geojson = <Option<crate::GeoJsonExtractionConfig>>::sse_decode(deserializer);
@@ -19037,7 +19037,7 @@ impl SseDecode for crate::FileExtractionConfig {
         let mut var_strictParse = <Option<bool>>::sse_decode(deserializer);
         let mut var_layout = <Option<crate::LayoutDetectionConfig>>::sse_decode(deserializer);
         let mut var_transcription = <Option<crate::TranscriptionConfig>>::sse_decode(deserializer);
-        let mut var_timeoutSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_timeoutSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_treeSitter = <Option<crate::TreeSitterConfig>>::sse_decode(deserializer);
         let mut var_structuredExtraction = <Option<crate::StructuredExtractionConfig>>::sse_decode(deserializer);
         let mut var_url = <Option<crate::UrlExtractionConfig>>::sse_decode(deserializer);
@@ -19435,14 +19435,14 @@ impl SseDecode for crate::HeuristicsConfig {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_enablePdfTextHeuristics = <bool>::sse_decode(deserializer);
         let mut var_textLayerThreshold = <f64>::sse_decode(deserializer);
-        let mut var_fileSizeThresholdBytes = <i64>::sse_decode(deserializer);
+        let mut var_fileSizeThresholdBytes = <u64>::sse_decode(deserializer);
         let mut var_pageCountThreshold = <i64>::sse_decode(deserializer);
         let mut var_targetPagesPerChunk = <i64>::sse_decode(deserializer);
         let mut var_maxPagesPerChunk = <i64>::sse_decode(deserializer);
-        let mut var_diskProcessingThresholdBytes = <i64>::sse_decode(deserializer);
+        let mut var_diskProcessingThresholdBytes = <u64>::sse_decode(deserializer);
         let mut var_minCharsPerPage = <i64>::sse_decode(deserializer);
         let mut var_maxXlsxSheetCount = <i64>::sse_decode(deserializer);
-        let mut var_maxXlsxWorkbookCells = <i64>::sse_decode(deserializer);
+        let mut var_maxXlsxWorkbookCells = <u64>::sse_decode(deserializer);
         let mut var_maxPptxEmbeddedCount = <i64>::sse_decode(deserializer);
         return crate::HeuristicsConfig {
             enable_pdf_text_heuristics: var_enablePdfTextHeuristics,
@@ -20095,7 +20095,7 @@ impl SseDecode for crate::LateInteractionConfig {
         let mut var_showDownloadProgress = <bool>::sse_decode(deserializer);
         let mut var_cacheDir = <Option<String>>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
-        let mut var_maxEmbedDurationSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxEmbedDurationSecs = <Option<u64>>::sse_decode(deserializer);
         return crate::LateInteractionConfig {
             model: var_model,
             batch_size: var_batchSize,
@@ -21527,7 +21527,7 @@ impl SseDecode for crate::LlmCacheConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_maxEntries = <Option<i64>>::sse_decode(deserializer);
-        let mut var_ttlSeconds = <Option<i64>>::sse_decode(deserializer);
+        let mut var_ttlSeconds = <Option<u64>>::sse_decode(deserializer);
         let mut var_backend = <Option<String>>::sse_decode(deserializer);
         let mut var_backendConfig = <Option<std::collections::HashMap<String, String>>>::sse_decode(deserializer);
         return crate::LlmCacheConfig {
@@ -21545,10 +21545,10 @@ impl SseDecode for crate::LlmConfig {
         let mut var_model = <String>::sse_decode(deserializer);
         let mut var_apiKey = <Option<String>>::sse_decode(deserializer);
         let mut var_baseUrl = <Option<String>>::sse_decode(deserializer);
-        let mut var_timeoutSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_timeoutSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_maxRetries = <Option<i64>>::sse_decode(deserializer);
         let mut var_temperature = <Option<f64>>::sse_decode(deserializer);
-        let mut var_maxTokens = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxTokens = <Option<u64>>::sse_decode(deserializer);
         let mut var_topP = <Option<f64>>::sse_decode(deserializer);
         let mut var_stop = <Option<Vec<String>>>::sse_decode(deserializer);
         let mut var_seed = <Option<i64>>::sse_decode(deserializer);
@@ -21564,8 +21564,8 @@ impl SseDecode for crate::LlmConfig {
         let mut var_rateLimit = <Option<crate::LlmRateLimitConfig>>::sse_decode(deserializer);
         let mut var_costTracking = <Option<bool>>::sse_decode(deserializer);
         let mut var_tracing = <Option<bool>>::sse_decode(deserializer);
-        let mut var_cooldownSecs = <Option<i64>>::sse_decode(deserializer);
-        let mut var_healthCheckSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_cooldownSecs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_healthCheckSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_bedrock = <Option<crate::BedrockConfig>>::sse_decode(deserializer);
         let mut var_credentialProvider = <Option<crate::CredentialProviderConfig>>::sse_decode(deserializer);
         let mut var_maxConcurrency = <Option<i64>>::sse_decode(deserializer);
@@ -21623,8 +21623,8 @@ impl SseDecode for crate::LlmRateLimitConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_rpm = <Option<i64>>::sse_decode(deserializer);
-        let mut var_tpm = <Option<i64>>::sse_decode(deserializer);
-        let mut var_windowSeconds = <Option<i64>>::sse_decode(deserializer);
+        let mut var_tpm = <Option<u64>>::sse_decode(deserializer);
+        let mut var_windowSeconds = <Option<u64>>::sse_decode(deserializer);
         return crate::LlmRateLimitConfig {
             rpm: var_rpm,
             tpm: var_tpm,
@@ -21638,9 +21638,9 @@ impl SseDecode for crate::LlmUsage {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_model = <String>::sse_decode(deserializer);
         let mut var_source = <String>::sse_decode(deserializer);
-        let mut var_inputTokens = <Option<i64>>::sse_decode(deserializer);
-        let mut var_outputTokens = <Option<i64>>::sse_decode(deserializer);
-        let mut var_totalTokens = <Option<i64>>::sse_decode(deserializer);
+        let mut var_inputTokens = <Option<u64>>::sse_decode(deserializer);
+        let mut var_outputTokens = <Option<u64>>::sse_decode(deserializer);
+        let mut var_totalTokens = <Option<u64>>::sse_decode(deserializer);
         let mut var_estimatedCost = <Option<f64>>::sse_decode(deserializer);
         let mut var_finishReason = <Option<String>>::sse_decode(deserializer);
         return crate::LlmUsage {
@@ -21763,7 +21763,7 @@ impl SseDecode for crate::Metadata {
         let mut var_imagePreprocessing = <Option<crate::ImagePreprocessingMetadata>>::sse_decode(deserializer);
         let mut var_jsonSchema = <Option<String>>::sse_decode(deserializer);
         let mut var_error = <Option<crate::ErrorMetadata>>::sse_decode(deserializer);
-        let mut var_extractionDurationMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_extractionDurationMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_category = <Option<String>>::sse_decode(deserializer);
         let mut var_tags = <Option<Vec<String>>>::sse_decode(deserializer);
         let mut var_documentVersion = <Option<String>>::sse_decode(deserializer);
@@ -21925,8 +21925,8 @@ impl SseDecode for crate::NoChunkingReason {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_sizeBytes = <i64>::sse_decode(deserializer);
-                let mut var_thresholdBytes = <i64>::sse_decode(deserializer);
+                let mut var_sizeBytes = <u64>::sse_decode(deserializer);
+                let mut var_thresholdBytes = <u64>::sse_decode(deserializer);
                 return crate::NoChunkingReason::SmallFile {
                     size_bytes: var_sizeBytes,
                     threshold_bytes: var_thresholdBytes,
@@ -23658,6 +23658,17 @@ impl SseDecode for Option<crate::TreeSitterConfig> {
     }
 }
 
+impl SseDecode for Option<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::UrlExtractionConfig> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -25274,7 +25285,7 @@ impl SseDecode for crate::RerankerConfig {
         let mut var_showDownloadProgress = <bool>::sse_decode(deserializer);
         let mut var_cacheDir = <Option<String>>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
-        let mut var_maxRerankDurationSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxRerankDurationSecs = <Option<u64>>::sse_decode(deserializer);
         return crate::RerankerConfig {
             model: var_model,
             top_k: var_topK,
@@ -25505,7 +25516,7 @@ impl SseDecode for crate::ServerConfig {
         let mut var_corsOrigins = <Vec<String>>::sse_decode(deserializer);
         let mut var_maxRequestBodyBytes = <i64>::sse_decode(deserializer);
         let mut var_maxMultipartFieldBytes = <i64>::sse_decode(deserializer);
-        let mut var_jobTimeoutSecs = <i64>::sse_decode(deserializer);
+        let mut var_jobTimeoutSecs = <u64>::sse_decode(deserializer);
         return crate::ServerConfig {
             host: var_host,
             port: var_port,
@@ -25554,7 +25565,7 @@ impl SseDecode for crate::SparseEmbeddingConfig {
         let mut var_showDownloadProgress = <bool>::sse_decode(deserializer);
         let mut var_cacheDir = <Option<String>>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
-        let mut var_maxEmbedDurationSecs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxEmbedDurationSecs = <Option<u64>>::sse_decode(deserializer);
         return crate::SparseEmbeddingConfig {
             model: var_model,
             batch_size: var_batchSize,
@@ -26060,9 +26071,9 @@ impl SseDecode for crate::TranscriptionConfig {
         let mut var_model = <crate::WhisperModel>::sse_decode(deserializer);
         let mut var_language = <Option<String>>::sse_decode(deserializer);
         let mut var_timestamps = <bool>::sse_decode(deserializer);
-        let mut var_maxDurationMs = <Option<i64>>::sse_decode(deserializer);
-        let mut var_maxBytes = <Option<i64>>::sse_decode(deserializer);
-        let mut var_timeoutMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxDurationMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_maxBytes = <Option<u64>>::sse_decode(deserializer);
+        let mut var_timeoutMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_modelCacheDir = <Option<String>>::sse_decode(deserializer);
         let mut var_allowNetwork = <bool>::sse_decode(deserializer);
         let mut var_verifyHash = <bool>::sse_decode(deserializer);
@@ -26172,6 +26183,13 @@ impl SseDecode for crate::TrocrBackendOptions {
             cache_dir: var_cacheDir,
             hf_revision: var_hfRevision,
         };
+    }
+}
+
+impl SseDecode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u64::<NativeEndian>().unwrap()
     }
 }
 
@@ -26390,8 +26408,8 @@ impl SseDecode for crate::XbergError {
                 return crate::XbergError::Transcription { message: var_message };
             }
             14 => {
-                let mut var_elapsedMs = <i64>::sse_decode(deserializer);
-                let mut var_limitMs = <i64>::sse_decode(deserializer);
+                let mut var_elapsedMs = <u64>::sse_decode(deserializer);
+                let mut var_limitMs = <u64>::sse_decode(deserializer);
                 return crate::XbergError::Timeout {
                     elapsed_ms: var_elapsedMs,
                     limit_ms: var_limitMs,
@@ -35348,8 +35366,8 @@ impl SseEncode for crate::ArchiveMetadata {
         <String>::sse_encode(self.format, serializer);
         <i64>::sse_encode(self.file_count, serializer);
         <Vec<String>>::sse_encode(self.file_list, serializer);
-        <i64>::sse_encode(self.total_size, serializer);
-        <Option<i64>>::sse_encode(self.compressed_size, serializer);
+        <u64>::sse_encode(self.total_size, serializer);
+        <Option<u64>>::sse_encode(self.compressed_size, serializer);
     }
 }
 
@@ -35389,7 +35407,7 @@ impl SseEncode for crate::Attributes {
 impl SseEncode for crate::AudioMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<i64>>::sse_encode(self.duration_ms, serializer);
+        <Option<u64>>::sse_encode(self.duration_ms, serializer);
         <Option<String>>::sse_encode(self.codec, serializer);
         <Option<String>>::sse_encode(self.container, serializer);
         <Option<i64>>::sse_encode(self.sample_rate_hz, serializer);
@@ -35753,7 +35771,7 @@ impl SseEncode for crate::ChunkInfo {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.index, serializer);
         <crate::PageRange>::sse_encode(self.pages, serializer);
-        <i64>::sse_encode(self.estimated_time_ms, serializer);
+        <u64>::sse_encode(self.estimated_time_ms, serializer);
     }
 }
 
@@ -35869,8 +35887,8 @@ impl SseEncode for crate::ChunkingReason {
                 threshold_bytes,
             } => {
                 <i32>::sse_encode(0, serializer);
-                <i64>::sse_encode(size_bytes, serializer);
-                <i64>::sse_encode(threshold_bytes, serializer);
+                <u64>::sse_encode(size_bytes, serializer);
+                <u64>::sse_encode(threshold_bytes, serializer);
             }
             crate::ChunkingReason::ManyPages { page_count, threshold } => {
                 <i32>::sse_encode(1, serializer);
@@ -35884,7 +35902,7 @@ impl SseEncode for crate::ChunkingReason {
             }
             crate::ChunkingReason::LargeAndManyPages { size_bytes, page_count } => {
                 <i32>::sse_encode(3, serializer);
-                <i64>::sse_encode(size_bytes, serializer);
+                <u64>::sse_encode(size_bytes, serializer);
                 <i64>::sse_encode(page_count, serializer);
             }
             _ => {
@@ -36172,8 +36190,8 @@ impl SseEncode for crate::ConversionOptions {
         <crate::HtmlToMarkdownRsOutputFormat>::sse_encode(self.output_format, serializer);
         <bool>::sse_encode(self.include_document_structure, serializer);
         <bool>::sse_encode(self.extract_images, serializer);
-        <i64>::sse_encode(self.max_image_size, serializer);
-        <Option<i64>>::sse_encode(self.max_input_size, serializer);
+        <u64>::sse_encode(self.max_image_size, serializer);
+        <Option<u64>>::sse_encode(self.max_input_size, serializer);
         <bool>::sse_encode(self.capture_svg, serializer);
         <bool>::sse_encode(self.infer_dimensions, serializer);
         <Option<i64>>::sse_encode(self.max_depth, serializer);
@@ -36229,12 +36247,12 @@ impl SseEncode for crate::CrawlConfig {
         <Vec<String>>::sse_encode(self.tracking_params, serializer);
         <std::collections::HashMap<String, String>>::sse_encode(self.custom_headers, serializer);
         <i64>::sse_encode(self.request_timeout, serializer);
-        <Option<i64>>::sse_encode(self.rate_limit_ms, serializer);
+        <Option<u64>>::sse_encode(self.rate_limit_ms, serializer);
         <i64>::sse_encode(self.max_redirects, serializer);
         <i64>::sse_encode(self.retry_count, serializer);
         <Vec<i64>>::sse_encode(self.retry_codes, serializer);
-        <i64>::sse_encode(self.retry_initial_delay_ms, serializer);
-        <i64>::sse_encode(self.retry_max_delay_ms, serializer);
+        <u64>::sse_encode(self.retry_initial_delay_ms, serializer);
+        <u64>::sse_encode(self.retry_max_delay_ms, serializer);
         <f64>::sse_encode(self.rate_limit_jitter_ratio, serializer);
         <bool>::sse_encode(self.cookies_enabled, serializer);
         <Option<crate::AuthConfig>>::sse_encode(self.auth, serializer);
@@ -36537,7 +36555,7 @@ impl SseEncode for crate::DocumentMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.mime_type, serializer);
-        <i64>::sse_encode(self.size_bytes, serializer);
+        <u64>::sse_encode(self.size_bytes, serializer);
         <Option<i64>>::sse_encode(self.page_count, serializer);
         <bool>::sse_encode(self.force_ocr, serializer);
         <Option<crate::UserChunkConfig>>::sse_encode(self.user_chunk_config, serializer);
@@ -36765,7 +36783,7 @@ impl SseEncode for crate::EmbeddingConfig {
         <bool>::sse_encode(self.show_download_progress, serializer);
         <Option<String>>::sse_encode(self.cache_dir, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
-        <Option<i64>>::sse_encode(self.max_embed_duration_secs, serializer);
+        <Option<u64>>::sse_encode(self.max_embed_duration_secs, serializer);
         <Option<i64>>::sse_encode(self.max_sequence_length, serializer);
     }
 }
@@ -37087,11 +37105,11 @@ impl SseEncode for crate::ExtractionConfig {
         <Option<crate::PostProcessorConfig>>::sse_encode(self.postprocessor, serializer);
         <Option<crate::ConversionOptions>>::sse_encode(self.html_options, serializer);
         <Option<crate::HtmlOutputConfig>>::sse_encode(self.html_output, serializer);
-        <Option<i64>>::sse_encode(self.extraction_timeout_secs, serializer);
+        <Option<u64>>::sse_encode(self.extraction_timeout_secs, serializer);
         <Option<i64>>::sse_encode(self.max_concurrent_extractions, serializer);
         <crate::ResultFormat>::sse_encode(self.result_format, serializer);
         <Option<crate::SecurityLimits>>::sse_encode(self.security_limits, serializer);
-        <Option<i64>>::sse_encode(self.max_embedded_file_bytes, serializer);
+        <Option<u64>>::sse_encode(self.max_embedded_file_bytes, serializer);
         <crate::OutputFormat>::sse_encode(self.output_format, serializer);
         <bool>::sse_encode(self.escape_markdown, serializer);
         <bool>::sse_encode(self.table_anchors, serializer);
@@ -37104,7 +37122,7 @@ impl SseEncode for crate::ExtractionConfig {
         <bool>::sse_encode(self.strict_parse, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
         <Option<String>>::sse_encode(self.cache_namespace, serializer);
-        <Option<i64>>::sse_encode(self.cache_ttl_secs, serializer);
+        <Option<u64>>::sse_encode(self.cache_ttl_secs, serializer);
         <Option<crate::EmailConfig>>::sse_encode(self.email, serializer);
         <Option<crate::CsvConfig>>::sse_encode(self.csv, serializer);
         <Option<crate::GeoJsonExtractionConfig>>::sse_encode(self.geojson, serializer);
@@ -37231,7 +37249,7 @@ impl SseEncode for crate::FileExtractionConfig {
         <Option<bool>>::sse_encode(self.strict_parse, serializer);
         <Option<crate::LayoutDetectionConfig>>::sse_encode(self.layout, serializer);
         <Option<crate::TranscriptionConfig>>::sse_encode(self.transcription, serializer);
-        <Option<i64>>::sse_encode(self.timeout_secs, serializer);
+        <Option<u64>>::sse_encode(self.timeout_secs, serializer);
         <Option<crate::TreeSitterConfig>>::sse_encode(self.tree_sitter, serializer);
         <Option<crate::StructuredExtractionConfig>>::sse_encode(self.structured_extraction, serializer);
         <Option<crate::UrlExtractionConfig>>::sse_encode(self.url, serializer);
@@ -37547,14 +37565,14 @@ impl SseEncode for crate::HeuristicsConfig {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.enable_pdf_text_heuristics, serializer);
         <f64>::sse_encode(self.text_layer_threshold, serializer);
-        <i64>::sse_encode(self.file_size_threshold_bytes, serializer);
+        <u64>::sse_encode(self.file_size_threshold_bytes, serializer);
         <i64>::sse_encode(self.page_count_threshold, serializer);
         <i64>::sse_encode(self.target_pages_per_chunk, serializer);
         <i64>::sse_encode(self.max_pages_per_chunk, serializer);
-        <i64>::sse_encode(self.disk_processing_threshold_bytes, serializer);
+        <u64>::sse_encode(self.disk_processing_threshold_bytes, serializer);
         <i64>::sse_encode(self.min_chars_per_page, serializer);
         <i64>::sse_encode(self.max_xlsx_sheet_count, serializer);
-        <i64>::sse_encode(self.max_xlsx_workbook_cells, serializer);
+        <u64>::sse_encode(self.max_xlsx_workbook_cells, serializer);
         <i64>::sse_encode(self.max_pptx_embedded_count, serializer);
     }
 }
@@ -38083,7 +38101,7 @@ impl SseEncode for crate::LateInteractionConfig {
         <bool>::sse_encode(self.show_download_progress, serializer);
         <Option<String>>::sse_encode(self.cache_dir, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
-        <Option<i64>>::sse_encode(self.max_embed_duration_secs, serializer);
+        <Option<u64>>::sse_encode(self.max_embed_duration_secs, serializer);
     }
 }
 
@@ -39286,7 +39304,7 @@ impl SseEncode for crate::LlmCacheConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<i64>>::sse_encode(self.max_entries, serializer);
-        <Option<i64>>::sse_encode(self.ttl_seconds, serializer);
+        <Option<u64>>::sse_encode(self.ttl_seconds, serializer);
         <Option<String>>::sse_encode(self.backend, serializer);
         <Option<std::collections::HashMap<String, String>>>::sse_encode(self.backend_config, serializer);
     }
@@ -39298,10 +39316,10 @@ impl SseEncode for crate::LlmConfig {
         <String>::sse_encode(self.model, serializer);
         <Option<String>>::sse_encode(self.api_key, serializer);
         <Option<String>>::sse_encode(self.base_url, serializer);
-        <Option<i64>>::sse_encode(self.timeout_secs, serializer);
+        <Option<u64>>::sse_encode(self.timeout_secs, serializer);
         <Option<i64>>::sse_encode(self.max_retries, serializer);
         <Option<f64>>::sse_encode(self.temperature, serializer);
-        <Option<i64>>::sse_encode(self.max_tokens, serializer);
+        <Option<u64>>::sse_encode(self.max_tokens, serializer);
         <Option<f64>>::sse_encode(self.top_p, serializer);
         <Option<Vec<String>>>::sse_encode(self.stop, serializer);
         <Option<i64>>::sse_encode(self.seed, serializer);
@@ -39317,8 +39335,8 @@ impl SseEncode for crate::LlmConfig {
         <Option<crate::LlmRateLimitConfig>>::sse_encode(self.rate_limit, serializer);
         <Option<bool>>::sse_encode(self.cost_tracking, serializer);
         <Option<bool>>::sse_encode(self.tracing, serializer);
-        <Option<i64>>::sse_encode(self.cooldown_secs, serializer);
-        <Option<i64>>::sse_encode(self.health_check_secs, serializer);
+        <Option<u64>>::sse_encode(self.cooldown_secs, serializer);
+        <Option<u64>>::sse_encode(self.health_check_secs, serializer);
         <Option<crate::BedrockConfig>>::sse_encode(self.bedrock, serializer);
         <Option<crate::CredentialProviderConfig>>::sse_encode(self.credential_provider, serializer);
         <Option<i64>>::sse_encode(self.max_concurrency, serializer);
@@ -39340,8 +39358,8 @@ impl SseEncode for crate::LlmRateLimitConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<i64>>::sse_encode(self.rpm, serializer);
-        <Option<i64>>::sse_encode(self.tpm, serializer);
-        <Option<i64>>::sse_encode(self.window_seconds, serializer);
+        <Option<u64>>::sse_encode(self.tpm, serializer);
+        <Option<u64>>::sse_encode(self.window_seconds, serializer);
     }
 }
 
@@ -39350,9 +39368,9 @@ impl SseEncode for crate::LlmUsage {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.model, serializer);
         <String>::sse_encode(self.source, serializer);
-        <Option<i64>>::sse_encode(self.input_tokens, serializer);
-        <Option<i64>>::sse_encode(self.output_tokens, serializer);
-        <Option<i64>>::sse_encode(self.total_tokens, serializer);
+        <Option<u64>>::sse_encode(self.input_tokens, serializer);
+        <Option<u64>>::sse_encode(self.output_tokens, serializer);
+        <Option<u64>>::sse_encode(self.total_tokens, serializer);
         <Option<f64>>::sse_encode(self.estimated_cost, serializer);
         <Option<String>>::sse_encode(self.finish_reason, serializer);
     }
@@ -39457,7 +39475,7 @@ impl SseEncode for crate::Metadata {
         <Option<crate::ImagePreprocessingMetadata>>::sse_encode(self.image_preprocessing, serializer);
         <Option<String>>::sse_encode(self.json_schema, serializer);
         <Option<crate::ErrorMetadata>>::sse_encode(self.error, serializer);
-        <Option<i64>>::sse_encode(self.extraction_duration_ms, serializer);
+        <Option<u64>>::sse_encode(self.extraction_duration_ms, serializer);
         <Option<String>>::sse_encode(self.category, serializer);
         <Option<Vec<String>>>::sse_encode(self.tags, serializer);
         <Option<String>>::sse_encode(self.document_version, serializer);
@@ -39580,8 +39598,8 @@ impl SseEncode for crate::NoChunkingReason {
                 threshold_bytes,
             } => {
                 <i32>::sse_encode(0, serializer);
-                <i64>::sse_encode(size_bytes, serializer);
-                <i64>::sse_encode(threshold_bytes, serializer);
+                <u64>::sse_encode(size_bytes, serializer);
+                <u64>::sse_encode(threshold_bytes, serializer);
             }
             crate::NoChunkingReason::FewPages { page_count, threshold } => {
                 <i32>::sse_encode(1, serializer);
@@ -41053,6 +41071,16 @@ impl SseEncode for Option<crate::TreeSitterConfig> {
     }
 }
 
+impl SseEncode for Option<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u64>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::UrlExtractionConfig> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -42365,7 +42393,7 @@ impl SseEncode for crate::RerankerConfig {
         <bool>::sse_encode(self.show_download_progress, serializer);
         <Option<String>>::sse_encode(self.cache_dir, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
-        <Option<i64>>::sse_encode(self.max_rerank_duration_secs, serializer);
+        <Option<u64>>::sse_encode(self.max_rerank_duration_secs, serializer);
     }
 }
 
@@ -42570,7 +42598,7 @@ impl SseEncode for crate::ServerConfig {
         <Vec<String>>::sse_encode(self.cors_origins, serializer);
         <i64>::sse_encode(self.max_request_body_bytes, serializer);
         <i64>::sse_encode(self.max_multipart_field_bytes, serializer);
-        <i64>::sse_encode(self.job_timeout_secs, serializer);
+        <u64>::sse_encode(self.job_timeout_secs, serializer);
     }
 }
 
@@ -42601,7 +42629,7 @@ impl SseEncode for crate::SparseEmbeddingConfig {
         <bool>::sse_encode(self.show_download_progress, serializer);
         <Option<String>>::sse_encode(self.cache_dir, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
-        <Option<i64>>::sse_encode(self.max_embed_duration_secs, serializer);
+        <Option<u64>>::sse_encode(self.max_embed_duration_secs, serializer);
     }
 }
 
@@ -42981,9 +43009,9 @@ impl SseEncode for crate::TranscriptionConfig {
         <crate::WhisperModel>::sse_encode(self.model, serializer);
         <Option<String>>::sse_encode(self.language, serializer);
         <bool>::sse_encode(self.timestamps, serializer);
-        <Option<i64>>::sse_encode(self.max_duration_ms, serializer);
-        <Option<i64>>::sse_encode(self.max_bytes, serializer);
-        <Option<i64>>::sse_encode(self.timeout_ms, serializer);
+        <Option<u64>>::sse_encode(self.max_duration_ms, serializer);
+        <Option<u64>>::sse_encode(self.max_bytes, serializer);
+        <Option<u64>>::sse_encode(self.timeout_ms, serializer);
         <Option<String>>::sse_encode(self.model_cache_dir, serializer);
         <bool>::sse_encode(self.allow_network, serializer);
         <bool>::sse_encode(self.verify_hash, serializer);
@@ -43044,6 +43072,13 @@ impl SseEncode for crate::TrocrBackendOptions {
         <Option<crate::CandleDevicePreference>>::sse_encode(self.device, serializer);
         <Option<String>>::sse_encode(self.cache_dir, serializer);
         <Option<String>>::sse_encode(self.hf_revision, serializer);
+    }
+}
+
+impl SseEncode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u64::<NativeEndian>(self).unwrap();
     }
 }
 
@@ -43261,8 +43296,8 @@ impl SseEncode for crate::XbergError {
             }
             crate::XbergError::Timeout { elapsed_ms, limit_ms } => {
                 <i32>::sse_encode(14, serializer);
-                <i64>::sse_encode(elapsed_ms, serializer);
-                <i64>::sse_encode(limit_ms, serializer);
+                <u64>::sse_encode(elapsed_ms, serializer);
+                <u64>::sse_encode(limit_ms, serializer);
             }
             crate::XbergError::Cancelled => {
                 <i32>::sse_encode(15, serializer);
