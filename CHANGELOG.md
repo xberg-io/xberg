@@ -175,6 +175,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recover text missing from a partial invisible scan layer.** (#2425)
+  In Plain Auto extraction with built-in Tesseract, check a single simple scan for uncovered text
+  bands and keep the native result unless OCR preserves its text and adds readable content.
+
 - **(pdf): Keep aligned financial amounts with their labels.** (#2315)
   Preserve complete native PDF rows in plain text and keep proven financial body rows out of Markdown headers.
 

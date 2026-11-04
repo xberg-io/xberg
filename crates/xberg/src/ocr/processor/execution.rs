@@ -1092,6 +1092,17 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
         )
 }
 
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) fn light_page_foreground_mode(histogram: &[usize; 256]) -> Option<u8> {
+    let light_threshold = (CLEAN_PAGE_LIGHT_PIXEL_THRESHOLD * RGB_CHANNEL_MAX).ceil() as usize;
+    let light: usize = histogram[light_threshold..].iter().sum();
+    let pixels: usize = histogram.iter().sum();
+    if (light as f64) < pixels as f64 * CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD {
+        return None;
+    }
+    foreground_lower_mode(histogram).map(|(threshold, _)| threshold)
+}
+
 fn foreground_lower_mode(histogram: &[usize; 256]) -> Option<(u8, usize)> {
     let total_count: usize = histogram.iter().sum();
     let total_weight: u128 = histogram
@@ -1140,9 +1151,9 @@ fn lower_mode_has_text_structure(
     lower_mode_max: u8,
     lower_mode_pixels: usize,
 ) -> bool {
-    let Some(pixel_count) = width.checked_mul(height) else {
+    if width.checked_mul(height) != Some(rgb_data.len() / RGB_CHANNEL_COUNT) {
         return false;
-    };
+    }
     let lower_mode_mask: Vec<bool> = rgb_data
         .as_chunks::<RGB_CHANNEL_COUNT>()
         .0
@@ -1152,6 +1163,18 @@ fn lower_mode_has_text_structure(
             (channel_sum + 1) / RGB_CHANNEL_COUNT as u16 <= u16::from(lower_mode_max)
         })
         .collect();
+    lower_mode_mask_has_text_structure(&lower_mode_mask, width, height, lower_mode_pixels)
+}
+
+pub(crate) fn lower_mode_mask_has_text_structure(
+    lower_mode_mask: &[bool],
+    width: usize,
+    height: usize,
+    lower_mode_pixels: usize,
+) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
     if lower_mode_mask.len() != pixel_count {
         return false;
     }
@@ -1164,7 +1187,7 @@ fn lower_mode_has_text_structure(
             continue;
         }
         let component_pixels = structured_component_size(
-            &lower_mode_mask,
+            lower_mode_mask,
             &mut visited,
             &mut component_stack,
             start,

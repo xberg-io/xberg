@@ -560,6 +560,7 @@ struct MixedOcrPageSelection<'a> {
     /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
     /// read them from its own native text.
     native_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    hidden_layer_backend: Option<std::sync::Arc<dyn crate::plugins::OcrBackend>>,
 }
 
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
@@ -624,6 +625,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
             ocr: ocr_page_numbers,
             single_block: single_block_page_numbers,
             native_layers: None,
+            hidden_layer_backend: None,
         },
         content,
         config,
@@ -637,6 +639,50 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     )
     .await
     .map_err(crate::XbergError::from)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    scanned_pages: &[u32],
+    content: &[u8],
+    config: &ExtractionConfig,
+) -> crate::Result<Option<MixedOcrRun>> {
+    if boundaries.is_empty()
+        || scanned_pages.len() != 1
+        || content.len() > super::hidden_layer::preview_byte_limit(config)
+    {
+        return Ok(None);
+    }
+    let Some(backend) = super::hidden_layer::stock_backend(config) else {
+        return Ok(None);
+    };
+    let result = Box::pin(extract_mixed_ocr_native_with_layout_inputs(
+        native_text,
+        boundaries,
+        MixedOcrPageSelection {
+            ocr: scanned_pages,
+            single_block: &[],
+            native_layers: None,
+            hidden_layer_backend: Some(backend),
+        },
+        content,
+        config,
+        AllPagesFailedPolicy::PreserveNative,
+        #[cfg(feature = "layout-detection")]
+        MixedLayoutInputs::Resolve(None),
+    ))
+    .await;
+    super::super::ensure_pdf_not_cancelled(config)?;
+    match result {
+        Ok(run) if !run.output.1.is_empty() => Ok(Some(run)),
+        Ok(_) => Ok(None),
+        Err(failure) => {
+            tracing::debug!(error = %failure.error, "Hidden PDF text layer probe preserved native text");
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -684,6 +730,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .collect::<std::collections::HashSet<u32>>(),
     );
     page_indices = valid_page_indices(&page_indices, page_count);
+    let probing_hidden_layer = pages.hidden_layer_backend.is_some();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if probing_hidden_layer {
+        let byte_limit = super::hidden_layer::preview_byte_limit(config);
+        let probe_doc = std::sync::Arc::clone(&render_doc);
+        let cancel = config.cancel_token.clone();
+        page_indices = super::super::spawn_pdf_blocking(move || {
+            page_indices.retain(|&index| {
+                let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
+                let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
+                tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
+                needed == Some(true)
+            });
+            Ok(page_indices)
+        })
+        .await?;
+    }
     if page_indices.is_empty() {
         return Ok(MixedOcrRun::native(native_text));
     }
@@ -700,7 +763,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         .unwrap_or_default();
     let page_layers = match pages.native_layers {
         Some(layers) => Some(layers),
-        None if all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
+        None if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
             let layers = super::document::clean_native_page_layers(
                 native_text,
                 boundaries,
@@ -811,6 +874,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     use std::sync::Arc;
 
     let mut ocr_config_resolved = super::resolve_ocr_config(config).into_owned();
+    if probing_hidden_layer {
+        ocr_config_resolved.tesseract_config = Some(crate::types::TesseractConfig {
+            output_format: "text".to_owned(),
+            enable_table_detection: false,
+            ..Default::default()
+        });
+    }
     if ocr_config_resolved.acceleration.is_none() {
         ocr_config_resolved.acceleration = config.acceleration.clone();
     }
@@ -873,7 +943,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // already-tested code path instead of duplicating pixel-space layout assembly here. This
     // only fires when a real detection is available for this call, so `--layout` producing
     // nothing (gate skipped every page, or no `config.layout`) leaves the fast path untouched.
-    let effective_pipeline = if let Some(pipeline) = ocr_config_owned.effective_pipeline() {
+    let effective_pipeline = if probing_hidden_layer {
+        None
+    } else if let Some(pipeline) = ocr_config_owned.effective_pipeline() {
         Some(pipeline)
     } else if mixed_route_layout_active {
         #[cfg(feature = "layout-detection")]
@@ -915,7 +987,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // `vlm_fallback = Always` config (or an explicit `pipeline`) that never touches
     // this top-level backend still failed if it happened to be unregistered
     // (review follow-up to #1341).
-    let backend = if effective_pipeline.is_none() {
+    let backend = if let Some(backend) = pages.hidden_layer_backend {
+        Some(backend)
+    } else if effective_pipeline.is_none() {
         let registry = crate::plugins::registry::get_ocr_backend_registry();
         let registry = registry.read();
         Some(registry.get(&ocr_config_owned.backend)?)
@@ -1739,7 +1813,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         // A page whose OCR came back blank or failed is retried on its embedded image XObjects,
         // as the whole-document route does (#1355, #1444). The pipeline branch above gets the
         // same retry inside each stage, from the document it hands the runner (#1912).
-        for (page_idx, png, _, _) in &encoded {
+        for (page_idx, png, _, _) in encoded.iter().filter(|_| !probing_hidden_layer) {
             let page_number = (page_idx + 1) as u32;
             let failure = failed_pages.remove(page_idx);
             let page_text = ocr_results.get(&page_number).map_or("", String::as_str);
@@ -1940,6 +2014,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 
     let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if probing_hidden_layer {
+        for boundary in boundaries {
+            let page = boundary.page_number;
+            if let Some(text) = accepted_replacements.get(&page)
+                && (noise_verdict_pages.contains(&page)
+                    || !native_text
+                        .get(boundary.byte_start..boundary.byte_end)
+                        .is_some_and(|native| super::hidden_layer::adds_text_preserving_native(native, text)))
+            {
+                accepted_replacements.remove(&page);
+            }
+        }
+    }
+
     // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
     // got the noise verdict, now gets its readable text layer first. A page it keeps native
     // stays as it was. ~keep
@@ -2228,6 +2317,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
             ocr: &page_numbers,
             single_block: &single_block_pages,
             native_layers,
+            hidden_layer_backend: None,
         },
         content,
         config,
