@@ -760,8 +760,8 @@ impl RedactionPass<'_> {
                         &mut doc.processing_warnings,
                         "output_format",
                         format!(
-                            "Page {} Markdown could not retain syntax authority; its verified current backup was redacted \
-                             and escaped as Markdown. Finding offsets refer to the backup before escaping",
+                            "Page {} Markdown could not retain syntax authority; its verified current backup was \
+                             redacted and escaped as Markdown. Finding offsets refer to the backup before escaping",
                             page.page_number
                         ),
                     );

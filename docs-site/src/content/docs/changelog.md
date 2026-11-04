@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Explain when a post-processor changes the document pages.** (#2447)
+  Redaction rejects added, removed, or renumbered pages and reports that the post-processor changed them.
+
 - **(redaction): Validate Markdown projection edges and remove emptied inline wrappers on Drop.** (#2446)
   Reject unverified source gaps, including reference definitions at the document edges.
   Remove delimiters owned by fully redacted inline spans while preserving unrelated markup and original finding offsets.

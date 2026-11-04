@@ -9,7 +9,7 @@ pub(crate) struct ProcessorWitness {
 }
 
 impl SurfaceContext {
-    fn page_shape_matches(&self, document: &ExtractedDocument) -> bool {
+    pub(super) fn page_shape_matches(&self, document: &ExtractedDocument) -> bool {
         match (&self.page_numbers, &document.pages) {
             (None, None) => true,
             (Some(expected), Some(pages)) => {
@@ -104,11 +104,15 @@ impl DerivedResult {
         if !Arc::ptr_eq(&context.identity, &witness.identity)
             || context.plain_document != witness.plain
             || context.capture.formatted != witness.formatted
-            || !context.page_shape_matches(&self.document)
         {
             return;
         }
-        // Only a validated actual invocation can advance current fields; edited rendering never regains tag authority. ~keep
+        if !context.page_shape_matches(&self.document) {
+            context.processor_changed_page_shape = true;
+            return;
+        }
+        // Only a validated actual invocation can advance current fields. ~keep
+        // Edited rendering never regains tag authority. ~keep
         context.observe_fields(&self.document, &witness);
     }
 }
