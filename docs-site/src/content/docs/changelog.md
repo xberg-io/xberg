@@ -178,6 +178,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep cover and map labels in the page text.** (#2431)
+  Restore dictionary-filtered lines when every word matches the rejected candidate at its original position.
+  A shared header keeps sparse ledgers with recurring numeric columns eligible.
+  The same shape rule applies to Tesseract and PaddleOCR.
+
 - **(docker): Stop storing the binary twice in the core and full images.**
   Remove a `chmod` that changed nothing but copied the whole binary into another layer.
 
