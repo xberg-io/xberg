@@ -237,6 +237,21 @@ fn system_fontdb() -> std::sync::Arc<fontdb::Database> {
         .clone()
 }
 
+fn bundled_latin_face(text: &str) -> Option<Arc<Vec<u8>>> {
+    use crate::fonts::{bundled::DEJAVU_SANS, encoding::is_winansi_char};
+
+    let face = OutlineFace::new(DEJAVU_SANS, 0)?;
+    if !text
+        .chars()
+        .all(|ch| ch.is_whitespace() || (is_winansi_char(ch) && face.glyph_index(ch).is_some()))
+    {
+        return None;
+    }
+
+    static BYTES: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
+    Some(Arc::clone(BYTES.get_or_init(|| Arc::new(DEJAVU_SANS.to_vec()))))
+}
+
 /// Process-wide cache mapping fontdb::ID → (font bytes, face index).
 ///
 /// Without this cache, `load_font_data` calls `with_face_data(...to_vec())`
@@ -728,6 +743,8 @@ impl TextRasterizer {
                     .map(|(id, d, i)| (Some(id), d, i, false))
             };
 
+        let font_data_and_index =
+            font_data_and_index.or_else(|| bundled_latin_face(&unicode_text).map(|font| (None, font, 0, false)));
         if let Some((font_id, font_data, index, use_cid_to_gid)) = font_data_and_index {
             if use_cid_to_gid {
                 // Direct CIDToGIDMap/CFF rendering — bypass harfrust, use `OutlineFace`

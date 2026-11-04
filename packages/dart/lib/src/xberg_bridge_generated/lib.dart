@@ -1588,8 +1588,7 @@ Future<PostProcessorDartImpl> createPostProcessorDartImpl({
   required FutureOr<ProcessingStage> Function() processingStage,
   required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
   shouldProcess,
-  required FutureOr<PlatformInt64> Function(ExtractedDocument)
-  estimatedDurationMs,
+  required FutureOr<BigInt> Function(ExtractedDocument) estimatedDurationMs,
   required FutureOr<PlatformInt64> Function() priority,
 }) => RustLib.instance.api.crateCreatePostProcessorDartImpl(
   pluginName: pluginName,
@@ -2138,10 +2137,10 @@ class ArchiveMetadata {
   final List<String> fileList;
 
   /// Total uncompressed size in bytes
-  final PlatformInt64 totalSize;
+  final BigInt totalSize;
 
   /// Compressed size in bytes (if available)
-  final PlatformInt64? compressedSize;
+  final BigInt? compressedSize;
 
   const ArchiveMetadata({
     required this.format,
@@ -2238,7 +2237,7 @@ class Attributes {
 /// PCM decode properties. Available when the `transcription-types` feature is enabled.
 class AudioMetadata {
   /// Duration in milliseconds derived from the decoded audio stream.
-  final PlatformInt64? durationMs;
+  final BigInt? durationMs;
 
   /// Audio codec (e.g. "mp3", "aac", "opus", "flac").
   final String? codec;
@@ -3169,7 +3168,7 @@ class ChunkInfo {
   final PageRange pages;
 
   /// Estimated processing time for this chunk in milliseconds.
-  final PlatformInt64 estimatedTimeMs;
+  final BigInt estimatedTimeMs;
 
   const ChunkInfo({
     required this.index,
@@ -3570,10 +3569,10 @@ sealed class ChunkingReason with _$ChunkingReason {
   /// File exceeds size threshold.
   const factory ChunkingReason.largeFile({
     /// Actual size in bytes.
-    required PlatformInt64 sizeBytes,
+    required BigInt sizeBytes,
 
     /// Threshold in bytes.
-    required PlatformInt64 thresholdBytes,
+    required BigInt thresholdBytes,
   }) = ChunkingReason_LargeFile;
 
   /// Document has many pages.
@@ -3597,7 +3596,7 @@ sealed class ChunkingReason with _$ChunkingReason {
   /// Both size and page count exceed thresholds.
   const factory ChunkingReason.largeAndManyPages({
     /// Actual size in bytes.
-    required PlatformInt64 sizeBytes,
+    required BigInt sizeBytes,
 
     /// Actual page count.
     required PlatformInt64 pageCount,
@@ -4574,14 +4573,14 @@ class ConversionOptions {
   final bool extractImages;
 
   /// Maximum decoded image size in bytes (default 5MB).
-  final PlatformInt64 maxImageSize;
+  final BigInt maxImageSize;
 
   /// Maximum accepted HTML input size in bytes.
   ///
   /// WebAssembly builds default to [`DEFAULT_WASM_MAX_INPUT_SIZE`] (2 MiB) to avoid
   /// an uncatchable stack-exhaustion trap on unusually large DOMs. Native builds default
   /// to `None`. Set `Some(bytes)` to choose another limit or `None` to disable it.
-  final PlatformInt64? maxInputSize;
+  final BigInt? maxInputSize;
 
   /// Capture SVG elements as images.
   final bool captureSvg;
@@ -5033,7 +5032,7 @@ class CrawlConfig {
   /// Per-domain rate limit in milliseconds. When set, enforces a minimum delay
   /// between requests to the same domain, in HTTP mode and before each page load in
   /// browser mode. When `None`, HTTP mode uses 200ms and browser mode applies no delay.
-  final PlatformInt64? rateLimitMs;
+  final BigInt? rateLimitMs;
 
   /// Maximum number of redirects to follow.
   final PlatformInt64 maxRedirects;
@@ -5048,13 +5047,13 @@ class CrawlConfig {
 
   /// Initial delay, in milliseconds, before the first retry. Doubled on each
   /// subsequent attempt (capped at `retry_max_delay_ms`). Defaults to 100ms.
-  final PlatformInt64 retryInitialDelayMs;
+  final BigInt retryInitialDelayMs;
 
   /// Upper bound, in milliseconds, on the exponential retry backoff. A 429 or 503 whose
   /// `Retry-After` is longer than the backoff is waited out, but one that exceeds this bound
   /// ends the retries with a warning instead (so `0` abandons the retry on any positive
   /// `Retry-After`). Defaults to 60s.
-  final PlatformInt64 retryMaxDelayMs;
+  final BigInt retryMaxDelayMs;
 
   /// Fraction of the per-domain rate-limit delay to randomly jitter by, in `[0.0, 1.0]`.
   /// `0.0` (the default) applies no jitter and preserves the previous fixed-interval
@@ -6145,7 +6144,7 @@ class DocumentMetadata {
   final String mimeType;
 
   /// File size in bytes.
-  final PlatformInt64 sizeBytes;
+  final BigInt sizeBytes;
 
   /// Page count (if known, e.g., from previous analysis).
   final PlatformInt64? pageCount;
@@ -7146,7 +7145,7 @@ class EmbeddingConfig {
   /// `None` disables the timeout. The default (60 seconds) is conservative
   /// for common in-process inference; increase for large batches on slow
   /// hardware.
-  final PlatformInt64? maxEmbedDurationSecs;
+  final BigInt? maxEmbedDurationSecs;
 
   /// Maximum number of tokens fed to the tokenizer before truncation when
   /// embedding a chunk with a local ONNX model (Preset/Custom).
@@ -8458,7 +8457,7 @@ class ExtractionConfig {
   /// giving slow paths (VLM-based OCR, large scanned documents) enough
   /// headroom to finish. Set to `None` to disable the timeout for trusted
   /// input or long-running workloads.
-  final PlatformInt64? extractionTimeoutSecs;
+  final BigInt? extractionTimeoutSecs;
 
   /// Maximum concurrent document extractions in batch operations.
   ///
@@ -8495,7 +8494,7 @@ class ExtractionConfig {
   ///
   /// Set to `None` to disable the per-embedded-file cap (falls back to
   /// `security_limits.max_archive_size` as the only guard).
-  final PlatformInt64? maxEmbeddedFileBytes;
+  final BigInt? maxEmbeddedFileBytes;
 
   /// Content text format (default: Plain).
   ///
@@ -8635,7 +8634,7 @@ class ExtractionConfig {
   /// Overrides the global `max_age_days` for this specific extraction.
   /// When `0`, caching is completely skipped (no read or write).
   /// When `None`, the global TTL applies.
-  final PlatformInt64? cacheTtlSecs;
+  final BigInt? cacheTtlSecs;
 
   /// Email extraction configuration (None = use defaults).
   ///
@@ -9256,7 +9255,7 @@ class FileExtractionConfig {
   /// When set, the extraction for this file will be canceled after the
   /// specified duration. A timed-out file produces an error result without
   /// affecting other files in the batch.
-  final PlatformInt64? timeoutSecs;
+  final BigInt? timeoutSecs;
 
   /// Override tree-sitter configuration for this file.
   final TreeSitterConfig? treeSitter;
@@ -10033,7 +10032,7 @@ class HeuristicsConfig {
   ///
   /// Files smaller than this are processed without chunking.
   /// Default: 10 MiB (10 × 1 024 × 1 024).
-  final PlatformInt64 fileSizeThresholdBytes;
+  final BigInt fileSizeThresholdBytes;
 
   /// Page count threshold for considering chunking.
   ///
@@ -10056,7 +10055,7 @@ class HeuristicsConfig {
   ///
   /// Files larger than this are buffered to disk to prevent OOM.
   /// Default: 50 MiB (50 × 1 024 × 1 024).
-  final PlatformInt64 diskProcessingThresholdBytes;
+  final BigInt diskProcessingThresholdBytes;
 
   /// Minimum characters per page to consider a page as having text.
   ///
@@ -10072,7 +10071,7 @@ class HeuristicsConfig {
   /// Maximum cell count (sheets × rows × columns approximation) in an XLSX workbook.
   ///
   /// Default: 5 000 000 (≈ 200 sheets × 25 k cells).
-  final PlatformInt64 maxXlsxWorkbookCells;
+  final BigInt maxXlsxWorkbookCells;
 
   /// Maximum number of OLE-embedded objects extractable from a single PPTX or DOCX.
   ///
@@ -11597,7 +11596,7 @@ class LateInteractionConfig {
 
   /// Maximum wall-clock duration (in seconds) for a single embed call when
   /// using [`LateInteractionModelType::Plugin`]. `None` disables the timeout.
-  final PlatformInt64? maxEmbedDurationSecs;
+  final BigInt? maxEmbedDurationSecs;
 
   const LateInteractionConfig({
     required this.model,
@@ -12157,7 +12156,7 @@ class LlmCacheConfig {
   final PlatformInt64? maxEntries;
 
   /// Cache entry time-to-live, in seconds.
-  final PlatformInt64? ttlSeconds;
+  final BigInt? ttlSeconds;
 
   /// Cache backend name (e.g. `"memory"`, or an `opendal` scheme).
   final String? backend;
@@ -12222,7 +12221,7 @@ class LlmConfig {
   /// Request timeout in seconds. When `None`, liter-llm's built-in 60s default
   /// applies, except the VLM OCR path which uses a 300s default (a single page
   /// image transcription routinely exceeds 60s). Set explicitly to override.
-  final PlatformInt64? timeoutSecs;
+  final BigInt? timeoutSecs;
 
   /// Maximum retry attempts (default: 3).
   final PlatformInt64? maxRetries;
@@ -12231,7 +12230,7 @@ class LlmConfig {
   final double? temperature;
 
   /// Maximum tokens to generate.
-  final PlatformInt64? maxTokens;
+  final BigInt? maxTokens;
 
   /// Nucleus sampling parameter for generation tasks, applied to individual
   /// requests built from this config. Restricts sampling to the smallest set of
@@ -12360,14 +12359,14 @@ class LlmConfig {
   /// Mirrors liter-llm's `LlmConfig::cooldown_secs`. Only takes effect when
   /// liter-llm's `tower` feature is compiled in; otherwise the value is accepted
   /// but unused.
-  final PlatformInt64? cooldownSecs;
+  final BigInt? cooldownSecs;
 
   /// Background health check interval, in seconds.
   ///
   /// Mirrors liter-llm's `LlmConfig::health_check_secs`. Only takes effect when
   /// liter-llm's `tower` feature is compiled in; otherwise the value is accepted
   /// but unused.
-  final PlatformInt64? healthCheckSecs;
+  final BigInt? healthCheckSecs;
 
   /// AWS Bedrock settings (region, cross-region routing, explicit credentials).
   ///
@@ -12588,10 +12587,10 @@ class LlmRateLimitConfig {
   final PlatformInt64? rpm;
 
   /// Tokens per minute limit.
-  final PlatformInt64? tpm;
+  final BigInt? tpm;
 
   /// Rate limit window, in seconds.
-  final PlatformInt64? windowSeconds;
+  final BigInt? windowSeconds;
 
   const LlmRateLimitConfig({this.rpm, this.tpm, this.windowSeconds});
 
@@ -12622,13 +12621,13 @@ class LlmUsage {
   final String source;
 
   /// Number of input/prompt tokens consumed.
-  final PlatformInt64? inputTokens;
+  final BigInt? inputTokens;
 
   /// Number of output/completion tokens generated.
-  final PlatformInt64? outputTokens;
+  final BigInt? outputTokens;
 
   /// Total tokens (input + output).
-  final PlatformInt64? totalTokens;
+  final BigInt? totalTokens;
 
   /// Estimated cost in USD based on the provider's published pricing.
   final double? estimatedCost;
@@ -12834,7 +12833,7 @@ class Metadata {
   ///
   /// This field is populated by batch extraction to provide per-file timing
   /// information. It's `None` for single-file extraction (which uses external timing).
-  final PlatformInt64? extractionDurationMs;
+  final BigInt? extractionDurationMs;
 
   /// Document category (from frontmatter or classification).
   final String? category;
@@ -13197,10 +13196,10 @@ sealed class NoChunkingReason with _$NoChunkingReason {
   /// File is below size threshold.
   const factory NoChunkingReason.smallFile({
     /// Actual size in bytes.
-    required PlatformInt64 sizeBytes,
+    required BigInt sizeBytes,
 
     /// Threshold in bytes.
-    required PlatformInt64 thresholdBytes,
+    required BigInt thresholdBytes,
   }) = NoChunkingReason_SmallFile;
 
   /// Document has fewer pages than threshold.
@@ -17546,7 +17545,7 @@ class RerankerConfig {
   /// `None` disables the timeout. The default (60 seconds) is conservative
   /// for common in-process inference; increase for large document sets on slow
   /// hardware.
-  final PlatformInt64? maxRerankDurationSecs;
+  final BigInt? maxRerankDurationSecs;
 
   const RerankerConfig({
     required this.model,
@@ -18028,7 +18027,7 @@ class ServerConfig {
   /// explicit `extraction_timeout_secs: null` deliberately does NOT mean "run unbounded" —
   /// it still falls back to this server-configured cap, because an unbounded job on a
   /// shared server is a denial-of-service risk.
-  final PlatformInt64 jobTimeoutSecs;
+  final BigInt jobTimeoutSecs;
 
   const ServerConfig({
     required this.host,
@@ -18159,7 +18158,7 @@ class SparseEmbeddingConfig {
 
   /// Maximum wall-clock duration (in seconds) for a single embed call when
   /// using [`SparseEmbeddingModelType::Plugin`]. `None` disables the timeout.
-  final PlatformInt64? maxEmbedDurationSecs;
+  final BigInt? maxEmbedDurationSecs;
 
   const SparseEmbeddingConfig({
     required this.model,
@@ -19490,12 +19489,12 @@ class TranscriptionConfig {
   /// Files longer than this are rejected after decode, before model work.
   /// Default: 30 minutes. Set to `None` to disable (not recommended for
   /// untrusted input).
-  final PlatformInt64? maxDurationMs;
+  final BigInt? maxDurationMs;
 
   /// Hard safety limit on input size (bytes).
   ///
   /// Default: 512 MiB. Protects against pathological or malicious uploads.
-  final PlatformInt64? maxBytes;
+  final BigInt? maxBytes;
 
   /// Wall-clock timeout for the entire transcription operation (ms).
   ///
@@ -19507,7 +19506,7 @@ class TranscriptionConfig {
   /// (`max_bytes`, `max_duration_ms`) are checked on every path.
   ///
   /// Default: 10 minutes.
-  final PlatformInt64? timeoutMs;
+  final BigInt? timeoutMs;
 
   /// Optional alternate Hugging Face cache root for Whisper models.
   ///
@@ -20129,8 +20128,8 @@ sealed class XbergError with _$XbergError {
 
   /// The extraction operation exceeded the configured time limit.
   const factory XbergError.timeout({
-    required PlatformInt64 elapsedMs,
-    required PlatformInt64 limitMs,
+    required BigInt elapsedMs,
+    required BigInt limitMs,
   }) = XbergError_Timeout;
 
   /// The extraction stopped after a cooperative cancellation request.

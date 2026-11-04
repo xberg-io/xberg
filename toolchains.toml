@@ -18,5 +18,5 @@ task_sets = [
 "plugin:verify" = "Check plugin source and root served-skill locks before Xberg artifact verification"
 
 [overrides."github:xberg-io/alef"]
-version = "0.115.16"
-reason = "Alef 0.115.16 supports managed Python runtime minimums; Xberg selects 3.11 in alef.toml"
+version = "0.122.1"
+reason = "Alef 0.122.1 generates the Swift TesseractConfig DTO through [crates.swift] lenient_serde_types"

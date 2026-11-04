@@ -1268,7 +1268,7 @@
       "properties": {
         "bundled_on": {
           "default": [],
-          "description": "Targets/platforms for which downloading component code is unsupported\n(e.g. mobile/wasm hosts) and the component must instead be linked\ndirectly into the binding. Not implemented by any backend yet -- this\nonly shapes config, validation, and the lock file's per-target\n`mode` so backends have a typed switch to read later.",
+          "description": "Targets/platforms for which downloading component code is unsupported\n(e.g. mobile/wasm hosts) and the component must instead be linked\ndirectly into the binding. No backend generates the bundled delivery\nitself: this shapes config, validation, and the lock file's per-target\n`mode`. For Rust hosts the supported fallback is a manual static link\n(the host depends on the implementation crate behind a cargo feature\nand calls it directly, since musl targets cannot `dlopen`); see\n\"Bundled (static-link) fallback\" in `docs/design/components.md`.",
           "items": {
             "type": "string"
           },
@@ -1278,6 +1278,11 @@
           "default": false,
           "description": "Whether the core crate's default Cargo features are also enabled.",
           "type": "boolean"
+        },
+        "extra_dependencies": {
+          "additionalProperties": true,
+          "description": "Extra Cargo dependencies for this component's generated producer crate, keyed by crate name.\n\nEach value is a Cargo dependency spec: a version string (`\"1\"`) or an inline table\n(`{ version = \"1\", features = [\"x\"] }`, `{ path = \"../x\" }`, `{ git = \"...\" }`), emitted\nverbatim into the producer `Cargo.toml`. Lets an implementation type live in a crate other\nthan the core crate. Cannot override `alef-component-abi`, `futures` or the core crate.",
+          "type": "object"
         },
         "features": {
           "description": "Exact Cargo feature set enabled for this component.",
@@ -1290,6 +1295,10 @@
           "description": "Stable component name used in manifests and release assets.",
           "type": "string"
         },
+        "producer_language": {
+          "$ref": "#/$defs/ComponentProducerLanguage",
+          "description": "Language used by the generated component producer; defaults to Rust."
+        },
         "provides": {
           "description": "Contracts this component implements. Must declare at least one entry;\na component provides each contract at most once, though the same\ncontract may be provided by more than one component under different\nfeature sets.",
           "items": {
@@ -1299,7 +1308,7 @@
         },
         "targets": {
           "default": null,
-          "description": "Rust target triples for which this component is built and published.\n\nDefaults to every target in [`SUPPORTED_COMPONENT_TARGETS`] enabled by\nthe crate's `[targets]` table, minus anything listed in `bundled_on`.\nAn explicit list must be a subset of [`SUPPORTED_COMPONENT_TARGETS`]\nand must not overlap `bundled_on`.",
+          "description": "Rust target triples for which this component is built and published.\n\nDefaults to every target in [`SUPPORTED_COMPONENT_TARGETS`] enabled by\nthe crate's `[targets]` table, minus anything listed in `bundled_on`.\nAn explicit list may name any well-formed Rust target triple (see\n[`is_valid_target_triple`]), including ones outside the default matrix such as\n`aarch64-pc-windows-msvc`, and must not overlap `bundled_on`.",
           "items": {
             "type": "string"
           },
@@ -1346,6 +1355,13 @@
       "additionalProperties": false,
       "description": "Distribution settings shared by every component in a crate.\n\nMay be declared at the workspace level (`[component_distribution]`), the\ncrate level (`[crates.component_distribution]`), or both; see [`Self::merge`].",
       "properties": {
+        "artifact_name_template": {
+          "description": "Optional template for artifact file names, replacing the default\n[`DEFAULT_ARTIFACT_NAME_TEMPLATE`].\n\nPlaceholders: `{crate}`, `{component}`, `{version}`, `{target}`, `{fh16}` and `{ch16}`\n(the first 16 hex characters of the feature and contract hashes). Must contain\n`{component}` and `{target}`; the rendered name may only use `[A-Za-z0-9._-]`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "public_keys": {
           "additionalProperties": {
             "type": "string"
@@ -1356,11 +1372,54 @@
         },
         "url_template": {
           "default": "",
-          "description": "URL template used to locate a component artifact or release manifest.",
+          "description": "URL template used to locate a component artifact or release manifest.\n\nMust start with `https://` (or `file://` for local dev locks) and contain `{artifact}`,\nwhich expands to the artifact file name. `{crate}`, `{component}`, `{version}`,\n`{target}`, `{feature_hash}` and `{contract_hash}` are optional.",
           "type": "string"
         }
       },
       "type": "object"
+    },
+    "ComponentHostConfig": {
+      "additionalProperties": false,
+      "description": "A standalone Rust host module for hosts that load components without an ffi/pyo3 binding.\n\n`alef generate` writes one Rust file at `output` holding the contract tables, proxies,\nentry-symbol constants and a `component_manager` constructor over the embedded lock.",
+      "properties": {
+        "lock_path": {
+          "description": "Path of `components.lock.json` as written in the module's `include_str!`, relative to the\ngenerated module's directory. Defaults to [`DEFAULT_COMPONENT_HOST_LOCK_PATH`] (next to\nthe module). `alef component lock` stages the lock at this location.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output": {
+          "description": "Path of the generated Rust module, relative to the project root. Must end in `.rs`.",
+          "type": "string"
+        },
+        "stdio_components": {
+          "description": "Component IDs loaded as child processes by this standalone Rust host.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "type": "object"
+    },
+    "ComponentProducerLanguage": {
+      "description": "Language used to build a component producer.",
+      "oneOf": [
+        {
+          "const": "rust",
+          "description": "Rust cdylib producer.",
+          "type": "string"
+        },
+        {
+          "const": "go",
+          "description": "Go c-shared producer using the native C ABI.",
+          "type": "string"
+        }
+      ]
     },
     "ComponentProvidesConfig": {
       "additionalProperties": false,
@@ -1371,7 +1430,7 @@
           "type": "string"
         },
         "implementation": {
-          "description": "Fully-qualified Rust path to the type implementing the contract trait.",
+          "description": "Fully-qualified Rust implementation type, or plain Go constructor identifier.",
           "type": "string"
         }
       },
@@ -5368,7 +5427,7 @@
             "type": "string"
           },
           "default": {},
-          "description": "Per-dependency version overrides for the manifests alef regenerates for this\nlanguage. Keys are ecosystem-qualified (`cargo:pyo3`, `pypi:pyrefly`, `maven:junit`,\n`hex:credo`, `gem:rspec`, `cran:rextendr`) and are listed, with the literal each one\ndefaults to, by `alef::core::managed_versions`. An unknown key is rejected outright\nrather than ignored: silently dropping an override is the exact failure this table\nexists to prevent.\n`runtime:python` selects a supported Python major/minor minimum, independent of the\ndevelopment interpreter; it cannot lower this Alef release line's default.",
+          "description": "Per-dependency version overrides for the manifests alef regenerates for this\nlanguage. Keys are ecosystem-qualified (`cargo:pyo3`, `pypi:pyrefly`, `maven:junit`,\n`hex:credo`, `gem:rspec`, `cran:rextendr`) and are listed, with the literal each one\ndefaults to, by `alef::core::managed_versions`. An unknown key is rejected outright\nrather than ignored: silently dropping an override is the exact failure this table\nexists to prevent.",
           "type": "object"
         },
         "exclude_functions": {
@@ -5690,6 +5749,18 @@
           ],
           "default": null,
           "description": "Download and signature-verification settings for this crate's components,\nmerged field by field over `[workspace] component_distribution` -- see\n[`ComponentDistributionConfig::merge`]."
+        },
+        "component_host": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentHostConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Standalone Rust host module for non-binding hosts that load this crate's components."
         },
         "components": {
           "default": [],
@@ -6558,7 +6629,7 @@
         },
         "required_ruby_version": {
           "default": null,
-          "description": "Override the `required_ruby_version` constraint emitted into the gemspec. A single\nRubyGems requirement string (e.g. `\">= 3.2.0\"`). When unset, defaults to `\">= 3.2.0\"`\n(no upper bound, so the gem installs on Ruby 4.x). ~keep",
+          "description": "Override the `required_ruby_version` constraint emitted into the gemspec. A single\nRubyGems requirement string (e.g. `\">= 3.3.0\"`). When unset, defaults to `\">= 3.3.0\"`\n(no upper bound, so the gem installs on Ruby 4.x). ~keep",
           "type": [
             "string",
             "null"
@@ -7232,6 +7303,14 @@
           "description": "Per-target overrides for the injected secondary FFI crate dependency\n(the C-ABI `*-ffi` crate; see [`Self::ffi_features`]). Each entry\nreplaces the default `[dependencies]` entry for that dependency with a\n`[target.'cfg(...)'.dependencies]` block scoped to the cfg predicate.\nWhen non-empty, the default entry (using `ffi_features`, if any) is\ngated on `cfg(not(any(<override cfgs>)))` so exactly one branch\nmatches per build target — mirrors [`Self::target_dep_overrides`], but\nfor the FFI crate dependency instead of the core crate dependency.\n\nNeeded because Cargo unifies feature sets across all dependency edges\nto the same resolved package: an unconditionally-enabled feature set\non the FFI dep (e.g. `full-no-heic`, which pulls in `sceptre-ocr` ->\n`sceptre-ocr-ort`) can activate desktop/server-only code even on\ntargets where the *core* dep only asks for a reduced feature set (e.g.\n`android-target`), tripping `compile_error!` guards meant to keep\nmobile builds from linking incompatible native dependencies. Without\nthis knob, the injected FFI dep has no equivalent to\n[`Self::target_dep_overrides`] / [`Self::excluded_default_features`],\nwhich only govern the primary core dep.\n\nA configuration that sets only `ffi_features` and leaves this list\nempty is unaffected: the FFI dependency is still emitted as a single\n`[dependencies]` line. ~keep",
           "items": {
             "$ref": "#/$defs/SwiftTargetDepOverride"
+          },
+          "type": "array"
+        },
+        "lenient_serde_types": {
+          "default": [],
+          "description": "Types whose Swift DTO is generated without `serde(deny_unknown_fields)`: it ignores unknown\nkeys instead of rejecting them. For strict types whose fields use custom input codecs\n(`deserialize_with`, `with`) that the strict Swift decoder cannot mirror. Each entry must name\na type with `deny_unknown_fields`.",
+          "items": {
+            "type": "string"
           },
           "type": "array"
         },
@@ -8542,7 +8621,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.115.16/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.122.1/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8674,6 +8753,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.115.16",
-  "x-alef-version": "0.115.16"
+  "version": "0.122.1",
+  "x-alef-version": "0.122.1"
 }

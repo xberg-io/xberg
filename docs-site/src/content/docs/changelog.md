@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(bindings): Regenerate the bindings with Alef 0.122.1.**
+  The Swift `TesseractConfig` DTO ignores unknown keys, while the Rust config keeps rejecting them and still accepts a
+  `language` string and the legacy boolean `thresholding_method`. Python option enums subclass `StrEnum`.
+
 - **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
   Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
 
@@ -169,6 +173,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
   Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
+
+- **(pdf): Render Latin text on hosts without a matching font.** (#2347)
+  Use the bundled DejaVu Sans face for covered Latin glyphs after embedded and system font lookup fails.
+
+- **(tests): Check the specific blank-PDF image decode warning.** (#2427)
+  Full-feature tests allow unrelated OCR fallback diagnostics on blank pages.
+
+- **(structured): Apply the caller's raster budget to PDF pages.** (#2352)
+  Check the canvas, CMYK and spot-color planes, and PNG encoding allowance before allocating the page raster.
 
 - **(pdf): Report an undecodable painted image when OCR sees a blank page.** (#2427)
   The warning names the affected page when neither decoding nor raw image recovery can supply the image.
