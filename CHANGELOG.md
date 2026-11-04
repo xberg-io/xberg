@@ -169,6 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep rows together in standalone sparse OCR page text.** (#2432)
+  A single accepted table can supply Plain and Djot page rows when it retains every recognized token occurrence.
+
 - **(pdf): Keep ruled table rows on the correct side of a section divider.** (#2376)
   Use exact shared row edges when both the original and corrected sections pass native table admission.
 

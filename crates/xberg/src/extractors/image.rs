@@ -1380,6 +1380,72 @@ fn is_implicit_horizontal_tesseract(config: &crate::core::config::OcrConfig) -> 
         && !has_vertical_tesseract_language(config)
 }
 
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn sparse_table_page_text(
+    raw: &str,
+    doc: &InternalDocument,
+    source: &InternalDocument,
+    output_format: &crate::core::config::OutputFormat,
+    mime_type: &str,
+) -> Option<String> {
+    use crate::core::config::OutputFormat;
+    use crate::types::internal::ElementKind;
+
+    // The standalone builder always keeps an empty source-image reference. ~keep
+    let ([image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+        return None;
+    };
+    // TIFF without page tracking can share the standalone page transcript across frames. ~keep
+    if !source.ocr_text_claimed_by_tables
+        || !matches!(image.kind, ElementKind::Image { image_index: 0 })
+        || !image.text.is_empty()
+        || !doc.images.is_empty()
+        || !matches!(element.kind, ElementKind::Table { table_index: 0 })
+        || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot)
+        || mime_type.to_lowercase().contains("tiff")
+        || doc
+            .metadata
+            .additional
+            .get("psm")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|psm| psm.parse().ok())
+            != Some(WHOLE_IMAGE_TESSERACT_PSM)
+    {
+        return None;
+    }
+    render_covered_table_page_text(raw, &table.cells)
+}
+
+// The table claim uses a word-count floor. Page text can use the row rendering only if it
+// preserves every literal token occurrence, including repeated values. ~keep
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn render_covered_table_page_text(raw: &str, cells: &[Vec<String>]) -> Option<String> {
+    let mut remaining = std::collections::HashMap::<&str, usize>::new();
+    for word in raw.split_whitespace() {
+        *remaining.entry(word).or_default() += 1;
+    }
+    if remaining.is_empty() {
+        return None;
+    }
+
+    for cell in cells.iter().flatten() {
+        if cell.contains(['\r', '\n']) {
+            return None;
+        }
+        for word in cell.split_whitespace() {
+            let count = remaining.get_mut(word)?;
+            *count = count.checked_sub(1)?;
+        }
+    }
+    if remaining.values().any(|&count| count != 0) {
+        return None;
+    }
+
+    let mut text = crate::rendering::common::render_table_plain(cells);
+    text.truncate(text.trim_end().len());
+    Some(text)
+}
+
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -2877,11 +2943,19 @@ impl ImageExtractor {
             }
         }
 
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let implicit_sparse_tesseract;
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
             let registry = registry.read();
-            registry.get(&ocr_config.backend)?
+            let backend = registry.get(&ocr_config.backend)?;
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            {
+                implicit_sparse_tesseract =
+                    is_implicit_horizontal_tesseract(ocr_config) && registry.is_builtin_tesseract(&backend);
+            }
+            backend
         };
 
         let mut ocr_config_with_format = ocr_config.clone();
@@ -3108,11 +3182,18 @@ impl ImageExtractor {
             if let Some(pages) = ocr_extraction_result.page_contents {
                 doc.prebuilt_pages = Some(pages);
             } else {
-                let text = ocr_extraction_result.content.trim().to_string();
-                if !text.is_empty() {
+                let raw = ocr_extraction_result.content.trim();
+                #[cfg(not(target_arch = "wasm32"))]
+                let table_text = ocr_internal_document
+                    .as_ref()
+                    .filter(|_| implicit_sparse_tesseract && !has_public_ocr_structure)
+                    .and_then(|source| sparse_table_page_text(raw, &doc, source, &config.output_format, mime_type));
+                #[cfg(target_arch = "wasm32")]
+                let table_text: Option<String> = None;
+                if !raw.is_empty() {
                     doc.prebuilt_pages = Some(vec![crate::types::PageContent {
                         page_number: 1,
-                        content: text,
+                        content: table_text.unwrap_or_else(|| raw.to_owned()),
                         tables: page_tables,
                         image_indices: vec![],
                         image_preprocessing: None,
@@ -4516,6 +4597,22 @@ mod tests {
 
             unregister_ocr_backend(NAME).unwrap();
         }
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn covered_table_page_text_requires_exact_literal_token_multiplicity() {
+        let cells = vec![
+            vec!["Rent".to_owned(), "14".to_owned()],
+            vec!["Repairs".to_owned(), "20".to_owned()],
+            vec!["Storage".to_owned(), "14".to_owned()],
+        ];
+        let retained = render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n14", &cells);
+        assert_eq!(retained.as_deref(), Some("Rent 14\nRepairs 20\nStorage 14"));
+        assert_eq!(
+            render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n20", &cells),
+            None
+        );
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
