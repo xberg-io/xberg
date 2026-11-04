@@ -18,6 +18,7 @@ struct Frame {
 struct Construct {
     decoded: Range<usize>,
     raw: Range<usize>,
+    payload: Range<usize>,
     preserve_envelope: bool,
 }
 #[derive(Debug)]
@@ -110,13 +111,23 @@ impl<'s> Builder<'s> {
         })
     }
 
-    fn construct(&mut self, decoded: Range<usize>, raw: Range<usize>, preserve_envelope: bool) -> Result<(), Error> {
+    fn construct(
+        &mut self,
+        decoded: Range<usize>,
+        raw: Range<usize>,
+        payload: Range<usize>,
+        preserve_envelope: bool,
+    ) -> Result<(), Error> {
+        if payload.start < raw.start || payload.end > raw.end || self.decoder.source.get(payload.clone()).is_none() {
+            return Err(Error::InvalidSource);
+        }
         if self.constructs.len() == self.decoder.source.len() {
             return Err(Error::Budget);
         }
         self.constructs.push(Construct {
             decoded,
             raw,
+            payload,
             preserve_envelope,
         });
         Ok(())
@@ -141,7 +152,12 @@ impl<'s> Builder<'s> {
             return Err(Error::Unsupported);
         }
         let end = self.decoder.leaf.text.len();
-        self.construct(frame.start..end, frame.raw.start..raw.end, false)
+        let payload = match kind {
+            Kind::Strong => frame.raw.start + 2..raw.end - 2,
+            Kind::Emphasis => frame.raw.start + 1..raw.end - 1,
+            Kind::Html(_) => frame.raw.end..raw.start,
+        };
+        self.construct(frame.start..end, frame.raw.start..raw.end, payload, false)
     }
 
     fn delimiter(&self, range: Range<usize>, strong: bool) -> Result<(), Error> {
@@ -154,6 +170,15 @@ impl<'s> Builder<'s> {
             .ok_or(Error::InvalidSource)
     }
 
+    fn whitespace_gap(&self, gap: Range<usize>, work: &mut Work) -> Result<(), Error> {
+        let bytes = self.decoder.source.get(gap).ok_or(Error::InvalidSource)?;
+        work.charge(bytes.len(), self.decoder.limits)?;
+        if !bytes.bytes().all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
+            return Err(Error::Unsupported);
+        }
+        Ok(())
+    }
+
     fn paragraph(&mut self, node: &AstNode<'_>, work: &mut Work) -> Result<(), Error> {
         let parent = node.parent().ok_or(Error::Unsupported)?;
         if !matches!(parent.data.borrow().value, NodeValue::Document)
@@ -163,13 +188,9 @@ impl<'s> Builder<'s> {
             return Err(Error::Unsupported);
         }
         let range = source_range(self.decoder.source, node, &self.lines)?;
-        if let Some(previous_end) = self.paragraph_end {
-            let gap = previous_end..range.start;
-            let bytes = self.decoder.source.get(gap.clone()).ok_or(Error::InvalidSource)?;
-            work.charge(bytes.len(), self.decoder.limits)?;
-            if !bytes.bytes().all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
-                return Err(Error::Unsupported);
-            }
+        let gap = self.paragraph_end.unwrap_or(0)..range.start;
+        self.whitespace_gap(gap.clone(), work)?;
+        if self.paragraph_end.is_some() {
             self.decoder.text(gap, work)?;
         }
         self.paragraph_end = Some(range.end);
@@ -192,9 +213,16 @@ impl<'s> Builder<'s> {
             NodeValue::Code(code) => {
                 let range = source_range(self.decoder.source, node, &self.lines)?;
                 let start = self.decoder.leaf.text.len();
+                let origin_start = self.decoder.leaf.origins.len();
                 self.decoder
                     .code(range.clone(), code.num_backticks, &code.literal, work)?;
-                self.construct(start..self.decoder.leaf.text.len(), range, true)
+                // The code decoder owns both tick runs and any padding it trimmed. ~keep
+                let origins = &self.decoder.leaf.origins[origin_start..];
+                let payload = match (origins.first(), origins.last()) {
+                    (Some(first), Some(last)) => first.source.start..last.source.end,
+                    _ => range.clone(),
+                };
+                self.construct(start..self.decoder.leaf.text.len(), range, payload, true)
             }
             NodeValue::Strong | NodeValue::Emph => {
                 let strong = matches!(data.value, NodeValue::Strong);
@@ -268,6 +296,7 @@ pub(super) fn project<'s>(
     if !builder.frames.is_empty() {
         return Err(Error::Unsupported);
     }
+    builder.whitespace_gap(builder.paragraph_end.unwrap_or(0)..source.len(), work)?;
     builder.decoder.leaf.source = 0..source.len();
     let projection = Projection {
         source,
@@ -279,6 +308,15 @@ pub(super) fn project<'s>(
 }
 
 impl Projection<'_> {
+    pub(super) fn drop_ranges(
+        &self,
+        matches: impl ExactSizeIterator<Item = Range<usize>>,
+        limits: Limits,
+        work: &mut Work,
+    ) -> Result<Vec<Range<usize>>, Error> {
+        drop::ranges(self, matches, limits, work)
+    }
+
     fn validate(&self, limits: Limits, work: &mut Work) -> Result<(), Error> {
         work.charge(
             self.leaf
@@ -410,3 +448,5 @@ impl Projection<'_> {
 
 #[cfg(test)]
 mod tests;
+
+mod drop;

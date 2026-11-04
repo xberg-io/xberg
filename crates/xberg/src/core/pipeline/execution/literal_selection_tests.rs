@@ -723,3 +723,5 @@ async fn formatted_literal_prefixed_entity_hashes_reject_lost_semantic_identity(
 
 #[path = "literal_selection_tests/surface_regression_tests.rs"]
 mod surface_regression_tests;
+
+mod edge_wrapper_tests;
