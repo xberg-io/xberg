@@ -160,3 +160,24 @@ async fn spot_plane_alone_exceeds_the_same_budget_that_admits_cmyk() {
         .expect_err("one extra spot plane must exceed the same live raster budget");
     assert_budget_error(denied, CMYK_PNG_CHARGE);
 }
+
+#[test]
+fn fitted_native_dpi_accounts_for_spot_planes_before_rendering() {
+    use xberg_native_pdf::rendering::render_png_page_with_dpi_budget;
+
+    let pdf = cmyk_page(true);
+    native_png_and_sidecar(&pdf, true);
+    let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf).expect("open press-target PDF");
+    let (image, dpi) = render_png_page_with_dpi_budget(&doc, 0, DPI, 69, CMYK_PNG_CHARGE).expect("96px with spot fits");
+    assert_eq!((image.width, image.height, dpi), (96, 96, 69));
+
+    let error = render_png_page_with_dpi_budget(&doc, 0, DPI, 70, CMYK_PNG_CHARGE)
+        .err()
+        .expect("98px with spot exceeds the budget");
+    assert!(
+        error
+            .to_string()
+            .contains("PDF raster 98x98 exceeds security_limits.max_content_size"),
+        "{error}"
+    );
+}

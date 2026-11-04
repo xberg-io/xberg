@@ -179,6 +179,11 @@ impl RenderOptions {
     }
 }
 
+pub(super) struct PngRenderBudget {
+    pub(super) max_working_bytes: usize,
+    pub(super) minimum_dpi: u32,
+}
+
 /// A rendered page image.
 pub struct RenderedImage {
     /// Raw image data
@@ -564,14 +569,15 @@ impl PageRenderer {
     /// Render a page with specific options.
     pub fn render_page_with_options(&mut self, page_num: usize, doc: &PdfDocument) -> Result<RenderedImage> {
         self.render_page_with_budget(page_num, doc, None)
+            .map(|(image, _)| image)
     }
 
     pub(super) fn render_page_with_budget(
         &mut self,
         page_num: usize,
         doc: &PdfDocument,
-        max_png_working_bytes: Option<usize>,
-    ) -> Result<RenderedImage> {
+        png_budget: Option<PngRenderBudget>,
+    ) -> Result<(RenderedImage, u32)> {
         self.fonts.clear();
         self.color_spaces.clear();
         // The qcms transform cache is per-page: dropping every entry
@@ -620,26 +626,21 @@ impl PageRenderer {
         } else {
             (media_box.width, media_box.height)
         };
-        let scale = self.options.scale_override.unwrap_or(self.options.dpi as f32 / 72.0);
-        let (width, height) = if self.options.scale_override.is_some() {
-            // Float scale path: round to avoid off-by-one from exact fractional pixels.
-            // Clamp to 1 so extreme aspect ratios never produce a 0-sized pixmap. ~keep
-            (
-                ((page_w * scale).round() as u32).max(1),
-                ((page_h * scale).round() as u32).max(1),
-            )
-        } else {
-            ((page_w * scale).ceil() as u32, (page_h * scale).ceil() as u32)
-        };
+        let scale_override = self.options.scale_override;
+        let scale_at_dpi = |dpi| scale_override.unwrap_or(dpi as f32 / 72.0);
+        let dimensions_at_dpi = |dpi| raster_dimensions(page_w, page_h, scale_at_dpi(dpi), scale_override.is_some());
 
-        let admitted_png = max_png_working_bytes
-            .map(|limit| {
+        let mut dpi = self.options.dpi;
+        let admitted_png = png_budget
+            .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                validate_png_working_bytes(width, height, spots.as_deref(), limit)?;
+                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
+        let scale = scale_at_dpi(dpi);
+        let (width, height) = dimensions_at_dpi(dpi);
 
         let mut pixmap =
             Pixmap::new(width, height).ok_or_else(|| Error::InvalidPdf("Failed to create pixmap".to_string()))?;
@@ -718,12 +719,15 @@ impl PageRenderer {
             ImageFormat::RawRgba8 => pixmap.data().to_vec(),
         };
 
-        Ok(RenderedImage {
-            data,
-            width,
-            height,
-            format: self.options.format,
-        })
+        Ok((
+            RenderedImage {
+                data,
+                width,
+                height,
+                format: self.options.format,
+            },
+            dpi,
+        ))
     }
 
     fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {
@@ -8627,25 +8631,67 @@ fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Op
     Some(dst_img.into_vec())
 }
 
-fn validate_png_working_bytes(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> Result<()> {
+fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_override: bool) -> (u32, u32) {
+    let width = page_width * scale;
+    let height = page_height * scale;
+    if has_scale_override {
+        // Exact fractional scale uses rounding and allows very narrow pages to stay one pixel.
+        ((width.round() as u32).max(1), (height.round() as u32).max(1))
+    } else {
+        (width.ceil() as u32, height.ceil() as u32)
+    }
+}
+
+fn fit_png_dpi(
+    requested: u32,
+    budget: &PngRenderBudget,
+    spot_names: Option<&[String]>,
+    dimensions: impl Fn(u32) -> (u32, u32),
+) -> Result<u32> {
+    let fits = |dpi| {
+        let (width, height) = dimensions(dpi);
+        png_working_bytes_fit(width, height, spot_names, budget.max_working_bytes)
+    };
+    if fits(requested) {
+        return Ok(requested);
+    }
+
+    let minimum = budget.minimum_dpi.max(1).min(requested);
+    if minimum == requested || !fits(minimum) {
+        let (width, height) = dimensions(minimum);
+        if width == 0 || height == 0 {
+            return Err(Error::InvalidPdf("Failed to create pixmap".to_string()));
+        }
+        return Err(Error::InvalidOperation(format!(
+            "PDF raster {width}x{height} exceeds security_limits.max_content_size ({} bytes) or platform allocation bounds",
+            budget.max_working_bytes
+        )));
+    }
+
+    let mut low = minimum;
+    let mut high = requested - 1;
+    while low < high {
+        let middle = low + (high - low) / 2 + 1;
+        if fits(middle) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    Ok(low)
+}
+
+fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the live CMYK and spot planes.
     const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
     const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
-    if width == 0 || height == 0 {
-        return Err(Error::InvalidPdf("Failed to create pixmap".to_string()));
-    }
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| 4_usize.checked_add(names.len()));
     let charge = sidecar_bytes_per_pixel
         .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
         .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
-    if charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize) {
-        return Ok(());
-    }
-    Err(Error::InvalidOperation(format!(
-        "PDF raster {width}x{height} exceeds security_limits.max_content_size ({limit} bytes) or platform allocation bounds"
-    )))
+    width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)
 }
 
 /// Encode a tiny_skia `Pixmap` to PNG.

@@ -11594,7 +11594,7 @@ Name: ___
                 max_concurrent_ocr: None,
             }),
             security_limits: Some(SecurityLimits {
-                max_content_size: 1024,
+                max_content_size: 256 * 1024 + 6 * 12,
                 ..Default::default()
             }),
             ..Default::default()

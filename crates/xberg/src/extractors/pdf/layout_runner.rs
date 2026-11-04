@@ -621,32 +621,23 @@ fn render_layout_page(
     normalize_for_ocr: bool,
     budget: RenderBudget<'_>,
 ) -> std::result::Result<image::RgbImage, String> {
-    // The page's own MediaBox dimensions (pre-rotation, matching `get_page_dimensions_pt`),
-    // not the possibly-swapped `page_width_pts`/`page_height_pts` above, which flip for a
-    // 90/270-rotated page under `normalize_for_ocr == false` -- `effective_pdf_render_dpi`
-    // only needs an aspect-insensitive area budget from `max_image_dimension`.
-    let (media_width_pt, media_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_index);
-    // `normalize_for_ocr` marks this render as OCR input (see `GatedPageHandling`), so it
-    // must make the same scan-density render-DPI decision the non-layout OCR routes make via
-    // `crate::image::dpi::pdf_ocr_render_dpi` -- otherwise a scanned page renders at a
-    // different DPI depending on whether layout detection is on (#1828). The plain
-    // `effective_pdf_render_dpi` stays in place for the markdown-structure render, which is
-    // never OCR input and must not change. ~keep
-    let render_dpi = if normalize_for_ocr {
-        crate::image::dpi::pdf_ocr_render_dpi(doc, page_index, budget.images_config, budget.security_limits)
+    // OCR and layout-only renders retain their distinct DPI policies.
+    let rendered = if normalize_for_ocr {
+        crate::pdf::render::render_pdf_ocr_page(doc, page_index, budget.images_config, budget.security_limits)
     } else {
-        crate::image::dpi::effective_pdf_render_dpi(
+        let (media_width_pt, media_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_index);
+        let render_dpi = crate::image::dpi::effective_pdf_render_dpi(
             budget.images_config,
             f64::from(media_width_pt),
             f64::from(media_height_pt),
+        );
+        crate::pdf::render::render_page_with_safeguards(
+            doc,
+            page_index,
+            render_dpi.max(1) as u32,
+            Some(budget.security_limits.max_content_size),
         )
-    };
-    let rendered = crate::pdf::render::render_page_with_safeguards(
-        doc,
-        page_index,
-        render_dpi.max(1) as u32,
-        (!normalize_for_ocr).then_some(budget.security_limits.max_content_size),
-    )
+    }
     .map_err(|error| {
         tracing::warn!(
             page = page_index + 1,
@@ -2311,9 +2302,35 @@ mod tests {
         assert!(pages[0].image.is_none());
     }
 
+    #[test]
+    fn layout_ocr_uses_native_dpi_budget_with_malformed_media_box() {
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 27 << 20,
+            ..Default::default()
+        };
+        let budget = RenderBudget {
+            security_limits: &security_limits,
+            images_config: None,
+        };
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[-100, 0]))
+            .expect("short MediaBox fixture must open");
+
+        let pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::RenderWithoutInference,
+            budget,
+        );
+        let image = pages[0].image.as_ref().expect("native dimensions fit at reduced DPI");
+        assert_eq!(image.dimensions(), (1444, 1606));
+    }
+
     /// #1828: `render_layout_chunk`'s OCR-input render (`GatedPageHandling::RenderWithoutInference`,
     /// i.e. `normalize_for_ocr`) must make the same scan-density render-DPI decision the
-    /// non-layout OCR routes make (`crate::image::dpi::pdf_ocr_render_dpi`), not the plain
+    /// non-layout OCR routes make (`crate::pdf::render::render_pdf_ocr_page`), not the plain
     /// `effective_pdf_render_dpi` the markdown-structure render (`SkipRender`) uses. A scan page
     /// (one full-page 400x400px raster over a 100x100pt page, 288 dpi) renders its OCR input at
     /// that density -- 400x400px, not the 150 dpi default's ~208x208px -- while the same page's

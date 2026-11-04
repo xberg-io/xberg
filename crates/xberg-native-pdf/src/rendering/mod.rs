@@ -350,7 +350,7 @@ pub fn render_page(
     page_num: usize,
     options: &RenderOptions,
 ) -> Result<RenderedImage> {
-    render_page_impl(doc, page_num, options, None)
+    render_page_impl(doc, page_num, options, None).map(|(image, _)| image)
 }
 
 /// Internal Core bridge for admitting the per-page canvas, sidecar planes and PNG allowance.
@@ -361,7 +361,23 @@ pub fn render_png_page_with_budget(
     dpi: u32,
     max_working_bytes: usize,
 ) -> Result<RenderedImage> {
-    render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(max_working_bytes))
+    render_png_page_with_dpi_budget(doc, page_num, dpi, dpi, max_working_bytes).map(|(image, _)| image)
+}
+
+/// Internal Core bridge for selecting the highest admitted PNG raster DPI at or above the floor.
+#[doc(hidden)]
+pub fn render_png_page_with_dpi_budget(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> Result<(RenderedImage, u32)> {
+    let budget = page_renderer::PngRenderBudget {
+        max_working_bytes,
+        minimum_dpi,
+    };
+    render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(budget))
 }
 
 #[tracing::instrument(name = "pdf.render_page", skip_all, fields(page = page_num, dpi = options.dpi))]
@@ -369,14 +385,14 @@ fn render_page_impl(
     doc: &crate::document::PdfDocument,
     page_num: usize,
     options: &RenderOptions,
-    max_png_working_bytes: Option<usize>,
-) -> Result<RenderedImage> {
+    png_budget: Option<page_renderer::PngRenderBudget>,
+) -> Result<(RenderedImage, u32)> {
     // The rasterizer decodes text through the same font paths as extraction, so
     // it needs the document in scope for those recoveries to be counted rather
     // than lost (GH#1547). ~keep
     let _recovery_scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
     let mut renderer = PageRenderer::new(options.clone());
-    let result = renderer.render_page_with_budget(page_num, doc, max_png_working_bytes);
+    let result = renderer.render_page_with_budget(page_num, doc, png_budget);
     if let Err(error) = &result {
         crate::error::trace_failure("render_page", error);
     }

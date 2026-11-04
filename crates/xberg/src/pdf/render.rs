@@ -354,10 +354,10 @@ fn classify_engine_warning(page_index: usize, captured: &EngineWarning) -> Proce
 /// Capture is opt-in: unless the application called
 /// [`install_pdf_render_diagnostics`], this arms nothing and is exactly
 /// equivalent to calling `render` directly, at no cost.
-fn render_page_capturing_glyph_drops(
+fn render_page_capturing_glyph_drops<T>(
     page_index: usize,
-    render: impl FnOnce() -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error>,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    render: impl FnOnce() -> std::result::Result<T, xberg_native_pdf::Error>,
+) -> std::result::Result<T, xberg_native_pdf::Error> {
     if !ENGINE_CAPTURE_ACTIVE.load(Ordering::Acquire) {
         return render();
     }
@@ -935,10 +935,10 @@ pub(crate) fn normalize_rendered_page_for_ocr_with_security_limits(
 /// it here is the same treatment the text path gives the total-order sort panic
 /// (#1198): the page becomes an `Err`, callers fall back to their existing
 /// render-failure handling, and the rest of the document still extracts.
-fn guard_render_panic(
+fn guard_render_panic<T>(
     page_index: usize,
-    render: impl FnOnce() -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error>,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    render: impl FnOnce() -> std::result::Result<T, xberg_native_pdf::Error>,
+) -> std::result::Result<T, xberg_native_pdf::Error> {
     super::native::guard_native_panic(render, |message| {
         xberg_native_pdf::Error::InvalidPdf(format!(
             "page {} could not be rasterized: the rasterizer panicked and was contained ({message})",
@@ -960,16 +960,54 @@ pub(crate) fn render_page_with_safeguards(
     base_dpi: u32,
     max_png_working_bytes: Option<usize>,
 ) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
-    let options = safeguarded_render_options(doc, page_index, base_dpi);
+    let options = safeguarded_render_options(page_index, base_dpi, get_page_dimensions_pt(doc, page_index));
     render_page_with_options(doc, page_index, &options, max_png_working_bytes)
 }
 
-fn safeguarded_render_options(
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) fn render_pdf_ocr_page(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    let (requested, planned) =
+        crate::image::dpi::planned_pdf_ocr_render_dpi(doc, page_index, images_config, security_limits);
+    let media = doc.get_page_info(page_index)?.media_box;
+    let options = safeguarded_render_options(page_index, planned.max(1) as u32, (media.width, media.height));
+    let floor = if options.dpi == 72 && media.width.max(media.height) > MAX_RENDER_DIMENSION_PX {
+        72
+    } else {
+        1
+    };
+    let (rendered, dpi) = render_page_capturing_glyph_drops(page_index, || {
+        guard_render_panic(page_index, || {
+            xberg_native_pdf::rendering::render_png_page_with_dpi_budget(
+                doc,
+                page_index,
+                options.dpi,
+                floor,
+                security_limits.max_content_size,
+            )
+        })
+    })?;
+    if dpi < requested.max(1) as u32 && (planned < requested || dpi < options.dpi) {
+        record_render_warning(warning(
+            PDF_RENDER_WARNING_SOURCE,
+            format!(
+                "Page {} OCR render DPI was reduced from {requested} to {dpi} to fit security_limits.max_content_size",
+                page_index + 1
+            ),
+        ));
+    }
+    Ok(rendered)
+}
+
+fn safeguarded_render_options(
+    page_index: usize,
     base_dpi: u32,
+    (w_pt, h_pt): (f32, f32),
 ) -> xberg_native_pdf::rendering::RenderOptions {
-    let (w_pt, h_pt) = get_page_dimensions_pt(doc, page_index);
     let safe_dpi = choose_safe_dpi(w_pt, h_pt, base_dpi);
     if safe_dpi != base_dpi {
         tracing::warn!(
@@ -1457,7 +1495,7 @@ mod tests {
     #[test]
     fn test_guard_render_panic_contains_panic_as_page_error() {
         // Matched rather than `expect_err`, which would require RenderedImage: Debug.
-        let message = match guard_render_panic(3, || panic!("simulated tiny-skia unwrap")) {
+        let message = match guard_render_panic::<()>(3, || panic!("simulated tiny-skia unwrap")) {
             Ok(_) => panic!("panic must not escape the guard"),
             Err(error) => error.to_string(),
         };

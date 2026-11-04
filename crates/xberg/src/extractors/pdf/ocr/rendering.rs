@@ -740,21 +740,6 @@ fn ocr_page_document<'a>(
         None => fallback_render_document(fallback_pdf_state, content),
     }
 }
-/// The DPI to render `page_idx` at for OCR.
-///
-/// Thin wrapper over [`crate::image::dpi::pdf_ocr_render_dpi`], which also backs the
-/// layout-detection route's OCR render (`extractors::pdf::layout_runner`) so both routes make
-/// the same scan-density decision (#1828). See that function's doc comment for the decision
-/// itself.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) fn ocr_page_render_dpi(
-    doc: &xberg_native_pdf::PdfDocument,
-    page_idx: usize,
-    images_config: Option<&crate::core::config::ImageExtractionConfig>,
-    security_limits: &crate::extractors::security::SecurityLimits,
-) -> i32 {
-    crate::image::dpi::pdf_ocr_render_dpi(doc, page_idx, images_config, security_limits)
-}
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn render_one_full_pdf_ocr_page(
     doc: &xberg_native_pdf::PdfDocument,
@@ -765,14 +750,15 @@ fn render_one_full_pdf_ocr_page(
 ) -> crate::Result<EncodedPage> {
     #[cfg(test)]
     record_render_thread();
-    // GH#1786 + GH#1796: the scan-density choice lives in `ocr_page_render_dpi`, and it is made
+    // GH#1786 + GH#1796: the scan-density choice is made
     // per page HERE rather than in the batch loop above, so the parallel render keeps it. Doing
     // it in the caller would have serialized the batch again. ~keep
-    let render_dpi = ocr_page_render_dpi(doc, page_idx, images_config, security_limits);
-    let rendered = crate::pdf::render::render_page_with_safeguards(doc, page_idx, render_dpi.max(1) as u32, None)
-        .map_err(|e| crate::XbergError::Parsing {
-            message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
-            source: None,
+    let rendered =
+        crate::pdf::render::render_pdf_ocr_page(doc, page_idx, images_config, security_limits).map_err(|e| {
+            crate::XbergError::Parsing {
+                message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
+                source: None,
+            }
         })?;
     let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
     let (data, width, height) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
@@ -886,14 +872,12 @@ fn render_one_selected_page(
 ) -> crate::Result<(usize, image::DynamicImage)> {
     #[cfg(test)]
     record_render_thread();
-    let render_dpi = ocr_page_render_dpi(doc, idx, images_config, security_limits);
-    let rendered =
-        crate::pdf::render::render_page_with_safeguards(doc, idx, render_dpi.max(1) as u32, None).map_err(|e| {
-            crate::XbergError::Parsing {
-                message: format!("Failed to render PDF page {}: {}", idx + 1, e),
-                source: None,
-            }
-        })?;
+    let rendered = crate::pdf::render::render_pdf_ocr_page(doc, idx, images_config, security_limits).map_err(|e| {
+        crate::XbergError::Parsing {
+            message: format!("Failed to render PDF page {}: {}", idx + 1, e),
+            source: None,
+        }
+    })?;
     let rotation = page_rotations.get(idx).copied().unwrap_or(0);
     let (data, _, _) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
         rendered.data,

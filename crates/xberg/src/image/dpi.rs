@@ -168,12 +168,12 @@ pub(crate) fn effective_pdf_render_dpi(
 /// scan rendered at 150 and then upscaled to 300 by the OCR preprocessor lost table values
 /// that OCR of the same page as an image read (#1786). Every other page keeps the default.
 #[cfg(feature = "pdf")]
-pub(crate) fn pdf_ocr_render_dpi(
+pub(crate) fn planned_pdf_ocr_render_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_idx: usize,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     security_limits: &crate::extractors::security::SecurityLimits,
-) -> i32 {
+) -> (i32, i32) {
     let requested_dpi = if images_config.is_none()
         && let Some(density) = crate::pdf::scan_detect::full_page_raster_density(doc, page_idx)
     {
@@ -189,16 +189,7 @@ pub(crate) fn pdf_ocr_render_dpi(
         f64::from(page_height_pt),
         security_limits.max_content_size,
     );
-    if capped_dpi < requested_dpi {
-        crate::pdf::render::record_render_warning(crate::types::ProcessingWarning {
-            source: std::borrow::Cow::Borrowed("pdf-render"),
-            message: std::borrow::Cow::Owned(format!(
-                "Page {} OCR render DPI was reduced from {requested_dpi} to {capped_dpi} to fit security_limits.max_content_size",
-                page_idx + 1
-            )),
-        });
-    }
-    capped_dpi
+    (requested_dpi, capped_dpi)
 }
 
 #[cfg(feature = "pdf")]

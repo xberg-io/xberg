@@ -174,13 +174,13 @@ fn render_full_pdf_ocr_batch_caps_dpi_to_the_png_encode_limit() {
     .expect("the configured DPI must be lowered before the render exceeds the PNG encode limit");
 
     let (_, _, width, height) = &batch[0];
-    assert_eq!((*width, *height), (2703, 3498), "Letter at the safe 318 DPI cap");
+    assert_eq!((*width, *height), (2593, 3355), "Letter at the native 305 DPI cap");
     let warnings = crate::pdf::render::take_xberg_native_pdf_render_warnings();
     assert_eq!(warnings.len(), 1);
     assert_eq!(warnings[0].source, "pdf-render");
     assert_eq!(
         warnings[0].message,
-        "Page 1 OCR render DPI was reduced from 400 to 318 to fit security_limits.max_content_size"
+        "Page 1 OCR render DPI was reduced from 400 to 305 to fit security_limits.max_content_size"
     );
 }
 
@@ -196,8 +196,8 @@ fn render_full_pdf_ocr_batch_caps_fractional_media_box_with_renderer_dimensions(
         ..Default::default()
     };
     let security_limits = crate::extractors::security::SecurityLimits {
-        // At 100 DPI the renderer's ceil rule produces 101 x 101 pixels and exceeds
-        // this limit. At the capped 99 DPI it produces 100 x 100 and fits exactly. ~keep
+        // The older 11-byte estimate admits a 100x100 raster here. Native 12-byte
+        // accounting instead admits 95x95 at 94 DPI, after rounding the fraction up. ~keep
         max_content_size: 100 * 100 * 11 + 256 * 1024,
         ..Default::default()
     };
@@ -207,7 +207,7 @@ fn render_full_pdf_ocr_batch_caps_fractional_media_box_with_renderer_dimensions(
 
     assert_eq!(batch.len(), 1);
     let (_, _, width, height) = &batch[0];
-    assert_eq!((*width, *height), (100, 100));
+    assert_eq!((*width, *height), (95, 95));
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn render_full_pdf_ocr_batch_caps_a_legal_scan_under_default_limits() {
     .expect("the scan-density DPI must be lowered before a legal page exceeds the default limit");
 
     let (_, _, width, height) = &batch[0];
-    assert_eq!((*width, *height), (2397, 3948), "Legal at the safe 282 DPI cap");
+    assert_eq!((*width, *height), (2295, 3780), "Legal at the native 270 DPI cap");
 }
 
 fn rotated_pdf_for_render_warning() -> xberg_native_pdf::PdfDocument {
@@ -256,7 +256,7 @@ fn assert_failed_ocr_render_keeps_only_prior_warning(
     let rotation = crate::pdf::render::get_page_rotations(&doc, 1);
     assert_eq!(rotation, vec![90]);
     let strict = SecurityLimits {
-        max_content_size: 1024,
+        max_content_size: 256 * 1024 + 6 * 12,
         ..Default::default()
     };
     record_render_warning(crate::core::diagnostics::warning(
@@ -305,4 +305,45 @@ fn failed_ocr_render_does_not_leak_dpi_warning_from_sequential_render() {
                 .collect()
         })
     });
+}
+
+#[test]
+fn ocr_render_caps_dpi_to_the_actual_native_png_budget() {
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(72.1, 72.1);
+    let (doc, _, rotations) = open_pdf_for_full_ocr(&pdf).expect("fixture PDF must open");
+    let images = crate::core::config::ImageExtractionConfig {
+        target_dpi: 100,
+        auto_adjust_dpi: false,
+        min_dpi: 72,
+        max_dpi: 600,
+        ..Default::default()
+    };
+    let limits = crate::extractors::security::SecurityLimits {
+        max_content_size: 100 * 100 * 12 + 256 * 1024,
+        ..Default::default()
+    };
+    let full = render_full_pdf_ocr_batch(&doc, &rotations, 0..1, &limits, Some(&images)).unwrap();
+    let (selected, failures) = render_selected_pages_from_document(&doc, &rotations, &[0], &limits, Some(&images));
+    assert_eq!((full[0].2, full[0].3), (100, 100));
+    assert!(failures.is_empty(), "{failures:?}");
+    assert_eq!((selected[0].1.width(), selected[0].1.height()), (100, 100));
+}
+
+#[test]
+fn ocr_render_refuses_native_budget_overrun_at_safeguard_floor() {
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(20000.0, 8.0);
+    let (doc, _, rotations) = open_pdf_for_full_ocr(&pdf).expect("fixture PDF must open");
+    let limits = crate::extractors::security::SecurityLimits {
+        max_content_size: 2 << 20,
+        ..Default::default()
+    };
+    let error = render_full_pdf_ocr_batch(&doc, &rotations, 0..1, &limits, None)
+        .err()
+        .expect("the 72 DPI floor must exceed the native limit");
+    assert!(
+        error
+            .to_string()
+            .contains("PDF raster 20000x8 exceeds security_limits.max_content_size"),
+        "{error}"
+    );
 }

@@ -179,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Fit OCR page rasters to the native allocation budget before rendering.** (#2491)
+  DPI selection accounts for the actual raster dimensions, PNG workspace and any CMYK or spot planes.
+
 - **(ocr): Keep warnings from failed PDF rasterization out of later extraction results.**
 
 - **(pdf): Enforce the request's raster budget before allocating layout-only page images.** (#2491)
