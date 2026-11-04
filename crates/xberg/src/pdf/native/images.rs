@@ -276,8 +276,8 @@ pub(crate) fn page_ocr_fallback_image_bytes_with_limits(
 ///   bytes, which are a valid standalone JPEG/JP2 file the OCR backend can decode itself.
 /// - Any other failure → skip the image; there is no way to recover pixel data from it.
 ///
-/// Returned in content-stream paint order; empty when the page has no image XObjects or
-/// none of them yielded usable bytes.
+/// Bytes are returned in paint order. The flag means the only enumerated image was an
+/// XObject whose decode failed and yielded no raw recovery bytes.
 ///
 // Available under `ocr-pipeline` too (not just `ocr`): its callers in
 // `crate::extractors::pdf::ocr` are gated `any(ocr, ocr-pipeline)`, and the `binstall`
@@ -286,19 +286,17 @@ pub(crate) fn page_ocr_fallback_image_bytes_with_limits(
 pub(crate) fn page_ocr_fallback_image_bytes(
     doc: &xberg_native_pdf::PdfDocument,
     page_idx: usize,
-) -> Vec<PageFallbackImage> {
+) -> (Vec<PageFallbackImage>, bool) {
     let handles = match doc.page_image_handles(page_idx) {
         Ok(h) => h,
         Err(error) => {
-            tracing::debug!(
-                page = page_idx,
-                "force_ocr fallback: enumerating image handles failed: {error}"
-            );
-            return Vec::new();
+            tracing::debug!(page = page_idx, "OCR fallback: image enumeration failed: {error}");
+            return (Vec::new(), false);
         }
     };
 
     let mut out = Vec::with_capacity(handles.len());
+    let mut single_enumerated_xobject_failed = false;
     for handle in &handles {
         match handle.decode() {
             Ok(img) => match img.data() {
@@ -323,6 +321,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                 }
             },
             Err(decode_err) => {
+                single_enumerated_xobject_failed = handles.len() == 1 && !handle.is_inline;
                 let passthrough = matches!(
                     handle.filter_chain.last(),
                     Some(xberg_native_pdf::PdfFilter::DCTDecode) | Some(xberg_native_pdf::PdfFilter::JPXDecode)
@@ -360,7 +359,8 @@ pub(crate) fn page_ocr_fallback_image_bytes(
             }
         }
     }
-    out
+    let single_enumerated_xobject_unrecoverable = single_enumerated_xobject_failed && out.is_empty();
+    (out, single_enumerated_xobject_unrecoverable)
 }
 
 /// Page numbers (1-based) whose PDF-space dimensions are known and whose native text layer is

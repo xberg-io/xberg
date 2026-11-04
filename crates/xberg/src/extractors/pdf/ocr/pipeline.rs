@@ -57,12 +57,13 @@ use super::document::{
 use super::rendering::EncodedPage;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 use super::rendering::{
-    OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryOutcome,
-    clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
-    page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
-    recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch,
-    render_selected_pages_from_document, share_rendered_page_images, single_block_for_ocr_page, valid_page_indices,
-    validate_png_encode_pages_individually, whole_page_raster_for_ocr_page,
+    OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryContext,
+    XObjectRecoveryOutcome, clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr,
+    open_pdf_for_page_ocr, page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry,
+    pre_rendered_page_source_dpi, recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects,
+    render_full_pdf_ocr_batch, render_selected_pages_from_document, share_rendered_page_images,
+    single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
+    whole_page_raster_for_ocr_page,
 };
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::scoring::{
@@ -1728,7 +1729,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     *page_idx,
                     page_rotations.len(),
                     &ocr_config_owned,
-                    &mut xobject_recovery_budget,
+                    XObjectRecoveryContext {
+                        budget: &mut xobject_recovery_budget,
+                        blank_raster_warnings: trigger.draw_failed.then_some(&mut accumulated_warnings),
+                    },
                 )
                 .await?
             } else {
@@ -3467,7 +3471,10 @@ pub(super) async fn extract_with_ocr_for_page(
                         document_page_idx,
                         progress_total_pages,
                         &ocr_config_owned,
-                        &mut xobject_recovery_budget,
+                        XObjectRecoveryContext {
+                            budget: &mut xobject_recovery_budget,
+                            blank_raster_warnings: xobject_trigger.draw_failed.then_some(&mut image_fallback_warnings),
+                        },
                     )
                     .await?
                 {
@@ -4785,8 +4792,12 @@ pub(super) async fn collect_pipeline_xobject_pages(
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
     for page_idx in 0..page_count {
+        let context = XObjectRecoveryContext {
+            budget,
+            blank_raster_warnings: None,
+        };
         let Some(recovery) =
-            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, budget).await?
+            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await?
         else {
             continue;
         };

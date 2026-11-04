@@ -558,6 +558,12 @@ fn ocr_document_text(document: &crate::types::internal::InternalDocument) -> Str
     }
     text
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) struct XObjectRecoveryContext<'a> {
+    pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
+    pub(super) blank_raster_warnings: Option<&'a mut Vec<crate::types::ProcessingWarning>>,
+}
+
 /// OCR a page's embedded image XObjects directly, bypassing the whole-page rasterizer.
 ///
 /// Used when the page render came back blank (see [`page_needs_xobject_fallback`]) but the
@@ -584,18 +590,38 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     page_idx: usize,
     total_pages: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    budget: &mut crate::extractors::security::SecurityBudget,
+    context: XObjectRecoveryContext<'_>,
 ) -> crate::Result<Option<XObjectRecoveryOutcome>> {
-    let fallback_images = crate::pdf::native::images::page_ocr_fallback_image_bytes(render_doc, page_idx);
+    let (fallback_images, single_enumerated_xobject_unrecoverable) =
+        crate::pdf::native::images::page_ocr_fallback_image_bytes(render_doc, page_idx);
     if fallback_images.is_empty() {
+        if single_enumerated_xobject_unrecoverable && let Some(warnings) = context.blank_raster_warnings {
+            crate::core::diagnostics::push_warning_deduped(
+                warnings,
+                crate::core::diagnostics::warning(
+                    "ocr",
+                    format!(
+                        "Page {} rendered blank and a painted image could not be decoded for OCR.",
+                        page_idx + 1
+                    ),
+                ),
+            );
+        }
         return Ok(None);
     }
     let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();
     let ocr_config =
         super::pipeline::ocr_config_with_page_rotation_hint(ocr_config, 0, None, whole_page_raster, false, false);
-    recover_image_xobjects(backend, &fallback_images, page_idx, total_pages, &ocr_config, budget)
-        .await
-        .map(Some)
+    recover_image_xobjects(
+        backend,
+        &fallback_images,
+        page_idx,
+        total_pages,
+        &ocr_config,
+        context.budget,
+    )
+    .await
+    .map(Some)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
