@@ -1431,6 +1431,12 @@ impl PaddleOcrBackend {
                 rejected_candidates += 1;
                 continue;
             };
+            // Same shape rule as the Tesseract producer: labels that only sit in scattered
+            // positions (a cover, a map) are text, not a table. ~keep
+            if !crate::ocr::table::has_table_grid(&cells) {
+                rejected_candidates += 1;
+                continue;
+            }
 
             table_count += 1;
             if table_rows.is_none() {
@@ -3262,6 +3268,47 @@ mod tests {
                 y1: 535.0,
             }),
             "bounding_box must be derived from the region's word extents, not left None"
+        );
+    }
+
+    /// The labels of a cover page sit at scattered positions. The grid passes the structural
+    /// validator, so only the shape rule keeps it out of the tables.
+    #[test]
+    #[cfg(feature = "pdf")]
+    fn scattered_cover_labels_stay_text_not_a_table() {
+        let words = hocr_words_from(&[
+            ("HARBOR", 100, 500, 120, 20),
+            ("CITY", 400, 500, 80, 20),
+            ("Annual", 100, 540, 100, 20),
+            ("Review", 400, 540, 100, 20),
+            ("Seventh", 400, 580, 100, 20),
+            ("Edition", 520, 580, 100, 20),
+            ("Prepared", 100, 620, 100, 20),
+            ("for", 210, 620, 40, 20),
+            ("the", 260, 620, 40, 20),
+            ("council", 310, 620, 90, 20),
+            ("Office", 100, 660, 80, 20),
+            ("of", 190, 660, 30, 20),
+            ("Planning", 240, 660, 100, 20),
+            ("Spring", 100, 700, 80, 20),
+            ("Volume", 200, 700, 90, 20),
+            ("Two", 310, 700, 50, 20),
+        ]);
+        let region = crate::table_core::cluster_words_into_table_regions(&words)
+            .into_iter()
+            .next()
+            .expect("the labels form one candidate region");
+        let cells = reconstruct_table(&region, TABLE_COLUMN_ALIGNMENT_THRESHOLD_PX, 0.5);
+        let accepted = crate::pdf::table_reconstruct::post_process_table(cells, false, false)
+            .expect("the structural validator accepts the staircase, so the shape rule is the only gate");
+        assert!(accepted.len() >= 4, "the staircase keeps one row per label");
+
+        let built = PaddleOcrBackend::build_ocr_tables_from_words(&words);
+
+        assert!(built.tables.is_empty(), "scattered labels are text, not a table");
+        assert_eq!(
+            built.rejected_candidates, 1,
+            "the shape rule counts the rejected candidate"
         );
     }
 
