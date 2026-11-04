@@ -2,17 +2,21 @@ use super::*;
 use crate::vendor::fontdb;
 use std::sync::Arc;
 
-fn latin_pdf(embedded: bool, explicit_winansi: bool) -> PdfDocument {
-    let content = b"BT /F0 60 Tf 18 22 Td (O) Tj ET";
+fn latin_pdf(embedded: bool, explicit_winansi: bool, glyph: u8) -> PdfDocument {
+    let mut content = b"BT /F0 60 Tf 18 22 Td (".to_vec();
+    content.push(glyph);
+    content.extend(b") Tj ET");
     let mut objects = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R           /Resources << /Font << /F0 5 0 R >> >> >>".to_vec(),
-        pdf_stream("", content),
+        pdf_stream("", &content),
     ];
     if embedded {
         objects.push(
-            b"<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /Encoding /WinAnsiEncoding               /FirstChar 79 /LastChar 79 /Widths [787] /FontDescriptor 6 0 R >>".to_vec(),
+            format!(
+                "<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /Encoding /WinAnsiEncoding /FirstChar {glyph} /LastChar {glyph} /Widths [787] /FontDescriptor 6 0 R >>"
+            ).into_bytes(),
         );
         objects.push(
             b"<< /Type /FontDescriptor /FontName /DejaVuSans /Flags 32 /FontBBox [-1021 -463 1793 1232]               /Ascent 928 /Descent -236 /CapHeight 729 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>".to_vec(),
@@ -53,22 +57,34 @@ fn pdf_stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
     stream
 }
 
+fn has_ink(pixel: &[u8; 4]) -> bool {
+    pixel[0] < 128
+}
+
 fn middle_row_runs(image: &RenderedImage) -> Vec<bool> {
     assert_eq!((image.width, image.height), (100, 100));
-    let rows: Vec<_> = image.data.chunks_exact(400).collect();
-    let ink = |pixel: &[u8]| pixel[0] < 128;
-    let first = rows
+    let (rows, remainder) = image.data.as_chunks::<400>();
+    assert!(remainder.is_empty());
+    let row_has_ink = |row: &[u8; 400]| row.as_chunks::<4>().0.iter().any(has_ink);
+    let first = rows.iter().position(row_has_ink).expect("glyph has ink");
+    let last = rows.iter().rposition(row_has_ink).unwrap();
+    let mut runs: Vec<_> = rows[(first + last) / 2]
+        .as_chunks::<4>()
+        .0
         .iter()
-        .position(|row| row.chunks_exact(4).any(ink))
-        .expect("glyph has ink");
-    let last = rows.iter().rposition(|row| row.chunks_exact(4).any(ink)).unwrap();
-    let mut runs: Vec<_> = rows[(first + last) / 2].chunks_exact(4).map(ink).collect();
+        .map(has_ink)
+        .collect();
     runs.dedup();
     runs
 }
 
 fn glyph_runs_with_font_provider(embedded: bool, explicit_winansi: bool, db: fontdb::Database) -> Vec<bool> {
-    let doc = latin_pdf(embedded, explicit_winansi);
+    middle_row_runs(&raster_with_font_provider(embedded, explicit_winansi, db, b'O'))
+}
+
+fn raster_with_font_provider(embedded: bool, explicit_winansi: bool, db: fontdb::Database, glyph: u8) -> RenderedImage {
+    let doc = latin_pdf(embedded, explicit_winansi, glyph);
+    let expected = char::from(glyph).to_string();
     let text = || {
         let chars: String = doc.extract_chars(0).unwrap().iter().map(|glyph| glyph.char).collect();
         let spans: String = doc
@@ -79,14 +95,14 @@ fn glyph_runs_with_font_provider(embedded: bool, explicit_winansi: bool, db: fon
             .collect();
         (chars, spans)
     };
-    assert_eq!(text(), ("O".to_owned(), "O".to_owned()));
+    assert_eq!(text(), (expected.clone(), expected.clone()));
     let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
     renderer.text_rasterizer = TextRasterizer::with_fontdb(Arc::new(db));
     let raster = renderer
         .render_page(&doc, 0)
         .expect("render Latin fixture through native page renderer");
-    assert_eq!(text(), ("O".to_owned(), "O".to_owned()));
-    middle_row_runs(&raster)
+    assert_eq!(text(), (expected.clone(), expected));
+    raster
 }
 
 const LATIN_O: [bool; 5] = [false, true, false, true, false];
@@ -113,6 +129,27 @@ fn default_standard_encoding_renders_latin_without_system_faces() {
         glyph_runs_with_font_provider(false, false, fontdb::Database::new()),
         LATIN_O
     );
+}
+
+#[test]
+fn fontless_winansi_raster_preserves_the_accented_e_outline() {
+    let glyph = 0xE9;
+    let embedded = raster_with_font_provider(true, true, fontdb::Database::new(), glyph);
+    let fallback = raster_with_font_provider(false, true, fontdb::Database::new(), glyph);
+    let mut occupied_rows: Vec<_> = embedded
+        .data
+        .as_chunks::<400>()
+        .0
+        .iter()
+        .map(|row| row.as_chunks::<4>().0.iter().any(has_ink))
+        .collect();
+    occupied_rows.dedup();
+    assert_eq!(
+        occupied_rows,
+        [false, true, false, true, false],
+        "separate accent and glyph body"
+    );
+    assert_eq!(fallback.data.cmp(&embedded.data), std::cmp::Ordering::Equal);
 }
 
 #[cfg(feature = "cjk-render-fallback")]
