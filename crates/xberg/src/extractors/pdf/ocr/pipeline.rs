@@ -888,6 +888,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     } else {
         None
     };
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let orientation_retry = effective_pipeline
+        .as_ref()
+        .filter(|_| config.ocr.is_none() && !mixed_route_layout_active)
+        .map(|pipeline| {
+            Arc::new(super::orientation_retry::OrientationRetry::new(
+                config,
+                pipeline.quality_thresholds.clone(),
+            ))
+        });
+
     // Each invocation below owns exactly one page. Page markers belong to the outer document
     // assembly; leaving them enabled here both stamps every detached page as page 1 and lets a
     // marker make an empty primary stage look good enough to suppress its fallback (#1931). ~keep
@@ -1028,6 +1039,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     let render_doc_clone = Arc::clone(&render_doc);
                     let pipeline_clone = pipeline.clone();
                     let config_clone = pipeline_stage_config.clone();
+                    #[cfg(all(auto_rotate, feature = "ocr"))]
+                    let orientation_retry = orientation_retry.clone();
                     let idx = *page_idx;
                     // This page's own known `/Rotate` value, already resolved by
                     // `open_pdf_for_page_ocr` above -- the sibling single-backend route
@@ -1073,6 +1086,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
+                        let source = DetachedOcrPage {
+                            document: render_doc_clone.as_ref(),
+                            #[cfg(all(auto_rotate, feature = "ocr"))]
+                            orientation_retry: orientation_retry.as_ref(),
+                        };
                         let result = Box::pin(run_ocr_pipeline_for_page(
                             None,
                             Some(std::slice::from_ref(image_arc.as_ref())),
@@ -1086,7 +1104,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             points_per_pixel_override,
                             Some(page_ocr_hints),
                             idx,
-                            Some(render_doc_clone.as_ref()),
+                            Some(source),
                         ))
                         .await;
                         (idx, result)
@@ -1219,6 +1237,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(feature = "layout-detection")]
                     let page_detection: Option<&crate::layout::DetectionResult> =
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx);
+                    let source = DetachedOcrPage {
+                        document: render_doc.as_ref(),
+                        #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                        orientation_retry: None,
+                    };
                     let result = Box::pin(run_ocr_pipeline_for_page(
                         None,
                         Some(std::slice::from_ref(image.as_ref())),
@@ -1232,7 +1255,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         points_per_pixel_override,
                         Some(page_ocr_hints),
                         *page_idx,
-                        Some(render_doc.as_ref()),
+                        Some(source),
                     ))
                     .await;
                     let result = match result.map_err(crate::XbergError::from) {
@@ -2379,6 +2402,14 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Clone, Copy)]
+pub(super) struct DetachedOcrPage<'a> {
+    pub(super) document: &'a xberg_native_pdf::PdfDocument,
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    pub(super) orientation_retry: Option<&'a std::sync::Arc<super::orientation_retry::OrientationRetry>>,
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Clone)]
 pub(crate) struct PageOcrHints {
     pub(crate) source_dpi: Option<f64>,
@@ -2460,7 +2491,7 @@ fn attach_page_segmentation_modes(
 /// indices when a caller supplies a detached page image. It affects externally visible page
 /// identity only; internal vectors remain indexed from zero.
 ///
-/// `xobject_document` -- the open document a detached page image came from. Only the
+/// `detached_page` -- the open document a detached page image came from. Only the
 /// embedded-image retry reads it, at `page_index_offset`, so a caller that hands in a
 /// detached page without `content` still gets the retry of a blank or failed page (#1912).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -2481,7 +2512,7 @@ pub(super) async fn extract_with_ocr_for_page(
     points_per_pixel_override: Option<f32>,
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
-    xobject_document: Option<&xberg_native_pdf::PdfDocument>,
+    detached_page: Option<DetachedOcrPage<'_>>,
 ) -> OcrRunResult<(
     String,
     Option<f64>,
@@ -2502,6 +2533,7 @@ pub(super) async fn extract_with_ocr_for_page(
     use image::codecs::png::PngEncoder;
     use std::io::Cursor;
 
+    let xobject_document = detached_page.map(|source| source.document);
     #[cfg(feature = "layout-detection")]
     let has_layout_detections = layout_detections.is_some();
     #[cfg(not(feature = "layout-detection"))]
@@ -2543,10 +2575,17 @@ pub(super) async fn extract_with_ocr_for_page(
         base_ocr_config
     };
 
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let can_retry_orientation;
     let backend = {
         let registry = get_ocr_backend_registry();
         let registry = registry.read();
-        registry.get(&base_ocr_config.backend)?
+        let backend = registry.get(&base_ocr_config.backend)?;
+        #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+        {
+            can_retry_orientation = !has_layout_detections && registry.is_builtin_tesseract(&backend);
+        }
+        backend
     };
     // Only `ConfidenceSemantics::Legibility` backends report a `mean_text_conf` whose scale
     // means legibility; anything else (`Uncalibrated`, `None`) must never be turned into a
@@ -2851,6 +2890,21 @@ pub(super) async fn extract_with_ocr_for_page(
     // Judged per page just before the OCR text is accepted, so a drawing page contributes
     // nothing instead of contributing invented words. See `is_ocr_recognition_noise`.
     let ocr_output_thresholds = base_ocr_config.quality_thresholds.clone().unwrap_or_default();
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let orientation_retry = if can_retry_orientation {
+        detached_page
+            .and_then(|source| source.orientation_retry.cloned())
+            .or_else(|| {
+                (config.ocr.is_none() && content.is_some() && images.is_none()).then(|| {
+                    Arc::new(super::orientation_retry::OrientationRetry::new(
+                        config,
+                        ocr_output_thresholds.clone(),
+                    ))
+                })
+            })
+    } else {
+        None
+    };
     let mut recognition_noise_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     // Numeric evidence behind each fired `recognition_noise_warnings` entry, so a caller
     // above the accept/reject decision can observe the signal without recomputing stats
@@ -3089,6 +3143,11 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(not(feature = "pdf"))]
                 let (upright_data, upright_width, upright_height, correction_degrees) =
                     (Arc::clone(image_data), *width, *height, 0u32);
+                #[cfg(all(auto_rotate, feature = "ocr"))]
+                let retry = orientation_retry
+                    .as_ref()
+                    .filter(|_| whole_page_raster)
+                    .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -3111,6 +3170,14 @@ pub(super) async fn extract_with_ocr_for_page(
                         cancel_token.as_ref(),
                     )
                     .await;
+                    #[cfg(all(auto_rotate, feature = "ocr"))]
+                    let result = if let Some((retry, raster)) = retry {
+                        retry
+                            .after_ocr(&backend_clone, raster, &config_clone, result, cancel_token.as_ref())
+                            .await
+                    } else {
+                        result
+                    };
                     (idx, correction_degrees, upright_width, upright_height, result)
                 }));
             }
@@ -5076,7 +5143,7 @@ pub(super) async fn run_ocr_pipeline_for_page(
     points_per_pixel_override: Option<f32>,
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
-    xobject_document: Option<&xberg_native_pdf::PdfDocument>,
+    detached_page: Option<DetachedOcrPage<'_>>,
 ) -> OcrRunResult<OcrPipelineOutput> {
     let mut stage_page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
     let result = Box::pin(run_ocr_pipeline_stages(
@@ -5091,7 +5158,7 @@ pub(super) async fn run_ocr_pipeline_for_page(
             points_per_pixel_override,
             page_ocr_hints,
             page_index_offset,
-            xobject_document,
+            detached_page,
         },
         config,
         pipeline,
@@ -5219,7 +5286,7 @@ struct PipelineStageInputs<'a> {
     points_per_pixel_override: Option<f32>,
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
-    xobject_document: Option<&'a xberg_native_pdf::PdfDocument>,
+    detached_page: Option<DetachedOcrPage<'a>>,
 }
 
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
@@ -5343,7 +5410,7 @@ async fn run_ocr_pipeline_stages(
             inputs.points_per_pixel_override,
             inputs.page_ocr_hints.clone(),
             inputs.page_index_offset,
-            inputs.xobject_document,
+            inputs.detached_page,
         ))
         .await;
 
@@ -5574,9 +5641,9 @@ async fn run_ocr_pipeline_stages(
                         &first_stage.backend,
                     ))
                     .await?
-                } else if let Some(doc) = inputs.xobject_document {
+                } else if let Some(source) = inputs.detached_page {
                     Box::pin(recover_pipeline_page_from_image_xobjects(
-                        doc,
+                        source.document,
                         inputs.page_index_offset,
                         config,
                         ocr_config,

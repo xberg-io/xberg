@@ -42,21 +42,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use xberg_tesseract::{TessPageSegMode, TessPolyBlockType, TesseractAPI};
 
-/// Process-global document-orientation classifier (ONNX PP-LCNet), shared by
-/// every tesseract-backend auto-rotate call. Session initialization is lazy and
-/// internally synchronized; `detect` is thread-safe.
-#[cfg(auto_rotate)]
-fn doc_orientation_detector() -> &'static crate::doc_orientation::DocOrientationDetector {
-    static DETECTOR: std::sync::LazyLock<crate::doc_orientation::DocOrientationDetector> =
-        std::sync::LazyLock::new(|| {
-            crate::doc_orientation::DocOrientationDetector::with_acceleration(
-                crate::doc_orientation::resolve_cache_dir(),
-                None,
-            )
-        });
-    &DETECTOR
-}
-
 use crate::table_core::{
     HocrWord, MIN_TABLE_CANDIDATE_WORDS, cluster_word_indices_into_table_regions, detect_rows,
     drop_leading_caption_row, hocr_words_are_rtl, median_word_height, merge_disjoint_numeric_columns,
@@ -1962,7 +1947,7 @@ pub(super) fn perform_ocr(
         } else {
             let image = image::RgbImage::from_raw(width, height, std::mem::take(&mut image_data))
                 .expect("validated RGB buffer length must match dimensions");
-            let result = doc_orientation_detector().detect(&image);
+            let result = crate::doc_orientation::detector::tesseract_detector().detect(&image);
             image_data = image.into_raw();
             result
         };

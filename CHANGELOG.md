@@ -165,6 +165,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
+  Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
+
 - **(pdf): Report an undecodable painted image when OCR sees a blank page.** (#2427)
   The warning names the affected page when neither decoding nor raw image recovery can supply the image.
 
