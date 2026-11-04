@@ -174,6 +174,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Render Latin text on hosts without a matching font.** (#2347)
   Use the bundled DejaVu Sans face for covered Latin glyphs after embedded and system font lookup fails.
 
+- **(tests): Check the specific blank-PDF image decode warning.** (#2427)
+  Full-feature tests allow unrelated OCR fallback diagnostics on blank pages.
+
 - **(structured): Apply the caller's raster budget to PDF pages.** (#2352)
   Check the canvas, CMYK and spot-color planes, and PNG encoding allowance before allocating the page raster.
 
