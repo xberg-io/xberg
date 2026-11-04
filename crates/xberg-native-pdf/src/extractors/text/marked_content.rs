@@ -675,6 +675,10 @@ impl<'doc> TextExtractor<'doc> {
         self.fonts.insert(name, font);
     }
 
+    pub(crate) fn has_fonts(&self) -> bool {
+        !self.fonts.is_empty()
+    }
+
     /// Return the current font set for caching purposes.
     pub fn get_font_set(&self) -> Vec<(String, Arc<FontInfo>)> {
         self.fonts.iter().map(|(k, v)| (k.clone(), Arc::clone(v))).collect()

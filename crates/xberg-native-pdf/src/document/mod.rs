@@ -613,9 +613,9 @@ pub struct PdfDocument {
     /// Name-based font set cache keyed by hash of sorted font names.
     /// Catches pages with different font ObjectRefs but the same font name→base font
     /// mapping (common in PDFs that create new font objects per page).
-    /// One entry pairs the donated font set with the combined identity hash over
-    /// all its fonts for verification before reuse. Bounded at 256 entries.
-    font_name_set_cache: Mutex<BoundedEntryCache<u64, (Arc<Vec<(String, Arc<crate::fonts::FontInfo>)>>, u64)>>,
+    /// One entry pairs both font sets with their combined identity hash.
+    /// Bounded at 256 entries.
+    font_name_set_cache: Mutex<BoundedEntryCache<u64, Arc<fonts::NamedFontSet>>>,
     /// Donated companions to `font_set_cache` and `font_fingerprint_cache`,
     /// keyed identically. Holds the SAME dictionary's font set after TrueType cmap donation
     /// has run only among fonts that dictionary itself resolves — never against fonts a

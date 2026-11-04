@@ -886,3 +886,71 @@ fn font_name_cache_replacement_preserves_verified_font_identity() {
     });
     assert_eq!(aliased_text.trim(), "a");
 }
+
+fn form_resources(font_dict: Object) -> Object {
+    Object::Dictionary(HashMap::from([("Font".to_owned(), font_dict)]))
+}
+
+fn alias_form_font_dict(doc: &PdfDocument) -> Object {
+    let donor_alias = ObjectRef::new(16, 0);
+    let recipient_alias = ObjectRef::new(17, 0);
+    for (original, alias) in [(11, donor_alias), (14, recipient_alias)] {
+        let font = doc.load_object(ObjectRef::new(original, 0)).expect("form font");
+        doc.object_cache.lock_or_recover().insert(alias, font);
+    }
+    Object::Dictionary(HashMap::from([
+        ("F1".to_owned(), Object::Reference(donor_alias)),
+        ("F2".to_owned(), Object::Reference(recipient_alias)),
+    ]))
+}
+
+#[test]
+fn cached_form_fonts_keep_enclosing_cmap_donor_on_every_cache_layer() {
+    use crate::extractors::TextExtractor;
+    use crate::fonts::TrueTypeCMap;
+
+    for layer in [2, 3, 4] {
+        let doc = PdfDocument::from_bytes(build_minimal_pdf(b"")).expect("open fixture");
+        let (font_dict, form) = donor_and_recipient_font_resources(&doc);
+        let warm_form = match layer {
+            2 => form.clone(),
+            3 => form_resources(doc.load_object(font_dict).expect("direct form font dictionary")),
+            4 => form_resources(alias_form_font_dict(&doc)),
+            _ => unreachable!(),
+        };
+
+        let mut page_donor =
+            crate::fonts::FontInfo::from_dict(&doc.load_object(ObjectRef::new(11, 0)).expect("local donor"), &doc)
+                .expect("parse donor");
+        page_donor.base_font = "MNOPQR+DonationTest1746".to_owned();
+        let larger_cmap = TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format4(&[(0x42, 3), (0x43, 4)]))
+            .expect("parse larger cmap");
+        page_donor.set_truetype_cmap(Some(larger_cmap));
+        let page_donor = Arc::new(page_donor);
+
+        let decode = |resources, with_enclosing_font| {
+            let mut extractor = TextExtractor::new();
+            if with_enclosing_font {
+                extractor.add_font_shared("PageDonor".to_owned(), Arc::clone(&page_donor));
+            }
+            doc.load_fonts(resources, &mut extractor).expect("load form fonts");
+            let recipient = extractor
+                .get_font_set()
+                .into_iter()
+                .find(|(name, _)| name == "F2")
+                .expect("recipient font")
+                .1;
+            recipient.truetype_cmap().expect("donated cmap").get_unicode(3)
+        };
+
+        assert_eq!(decode(&form, true), Some('B'), "layer {layer}: cold scoped donor");
+        assert_eq!(decode(&warm_form, true), Some('B'), "layer {layer}: warm scoped donor");
+        assert_eq!(decode(&warm_form, false), Some('A'), "layer {layer}: warm local donor");
+        assert_eq!(doc.donation_call_count(), 1, "layer {layer}: one dictionary donation");
+        assert_eq!(
+            doc.donation_apply_count(),
+            2,
+            "layer {layer}: only scoped reads apply donations"
+        );
+    }
+}
