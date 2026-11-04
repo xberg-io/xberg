@@ -122,6 +122,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(pdf): Honor OCR image decode limits when retrying embedded scans after pipeline failure.**
+  Whole-document retries use the tighter explicit limit and stop when extraction is cancelled. (#2339)
+
 - **(excel): Upgrade Calamine to 0.38.0 for RUSTSEC-2026-0436.**
   Fixes a parser panic and unbounded allocation when reading malformed CFB/OLE2 spreadsheets.
 
