@@ -15,6 +15,9 @@ enum Action {
     Soft,
     Fatal,
     Rewrite,
+    MiddleFormatted,
+    MiddleContent,
+    MiddleDropPage,
 }
 
 struct Probe {
@@ -37,6 +40,18 @@ impl PostProcessor for Probe {
     async fn process(&self, result: &mut ExtractedDocument, _config: &ExtractionConfig) -> Result<()> {
         self.log.lock().push((self.name.into(), result.content.clone()));
         match self.action {
+            Action::MiddleFormatted => {
+                result.formatted_content = Some("Visit [secret](https://example.test) now".into());
+                Ok(())
+            }
+            Action::MiddleContent => {
+                result.content = "updated secret".into();
+                Ok(())
+            }
+            Action::MiddleDropPage => {
+                assert_eq!(result.pages.as_mut().unwrap().pop().unwrap().page_number, 1);
+                Ok(())
+            }
             Action::Record => Ok(()),
             Action::Foreign => {
                 result.content = "foreign handled".into();
@@ -54,7 +69,10 @@ impl PostProcessor for Probe {
         }
     }
     fn processing_stage(&self) -> ProcessingStage {
-        ProcessingStage::Late
+        match self.action {
+            Action::MiddleFormatted | Action::MiddleContent | Action::MiddleDropPage => ProcessingStage::Middle,
+            _ => ProcessingStage::Late,
+        }
     }
     fn priority(&self) -> i32 {
         self.priority
@@ -113,7 +131,10 @@ async fn execute(
         result,
         &config(),
         &None,
-        &[(ProcessingStage::Late, Arc::clone(&cache.late))],
+        &[
+            (ProcessingStage::Middle, Arc::clone(&cache.middle)),
+            (ProcessingStage::Late, Arc::clone(&cache.late)),
+        ],
         cache.builtin_redaction.as_ref(),
     )
     .await
@@ -290,4 +311,61 @@ async fn explicit_builtin_registration_replaces_foreign_and_binds_actual_handle(
     assert!(log.lock().is_empty());
     assert_eq!(result.content, "[REDACTED]");
     assert_eq!(result.formatted_content.as_deref(), Some("<sup>[REDACTED]</sup>\n"));
+}
+
+#[tokio::test]
+async fn processor_that_drops_a_page_gets_an_actionable_redaction_error() {
+    let registry = registry();
+    let log = Arc::new(Mutex::new(Vec::new()));
+    registry
+        .write()
+        .register(probe("drop-page", 0, true, Action::MiddleDropPage, &log))
+        .unwrap();
+    let mut result = document();
+    let error = execute(&registry, &mut result).await.unwrap_err();
+    assert_eq!(log.lock().as_slice(), [("drop-page".into(), "secret".into())]);
+    assert_eq!(result.pages.as_ref().unwrap().len(), 0);
+    assert!(result.redaction_report.is_none());
+    let XbergError::Plugin { plugin_name, message } = error else {
+        panic!("expected redaction to reject the changed page shape: {error}");
+    };
+    assert_eq!(plugin_name, "redaction");
+    assert_eq!(
+        message,
+        "Validation error: A post-processor changed the pages of the document, and redaction cannot continue"
+    );
+}
+
+#[tokio::test]
+async fn content_edit_after_formatted_edit_clears_the_kept_literal_before_redaction() {
+    let registry = registry();
+    let log = Arc::new(Mutex::new(Vec::new()));
+    for (name, priority, action) in [
+        ("edit-formatted", 2, Action::MiddleFormatted),
+        ("edit-content", 1, Action::MiddleContent),
+    ] {
+        registry
+            .write()
+            .register(probe(name, priority, true, action, &log))
+            .unwrap();
+    }
+    let mut result = document();
+    let outcome = execute(&registry, &mut result).await;
+    assert_eq!(
+        log.lock().as_slice(),
+        [
+            ("edit-formatted".into(), "secret".into()),
+            ("edit-content".into(), "secret".into())
+        ]
+    );
+    outcome.unwrap();
+    assert_eq!(result.content, "updated [REDACTED]");
+    assert!(result.formatted_content.is_none());
+    assert_eq!(result.pages.as_ref().unwrap()[0].content, "<sup>[REDACTED]</sup>\n");
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
+    let (document, format) = result.into_output(OutputFormat::Markdown);
+    assert_eq!(format, OutputFormat::Plain);
+    let output = super::super::apply_output_format(document, format);
+    assert_eq!(output.metadata.output_format.as_deref(), Some("plain"));
+    assert_eq!(output.content, "updated [REDACTED]");
 }

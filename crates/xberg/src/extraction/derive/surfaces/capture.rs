@@ -81,10 +81,16 @@ pub(crate) struct SurfaceContext {
     formatted_literal: Option<String>,
     prefer_current_plain: bool,
     page_numbers: Option<Vec<u32>>,
+    processor_changed_page_shape: bool,
 }
 
 impl RedactionSurfaces for SurfaceContext {
     fn validate(&self, document: &ExtractedDocument) -> crate::Result<()> {
+        if self.processor_changed_page_shape && !self.page_shape_matches(document) {
+            return Err(crate::XbergError::validation(
+                "A post-processor changed the pages of the document, and redaction cannot continue",
+            ));
+        }
         let formatted_valid = match &self.capture.formatted {
             Some(expected) => document
                 .formatted_content
@@ -162,6 +168,7 @@ impl DerivedResult {
                 formatted_invalidated: false,
                 formatted_literal: None,
                 prefer_current_plain: false,
+                processor_changed_page_shape: false,
                 page_numbers: document
                     .pages
                     .as_ref()
