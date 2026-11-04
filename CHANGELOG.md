@@ -169,6 +169,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reject unverified source gaps, including reference definitions at the document edges.
   Remove delimiters owned by fully redacted inline spans while preserving unrelated markup and original finding offsets.
 
+- **(rust): Restore strict Clippy and no-ORT PDF feature builds.**
+  Keep script fixture geometry bit-exact and compile the OCR structure wrapper only where it is used.
+
+- **(pdf): Keep proved native superscript suffixes with their base text across paragraph grouping.** (#2275)
+  Preserve original glyph geometry and unrelated paragraphs; overlapping suffixes retain their existing behavior.
+  Attach surviving suffix records after semantic refinement to preserve references, list boundaries and existing scripts.
+  Keep existing script annotations when a new suffix would exceed the legacy base search window.
+  Release discarded hierarchy data before constructing script-preserving paragraphs.
+  Leave stacked fractions and incomplete raised cohorts unassociated, preserving their original records and annotations.
+  Reject opposing fraction records even when their native semantic or style metadata differs.
+
 - **(redaction): Cover repeated inline-styled terms in Markdown and DOCX/PDF output.** (#2361)
   Verify each rendered occurrence against its own plain backup before retaining formatting or returning a plain fallback.
   Preserve untrusted HTML-derived Markdown obligations through processor edits and keep original finding offsets.
