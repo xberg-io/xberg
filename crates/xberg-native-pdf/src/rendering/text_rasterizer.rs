@@ -302,12 +302,20 @@ struct CachedFace {
     pub units_per_em: f32,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Shaping fonts built on this thread, so a test can see a face parsed twice.
+    pub(super) static SHAPING_FONT_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Build the `harfrust::Font` over the shared bytes without copying them.
 ///
 /// `Font` owns its source and carries the expensive per-font shaping state
 /// (GSUB/GPOS/AAT tables, cmap cache) behind a shared handle, so a clone of a
 /// cached `Font` reuses it while a fresh `Font::new` rebuilds it. ~keep
 fn build_shaping_font(data: &Arc<Vec<u8>>, index: u32) -> Option<harfrust::Font> {
+    #[cfg(test)]
+    SHAPING_FONT_BUILDS.with(|builds| builds.set(builds.get() + 1));
     let shared: Arc<Vec<u8>> = Arc::clone(data);
     let bytes: Arc<dyn AsRef<[u8]> + Send + Sync> = shared;
     harfrust::Font::new(bytes, index)
