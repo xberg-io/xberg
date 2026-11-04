@@ -1348,6 +1348,7 @@ impl<'a> RedactionPass<'a> {
         }
         for header in html.headers.iter_mut() {
             self.redact_in_place(&mut header.text);
+            self.redact_optional(&mut header.id);
         }
         for link in html.links.iter_mut() {
             self.redact_in_place(&mut link.href);

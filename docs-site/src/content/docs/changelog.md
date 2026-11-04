@@ -245,6 +245,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(docx): Return complete hyperlink labels for links split across styled runs.** Redaction can match the full label.
   With redaction disabled, the label shows the complete first occurrence. URI deduplication stays the same.
 
+- **(redaction): Redact source IDs in HTML heading metadata.** (#2363)
+
 - **(redaction): Redact annotation authors and decoded QR payloads.** Cover the structured fields alongside the
   document text while preserving unrelated annotation and QR metadata.
 
