@@ -4,6 +4,7 @@ Run: python -I make_ocr_layout_fixtures.py <output-directory>
 
 Writes, with invented text only:
   cover_scattered.png    a cover page with a few large text blocks placed far apart
+  cover_numeric.png      a cover page with dates in a separate column
   map_loose_grid.png     a diagram whose labels sit in a loose grid, with no rules
   ruled_table.png        a ruled table that must stay a table
 """
@@ -39,6 +40,16 @@ def cover_scattered(out: Path) -> None:
     draw.text((700, 1650), "Office of Planning", font=font(64), fill="black")
     draw.text((250, 1950), "Spring Volume Two", font=font(56), fill="black")
     save(image, out / "cover_scattered.png", dpi=(300, 300))
+
+
+def cover_numeric(out: Path) -> None:
+    image, draw = page(950, 580)
+    font_file = Path(__file__).resolve().parents[4] / "xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf"
+    cover_font = ImageFont.truetype(str(font_file), 44)
+    labels = [(80, "Annual report"), (680, "2024"), (80, "Prepared for the council"), (680, "2025")]
+    for index, (x, text) in enumerate(labels):
+        draw.text((x, 150 + index * 65), text, font=cover_font, fill="black")
+    save(image, out / "cover_numeric.png", dpi=(300, 300))
 
 
 def map_loose_grid(out: Path) -> None:
@@ -129,6 +140,7 @@ if __name__ == "__main__":
     target = Path(sys.argv[1])
     target.mkdir(parents=True, exist_ok=True)
     cover_scattered(target)
+    cover_numeric(target)
     map_loose_grid(target)
     cover_centered(target)
     map_ragged(target)

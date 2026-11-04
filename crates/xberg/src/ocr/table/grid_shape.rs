@@ -40,15 +40,11 @@ fn columns_with_relation(grid: &[Vec<String>]) -> usize {
 
 /// Whether `grid` has the shape of a table.
 ///
-/// A grid is a table when two cells relate by row and by column in one of three ways. Rows
-/// relate cells: at least two rows fill two or more cells, and those rows are at least half of
-/// all rows. A column of values relates cells: a column holds two or more numbers that are most
-/// of its cells, as in a ledger or a receipt where each row carries one value. A block relates
-/// cells: three rows in a row fill the same two or more columns, as the table at the end of a
-/// page region that also holds lines of prose. A staircase of labels, one per row, has none of
-/// these. ~keep
+/// A grid is a table when two recurring columns are tied by rows, a shared ledger header,
+/// or a contiguous block. The ledger exception needs two numeric columns with labels on the
+/// same opening row, so a staircase of unrelated numeric and text labels stays prose. ~keep
 pub(crate) fn has_table_grid(grid: &[Vec<String>]) -> bool {
-    columns_with_relation(grid) >= 2 && (rows_relate(grid) || has_value_column(grid) || has_uniform_block(grid))
+    columns_with_relation(grid) >= 2 && (rows_relate(grid) || has_sparse_ledger_header(grid) || has_uniform_block(grid))
 }
 
 fn rows_relate(grid: &[Vec<String>]) -> bool {
@@ -59,17 +55,33 @@ fn rows_relate(grid: &[Vec<String>]) -> bool {
     rows >= 2 && rows * 2 >= grid.len()
 }
 
-fn has_value_column(grid: &[Vec<String>]) -> bool {
-    let column_count = grid.iter().map(Vec::len).max().unwrap_or(0);
-    (0..column_count).any(|column| {
-        let cells: Vec<&String> = grid
-            .iter()
-            .filter_map(|row| row.get(column))
-            .filter(|c| filled(c))
-            .collect();
-        let values = cells.iter().filter(|c| is_value(c)).count();
-        values >= 2 && values * 2 >= cells.len()
-    })
+fn has_sparse_ledger_header(grid: &[Vec<String>]) -> bool {
+    let Some((header, body)) = grid.split_first() else {
+        return false;
+    };
+    header
+        .iter()
+        .enumerate()
+        .filter(|(_, label)| label.chars().any(char::is_alphabetic) && !is_prose(label))
+        .filter(|(column, _)| recurring_numeric_column(body, *column))
+        .take(2)
+        .count()
+        == 2
+}
+
+fn recurring_numeric_column(rows: &[Vec<String>], column: usize) -> bool {
+    let mut values = 0;
+    for cell in rows
+        .iter()
+        .filter_map(|row| row.get(column))
+        .filter(|cell| filled(cell))
+    {
+        if !is_value(cell) {
+            return false;
+        }
+        values += 1;
+    }
+    values >= 2
 }
 
 fn has_uniform_block(grid: &[Vec<String>]) -> bool {
@@ -183,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn receipt_with_amounts_on_their_own_lines_is_a_table() {
+    fn alternating_receipt_labels_and_amounts_without_a_header_stay_text() {
         let receipt = grid(&[
             &["Anvil", ""],
             &["", "1,000"],
@@ -192,7 +204,18 @@ mod tests {
             &["TOTAL", ""],
             &["", "11,000"],
         ]);
-        assert!(has_table_grid(&receipt));
+        assert!(!has_table_grid(&receipt));
+    }
+
+    #[test]
+    fn alternating_years_do_not_turn_a_cover_into_a_table() {
+        let cover = grid(&[
+            &["Annual report", ""],
+            &["", "2024"],
+            &["Prepared for the council", ""],
+            &["", "2025"],
+        ]);
+        assert!(!has_table_grid(&cover));
     }
 
     #[test]

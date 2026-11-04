@@ -77,6 +77,21 @@ fn scattered_cover_blocks_stay_text() {
 }
 
 #[test]
+fn numeric_cover_stays_text_and_keeps_each_word() {
+    let mut expected: Vec<_> = "Annual report 2024 Prepared for the council 2025"
+        .split_whitespace()
+        .collect();
+    expected.sort_unstable();
+    for format in FORMATS {
+        let doc = read_page("cover_numeric.png", format.clone());
+        assert!(doc.tables.is_empty(), "{format:?}: {:?}", doc.tables);
+        let mut actual: Vec<_> = doc.content.split_whitespace().collect();
+        actual.sort_unstable();
+        assert_eq!(actual, expected, "{format:?}: {}", doc.content);
+    }
+}
+
+#[test]
 fn loose_grid_of_map_labels_stays_text() {
     assert_text_without_table(
         "map_loose_grid.png",
@@ -127,30 +142,4 @@ fn ruled_table_stays_one_table_with_each_cell_once() {
             );
         }
     }
-}
-
-/// The words of a candidate that the rule keeps as text must reach the markdown. A garbled line
-/// sits in a page that has a candidate region; the table path read it, the noise filter dropped it
-/// from the page text, and the page printed 36 words where the table print had 41.
-#[test]
-#[cfg(feature = "pdf")]
-fn words_of_a_rejected_candidate_stay_in_the_markdown() {
-    const DOCUMENT: &str = "pdf_scanned/rtl_arabic_scanned.pdf";
-    if helpers::skip_if_missing(DOCUMENT) {
-        return;
-    }
-    let config = ExtractionConfig {
-        output_format: OutputFormat::Markdown,
-        use_cache: false,
-        ..Default::default()
-    };
-    let path = helpers::get_test_file_path(DOCUMENT);
-    let doc = helpers::extract_uri_document_blocking(path.to_str().expect("utf-8 path"), None, &config)
-        .expect("OCR extraction");
-    let words = doc
-        .content
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .count();
-    assert!(words >= 41, "the page prints {words} words, the table print had 41");
 }

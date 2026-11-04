@@ -16,9 +16,12 @@
 //!         ocrx_word  →  word text with bbox and confidence
 //! ```
 
+use std::collections::HashSet;
+
 use memchr::memchr;
 
 use crate::ocr::table::tsv_parser::text_without_underscore_marks;
+use crate::table_core::HocrWord;
 use crate::types::extraction::BoundingBox;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use crate::types::ocr_elements::{OcrBoundingGeometry, OcrConfidence, OcrElementLevel};
@@ -183,6 +186,56 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
     dictionary_filter: Option<&DictionaryLineFilter<'_>>,
     page_offset: u32,
 ) -> HocrParseResult {
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter,
+            protected_words: None,
+        },
+    )
+}
+
+type PositionedWord = ([u32; 4], String);
+
+#[derive(Clone, Copy)]
+struct HocrLinePolicy<'a> {
+    dictionary_filter: Option<&'a DictionaryLineFilter<'a>>,
+    protected_words: Option<&'a HashSet<PositionedWord>>,
+}
+
+pub(crate) fn parse_hocr_preserving_rejected_table_words(
+    hocr_html: &str,
+    dictionary_filter: &DictionaryLineFilter<'_>,
+    page_offset: u32,
+    rejected_regions: &[Vec<HocrWord>],
+) -> HocrParseResult {
+    let protected_words = rejected_regions
+        .iter()
+        .flatten()
+        .map(|word| {
+            (
+                [
+                    word.left,
+                    word.top,
+                    word.left.saturating_add(word.width),
+                    word.top.saturating_add(word.height),
+                ],
+                text_without_underscore_marks(&word.text).trim().to_owned(),
+            )
+        })
+        .collect();
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter: Some(dictionary_filter),
+            protected_words: Some(&protected_words),
+        },
+    )
+}
+
+fn parse_hocr_document(hocr_html: &str, page_offset: u32, line_policy: HocrLinePolicy<'_>) -> HocrParseResult {
     let mut doc = InternalDocument::new("ocr");
     doc.mime_type = "application/x-hocr".to_string();
 
@@ -252,7 +305,7 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
                 last_page.unwrap_or(page_offset),
                 element_index,
                 &par_tag_name,
-                dictionary_filter,
+                line_policy,
                 &mut retained_word_confidence_stats,
             );
             pos = end_pos;
@@ -549,6 +602,14 @@ fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'
     (invalid as f64 / candidates as f64) > filter.max_invalid_ratio
 }
 
+fn line_matches_rejected_table_words(line: &HocrLineInfo, protected_words: &HashSet<PositionedWord>) -> bool {
+    line.words.iter().all(|word| {
+        word.x0 < word.x1
+            && word.y0 < word.y1
+            && protected_words.contains(&([word.x0, word.y0, word.x1, word.y1], word.text.clone()))
+    })
+}
+
 /// Attribute key holding the paragraph's average word font size (points, as a
 /// decimal string). Consumed by markdown assembly to promote large-font
 /// paragraphs to headings (#185).
@@ -678,7 +739,7 @@ fn parse_paragraph(
     page: u32,
     element_index: u32,
     par_tag: &str,
-    dictionary_filter: Option<&DictionaryLineFilter<'_>>,
+    line_policy: HocrLinePolicy<'_>,
     retained_word_confidence_stats: &mut RetainedWordConfidenceStats,
 ) -> (Option<InternalElement>, usize, usize) {
     let bytes = html.as_bytes();
@@ -773,9 +834,14 @@ fn parse_paragraph(
     }
 
     let mut removed_line_count = 0usize;
-    if let Some(filter) = dictionary_filter {
+    if let Some(filter) = line_policy.dictionary_filter {
         let lines_before = lines.len();
-        lines.retain(|line| !is_dictionary_noise_line(line, filter));
+        lines.retain(|line| {
+            !is_dictionary_noise_line(line, filter)
+                || line_policy
+                    .protected_words
+                    .is_some_and(|words| line_matches_rejected_table_words(line, words))
+        });
         removed_line_count = lines_before - lines.len();
         if removed_line_count > 0 {
             tracing::debug!(
@@ -2155,6 +2221,40 @@ mod tests {
         /// module tests is the *filtering mechanism* at a fixed, known threshold, not
         /// that the production default stays at any particular value.
         const TEST_THRESHOLD: f64 = 0.6;
+
+        #[test]
+        fn rejected_table_restores_an_exact_repeat_at_its_original_line_position() {
+            let hocr = ELEVATIONS_PAGE_HOCR.replace("OPMENT", "ELEVATION");
+            let filter = DictionaryLineFilter {
+                is_valid_word: &measured_is_valid_word,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+            let rejected_word = |text: &str, left, top, width| HocrWord {
+                text: text.to_owned(),
+                left,
+                top,
+                width,
+                height: 30,
+                confidence: 90.0,
+            };
+            let mut region = vec![
+                rejected_word("OWATS", 10, 50, 90),
+                rejected_word("DNDEVET", 110, 50, 110),
+                rejected_word("ELEVATION", 110, 10, 150),
+            ];
+            let mismatched = parse_hocr_preserving_rejected_table_words(&hocr, &filter, 1, &[region.clone()]);
+            assert_eq!(mismatched.dictionary_filtered_line_count, 1);
+            assert_eq!(mismatched.document.elements[0].text, "RIGHT ELEVATION\nLEFT ELEVATION");
+
+            region[2] = rejected_word("ELEVATION", 230, 50, 90);
+            let restored = parse_hocr_preserving_rejected_table_words(&hocr, &filter, 1, &[region]);
+            assert_eq!(restored.dictionary_filtered_line_count, 0);
+            assert_eq!(restored.document.elements.len(), 1);
+            assert_eq!(
+                restored.document.elements[0].text,
+                "RIGHT ELEVATION\nOWATS DNDEVET ELEVATION\nLEFT ELEVATION"
+            );
+        }
 
         /// The exact defect from #783: with the real (imperfect) dictionary behavior,
         /// the garbage line is still removed -- 2 invalid of 3 candidates (0.667) clears
