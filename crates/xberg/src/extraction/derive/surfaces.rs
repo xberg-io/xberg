@@ -1,9 +1,20 @@
 use crate::types::ExtractedDocument;
 
+pub(crate) enum HtmlPageBody {
+    Rendered(#[cfg(feature = "redaction")] String),
+    Literal,
+    Unverified,
+}
+
 pub(crate) trait DerivationObserver {
     fn captures_pages(&self) -> bool {
         false
     }
+    fn captures_html(&self) -> bool {
+        false
+    }
+    fn formatted_html(&mut self, _rendered: &str, _verified: bool) {}
+    fn page_html(&mut self, _index: usize, _rendered: &str, _body: HtmlPageBody) {}
     fn formatted(&mut self, _markdown: bool, _text: &str) {}
     fn page(&mut self, _index: usize, _number: u32, _rendered: &str, _plain: String) {}
     fn formatted_from_source(&mut self, markdown: bool, text: &str, _tag_exemptions: bool) {
@@ -30,6 +41,16 @@ pub(crate) trait ProcessingDocument: Send {
     fn seal_processor_witness(&mut self) {}
 
     #[cfg(feature = "redaction")]
+    fn seal_redacted_html(&mut self) -> crate::Result<()> {
+        Ok(())
+    }
+
+    #[cfg(feature = "redaction")]
+    fn validate_sealed_html(&self, _config: &crate::ExtractionConfig) -> crate::Result<()> {
+        Ok(())
+    }
+
+    #[cfg(feature = "redaction")]
     fn redaction_parts(&mut self) -> crate::Result<(&mut ExtractedDocument, Option<&SurfaceContext>)> {
         Ok((self.document_mut(), None))
     }
@@ -48,6 +69,12 @@ impl ProcessingDocument for ExtractedDocument {
 pub(crate) trait RedactionSurfaces: Send + Sync {
     fn validate(&self, _document: &ExtractedDocument) -> crate::Result<()> {
         Ok(())
+    }
+    fn formatted_html(&self) -> bool {
+        false
+    }
+    fn page_html_backup(&self, _index: usize) -> Option<&str> {
+        None
     }
     fn formatted_markdown(&self) -> bool {
         false

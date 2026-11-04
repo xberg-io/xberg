@@ -457,3 +457,67 @@ async fn generated_sensitive_code_block_is_completely_redacted_without_exposing_
 
 mod compatibility_tests;
 mod reachability_tests;
+
+#[tokio::test]
+async fn trusted_html_rebuild_preserves_unicode_whitespace_and_exact_audit_offsets_2361() {
+    let text = "\n\nCafé  Jane Doe and Jane Doe\r\n尾 < &";
+    let start = text.rfind("Doe").unwrap() as u32;
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(text, vec![underline(start, start + 3)], None, None);
+    let mut result = crate::extraction::derive::derive_with_surfaces(builder.build(), false, OutputFormat::Html, true);
+    assert_eq!(result.content, text);
+    assert_eq!(
+        result
+            .formatted_content
+            .as_ref()
+            .unwrap()
+            .matches("Jane <u>Doe</u>")
+            .count(),
+        1
+    );
+    let redaction = config("Jane Doe", RedactionStrategy::Mask);
+    let selected = findings(text, &redaction).await;
+    assert_eq!(selected.len(), 2);
+    let configuration = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        redaction: Some(redaction),
+        ..Default::default()
+    };
+    let (document, context) = result.redaction_parts().unwrap();
+    match context {
+        Some(context) => {
+            RedactionProcessor
+                .process_with_surfaces(document, &configuration, context)
+                .await
+        }
+        None => {
+            RedactionProcessor
+                .process_with_surfaces(document, &configuration, &())
+                .await
+        }
+    }
+    .unwrap();
+    let (document, format) = result.into_output(OutputFormat::Html);
+    let output = crate::core::pipeline::apply_output_format(document, format);
+    assert_eq!(output.metadata.output_format.as_deref(), Some("html"));
+    let tree = roxmltree::Document::parse(&output.content).expect("actual valid escaped HTML");
+    let visible = tree
+        .descendants()
+        .filter(|node| node.is_text())
+        .filter_map(|node| node.text())
+        .collect::<String>();
+    assert_eq!(visible, "\n\nCafé  [REDACTED] and [REDACTED]\r\n尾 < &");
+    assert_eq!(tree.root_element().tag_name().name(), "pre");
+    assert!(
+        output
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "output_format" && warning.message.contains("formatting"))
+    );
+    let report = output.redaction_report.as_ref().unwrap();
+    assert_eq!(report.total_redacted, 2);
+    assert_eq!(offsets(&report.findings), offsets(&selected));
+}
+
+#[cfg(feature = "html")]
+mod html_tests;

@@ -36,7 +36,7 @@ pub(crate) use doctags::render_doctags;
 #[cfg(feature = "office")]
 pub(crate) use docx::render_docx;
 pub(crate) use dot::render_dot;
-pub(crate) use html::render_html;
+pub(crate) use html::{render_html, render_html_checked};
 #[cfg(feature = "html")]
 pub use html_styled::StyledHtmlRenderer;
 #[cfg(feature = "redaction")]

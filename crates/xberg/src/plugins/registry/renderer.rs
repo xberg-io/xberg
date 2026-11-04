@@ -385,6 +385,10 @@ impl RendererRegistry {
     /// # Returns
     ///
     /// The rendered output string, or an error if the renderer is not found or rendering fails.
+    pub(crate) fn renders_html(&self, name: &str) -> bool {
+        name == "html" && self.renderers.get(name).is_some_and(|entry| entry.internal.is_some())
+    }
+
     pub(crate) fn renders_markdown(&self, name: &str) -> bool {
         self.renderers
             .get(name)
