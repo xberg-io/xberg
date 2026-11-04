@@ -1,6 +1,8 @@
 //! Reconciles a page's OCR text elements with the tables detected on the same page, shared by
 //! every OCR backend that returns both.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::types::extraction::BoundingBox;
 use crate::types::internal::{InternalDocument, InternalElement};
 
@@ -33,17 +35,19 @@ pub(crate) fn should_adopt_table_rebuild(original_content: &str, rebuilt_content
 /// centre lies inside a table's bbox. Run this where the elements and the table bboxes still
 /// share the backend's pixel space; downstream consumers rescale the two separately. ~keep
 ///
-/// A table only claims its region when it kept the region's words -- see
-/// [`table_retains_region_words`] (xberg-io/xberg#1884).
+/// A table claims the entire region when it kept the region's words. A lossy table can
+/// claim only individual elements it matches to complete rows (xberg-io/xberg#1884).
 pub(crate) fn drop_elements_claimed_by_tables<'a>(
     elements: Vec<InternalElement>,
     tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
 ) -> Vec<InternalElement> {
     let mut claiming_bboxes: Vec<BoundingBox> = Vec::new();
+    let mut claimed_lines = HashSet::new();
     for (bbox, cells) in tables {
         if table_retains_region_words(&elements, &bbox, cells) {
             claiming_bboxes.push(bbox);
         } else {
+            claim_matching_table_rows(&elements, &bbox, cells, &mut claimed_lines);
             tracing::warn!(
                 target: "xberg::ocr::tables",
                 left = bbox.x0,
@@ -51,22 +55,54 @@ pub(crate) fn drop_elements_claimed_by_tables<'a>(
                 right = bbox.x1,
                 bottom = bbox.y1,
                 table_rows = cells.len(),
-                "reconstructed table dropped words from its region; keeping the region's lines in the page document"
+                "reconstructed table dropped words from its region; keeping lines without a matching row"
             );
         }
     }
-    if claiming_bboxes.is_empty() {
+    if claiming_bboxes.is_empty() && claimed_lines.is_empty() {
         return elements;
     }
 
     elements
         .into_iter()
-        .filter(|element| {
-            !claiming_bboxes
-                .iter()
-                .any(|table_bbox| element_center_within_table(element, table_bbox))
+        .enumerate()
+        .filter_map(|(index, element)| {
+            let claimed = claimed_lines.contains(&index)
+                || claiming_bboxes
+                    .iter()
+                    .any(|table_bbox| element_center_within_table(&element, table_bbox));
+            (!claimed).then_some(element)
         })
         .collect()
+}
+
+/// A row may replace one single-line element with the same ordered tokens. Spending each
+/// row once preserves repeated source lines, and unmatched text stays intact.
+fn claim_matching_table_rows(
+    elements: &[InternalElement],
+    bbox: &BoundingBox,
+    cells: &[Vec<String>],
+    claimed_lines: &mut HashSet<usize>,
+) {
+    let mut row_counts = HashMap::new();
+    for row in cells {
+        let tokens: Vec<_> = row.iter().flat_map(|cell| cell.split_whitespace()).collect();
+        if !tokens.is_empty() {
+            *row_counts.entry(tokens).or_insert(0usize) += 1;
+        }
+    }
+    for (index, element) in elements.iter().enumerate() {
+        if !element_center_within_table(element, bbox) || element.text.trim().contains(['\n', '\r']) {
+            continue;
+        }
+        let tokens: Vec<_> = element.text.split_whitespace().collect();
+        if let Some(remaining) = row_counts.get_mut(&tokens)
+            && *remaining > 0
+            && claimed_lines.insert(index)
+        {
+            *remaining -= 1;
+        }
+    }
 }
 
 /// [`drop_elements_claimed_by_tables`] over a page document, recording in
@@ -103,9 +139,8 @@ fn element_center_within_table(element: &InternalElement, table_bbox: &BoundingB
 /// value glues onto its label, the interior cells of a sparse row vanish (`73 | | | |` for a line
 /// that read `73 4 4 4 4 -`). Removing the region's lines on the strength of a table that no longer
 /// carries them deletes those words from the page entirely — they are in neither the paragraphs nor
-/// the table. When this returns false the lines stay and the table is still emitted in `tables`, so
-/// the structured form is never lost either; the cost is the #1571 duplication for that one region,
-/// which is strictly better than losing content.
+/// the table. When this returns false, only exact row matches can be removed from the page document.
+/// The table is still emitted in `tables`.
 ///
 /// Judged by [`should_adopt_table_rebuild`], the same absolute word-count rule the standalone-image
 /// rebuild uses (GH#1599), and against the table's non-empty cell tokens rather than its markdown,
@@ -207,6 +242,25 @@ mod tests {
             "a table that dropped the region's words must not claim it"
         );
         assert_eq!(filtered[0].text, "73 4 4 4 4 -");
+    }
+
+    #[test]
+    fn lossy_table_claims_only_one_exact_line_per_complete_row() {
+        let elements = vec![
+            paragraph_with_bbox("Item  Count", 10.0, 10.0, 90.0, 20.0),
+            paragraph_with_bbox("Apple 50", 10.0, 20.0, 90.0, 30.0),
+            paragraph_with_bbox("Apple 50", 10.0, 30.0, 90.0, 40.0),
+            paragraph_with_bbox("Pear 61 -", 10.0, 40.0, 90.0, 50.0),
+            paragraph_with_bbox("Item Count", 10.0, 110.0, 90.0, 120.0),
+        ];
+        let cells = ["Item Count", "Apple 50", "Pear 61"].map(|row| cells_of(row).remove(0));
+
+        let filtered = drop_elements_claimed_by_tables(elements, [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())]);
+
+        assert_eq!(
+            filtered.iter().map(|element| element.text.as_str()).collect::<Vec<_>>(),
+            ["Apple 50", "Pear 61 -", "Item Count"]
+        );
     }
 
     #[test]
