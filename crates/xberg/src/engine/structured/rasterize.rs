@@ -67,8 +67,9 @@ pub async fn pages_for_call(
 
 /// Render pages with caller-selected image decoding and PNG encoding limits.
 ///
-/// Only `max_content_size` applies to image inputs. PDF rendering retains its
-/// existing behavior; this method does not enforce PDF page or memory limits.
+/// `max_content_size` bounds image decoding and the per-page PDF canvas, CMYK and
+/// spot-color planes, and PNG encoding allowance. PDF resources and transient
+/// transparency compositing buffers remain subject to the renderer's own limits.
 /// Nonvision call modes return without decoding, regardless of the limits.
 pub async fn pages_for_call_with_security_limits(
     bytes: &[u8],
@@ -85,8 +86,8 @@ pub async fn pages_for_call_with_security_limits(
 /// Image inputs are decoded within `security_limits`, then reduced before PNG
 /// encoding. The resize accounts for both pixel buffers while they coexist;
 /// encoding applies the budget again after the source buffer is released.
-/// Smaller images are unchanged. PDF input and nonvision modes retain their
-/// existing behavior. No model-specific size limit is selected by this API.
+/// Smaller images are unchanged. PDF rasters use the requested DPI, subject to
+/// the renderer's DPI safeguard and the caller's per-page byte budget.
 ///
 /// A downstream caller can pass its existing `max_page_edge` policy:
 /// ```no_run
@@ -162,7 +163,7 @@ pub(crate) fn render_all_pages_with_options(
 ) -> Result<Vec<PageImage>, RasterizeError> {
     let mime_lc = mime.to_ascii_lowercase();
     if mime_lc == "application/pdf" {
-        render_pdf(bytes, dpi)
+        render_pdf(bytes, dpi, security_limits)
     } else if mime_lc.starts_with("image/") {
         render_image(bytes, security_limits, options)
     } else {
@@ -170,7 +171,7 @@ pub(crate) fn render_all_pages_with_options(
     }
 }
 
-fn render_pdf(bytes: &[u8], dpi: u32) -> Result<Vec<PageImage>, RasterizeError> {
+fn render_pdf(bytes: &[u8], dpi: u32, security_limits: &SecurityLimits) -> Result<Vec<PageImage>, RasterizeError> {
     let document = crate::pdf::render::open_pdf_document(bytes, None)
         .map_err(|e| RasterizeError::Pdf(format!("failed to open PDF: {e}")))?;
 
@@ -180,8 +181,13 @@ fn render_pdf(bytes: &[u8], dpi: u32) -> Result<Vec<PageImage>, RasterizeError> 
     let mut pages = Vec::with_capacity(page_count);
 
     for page_idx in 0..page_count {
-        let png_bytes = crate::pdf::render::render_open_pdf_page_to_png(&document, page_idx, Some(dpi as i32))
-            .map_err(|e| RasterizeError::Pdf(format!("failed to render page {}: {e}", page_idx + 1)))?;
+        let png_bytes = crate::pdf::render::render_open_pdf_page_to_png(
+            &document,
+            page_idx,
+            Some(dpi as i32),
+            Some(security_limits),
+        )
+        .map_err(|e| RasterizeError::Pdf(format!("failed to render page {}: {e}", page_idx + 1)))?;
 
         pages.push(PageImage {
             page_number: (page_idx + 1) as u32,

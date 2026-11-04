@@ -921,6 +921,15 @@ pub(crate) fn render_page_with_safeguards(
     page_index: usize,
     base_dpi: u32,
 ) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    let options = safeguarded_render_options(doc, page_index, base_dpi);
+    render_page_with_options(doc, page_index, &options, None)
+}
+
+fn safeguarded_render_options(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    base_dpi: u32,
+) -> xberg_native_pdf::rendering::RenderOptions {
     let (w_pt, h_pt) = get_page_dimensions_pt(doc, page_index);
     let safe_dpi = choose_safe_dpi(w_pt, h_pt, base_dpi);
     if safe_dpi != base_dpi {
@@ -933,13 +942,25 @@ pub(crate) fn render_page_with_safeguards(
             "reducing render DPI for page due to extreme dimensions (wide vector-heavy PDF or similar)"
         );
     }
-    let options = xberg_native_pdf::rendering::RenderOptions::with_dpi(safe_dpi);
+    xberg_native_pdf::rendering::RenderOptions::with_dpi(safe_dpi)
+}
+
+fn render_page_with_options(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    options: &xberg_native_pdf::rendering::RenderOptions,
+    max_png_working_bytes: Option<usize>,
+) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
     // The panic guard sits inside the capture wrapper, not around it, so a
     // panicking page still lets the wrapper take its thread-local buffer back
     // instead of leaving it armed on a pooled thread.
     render_page_capturing_glyph_drops(page_index, || {
         guard_render_panic(page_index, || {
-            xberg_native_pdf::rendering::render_page(doc, page_index, &options)
+            if let Some(limit) = max_png_working_bytes {
+                xberg_native_pdf::rendering::render_png_page_with_budget(doc, page_index, options.dpi, limit)
+            } else {
+                xberg_native_pdf::rendering::render_page(doc, page_index, options)
+            }
         })
     })
 }
@@ -1002,14 +1023,21 @@ pub(crate) fn document_page_count(doc: &xberg_native_pdf::PdfDocument) -> Result
 ///
 /// # Errors
 ///
-/// Returns `XbergError::Parsing` if the page cannot be rendered.
+/// Returns `XbergError::Parsing` if the page cannot be rendered within the requested budget.
 pub(crate) fn render_open_pdf_page_to_png(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     dpi: Option<i32>,
+    security_limits: Option<&crate::extractors::security::SecurityLimits>,
 ) -> Result<Vec<u8>> {
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    let rendered = render_page_with_safeguards(doc, page_index, render_dpi).map_err(|e| XbergError::Parsing {
+    let rendered = if let Some(limits) = security_limits {
+        let options = safeguarded_render_options(doc, page_index, render_dpi);
+        render_page_with_options(doc, page_index, &options, Some(limits.max_content_size))
+    } else {
+        render_page_with_safeguards(doc, page_index, render_dpi)
+    }
+    .map_err(|e| XbergError::Parsing {
         message: format!("Failed to render page {page_index}: {e}"),
         source: None,
     })?;
@@ -1065,7 +1093,7 @@ impl PdfRenderSession {
             });
         }
 
-        render_open_pdf_page_to_png(&self.document, page_index, dpi)
+        render_open_pdf_page_to_png(&self.document, page_index, dpi, None)
     }
 }
 
