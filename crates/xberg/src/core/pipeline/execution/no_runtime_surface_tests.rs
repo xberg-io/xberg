@@ -99,3 +99,31 @@ fn source_bound_redaction_path_works_without_tokio() {
     assert_eq!(result.formatted_content.as_deref(), Some("<sup>[REDACTED]</sup>\n"));
     assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 3);
 }
+
+#[cfg(feature = "redaction")]
+#[test]
+fn repeated_styled_terms_are_redacted_through_public_extraction_without_tokio() {
+    use crate::core::config::OutputFormat;
+    use crate::core::config::redaction::{RedactionConfig, RedactionTerm};
+    const { assert!(!cfg!(feature = "tokio-runtime")) };
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        use_cache: false,
+        redaction: Some(RedactionConfig {
+            custom_terms: vec![RedactionTerm::labeled("private", "Jane Doe")],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let response = finish_ready(crate::extract(
+        crate::ExtractInput::from_bytes(b"Jane Doe and Jane **Doe** end".as_slice(), "text/markdown", None),
+        &config,
+    ))
+    .expect("actual public byte extraction must finish without an async runtime");
+    assert_eq!(response.results.len(), 1);
+    let result = &response.results[0];
+    assert_eq!(result.content, "[REDACTED] and [REDACTED] end");
+    assert_eq!(result.metadata.output_format.as_deref(), Some("plain"));
+    assert!(result.formatted_content.is_none());
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
+}

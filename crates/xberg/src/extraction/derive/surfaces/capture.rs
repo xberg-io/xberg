@@ -258,3 +258,6 @@ pub(crate) fn derive_with_surfaces(
 
 mod processor;
 pub(crate) use processor::ProcessorWitness;
+
+#[cfg(all(test, feature = "tokio-runtime", feature = "office"))]
+mod coverage_tests;
