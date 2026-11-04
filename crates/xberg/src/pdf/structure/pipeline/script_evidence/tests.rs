@@ -230,7 +230,7 @@ fn should_preserve_existing_subscript_and_utf8_offsets_after_inserting_a_long_na
         source("2", 140.5, 704.5, 0.25, 8.0),
         source("†", 140.75, 704.5, 0.25, 8.0),
         source("d", 100.0, 700.0, 40.0, 12.0),
-        source("2", 140.0, 697.0, 4.0, 8.0),
+        source("2", 136.0, 697.0, 4.0, 8.0),
     ]);
     assert_eq!(
         page.valid_owners(&page.segments).len(),

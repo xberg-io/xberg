@@ -315,6 +315,37 @@ fn should_reject_a_raised_fraction_numerator_beside_a_baseline_delimiter() {
 }
 
 #[test]
+fn should_reject_stacked_counterparts_with_unproved_native_context_or_style() {
+    let lower = span("2", 140.0, 695.5, 4.0, 8.0);
+    let mut heading = lower.clone();
+    heading.heading_level = Some(2);
+    let mut scoped = lower.clone();
+    scoped.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1));
+    let mut rotated_page = lower.clone();
+    rotated_page.page_rotation_applied = true;
+    let mut monospace = lower;
+    monospace.is_monospace = true;
+    let counts: Vec<_> = [heading, scoped, rotated_page, monospace]
+        .into_iter()
+        .map(|lower| {
+            page(vec![
+                span("sin(", 100.0, 700.0, 40.0, 12.0),
+                span("ω", 140.0, 704.5, 4.0, 8.0),
+                lower,
+                span(")", 145.0, 700.0, 3.0, 12.0),
+            ])
+            .owners
+            .len()
+        })
+        .collect();
+    assert_eq!(
+        counts,
+        [0, 0, 0, 0],
+        "unproved opposing context cannot make a stacked fraction into an exponent"
+    );
+}
+
+#[test]
 fn should_reject_a_decimal_cohort_with_a_nearby_unclaimed_point() {
     let captured = page(vec![
         span("10", 100.0, 700.0, 20.0, 12.0),
