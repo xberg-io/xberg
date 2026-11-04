@@ -9407,6 +9407,10 @@ fn trace_ccitt_mask_decode_failure(error: &Error) {
 }
 
 #[cfg(test)]
+#[path = "latin_font_fallback_tests.rs"]
+mod latin_font_fallback_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::object::Object;
