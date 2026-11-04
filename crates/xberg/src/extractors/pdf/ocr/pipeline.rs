@@ -2069,19 +2069,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
     // got the noise verdict or confirms the layer, now gets the layer lines that its OCR text
     // lacks first. A page it keeps native stays as it was. ~keep
-    let mut page_layers_first: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+    let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
     if let Some(layers) = page_layers.as_ref() {
         for (page_number, text) in &mut accepted_replacements {
             if let Some(layer) = layers.get(page_number)
-                && let Some(missing) = super::document::layer_lines_to_put_first(
+                && let Some(first) = super::document::layer_lines_to_put_first(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
                 )
             {
-                *text = format!("{missing}\n\n{text}");
-                page_layers_first.insert(*page_number, missing);
+                *text = super::document::text_with_layer_first(text, &first);
+                page_layers_first.insert(*page_number, first);
             }
         }
     }
@@ -2195,11 +2195,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         apply_numeric_repair_to_structured_ocr_pages(&mut structured_ocr_pages);
     }
     // The structured page keeps the layer first as well, after the passes above rebuilt it. ~keep
-    for (page_number, layer) in &page_layers_first {
+    for (page_number, first) in &page_layers_first {
         if accepted_replacements.contains_key(page_number)
             && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
         {
-            super::document::insert_layer_into_document(page_doc, None, layer);
+            super::document::put_layer_first_in_document(page_doc, None, first);
         }
     }
 

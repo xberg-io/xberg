@@ -178,7 +178,7 @@ pub(crate) fn layer_lines_absent_from_ocr(layer: &str, ocr_text: &str) -> Option
         .collect();
     (!kept.is_empty()).then(|| kept.join("\n"))
 }
-/// The whole words of a text: runs of letters and digits, lowercase.
+/// The whole words of a text: runs of letters and digits, lowercase. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn whole_words(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split(|c: char| !c.is_alphanumeric())
@@ -186,43 +186,131 @@ fn whole_words(text: &str) -> impl Iterator<Item = String> + '_ {
         .map(str::to_lowercase)
 }
 /// The share of a layer's words that the OCR text of the same page must hold before the OCR read
-/// confirms the layer. Only words with a letter count. A layer whose glyphs map to the wrong
-/// letters shares almost no whole word with an OCR read of the page; a correct layer shares
-/// most of them, less what the OCR misreads. ~keep
+/// confirms the layer. A layer whose glyphs map to the wrong letters shares almost no whole word
+/// with an OCR read of the page; a correct layer shares most of them, less what the OCR
+/// misreads. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 const MIN_LAYER_WORD_SHARE_READ_BY_OCR: f64 = 0.5;
-/// Whether the OCR text of a page confirms its text layer: the layer passes the per-page quality
-/// check, and the OCR text holds at least half of the layer's words with a letter. A confirmed
-/// layer has the right letters, whatever check sent the page to OCR. ~keep
+/// How many distinct numbers a layer without a word with a letter needs before the OCR text can
+/// confirm it. A figure or two on the page can occur in any OCR text by chance; a table of
+/// numbers cannot. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MIN_NUMBER_ONLY_LAYER_WORDS: usize = 3;
+/// Whether the OCR text of a page confirms its text layer: the OCR text holds at least half of the
+/// layer's words with a letter (of its numbers, when no word has a letter), and the layer passes
+/// the per-page quality check. A confirmed layer has the right letters, whatever check sent the
+/// page to OCR. The quality check runs last, and only for a layer that the words confirm. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQualityThresholds) -> bool {
-    if evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback {
-        return false;
-    }
-    let layer_words: std::collections::HashSet<String> = whole_words(layer)
+    let all_words: std::collections::HashSet<String> = whole_words(layer).collect();
+    let lettered: std::collections::HashSet<String> = all_words
+        .iter()
         .filter(|word| word.chars().any(char::is_alphabetic))
+        .cloned()
         .collect();
-    if layer_words.is_empty() {
+    let (layer_words, least) = if lettered.is_empty() {
+        (all_words, MIN_NUMBER_ONLY_LAYER_WORDS)
+    } else {
+        (lettered, 1)
+    };
+    if layer_words.len() < least {
         return false;
     }
     let ocr_words: std::collections::HashSet<String> = whole_words(ocr_text).collect();
     let read = layer_words.iter().filter(|word| ocr_words.contains(*word)).count();
     read as f64 >= MIN_LAYER_WORD_SHARE_READ_BY_OCR * layer_words.len() as f64
+        && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
 }
-/// The layer lines that go before the OCR text of a replaced page: the lines with a word the OCR
-/// text lacks, when the OCR text got the noise verdict or confirms the layer. `None` keeps the
-/// OCR text as it is. A wrong-letter layer is never confirmed, so its lines never come back. ~keep
+/// The layer lines that go before the OCR text of a replaced page, and the OCR lines they replace. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) struct LayerFirst {
+    /// The layer lines with a word that the OCR text lacks, one per line. ~keep
+    pub(crate) lines: String,
+    /// The OCR lines that misread one of `lines`, as their whole words joined by a space. The page
+    /// holds the layer line, so the merge drops the OCR copy. ~keep
+    pub(crate) ocr_copies: Vec<String>,
+}
+/// A line as its whole words joined by a space: the same key for a line of plain text and for the
+/// same line with markup around it. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn line_key(line: &str) -> String {
+    whole_words(line).collect::<Vec<_>>().join(" ")
+}
+/// Whether an OCR line is one layer line with one word misread: it shares a word with the layer
+/// line, and each side has at most one word the other lacks. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn misreads_one_word(layer_line: &str, ocr_line: &str) -> Option<usize> {
+    let layer_words: std::collections::HashSet<String> = whole_words(layer_line).collect();
+    let ocr_words: std::collections::HashSet<String> = whole_words(ocr_line).collect();
+    let shared = layer_words.intersection(&ocr_words).count();
+    (shared >= 1 && layer_words.len() - shared <= 1 && ocr_words.len() - shared <= 1).then_some(shared)
+}
+/// The OCR lines that misread one of the missing layer lines. An OCR line that reads another line
+/// of the layer exactly is never a copy. Each OCR line pairs with one layer line. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_lines_misreading(missing: &str, layer: &str, ocr_text: &str) -> Vec<String> {
+    let layer_keys: std::collections::HashSet<String> = layer.lines().map(line_key).collect();
+    let mut candidates: Vec<&str> = ocr_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !layer_keys.contains(&line_key(line)))
+        .collect();
+    let mut copies = Vec::new();
+    for layer_line in missing.lines() {
+        let best = candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(at, line)| misreads_one_word(layer_line, line).map(|shared| (shared, at)))
+            .max_by_key(|(shared, _)| *shared);
+        if let Some((_, at)) = best {
+            copies.push(line_key(candidates.swap_remove(at)));
+        }
+    }
+    copies
+}
+/// The layer lines that go before the OCR text of a replaced page. With the noise verdict, the
+/// lines with a word the OCR text lacks. Without it, the same lines when the OCR text confirms the
+/// layer, and the OCR lines that misread them go: the page holds each line once, with the layer's
+/// words. `None` keeps the OCR text as it is. A wrong-letter layer is never confirmed. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn layer_lines_to_put_first(
     layer: &str,
     ocr_text: &str,
     noise_verdict: bool,
     thresholds: &OcrQualityThresholds,
-) -> Option<String> {
-    if noise_verdict || ocr_confirms_layer(layer, ocr_text, thresholds) {
-        layer_lines_absent_from_ocr(layer, ocr_text)
+) -> Option<LayerFirst> {
+    if !noise_verdict && !ocr_confirms_layer(layer, ocr_text, thresholds) {
+        return None;
+    }
+    let lines = layer_lines_absent_from_ocr(layer, ocr_text)?;
+    let ocr_copies = if noise_verdict {
+        Vec::new()
     } else {
-        None
+        ocr_lines_misreading(&lines, layer, ocr_text)
+    };
+    Some(LayerFirst { lines, ocr_copies })
+}
+/// The OCR text of a page with the layer lines first and the OCR copies of those lines removed.
+/// A removed line leaves no blank line behind. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn text_with_layer_first(ocr_text: &str, first: &LayerFirst) -> String {
+    if first.ocr_copies.is_empty() {
+        return format!("{}\n\n{ocr_text}", first.lines);
+    }
+    let mut copies = first.ocr_copies.clone();
+    let mut kept: Vec<&str> = Vec::new();
+    for line in ocr_text.lines() {
+        if let Some(at) = copies.iter().position(|copy| *copy == line_key(line)) {
+            copies.swap_remove(at);
+        } else if !line.trim().is_empty() || kept.last().is_some_and(|last| !last.trim().is_empty()) {
+            kept.push(line);
+        }
+    }
+    let rest = kept.join("\n");
+    if rest.trim().is_empty() {
+        first.lines.clone()
+    } else {
+        format!("{}\n\n{}", first.lines, rest.trim_end())
     }
 }
 /// Put layer lines first on a structured OCR document, before its first element of `page`
@@ -257,6 +345,96 @@ pub(super) fn insert_layer_into_document(
     }
     doc.elements.splice(at..at, layer_elements);
 }
+/// Put the layer first on a structured OCR document, and drop the OCR lines that the layer lines
+/// replace. An element that holds only such lines goes, with its relationships; an element that
+/// holds others keeps them, and its inline annotations go because their byte ranges moved. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn put_layer_first_in_document(
+    doc: &mut crate::types::internal::InternalDocument,
+    page: Option<u32>,
+    first: &LayerFirst,
+) {
+    use crate::types::internal::RelationshipTarget;
+
+    insert_layer_into_document(doc, page, &first.lines);
+    if first.ocr_copies.is_empty() {
+        return;
+    }
+    let mut copies = first.ocr_copies.clone();
+    let mut new_index: Vec<Option<u32>> = Vec::with_capacity(doc.elements.len());
+    let mut kept = 0u32;
+    doc.elements.retain_mut(|element| {
+        let mut keep = true;
+        if page.is_none() || element.page == page {
+            let lines: Vec<&str> = element.text.lines().collect();
+            let remaining: Vec<&str> = lines
+                .iter()
+                .copied()
+                .filter(|line| match copies.iter().position(|copy| *copy == line_key(line)) {
+                    Some(at) => {
+                        copies.swap_remove(at);
+                        false
+                    }
+                    None => true,
+                })
+                .collect();
+            if remaining.len() < lines.len() {
+                keep = remaining.iter().any(|line| !line.trim().is_empty());
+                element.text = remaining.join("\n");
+                element.annotations.clear();
+            }
+        }
+        new_index.push(keep.then(|| {
+            kept += 1;
+            kept - 1
+        }));
+        keep
+    });
+    doc.relationships.retain_mut(|relationship| {
+        let Some(source) = new_index.get(relationship.source as usize).copied().flatten() else {
+            return false;
+        };
+        relationship.source = source;
+        match &mut relationship.target {
+            RelationshipTarget::Index(index) => match new_index.get(*index as usize).copied().flatten() {
+                Some(target) => {
+                    *index = target;
+                    true
+                }
+                None => false,
+            },
+            RelationshipTarget::Key(_) => true,
+        }
+    });
+}
+/// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
+/// text of the page, else whether the page has the noise verdict. A page with no verdict has
+/// not. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn run_page_noise_verdict(verdicts: &[super::scoring::OcrPageNoiseVerdict], page: u32) -> Option<bool> {
+    let mut of_page = verdicts
+        .iter()
+        .filter(|verdict| verdict.page_index as u32 + 1 == page)
+        .peekable();
+    let has_verdict = of_page.peek().is_some();
+    let noise = of_page.any(|verdict| !verdict.discarded);
+    (noise || !has_verdict).then_some(noise)
+}
+/// The page texts of a whole-document run as its flat text holds them: joined with a page marker
+/// or a blank line. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn join_run_pages(page_texts: &[String], marker_format: Option<&str>, page_index_offset: usize) -> String {
+    let mut joined = String::new();
+    for (i, page_text) in page_texts.iter().enumerate() {
+        match marker_format {
+            Some(format) => joined.push_str(&format.replace("{page_num}", &(page_index_offset + i + 1).to_string())),
+            None if i > 0 => joined.push_str("\n\n"),
+            None => {}
+        }
+        joined.push_str(page_text);
+    }
+    joined
+}
 /// For a whole-document OCR run: put the text layer first on every page whose OCR text got the
 /// recognition-noise verdict or confirms the layer (see [`layer_lines_to_put_first`]), in the
 /// flat text, the page texts and the structured document. A page whose noise verdict discarded
@@ -282,54 +460,32 @@ pub(super) fn put_layers_first_in_run(
         .as_ref()
         .and_then(|ocr| ocr.quality_thresholds.clone())
         .unwrap_or_default();
-    // The flat text is the page texts joined with a page marker or a blank line, as the run
-    // assembled it. It is rebuilt from the pages, never searched for a page text: identical
-    // pages would match the wrong one.
-    let join = |page_texts: &[String]| -> String {
-        let mut joined = String::new();
-        for (i, page_text) in page_texts.iter().enumerate() {
-            match marker_format {
-                Some(format) => {
-                    joined.push_str(&format.replace("{page_num}", &(page_index_offset + i + 1).to_string()))
-                }
-                None if i > 0 => joined.push_str("\n\n"),
-                None => {}
-            }
-            joined.push_str(page_text);
-        }
-        joined
-    };
-    let flat_is_page_join = join(page_texts) == *text;
-    let verdicts_of = |page: u32| {
-        verdicts
-            .iter()
-            .filter(move |verdict| verdict.page_index as u32 + 1 == page)
-    };
+    // The flat text is rebuilt from the pages, never searched for a page text: identical pages
+    // would match the wrong one.
+    let flat_is_page_join = join_run_pages(page_texts, marker_format, page_index_offset) == *text;
     let mut pages: Vec<u32> = layers.keys().copied().collect();
     pages.sort_unstable();
     for page in pages {
         let Some(layer) = layers.get(&page) else { continue };
-        let noise_verdict = verdicts_of(page).any(|verdict| !verdict.discarded);
-        if !noise_verdict && verdicts_of(page).next().is_some() {
-            continue;
-        }
-        let Some(local) = (page as usize).checked_sub(page_index_offset + 1) else {
+        let Some(noise_verdict) = run_page_noise_verdict(verdicts, page) else {
             continue;
         };
-        let Some(page_text) = page_texts.get_mut(local) else {
+        let Some(page_text) = (page as usize)
+            .checked_sub(page_index_offset + 1)
+            .and_then(|local| page_texts.get_mut(local))
+        else {
             continue;
         };
-        let Some(missing) = layer_lines_to_put_first(layer, page_text, noise_verdict, &thresholds) else {
+        let Some(first) = layer_lines_to_put_first(layer, page_text, noise_verdict, &thresholds) else {
             continue;
         };
-        let with_layer = format!("{missing}\n\n{page_text}");
-        *page_text = with_layer;
+        *page_text = text_with_layer_first(page_text, &first);
         if let Some(doc) = doc.as_deref_mut() {
-            insert_layer_into_document(doc, Some(page), &missing);
+            put_layer_first_in_document(doc, Some(page), &first);
         }
     }
     if flat_is_page_join {
-        *text = join(page_texts);
+        *text = join_run_pages(page_texts, marker_format, page_index_offset);
     }
 }
 /// Attach a page's OCR tables and OCR elements to its structured document.
