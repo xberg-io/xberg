@@ -14,81 +14,11 @@
 
 #![cfg(feature = "pdf")]
 
+mod helpers;
+
 use xberg::pdf::render::{
     install_pdf_render_diagnostics, render_pdf_page_to_png, take_xberg_native_pdf_render_warnings,
 };
-
-/// Build a minimal one-page PDF with a single `/XObject /Image` (`/Im1`) whose
-/// `/Filter /FlateDecode` stream is not valid zlib/deflate data. `xberg_native_pdf`'s
-/// `FlateDecoder` exhausts every recovery strategy on exactly this byte string (see
-/// `xberg-native-pdf/src/decoders/flate.rs::test_flate_decode_invalid_data`), so the
-/// decode is guaranteed to fail rather than accidentally succeed via one of the
-/// decoder's corruption-recovery heuristics.
-fn build_pdf_with_undecodable_image() -> Vec<u8> {
-    let image_stream: &[u8] = b"This is not zlib compressed data";
-    let content_stream: &[u8] = b"q 100 0 0 100 50 50 cm /Im1 Do Q";
-
-    let mut pdf: Vec<u8> = Vec::new();
-    macro_rules! push_bytes {
-        ($s:expr) => {
-            pdf.extend_from_slice($s)
-        };
-    }
-    macro_rules! push_str {
-        ($s:expr) => {
-            pdf.extend_from_slice($s.as_bytes())
-        };
-    }
-
-    push_bytes!(b"%PDF-1.5\n");
-
-    let off1 = pdf.len();
-    push_bytes!(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-
-    let off2 = pdf.len();
-    push_bytes!(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-
-    let off3 = pdf.len();
-    push_bytes!(
-        b"3 0 obj\n\
-         << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300]\n\
-            /Resources << /XObject << /Im1 5 0 R >> >>\n\
-            /Contents 4 0 R >>\n\
-         endobj\n"
-    );
-
-    let off4 = pdf.len();
-    push_str!(format!("4 0 obj\n<< /Length {} >>\nstream\n", content_stream.len()));
-    push_bytes!(content_stream);
-    push_bytes!(b"\nendstream\nendobj\n");
-
-    let off5 = pdf.len();
-    push_str!(format!(
-        "5 0 obj\n\
-         << /Type /XObject /Subtype /Image /Width 10 /Height 10 /ColorSpace /DeviceGray\n\
-            /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\n\
-         stream\n",
-        image_stream.len()
-    ));
-    push_bytes!(image_stream);
-    push_bytes!(b"\nendstream\nendobj\n");
-
-    let xref_off = pdf.len();
-    push_str!(format!(
-        "xref\n0 6\n\
-         0000000000 65535 f \r\n\
-         {off1:010} 00000 n \r\n\
-         {off2:010} 00000 n \r\n\
-         {off3:010} 00000 n \r\n\
-         {off4:010} 00000 n \r\n\
-         {off5:010} 00000 n \r\n"
-    ));
-    push_str!(format!(
-        "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n"
-    ));
-
-    pdf
-}
 
 /// The undecodable image must not fail the whole page (`render_xobject` catches the
 /// error and continues), but it must now surface as exactly one `ProcessingWarning`
@@ -107,7 +37,7 @@ fn test_unrenderable_image_xobject_produces_processing_warning() {
     // assertion below is exact, not "at least".
     let _ = take_xberg_native_pdf_render_warnings();
 
-    let pdf = build_pdf_with_undecodable_image();
+    let pdf = helpers::pdf_helpers::build_pdf_with_undecodable_image();
 
     let png = render_pdf_page_to_png(&pdf, 0, Some(150), None)
         .expect("a page with one unrenderable image must still render (blank in that region)");

@@ -153,7 +153,7 @@ fn build_pdf_with_resolvable_font() -> Vec<u8> {
 /// Issue #291 / GH#1364: a page whose `/Font` resource is structurally
 /// invalid renders successfully (as it must — a broken font resource must
 /// not fail the whole page) but drops every glyph drawn with it. Before this
-/// fix nothing surfaced that: `RenderedImage` has no diagnostic field, and
+/// fix nothing surfaced that: `RenderedImage` has no field for dropped glyphs, and
 /// xberg_native_pdf's own warning had no subscriber installed to receive it, so the
 /// drop was invisible twice over. (It reported through `log::warn!` then and
 /// through `tracing::warn!` since the 1.0.1 fork migration — the second time

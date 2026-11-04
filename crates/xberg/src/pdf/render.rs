@@ -51,8 +51,9 @@ static ENGINE_CAPTURE_ACTIVE: AtomicBool = AtomicBool::new(false);
 /// direct CID/CFF glyph-outline rendering errors mid-run. In every one of
 /// those cases `xberg_native_pdf` still returns `Ok(RenderedImage { .. })` — the
 /// page just has a gap where the glyph should be, with the text-space cursor
-/// advanced as if it painted. `RenderedImage` carries no diagnostic field, so
-/// none of this is visible to callers through the return value.
+/// advanced as if it painted. `RenderedImage` reports only images it could not
+/// paint (`skipped_images`), so none of this is visible to callers through the
+/// return value.
 ///
 /// `xberg_native_pdf` *does* report every one of these cases through `tracing::warn!`,
 /// but this crate never installed a [`tracing::Subscriber`], so — independent
@@ -207,10 +208,11 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for EngineWarningCaptu
 ///     .try_init();
 /// ```
 ///
-/// Constructing the layer arms the capture — [`render_page_capturing_glyph_drops`] is a no-op
-/// until something does, so that the render path costs nothing for the majority of embedders
-/// who never opt in. Building a layer you then discard leaves the render path arming and
-/// draining an empty buffer: harmless, but pointless.
+/// Constructing the layer arms the capture — [`render_page_capturing_glyph_drops`] captures no
+/// log lines until something does, so that the render path costs nothing for the majority of
+/// embedders who never opt in. An extraction render queues the images the renderer left blank
+/// either way. Building a layer you then discard leaves the render path arming and draining an
+/// empty buffer: harmless, but pointless.
 #[cfg_attr(alef, alef(skip))]
 pub fn glyph_drop_capture_layer<S: tracing::Subscriber>() -> impl tracing_subscriber::Layer<S> {
     ENGINE_CAPTURE_ACTIVE.store(true, Ordering::Release);
@@ -294,19 +296,11 @@ fn glyph_drop_warning(page_index: usize, cause: &str) -> ProcessingWarning {
     )
 }
 
-/// Whether a captured engine warning means a whole image XObject failed to rasterize
-/// (e.g. its stream failed to decode, tripped a decompression-bomb guard, or carried an
-/// unsupported colour space), as opposed to a single glyph being dropped.
-///
-/// Matches the exact wording `xberg_native_pdf::rendering::page_renderer::render_xobject` logs
-/// at its `render_image`/`render_image_mask` catch sites ("Skipping unrenderable image
-/// XObject '{name}': {e}" / "Skipping unrenderable ImageMask XObject '{name}': {e}") when
-/// `render_image` returns `Err` and the page is left with a blank region instead. That is a
-/// materially different defect from a dropped glyph — a whole picture is missing, not one
-/// character's ink — and reporting it as "glyph ink is missing" would misdescribe the cause
-/// to anyone reading `processing_warnings`.
+/// Whether a captured engine log line only repeats an image the renderer reports
+/// through `RenderedImage::skipped_images`. The structured list is the report; the log
+/// line is dropped so each failed image yields one warning, not two. ~keep
 fn indicates_unrenderable_image(cause: &str) -> bool {
-    cause.contains("unrenderable image XObject") || cause.contains("unrenderable ImageMask XObject")
+    cause.starts_with("skipping unrenderable ")
 }
 
 fn image_render_failure_warning(page_index: usize, cause: &str) -> ProcessingWarning {
@@ -329,13 +323,11 @@ fn render_notice_warning(page_index: usize, cause: &str) -> ProcessingWarning {
     )
 }
 
-/// Word one captured engine warning by what it reports: a whole image left blank,
-/// glyph ink missing, or any other warning passed through with its own cause.
+/// Word one captured engine warning by what it reports: glyph ink missing, or any other
+/// warning passed through with its own cause.
 fn classify_engine_warning(page_index: usize, captured: &EngineWarning) -> ProcessingWarning {
     let cause = captured.message.as_str();
-    if indicates_unrenderable_image(cause) {
-        image_render_failure_warning(page_index, cause)
-    } else if captured
+    if captured
         .operation
         .as_deref()
         .is_some_and(|operation| GLYPH_INK_LOSS_OPERATIONS.contains(&operation))
@@ -346,23 +338,46 @@ fn classify_engine_warning(page_index: usize, captured: &EngineWarning) -> Proce
     }
 }
 
-/// Render a page while capturing any `xberg_native_pdf` render-degradation warnings it
-/// logs during the call — dropped glyphs and unrenderable image XObjects alike — deduping
-/// them into [`ENGINE_PENDING_WARNINGS`] for later collection via
-/// [`take_xberg_native_pdf_render_warnings`].
+/// Queue one warning per image the renderer could not paint. These come back in the
+/// render result, so they reach `processing_warnings` whether or not the application
+/// opted in to the log capture. ~keep
+fn pend_skipped_image_warnings(
+    page_index: usize,
+    result: &std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error>,
+) {
+    let Ok(rendered) = result else { return };
+    if rendered.skipped_images.is_empty() {
+        return;
+    }
+    ENGINE_PENDING_WARNINGS.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        for cause in &rendered.skipped_images {
+            push_warning_deduped(&mut pending, image_render_failure_warning(page_index, cause));
+        }
+    });
+}
+
+/// Render a page and queue its render-degradation warnings into [`ENGINE_PENDING_WARNINGS`],
+/// deduped, for later collection via [`take_xberg_native_pdf_render_warnings`]: one per image
+/// the render result lists as skipped, plus the warnings `xberg_native_pdf` logs during the
+/// call (dropped glyphs and other notices).
 ///
-/// Capture is opt-in: unless the application called
-/// [`install_pdf_render_diagnostics`], this arms nothing and is exactly
-/// equivalent to calling `render` directly, at no cost.
+/// Log capture is opt-in: unless the application called
+/// [`install_pdf_render_diagnostics`], this arms nothing for glyph drops and other log
+/// lines. Images the renderer left blank come back in the render result instead, so they
+/// are queued with or without the opt-in.
 fn render_page_capturing_glyph_drops(
     page_index: usize,
     render: impl FnOnce() -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error>,
 ) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
     if !ENGINE_CAPTURE_ACTIVE.load(Ordering::Acquire) {
-        return render();
+        let result = render();
+        pend_skipped_image_warnings(page_index, &result);
+        return result;
     }
     ENGINE_LOG_CAPTURE.with(|cell| *cell.borrow_mut() = Some(Vec::new()));
     let result = render();
+    pend_skipped_image_warnings(page_index, &result);
     let captured = ENGINE_LOG_CAPTURE.with(|cell| cell.borrow_mut().take().unwrap_or_default());
     if !captured.is_empty() {
         ENGINE_PENDING_WARNINGS.with(|pending| {
@@ -372,8 +387,9 @@ fn render_page_capturing_glyph_drops(
             // capture threshold (TRACE, gated on <= WARN by `EngineWarningCapture::interested`)
             // so it can never reach here, and the substring match was a trap for whoever next
             // wrote a genuinely actionable warning that happened to share the phrase. Every
-            // captured cause is classified below instead of pre-filtered. ~keep
-            for engine_warning in captured.iter() {
+            // captured cause is classified below. The one exclusion is the log line of a skipped
+            // image, which the render result already reported above. ~keep
+            for engine_warning in captured.iter().filter(|w| !indicates_unrenderable_image(&w.message)) {
                 push_warning_deduped(&mut pending, classify_engine_warning(page_index, engine_warning));
             }
         });
@@ -413,6 +429,19 @@ fn render_page_capturing_glyph_drops(
 /// no longer silently lost.
 pub fn take_xberg_native_pdf_render_warnings() -> Vec<ProcessingWarning> {
     ENGINE_PENDING_WARNINGS.with(|pending| std::mem::take(&mut *pending.borrow_mut()))
+}
+
+/// Run `render` and drop the render warnings it queues on this thread. Warnings queued before
+/// the call stay queued.
+///
+/// For a caller that has no channel to report render warnings. Left in the thread-local buffer,
+/// they reach whichever extraction next drains this thread, which is often a different
+/// document. ~keep
+fn render_discarding_warnings<T>(render: impl FnOnce() -> T) -> T {
+    let earlier = take_xberg_native_pdf_render_warnings();
+    let result = render();
+    ENGINE_PENDING_WARNINGS.with(|pending| *pending.borrow_mut() = earlier);
+    result
 }
 
 // ~keep Liveness is configuration-dependent: the only consumers are compiled out on
@@ -1000,6 +1029,14 @@ pub(crate) fn document_page_count(doc: &xberg_native_pdf::PdfDocument) -> Result
 /// render every page from a single parsed handle. `page_index` is assumed to be
 /// in range; out-of-range indices surface as the underlying rasterizer error.
 ///
+/// Render warnings from this path are queued only when the application opted in with
+/// [`install_pdf_render_diagnostics`] or [`glyph_drop_capture_layer`], as before GH#2427.
+/// The PNG entry points return no warnings, a language binding cannot drain the thread's
+/// buffer, and the structured rasterizer runs on a pooled thread. Without the opt-in, a
+/// queued warning would reach the next extraction on the thread, often for another document.
+/// Extraction renders call [`render_page_with_safeguards`] directly and always queue a failed
+/// image. ~keep
+///
 /// # Errors
 ///
 /// Returns `XbergError::Parsing` if the page cannot be rendered.
@@ -1009,7 +1046,13 @@ pub(crate) fn render_open_pdf_page_to_png(
     dpi: Option<i32>,
 ) -> Result<Vec<u8>> {
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    let rendered = render_page_with_safeguards(doc, page_index, render_dpi).map_err(|e| XbergError::Parsing {
+    let render = || render_page_with_safeguards(doc, page_index, render_dpi);
+    let rendered = if ENGINE_CAPTURE_ACTIVE.load(Ordering::Acquire) {
+        render()
+    } else {
+        render_discarding_warnings(render)
+    };
+    let rendered = rendered.map_err(|e| XbergError::Parsing {
         message: format!("Failed to render page {page_index}: {e}"),
         source: None,
     })?;
@@ -1328,6 +1371,20 @@ pub(crate) const CONTROL_ROW: &[u8] = &[108, 110, 44];
 #[cfg(all(test, feature = "pdf"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_discarding_warnings_drops_only_what_the_render_queued() {
+        let _ = take_xberg_native_pdf_render_warnings();
+        record_render_warning(warning("pdf-render", "queued before the render"));
+
+        render_discarding_warnings(|| record_render_warning(warning("pdf-render", "queued by the render")));
+
+        let left: Vec<String> = take_xberg_native_pdf_render_warnings()
+            .into_iter()
+            .map(|left| left.message.into_owned())
+            .collect();
+        assert_eq!(left, ["queued before the render"]);
+    }
 
     #[test]
     fn test_choose_safe_dpi_normal_page_unchanged() {
@@ -1777,6 +1834,7 @@ mod tests {
                 width: 1,
                 height: 1,
                 format: xberg_native_pdf::rendering::ImageFormat::RawRgba8,
+                skipped_images: Vec::new(),
             })
         });
         assert!(result.is_ok(), "capturing a warning must not change the render outcome");
@@ -1796,6 +1854,7 @@ mod tests {
             width: 1,
             height: 1,
             format: xberg_native_pdf::rendering::ImageFormat::RawRgba8,
+            skipped_images: Vec::new(),
         })
     }
 

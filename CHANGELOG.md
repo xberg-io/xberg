@@ -132,6 +132,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Render scanned images with a singleton DeviceGray color-space array.** (#2427)
   This also covers CCITT Group 4 images that omit Rows and wrap the filter and parameters in arrays.
 
+- **(pdf): A page image that fails to render is reported in `processing_warnings`.**
+  The warning names the page and the cause, and it no longer depends on the application installing the render diagnostics. `RenderedImage` gains `skipped_images`, one cause for each image left blank. (GH#2427)
+
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
 

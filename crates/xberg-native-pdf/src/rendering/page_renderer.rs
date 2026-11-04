@@ -189,6 +189,9 @@ pub struct RenderedImage {
     pub height: u32,
     /// Format of the image data
     pub format: ImageFormat,
+    /// One cause for each image on the page that the renderer could not paint and
+    /// left blank. Empty when every image painted.
+    pub skipped_images: Vec<String>,
 }
 
 impl RenderedImage {
@@ -274,6 +277,9 @@ pub struct PageRenderer {
     /// log doesn't spam on a degenerate document. Reset on each
     /// `render_page_with_options` entry.
     k_zero_warning_emitted: bool,
+    /// One cause per image the current page could not paint. Moves into
+    /// [`RenderedImage::skipped_images`] when the page finishes. ~keep
+    skipped_images: Vec<String>,
     /// Recursion depth for Type 3 glyph rendering. A Type 3 glyph's
     /// CharProcs stream is executed re-entrantly through
     /// [`Self::execute_operators`]; a glyph that (directly or via a Form
@@ -457,6 +463,7 @@ impl PageRenderer {
             cmyk_sidecar: None,
             force_cmyk_sidecar: false,
             k_zero_warning_emitted: false,
+            skipped_images: Vec::new(),
             type3_depth: 0,
             type3_fill_lock: None,
         }
@@ -577,6 +584,7 @@ impl PageRenderer {
         // of staying suppressed across all subsequent renders on this
         // long-lived PageRenderer). ~keep
         self.k_zero_warning_emitted = false;
+        self.skipped_images.clear();
         // Same page scope for the glyph-drop warning latch: a new page warns
         // again per broken font, so bulk ingestion never goes silent. ~keep
         self.text_rasterizer.reset_page_warnings();
@@ -742,7 +750,21 @@ impl PageRenderer {
             width,
             height,
             format: self.options.format,
+            skipped_images: std::mem::take(&mut self.skipped_images),
         })
+    }
+
+    /// Record an image the page could not paint. The page keeps rendering with
+    /// that region blank, so the cause travels out in [`RenderedImage::skipped_images`]
+    /// for the caller to report: a log line alone leaves a blank page looking like
+    /// a successful render. ~keep
+    fn skip_unrenderable_image(&mut self, kind: &str, error: &Error) {
+        tracing::warn!(
+            error_code = error.telemetry_code(),
+            error_offset = ?error.telemetry_offset(),
+            "skipping unrenderable {kind}"
+        );
+        self.skipped_images.push(format!("{kind}: {error}"));
     }
 
     /// Load resources (fonts, color spaces) into local cache.
@@ -2553,20 +2575,12 @@ impl PageRenderer {
                             if let Err(error) =
                                 self.render_image_mask(pixmap, &synthetic, None, transform, doc, clip, &gs_clone)
                             {
-                                tracing::warn!(
-                                    error_code = error.telemetry_code(),
-                                    error_offset = ?error.telemetry_offset(),
-                                    "skipping unrenderable inline ImageMask"
-                                );
+                                self.skip_unrenderable_image("inline ImageMask", &error);
                             }
                         } else if let Err(error) =
                             self.render_image(pixmap, &synthetic, None, transform, doc, clip, None, None, &gs_clone)
                         {
-                            tracing::warn!(
-                                error_code = error.telemetry_code(),
-                                error_offset = ?error.telemetry_offset(),
-                                "skipping unrenderable inline image"
-                            );
+                            self.skip_unrenderable_image("inline image", &error);
                         }
                     }
                 }
@@ -3561,11 +3575,7 @@ impl PageRenderer {
                                             if let Err(error) = self.render_image_mask(
                                                 pixmap, &xobj, xobj_ref, transform, doc, clip_mask, render_gs,
                                             ) {
-                                                tracing::warn!(
-                                                    error_code = error.telemetry_code(),
-                                                    error_offset = ?error.telemetry_offset(),
-                                                    "skipping unrenderable ImageMask XObject"
-                                                );
+                                                self.skip_unrenderable_image("ImageMask XObject", &error);
                                             }
                                         } else {
                                             let smask = dict.get("SMask").cloned();
@@ -3573,11 +3583,7 @@ impl PageRenderer {
                                             if let Err(error) = self.render_image(
                                                 pixmap, &xobj, xobj_ref, transform, doc, clip_mask, smask, mask, gs,
                                             ) {
-                                                tracing::warn!(
-                                                    error_code = error.telemetry_code(),
-                                                    error_offset = ?error.telemetry_offset(),
-                                                    "skipping unrenderable image XObject"
-                                                );
+                                                self.skip_unrenderable_image("image XObject", &error);
                                             }
                                         }
                                     }

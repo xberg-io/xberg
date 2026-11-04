@@ -427,6 +427,7 @@ pub fn render_page_region(
         width: w,
         height: h,
         format: full.format,
+        skipped_images: full.skipped_images,
     })
 }
 

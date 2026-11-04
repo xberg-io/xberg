@@ -3596,13 +3596,11 @@ impl PdfExtractor {
         // document's pages were rendered on *this* thread (OCR rasterization
         // and any other call routed through `render_page_capturing_glyph_drops`
         // in `crate::pdf::render` that runs inline on the extracting task's
-        // thread). The drain is unconditionally cheap and correct even when
-        // nothing was ever captured: `install_pdf_render_diagnostics` is
-        // opt-in and only an embedding application calls it (a library must
-        // not seize the process-global `log` backend on its own — see
-        // `pdf::render` for why), so this buffer stays empty for every caller
-        // that has not opted in and this loop is a no-op `Vec::is_empty`
-        // check. Deduped because a multi-page document can hit the identical
+        // thread). The log capture is opt-in: `install_pdf_render_diagnostics`
+        // is called only by an embedding application (a library must not seize
+        // the process-global `log` backend on its own — see `pdf::render` for
+        // why). Images the renderer left blank are queued with or without it.
+        // Deduped because a multi-page document can hit the identical
         // xberg_native_pdf cause on many pages.
         //
         // Layout-detection rasterization runs inside `tokio::task::spawn_blocking`
