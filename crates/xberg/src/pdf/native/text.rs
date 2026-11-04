@@ -249,16 +249,10 @@ fn extract_one_page_text(
 
 /// Extract every page's cleaned text, in page order.
 ///
-/// Pages are read in ascending order and that order is load-bearing, not incidental. A
-/// page's text depends on which pages were read before it: the document handle shares
-/// resolved font sets and TrueType CMaps between pages through its own caches, and where
-/// two subsets of one base font disagree about a glyph id the first one loaded wins (see
-/// `share_truetype_cmaps` and the font caches in `xberg-native-pdf`'s `document::fonts`).
-/// Reading the pages in any other order, including concurrently, silently changes the
-/// extracted text. Measured on a 731-page document: ascending order reproduces the same
-/// bytes on every run, while parsing the same pages two at a time over one handle drops
-/// text and lands on a different result each run. Removing that order dependence is
-/// GH#1725; until it is gone this loop must stay in page order. ~keep
+/// Keep this pass ordered until parallel extraction is qualified across the PDF corpus.
+/// GH#2429 reproduced order-dependent decoding through the shared font and Form caches.
+/// The cache fixes have targeted regressions, and the parallel timing was mixed: the
+/// text pass sped up on the MML book and slowed down on NIST SP 800-53r5. ~keep
 ///
 /// Also returns each page's fabricated-mapping character counts (see [`PageProvenanceCounts`]),
 /// captured from the same raw `ColumnAware` spans this loop already reads for content, so the
