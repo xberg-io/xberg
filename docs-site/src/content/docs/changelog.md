@@ -177,6 +177,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve long Form text when the caller marks the Form invocation as placed PDF content.** (#2310)
+
 - **(pdf): Recover text missing from a partial invisible scan layer.** (#2425)
   In Plain Auto extraction with built-in Tesseract, check a single simple scan for uncovered text
   bands and keep the native result unless OCR preserves its text and adds readable content.
