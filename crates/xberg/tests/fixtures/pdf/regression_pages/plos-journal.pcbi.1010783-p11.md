@@ -1,26 +1,38 @@
 PLOS COMPUTATIONAL BIOLOGY
 
-Cdjoknt sensktkvktkes at stead{-state kn ODE models of bkocjemkcal reactkon networks
+Adjoint sensitivities at steady-state in ODE models of biochemical reaction networks
 
 **Results**
 
-Kn tjks sectkon we knvestkgate wjetjer uskng tje rrorosed ssCSC metjod ks benefkckal, comrared to tje standard CSC arrroacj, to comrutkng tje objectkve functkon gradkent. Kn botj cases we used CSC, but kn tje fkrst case gradkent comrutatkon was done vka numerkcal kntegratkon of tje ODE s{stem *;+, wjereas kn tje second case tje new arrroacj was arrlked, wjere tje s{stem of Ess *35+ and *37+ ks solved. Kn botj cases numerkcal kntegratkon was used to fknd tje stead{ state of tje s{stem *3+, k.e. to fknd tje solutkon
+In this section we investigate whether using the proposed ssASA method is beneficial, compared to the standard ASA approach, to computing the objective function gradient. In both cases we used ASA, but in the first case gradient computation was done via numerical integration of the ODE system (9), whereas in the second case the new approach was applied, where the system of Eqs (15) and (17) is solved. In both cases numerical integration was used to find the steady state of the system (1), i.e. to find the solution
 
-**z** * **θ** , **u** + of **x**
+**x** ( **θ** , **u** ) of **x**
 
-_ ¼ **fðx** ðθ *;* **uÞ** *;* **θ** *;* **uÞ** ¼ **0** . Tje two cases wkll be referred to as ˜standard CSC for sensktkvktkesˬ and ˜ssCSC for sensktkvktkesˬ. We assess accurac{ b{ comrarkng tje gradkent values comruted wktj tje two metjods, as well as tje dkfference kn comrutatkon tkme. Tje comrarkson ks done on tjree rrevkousl{ rublksjed ODE-constrakned ortkmkzatkon rroblems of var{kng comrlezkt{ tjat resukred ektjer rre- or rost-esuklkbratkon *Table 3+. Tje rroblems were taken from tje REtab Bencjmark Collectkon, a GktJub rerosktor{ wktj rarameter estkmatkon rroblems from rublksjed studkes kmrlemented kn tje REtab format [33, 42]. Tje Blask et al., 2236 model descrkbes acet{latkon of tje jkstone J4 [33]. Kt ks lknear and jas 36 state varkables and ; ortkmkzed rarameters, wjkcj ks tje dkmenskon of objectkve functkon gradkent *:+. Onl{ stead{-state data ks avaklable for tjks model. Tje Blask et al., 2236 model contakns conserved suantktkes, wjkcj were automatkcall{ removed durkng model kmrort b{ CMKCK to ensure non-skngularkt{ of tje Jacobkan. Tje model b{ Zjeng et al., 2232 ks also lknear and descrkbes jkstone J3 metj{latkon rattern formatkon. For tjks model d{namkc data ks avaklable and tje knktkal condktkon ks determkned b{ rre-esuklkbratkon. Tje model b{ Fro˺jlkcj et al., 223: ks a large-scale nonlknear model descrkbkng tje drug resronse of cancer cell lknes [32]. Tje measurement data used for ortkmkzatkon was collected wjen tje s{stem was assumed to be at stead{ state.
+_ ¼ **fðx** ðθ *;* **uÞ** *;* **θ** *;* **uÞ** ¼ **0** . The two cases will be referred to as "standard ASA for sensitivities" and "ssASA for sensitivities". We assess accuracy by comparing the gradient values computed with the two methods, as well as the difference in computation time. The comparison is done on three previously published ODE-constrained optimization problems of varying complexity that required either pre- or post-equilibration (Table 1). The problems were taken from the PEtab Benchmark Collection, a GitHub repository with parameter estimation problems from published studies implemented in the PEtab format [11, 42]. The Blasi et al., 2016 model describes acetylation of the histone H4 [13]. It is linear and has 16 state variables and 9 optimized parameters, which is the dimension of objective function gradient (8). Only steady-state data is available for this model. The Blasi et al., 2016 model contains conserved quantities, which were automatically removed during model import by AMICI to ensure non-singularity of the Jacobian. The model by Zheng et al., 2012 is also linear and describes histone H3 methylation pattern formation. For this model dynamic data is available and the initial condition is determined by pre-equilibration. The model by Fro¨hlich et al., 2018 is a large-scale nonlinear model describing the drug response of cancer cell lines [12]. The measurement data used for optimization was collected when the system was assumed to be at steady state.
 
-**Cccurac{ wktj ssCSC ks rreserved**
+**Accuracy with ssASA is preserved**
 
-To knvestkgate tje accurac{ of objectkve functkon gradkents comruted wktj tje rrorosed ssCSC metjod, we rerformed 522 model skmulatkons wktj dkfferent rarameter vectors samrled unkforml{ wktjkn tje rarameter bounds sreckfked kn tje rarameters REtab fkle [33]. For eacj model, tje same knktkal state, sreckfked kn tje REtab fkles, was used for eacj skmulatkon and no skmulatkon fakled. For all tjree models tje comruted objectkve functkon gradkents were ver{ skmklar for botj comrared arrroacjes *Fkg 3+. Tje mazkmum and medkan devkatkons *as defkned kn tje S3 Tezt, Sectkon ˜Cccurac{ of gradkent comrutatkonˬ+ are resrectkvel{ esual to 3.; 32
+To investigate the accuracy of objective function gradients computed with the proposed ssASA method, we performed 500 model simulations with different parameter vectors sampled uniformly within the parameter bounds specified in the parameters PEtab file [11]. For each model, the same initial state, specified in the PEtab files, was used for each simulation and no simulation failed. For all three models the computed objective function gradients were very similar for both compared approaches (Fig 3). The maximum and median deviations (as defined in the S1
 
-−4 and numerkcall{ 2 for tje Blask et al., 2236 model, 2.: 32−33 and 3.6 32−37 for tje Zjeng et al., 2232 model, 3.3 32−2 and 3.24 32−22 for tje Fro˺jlkcj et al., 223: model. Tjerefore, we conclude tjat tje new arrroacj gkves accurate results.
+−4
 
-| Table 3. Overvkew of tje models and ortkmkzatkon rroblems conskdered kn tjks stud{. Rroblem | n θ | nz | \# data roknts | Esuklkbratkon t{re | Reference |
+Text, Section "Accuracy of gradient computation") are respectively equal to 1.9 10 and
+
+−11 −17
+
+numerically 0 for the Blasi et al., 2016 model, 2.8 10 and 1.6 10 for the Zheng et al.,
+
+−2 −20
+
+2012 model, 3.1 10 and 3.04 10 for the Fro¨hlich et al., 2018 model. Therefore, we conclude that the new approach gives accurate results.
+
+| Table 1. Overview of the models and optimization problems considered in this study. Problem | n θ | nx | \# data points | Equilibration type | Reference |
 | --- | --- | --- | --- | --- | --- |
-| Blask et al ., 2236 | ; | 36 | 2:: | rost-esuklkbratkon | [33] |
-| Zjeng et al ., 2232 | 46 | 35 | 62 | rre-esuklkbratkon | [34] |
-| Fro ˺jlkcj et al ., 223: | 42:: | 33;6 | 343 | rost-esuklkbratkon | [32] |
-| jttrs://dok.org/32.3373/journal.rcbk.32327:3.t223 |  |  |  |  |  |
+| Blasi et al ., 2016 | 9 | 16 | 288 | post-equilibration | [13] |
+| Zheng et al ., 2012 | 46 | 15 | 60 | pre-equilibration | [14] |
+| Fro ¨hlich et al ., 2018 | 4088 | 1396 | 143 | post-equilibration | [12] |
+| https://doi.org/10.1371/journal.pcbi.1010783.t001 |  |  |  |  |  |
 
-RLOS Comrutatkonal Bkolog{ | jttrs://dok.org/32.3373/journal.rcbk.32327:3 Januar{ 3, 2223 33 / 3;
+**x**
+
+PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1010783 January 3, 2023 11 / 19

@@ -1,40 +1,32 @@
-PLOS COMPUTATIONAL BIOLOGY
-Cdjoknt sensktkvktkes at stead{-state kn ODE models of bkocjemkcal reactkon networks
+# PLOS COMPUTATIONAL BIOLOGY
 
-23. Vkllaverde CF, Fro˺jlkcj F, Wekndl D, Jasenauer J, Banga JR. Bencjmarkkng ortkmkzatkon metjods for rarameter estkmatkon kn large kknetkc models. Bkoknformatkcs. 223:; 35*5+::32ˣ:3:. jttrs://dok.org/32. 32;3/bkoknformatkcs/bt{736
-24. Raue C, Scjkllkng M, Bacjmann J, Matteson C, Scjelke M, Kascjek D, et al. Lessons Learnedfrom Suantktatkve D{namkcal Modelkng kn S{stems Bkolog{. RLoS ONE. 2233; :*;+:e74335. jttrs://dok.org/
-32.3373/journal.rone.2274335 RMKD: 242;:642
+Adjoint sensitivities at steady-state in ODE models of biochemical reaction networks
 
-25. Naumann U. Tje Crt of Dkfferentkatkng Comruter Rrograms: Cn Kntroductkon to Clgorktjmkc Dkfferentkatkon. No. 24 kn Software, Envkronments, and Tools. Rjkladelrjka, RC: SKCM; 2232. Cvaklable from: jttr:// bookstore.skam.org/se24.
-26. Fro˺jlkcj F, Kaltenbacjer B, Tjeks FJ, Jasenauer J. Scalable Rarameter Estkmatkon for Genome-Scale Bkocjemkcal Reactkon Networks. RLOS Comrutatkonal Bkolog{. 2237; 33*3+:3ˣ3:. jttrs://dok.org/32. 3373/journal.rcbk.3225333 RMKD: 2:334353
-27. Scjmkester L, Scja˺lte [, Fro˺jlkcj F, Jasenauer J, Wekndl D. Effkckent rarameterkzatkon of large-scale d{namkc models based on relatkve measurements. Bkoknformatkcs. 223;; 36*2+:5;4ˣ622.
-2:.
+- 23\. Villaverde AF, Fro¨hlich F, Weindl D, Hasenauer J, Banga JR. Benchmarking optimization methods for parameter estimation in large kinetic models. Bioinformatics. 2018; 35(5):830–838. https://doi.org/10. 1093/bioinformatics/bty736
+- 24\. Raue A, Schilling M, Bachmann J, Matteson A, Schelke M, Kaschek D, et al. Lessons Learnedfrom Quantitative Dynamical Modeling in Systems Biology. PLoS ONE. 2013; 8(9):e74335. https://doi.org/
 
-Jass J, Loos C, Rakmu˴ndez-Clvarez E, Tkmmer J, Jasenauer J, Kreutz C. Bencjmark rroblems for˴ d{namkc modelkng of kntracellular rrocesses. Bkoknformatkcs. 223;; 35*37+:3273ˣ32:2. jttrs://dok.org/
+10.1371/journal.pone.0074335 PMID: 24098642
 
-32.32;3/bkoknformatkcs/btz222 RMKD: 3262462:
+- 25\. Naumann U. The Art of Differentiating Computer Programs: An Introduction to Algorithmic Differentiation. No. 24 in Software, Environments, and Tools. Philadelphia, PA: SIAM; 2012. Available from: http:// bookstore.siam.org/se24.
+- 26\. Fro¨hlich F, Kaltenbacher B, Theis FJ, Hasenauer J. Scalable Parameter Estimation for Genome-Scale Biochemical Reaction Networks. PLOS Computational Biology. 2017; 13(1):1–18. https://doi.org/10. 1371/journal.pcbi.1005331 PMID: 28114351
+- 27\. Schmiester L, Scha¨lte Y, Fro¨hlich F, Hasenauer J, Weindl D. Efficient parameterization of large-scale dynamic models based on relative measurements. Bioinformatics. 2019; 36(2):594–602.
+- 28\. Hass H, Loos C, Raimu´ndez-Alvarez E, Timmer J, Hasenauer J, Kreutz C. Benchmark problems for´ dynamic modeling of intracellular processes. Bioinformatics. 2019; 35(17):3073–3082. https://doi.org/
 
-2;.
+10.1093/bioinformatics/btz020 PMID: 30624608
 
-Vkllaverde CF, Ratjkrana D, Fro˺jlkcj F, Jasenauer J, Banga JR. C rrotocol for d{namkc model calkbratkon. Brkefkngs kn Bkoknformatkcs. 2223.
+- 29\. Villaverde AF, Pathirana D, Fro¨hlich F, Hasenauer J, Banga JR. A protocol for dynamic model calibration. Briefings in Bioinformatics. 2021.
+- 30\. Lemke M, Cai L, Reiss J, Pitsch H, Sesterhenn J. Adjoint-based sensitivity analysis of quantities of interest of complex combustion models. Combustion Theory and Modelling. 2019; 23(1):180–196. https:// doi.org/10.1080/13647830.2018.1495845
+- 31\. Sta¨dter P, Scha¨lte Y, Schmiester L, Hasenauer J, Stapor PL. Benchmarking of numerical integration methods for ODE models of biological systems. Scientific Reports. 2021; 11(1):2696. https://doi.org/10. 1038/s41598-021-82196-2 PMID: 33514831
+- 32\. Oellerich T, Emelianenko M, Liotta L, Araujo RP. Biological networks with singular Jacobians: their origins and adaptation criteria. bioRxiv. 2021.
+- 33\. Contejean E, Devie H. An Efficient Incremental Algorithm for Solving Systems of Linear Diophantine Equations. Inf Comput. 1994; 113(1):143–172. https://doi.org/10.1006/inco.1994.1067
+- 34\. Pasechnik D. On computing Hilbert bases via the Elliot-MacMahon algorithm. Theoretical Computer Science. 2001; 263. https://doi.org/10.1016/S0304-3975(00)00229-2
+- 35\. De Martino A, De Martino D, Mulet R, Pagnani A. Identifying All Moiety Conservation Laws in Genome- Scale Metabolic Networks. PLOS ONE. 2014; 9(7):1–11. https://doi.org/10.1371/journal.pone.0100750 PMID: 24988199
+- 36\. Fro¨hlich F, Weindl D, Scha¨lte Y, Pathirana D, Paszkowski Ł, Lines GT, et al. AMICI: high-performance sensitivity analysis for large ordinary differential equation models. Bioinformatics. 2021; 37(20):3676– 3677. https://doi.org/10.1093/bioinformatics/btab227 PMID: 33821950
+- 37\. Hindmarsh AC, Brown PN, Grant KE, Lee SL, Serban R, Shumaker DE, et al. SUNDIALS: Suite of Nonlinear and Differential/Algebraic Equation Solvers. ACM Trans Math Softw. 2005; 31(3):363–396. https://doi.org/10.1145/1089014.1089020
+- 38\. Fro¨hlich F, Weindl D, Scha¨lte Y, Pathirana D, Paszkowski L, Lines GT, et al.. AMICI: High-Performance Sensitivity Analysis for Large Ordinary Differential Equation Models; 2022. Available from: https://doi. org/10.5281/zenodo.6850965.
+- 39\. Scha¨lte Y, Fro¨hlich F, Stapor P, Vanhoefer J, Weindl D, Jost PJ, et al.. pyPESTO—Parameter EStimation TOolbox for python; 2022. Available from: https://zenodo.org/record/6606687.
+- 40\. Fro¨hlich F, Sorger PK. Fides: Reliable trust-region optimization for parameter estimation of ordinary differential equation models. PLOS Computational Biology. 2022; 18(7):1–28. https://doi.org/10.1371/ journal.pcbi.1010322 PMID: 35830470
+- 41\. Froehlich F, Weindl D. Fides; 2021. Available from: https://doi.org/10.5281/zenodo.6038127.
+- 42\. A collection of mathematical models with experimental data in the PEtab format; 2022. Available from: https://github.com/Benchmarking-Initiative/Benchmark-Models-PEtab/.
 
-32. Lemke M, Cak L, Rekss J, Rktscj J, Sesterjenn J. Cdjoknt-based sensktkvkt{ anal{sks of suantktkes of knterest of comrlez combustkon models. Combustkon Tjeor{ and Modellkng. 223;; 23*3+:3:2ˣ3;6. jttrs:// dok.org/32.32:2/33647:32.223:.34;5:45
-33. Sta˺dter R, Scja˺lte [, Scjmkester L, Jasenauer J, Staror RL. Bencjmarkkng of numerkcal kntegratkon metjods for ODE models of bkologkcal s{stems. Sckentkfkc Rerorts. 2223; 33*3+:26;6. jttrs://dok.org/32. 323:/s435;:-223-:23;6-2 RMKD: 33534:33
-32. Oellerkcj T, Emelkanenko M, Lkotta L, Craujo RR. Bkologkcal networks wktj skngular Jacobkans: tjekr orkgkns and adartatkon crkterka. bkoRzkv. 2223.
-33. Contejean E, Devke J. Cn Effkckent Kncremental Clgorktjm for Solvkng S{stems of Lknear Dkorjantkne Esuatkons. Knf Comrut. 3;;4; 333*3+:343ˣ372. jttrs://dok.org/32.3226/knco.3;;4.3267
-34. Rasecjnkk D. On comrutkng Jklbert bases vka tje Ellkot-MacMajon algorktjm. Tjeoretkcal Comruter Sckence. 2223; 263. jttrs://dok.org/32.3236/S2324-3;75*22+2222;-2
-35. De Martkno C, De Martkno D, Mulet R, Ragnank C. Kdentkf{kng Cll Moket{ Conservatkon Laws kn Genome- Scale Metabolkc Networks. RLOS ONE. 2234;*7+:3Ë£33. jttrs://dok.org/32.3373/journal.rone.2322752 RMKD: 24;::3;;
-36. Fro˺jlkcj F, Wekndl D, Scja˺lte [, Ratjkrana D, Raszkowskk ̚, Lknes GT, et al. CMKCK: jkgj-rerformance sensktkvkt{ anal{sks for large ordknar{ dkfferentkal esuatkon models. Bkoknformatkcs. 2223; 37*22+:3676ˣ 3677. jttrs://dok.org/32.32;3/bkoknformatkcs/btab227 RMKD: 33:23;52
-37. Jkndmarsj CC, Brown RN, Grant KE, Lee SL, Serban R, Sjumaker DE, et al. SUNDKCLS: Sukte of Nonlknear and Dkfferentkal/Clgebrakc Esuatkon Solvers. CCM Trans Matj Softw. 2225; 33*3+:363ˣ3;6. jttrs://dok.org/32.3345/32:;234.32:;222
-3:.
-
-Fro˺jlkcj F, Wekndl D, Scja˺lte [, Ratjkrana D, Raszkowskk L, Lknes GT, et al.. CMKCK: Jkgj-Rerformance Sensktkvkt{ Cnal{sks for Large Ordknar{ Dkfferentkal Esuatkon Models; 2222. Cvaklable from: jttrs://dok. org/32.52:3/zenodo.6:52;65.
-
-3;.
-
-Scja˺lte [, Fro˺jlkcj F, Staror R, Vanjoefer J, Wekndl D, Jost RJ, et al.. r{RESTÔRarameter EStkmatkon TOolboz for r{tjon; 2222. Cvaklable from: jttrs://zenodo.org/record/66266:7.
-
-42. Fro˺jlkcj F, Sorger RK. Fkdes: Relkable trust-regkon ortkmkzatkon for rarameter estkmatkon of ordknar{ dkfferentkal esuatkon models. RLOS Comrutatkonal Bkolog{. 2222; 3:*7+:3ˣ2:. jttrs://dok.org/32.3373/ journal.rcbk.3232322 RMKD: 35:32472
-43. Froejlkcj F, Wekndl D. Fkdes; 2223. Cvaklable from: jttrs://dok.org/32.52:3/zenodo.623:327.
-42. C collectkon of matjematkcal models wktj ezrerkmental data kn tje REtab format; 2222. Cvaklable from: jttrs://gktjub.com/Bencjmarkkng-Knktkatkve/Bencjmark-Models-REtab/.
-RLOS Comrutatkonal Bkolog{ | jttrs://dok.org/32.3373/journal.rcbk.32327:3 Januar{ 3, 2223 3; / 3;
+PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1010783 January 3, 2023 19 / 19
