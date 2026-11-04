@@ -177,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve characters mapped by multiline ToUnicode ranges.** (#2476)
+  Keep destination arrays together so their entries cannot be mistaken for separate character ranges.
+
 - **(pdf): Keep row-painted table values with their labels across wide gutters in plain text.** (#2343)
   Preserve blank value cells and wrapped labels when source order confirms the visual pairs.
 

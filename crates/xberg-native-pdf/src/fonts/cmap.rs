@@ -31,7 +31,10 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 mod line_parsers;
-use line_parsers::{parse_bfchar_line, parse_bfrange_line, parse_codespacerange_line_width, parse_notdefrange_line};
+use line_parsers::{
+    for_each_bfrange_record, parse_bfchar_line, parse_bfrange_line, parse_codespacerange_line_width,
+    parse_notdefrange_line,
+};
 
 /// A range entry for efficient binary search lookups.
 ///
@@ -673,9 +676,13 @@ fn apply_codespacerange_sections(cmap: &mut CMap, content: &str) {
 fn apply_bfchar_section(cmap: &mut CMap, section: &str) {
     let mut attempted = 0usize;
     let mut malformed = 0usize;
-    for line in significant_lines(section) {
+    for line in section.lines().map(bfchar_line_code) {
+        let code = line.trim();
+        if code.is_empty() {
+            continue;
+        }
         attempted += 1;
-        let pairs = parse_bfchar_line(line);
+        let pairs = parse_bfchar_line(code);
         if pairs.is_empty() {
             malformed += 1;
             continue;
@@ -695,17 +702,17 @@ fn apply_bfchar_section(cmap: &mut CMap, section: &str) {
 fn apply_bfrange_section(cmap: &mut CMap, section: &str) {
     let mut attempted = 0usize;
     let mut malformed = 0usize;
-    for line in significant_lines(section) {
+    for_each_bfrange_record(section, |record| {
         attempted += 1;
-        let Some(mappings) = parse_bfrange_line(line) else {
+        let Some(mappings) = parse_bfrange_line(record) else {
             malformed += 1;
-            continue;
+            return;
         };
         tracing::trace!("ToUnicode bfrange: {} mappings parsed", mappings.len());
         for (src, dst) in mappings {
             cmap.insert(src, dst);
         }
-    }
+    });
     warn_on_malformed_lines("bfrange", attempted, malformed);
 }
 
@@ -777,6 +784,44 @@ fn warn_on_malformed_lines(section_kind: &str, attempted: usize, malformed: usiz
     }
 }
 
+fn cmap_line_code(line: &str) -> &str {
+    line.split_once('%').map_or(line, |(code, _)| code)
+}
+
+// Keep BFChar's legacy LF grouping so bare CR can separate a source and destination.
+fn bfchar_line_code(line: &str) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+
+    let prefix = cmap_line_code(line);
+    let Some((_, continuation)) = line[prefix.len()..].split_once('\r') else {
+        return Cow::Borrowed(prefix);
+    };
+    let mut code = prefix.to_owned();
+    for fragment in continuation.split('\r') {
+        code.push('\r');
+        code.push_str(cmap_line_code(fragment));
+    }
+    Cow::Owned(code)
+}
+
+fn cmap_code_lines(section: &str) -> impl Iterator<Item = &str> {
+    section
+        .split(['\r', '\n'])
+        .map(|line| cmap_line_code(line).trim())
+        .filter(|line| !line.is_empty())
+}
+
+fn find_bf_delimiter(content: &str, delimiter: &str) -> Option<usize> {
+    let mut start = 0;
+    for line in content.split_inclusive(['\r', '\n']) {
+        if let Some(offset) = cmap_line_code(line).find(delimiter) {
+            return Some(start + offset);
+        }
+        start += line.len();
+    }
+    None
+}
+
 /// Yield `beginbfchar` and `beginbfrange` sections in the order they appear in
 /// the CMap stream, so that callers can process them with document-order,
 /// last-wins semantics (matching pdf.js, MuPDF, and Poppler).
@@ -784,11 +829,11 @@ fn bf_sections_in_document_order(content: &str) -> impl Iterator<Item = (BfSecti
     let mut remaining = content;
     std::iter::from_fn(move || {
         loop {
-            let pos = remaining.find("beginbf")?;
+            let pos = find_bf_delimiter(remaining, "beginbf")?;
             let after = &remaining[pos + "beginbf".len()..];
 
             if let Some(body) = after.strip_prefix("char") {
-                if let Some(end) = body.find("endbfchar") {
+                if let Some(end) = find_bf_delimiter(body, "endbfchar") {
                     remaining = &body[end + "endbfchar".len()..];
                     return Some((BfSectionKind::Char, &body[..end]));
                 }
@@ -801,7 +846,7 @@ fn bf_sections_in_document_order(content: &str) -> impl Iterator<Item = (BfSecti
                      truncated block"
                 );
             } else if let Some(body) = after.strip_prefix("range") {
-                if let Some(end) = body.find("endbfrange") {
+                if let Some(end) = find_bf_delimiter(body, "endbfrange") {
                     remaining = &body[end + "endbfrange".len()..];
                     return Some((BfSectionKind::Range, &body[..end]));
                 }

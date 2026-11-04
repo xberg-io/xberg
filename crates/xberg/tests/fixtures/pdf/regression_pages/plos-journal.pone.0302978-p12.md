@@ -1,35 +1,62 @@
 PLOS ONE
 
-Tje dkgktal fknanckal develorment on corrorate leverage of Cjknn's sjare-lksted enterrrkses
+The digital financial development on corporate leverage of Chinn's share-listed enterprises
 
-| Table 2. Descrkrtkve statkstkcs. Role | Varkable | N | Mean | SD | Mkn Maz |  |
-| --- | --- | --- | --- | --- | --- | --- |
-| Derendent varkables [74, :2] | LLEV | 27,73; | 2.432 | 2.232 | 2.2322 | 3.762 |
-|  | SLEV | 27,73; | 2.342 | 2.3:2 | 2 | 3.422 |
-|  | LLEV | 27,73; | 2.2;22 | 2.2:22 | -2.2;22 | 2.:52 |
-| Ke{ knderendent varkables [:3] | DKF | 27,73; | 5.;32 | 2.322 | 5.722 | 6.272 |
-| Control varkables [22, 26, 74] | FKZ | 27,73; | 2.232 | 2.362 | 2 | 2.;72 |
-|  | ROC | 27,73; | 2.2422 | 2.2:22 | -3.:62 | 2.::2 |
-|  | Casjflow | 27,73; | 2.2522 | 2.2:22 | -3.;42 | 2.::2 |
-|  | Growtj | 27,73; | 5.752 | :33.2 | -3.332 | 332222 |
-|  | Tobkns | 27,73; | 2.362 | 2.:72 | 2.352 | 25;.3 |
-|  | Tor3 | 27,73; | 2.352 | 2.352 | 2 | 2.;22 |
-|  | Skze | 27,73; | 22.3; | 3.332 | 35.5: | 2:.64 |
-|  | Lkstage | 27,73; | 2.352 | 2.:22 | 2 | 3.432 |
-|  | M2 | 27,73; | 33.42 | 3.352 | 6.;;2 | 3:.;5 |
-|  | GDR | 27,73; | 6.742 | 2 | 2.352 | 32.62 |
-| jttrs://dok.org/32.3373/journal.rone .2322;7:.t222 |  |  |  |  |  |  |
+**Table 2. Descriptive statistics.**
 
-kmrortance of regulator{ envkronments and market condktkons kn sjarkng tje effectkveness of dkgktal fknanckal solutkons.
+| Variable | N | Mean | SD | Min |
+| --- | --- | --- | --- | --- |
+| LLEV | 27,739 | 0.430 | 0.210 | 0.0100 |
+| SLEV | 27,739 | 0.340 | 0.180 | 0 |
+| LLEV | 27,739 | 0.0900 | 0.0800 | -0.0900 |
+| DIF | 27,739 | 5.910 | 0.100 | 5.700 |
+| FIX | 27,739 | 0.210 | 0.160 | 0 |
+| ROA | 27,739 | 0.0400 | 0.0800 | -1.860 |
+| Cashflow | 27,739 | 0.0500 | 0.0800 | -1.940 |
+| Growth | 27,739 | 5.750 | 813.2 | -1.310 |
+| Tobinq | 27,739 | 2.160 | 2.870 | 0.150 |
+| Top1 | 27,739 | 0.350 | 0.150 | 0 |
+| Size | 27,739 | 22.19 | 1.330 | 15.58 |
+| Listage | 27,739 | 2.150 | 0.800 | 0 |
+| M2 | 27,739 | 11.40 | 3.350 | 6.990 |
+| GDP | 27,739 | 6.740 | 2 | 2.350 |
 
-# 4\. Cnal{sks and results
+**Role Max**
 
-# 4.3 Descrkrtkve statkstkcs
+Dependent variables [74, 80] 1.760
 
-Tje descrkrtkve statement rresented kn Table 2 sjow substantkal varkabklkt{ kn tje leverage ratkos among tje samrled fkrms, wktj a mean leverage of 2.432 and a notable dkfference kn rreference for sjort-term debt *mean sjort-term leverage ratko of 2.34+ as comrared to long-term debt *mean long-term leverage ratko of 2.2;+. Tjks dksrarkt{ underscores tje strategkc fknanckal deckskons tjat enterrrkses make kn tje contezt of dkgktal fknanckal develorment, wjkcj averages a relatkvel{ jkgj and low value of 5.;3. Wjen ezamknkng control varkables, tjere ks a rkgjtskewed dkstrkbutkon kn fkzed assets, oreratkng kncome growtj, Tobkn's S, and economkc growtj, kndkcatkng tjat a mknorkt{ of fkrms rossess ezcertkonall{ jkgj values kn tjese areas. Kn contrast, varkables sucj as lkstkng tkme and currenc{ growtj rate dksrla{ a left-skewed dkstrkbutkon. Tje congruence between average and medkan values for return on assets, oreratkng casj flow, esukt{ concentratkon, and enterrrkse skze suggests tjese varkables are normall{ dkstrkbuted wktjkn tje samrle. Tjks overvkew reveals tje kntrkcate kmrlkcatkons of dkgktal fknance kn sjarkng corrorate fknanckal leverage and jkgjlkgjts tje need for fkrms to leverage flezkble fknanckal strategkes tjat can accommodate tje d{namkc knterrla{ of tecjnologkcal advancement and economkc kndkcators.
+1.400
 
-# 4.2 Baselkne regresskon
+0.850
 
-Table 3 rresents tje emrkrkcal fkndkngs derkved from Model *3+, kndkcatkng a skgnkfkcant and negatkve correlatkon between tje develorment of dkgktal fknance and corrorate leverage. Columns *2+ and *4+ dksrla{ tje outcomes of a unkvarkate regresskon of dkgktal fknanckal develorment wjkle controllkng for kndustr{ and tkme-fkzed effects. Tje kncluskon of columns *2+-*3+ kn tje regresskon demonstrates tjat dkgktal fknance develorment markedl{ reduces corrorate leverage ratkos. Furtjermore, Columns *3+ and *4+ dksentangle sjort-term leverage *SLEV+ and long-term leverage *LLEV+ for regresskon based on tje term structure varkance kn corrorate leverage. Tje results kndkcate a notewortj{ negatkve kmract of dkgktal fknance develorment
+Key independent variables [81] 6.070 Control variables [20, 26, 74] 0.970
 
-RLOS ONE | jttrs://dok.org/32.3373/journal.rone.2322;7: Cugust 32, 2224 32 / 25
+0.880
+
+0.880 130000
+
+259.1
+
+0.900
+
+28.64
+
+3.430
+
+18.95
+
+10.60 https://doi.org/10.1371/journal.pone.0302978.t002
+
+importance of regulatory environments and market conditions in shaping the effectiveness of digital financial solutions.
+
+# 4\. Analysis and results
+
+# 4.1 Descriptive statistics
+
+The descriptive statement presented in Table 2 show substantial variability in the leverage ratios among the sampled firms, with a mean leverage of 0.430 and a notable difference in preference for short-term debt (mean short-term leverage ratio of 0.34) as compared to long-term debt (mean long-term leverage ratio of 0.09). This disparity underscores the strategic financial decisions that enterprises make in the context of digital financial development, which averages a relatively high and low value of 5.91. When examining control variables, there is a rightskewed distribution in fixed assets, operating income growth, Tobin's Q, and economic growth, indicating that a minority of firms possess exceptionally high values in these areas. In contrast, variables such as listing time and currency growth rate display a left-skewed distribution. The congruence between average and median values for return on assets, operating cash flow, equity concentration, and enterprise size suggests these variables are normally distributed within the sample. This overview reveals the intricate implications of digital finance in shaping corporate financial leverage and highlights the need for firms to leverage flexible financial strategies that can accommodate the dynamic interplay of technological advancement and economic indicators.
+
+# 4.2 Baseline regression
+
+Table 3 presents the empirical findings derived from Model (1), indicating a significant and negative correlation between the development of digital finance and corporate leverage. Columns (2) and (4) display the outcomes of a univariate regression of digital financial development while controlling for industry and time-fixed effects. The inclusion of columns (2)-(1) in the regression demonstrates that digital finance development markedly reduces corporate leverage ratios. Furthermore, Columns (3) and (4) disentangle short-term leverage (SLEV) and long-term leverage (LLEV) for regression based on the term structure variance in corporate leverage. The results indicate a noteworthy negative impact of digital finance development
+
+PLOS ONE | https://doi.org/10.1371/journal.pone.0302978 August 12, 2024 12 / 25
