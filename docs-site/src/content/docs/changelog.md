@@ -200,6 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Keep cover and map labels in the page text.** (#2431)
   Restore dictionary-filtered lines when every word matches the rejected candidate at its original position.
   A shared header keeps sparse ledgers with recurring numeric columns eligible.
+  A label beside one of a column's recurring numbers keeps sparse receipts and forms eligible.
   The same shape rule applies to Tesseract and PaddleOCR.
 
 - **(docker): Stop storing the binary twice in the core and full images.**
