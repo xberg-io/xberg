@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
+  Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
+
 - Minimum supported versions raised: Node.js 22, Ruby 3.3, PHP 8.3, Go 1.27, Java 25, Android API 24, Dart 3.13, macOS 26, Rust 1.99.
 - **(python): Set the package minimum and native stable ABI target to Python 3.11 (`abi3-py311`).**
 - **(swift): Preserve the macOS 26 deployment minimum in regenerated packages.**
