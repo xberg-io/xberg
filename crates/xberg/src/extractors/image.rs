@@ -1392,12 +1392,11 @@ fn sparse_table_page_text(
     use crate::types::internal::ElementKind;
 
     // The standalone builder always keeps an empty source-image reference. ~keep
-    let ([image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+    let ([.., image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
         return None;
     };
     // TIFF without page tracking can share the standalone page transcript across frames. ~keep
-    if !source.ocr_text_claimed_by_tables
-        || !matches!(image.kind, ElementKind::Image { image_index: 0 })
+    if !matches!(image.kind, ElementKind::Image { image_index: 0 })
         || !image.text.is_empty()
         || !doc.images.is_empty()
         || !matches!(element.kind, ElementKind::Table { table_index: 0 })
@@ -1413,13 +1412,61 @@ fn sparse_table_page_text(
     {
         return None;
     }
-    render_covered_table_page_text(raw, &table.cells)
+    if source.ocr_text_claimed_by_tables {
+        return render_covered_table_page_text(raw, &table.cells, &[], &[]);
+    }
+    let (before, after) = sparse_table_surrounding_text(source, table.bounding_box.as_ref()?)?;
+    render_covered_table_page_text(raw, &table.cells, &before, &after)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn sparse_table_surrounding_text<'a>(
+    source: &'a InternalDocument,
+    table: &crate::types::extraction::BoundingBox,
+) -> Option<(Vec<&'a str>, Vec<&'a str>)> {
+    if !valid_sparse_table_bounds(table) {
+        return None;
+    }
+    let mut before = Vec::new();
+    let mut after = Vec::new();
+    for element in &source.elements {
+        let text = element.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let bbox = element.bbox.as_ref().filter(|bbox| valid_sparse_table_bounds(bbox))?;
+        if bbox.y0 >= table.y1 {
+            after.push(text);
+        } else if bbox.y1 <= table.y0 && after.is_empty() {
+            before.push(text);
+        } else {
+            return None;
+        }
+    }
+    (!before.is_empty() || !after.is_empty()).then_some((before, after))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn valid_sparse_table_bounds(bbox: &crate::types::extraction::BoundingBox) -> bool {
+    [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().all(f64::is_finite) && bbox.x0 < bbox.x1 && bbox.y0 < bbox.y1
 }
 
 // The table claim uses a word-count floor. Page text can use the row rendering only if it
 // preserves every literal token occurrence, including repeated values. ~keep
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn render_covered_table_page_text(raw: &str, cells: &[Vec<String>]) -> Option<String> {
+fn render_covered_table_page_text(raw: &str, cells: &[Vec<String>], before: &[&str], after: &[&str]) -> Option<String> {
+    if cells.iter().flatten().any(|cell| cell.contains(['\r', '\n'])) {
+        return None;
+    }
+    let rows = crate::rendering::common::render_table_plain(cells);
+    let text = before
+        .iter()
+        .copied()
+        .chain(std::iter::once(rows.trim_end()))
+        .chain(after.iter().copied())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
     let mut remaining = std::collections::HashMap::<&str, usize>::new();
     for word in raw.split_whitespace() {
         *remaining.entry(word).or_default() += 1;
@@ -1427,23 +1474,11 @@ fn render_covered_table_page_text(raw: &str, cells: &[Vec<String>]) -> Option<St
     if remaining.is_empty() {
         return None;
     }
-
-    for cell in cells.iter().flatten() {
-        if cell.contains(['\r', '\n']) {
-            return None;
-        }
-        for word in cell.split_whitespace() {
-            let count = remaining.get_mut(word)?;
-            *count = count.checked_sub(1)?;
-        }
+    for word in text.split_whitespace() {
+        let count = remaining.get_mut(word)?;
+        *count = count.checked_sub(1)?;
     }
-    if remaining.values().any(|&count| count != 0) {
-        return None;
-    }
-
-    let mut text = crate::rendering::common::render_table_plain(cells);
-    text.truncate(text.trim_end().len());
-    Some(text)
+    remaining.values().all(|&count| count == 0).then_some(text)
 }
 
 #[cfg(all(
@@ -4607,12 +4642,56 @@ mod tests {
             vec!["Repairs".to_owned(), "20".to_owned()],
             vec!["Storage".to_owned(), "14".to_owned()],
         ];
-        let retained = render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n14", &cells);
+        let retained = render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n14", &cells, &[], &[]);
         assert_eq!(retained.as_deref(), Some("Rent 14\nRepairs 20\nStorage 14"));
         assert_eq!(
-            render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n20", &cells),
+            render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n20", &cells, &[], &[]),
             None
         );
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn sparse_table_page_text_rejects_a_cell_that_cannot_fit_on_one_line() {
+        let cells = vec![vec!["Annual\nRent".to_owned(), "14".to_owned()]];
+        assert_eq!(render_covered_table_page_text("Annual Rent 14", &cells, &[], &[]), None);
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn sparse_table_context_requires_finite_nonoverlapping_bounds_in_reading_order() {
+        use crate::types::extraction::BoundingBox;
+        use crate::types::internal::{ElementKind, InternalElement};
+
+        let bounds = |y0, y1| BoundingBox {
+            x0: 0.0,
+            y0,
+            x1: 100.0,
+            y1,
+        };
+        let table = bounds(20.0, 60.0);
+        let text_element = |text, bbox| {
+            let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+            element.bbox = Some(bbox);
+            element
+        };
+        let mut doc = InternalDocument::new("test");
+        doc.elements = vec![
+            text_element("Heading", bounds(1.0, 10.0)),
+            text_element("Caption", bounds(70.0, 90.0)),
+        ];
+        assert_eq!(
+            sparse_table_surrounding_text(&doc, &table),
+            Some((vec!["Heading"], vec!["Caption"]))
+        );
+
+        doc.elements.swap(0, 1);
+        assert_eq!(sparse_table_surrounding_text(&doc, &table), None);
+        doc.elements.swap(0, 1);
+        doc.elements[1].bbox = Some(bounds(50.0, 90.0));
+        assert_eq!(sparse_table_surrounding_text(&doc, &table), None);
+        doc.elements[1].bbox = Some(bounds(70.0, f64::INFINITY));
+        assert_eq!(sparse_table_surrounding_text(&doc, &table), None);
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]

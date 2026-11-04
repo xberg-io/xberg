@@ -164,16 +164,19 @@ fn with_repeated_caption() -> Vec<u8> {
 }
 
 #[test]
-fn accepted_table_does_not_consume_repeated_words_in_the_surrounding_text() {
+fn accepted_table_keeps_rows_and_a_repeated_caption_in_plain_and_djot_pages() {
     let bytes = with_repeated_caption();
-    let baseline = extract(&bytes, OutputFormat::Plain, Some(11));
-    let implicit = extract(&bytes, OutputFormat::Plain, None);
-    for doc in [&baseline, &implicit] {
-        assert_table(doc, "11");
-        let words = counts(page_text(doc).split_whitespace());
-        assert_eq!(words.get("Rent"), Some(&2));
-        assert_eq!(words.get("14"), Some(&2));
-        assert_eq!(words.values().sum::<usize>(), 50);
+    let expected = format!("{}\n\nRent 14", ROWS.map(|row| row.join(" ")).join("\n"));
+    for format in [OutputFormat::Plain, OutputFormat::Djot] {
+        let baseline = extract(&bytes, format.clone(), Some(11));
+        let implicit = extract(&bytes, format, None);
+        assert_table(&baseline, "11");
+        assert_table(&implicit, "11");
+        assert_eq!(page_text(&implicit), expected);
+        assert_eq!(
+            counts(page_text(&implicit).split_whitespace()),
+            counts(page_text(&baseline).split_whitespace())
+        );
+        assert_ne!(page_text(&implicit), page_text(&baseline));
     }
-    assert_eq!(page_text(&implicit), page_text(&baseline));
 }
