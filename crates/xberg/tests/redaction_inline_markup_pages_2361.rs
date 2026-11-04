@@ -162,3 +162,150 @@ async fn public_docx_page_redacts_a_name_split_by_a_real_underline_run() {
     assert_eq!(word(&page_bytes).0, "Call [REDACTED] today");
     assert_selected_page_fallback(&result);
 }
+
+#[tokio::test]
+async fn html_pages_cover_split_terms_with_valid_html_and_exact_visible_text_2361() {
+    let source = verified_source().await;
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        use_cache: false,
+        pages: Some(xberg::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        redaction: Some(RedactionConfig {
+            strategy: RedactionStrategy::Mask,
+            custom_terms: vec![RedactionTerm::labeled("person", "Jane Doe")],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let response = extract(ExtractInput::from_bytes(source.as_slice(), DOCX, None), &config)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    let result = &response.results[0];
+    assert_eq!(result.metadata.output_format.as_deref(), Some("html"));
+    let pages = result.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 1);
+    let mut rendered = vec![&result.content];
+    if pages[0].content != "Call [REDACTED] today" {
+        rendered.push(&pages[0].content);
+    }
+    // Unmapped native page text is returned unchanged by apply_page_content_format. ~keep
+    assert_eq!(
+        (
+            pages[0].content.matches("Jane").count(),
+            pages[0].content.matches("Doe").count()
+        ),
+        (0, 0)
+    );
+    for html in rendered {
+        let tree = roxmltree::Document::parse(html)
+            .unwrap_or_else(|error| panic!("valid actual HTML tree: {error}; {html:?}"));
+        let text = tree
+            .descendants()
+            .filter(|node| node.is_text())
+            .filter_map(|node| node.text())
+            .collect::<String>();
+        assert_eq!(text, "Call [REDACTED] today");
+        assert_eq!((html.matches("Jane").count(), html.matches("Doe").count()), (0, 0));
+    }
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 2);
+}
+
+#[tokio::test]
+async fn builtin_custom_html_preserves_the_literal_page_contract_2361() {
+    let source = verified_source().await;
+    let mut config = ExtractionConfig {
+        output_format: OutputFormat::Custom("html".into()),
+        use_cache: false,
+        pages: Some(xberg::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let input = || ExtractInput::from_bytes(source.as_slice(), DOCX, None);
+    let before = extract(input(), &config).await.unwrap();
+    let pages = before.results[0].pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(
+        (pages[0].page_number, pages[0].content.as_str()),
+        (1, "Call Jane Doe today")
+    );
+    config.redaction = Some(RedactionConfig {
+        custom_terms: vec![RedactionTerm::labeled("person", "Jane Doe")],
+        ..Default::default()
+    });
+    let after = extract(input(), &config).await.unwrap();
+    assert_eq!(after.results.len(), 1);
+    let result = &after.results[0];
+    assert_eq!(result.metadata.output_format.as_deref(), Some("html"));
+    assert_eq!(result.content, "<pre><span>Call [REDACTED] today</span></pre>");
+    let pages = result.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(
+        (pages[0].page_number, pages[0].content.as_str()),
+        (1, "Call [REDACTED] today")
+    );
+    let report = result.redaction_report.as_ref().unwrap();
+    assert_eq!(report.total_redacted, 2);
+    assert_eq!(
+        report
+            .findings
+            .iter()
+            .map(|item| (item.start, item.end))
+            .collect::<Vec<_>>(),
+        [(5, 13), (5, 13)]
+    );
+}
+
+#[cfg(feature = "pdf")]
+#[tokio::test]
+async fn html_keeps_an_actual_empty_pdf_page_without_requiring_markup_2361() {
+    let source = include_bytes!("../../../fixtures/repros/blank-page-coverage/empty-middle.pdf");
+    let mut config = ExtractionConfig {
+        output_format: OutputFormat::Html,
+        use_cache: false,
+        disable_ocr: true,
+        pages: Some(xberg::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let input = || ExtractInput::from_bytes(source.as_slice(), "application/pdf", None);
+    let before = extract(input(), &config).await.unwrap();
+    let pages = before.results[0].pages.as_ref().unwrap();
+    assert_eq!(pages.iter().map(|page| page.page_number).collect::<Vec<_>>(), [1, 2, 3]);
+    assert_eq!(pages[1].content, "");
+    config.redaction = Some(RedactionConfig {
+        custom_terms: vec![RedactionTerm::labeled("private", "page body")],
+        ..Default::default()
+    });
+    let after = extract(input(), &config).await.unwrap();
+    assert_eq!(after.results.len(), 1);
+    let result = &after.results[0];
+    assert_eq!(result.metadata.output_format.as_deref(), Some("html"));
+    let pages = result.pages.as_ref().unwrap();
+    assert_eq!(pages.iter().map(|page| page.page_number).collect::<Vec<_>>(), [1, 2, 3]);
+    assert_eq!(pages[1].content, "");
+    assert_eq!(pages[0].content, "<pre><span>First [REDACTED].</span></pre>");
+    assert_eq!(pages[2].content, "<pre><span>Last [REDACTED].</span></pre>");
+    for (index, expected) in [(0, "First [REDACTED]."), (2, "Last [REDACTED].")] {
+        let hierarchy = pages[index].hierarchy.as_ref().unwrap();
+        assert_eq!(hierarchy.blocks.len(), 1);
+        assert_eq!(hierarchy.blocks[0].text, expected);
+    }
+    let report = result.redaction_report.as_ref().unwrap();
+    assert_eq!(report.total_redacted, 6);
+    assert_eq!(
+        report
+            .findings
+            .iter()
+            .map(|item| (item.start, item.end))
+            .collect::<Vec<_>>(),
+        [(6, 15), (24, 33), (6, 15), (6, 15), (5, 14), (5, 14)]
+    );
+}

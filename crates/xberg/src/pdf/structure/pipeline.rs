@@ -1745,7 +1745,7 @@ const PARAGRAPH_GAP_HEIGHT_FACTOR: f32 = 1.5;
 /// happens to be. The two rules are OR-ed, so no break the band rule already
 /// finds is lost.
 const PARAGRAPH_BREAK_LEADING_MULTIPLE: f32 = 1.5;
-const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
+pub(super) const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
 /// How many already-accumulated segments back to look for a sub/superscript's base.
 ///
 /// ~keep GH#1617: two is enough on the reproducer (`dB` then `L`); four covers a row with a couple
@@ -3461,22 +3461,20 @@ const TABLE_MODEL_LOADERS: TableModelLoaders = TableModelLoaders {
     slanet: crate::layout::take_or_create_slanet,
 };
 
-#[cfg(feature = "layout-detection")]
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn extract_document_structure_from_segments(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
-    build_document_structure(all_page_segments, config, TABLE_MODEL_LOADERS)
+    build_document_structure(
+        all_page_segments,
+        config,
+        #[cfg(feature = "layout-detection")]
+        TABLE_MODEL_LOADERS,
+    )
 }
 
-#[cfg(not(feature = "layout-detection"))]
-pub(crate) fn extract_document_structure_from_segments(
-    all_page_segments: Vec<Vec<SegmentData>>,
-    config: SegmentStructureConfig<'_>,
-) -> Result<crate::types::internal::InternalDocument> {
-    build_document_structure(all_page_segments, config)
-}
-
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 fn build_document_structure(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,

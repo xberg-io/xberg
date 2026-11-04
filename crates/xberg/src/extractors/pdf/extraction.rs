@@ -51,10 +51,28 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
     pub(crate) page_config: Option<&'a crate::core::config::PageConfig>,
 }
 
-type NativeTableMetadata = (
-    Option<crate::types::TableGrid>,
-    Option<crate::pdf::native::table::scripts::TableScripts>,
-);
+#[derive(Default)]
+struct NativeTableMetadata {
+    grid: Option<crate::types::TableGrid>,
+    scripts: Option<crate::pdf::native::table::scripts::TableScripts>,
+    complete_leading_header: bool,
+}
+
+impl NativeTableMetadata {
+    fn retain_column_labels(&self, table: &mut Table) {
+        if table.columns.is_none()
+            && self.complete_leading_header
+            && self
+                .grid
+                .as_ref()
+                .is_some_and(|grid| crate::extraction::derive::native_grid_matches_table(table, grid))
+            && let Some(labels) = table.cells.first()
+            && labels.iter().all(|label| !label.trim().is_empty())
+        {
+            table.columns = Some(labels.clone());
+        }
+    }
+}
 
 struct NativeHierarchySegments {
     pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
@@ -85,25 +103,27 @@ fn attach_native_table_grids(
     let sidecars: Vec<_> = tables
         .iter()
         .zip(grids)
-        .filter_map(|(table, (grid, _))| {
-            grid.as_ref()
+        .filter_map(|(table, metadata)| {
+            metadata
+                .grid
+                .as_ref()
                 .map(|grid| crate::pdf::structure::table_grid::TableGridSidecar {
                     table: table.clone(),
                     grid: grid.clone(),
                 })
         })
         .collect();
-    crate::pdf::structure::table_grid::attach_table_grids(document, &sidecars)
+    crate::pdf::structure::table_grid::attach_ruled_table_grids(document, &sidecars)
         .map_err(|error| crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}")))?;
     for element in &mut document.elements {
         let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
             continue;
         };
         let index = table_index as usize;
-        let Some((table, (_, scripts))) = tables.get(index).zip(grids.get(index)) else {
+        let Some((table, metadata)) = tables.get(index).zip(grids.get(index)) else {
             continue;
         };
-        if let Some(scripts) = scripts
+        if let Some(scripts) = &metadata.scripts
             && scripts.cells == table.cells
             && document
                 .tables
@@ -119,6 +139,64 @@ fn attach_native_table_grids(
         }
     }
     Ok(())
+}
+
+fn retain_headerless_financial_tables(
+    tables: &mut [Table],
+    metadata: &[NativeTableMetadata],
+    financial_rows: &crate::pdf::native::text::NativeFinancialRows,
+    document: Option<&mut crate::types::internal::InternalDocument>,
+) {
+    use crate::rendering::common::render_headerless_table_markdown;
+    use crate::types::internal::{ElementKind, NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE};
+
+    if financial_rows.is_empty() {
+        return;
+    }
+    let mut page_counts = ahash::AHashMap::<u32, usize>::new();
+    for table in tables
+        .iter()
+        .filter(|table| financial_rows.contains_key(&table.page_number))
+    {
+        *page_counts.entry(table.page_number).or_default() += 1;
+    }
+    let mut proven = ahash::AHashMap::new();
+    for (table, metadata) in tables.iter_mut().zip(metadata) {
+        if page_counts.get(&table.page_number) == Some(&1)
+            && financial_rows.get(&table.page_number) == Some(&table.cells)
+            && table.columns.is_none()
+            && !metadata.complete_leading_header
+            && metadata
+                .grid
+                .as_ref()
+                .is_none_or(|grid| grid.cells.iter().all(|cell| !cell.is_header))
+        {
+            table.markdown = render_headerless_table_markdown(&table.cells);
+            proven.insert(table.page_number, table);
+        }
+    }
+    let Some(document) = document else {
+        return;
+    };
+    for element in &mut document.elements {
+        let ElementKind::Table { table_index } = element.kind else {
+            continue;
+        };
+        let Some(table) = document.tables.get_mut(table_index as usize) else {
+            continue;
+        };
+        if let Some(source) = proven.get(&table.page_number)
+            && table.cells == source.cells
+            && table.bounding_box == source.bounding_box
+            && table.columns.is_none()
+        {
+            table.markdown.clone_from(&source.markdown);
+            element
+                .attributes
+                .get_or_insert_with(Default::default)
+                .insert(NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE.to_owned(), String::new());
+        }
+    }
 }
 
 #[cfg(feature = "layout-detection")]
@@ -571,7 +649,7 @@ pub(crate) fn extract_all_from_native_document(
         force_annotation_page_tracking && !crate::pdf::native::text::page_boundaries_required(config);
 
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
-    let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata) =
+    let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata, financial_rows) =
         crate::pdf::native::text::extract_text_and_metadata(&mut doc, Some(text_config))
             .map_err(map_native_text_error)?;
 
@@ -626,7 +704,7 @@ pub(crate) fn extract_all_from_native_document(
         .pdf_options
         .as_ref()
         .is_some_and(|o| o.allow_single_column_tables);
-    let (tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
+    let (mut tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
         crate::pdf::native::guard_native_panic(
             || -> Result<TableExtractionResult> {
                 let mut warnings = Vec::new();
@@ -646,7 +724,16 @@ pub(crate) fn extract_all_from_native_document(
                 warnings.extend(bordered_warnings);
                 let (mut combined, mut native_grids): (Vec<_>, Vec<_>) = extracted_tables
                     .into_iter()
-                    .map(|entry| (entry.table, (entry.grid, entry.scripts)))
+                    .map(|entry| {
+                        (
+                            entry.table,
+                            NativeTableMetadata {
+                                grid: entry.grid,
+                                scripts: entry.scripts,
+                                complete_leading_header: entry.complete_leading_header,
+                            },
+                        )
+                    })
                     .unzip();
                 let covered_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
                 let hierarchy_segments = match crate::pdf::native::table::extract_tables_heuristic(
@@ -656,7 +743,8 @@ pub(crate) fn extract_all_from_native_document(
                     artifacts,
                 ) {
                     Ok(extraction) => {
-                        native_grids.resize_with(combined.len() + extraction.tables.len(), || (None, None));
+                        native_grids
+                            .resize_with(combined.len() + extraction.tables.len(), NativeTableMetadata::default);
                         combined.extend(extraction.tables);
                         drop((
                             extraction.hierarchy_segments.pages,
@@ -777,7 +865,7 @@ pub(crate) fn extract_all_from_native_document(
     // once `assign_hierarchy_to_pages` has run, since that happens after this function
     // returns and the `NativeDocument` this loop reads from is dropped. ~keep
     let mut pdf_page_coordinate_frames: Vec<crate::types::internal::PdfPageCoordinateFrame> = Vec::new();
-    let pre_rendered_doc = if needs_structured && !config.force_ocr {
+    let mut pre_rendered_doc = if needs_structured && !config.force_ocr {
         let k = hierarchy_cluster_count(config);
 
         // `HierarchyConfig::include_bbox` (default `true`): when explicitly disabled,
@@ -914,7 +1002,6 @@ pub(crate) fn extract_all_from_native_document(
         ) {
             Ok(mut structured_doc) if !structured_doc.elements.is_empty() => {
                 extraction_warnings.append(&mut structured_doc.processing_warnings);
-                attach_native_table_grids(&mut structured_doc, &tables, &native_table_grids)?;
                 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
                 if image_anchor == ImageAnchor::OcrTextOnly {
                     anchor_images_as_ocr_text(&mut structured_doc);
@@ -950,6 +1037,20 @@ pub(crate) fn extract_all_from_native_document(
     } else {
         None
     };
+
+    // Column labels describe the retained table, never guide repairs or stitching. ~keep
+    for (table, metadata) in tables.iter_mut().zip(&native_table_grids) {
+        metadata.retain_column_labels(table);
+    }
+    if let Some(document) = &mut pre_rendered_doc {
+        attach_native_table_grids(document, &tables, &native_table_grids)?;
+    }
+    retain_headerless_financial_tables(
+        &mut tables,
+        &native_table_grids,
+        &financial_rows,
+        pre_rendered_doc.as_mut(),
+    );
 
     let has_font_encoding_issues = false;
 
@@ -1010,7 +1111,8 @@ fn apply_reading_order_reordering(
     page_config: Option<&crate::core::config::PageConfig>,
     margins: crate::pdf::native::text::PageMarginFractions,
 ) -> Result<(String, Vec<crate::types::PageBoundary>, Vec<String>)> {
-    use crate::extractors::pdf::reading_order;
+    use crate::extractors::pdf::{reading_order, rotation::page_has_rotated_spans};
+    use crate::pdf::native::text::{assemble_upright_layout_text, extract_spans_from_page, rotation_span};
 
     let page_count = doc.doc.page_count().map_err(|e| crate::error::XbergError::Parsing {
         message: format!("reading-order reordering: failed to get page count: {e}"),
@@ -1031,24 +1133,28 @@ fn apply_reading_order_reordering(
     let mut reordered_pages = Vec::with_capacity(page_count);
 
     for (page_idx, hints) in layout_hints_per_page.iter().enumerate().take(page_count) {
-        let (spans, reordered_sparse_columns) =
-            crate::pdf::native::text::extract_spans_from_page(&mut doc.doc, page_idx, margins).map_err(|e| {
-                crate::error::XbergError::Parsing {
-                    message: format!(
-                        "reading-order reordering: failed to extract spans from page {}: {e}",
-                        page_idx + 1
-                    ),
-                    source: None,
-                }
+        let (native_spans, reordered_sparse_columns) = extract_spans_from_page(&mut doc.doc, page_idx, margins)
+            .map_err(|e| crate::error::XbergError::Parsing {
+                message: format!(
+                    "reading-order reordering: failed to extract spans from page {}: {e}",
+                    page_idx + 1
+                ),
+                source: None,
             })?;
 
+        let spans: Vec<_> = native_spans.iter().map(rotation_span).collect();
         let span_order: Vec<usize> = if hints.is_empty() || (reordered_sparse_columns && hints.len() == 1) {
             (0..spans.len()).collect()
         } else {
             reading_order::reorder_spans_by_layout(&spans, hints)
         };
 
-        reordered_pages.push(reading_order::assemble_reading_order_text(&spans, &span_order));
+        let text = if page_has_rotated_spans(&spans) {
+            reading_order::assemble_reading_order_text(&spans, &span_order)
+        } else {
+            assemble_upright_layout_text(&native_spans, &span_order)
+        };
+        reordered_pages.push(text);
     }
 
     if reordered_pages.is_empty() {
@@ -1583,6 +1689,89 @@ mod tests {
         super::apply_reordered_text_to_page_contents(&mut page_contents, vec!["ignored".to_string()]);
 
         assert!(page_contents.is_none(), "None page_contents must stay None");
+    }
+
+    #[cfg(feature = "layout-detection")]
+    fn layout_spacing_pdf() -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut document = Document::with_version("1.5");
+        let pages_id = document.new_object_id();
+        let font = document.add_object(dictionary! {
+            "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+        });
+        let mut kids = Vec::new();
+        for number in 1..=2 {
+            let stream = format!(
+                "BT /F1 11 Tf 72 700 Td (Page {number} starts here.) Tj ET\n\
+                 BT /F1 11 Tf 72 684 Td (A separate body line.) Tj ET\n\
+                 BT /F1 11 Tf 72 620 Td (Model) Tj ET\n\
+                 BT /F1 11 Tf 200 620 Td (Recall) Tj ET\n\
+                 BT /F1 11 Tf 330 620 Td (Precision) Tj ET\n\
+                 BT /F1 11 Tf 460 620 Td (Latency) Tj ET\n\
+                 BT /F1 11 Tf 72 602 Td (alpha) Tj ET\n\
+                 BT /F1 11 Tf 200 602 Td (0.91) Tj ET\n\
+                 BT /F1 11 Tf 330 602 Td (0.88) Tj ET\n\
+                 BT /F1 11 Tf 460 602 Td (12ms) Tj ET"
+            );
+            let content = document.add_object(Stream::new(dictionary! {}, stream.into_bytes()));
+            let page = document.add_object(dictionary! {
+                "Type" => "Page", "Parent" => pages_id, "Contents" => content,
+                "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+                "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+            });
+            kids.push(Object::Reference(page));
+        }
+        document.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! { "Type" => "Pages", "Count" => 2, "Kids" => kids }),
+        );
+        let catalog = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        document.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).expect("layout spacing PDF must serialize");
+        bytes
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn should_preserve_body_and_table_separators_in_selected_layout_order() {
+        use crate::pdf::native::{NativeDocument, text::PageMarginFractions};
+        use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
+
+        let hint = |class_name, bottom, top| LayoutHint {
+            class_name,
+            confidence: 0.9,
+            left: 70.0,
+            bottom,
+            right: 550.0,
+            top,
+        };
+        let page_hints = vec![
+            hint(LayoutHintClass::Text, 680.0, 730.0),
+            hint(LayoutHintClass::Table, 590.0, 640.0),
+        ];
+        let mut doc = NativeDocument::open_bytes(&layout_spacing_pdf()).expect("layout spacing PDF must open");
+        let margins = PageMarginFractions { top: 0.0, bottom: 0.0 };
+        let (content, boundaries, pages) =
+            super::apply_reading_order_reordering(&mut doc, "", &[page_hints.clone(), page_hints], None, margins)
+                .expect("layout order must assemble both pages");
+
+        assert_eq!(pages.len(), 2);
+        assert_eq!(boundaries.len(), 2);
+        for (index, (page, boundary)) in pages.iter().zip(&boundaries).enumerate() {
+            assert_eq!(boundary.page_number as usize, index + 1);
+            assert_eq!(&content[boundary.byte_start..boundary.byte_end], page);
+            assert_eq!(
+                page.lines().filter(|line| !line.is_empty()).collect::<Vec<_>>(),
+                [
+                    format!("Page {} starts here.", index + 1).as_str(),
+                    "A separate body line.",
+                    "Model Recall Precision Latency",
+                    "alpha 0.91 0.88 12ms",
+                ]
+            );
+        }
     }
 
     /// Boundaries produced alongside reordered text must index it exactly:

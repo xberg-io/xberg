@@ -563,6 +563,15 @@ impl PageRenderer {
 
     /// Render a page with specific options.
     pub fn render_page_with_options(&mut self, page_num: usize, doc: &PdfDocument) -> Result<RenderedImage> {
+        self.render_page_with_budget(page_num, doc, None)
+    }
+
+    pub(super) fn render_page_with_budget(
+        &mut self,
+        page_num: usize,
+        doc: &PdfDocument,
+        max_png_working_bytes: Option<usize>,
+    ) -> Result<RenderedImage> {
         self.fonts.clear();
         self.color_spaces.clear();
         // The qcms transform cache is per-page: dropping every entry
@@ -623,6 +632,15 @@ impl PageRenderer {
             ((page_w * scale).ceil() as u32, (page_h * scale).ceil() as u32)
         };
 
+        let admitted_png = max_png_working_bytes
+            .map(|limit| {
+                let resources = doc.get_page_resources(page_num)?;
+                let spots = self.page_sidecar_spots(doc, page_num, &resources);
+                validate_png_working_bytes(width, height, spots.as_deref(), limit)?;
+                Ok::<_, Error>((resources, spots))
+            })
+            .transpose()?;
+
         let mut pixmap =
             Pixmap::new(width, height).ok_or_else(|| Error::InvalidPdf("Failed to create pixmap".to_string()))?;
 
@@ -669,52 +687,15 @@ impl PageRenderer {
                 .post_translate(0.0, page_h * scale),
         };
 
-        let resources = doc.get_page_resources(page_num)?;
-
+        let (resources, admitted_spots) = match admitted_png {
+            Some((resources, spots)) => (resources, Some(spots)),
+            None => (doc.get_page_resources(page_num)?, None),
+        };
         self.load_resources(doc, &resources)?;
 
-        // Decide whether to allocate the CMYK + spot-ink sidecar. The
-        // CMYK plane costs `4·width·height` bytes per page and mirrors
-        // every opaque CMYK paint so the compose-first and overprint
-        // correction helpers can read the backdrop CMYK quadruple
-        // directly instead of inverting the post-ICC RGB. Each spot
-        // ink adds one extra plane of `width·height` bytes.
-        //
-        // Allocation is gated on (a) the OutputIntent declares a
-        // CMYK profile — without one, the process-side helpers would
-        // not fire at all — and (b) the page resources declare
-        // ExtGState entries that could drive transparency or
-        // overprint, or the page's Form XObjects declare /Group dicts
-        // or /SMask entries (which trigger transparency-group
-        // compositing). When either condition is false the sidecar
-        // stays `None` and the per-paint mirror is a no-op; the
-        // detection-OFF path is byte-identical to the pre-sidecar
-        // behaviour.
-        //
-        // The spot ink set is discovered with the same walker the
-        // separation renderer's per-plate path uses (§8.6.6.4 /
-        // §8.6.6.5: `/Separation` and non-process `/DeviceN`
-        // colorants, with `/All` and `/None` filtered out). Sizing
-        // the sidecar's spot lanes up front means subsequent paint
-        // operators can blind-index by ink without re-walking the
-        // resource tree. ~keep
         self.cmyk_sidecar = None;
-        // ISO 32000-1 §11.7.3 + §11.7.4.2 + §10.5: the sidecar carries
-        // the composite-then-separate workflow's process + spot lanes.
-        // The default page-renderer path gates on the OutputIntent CMYK
-        // profile because the compose-first / overprint-correction
-        // helpers only fire when there is a non-trivial CMYK→RGB
-        // transform to compose under. The separation entry point flips
-        // `force_cmyk_sidecar` so the sidecar lives on every
-        // detection-ON page regardless of OutputIntent — the per-plate
-        // output is meaningful even without a press ICC profile (it is
-        // the raw subtractive tint at every pixel). ~keep
-        let needs_cmyk_sidecar = (self.force_cmyk_sidecar || doc.output_intent_cmyk_profile().is_some())
-            && page_declares_transparency_or_overprint(doc, &resources);
-        if needs_cmyk_sidecar {
-            let spot_names = sidecar_mod::discover_page_spot_inks(doc, page_num);
-            self.cmyk_sidecar = Some(CmykSidecar::new(width, height, spot_names));
-        }
+        let spots = admitted_spots.unwrap_or_else(|| self.page_sidecar_spots(doc, page_num, &resources));
+        self.cmyk_sidecar = spots.map(|names| CmykSidecar::new(width, height, names));
 
         let content_data = doc.get_page_content_data(page_num)?;
 
@@ -743,6 +724,47 @@ impl PageRenderer {
             height,
             format: self.options.format,
         })
+    }
+
+    fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {
+        // Decide whether to allocate the CMYK + spot-ink sidecar. The
+        // CMYK plane costs `4·width·height` bytes per page and mirrors
+        // every opaque CMYK paint so the compose-first and overprint
+        // correction helpers can read the backdrop CMYK quadruple
+        // directly instead of inverting the post-ICC RGB. Each spot
+        // ink adds one extra plane of `width·height` bytes.
+        //
+        // Allocation is gated on (a) the OutputIntent declares a
+        // CMYK profile — without one, the process-side helpers would
+        // not fire at all — and (b) the page resources declare
+        // ExtGState entries that could drive transparency or
+        // overprint, or the page's Form XObjects declare /Group dicts
+        // or /SMask entries (which trigger transparency-group
+        // compositing). When either condition is false the sidecar
+        // stays `None` and the per-paint mirror is a no-op; the
+        // detection-OFF path is byte-identical to the pre-sidecar
+        // behaviour.
+        //
+        // The spot ink set is discovered with the same walker the
+        // separation renderer's per-plate path uses (§8.6.6.4 /
+        // §8.6.6.5: `/Separation` and non-process `/DeviceN`
+        // colorants, with `/All` and `/None` filtered out). Sizing
+        // the sidecar's spot lanes up front means subsequent paint
+        // operators can blind-index by ink without re-walking the
+        // resource tree. ~keep
+        // ISO 32000-1 §11.7.3 + §11.7.4.2 + §10.5: the sidecar carries
+        // the composite-then-separate workflow's process + spot lanes.
+        // The default page-renderer path gates on the OutputIntent CMYK
+        // profile because the compose-first / overprint-correction
+        // helpers only fire when there is a non-trivial CMYK→RGB
+        // transform to compose under. The separation entry point flips
+        // `force_cmyk_sidecar` so the sidecar lives on every
+        // detection-ON page regardless of OutputIntent — the per-plate
+        // output is meaningful even without a press ICC profile (it is
+        // the raw subtractive tint at every pixel). ~keep
+        let needed = (self.force_cmyk_sidecar || doc.output_intent_cmyk_profile().is_some())
+            && page_declares_transparency_or_overprint(doc, resources);
+        needed.then(|| sidecar_mod::discover_page_spot_inks(doc, page_num))
     }
 
     /// Load resources (fonts, color spaces) into local cache.
@@ -8605,6 +8627,27 @@ fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Op
     Some(dst_img.into_vec())
 }
 
+fn validate_png_working_bytes(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> Result<()> {
+    // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
+    // and fixed PNG allowance as Core image encoding, plus the live CMYK and spot planes.
+    const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
+    const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
+    if width == 0 || height == 0 {
+        return Err(Error::InvalidPdf("Failed to create pixmap".to_string()));
+    }
+    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| 4_usize.checked_add(names.len()));
+    let charge = sidecar_bytes_per_pixel
+        .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
+        .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
+        .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
+    if charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize) {
+        return Ok(());
+    }
+    Err(Error::InvalidOperation(format!(
+        "PDF raster {width}x{height} exceeds security_limits.max_content_size ({limit} bytes) or platform allocation bounds"
+    )))
+}
+
 /// Encode a tiny_skia `Pixmap` to PNG.
 ///
 /// Uses fdeflate (ultra-fast) compression via the `image` crate instead of
@@ -9362,6 +9405,10 @@ fn intersect_with_inherited(mut mask: tiny_skia::Mask, inherited: Option<&tiny_s
 fn trace_ccitt_mask_decode_failure(error: &Error) {
     crate::error::trace_recovery("decode_ccitt_image_mask", error);
 }
+
+#[cfg(test)]
+#[path = "latin_font_fallback_tests.rs"]
+mod latin_font_fallback_tests;
 
 #[cfg(test)]
 mod tests {

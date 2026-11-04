@@ -449,25 +449,33 @@ pub(crate) fn render_table_markdown(cells: &[Vec<String>]) -> String {
 /// the buffer from a capacity estimate use this to skip the intermediate
 /// allocation.
 pub(crate) fn render_table_markdown_into(out: &mut String, cells: &[Vec<String>]) {
-    if cells.is_empty() {
-        return;
-    }
-    let num_cols = cells.iter().map(|r| r.len()).max().unwrap_or(0);
+    render_table_markdown_rows(out, cells, true);
+}
+
+#[cfg(feature = "pdf")]
+pub(crate) fn render_headerless_table_markdown(cells: &[Vec<String>]) -> String {
+    let mut out = String::new();
+    render_table_markdown_rows(&mut out, cells, false);
+    out
+}
+
+fn render_table_markdown_rows(out: &mut String, cells: &[Vec<String>], has_header: bool) {
+    let num_cols = cells.iter().map(|row| row.len()).max().unwrap_or(0);
     if num_cols == 0 {
         return;
     }
-
-    if let Some(header) = cells.first() {
-        push_table_row(out, header, num_cols);
-
-        out.push('|');
-        for _ in 0..num_cols {
-            out.push_str(" --- |");
-        }
-        out.push('\n');
+    let (header, body) = if has_header {
+        (cells[0].as_slice(), &cells[1..])
+    } else {
+        (&[][..], cells)
+    };
+    push_table_row(out, header, num_cols);
+    out.push('|');
+    for _ in 0..num_cols {
+        out.push_str(" --- |");
     }
-
-    for row in cells.iter().skip(1) {
+    out.push('\n');
+    for row in body {
         push_table_row(out, row, num_cols);
     }
 }
@@ -745,6 +753,11 @@ pub(crate) fn escape_html_text(input: &str) -> Cow<'_, str> {
         return Cow::Borrowed(input);
     }
     let mut out = String::with_capacity(input.len() + 16);
+    push_html_text(&mut out, input);
+    Cow::Owned(out)
+}
+
+pub(crate) fn push_html_text(out: &mut String, input: &str) {
     for c in input.chars() {
         match c {
             '&' => out.push_str("&amp;"),
@@ -753,7 +766,6 @@ pub(crate) fn escape_html_text(input: &str) -> Cow<'_, str> {
             _ => out.push(c),
         }
     }
-    Cow::Owned(out)
 }
 
 // ~keep Read only by the DOCX and PDF writers, which need `office` and `pdf`; a

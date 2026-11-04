@@ -54,12 +54,22 @@ fn matching_sources(sidecars: &[TableGridSidecar]) -> GridCandidates<'_> {
     candidates
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", any(feature = "layout-detection", test)))]
 pub(crate) fn attach_table_grids(
     document: &mut InternalDocument,
     sidecars: &[TableGridSidecar],
 ) -> serde_json::Result<()> {
-    attach_table_grids_inner(document, sidecars, false)
+    attach_table_grids_inner(document, sidecars, |_, _| false)
+}
+
+#[cfg(feature = "pdf")]
+pub(crate) fn attach_ruled_table_grids(
+    document: &mut InternalDocument,
+    sidecars: &[TableGridSidecar],
+) -> serde_json::Result<()> {
+    attach_table_grids_inner(document, sidecars, |table, source| {
+        table.columns.is_none() && source.columns.is_some()
+    })
 }
 
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
@@ -67,13 +77,13 @@ pub(crate) fn attach_recognized_table_grids(
     document: &mut InternalDocument,
     sidecars: &[TableGridSidecar],
 ) -> serde_json::Result<()> {
-    attach_table_grids_inner(document, sidecars, true)
+    attach_table_grids_inner(document, sidecars, |_, _| true)
 }
 
 fn attach_table_grids_inner(
     document: &mut InternalDocument,
     sidecars: &[TableGridSidecar],
-    update_headers: bool,
+    update_headers: fn(&Table, &Table) -> bool,
 ) -> serde_json::Result<()> {
     let candidates = matching_sources(sidecars);
     let mut final_counts = ahash::AHashMap::<TableIdentity<'_>, usize>::new();
@@ -101,7 +111,7 @@ fn attach_table_grids_inner(
             NATIVE_TABLE_GRID_ATTRIBUTE.to_owned(),
             serde_json::to_string(&source.grid)?,
         );
-        if update_headers {
+        if update_headers(table, &source.table) {
             headers.push(HeaderUpdate {
                 index: table_index as usize,
                 columns: source.table.columns.clone(),

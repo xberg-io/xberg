@@ -34,6 +34,8 @@ const HF_REPO_REVISION: &str = crate::model_download::PADDLE_MODELS_REVISION;
 const REMOTE_FILENAME: &str = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
 #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
 const SHA256: &str = "6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947";
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+const MODEL_SIZE: usize = 6_785_465;
 
 const INPUT_SIZE: u32 = 224;
 const RESIZE_SHORT: u32 = 256;
@@ -75,8 +77,21 @@ enum ModelSource {
 #[cfg_attr(alef, alef(skip))]
 pub struct DocOrientationDetector {
     session: once_cell::sync::OnceCell<Box<dyn InferenceSession>>,
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    initialization: parking_lot::Mutex<()>,
     source: ModelSource,
     acceleration: Option<crate::core::config::acceleration::AccelerationConfig>,
+}
+
+/// Process-global document-orientation classifier (ONNX PP-LCNet), shared by
+/// every tesseract-backend auto-rotate call. Session initialization is lazy and
+/// internally synchronized; `detect` is thread-safe.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn tesseract_detector() -> &'static DocOrientationDetector {
+    static DETECTOR: std::sync::LazyLock<DocOrientationDetector> = std::sync::LazyLock::new(|| {
+        DocOrientationDetector::with_acceleration(crate::doc_orientation::resolve_cache_dir(), None)
+    });
+    &DETECTOR
 }
 
 impl DocOrientationDetector {
@@ -91,6 +106,8 @@ impl DocOrientationDetector {
     ) -> Self {
         Self {
             session: once_cell::sync::OnceCell::new(),
+            #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            initialization: parking_lot::Mutex::new(()),
             source: ModelSource::CacheDir(cache_dir),
             acceleration: accel,
         }
@@ -108,6 +125,8 @@ impl DocOrientationDetector {
     ) -> Self {
         Self {
             session: once_cell::sync::OnceCell::new(),
+            #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            initialization: parking_lot::Mutex::new(()),
             source: ModelSource::Bytes(model_bytes),
             acceleration: accel,
         }
@@ -158,6 +177,59 @@ impl DocOrientationDetector {
         Ok(best_result)
     }
 
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn prepare_cached(&self) -> bool {
+        if self.session.get().is_some() {
+            return true;
+        }
+        // An explicit initializer may be downloading even if a peer has since seeded the cache.
+        let Some(_initialization) = self.initialization.try_lock() else {
+            return false;
+        };
+        if self.session.get().is_some() {
+            return true;
+        }
+        let ModelSource::CacheDir(cache_dir) = &self.source else {
+            return false;
+        };
+        let cached_path = crate::model_download::hf_client(Some(cache_dir)).and_then(|client| {
+            crate::model_download::hf_cached_revision_with_client(
+                &client,
+                HF_REPO_ID,
+                REMOTE_FILENAME,
+                Some(HF_REPO_REVISION),
+            )
+        });
+        let Ok(Some(path)) = cached_path else {
+            return false;
+        };
+        let Some(bytes) = read_verified_cached_model(&path) else {
+            return false;
+        };
+        self.session
+            .get_or_try_init(|| self.load_model_from_bytes(&bytes))
+            .is_ok()
+    }
+
+    fn load_model_from_bytes(&self, bytes: &[u8]) -> Result<Box<dyn InferenceSession>> {
+        default_backend()
+            .load_from_memory(bytes, self.acceleration.as_ref())
+            .map_err(|error| XbergError::Ocr {
+                message: format!("Failed to load doc_ori model: {error}"),
+                source: None,
+            })
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
+    fn load_model(&self, path: &std::path::Path) -> Result<Box<dyn InferenceSession>> {
+        default_backend()
+            .load(path, self.acceleration.as_ref())
+            .map_err(|error| XbergError::Ocr {
+                message: format!("Failed to load doc_ori model: {error}"),
+                source: None,
+            })
+    }
+
     /// Resolve the verified ONNX model directly from the Hugging Face cache.
     ///
     /// Not available on `wasm32` — see [`ModelSource::Bytes`]. Only called from the
@@ -182,6 +254,13 @@ impl DocOrientationDetector {
     /// The session (optimization level, thread budget, execution-provider
     /// selection, and CPU fallback) is built by the [`crate::inference`] seam.
     fn get_or_init_session(&self) -> Result<&dyn InferenceSession> {
+        #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let _initialization = {
+            if let Some(session) = self.session.get() {
+                return Ok(session.as_ref());
+            }
+            self.initialization.lock()
+        };
         let session = self
             .session
             .get_or_try_init(|| -> crate::Result<Box<dyn InferenceSession>> {
@@ -189,19 +268,9 @@ impl DocOrientationDetector {
                     #[cfg(all(not(target_arch = "wasm32"), any(feature = "ocr", sceptre_ocr)))]
                     ModelSource::CacheDir(cache_dir) => {
                         let model_path = Self::ensure_model(cache_dir)?;
-                        default_backend()
-                            .load(&model_path, self.acceleration.as_ref())
-                            .map_err(|e| XbergError::Ocr {
-                                message: format!("Failed to load doc_ori model: {e}"),
-                                source: None,
-                            })?
+                        self.load_model(&model_path)?
                     }
-                    ModelSource::Bytes(model_bytes) => default_backend()
-                        .load_from_memory(model_bytes, self.acceleration.as_ref())
-                        .map_err(|e| XbergError::Ocr {
-                            message: format!("Failed to load doc_ori model: {e}"),
-                            source: None,
-                        })?,
+                    ModelSource::Bytes(model_bytes) => self.load_model_from_bytes(model_bytes)?,
                 };
 
                 tracing::info!("Doc orientation model loaded");
@@ -209,6 +278,33 @@ impl DocOrientationDetector {
             })?;
         Ok(session.as_ref())
     }
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn read_verified_cached_model(path: &std::path::Path) -> Option<Vec<u8>> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let is_model_file = |metadata: std::fs::Metadata| metadata.is_file() && metadata.len() == MODEL_SIZE as u64;
+    if !std::fs::metadata(path).is_ok_and(is_model_file) {
+        return None;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // A replaced cache entry must not block before the opened file can be checked.
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let file = options.open(path).ok()?;
+    if !file.metadata().is_ok_and(is_model_file) {
+        return None;
+    }
+    // Load the same buffer that was hashed, even if a peer changes the cache entry.
+    let mut bytes = Vec::with_capacity(MODEL_SIZE + 1);
+    file.take(MODEL_SIZE as u64 + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() == MODEL_SIZE && hex::encode(Sha256::digest(&bytes)) == SHA256).then_some(bytes)
 }
 
 fn validate_orientation_peak(
@@ -452,6 +548,44 @@ mod tests {
         let hit = DocOrientationDetector::ensure_model(&cache).unwrap_err().to_string();
         assert!(hit.contains("failed checksum verification"), "{hit}");
         assert!(hit.contains(&format!("@{revision}")), "{hit}");
+    }
+
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    #[ignore = "requires an isolated local HTTP gate that seeds the verified model during an explicit fetch"]
+    fn cached_orientation_does_not_wait_for_an_explicit_model_fetch() {
+        use std::time::{Duration, Instant};
+
+        let gate = PathBuf::from(std::env::var_os("XBERG_TEST_ORIENTATION_RACE").expect("local fetch gate directory"));
+        let ready = gate.join("cached-model-ready");
+        let release = gate.join("release-explicit-fetch");
+        let detector = DocOrientationDetector::with_acceleration(resolve_cache_dir(), None);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let _result = detector.get_or_init_session();
+            });
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !ready.is_file() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if !ready.is_file() {
+                std::fs::write(&release, b"").expect("release explicit fetch");
+                panic!("the explicit loader did not reach the local network gate");
+            }
+
+            let (send, receive) = std::sync::mpsc::sync_channel(1);
+            let detector = &detector;
+            scope.spawn(move || {
+                let _ = send.send(detector.prepare_cached());
+            });
+            let observed = receive.recv_timeout(Duration::from_secs(2));
+            std::fs::write(release, b"").expect("release explicit fetch");
+            assert_eq!(
+                observed,
+                Ok(false),
+                "cached retry must bypass a busy explicit initializer"
+            );
+        });
     }
 
     #[test]

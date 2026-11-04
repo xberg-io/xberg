@@ -685,6 +685,7 @@ fn compute_formatted_content_observed(
     output_format: &crate::core::config::OutputFormat,
     observer: &mut impl surfaces::DerivationObserver,
     plain_from_ir: bool,
+    plain: &str,
 ) -> Option<String> {
     match output_format {
         crate::core::config::OutputFormat::Plain => None,
@@ -696,24 +697,19 @@ fn compute_formatted_content_observed(
                 }
                 Some(text)
             } else {
-                let text = crate::rendering::render_markdown(doc);
-                observer.formatted_from_source(true, &text, crate::rendering::markdown_tag_exemptions_are_owned(doc));
-                Some(text)
+                Some(surfaces::derive_markdown(doc, observer))
             }
         }
-        crate::core::config::OutputFormat::Djot => {
-            if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("djot") {
-                doc.pre_rendered_content.take()
-            } else {
-                Some(crate::rendering::render_djot(doc))
-            }
-        }
+        crate::core::config::OutputFormat::Djot => surfaces::derive_djot(doc, observer, plain_from_ir),
         crate::core::config::OutputFormat::Html => {
-            if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("html") {
-                doc.pre_rendered_content.take()
-            } else {
-                Some(crate::rendering::render_html(doc))
-            }
+            let (rendered, verified) =
+                if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("html") {
+                    (doc.pre_rendered_content.take()?, false)
+                } else {
+                    crate::rendering::render_html_checked(doc, observer.captures_verified_markup().then_some(plain))
+                };
+            observer.formatted_html(&rendered, verified);
+            Some(rendered)
         }
         crate::core::config::OutputFormat::Json => {
             if doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("json") {
@@ -729,7 +725,7 @@ fn compute_formatted_content_observed(
                 Some(crate::rendering::render_doctags(doc))
             }
         }
-        crate::core::config::OutputFormat::Custom(name) => compute_custom_formatted_content(doc, name, observer),
+        crate::core::config::OutputFormat::Custom(name) => compute_custom_formatted_content(doc, name, observer, plain),
     }
 }
 
@@ -737,6 +733,7 @@ fn compute_custom_formatted_content(
     doc: &mut InternalDocument,
     name: &str,
     observer: &mut impl surfaces::DerivationObserver,
+    plain: &str,
 ) -> Option<String> {
     // A prior `clear_renderers()` call (e.g. by a sibling test, or any consumer
     // resetting the plugin lifecycle) empties this global registry, including the
@@ -745,8 +742,16 @@ fn compute_custom_formatted_content(
     crate::plugins::ensure_renderers_initialized();
     let registry = crate::plugins::registry::get_renderer_registry();
     let registry = registry.read();
+    if observer.captures_verified_markup() && registry.renders_html(name) {
+        let (rendered, verified) = crate::rendering::render_html_checked(doc, Some(plain));
+        observer.formatted_html(&rendered, verified);
+        return Some(rendered);
+    }
     match registry.render(name, doc) {
         Ok(rendered) => {
+            if name == "html" {
+                observer.formatted_html(&rendered, false);
+            }
             observer.formatted_from_source(
                 registry.renders_markdown(name),
                 &rendered,
@@ -886,7 +891,8 @@ fn derive(
     resolve_relationships(&mut doc);
 
     let (content, mime_type, plain_from_ir) = derive_content_and_mime_type(&mut doc);
-    let formatted_content = compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir);
+    let formatted_content =
+        compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir, &content);
 
     // `content`, the plain rendering, is the output the caller gets exactly when the caller
     // gets this document and `formatted_content` is `None`: plain output, or a custom format

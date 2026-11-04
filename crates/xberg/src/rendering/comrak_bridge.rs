@@ -1243,8 +1243,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                         parent.append(table_node);
                         continue;
                     }
+                    #[cfg(feature = "pdf")]
+                    let headerless_pdf = doc.source_format == "pdf"
+                        && elem_attributes.is_some_and(|attributes| {
+                            attributes.contains_key(crate::types::internal::NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE)
+                        });
+                    #[cfg(not(feature = "pdf"))]
+                    let headerless_pdf = false;
                     let has_header = table.has_header_row()
                         || (table_mode == TableRenderMode::Markdown
+                            && !headerless_pdf
                             && !matches!(doc.source_format.as_str(), "csv" | "orgmode" | "typst"));
                     match build_table(arena, &table.cells, has_header, elem_attributes, table_mode) {
                         Some(table_node) => {

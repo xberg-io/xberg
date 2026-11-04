@@ -31,12 +31,12 @@ mod redaction_projection;
 pub(crate) mod table_math;
 pub(crate) mod table_scripts;
 
-pub(crate) use djot::render_djot;
+pub(crate) use djot::{has_djot_plain_body, render_djot};
 pub(crate) use doctags::render_doctags;
 #[cfg(feature = "office")]
 pub(crate) use docx::render_docx;
 pub(crate) use dot::render_dot;
-pub(crate) use html::render_html;
+pub(crate) use html::{render_html, render_html_checked};
 #[cfg(feature = "html")]
 pub use html_styled::StyledHtmlRenderer;
 #[cfg(feature = "redaction")]
@@ -46,7 +46,7 @@ pub(crate) use inline_html::{Kind as PrivacyInlineKind, tag as privacy_inline_ta
 pub use json::render_json;
 #[cfg(feature = "redaction")]
 pub(crate) use markdown::comrak_options;
-pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown};
+pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown, render_markdown_observed};
 #[cfg(feature = "pdf")]
 pub(crate) use pdf::render_pdf;
 pub(crate) use plain::render_plain;

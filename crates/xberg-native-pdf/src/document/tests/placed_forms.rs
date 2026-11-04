@@ -952,3 +952,121 @@ fn test_placed_copy_painted_right_to_left_after_a_tj_is_dropped_in_chars() {
     });
     assert_eq!(placed_copy_counts(&body, &copy), [(30, 30); 2], "body first, body last");
 }
+
+#[test]
+fn caller_only_placed_tag_retains_form_body() {
+    let lines = body_lines("Harbor");
+    let form = text_lines_stream(&lines, 20, 760);
+    let header = text_lines_stream(&["Quarterly Review".into()], 20, 790);
+    for scope in ["/PlacedPDF BMC", "/Placed#50DF /MC0 BDC"] {
+        let page = format!("{header}{scope}\n/Fb Do\nEMC\n");
+        let doc = PdfDocument::from_bytes(build_forms_pdf(&page, &[("Fb", FULL_BBOX, &form)])).expect("parse PDF");
+        let text = doc.extract_text(0).unwrap();
+        let spans: String = doc
+            .extract_spans(0)
+            .unwrap()
+            .iter()
+            .map(|span| span.text.as_str())
+            .collect();
+        let chars: String = doc.extract_chars(0).unwrap().iter().map(|ch| ch.char).collect();
+        for (path, actual) in [("text", text), ("spans", spans), ("chars", chars)] {
+            assert_eq!(actual.matches("Quarterly Review").count(), 1, "{scope}, {path}");
+            for line in &lines {
+                assert_eq!(
+                    actual.matches(line).count(),
+                    1,
+                    "{scope}, {path}: lost or copied {line:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn caller_only_placed_tag_drops_short_and_duplicate_forms() {
+    let lines = body_lines("Harbor");
+    let short = text_lines_stream(&lines[..8], 20, 760);
+    let header = text_lines_stream(&["Quarterly Review".into()], 20, 790);
+    let short_page = format!("{header}/PlacedPDF BMC\n/Fb Do\nEMC\n");
+    assert_eq!(
+        body_line_counts(build_forms_pdf(&short_page, &[("Fb", FULL_BBOX, &short)]), "Harbor"),
+        (0, 0)
+    );
+
+    let body = text_lines_stream(&lines, 20, 760);
+    let copy = text_lines_stream(&lines, 29, 751);
+    let wrapped = "/PlacedPDF BMC\n/Fb Do\nEMC\n";
+    for page in [format!("{body}{wrapped}"), format!("{wrapped}{body}")] {
+        assert_eq!(
+            body_line_counts(build_forms_pdf(&page, &[("Fb", FULL_BBOX, &copy)]), "Harbor"),
+            (1, 1)
+        );
+    }
+}
+
+#[test]
+fn caller_only_hold_keeps_an_own_tagged_child_in_its_separate_group() {
+    let lines = body_lines("Harbor");
+    let unique: Vec<_> = (0..25)
+        .map(|i| format!("Zephyr kite {i} drifts across salt flats with lanterns"))
+        .collect();
+    let body = text_lines_stream(&lines, 20, 760);
+    let copy = text_lines_stream(&lines, 29, 751);
+    let child = format!("/PlacedPDF BMC\n{}EMC\n", text_lines_stream(&unique, 20, 260));
+    let page = format!("{body}/PlacedPDF BMC\n/Fb Do\nEMC\n");
+    for parent in [format!("/Fc Do\n{copy}"), format!("{copy}/Fc Do\n")] {
+        let pdf = build_forms_pdf(&page, &[("Fb", FULL_BBOX, &parent), ("Fc", FULL_BBOX, &child)]);
+        let doc = PdfDocument::from_bytes(pdf).expect("parse PDF");
+        let text = doc.extract_text(0).unwrap();
+        let chars: String = doc.extract_chars(0).unwrap().iter().map(|ch| ch.char).collect();
+        for actual in [text, chars] {
+            assert_eq!(actual.matches("Harbor paragraph number 7 ").count(), 1);
+            assert_eq!(actual.matches("Zephyr kite 7 drifts").count(), 1);
+        }
+    }
+}
+
+#[test]
+fn caller_tagged_siblings_follow_ordinary_form_placement() {
+    let lines = body_lines("Harbor");
+    let body = text_lines_stream(&lines, 20, 760);
+    let ordinary = "/Fa Do\n/Fb Do\n";
+    let tagged = "/PlacedPDF BMC\n/Fa Do\nEMC\n/PlacedPDF BMC\n/Fb Do\nEMC\n";
+    for (x, y, expected) in [
+        (20, 760, (1, 1)),
+        (22, 759, (1, 2)),
+        (29, 751, (2, 2)),
+        (315, 760, (2, 2)),
+    ] {
+        let second = text_lines_stream(&lines, x, y);
+        let forms = [("Fa", FULL_BBOX, body.as_str()), ("Fb", FULL_BBOX, second.as_str())];
+        assert_eq!(body_line_counts(build_forms_pdf(ordinary, &forms), "Harbor"), expected);
+        assert_eq!(
+            body_line_counts(build_forms_pdf(tagged, &forms), "Harbor"),
+            expected,
+            "caller-marked sibling placement at ({x}, {y})"
+        );
+    }
+}
+
+#[test]
+fn caller_tagged_overlapping_siblings_keep_unique_tail() {
+    let lines = body_lines("Harbor");
+    let body = text_lines_stream(&lines, 20, 760);
+    let mut second = lines[..29].to_vec();
+    second.push("Unique tail remains visible".into());
+    let second = text_lines_stream(&second, 22, 759);
+    let forms = [("Fa", FULL_BBOX, body.as_str()), ("Fb", FULL_BBOX, second.as_str())];
+    for page in [
+        "/Fa Do\n/Fb Do\n",
+        "/PlacedPDF BMC\n/Fa Do\nEMC\n/PlacedPDF BMC\n/Fb Do\nEMC\n",
+    ] {
+        let doc = PdfDocument::from_bytes(build_forms_pdf(page, &forms)).expect("parse PDF");
+        let text = doc.extract_text(0).unwrap();
+        let chars: String = doc.extract_chars(0).unwrap().iter().map(|ch| ch.char).collect();
+        for actual in [text, chars] {
+            assert_eq!(actual.matches("Unique tail remains visible").count(), 1);
+            assert_eq!(actual.matches(&lines[29]).count(), 1);
+        }
+    }
+}

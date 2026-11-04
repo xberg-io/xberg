@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(bindings): Regenerate the bindings with Alef 0.122.2.**
+  The Swift `TesseractConfig` DTO ignores unknown keys, while the Rust config keeps rejecting them and still accepts a
+  `language` string and the legacy boolean `thresholding_method`. Python option enums subclass `StrEnum`. The Node
+  binding's fallible conversions return their results directly, so clippy accepts them.
+
 - **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
   Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
 
@@ -116,6 +121,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
+  Bound the unique retained bytes for plain embedded JPEGs while preserving repeated paints. (#2339)
+
+- **(pdf): Honor OCR image decode limits when retrying embedded scans after pipeline failure.**
+  Whole-document retries use the tighter explicit limit and stop when extraction is cancelled. (#2339)
+
 - **(excel): Upgrade Calamine to 0.38.0 for RUSTSEC-2026-0436.**
   Fixes a parser panic and unbounded allocation when reading malformed CFB/OLE2 spreadsheets.
 
@@ -165,12 +176,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(ocr): Keep the labels of a cover page or a map as text.** (#2431)
-  OCR no longer builds a table from the labels of a cover page or a map when no row or column relates two cells.
-  The words of such a region stay in the page text, including lines that the noise filter drops.
-  A column of numbers, or three rows that fill the same columns, still makes a table in a build without the `pdf` feature.
-  The `pdf` build drops a two-column OCR grid before this rule runs, as before.
-  The PaddleOCR table path applies the same rule.
+- **(ocr): Keep cover and map labels in the page text.** (#2431)
+  Restore dictionary-filtered lines when every word matches the rejected candidate at its original position.
+  A shared header keeps sparse ledgers with recurring numeric columns eligible.
+  The same shape rule applies to Tesseract and PaddleOCR.
+
+- **(docker): Stop storing the binary twice in the core and full images.**
+  Remove a `chmod` that changed nothing but copied the whole binary into another layer.
+
+- **(pdf): Preserve long Form text when the caller marks the Form invocation as placed PDF content.** (#2310)
+
+- **(pdf): Recover text missing from a partial invisible scan layer.** (#2425)
+  In Plain Auto extraction with built-in Tesseract, check a single simple scan for uncovered text
+  bands and keep the native result unless OCR preserves its text and adds readable content.
+
+- **(pdf): Keep aligned financial amounts with their labels.** (#2315)
+  Preserve complete native PDF rows in plain text and keep proven financial body rows out of Markdown headers.
+
+- **(pdf): Preserve characters mapped by multiline ToUnicode ranges.** (#2476)
+  Keep destination arrays together so their entries cannot be mistaken for separate character ranges.
+
+- **(pdf): Keep row-painted table values with their labels across wide gutters in plain text.** (#2343)
+  Preserve blank value cells and wrapped labels when source order confirms the visual pairs.
+
+- **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
+  Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
+
+- **(ocr): Keep rows together in standalone sparse OCR page text.** (#2432)
+  A single accepted table can supply Plain and Djot page rows when it retains every recognized token occurrence.
+
+- **(pdf): Keep ruled table rows on the correct side of a section divider.** (#2376)
+  Use exact shared row edges when both the original and corrected sections pass native table admission.
+
+- **(ocr): Skip automatic PaddleOCR on uniform PDF page rasters.** (#2430)
+  Faint text and usable embedded images remain eligible for fallback.
+
+- **(pdf): Expose complete native table headers as column labels.** (#2332)
+  A single fully labeled header row survives in the structured table when its original grid still matches.
+
+- **(dart): Fix compilation of the generated SDK.**
+  Keep the unsigned-value checks aligned with the types emitted by Flutter Rust Bridge.
+
+- **(pdf): Retry low-confidence OCR on rotated scanned pages.** (#2389)
+  Implicit Tesseract OCR can use a verified cached orientation model to recover text. Explicit OCR settings still apply.
+
+- **(pdf): Render Latin text on hosts without a matching font.** (#2347)
+  Use the bundled DejaVu Sans face for covered Latin glyphs after embedded and system font lookup fails.
+
+- **(tests): Check the specific blank-PDF image decode warning.** (#2427)
+  Full-feature tests allow unrelated OCR fallback diagnostics on blank pages.
+
+- **(structured): Apply the caller's raster budget to PDF pages.** (#2352)
+  Check the canvas, CMYK and spot-color planes, and PNG encoding allowance before allocating the page raster.
+
+- **(pdf): Report an undecodable painted image when OCR sees a blank page.** (#2427)
+  The warning names the affected page when neither decoding nor raw image recovery can supply the image.
+
+- **(pdf): Render scanned images with a singleton DeviceGray color-space array.** (#2427)
+  This also covers CCITT Group 4 images that omit Rows and wrap the filter and parameters in arrays.
+
+- **(docx): Return complete hyperlink labels for links split across styled runs.** Redaction can match the full label.
+  With redaction disabled, the label shows the complete first occurrence. URI deduplication stays the same.
+
+- **(redaction): Redact annotation authors and decoded QR payloads.** Cover the structured fields alongside the
+  document text while preserving unrelated annotation and QR metadata.
+
+- **(redaction): Distinguish generated Markdown tags from source text.** Preserve genuine inline formatting while
+  redacting literal tag names in annotations and raw source blocks.
+
+- **(pdf): Preserve word and line breaks when layout reorders upright PDF text.** (#2373)
+  Keep table cells searchable and leave adjacent source glyphs attached.
+
+- **(redaction): Redact repeated terms split by Djot inline styling.** Return verified redacted plain text for
+  supported Djot documents and pages with a format warning. Reject opaque output, including raw page-marker blocks.
+
+- **(windows): Bundle the Microsoft runtime dependencies of PHP, CLI, C FFI, and Elixir releases.** (#2370)
+  Verify hard and delayed DLL imports and runtime notices in the final archives before upload.
+
+- **(redaction): Rebuild verified HTML from redacted plain text.** (#2361)
+  Cover repeated terms split by inline styling while keeping HTML output and reporting the loss of original formatting.
+  Reject HTML whose original text cannot be verified or whose captured content changes during post-processing.
+
+- **(pdf): Keep witnessed prime marks beside their operands.** (#2443)
+  Preserve literal glyphs when both original neighboring spans survive the PDF layout passes.
+
+- **(pdf): Keep same-baseline small caps out of script markup.** (#2443)
+  Preserve genuine scripts and their byte ranges when assembling native PDF text.
+
+- **(redaction): Explain when a post-processor changes the document pages.** (#2447)
+  Redaction rejects added, removed, or renumbered pages and reports that the post-processor changed them.
+
+- **(redaction): Validate Markdown projection edges and remove emptied inline wrappers on Drop.** (#2446)
+  Reject unverified source gaps, including reference definitions at the document edges.
+  Remove delimiters owned by fully redacted inline spans while preserving unrelated markup and original finding offsets.
+
+- **(rust): Restore strict Clippy and no-ORT PDF feature builds.**
+  Keep script fixture geometry bit-exact and compile the OCR structure wrapper only where it is used.
 
 - **(pdf): Keep proved native superscript suffixes with their base text across paragraph grouping.** (#2275)
   Preserve original glyph geometry and unrelated paragraphs; overlapping suffixes retain their existing behavior.

@@ -423,16 +423,25 @@ async fn run_captioning_prepass(
 /// - Validator errors bubble up immediately
 /// - Post-processor errors are caught and recorded in metadata
 /// - System errors (IO, RuntimeError equivalents) always bubble up
+#[cfg_attr(alef, alef(skip))]
+pub async fn run_pipeline(doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractedDocument> {
+    run_pipeline_from_extractor(doc, config, false).await
+}
+
 #[cfg_attr(feature = "otel", tracing::instrument(
-    skip(doc, config),
+    name = "run_pipeline",
+    skip(doc, config, builtin_html_origin),
     fields(
         { crate::telemetry::conventions::OPERATION } = crate::telemetry::conventions::operations::PIPELINE,
         content.element_count = doc.elements.len(),
     )
 ))]
-#[cfg_attr(alef, alef(skip))]
-pub async fn run_pipeline(doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractedDocument> {
-    run_pipeline_impl(doc, config, ProcessorSource::Global).await
+pub(crate) async fn run_pipeline_from_extractor(
+    doc: InternalDocument,
+    config: &ExtractionConfig,
+    builtin_html_origin: bool,
+) -> Result<ExtractedDocument> {
+    run_pipeline_impl(doc, config, ProcessorSource::Global, builtin_html_origin).await
 }
 
 /// Isolated-registry counterpart of [`run_pipeline`] for the #1749 tests described on
@@ -444,14 +453,20 @@ async fn run_pipeline_with_isolated_registry(
     config: &ExtractionConfig,
     state: std::sync::Arc<initialization::ProcessorRegistryState>,
 ) -> Result<ExtractedDocument> {
-    run_pipeline_impl(doc, config, ProcessorSource::Isolated(state)).await
+    run_pipeline_impl(doc, config, ProcessorSource::Isolated(state), false).await
 }
 
 async fn run_pipeline_impl(
     mut doc: InternalDocument,
     config: &ExtractionConfig,
     processor_source: ProcessorSource,
+    _builtin_html_origin: bool,
 ) -> Result<ExtractedDocument> {
+    #[cfg(feature = "redaction")]
+    let replace_html_djot = _builtin_html_origin
+        && config.output_format == crate::core::config::OutputFormat::Djot
+        && crate::extraction::derive::surfaces::has_structured_html_djot_prerender(&doc);
+
     (doc.ocr_text_only, doc.append_ocr_text) = image_ocr_text_rendering(config);
     doc.escape_markdown = config.escape_markdown;
     doc.include_watermarks = config
@@ -558,14 +573,31 @@ async fn run_pipeline_impl(
     #[cfg(not(feature = "chunking"))]
     let chunker_heading_source: Option<String> = None;
 
+    #[cfg(feature = "redaction")]
+    let capture_redaction = processor_stages
+        .as_ref()
+        .is_some_and(|snapshot| snapshot.builtin_redaction().is_some())
+        && (config.redaction.is_some() || crate::text::redaction::external::external_redaction_is_scoped());
+
+    #[cfg(feature = "redaction")]
+    if replace_html_djot && capture_redaction && execution::should_processor_run(&pp_config, "redaction") {
+        doc.pre_rendered_content = None;
+    }
+
     #[cfg(feature = "html")]
-    let styled_html_prerender: Option<String> = {
+    let styled_html_prerender: Option<(String, Option<String>)> = {
         use crate::plugins::InternalRenderer as _;
         if config.output_format == crate::core::config::OutputFormat::Html {
             config.html_output.as_ref().and_then(|html_cfg| {
                 match crate::rendering::StyledHtmlRenderer::new(html_cfg.clone()) {
                     Ok(renderer) => match renderer.render(&doc) {
-                        Ok(html) => Some(html),
+                        Ok(html) => {
+                            #[cfg(feature = "redaction")]
+                            let verified_plain = capture_redaction.then(|| renderer.verified_plain(&doc)).flatten();
+                            #[cfg(not(feature = "redaction"))]
+                            let verified_plain = None;
+                            Some((html, verified_plain))
+                        }
                         Err(e) => {
                             tracing::warn!("StyledHtmlRenderer render failed, falling back to default HTML: {e}");
                             None
@@ -593,10 +625,7 @@ async fn run_pipeline_impl(
         doc,
         include_structure,
         config.output_format.clone(),
-        processor_stages
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.builtin_redaction().is_some())
-            && (config.redaction.is_some() || crate::text::redaction::external::external_redaction_is_scoped()),
+        capture_redaction,
     );
     #[cfg(not(feature = "redaction"))]
     let mut result =
@@ -625,8 +654,13 @@ async fn run_pipeline_impl(
     let internal_document_source_content = result.internal_document.is_some().then(|| result.content.clone());
 
     #[cfg(feature = "html")]
-    if let Some(html) = styled_html_prerender {
-        result.formatted_content = Some(html);
+    if let Some((html, _verified_plain)) = styled_html_prerender {
+        #[cfg(feature = "redaction")]
+        result.set_styled_html(html, _verified_plain.as_deref());
+        #[cfg(not(feature = "redaction"))]
+        {
+            result.formatted_content = Some(html);
+        }
     }
 
     // #331: same idea for the rendered output format, which `apply_output_format` swaps into

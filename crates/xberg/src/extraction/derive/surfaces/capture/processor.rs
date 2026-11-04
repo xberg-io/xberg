@@ -9,7 +9,7 @@ pub(crate) struct ProcessorWitness {
 }
 
 impl SurfaceContext {
-    fn page_shape_matches(&self, document: &ExtractedDocument) -> bool {
+    pub(super) fn page_shape_matches(&self, document: &ExtractedDocument) -> bool {
         match (&self.page_numbers, &document.pages) {
             (None, None) => true,
             (Some(expected), Some(pages)) => {
@@ -34,6 +34,7 @@ impl SurfaceContext {
         if (content_changed || formatted != witness.formatted) && self.formatted_markdown() {
             self.formatted_invalidated = true;
             self.capture.formatted = formatted;
+            self.capture.owned_tags = None;
             if !self.prefer_current_plain {
                 self.formatted_literal = document.formatted_content.clone();
             }
@@ -45,6 +46,7 @@ impl SurfaceContext {
                 expected.plain = Some(super::PlainPageBackup(page.content.clone()));
                 expected.literal = true;
                 expected.tag_exemptions = false;
+                expected.owned_tags = None;
             }
         }
         self.plain_document = Fingerprint::new(&document.content);
@@ -104,11 +106,20 @@ impl DerivedResult {
         if !Arc::ptr_eq(&context.identity, &witness.identity)
             || context.plain_document != witness.plain
             || context.capture.formatted != witness.formatted
-            || !context.page_shape_matches(&self.document)
         {
             return;
         }
-        // Only a validated actual invocation can advance current fields; edited rendering never regains tag authority. ~keep
+        if let Some(markup) = &context.capture.markup {
+            // Verified markup witnesses record a change without advancing the original preimage. ~keep
+            context.markup_mutated |= !context.markup_preimage_matches(&self.document, markup);
+            return;
+        }
+        if !context.page_shape_matches(&self.document) {
+            context.processor_changed_page_shape = true;
+            return;
+        }
+        // Only a validated actual invocation can advance current fields. ~keep
+        // Edited rendering never regains tag authority. ~keep
         context.observe_fields(&self.document, &witness);
     }
 }

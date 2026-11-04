@@ -8,6 +8,9 @@ use xberg_native_pdf::layout::TextSpan;
 use super::{ArtifactRetention, ScriptGeometry};
 use crate::pdf::hierarchy::SegmentData;
 
+mod literal_prime;
+pub(super) use literal_prime::{LiteralPrimeWitness, capture_literal_primes};
+
 // The native SnapBaseSearch already admits `bfs * 0.5`. This private lane uses
 // that domain; the shared core 0.35em script predicate remains unchanged. ~keep
 const ROW_CANDIDATE_MAX_SHIFT_EM: f32 = 0.5;
@@ -50,11 +53,16 @@ pub(crate) struct ScriptOwner {
     pub(crate) base: Arc<SegmentData>,
     pub(crate) script: Arc<SegmentData>,
     run: Arc<Vec<SegmentKey>>,
+    literal_prime_right: Option<SegmentKey>,
 }
 
 impl ScriptOwner {
     pub(crate) fn run_members(&self) -> &[SegmentKey] {
         &self.run
+    }
+
+    pub(crate) fn literal_prime_right(&self) -> Option<&SegmentKey> {
+        self.literal_prime_right.as_ref()
     }
 
     pub(crate) fn matches_script(&self, segment: &SegmentData) -> bool {
@@ -81,6 +89,10 @@ impl ScriptOwner {
             && source_projection_matches(&self.script_source, &self.script)
             && counts.get(&SegmentKey::from(self.base.as_ref())) == Some(&1)
             && self.run.iter().all(|key| counts.get(key) == Some(&1))
+            && self
+                .literal_prime_right
+                .as_ref()
+                .is_none_or(|key| counts.get(key) == Some(&1))
     }
 }
 
@@ -91,17 +103,30 @@ pub(crate) struct NativePageSegments {
 }
 
 impl NativePageSegments {
+    #[cfg(test)]
     pub(crate) fn from_final_spans(
         spans: Vec<TextSpan>,
         roles: &HashMap<u32, Option<u8>>,
         artifacts: ArtifactRetention,
+    ) -> Self {
+        let primes = capture_literal_primes(&spans);
+        Self::from_final_spans_with_primes(spans, roles, artifacts, primes)
+    }
+
+    fn from_final_spans_with_primes(
+        spans: Vec<TextSpan>,
+        roles: &HashMap<u32, Option<u8>>,
+        artifacts: ArtifactRetention,
+        prime_witnesses: Vec<LiteralPrimeWitness>,
     ) -> Self {
         let projected: Vec<_> = spans
             .iter()
             .cloned()
             .map(|span| super::project_final_span(span, roles, ScriptGeometry::Preserve))
             .collect();
-        let owners = collect_owners(&spans, &projected);
+        let mut owners = collect_owners(&spans, &projected);
+        let primes = literal_prime::bind_literal_primes(prime_witnesses, &spans, &projected, &owners);
+        owners.extend(primes);
         let segments = super::dedupe_redrawn_segments(
             spans
                 .iter()
@@ -123,6 +148,10 @@ impl NativePageSegments {
             .filter(|owner| owner.survives_inventory(&source_counts) && owner.survives_inventory(&retained_counts))
             .collect();
         Self { segments, owners }
+    }
+
+    pub(crate) fn has_literal_primes(&self) -> bool {
+        self.owners.iter().any(|owner| owner.literal_prime_right.is_some())
     }
 
     pub(crate) fn valid_owners(&self, segments: &[SegmentData]) -> Vec<ScriptOwner> {
@@ -339,6 +368,7 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
                 base: Arc::new(projected[*base].clone()),
                 script: Arc::new(projected[index].clone()),
                 run: Arc::clone(&run),
+                literal_prime_right: None,
             });
         }
     }
@@ -378,8 +408,14 @@ fn extract_page(
     artifacts: ArtifactRetention,
     geometry: ScriptGeometry,
 ) -> crate::pdf::error::Result<NativePageSegments> {
-    let spans = super::extract_final_spans_from_page(doc, page, geometry)?;
-    Ok(NativePageSegments::from_final_spans(spans, roles, artifacts))
+    let mut prime_witnesses = Vec::new();
+    let spans = super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses))?;
+    Ok(NativePageSegments::from_final_spans_with_primes(
+        spans,
+        roles,
+        artifacts,
+        prime_witnesses,
+    ))
 }
 
 #[cfg(test)]

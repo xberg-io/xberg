@@ -12,6 +12,7 @@ on:
       - ".editorconfig"
       - "mise-tasks/**"
       - ".github/workflows/ci-scripts.yaml"
+      - ".github/workflows/publish.yaml"
       - "mise.toml"
       - "mise.lock"
   workflow_dispatch:
@@ -95,6 +96,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Setup pinned Python for Windows closure contracts
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          tools: python
+
       - name: Install Pester
         id: pester
         uses: xberg-io/actions/install-pester@v1
@@ -107,6 +113,10 @@ jobs:
           path: scripts/tests/pester
           module-path: ${{ steps.pester.outputs.module-path }}
           version: ${{ env.PESTER_VERSION }}
+
+      - name: Run Windows artifact closure contracts
+        shell: pwsh
+        run: python scripts/ci/test_windows_raw_wrappers.py
 
   format:
     if: github.ref == 'refs/heads/main'

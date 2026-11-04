@@ -1264,8 +1264,7 @@ abstract class RustLibApi extends BaseApi {
     required FutureOr<ProcessingStage> Function() processingStage,
     required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
     shouldProcess,
-    required FutureOr<PlatformInt64> Function(ExtractedDocument)
-    estimatedDurationMs,
+    required FutureOr<BigInt> Function(ExtractedDocument) estimatedDurationMs,
     required FutureOr<PlatformInt64> Function() priority,
   });
 
@@ -11318,8 +11317,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required FutureOr<ProcessingStage> Function() processingStage,
     required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
     shouldProcess,
-    required FutureOr<PlatformInt64> Function(ExtractedDocument)
-    estimatedDurationMs,
+    required FutureOr<BigInt> Function(ExtractedDocument) estimatedDurationMs,
     required FutureOr<PlatformInt64> Function() priority,
   }) {
     return handler.executeNormal(
@@ -11340,7 +11338,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             shouldProcess,
             serializer,
           );
-          sse_encode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
+          sse_encode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
             estimatedDurationMs,
             serializer,
           );
@@ -15761,22 +15759,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<bool>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_bool(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -15796,22 +15803,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<PlatformInt64>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_i_64(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -15832,22 +15848,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<bool>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_bool(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -15868,22 +15893,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<Float64List>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_list_prim_f_64_strict(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -15904,22 +15938,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<ExtractedDocument>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_extracted_document(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -15936,22 +15979,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<bool>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_bool(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -15969,22 +16021,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<ConfidenceSemantics>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_confidence_semantics(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16001,22 +16062,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<PlatformInt64>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_i_64(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16034,22 +16104,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<List<String>>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_list_String(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16067,22 +16146,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<OcrBackendType>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_ocr_backend_type(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16100,22 +16188,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<PageOrientationHandling>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_page_orientation_handling(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16133,22 +16230,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (callId) async {
       Box<ProcessingStage>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw());
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_processing_stage(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16169,22 +16275,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<ExtractedDocument>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_extracted_document(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16204,22 +16319,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<String>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_String(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16231,30 +16355,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   Future<void> Function(int, dynamic)
-  encode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
-    FutureOr<PlatformInt64> Function(ExtractedDocument) raw,
+  encode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
+    FutureOr<BigInt> Function(ExtractedDocument) raw,
   ) {
     return (callId, rawArg0) async {
       final arg0 = dco_decode_extracted_document(rawArg0);
 
-      Box<PlatformInt64>? rawOutput;
+      Box<BigInt>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
-        sse_encode_i_64(rawOutput.value, serializer);
-      } else {
+        sse_encode_u_64(rawOutput.value, serializer);
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16275,22 +16408,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<bool>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_bool(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16311,22 +16453,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<void>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_unit(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16346,22 +16497,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<List<Float64List>>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_list_list_prim_f_64_strict(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16382,22 +16542,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<ExtractedDocument>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_extracted_document(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16417,22 +16586,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<List<String>>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_list_String(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -16453,22 +16631,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
       Box<bool>? rawOutput;
       Box<AnyhowException>? rawError;
+      SseSerializer? serializer;
       try {
         rawOutput = Box(await raw(arg0, arg1));
-      } catch (e, s) {
-        rawError = Box(AnyhowException("$e\n\n$s"));
-      }
-
-      final serializer = SseSerializer(generalizedFrbRustBinding);
-      assert((rawOutput != null) ^ (rawError != null));
-      if (rawOutput != null) {
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(0);
         sse_encode_bool(rawOutput.value, serializer);
-      } else {
+      } catch (e, s) {
+        rawOutput = null;
+        rawError = Box(AnyhowException("$e\n\n$s"));
+        if (serializer != null) {
+          final failed = serializer.intoRaw();
+          // The partial success buffer owns a native Vec until explicitly released.
+          if (!const bool.fromEnvironment('dart.library.js_interop')) {
+            (generalizedFrbRustBinding as dynamic).rustVecU8Free(
+              failed.ptr,
+              failed.rustVecLen,
+            );
+          }
+        }
+        serializer = SseSerializer(generalizedFrbRustBinding);
         serializer.buffer.putUint8(1);
-        sse_encode_AnyhowException(rawError!.value, serializer);
+        sse_encode_AnyhowException(rawError.value, serializer);
       }
-      final output = serializer.intoRaw();
+      assert((rawOutput != null) ^ (rawError != null));
+      final output = serializer!.intoRaw();
 
       generalizedFrbRustBinding.dartFnDeliverOutput(
         callId: callId,
@@ -17138,8 +17325,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  FutureOr<PlatformInt64> Function(ExtractedDocument)
-  dco_decode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
+  FutureOr<BigInt> Function(ExtractedDocument)
+  dco_decode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -17545,8 +17732,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       format: dco_decode_String(arr[0]),
       fileCount: dco_decode_i_64(arr[1]),
       fileList: dco_decode_list_String(arr[2]),
-      totalSize: dco_decode_i_64(arr[3]),
-      compressedSize: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      totalSize: dco_decode_u_64(arr[3]),
+      compressedSize: dco_decode_opt_box_autoadd_u_64(arr[4]),
     );
   }
 
@@ -17576,7 +17763,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return AudioMetadata(
-      durationMs: dco_decode_opt_box_autoadd_i_64(arr[0]),
+      durationMs: dco_decode_opt_box_autoadd_u_64(arr[0]),
       codec: dco_decode_opt_String(arr[1]),
       container: dco_decode_opt_String(arr[2]),
       sampleRateHz: dco_decode_opt_box_autoadd_i_64(arr[3]),
@@ -18487,6 +18674,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_u_64(raw);
+  }
+
+  @protected
   UrlExtractionConfig dco_decode_box_autoadd_url_extraction_config(
     dynamic raw,
   ) {
@@ -18703,7 +18896,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return ChunkInfo(
       index: dco_decode_i_64(arr[0]),
       pages: dco_decode_page_range(arr[1]),
-      estimatedTimeMs: dco_decode_i_64(arr[2]),
+      estimatedTimeMs: dco_decode_u_64(arr[2]),
     );
   }
 
@@ -18789,8 +18982,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     switch (raw[0]) {
       case 0:
         return ChunkingReason_LargeFile(
-          sizeBytes: dco_decode_i_64(raw[1]),
-          thresholdBytes: dco_decode_i_64(raw[2]),
+          sizeBytes: dco_decode_u_64(raw[1]),
+          thresholdBytes: dco_decode_u_64(raw[2]),
         );
       case 1:
         return ChunkingReason_ManyPages(
@@ -18804,7 +18997,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         );
       case 3:
         return ChunkingReason_LargeAndManyPages(
-          sizeBytes: dco_decode_i_64(raw[1]),
+          sizeBytes: dco_decode_u_64(raw[1]),
           pageCount: dco_decode_i_64(raw[2]),
         );
       default:
@@ -19080,8 +19273,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       outputFormat: dco_decode_html_to_markdown_rs_output_format(arr[38]),
       includeDocumentStructure: dco_decode_bool(arr[39]),
       extractImages: dco_decode_bool(arr[40]),
-      maxImageSize: dco_decode_i_64(arr[41]),
-      maxInputSize: dco_decode_opt_box_autoadd_i_64(arr[42]),
+      maxImageSize: dco_decode_u_64(arr[41]),
+      maxInputSize: dco_decode_opt_box_autoadd_u_64(arr[42]),
       captureSvg: dco_decode_bool(arr[43]),
       inferDimensions: dco_decode_bool(arr[44]),
       maxDepth: dco_decode_opt_box_autoadd_i_64(arr[45]),
@@ -19145,12 +19338,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       trackingParams: dco_decode_list_String(arr[19]),
       customHeaders: dco_decode_Map_String_String_None(arr[20]),
       requestTimeout: dco_decode_i_64(arr[21]),
-      rateLimitMs: dco_decode_opt_box_autoadd_i_64(arr[22]),
+      rateLimitMs: dco_decode_opt_box_autoadd_u_64(arr[22]),
       maxRedirects: dco_decode_i_64(arr[23]),
       retryCount: dco_decode_i_64(arr[24]),
       retryCodes: dco_decode_list_prim_i_64_strict(arr[25]),
-      retryInitialDelayMs: dco_decode_i_64(arr[26]),
-      retryMaxDelayMs: dco_decode_i_64(arr[27]),
+      retryInitialDelayMs: dco_decode_u_64(arr[26]),
+      retryMaxDelayMs: dco_decode_u_64(arr[27]),
       rateLimitJitterRatio: dco_decode_f_64(arr[28]),
       cookiesEnabled: dco_decode_bool(arr[29]),
       auth: dco_decode_opt_box_autoadd_auth_config(arr[30]),
@@ -19482,7 +19675,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return DocumentMetadata(
       mimeType: dco_decode_String(arr[0]),
-      sizeBytes: dco_decode_i_64(arr[1]),
+      sizeBytes: dco_decode_u_64(arr[1]),
       pageCount: dco_decode_opt_box_autoadd_i_64(arr[2]),
       forceOcr: dco_decode_bool(arr[3]),
       userChunkConfig: dco_decode_opt_box_autoadd_user_chunk_config(arr[4]),
@@ -19758,7 +19951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       showDownloadProgress: dco_decode_bool(arr[3]),
       cacheDir: dco_decode_opt_String(arr[4]),
       acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[5]),
-      maxEmbedDurationSecs: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      maxEmbedDurationSecs: dco_decode_opt_box_autoadd_u_64(arr[6]),
       maxSequenceLength: dco_decode_opt_box_autoadd_i_64(arr[7]),
     );
   }
@@ -20089,11 +20282,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       postprocessor: dco_decode_opt_box_autoadd_post_processor_config(arr[19]),
       htmlOptions: dco_decode_opt_box_autoadd_conversion_options(arr[20]),
       htmlOutput: dco_decode_opt_box_autoadd_html_output_config(arr[21]),
-      extractionTimeoutSecs: dco_decode_opt_box_autoadd_i_64(arr[22]),
+      extractionTimeoutSecs: dco_decode_opt_box_autoadd_u_64(arr[22]),
       maxConcurrentExtractions: dco_decode_opt_box_autoadd_i_64(arr[23]),
       resultFormat: dco_decode_result_format(arr[24]),
       securityLimits: dco_decode_opt_box_autoadd_security_limits(arr[25]),
-      maxEmbeddedFileBytes: dco_decode_opt_box_autoadd_i_64(arr[26]),
+      maxEmbeddedFileBytes: dco_decode_opt_box_autoadd_u_64(arr[26]),
       outputFormat: dco_decode_output_format(arr[27]),
       escapeMarkdown: dco_decode_bool(arr[28]),
       tableAnchors: dco_decode_bool(arr[29]),
@@ -20106,7 +20299,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       strictParse: dco_decode_bool(arr[36]),
       acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[37]),
       cacheNamespace: dco_decode_opt_String(arr[38]),
-      cacheTtlSecs: dco_decode_opt_box_autoadd_i_64(arr[39]),
+      cacheTtlSecs: dco_decode_opt_box_autoadd_u_64(arr[39]),
       email: dco_decode_opt_box_autoadd_email_config(arr[40]),
       csv: dco_decode_opt_box_autoadd_csv_config(arr[41]),
       geojson: dco_decode_opt_box_autoadd_geo_json_extraction_config(arr[42]),
@@ -20255,7 +20448,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       strictParse: dco_decode_opt_box_autoadd_bool(arr[21]),
       layout: dco_decode_opt_box_autoadd_layout_detection_config(arr[22]),
       transcription: dco_decode_opt_box_autoadd_transcription_config(arr[23]),
-      timeoutSecs: dco_decode_opt_box_autoadd_i_64(arr[24]),
+      timeoutSecs: dco_decode_opt_box_autoadd_u_64(arr[24]),
       treeSitter: dco_decode_opt_box_autoadd_tree_sitter_config(arr[25]),
       structuredExtraction:
           dco_decode_opt_box_autoadd_structured_extraction_config(arr[26]),
@@ -20563,14 +20756,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return HeuristicsConfig(
       enablePdfTextHeuristics: dco_decode_bool(arr[0]),
       textLayerThreshold: dco_decode_f_64(arr[1]),
-      fileSizeThresholdBytes: dco_decode_i_64(arr[2]),
+      fileSizeThresholdBytes: dco_decode_u_64(arr[2]),
       pageCountThreshold: dco_decode_i_64(arr[3]),
       targetPagesPerChunk: dco_decode_i_64(arr[4]),
       maxPagesPerChunk: dco_decode_i_64(arr[5]),
-      diskProcessingThresholdBytes: dco_decode_i_64(arr[6]),
+      diskProcessingThresholdBytes: dco_decode_u_64(arr[6]),
       minCharsPerPage: dco_decode_i_64(arr[7]),
       maxXlsxSheetCount: dco_decode_i_64(arr[8]),
-      maxXlsxWorkbookCells: dco_decode_i_64(arr[9]),
+      maxXlsxWorkbookCells: dco_decode_u_64(arr[9]),
       maxPptxEmbeddedCount: dco_decode_i_64(arr[10]),
     );
   }
@@ -21022,7 +21215,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       showDownloadProgress: dco_decode_bool(arr[4]),
       cacheDir: dco_decode_opt_String(arr[5]),
       acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[6]),
-      maxEmbedDurationSecs: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      maxEmbedDurationSecs: dco_decode_opt_box_autoadd_u_64(arr[7]),
     );
   }
 
@@ -21823,7 +22016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return LlmCacheConfig(
       maxEntries: dco_decode_opt_box_autoadd_i_64(arr[0]),
-      ttlSeconds: dco_decode_opt_box_autoadd_i_64(arr[1]),
+      ttlSeconds: dco_decode_opt_box_autoadd_u_64(arr[1]),
       backend: dco_decode_opt_String(arr[2]),
       backendConfig: dco_decode_opt_Map_String_String_None(arr[3]),
     );
@@ -21839,10 +22032,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       model: dco_decode_String(arr[0]),
       apiKey: dco_decode_opt_String(arr[1]),
       baseUrl: dco_decode_opt_String(arr[2]),
-      timeoutSecs: dco_decode_opt_box_autoadd_i_64(arr[3]),
+      timeoutSecs: dco_decode_opt_box_autoadd_u_64(arr[3]),
       maxRetries: dco_decode_opt_box_autoadd_i_64(arr[4]),
       temperature: dco_decode_opt_box_autoadd_f_64(arr[5]),
-      maxTokens: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      maxTokens: dco_decode_opt_box_autoadd_u_64(arr[6]),
       topP: dco_decode_opt_box_autoadd_f_64(arr[7]),
       stop: dco_decode_opt_list_String(arr[8]),
       seed: dco_decode_opt_box_autoadd_i_64(arr[9]),
@@ -21858,8 +22051,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rateLimit: dco_decode_opt_box_autoadd_llm_rate_limit_config(arr[19]),
       costTracking: dco_decode_opt_box_autoadd_bool(arr[20]),
       tracing: dco_decode_opt_box_autoadd_bool(arr[21]),
-      cooldownSecs: dco_decode_opt_box_autoadd_i_64(arr[22]),
-      healthCheckSecs: dco_decode_opt_box_autoadd_i_64(arr[23]),
+      cooldownSecs: dco_decode_opt_box_autoadd_u_64(arr[22]),
+      healthCheckSecs: dco_decode_opt_box_autoadd_u_64(arr[23]),
       bedrock: dco_decode_opt_box_autoadd_bedrock_config(arr[24]),
       credentialProvider: dco_decode_opt_box_autoadd_credential_provider_config(
         arr[25],
@@ -21891,8 +22084,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return LlmRateLimitConfig(
       rpm: dco_decode_opt_box_autoadd_i_64(arr[0]),
-      tpm: dco_decode_opt_box_autoadd_i_64(arr[1]),
-      windowSeconds: dco_decode_opt_box_autoadd_i_64(arr[2]),
+      tpm: dco_decode_opt_box_autoadd_u_64(arr[1]),
+      windowSeconds: dco_decode_opt_box_autoadd_u_64(arr[2]),
     );
   }
 
@@ -21905,9 +22098,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return LlmUsage(
       model: dco_decode_String(arr[0]),
       source: dco_decode_String(arr[1]),
-      inputTokens: dco_decode_opt_box_autoadd_i_64(arr[2]),
-      outputTokens: dco_decode_opt_box_autoadd_i_64(arr[3]),
-      totalTokens: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      inputTokens: dco_decode_opt_box_autoadd_u_64(arr[2]),
+      outputTokens: dco_decode_opt_box_autoadd_u_64(arr[3]),
+      totalTokens: dco_decode_opt_box_autoadd_u_64(arr[4]),
       estimatedCost: dco_decode_opt_box_autoadd_f_64(arr[5]),
       finishReason: dco_decode_opt_String(arr[6]),
     );
@@ -22002,7 +22195,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           dco_decode_opt_box_autoadd_image_preprocessing_metadata(arr[11]),
       jsonSchema: dco_decode_opt_String(arr[12]),
       error: dco_decode_opt_box_autoadd_error_metadata(arr[13]),
-      extractionDurationMs: dco_decode_opt_box_autoadd_i_64(arr[14]),
+      extractionDurationMs: dco_decode_opt_box_autoadd_u_64(arr[14]),
       category: dco_decode_opt_String(arr[15]),
       tags: dco_decode_opt_list_String(arr[16]),
       documentVersion: dco_decode_opt_String(arr[17]),
@@ -22115,8 +22308,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     switch (raw[0]) {
       case 0:
         return NoChunkingReason_SmallFile(
-          sizeBytes: dco_decode_i_64(raw[1]),
-          thresholdBytes: dco_decode_i_64(raw[2]),
+          sizeBytes: dco_decode_u_64(raw[1]),
+          thresholdBytes: dco_decode_u_64(raw[2]),
         );
       case 1:
         return NoChunkingReason_FewPages(
@@ -23301,6 +23494,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
   UrlExtractionConfig? dco_decode_opt_box_autoadd_url_extraction_config(
     dynamic raw,
   ) {
@@ -24430,7 +24629,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       showDownloadProgress: dco_decode_bool(arr[3]),
       cacheDir: dco_decode_opt_String(arr[4]),
       acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[5]),
-      maxRerankDurationSecs: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      maxRerankDurationSecs: dco_decode_opt_box_autoadd_u_64(arr[6]),
     );
   }
 
@@ -24579,7 +24778,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       corsOrigins: dco_decode_list_String(arr[2]),
       maxRequestBodyBytes: dco_decode_i_64(arr[3]),
       maxMultipartFieldBytes: dco_decode_i_64(arr[4]),
-      jobTimeoutSecs: dco_decode_i_64(arr[5]),
+      jobTimeoutSecs: dco_decode_u_64(arr[5]),
     );
   }
 
@@ -24622,7 +24821,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       showDownloadProgress: dco_decode_bool(arr[3]),
       cacheDir: dco_decode_opt_String(arr[4]),
       acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[5]),
-      maxEmbedDurationSecs: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      maxEmbedDurationSecs: dco_decode_opt_box_autoadd_u_64(arr[6]),
     );
   }
 
@@ -24998,9 +25197,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       model: dco_decode_whisper_model(arr[1]),
       language: dco_decode_opt_String(arr[2]),
       timestamps: dco_decode_bool(arr[3]),
-      maxDurationMs: dco_decode_opt_box_autoadd_i_64(arr[4]),
-      maxBytes: dco_decode_opt_box_autoadd_i_64(arr[5]),
-      timeoutMs: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      maxDurationMs: dco_decode_opt_box_autoadd_u_64(arr[4]),
+      maxBytes: dco_decode_opt_box_autoadd_u_64(arr[5]),
+      timeoutMs: dco_decode_opt_box_autoadd_u_64(arr[6]),
       modelCacheDir: dco_decode_opt_String(arr[7]),
       allowNetwork: dco_decode_bool(arr[8]),
       verifyHash: dco_decode_bool(arr[9]),
@@ -25082,6 +25281,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       cacheDir: dco_decode_opt_String(arr[2]),
       hfRevision: dco_decode_opt_String(arr[3]),
     );
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -25217,8 +25422,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return XbergError_Transcription(message: dco_decode_String(raw[1]));
       case 14:
         return XbergError_Timeout(
-          elapsedMs: dco_decode_i_64(raw[1]),
-          limitMs: dco_decode_i_64(raw[2]),
+          elapsedMs: dco_decode_u_64(raw[1]),
+          limitMs: dco_decode_u_64(raw[2]),
         );
       case 15:
         return XbergError_Cancelled();
@@ -26169,8 +26374,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_format = sse_decode_String(deserializer);
     var var_fileCount = sse_decode_i_64(deserializer);
     var var_fileList = sse_decode_list_String(deserializer);
-    var var_totalSize = sse_decode_i_64(deserializer);
-    var var_compressedSize = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_totalSize = sse_decode_u_64(deserializer);
+    var var_compressedSize = sse_decode_opt_box_autoadd_u_64(deserializer);
     return ArchiveMetadata(
       format: var_format,
       fileCount: var_fileCount,
@@ -26203,7 +26408,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   AudioMetadata sse_decode_audio_metadata(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_durationMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_durationMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_codec = sse_decode_opt_String(deserializer);
     var var_container = sse_decode_opt_String(deserializer);
     var var_sampleRateHz = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -27284,6 +27489,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
   UrlExtractionConfig sse_decode_box_autoadd_url_extraction_config(
     SseDeserializer deserializer,
   ) {
@@ -27540,7 +27751,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_index = sse_decode_i_64(deserializer);
     var var_pages = sse_decode_page_range(deserializer);
-    var var_estimatedTimeMs = sse_decode_i_64(deserializer);
+    var var_estimatedTimeMs = sse_decode_u_64(deserializer);
     return ChunkInfo(
       index: var_index,
       pages: var_pages,
@@ -27656,8 +27867,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var tag_ = sse_decode_i_32(deserializer);
     switch (tag_) {
       case 0:
-        var var_sizeBytes = sse_decode_i_64(deserializer);
-        var var_thresholdBytes = sse_decode_i_64(deserializer);
+        var var_sizeBytes = sse_decode_u_64(deserializer);
+        var var_thresholdBytes = sse_decode_u_64(deserializer);
         return ChunkingReason_LargeFile(
           sizeBytes: var_sizeBytes,
           thresholdBytes: var_thresholdBytes,
@@ -27677,7 +27888,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           forceOcr: var_forceOcr,
         );
       case 3:
-        var var_sizeBytes = sse_decode_i_64(deserializer);
+        var var_sizeBytes = sse_decode_u_64(deserializer);
         var var_pageCount = sse_decode_i_64(deserializer);
         return ChunkingReason_LargeAndManyPages(
           sizeBytes: var_sizeBytes,
@@ -27997,8 +28208,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     );
     var var_includeDocumentStructure = sse_decode_bool(deserializer);
     var var_extractImages = sse_decode_bool(deserializer);
-    var var_maxImageSize = sse_decode_i_64(deserializer);
-    var var_maxInputSize = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_maxImageSize = sse_decode_u_64(deserializer);
+    var var_maxInputSize = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_captureSvg = sse_decode_bool(deserializer);
     var var_inferDimensions = sse_decode_bool(deserializer);
     var var_maxDepth = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -28122,12 +28333,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_trackingParams = sse_decode_list_String(deserializer);
     var var_customHeaders = sse_decode_Map_String_String_None(deserializer);
     var var_requestTimeout = sse_decode_i_64(deserializer);
-    var var_rateLimitMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_rateLimitMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_maxRedirects = sse_decode_i_64(deserializer);
     var var_retryCount = sse_decode_i_64(deserializer);
     var var_retryCodes = sse_decode_list_prim_i_64_strict(deserializer);
-    var var_retryInitialDelayMs = sse_decode_i_64(deserializer);
-    var var_retryMaxDelayMs = sse_decode_i_64(deserializer);
+    var var_retryInitialDelayMs = sse_decode_u_64(deserializer);
+    var var_retryMaxDelayMs = sse_decode_u_64(deserializer);
     var var_rateLimitJitterRatio = sse_decode_f_64(deserializer);
     var var_cookiesEnabled = sse_decode_bool(deserializer);
     var var_auth = sse_decode_opt_box_autoadd_auth_config(deserializer);
@@ -28549,7 +28760,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DocumentMetadata sse_decode_document_metadata(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_mimeType = sse_decode_String(deserializer);
-    var var_sizeBytes = sse_decode_i_64(deserializer);
+    var var_sizeBytes = sse_decode_u_64(deserializer);
     var var_pageCount = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_forceOcr = sse_decode_bool(deserializer);
     var var_userChunkConfig = sse_decode_opt_box_autoadd_user_chunk_config(
@@ -28885,7 +29096,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_acceleration = sse_decode_opt_box_autoadd_acceleration_config(
       deserializer,
     );
-    var var_maxEmbedDurationSecs = sse_decode_opt_box_autoadd_i_64(
+    var var_maxEmbedDurationSecs = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     var var_maxSequenceLength = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -29330,7 +29541,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_htmlOutput = sse_decode_opt_box_autoadd_html_output_config(
       deserializer,
     );
-    var var_extractionTimeoutSecs = sse_decode_opt_box_autoadd_i_64(
+    var var_extractionTimeoutSecs = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     var var_maxConcurrentExtractions = sse_decode_opt_box_autoadd_i_64(
@@ -29340,7 +29551,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_securityLimits = sse_decode_opt_box_autoadd_security_limits(
       deserializer,
     );
-    var var_maxEmbeddedFileBytes = sse_decode_opt_box_autoadd_i_64(
+    var var_maxEmbeddedFileBytes = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     var var_outputFormat = sse_decode_output_format(deserializer);
@@ -29363,7 +29574,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       deserializer,
     );
     var var_cacheNamespace = sse_decode_opt_String(deserializer);
-    var var_cacheTtlSecs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_cacheTtlSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_email = sse_decode_opt_box_autoadd_email_config(deserializer);
     var var_csv = sse_decode_opt_box_autoadd_csv_config(deserializer);
     var var_geojson = sse_decode_opt_box_autoadd_geo_json_extraction_config(
@@ -29618,7 +29829,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_transcription = sse_decode_opt_box_autoadd_transcription_config(
       deserializer,
     );
-    var var_timeoutSecs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_timeoutSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_treeSitter = sse_decode_opt_box_autoadd_tree_sitter_config(
       deserializer,
     );
@@ -29964,14 +30175,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_enablePdfTextHeuristics = sse_decode_bool(deserializer);
     var var_textLayerThreshold = sse_decode_f_64(deserializer);
-    var var_fileSizeThresholdBytes = sse_decode_i_64(deserializer);
+    var var_fileSizeThresholdBytes = sse_decode_u_64(deserializer);
     var var_pageCountThreshold = sse_decode_i_64(deserializer);
     var var_targetPagesPerChunk = sse_decode_i_64(deserializer);
     var var_maxPagesPerChunk = sse_decode_i_64(deserializer);
-    var var_diskProcessingThresholdBytes = sse_decode_i_64(deserializer);
+    var var_diskProcessingThresholdBytes = sse_decode_u_64(deserializer);
     var var_minCharsPerPage = sse_decode_i_64(deserializer);
     var var_maxXlsxSheetCount = sse_decode_i_64(deserializer);
-    var var_maxXlsxWorkbookCells = sse_decode_i_64(deserializer);
+    var var_maxXlsxWorkbookCells = sse_decode_u_64(deserializer);
     var var_maxPptxEmbeddedCount = sse_decode_i_64(deserializer);
     return HeuristicsConfig(
       enablePdfTextHeuristics: var_enablePdfTextHeuristics,
@@ -30529,7 +30740,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_acceleration = sse_decode_opt_box_autoadd_acceleration_config(
       deserializer,
     );
-    var var_maxEmbedDurationSecs = sse_decode_opt_box_autoadd_i_64(
+    var var_maxEmbedDurationSecs = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     return LateInteractionConfig(
@@ -32027,7 +32238,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LlmCacheConfig sse_decode_llm_cache_config(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_maxEntries = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_ttlSeconds = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_ttlSeconds = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_backend = sse_decode_opt_String(deserializer);
     var var_backendConfig = sse_decode_opt_Map_String_String_None(deserializer);
     return LlmCacheConfig(
@@ -32044,10 +32255,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_model = sse_decode_String(deserializer);
     var var_apiKey = sse_decode_opt_String(deserializer);
     var var_baseUrl = sse_decode_opt_String(deserializer);
-    var var_timeoutSecs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_timeoutSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_maxRetries = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_temperature = sse_decode_opt_box_autoadd_f_64(deserializer);
-    var var_maxTokens = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_maxTokens = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_topP = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_stop = sse_decode_opt_list_String(deserializer);
     var var_seed = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -32065,8 +32276,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     );
     var var_costTracking = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_tracing = sse_decode_opt_box_autoadd_bool(deserializer);
-    var var_cooldownSecs = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_healthCheckSecs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_cooldownSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_healthCheckSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_bedrock = sse_decode_opt_box_autoadd_bedrock_config(deserializer);
     var var_credentialProvider =
         sse_decode_opt_box_autoadd_credential_provider_config(deserializer);
@@ -32127,8 +32338,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_rpm = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_tpm = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_windowSeconds = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_tpm = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_windowSeconds = sse_decode_opt_box_autoadd_u_64(deserializer);
     return LlmRateLimitConfig(
       rpm: var_rpm,
       tpm: var_tpm,
@@ -32141,9 +32352,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_model = sse_decode_String(deserializer);
     var var_source = sse_decode_String(deserializer);
-    var var_inputTokens = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_outputTokens = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_totalTokens = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_inputTokens = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_outputTokens = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_totalTokens = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_estimatedCost = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_finishReason = sse_decode_opt_String(deserializer);
     return LlmUsage(
@@ -32243,7 +32454,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_opt_box_autoadd_image_preprocessing_metadata(deserializer);
     var var_jsonSchema = sse_decode_opt_String(deserializer);
     var var_error = sse_decode_opt_box_autoadd_error_metadata(deserializer);
-    var var_extractionDurationMs = sse_decode_opt_box_autoadd_i_64(
+    var var_extractionDurationMs = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     var var_category = sse_decode_opt_String(deserializer);
@@ -32385,8 +32596,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var tag_ = sse_decode_i_32(deserializer);
     switch (tag_) {
       case 0:
-        var var_sizeBytes = sse_decode_i_64(deserializer);
-        var var_thresholdBytes = sse_decode_i_64(deserializer);
+        var var_sizeBytes = sse_decode_u_64(deserializer);
+        var var_thresholdBytes = sse_decode_u_64(deserializer);
         return NoChunkingReason_SmallFile(
           sizeBytes: var_sizeBytes,
           thresholdBytes: var_thresholdBytes,
@@ -34278,6 +34489,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   UrlExtractionConfig? sse_decode_opt_box_autoadd_url_extraction_config(
     SseDeserializer deserializer,
   ) {
@@ -35755,7 +35977,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_acceleration = sse_decode_opt_box_autoadd_acceleration_config(
       deserializer,
     );
-    var var_maxRerankDurationSecs = sse_decode_opt_box_autoadd_i_64(
+    var var_maxRerankDurationSecs = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     return RerankerConfig(
@@ -35945,7 +36167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_corsOrigins = sse_decode_list_String(deserializer);
     var var_maxRequestBodyBytes = sse_decode_i_64(deserializer);
     var var_maxMultipartFieldBytes = sse_decode_i_64(deserializer);
-    var var_jobTimeoutSecs = sse_decode_i_64(deserializer);
+    var var_jobTimeoutSecs = sse_decode_u_64(deserializer);
     return ServerConfig(
       host: var_host,
       port: var_port,
@@ -35992,7 +36214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_acceleration = sse_decode_opt_box_autoadd_acceleration_config(
       deserializer,
     );
-    var var_maxEmbedDurationSecs = sse_decode_opt_box_autoadd_i_64(
+    var var_maxEmbedDurationSecs = sse_decode_opt_box_autoadd_u_64(
       deserializer,
     );
     return SparseEmbeddingConfig(
@@ -36446,9 +36668,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_model = sse_decode_whisper_model(deserializer);
     var var_language = sse_decode_opt_String(deserializer);
     var var_timestamps = sse_decode_bool(deserializer);
-    var var_maxDurationMs = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_maxBytes = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_timeoutMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_maxDurationMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_maxBytes = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_timeoutMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_modelCacheDir = sse_decode_opt_String(deserializer);
     var var_allowNetwork = sse_decode_bool(deserializer);
     var var_verifyHash = sse_decode_bool(deserializer);
@@ -36563,6 +36785,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       cacheDir: var_cacheDir,
       hfRevision: var_hfRevision,
     );
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -36734,8 +36962,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_message = sse_decode_String(deserializer);
         return XbergError_Transcription(message: var_message);
       case 14:
-        var var_elapsedMs = sse_decode_i_64(deserializer);
-        var var_limitMs = sse_decode_i_64(deserializer);
+        var var_elapsedMs = sse_decode_u_64(deserializer);
+        var var_limitMs = sse_decode_u_64(deserializer);
         return XbergError_Timeout(
           elapsedMs: var_elapsedMs,
           limitMs: var_limitMs,
@@ -37533,13 +37761,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
-    FutureOr<PlatformInt64> Function(ExtractedDocument) self,
+  void sse_encode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
+    FutureOr<BigInt> Function(ExtractedDocument) self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_DartOpaque(
-      encode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(self),
+      encode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(self),
       serializer,
     );
   }
@@ -38051,8 +38279,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.format, serializer);
     sse_encode_i_64(self.fileCount, serializer);
     sse_encode_list_String(self.fileList, serializer);
-    sse_encode_i_64(self.totalSize, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.compressedSize, serializer);
+    sse_encode_u_64(self.totalSize, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.compressedSize, serializer);
   }
 
   @protected
@@ -38072,7 +38300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_audio_metadata(AudioMetadata self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_box_autoadd_i_64(self.durationMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.durationMs, serializer);
     sse_encode_opt_String(self.codec, serializer);
     sse_encode_opt_String(self.container, serializer);
     sse_encode_opt_box_autoadd_i_64(self.sampleRateHz, serializer);
@@ -39277,6 +39505,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_url_extraction_config(
     UrlExtractionConfig self,
     SseSerializer serializer,
@@ -39497,7 +39731,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.index, serializer);
     sse_encode_page_range(self.pages, serializer);
-    sse_encode_i_64(self.estimatedTimeMs, serializer);
+    sse_encode_u_64(self.estimatedTimeMs, serializer);
   }
 
   @protected
@@ -39580,8 +39814,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         thresholdBytes: final thresholdBytes,
       ):
         sse_encode_i_32(0, serializer);
-        sse_encode_i_64(sizeBytes, serializer);
-        sse_encode_i_64(thresholdBytes, serializer);
+        sse_encode_u_64(sizeBytes, serializer);
+        sse_encode_u_64(thresholdBytes, serializer);
       case ChunkingReason_ManyPages(
         pageCount: final pageCount,
         threshold: final threshold,
@@ -39601,7 +39835,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         pageCount: final pageCount,
       ):
         sse_encode_i_32(3, serializer);
-        sse_encode_i_64(sizeBytes, serializer);
+        sse_encode_u_64(sizeBytes, serializer);
         sse_encode_i_64(pageCount, serializer);
     }
   }
@@ -39851,8 +40085,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_html_to_markdown_rs_output_format(self.outputFormat, serializer);
     sse_encode_bool(self.includeDocumentStructure, serializer);
     sse_encode_bool(self.extractImages, serializer);
-    sse_encode_i_64(self.maxImageSize, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.maxInputSize, serializer);
+    sse_encode_u_64(self.maxImageSize, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxInputSize, serializer);
     sse_encode_bool(self.captureSvg, serializer);
     sse_encode_bool(self.inferDimensions, serializer);
     sse_encode_opt_box_autoadd_i_64(self.maxDepth, serializer);
@@ -39912,12 +40146,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_String(self.trackingParams, serializer);
     sse_encode_Map_String_String_None(self.customHeaders, serializer);
     sse_encode_i_64(self.requestTimeout, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.rateLimitMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.rateLimitMs, serializer);
     sse_encode_i_64(self.maxRedirects, serializer);
     sse_encode_i_64(self.retryCount, serializer);
     sse_encode_list_prim_i_64_strict(self.retryCodes, serializer);
-    sse_encode_i_64(self.retryInitialDelayMs, serializer);
-    sse_encode_i_64(self.retryMaxDelayMs, serializer);
+    sse_encode_u_64(self.retryInitialDelayMs, serializer);
+    sse_encode_u_64(self.retryMaxDelayMs, serializer);
     sse_encode_f_64(self.rateLimitJitterRatio, serializer);
     sse_encode_bool(self.cookiesEnabled, serializer);
     sse_encode_opt_box_autoadd_auth_config(self.auth, serializer);
@@ -40205,7 +40439,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.mimeType, serializer);
-    sse_encode_i_64(self.sizeBytes, serializer);
+    sse_encode_u_64(self.sizeBytes, serializer);
     sse_encode_opt_box_autoadd_i_64(self.pageCount, serializer);
     sse_encode_bool(self.forceOcr, serializer);
     sse_encode_opt_box_autoadd_user_chunk_config(
@@ -40435,7 +40669,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.acceleration,
       serializer,
     );
-    sse_encode_opt_box_autoadd_i_64(self.maxEmbedDurationSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxEmbedDurationSecs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.maxSequenceLength, serializer);
   }
 
@@ -40748,11 +40982,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     );
     sse_encode_opt_box_autoadd_conversion_options(self.htmlOptions, serializer);
     sse_encode_opt_box_autoadd_html_output_config(self.htmlOutput, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.extractionTimeoutSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.extractionTimeoutSecs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.maxConcurrentExtractions, serializer);
     sse_encode_result_format(self.resultFormat, serializer);
     sse_encode_opt_box_autoadd_security_limits(self.securityLimits, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.maxEmbeddedFileBytes, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxEmbeddedFileBytes, serializer);
     sse_encode_output_format(self.outputFormat, serializer);
     sse_encode_bool(self.escapeMarkdown, serializer);
     sse_encode_bool(self.tableAnchors, serializer);
@@ -40771,7 +41005,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_opt_String(self.cacheNamespace, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.cacheTtlSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.cacheTtlSecs, serializer);
     sse_encode_opt_box_autoadd_email_config(self.email, serializer);
     sse_encode_opt_box_autoadd_csv_config(self.csv, serializer);
     sse_encode_opt_box_autoadd_geo_json_extraction_config(
@@ -40934,7 +41168,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.transcription,
       serializer,
     );
-    sse_encode_opt_box_autoadd_i_64(self.timeoutSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.timeoutSecs, serializer);
     sse_encode_opt_box_autoadd_tree_sitter_config(self.treeSitter, serializer);
     sse_encode_opt_box_autoadd_structured_extraction_config(
       self.structuredExtraction,
@@ -41208,14 +41442,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.enablePdfTextHeuristics, serializer);
     sse_encode_f_64(self.textLayerThreshold, serializer);
-    sse_encode_i_64(self.fileSizeThresholdBytes, serializer);
+    sse_encode_u_64(self.fileSizeThresholdBytes, serializer);
     sse_encode_i_64(self.pageCountThreshold, serializer);
     sse_encode_i_64(self.targetPagesPerChunk, serializer);
     sse_encode_i_64(self.maxPagesPerChunk, serializer);
-    sse_encode_i_64(self.diskProcessingThresholdBytes, serializer);
+    sse_encode_u_64(self.diskProcessingThresholdBytes, serializer);
     sse_encode_i_64(self.minCharsPerPage, serializer);
     sse_encode_i_64(self.maxXlsxSheetCount, serializer);
-    sse_encode_i_64(self.maxXlsxWorkbookCells, serializer);
+    sse_encode_u_64(self.maxXlsxWorkbookCells, serializer);
     sse_encode_i_64(self.maxPptxEmbeddedCount, serializer);
   }
 
@@ -41626,7 +41860,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.acceleration,
       serializer,
     );
-    sse_encode_opt_box_autoadd_i_64(self.maxEmbedDurationSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxEmbedDurationSecs, serializer);
   }
 
   @protected
@@ -42938,7 +43172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_i_64(self.maxEntries, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.ttlSeconds, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.ttlSeconds, serializer);
     sse_encode_opt_String(self.backend, serializer);
     sse_encode_opt_Map_String_String_None(self.backendConfig, serializer);
   }
@@ -42949,10 +43183,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.model, serializer);
     sse_encode_opt_String(self.apiKey, serializer);
     sse_encode_opt_String(self.baseUrl, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.timeoutSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.timeoutSecs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.maxRetries, serializer);
     sse_encode_opt_box_autoadd_f_64(self.temperature, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.maxTokens, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxTokens, serializer);
     sse_encode_opt_box_autoadd_f_64(self.topP, serializer);
     sse_encode_opt_list_String(self.stop, serializer);
     sse_encode_opt_box_autoadd_i_64(self.seed, serializer);
@@ -42971,8 +43205,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     );
     sse_encode_opt_box_autoadd_bool(self.costTracking, serializer);
     sse_encode_opt_box_autoadd_bool(self.tracing, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.cooldownSecs, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.healthCheckSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.cooldownSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.healthCheckSecs, serializer);
     sse_encode_opt_box_autoadd_bedrock_config(self.bedrock, serializer);
     sse_encode_opt_box_autoadd_credential_provider_config(
       self.credentialProvider,
@@ -43001,8 +43235,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_i_64(self.rpm, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.tpm, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.windowSeconds, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.tpm, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.windowSeconds, serializer);
   }
 
   @protected
@@ -43010,9 +43244,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.model, serializer);
     sse_encode_String(self.source, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.inputTokens, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.outputTokens, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.totalTokens, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.inputTokens, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.outputTokens, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.totalTokens, serializer);
     sse_encode_opt_box_autoadd_f_64(self.estimatedCost, serializer);
     sse_encode_opt_String(self.finishReason, serializer);
   }
@@ -43098,7 +43332,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     );
     sse_encode_opt_String(self.jsonSchema, serializer);
     sse_encode_opt_box_autoadd_error_metadata(self.error, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.extractionDurationMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.extractionDurationMs, serializer);
     sse_encode_opt_String(self.category, serializer);
     sse_encode_opt_list_String(self.tags, serializer);
     sse_encode_opt_String(self.documentVersion, serializer);
@@ -43198,8 +43432,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         thresholdBytes: final thresholdBytes,
       ):
         sse_encode_i_32(0, serializer);
-        sse_encode_i_64(sizeBytes, serializer);
-        sse_encode_i_64(thresholdBytes, serializer);
+        sse_encode_u_64(sizeBytes, serializer);
+        sse_encode_u_64(thresholdBytes, serializer);
       case NoChunkingReason_FewPages(
         pageCount: final pageCount,
         threshold: final threshold,
@@ -44961,6 +45195,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_url_extraction_config(
     UrlExtractionConfig? self,
     SseSerializer serializer,
@@ -46193,7 +46437,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.acceleration,
       serializer,
     );
-    sse_encode_opt_box_autoadd_i_64(self.maxRerankDurationSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxRerankDurationSecs, serializer);
   }
 
   @protected
@@ -46344,7 +46588,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_String(self.corsOrigins, serializer);
     sse_encode_i_64(self.maxRequestBodyBytes, serializer);
     sse_encode_i_64(self.maxMultipartFieldBytes, serializer);
-    sse_encode_i_64(self.jobTimeoutSecs, serializer);
+    sse_encode_u_64(self.jobTimeoutSecs, serializer);
   }
 
   @protected
@@ -46381,7 +46625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.acceleration,
       serializer,
     );
-    sse_encode_opt_box_autoadd_i_64(self.maxEmbedDurationSecs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxEmbedDurationSecs, serializer);
   }
 
   @protected
@@ -46717,9 +46961,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_whisper_model(self.model, serializer);
     sse_encode_opt_String(self.language, serializer);
     sse_encode_bool(self.timestamps, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.maxDurationMs, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.maxBytes, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.timeoutMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxDurationMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.maxBytes, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.timeoutMs, serializer);
     sse_encode_opt_String(self.modelCacheDir, serializer);
     sse_encode_bool(self.allowNetwork, serializer);
     sse_encode_bool(self.verifyHash, serializer);
@@ -46793,6 +47037,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(_alefCheckU64BeforeEncode(self));
+  }
+
+  @protected
   void sse_encode_u_8(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self);
@@ -46857,7 +47107,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putBigUint64(self);
+    serializer.buffer.putBigUint64(_alefCheckU64BeforeEncode(self));
   }
 
   @protected
@@ -46949,8 +47199,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         limitMs: final limitMs,
       ):
         sse_encode_i_32(14, serializer);
-        sse_encode_i_64(elapsedMs, serializer);
-        sse_encode_i_64(limitMs, serializer);
+        sse_encode_u_64(elapsedMs, serializer);
+        sse_encode_u_64(limitMs, serializer);
       case XbergError_Cancelled():
         sse_encode_i_32(15, serializer);
       case XbergError_Security(message: final message):
@@ -47576,4 +47826,13 @@ class ValidatorDartImplImpl extends RustOpaque implements ValidatorDartImpl {
 
   set field0(ArcValidator field0) => RustLib.instance.api
       .crateValidatorDartImplAutoAccessorSetField0(that: this, field0: field0);
+}
+
+BigInt _alefCheckU64BeforeEncode(BigInt value) {
+  if (value.isNegative || value.bitLength > 64) {
+    throw RangeError(
+      'u64 unsigned value must be between 0 and 18446744073709551615: $value',
+    );
+  }
+  return value;
 }

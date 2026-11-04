@@ -1020,6 +1020,15 @@ fn extract_final_spans_from_page(
     page_index: usize,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
+    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None)
+}
+
+fn extract_final_spans_from_page_with_primes(
+    doc: &mut NativeDocument,
+    page_index: usize,
+    script_geometry: ScriptGeometry,
+    prime_witnesses: Option<&mut Vec<script_evidence::LiteralPrimeWitness>>,
+) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
     let extracted = if script_geometry == ScriptGeometry::Preserve {
         doc.doc
@@ -1037,6 +1046,12 @@ fn extract_final_spans_from_page(
             return Ok(Vec::new());
         }
     };
+    if let Some(witnesses) = prime_witnesses {
+        let captured = script_evidence::capture_literal_primes(&page_text_data.spans);
+        if !captured.is_empty() && matches!(doc.doc.get_page_rotation(page_index), Ok(0)) {
+            *witnesses = captured;
+        }
+    }
     let used_structure_order = apply_rtl_structure_order(doc, page_index, &mut page_text_data.spans);
     if !used_structure_order {
         reorder_page_reading_order(

@@ -16,20 +16,8 @@ fn page(spans: Vec<TextSpan>) -> NativePageSegments {
 
 #[test]
 fn should_leave_measured_author_overlap_unsupported_regardless_of_final_offsets() {
-    let mut base = span(
-        "Author",
-        94.29801177978516,
-        697.1630249023438,
-        91.20623016357422,
-        11.9552001953125,
-    );
-    let script = span(
-        "1",
-        185.50401306152344,
-        701.5010375976562,
-        4.234514236450195,
-        7.970099925994873,
-    );
+    let mut base = span("Author", 94.298_01, 697.163, 91.206_23, 11.955_2);
+    let script = span("1", 185.504_01, 701.501_04, 4.234_514, 7.970_1);
     assert!(script.bbox.x < base.bbox.right());
     assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
     base.char_widths = vec![base.bbox.width / 6.0; 6];
@@ -46,20 +34,8 @@ fn should_leave_measured_author_overlap_unsupported_regardless_of_final_offsets(
 
 #[test]
 fn should_leave_measured_ordinal_overlap_unsupported_regardless_of_final_offsets() {
-    let mut base = span(
-        "1",
-        117.74600219726562,
-        661.489990234375,
-        5.479450225830078,
-        10.958900451660156,
-    );
-    let suffix = span(
-        "st",
-        123.22500610351562,
-        665.448974609375,
-        5.116690635681152,
-        7.671199798583984,
-    );
+    let mut base = span("1", 117.746, 661.49, 5.479_45, 10.958_9);
+    let suffix = span("st", 123.225_006, 665.449, 5.116_690_6, 7.671_2);
     assert_eq!(page(vec![base.clone(), suffix.clone()]).owners.len(), 0);
     base.char_x_offsets = vec![base.bbox.x];
     assert_eq!(page(vec![base.clone(), suffix.clone()]).owners.len(), 0);
@@ -75,20 +51,8 @@ fn should_leave_measured_ordinal_overlap_unsupported_regardless_of_final_offsets
 
 #[test]
 fn should_leave_measured_affiliation_prefix_unowned() {
-    let marker = span(
-        "1",
-        89.53799438476562,
-        674.801025390625,
-        4.234514236450195,
-        7.970099925994873,
-    );
-    let base = span(
-        "University",
-        94.2699966430664,
-        670.4630126953125,
-        86.85453033447266,
-        11.9552001953125,
-    );
+    let marker = span("1", 89.537_994, 674.801, 4.234_514, 7.970_1);
+    let base = span("University", 94.27, 670.463, 86.854_53, 11.955_2);
     let captured = page(vec![marker, base]);
     assert_eq!(captured.owners.len(), 0);
     assert_eq!(
@@ -250,20 +214,8 @@ fn should_reject_complete_run_when_later_member_has_a_different_projected_role()
 
 #[test]
 fn should_accept_measured_nonoverlapping_ordinal_without_claiming_native_glyph_origins() {
-    let base = span(
-        "4",
-        193.9890594482422,
-        599.6990356445312,
-        4.981300354003906,
-        9.962599754333496,
-    );
-    let suffix = span(
-        "th",
-        198.97105407714844,
-        603.3140258789062,
-        5.425617218017578,
-        6.973800182342529,
-    );
+    let base = span("4", 193.989_06, 599.699_04, 4.981_300_4, 9.962_6);
+    let suffix = span("th", 198.971_05, 603.314, 5.425_617, 6.973_8);
     assert!(suffix.bbox.x > base.bbox.right());
     assert_eq!(base.char_x_offsets.len(), 0);
     let captured = page(vec![base, suffix]);
@@ -350,7 +302,7 @@ fn should_reject_a_decimal_cohort_with_a_nearby_unclaimed_point() {
     let captured = page(vec![
         span("10", 100.0, 700.0, 20.0, 12.0),
         span("2", 120.0, 704.5, 0.25, 8.0),
-        span(".", 120.25, 704.5000610351562, 0.25, 8.0),
+        span(".", 120.25, 704.500_06, 0.25, 8.0),
         span("58", 120.5, 704.5, 0.5, 8.0),
     ]);
     assert_eq!(
@@ -410,7 +362,7 @@ fn should_reject_decimal_cohort_retries_from_either_source_order() {
     for order in [[0, 1, 2], [2, 1, 0]] {
         let scripts = [
             span("2", 120.0, 704.5, 0.25, 8.0),
-            span(".", 120.25, 704.5000610351562, 0.25, 8.0),
+            span(".", 120.25, 704.500_06, 0.25, 8.0),
             span("58", 120.5, 704.5, 0.5, 8.0),
         ];
         let mut spans = vec![span("10", 100.0, 700.0, 20.0, 12.0)];
@@ -428,7 +380,7 @@ fn should_reject_decimal_cohort_retries_from_either_source_order() {
 #[test]
 fn should_reject_overlapping_unclaimed_punctuation_with_a_different_font_or_role() {
     for size in [8.0, 9.0] {
-        let mut point = span(".", 121.0, 704.5000610351562, 1.0, size);
+        let mut point = span(".", 121.0, 704.500_06, 1.0, size);
         point.mcid = Some(7);
         let captured = NativePageSegments::from_final_spans(
             vec![
@@ -454,7 +406,7 @@ fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
     let root = std::env::var_os("XBERG_SCRIPT_RETENTION_FIXTURE_ROOT")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents"));
-    std::fs::create_dir_all(&output).expect("owner receipt directory");
+    std::fs::create_dir_all(output).expect("owner receipt directory");
     for (name, hash) in [
         (
             "arxiv-2405.00569v2-p9.pdf",

@@ -70,6 +70,7 @@ const LIST_ITEM_SOURCE_LABEL_ATTRIBUTE: &str = "list_marker";
 const MEASURED_FONT_SIZE_ATTRIBUTE: &str = "xberg:internal:font-size-pt";
 
 pub(crate) const NATIVE_TABLE_GRID_ATTRIBUTE: &str = "xberg:internal:native-table-grid";
+pub(crate) const NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE: &str = "xberg:internal:native-pdf-headerless-table";
 
 /// One OCR page's authoritative processed-raster coordinate frame (GH#1645).
 ///
@@ -798,6 +799,7 @@ fn is_internal_only_attribute(key: &str) -> bool {
         || key == IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE
         || key == MEASURED_FONT_SIZE_ATTRIBUTE
         || key == NATIVE_TABLE_GRID_ATTRIBUTE
+        || key == NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE
         || key == crate::rendering::table_math::TABLE_CELL_MATH_ATTRIBUTE
         || key == crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE
 }

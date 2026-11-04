@@ -8,6 +8,16 @@ use crate::pdf::native::hierarchy::script_evidence::{NativePageSegments, ScriptO
 use crate::pdf::structure::types::{LayoutHintClass, PdfLine, PdfParagraph};
 
 pub(super) fn associate_surviving_suffixes(paragraphs: &mut Vec<PdfParagraph>, page: &NativePageSegments) -> bool {
+    let scripts = associate_matching_suffixes(paragraphs, page, false);
+    let primes = page.has_literal_primes() && associate_matching_suffixes(paragraphs, page, true);
+    scripts || primes
+}
+
+fn associate_matching_suffixes(
+    paragraphs: &mut Vec<PdfParagraph>,
+    page: &NativePageSegments,
+    literal_primes: bool,
+) -> bool {
     let segments: Vec<_> = paragraphs
         .iter()
         .flat_map(|paragraph| &paragraph.lines)
@@ -27,6 +37,7 @@ pub(super) fn associate_surviving_suffixes(paragraphs: &mut Vec<PdfParagraph>, p
     let owners: Vec<_> = page
         .valid_owners(&segments)
         .into_iter()
+        .filter(|owner| owner.literal_prime_right().is_some() == literal_primes)
         .filter(|owner| run_context_survives(owner, paragraphs, &positions))
         .collect();
     if owners.is_empty() {
@@ -85,11 +96,10 @@ fn preserves_existing_scripts(
                 after.extend(children.iter().map(|owner| owner.script.as_ref()));
             }
         }
-        // New records consume the shared lookback window. Reject the transfer
-        // before mutation if any original script classification would change. ~keep
+        // New records can displace or replace a legacy base in the lookback.
+        // Preserve both its joining classification and its emitted markup. ~keep
         original_positions.into_iter().all(|(old, new)| {
-            super::super::assembly::segment_script_kind(&before, old)
-                == super::super::assembly::segment_script_kind(&after, new)
+            super::super::assembly::segment_script(&before, old) == super::super::assembly::segment_script(&after, new)
         })
     })
 }
@@ -99,9 +109,19 @@ fn run_context_survives(
     paragraphs: &[PdfParagraph],
     positions: &HashMap<SegmentKey, usize>,
 ) -> bool {
-    let Some(&base) = positions.get(&SegmentKey::from(owner.base.as_ref())) else {
+    let base_key = SegmentKey::from(owner.base.as_ref());
+    let Some(&base) = positions.get(&base_key) else {
         return false;
     };
+    if let Some(right) = owner.literal_prime_right()
+        && !paragraphs[base].lines.iter().any(|line| {
+            line.segments
+                .windows(2)
+                .any(|pair| SegmentKey::from(&pair[0]) == base_key && SegmentKey::from(&pair[1]) == *right)
+        })
+    {
+        return false;
+    }
     owner.run_members().iter().all(|key| {
         positions.get(key).is_some_and(|&script| {
             let base = &paragraphs[base];

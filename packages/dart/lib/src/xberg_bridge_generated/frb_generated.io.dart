@@ -408,8 +408,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  FutureOr<PlatformInt64> Function(ExtractedDocument)
-  dco_decode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
+  FutureOr<BigInt> Function(ExtractedDocument)
+  dco_decode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
     dynamic raw,
   );
 
@@ -1054,6 +1054,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TreeSitterConfig dco_decode_box_autoadd_tree_sitter_config(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   UrlExtractionConfig dco_decode_box_autoadd_url_extraction_config(dynamic raw);
@@ -2434,6 +2437,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TreeSitterConfig? dco_decode_opt_box_autoadd_tree_sitter_config(dynamic raw);
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
   UrlExtractionConfig? dco_decode_opt_box_autoadd_url_extraction_config(
     dynamic raw,
   );
@@ -2894,6 +2900,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrocrBackendOptions dco_decode_trocr_backend_options(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -3950,6 +3959,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TreeSitterConfig sse_decode_box_autoadd_tree_sitter_config(
     SseDeserializer deserializer,
   );
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   UrlExtractionConfig sse_decode_box_autoadd_url_extraction_config(
@@ -5688,6 +5700,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   UrlExtractionConfig? sse_decode_opt_box_autoadd_url_extraction_config(
     SseDeserializer deserializer,
   );
@@ -6252,6 +6267,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer);
 
   @protected
@@ -6681,8 +6699,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_DartFn_Inputs_extracted_document_Output_i_64_AnyhowException(
-    FutureOr<PlatformInt64> Function(ExtractedDocument) self,
+  void sse_encode_DartFn_Inputs_extracted_document_Output_u_64_AnyhowException(
+    FutureOr<BigInt> Function(ExtractedDocument) self,
     SseSerializer serializer,
   );
 
@@ -7701,6 +7719,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TreeSitterConfig self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_url_extraction_config(
@@ -9911,6 +9932,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_url_extraction_config(
     UrlExtractionConfig? self,
     SseSerializer serializer,
@@ -10653,6 +10677,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TrocrBackendOptions self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

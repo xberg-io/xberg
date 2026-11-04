@@ -293,3 +293,125 @@ fn should_preserve_existing_subscript_and_utf8_offsets_after_inserting_a_long_na
     assert_eq!((retained[0].start, retained[0].end), expected);
     assert_eq!(&base.text[expected.0 as usize..expected.1 as usize], "2");
 }
+
+#[test]
+fn should_preserve_existing_subscript_when_a_native_suffix_enters_its_lookback() {
+    use crate::types::document_structure::AnnotationKind;
+
+    let mut subscript = source("q", 145.5, 704.05, 1.0, 6.0);
+    subscript.bbox.height = 8.0;
+    let page = captured(vec![
+        source("é", 135.0, 706.5, 9.5, 12.0),
+        source("x", 100.0, 700.0, 40.0, 12.0),
+        subscript,
+        source("ω", 140.0, 704.5, 4.0, 8.0),
+    ]);
+    assert_eq!(page.valid_owners(&page.segments).len(), 1);
+
+    let mut base = super::super::blocks_to_paragraphs(vec![page.segments[0].clone()], &[], &[]).remove(0);
+    let mut next_line = base.lines[0].clone();
+    next_line.baseline_y = 700.0;
+    next_line.segments = page.segments[1..3].to_vec();
+    base.lines.push(next_line);
+    let mut suffix = base.clone();
+    suffix.lines.truncate(1);
+    suffix.lines[0].baseline_y = 704.5;
+    suffix.lines[0].segments = vec![page.segments[3].clone()];
+    let mut paragraphs = vec![base, suffix];
+    let assemble = |paragraphs| {
+        crate::pdf::structure::assembly::assemble_internal_document(
+            vec![paragraphs],
+            &[],
+            None,
+            &[],
+            &Default::default(),
+        )
+    };
+    let original = assemble(paragraphs.clone());
+    let original_base = &original.elements[0];
+    assert_eq!(
+        original_base
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.kind == AnnotationKind::Subscript)
+            .map(|annotation| &original_base.text[annotation.start as usize..annotation.end as usize])
+            .collect::<Vec<_>>(),
+        ["q"],
+        "the legacy base has a genuine subscript before transfer",
+    );
+
+    let untouched = format!("{paragraphs:?}");
+    assert!(
+        !associate_surviving_suffixes(&mut paragraphs, &page),
+        "a same-kind replacement base must not erase the existing annotation",
+    );
+    assert_eq!(format!("{paragraphs:?}"), untouched);
+    let after = assemble(paragraphs);
+    let base = &after.elements[0];
+    assert_eq!(base.text, original_base.text);
+    assert_eq!(
+        base.annotations
+            .iter()
+            .filter(|annotation| annotation.kind == AnnotationKind::Subscript)
+            .map(|annotation| &base.text[annotation.start as usize..annotation.end as usize])
+            .collect::<Vec<_>>(),
+        ["q"],
+        "a same-kind replacement base must not erase the existing annotation",
+    );
+}
+
+fn literal_prime_paragraphs() -> (NativePageSegments, Vec<PdfParagraph>) {
+    use xberg_native_pdf::{fonts::MappingProvenance, structure::McidScope};
+
+    let mut records = [
+        source("′", 121.0, 704.5, 2.0, 8.0),
+        source("RP", 100.0, 700.0, 20.0, 12.0),
+        source(")", 124.0, 700.0, 4.0, 12.0),
+    ];
+    for (record, sequence) in records.iter_mut().zip([12, 11, 13]) {
+        record.sequence = sequence;
+        record.mcid_scope = Some(McidScope::Page(0));
+        record.provenance = Some(MappingProvenance::ToUnicode);
+    }
+    let page = captured(records.to_vec());
+    assert_eq!(page.valid_owners(&page.segments).len(), 1);
+    let mut left = super::super::blocks_to_paragraphs(vec![page.segments[1].clone()], &[], &[]).remove(0);
+    let mut prime = left.clone();
+    prime.lines[0].baseline_y = 704.5;
+    prime.lines[0].segments = vec![page.segments[0].clone()];
+    left.lines[0].segments.push(page.segments[2].clone());
+    (page, vec![prime, left])
+}
+
+#[test]
+fn should_join_literal_prime_with_its_adjacent_whole_records_without_annotation() {
+    let (page, mut paragraphs) = literal_prime_paragraphs();
+    assert!(associate_surviving_suffixes(&mut paragraphs, &page));
+    assert_eq!(paragraphs.len(), 1);
+    let line = &paragraphs[0].lines[0];
+    assert_eq!(
+        line.segments.iter().map(SegmentKey::from).collect::<Vec<_>>(),
+        [1, 0, 2].map(|index| SegmentKey::from(&page.segments[index])),
+    );
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    assert_eq!(document.elements[0].text, "RP′)");
+    assert!(document.elements[0].annotations.is_empty());
+}
+
+#[test]
+fn should_reject_literal_prime_when_the_right_record_is_no_longer_on_the_same_line() {
+    let (page, mut paragraphs) = literal_prime_paragraphs();
+    let mut right = paragraphs[1].lines[0].clone();
+    right.segments.remove(0);
+    paragraphs[1].lines[0].segments.pop();
+    paragraphs[1].lines.push(right);
+    let original = format!("{paragraphs:?}");
+    assert!(!associate_surviving_suffixes(&mut paragraphs, &page));
+    assert_eq!(format!("{paragraphs:?}"), original);
+}
