@@ -24,6 +24,7 @@ use crate::ocr::hocr_parser::{
 use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
 use crate::ocr::preprocessing::should_invert_for_polarity;
+use crate::ocr::table::has_table_grid;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
@@ -2435,6 +2436,14 @@ pub(super) fn perform_ocr(
             let Some(cleaned) = cleaned else {
                 continue;
             };
+            if !has_table_grid(&cleaned) {
+                tracing::debug!(
+                    target: "xberg::ocr::tables",
+                    region_index,
+                    "OCR table region has no row or column that relates two cells; keeping it as text"
+                );
+                continue;
+            }
 
             let markdown_table = table_to_markdown(&cleaned);
 
