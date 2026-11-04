@@ -175,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(docker): Stop storing the binary twice in the core and full images.**
+  Remove a `chmod` that changed nothing but copied the whole binary into another layer.
+
 - **(pdf): Preserve long Form text when the caller marks the Form invocation as placed PDF content.** (#2310)
 
 - **(pdf): Recover text missing from a partial invisible scan layer.** (#2425)
