@@ -167,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep same-baseline small caps out of script markup.** (#2443)
+  Preserve genuine scripts and their byte ranges when assembling native PDF text.
+
 - **(redaction): Explain when a post-processor changes the document pages.** (#2447)
   Redaction rejects added, removed, or renumbered pages and reports that the post-processor changed them.
 

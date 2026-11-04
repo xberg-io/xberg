@@ -972,10 +972,20 @@ fn annotated_segments_need_space(
     segments_need_space(previous, previous_word, next, next_word)
 }
 
+#[derive(PartialEq)]
+pub(super) struct SegmentScript {
+    kind: AnnotationKind,
+    annotate: bool,
+}
+
 pub(super) fn segment_script_kind(
     segments: &[&crate::pdf::hierarchy::SegmentData],
     index: usize,
 ) -> Option<AnnotationKind> {
+    segment_script(segments, index).map(|script| script.kind)
+}
+
+pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], index: usize) -> Option<SegmentScript> {
     let script = segments[index];
     segments[..index]
         .iter()
@@ -985,12 +995,32 @@ pub(super) fn segment_script_kind(
             if script.font_size >= base.font_size || !super::pipeline::is_script_run_of(base, script) {
                 return None;
             }
-            Some(if script.upright_baseline() > base.upright_baseline() {
-                AnnotationKind::Superscript
-            } else {
-                AnnotationKind::Subscript
+            let shift = script.upright_baseline() - base.upright_baseline();
+            // Keep the legacy joining run. A smaller font with the same measured
+            // height and ordinary baseline drift is insufficient evidence for markup.
+            let same_row_style = shift.abs() <= super::pipeline::INLINE_STYLE_BASELINE_TOLERANCE
+                && base.height.is_finite()
+                && base.height > 0.0
+                && base.height.to_bits() == script.height.to_bits();
+            Some(SegmentScript {
+                kind: if shift > 0.0 {
+                    AnnotationKind::Superscript
+                } else {
+                    AnnotationKind::Subscript
+                },
+                annotate: !same_row_style,
             })
         })
+}
+
+fn finish_script_span(annotations: &mut Vec<TextAnnotation>, open: &mut Option<(usize, &AnnotationKind)>, end: usize) {
+    if let Some((start, kind)) = open.take().filter(|(start, _)| *start < end) {
+        annotations.push(TextAnnotation {
+            start: start as u32,
+            end: end as u32,
+            kind: kind.clone(),
+        });
+    }
 }
 
 fn paragraph_has_scripts(para: &PdfParagraph) -> bool {
@@ -999,10 +1029,9 @@ fn paragraph_has_scripts(para: &PdfParagraph) -> bool {
         || (0..segments.len()).any(|index| segment_script_kind(&segments, index).is_some())
 }
 
-/// Extract plain text and inline annotations (bold/italic) from a paragraph.
+/// Extract plain text and inline annotations from a paragraph.
 ///
-/// Walks segments, groups consecutive runs of the same bold/italic state,
-/// and produces `TextAnnotation` spans for formatting changes.
+/// Keep legacy text runs intact when only part of a run supports script markup.
 fn extract_text_and_annotations(
     para: &PdfParagraph,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
@@ -1014,12 +1043,15 @@ fn extract_text_and_annotations(
     }
 
     let native_scripts: Vec<_> = para.lines.iter().flat_map(|line| line.valid_native_scripts()).collect();
-    let script_kind = |index| {
+    let script_at = |index| {
         native_scripts
             .iter()
             .any(|owner| owner.matches_script(all_segments[index]))
-            .then_some(AnnotationKind::Superscript)
-            .or_else(|| segment_script_kind(&all_segments, index))
+            .then_some(SegmentScript {
+                kind: AnnotationKind::Superscript,
+                annotate: true,
+            })
+            .or_else(|| segment_script(&all_segments, index))
     };
     let mut text = String::new();
     let mut annotations = Vec::new();
@@ -1028,23 +1060,20 @@ fn extract_text_and_annotations(
     while i < all_segments.len() {
         let bold = all_segments[i].is_bold;
         let italic = all_segments[i].is_italic;
-        let script = script_kind(i);
+        let script = script_at(i).map(|script| script.kind);
 
         let run_start = i;
-        while i < all_segments.len()
-            && all_segments[i].is_bold == bold
-            && all_segments[i].is_italic == italic
-            && script_kind(i) == script
-        {
-            i += 1;
-        }
-
-        let mut run_words: Vec<(&str, usize)> = Vec::new();
-        for (seg_offset, seg) in all_segments[run_start..i].iter().enumerate() {
-            let seg_idx = run_start + seg_offset;
-            for word in seg.text.split_whitespace() {
-                run_words.push((word, seg_idx));
+        let mut run_words = Vec::new();
+        while i < all_segments.len() && all_segments[i].is_bold == bold && all_segments[i].is_italic == italic {
+            let script_at_segment = script_at(i);
+            if script_at_segment.as_ref().map(|script| &script.kind) != script.as_ref() {
+                break;
             }
+            let kind = script
+                .as_ref()
+                .filter(|_| script_at_segment.is_some_and(|script| script.annotate));
+            run_words.extend(all_segments[i].text.split_whitespace().map(|word| (word, i, kind)));
+            i += 1;
         }
 
         if !text.is_empty() && !run_words.is_empty() {
@@ -1068,9 +1097,11 @@ fn extract_text_and_annotations(
 
         let span_start = text.len();
 
-        for (wi, &(word, seg_idx)) in run_words.iter().enumerate() {
+        let mut script_span = None;
+        for (wi, &(word, seg_idx, script)) in run_words.iter().enumerate() {
+            let mut previous_end = text.len();
             if wi > 0 {
-                let (prev, prev_seg_idx) = run_words[wi - 1];
+                let (prev, prev_seg_idx, _) = run_words[wi - 1];
                 match classify_line_break_hyphen(
                     prev,
                     word,
@@ -1080,6 +1111,7 @@ fn extract_text_and_annotations(
                 ) {
                     LineBreakHyphen::Weld => {
                         text.pop();
+                        previous_end = text.len();
                     }
                     LineBreakHyphen::KeepHyphen => {}
                     LineBreakHyphen::NotApplicable => {
@@ -1099,19 +1131,18 @@ fn extract_text_and_annotations(
                     }
                 }
             }
+            if let Some(kind) = script {
+                script_span.get_or_insert((text.len(), kind));
+            } else {
+                finish_script_span(&mut annotations, &mut script_span, previous_end);
+            }
             text.push_str(word);
         }
 
         let span_end = text.len();
+        finish_script_span(&mut annotations, &mut script_span, span_end);
 
         if span_start < span_end {
-            if let Some(kind) = script {
-                annotations.push(TextAnnotation {
-                    start: span_start as u32,
-                    end: span_end as u32,
-                    kind,
-                });
-            }
             if bold {
                 annotations.push(TextAnnotation {
                     start: span_start as u32,
@@ -1394,6 +1425,117 @@ mod tests {
 
     use super::super::types::PdfLine;
     use super::*;
+
+    #[test]
+    fn should_keep_measured_small_cap_baseline_drift_out_of_script_annotations() {
+        let base = SegmentData {
+            x: 180.9708,
+            y: 133.32146,
+            width: 11.3532715,
+            height: 9.9626,
+            font_size: 9.9626,
+            baseline_y: 133.32146,
+            ..plain_segment("RO")
+        };
+        let small_caps = SegmentData {
+            x: 192.32407,
+            y: 133.312,
+            width: 29.888138,
+            font_size: 7.9701,
+            baseline_y: 133.312,
+            ..base.clone()
+        };
+        let mut para = make_paragraph_at("", None, base.baseline_y);
+        para.lines[0].segments = vec![
+            base,
+            SegmentData {
+                text: " TWO R D".to_string(),
+                ..small_caps
+            },
+        ];
+        let (text, annotations) = extract_text_and_annotations(&para, &Default::default());
+        assert_eq!(text, "RO TWO R D");
+        assert!(
+            annotations.is_empty(),
+            "the measured small-cap drift must not create a script annotation"
+        );
+    }
+
+    #[test]
+    fn should_keep_shallow_genuine_script_annotations_and_byte_offsets() {
+        for (baseline, kind) in [
+            (699.3, AnnotationKind::Subscript),
+            (699.75, AnnotationKind::Subscript),
+            (700.25, AnnotationKind::Superscript),
+            (700.7, AnnotationKind::Superscript),
+        ] {
+            let base = SegmentData {
+                width: 12.0,
+                font_size: 11.59,
+                ..plain_segment("éX")
+            };
+            let script = SegmentData {
+                x: 12.0,
+                y: baseline,
+                width: 4.0,
+                height: 8.0,
+                font_size: 8.0,
+                baseline_y: baseline,
+                ..plain_segment("L")
+            };
+            let mut para = make_paragraph("", None);
+            para.lines[0].segments = vec![base, script];
+            let (text, annotations) = extract_text_and_annotations(&para, &Default::default());
+            assert_eq!(text, "éXL");
+            assert_eq!(annotations, vec![TextAnnotation { start: 3, end: 4, kind }]);
+        }
+    }
+
+    #[test]
+    fn should_annotate_only_the_genuine_words_in_a_mixed_legacy_script_run() {
+        let base = SegmentData {
+            width: 12.0,
+            ..plain_segment("éX")
+        };
+        let small_caps = SegmentData {
+            x: 12.0,
+            width: 1.0,
+            font_size: 8.0,
+            baseline_y: 699.99,
+            ..plain_segment(" C")
+        };
+        let first_script = SegmentData {
+            x: 13.0,
+            width: 1.0,
+            height: 8.0,
+            font_size: 8.0,
+            baseline_y: 699.75,
+            ..plain_segment("é")
+        };
+        let second_script = SegmentData {
+            x: 14.0,
+            text: "2".to_string(),
+            ..first_script.clone()
+        };
+        let mut para = make_paragraph("", None);
+        para.lines[0].segments = vec![base, small_caps, first_script, second_script];
+        let segments: Vec<_> = para.lines[0].segments.iter().collect();
+        assert!(
+            (1..segments.len()).all(|index| segment_script_kind(&segments, index) == Some(AnnotationKind::Subscript))
+        );
+
+        let (text, annotations) = extract_text_and_annotations(&para, &Default::default());
+        assert_eq!(text, "éX Cé2");
+        assert_eq!(
+            annotations,
+            vec![TextAnnotation {
+                start: 5,
+                end: 8,
+                kind: AnnotationKind::Subscript,
+            }],
+            "only the two genuine script words belong in the coalesced annotation"
+        );
+    }
 
     #[test]
     fn should_preserve_script_byte_offsets_with_overlapping_bold_and_italic() {
