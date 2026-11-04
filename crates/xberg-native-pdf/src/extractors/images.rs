@@ -769,6 +769,7 @@ pub fn parse_color_space(obj: &crate::object::Object) -> Result<ColorSpace> {
         Object::Array(arr) if !arr.is_empty() => {
             if let Some(name) = arr[0].as_name() {
                 match name {
+                    "DeviceGray" if arr.len() == 1 => Ok(ColorSpace::DeviceGray),
                     "Indexed" => Ok(ColorSpace::Indexed),
                     "CalGray" => Ok(ColorSpace::CalGray),
                     "CalRGB" => Ok(ColorSpace::CalRGB),

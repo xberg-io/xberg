@@ -165,6 +165,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Render scanned images with a singleton DeviceGray color-space array.** (#2427)
+  This also covers CCITT Group 4 images that omit Rows and wrap the filter and parameters in arrays.
+
 - **(docx): Return complete hyperlink labels for links split across styled runs.** Redaction can match the full label.
   With redaction disabled, the label shows the complete first occurrence. URI deduplication stays the same.
 

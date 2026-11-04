@@ -265,3 +265,77 @@ fn german_sized_group4_mask_expands_and_paints_pixels() {
     assert_eq!(pixel(20, HEIGHT - 2), [0, 255, 0, 255]);
     assert_eq!(pixel(200, HEIGHT - 2), [255, 0, 0, 255]);
 }
+
+const BLACK_RUN: [bool; 8] = [false, false, false, true, true, false, false, false];
+
+fn build_group4_grayscale_pdf(color_space: &str, filter: &str, params: &str) -> Vec<u8> {
+    let mut image = format!(
+        "<< /Type /XObject /Subtype /Image /Width 8 /Height 1 /BitsPerComponent 1 \
+         /ColorSpace {color_space} /Filter {filter} /DecodeParms {params} /Length {} >>\nstream\n",
+        CCITT_WHITE3_BLACK2_WHITE3.len()
+    )
+    .into_bytes();
+    image.extend_from_slice(CCITT_WHITE3_BLACK2_WHITE3);
+    image.extend_from_slice(b"\nendstream");
+    build_pdf(8, 1, b"q 8 0 0 1 0 0 cm /Im0 Do Q", &image, &[])
+}
+
+#[test]
+fn group4_grayscale_array_colorspace_renders_with_filter_and_params_arrays_and_missing_rows() {
+    assert_eq!(
+        rendered_is_black(build_group4_grayscale_pdf(
+            "[/DeviceGray]",
+            "[/CCITTFaxDecode]",
+            "[<< /K -1 /Columns 8 >>]",
+        )),
+        BLACK_RUN
+    );
+}
+
+#[test]
+fn group4_named_grayscale_accepts_filter_and_params_arrays_with_missing_rows() {
+    assert_eq!(
+        rendered_is_black(build_group4_grayscale_pdf(
+            "/DeviceGray",
+            "[/CCITTFaxDecode]",
+            "[<< /K -1 /Columns 8 >>]",
+        )),
+        BLACK_RUN
+    );
+}
+
+#[test]
+fn group4_named_grayscale_accepts_filter_and_params_arrays_with_explicit_rows() {
+    assert_eq!(
+        rendered_is_black(build_group4_grayscale_pdf(
+            "/DeviceGray",
+            "[/CCITTFaxDecode]",
+            "[<< /K -1 /Columns 8 /Rows 1 >>]",
+        )),
+        BLACK_RUN
+    );
+}
+
+#[test]
+fn group4_named_grayscale_accepts_scalar_filter_and_params_with_missing_rows() {
+    assert_eq!(
+        rendered_is_black(build_group4_grayscale_pdf(
+            "/DeviceGray",
+            "/CCITTFaxDecode",
+            "<< /K -1 /Columns 8 >>",
+        )),
+        BLACK_RUN
+    );
+}
+
+#[test]
+fn malformed_group4_grayscale_colorspace_array_does_not_paint() {
+    assert_eq!(
+        rendered_is_black(build_group4_grayscale_pdf(
+            "[/DeviceGray 1]",
+            "[/CCITTFaxDecode]",
+            "[<< /K -1 /Columns 8 >>]",
+        )),
+        [false; 8]
+    );
+}
