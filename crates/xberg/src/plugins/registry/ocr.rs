@@ -65,8 +65,15 @@ pub(crate) fn builtin_ocr_backend_names() -> Vec<&'static str> {
 #[cfg_attr(alef, alef(skip))]
 pub struct OcrBackendRegistry {
     pub(super) backends: AHashMap<String, Arc<dyn OcrBackend>>,
-    #[cfg(all(auto_rotate, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        any(auto_rotate, paddle_ocr),
+        feature = "ocr",
+        feature = "pdf",
+        not(target_arch = "wasm32")
+    ))]
     builtin_tesseract: Option<std::sync::Weak<dyn OcrBackend>>,
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    builtin_paddle: Option<std::sync::Weak<dyn OcrBackend>>,
 }
 
 #[cfg(all(test, sceptre_ocr, not(target_arch = "wasm32")))]
@@ -130,7 +137,7 @@ impl OcrBackendRegistry {
             let backend: Arc<dyn OcrBackend> = Arc::new(TesseractBackend::new());
             match self.register(Arc::clone(&backend)) {
                 Ok(()) => {
-                    #[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
+                    #[cfg(all(any(auto_rotate, paddle_ocr), feature = "pdf", not(target_arch = "wasm32")))]
                     {
                         self.builtin_tesseract = Some(Arc::downgrade(&backend));
                     }
@@ -158,24 +165,7 @@ impl OcrBackendRegistry {
         }
 
         #[cfg(paddle_ocr)]
-        {
-            use crate::paddle_ocr::PaddleOcrBackend;
-            tracing::info!("Initializing PaddleOCR backend");
-            match PaddleOcrBackend::new() {
-                Ok(backend) => {
-                    self.register(Arc::new(backend)).unwrap_or_else(|e| {
-                        tracing::warn!("Failed to register PaddleOCR backend: {e}");
-                    });
-                    tracing::info!("PaddleOCR backend registered successfully");
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "PaddleOCR backend unavailable: {e}. \
-                         Check ONNX Runtime availability and model files."
-                    );
-                }
-            }
-        }
+        self.register_default_paddle_backend();
 
         #[cfg(all(sceptre_ocr, not(target_arch = "wasm32")))]
         {
@@ -253,23 +243,71 @@ impl OcrBackendRegistry {
         }
     }
 
+    #[cfg(paddle_ocr)]
+    fn register_default_paddle_backend(&mut self) {
+        use crate::paddle_ocr::PaddleOcrBackend;
+        tracing::info!("Initializing PaddleOCR backend");
+        match PaddleOcrBackend::new() {
+            Ok(backend) => {
+                let backend: Arc<dyn OcrBackend> = Arc::new(backend);
+                match self.register(Arc::clone(&backend)) {
+                    Ok(()) => {
+                        #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+                        {
+                            self.builtin_paddle = Some(Arc::downgrade(&backend));
+                        }
+                    }
+                    Err(error) => tracing::warn!("Failed to register PaddleOCR backend: {error}"),
+                }
+                tracing::info!("PaddleOCR backend registered successfully");
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "PaddleOCR backend unavailable: {e}. \
+                     Check ONNX Runtime availability and model files."
+                );
+            }
+        }
+    }
+
     /// Create a new empty OCR backend registry without default backends.
     ///
     /// This is useful for testing or when you want full control over backend registration.
     pub fn new_empty() -> Self {
         Self {
             backends: AHashMap::new(),
-            #[cfg(all(auto_rotate, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            #[cfg(all(
+                any(auto_rotate, paddle_ocr),
+                feature = "ocr",
+                feature = "pdf",
+                not(target_arch = "wasm32")
+            ))]
             builtin_tesseract: None,
+            #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            builtin_paddle: None,
         }
     }
 
-    #[cfg(all(auto_rotate, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        any(auto_rotate, paddle_ocr),
+        feature = "ocr",
+        feature = "pdf",
+        not(target_arch = "wasm32")
+    ))]
     pub(crate) fn is_builtin_tesseract(&self, backend: &Arc<dyn OcrBackend>) -> bool {
         self.builtin_tesseract
             .as_ref()
             .and_then(std::sync::Weak::upgrade)
             .is_some_and(|builtin| Arc::ptr_eq(&builtin, backend))
+    }
+
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn has_builtin_paddle(&self) -> bool {
+        self.builtin_paddle
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .zip(self.get("paddleocr").ok())
+            .is_some_and(|(builtin, active)| Arc::ptr_eq(&builtin, &active))
     }
 
     /// Register an OCR backend.
