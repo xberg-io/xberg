@@ -46,7 +46,7 @@ pub(crate) use inline_html::{Kind as PrivacyInlineKind, tag as privacy_inline_ta
 pub use json::render_json;
 #[cfg(feature = "redaction")]
 pub(crate) use markdown::comrak_options;
-pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown};
+pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown, render_markdown_observed};
 #[cfg(feature = "pdf")]
 pub(crate) use pdf::render_pdf;
 pub(crate) use plain::render_plain;

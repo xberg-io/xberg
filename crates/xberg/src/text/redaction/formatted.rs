@@ -28,11 +28,18 @@ pub(super) fn content_matches(
     text: &str,
     matches: Vec<PatternMatch>,
     tag_exemptions: bool,
+    owned_tags: Option<&[std::ops::Range<usize>]>,
 ) -> Option<Vec<PatternMatch>> {
     if matches.is_empty() {
         return Some(matches);
     }
-    let ranges = crate::rendering::standard_inline_html_ranges(text)?;
+    let parsed;
+    let ranges = if let Some(owned) = owned_tags {
+        owned
+    } else {
+        parsed = crate::rendering::standard_inline_html_ranges(text)?;
+        &parsed
+    };
     let mut index = 0;
     let mut content = Vec::new();
     for finding in matches {
@@ -40,7 +47,7 @@ pub(super) fn content_matches(
             index += 1;
         }
         if let Some(range) = ranges.get(index).filter(|range| range.start < finding.end) {
-            if tag_exemptions && finding.start >= range.start && finding.end <= range.end {
+            if (tag_exemptions || owned_tags.is_some()) && finding.start >= range.start && finding.end <= range.end {
                 continue;
             }
             return None;

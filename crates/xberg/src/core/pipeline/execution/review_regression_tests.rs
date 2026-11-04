@@ -286,3 +286,82 @@ async fn completed_builtin_cannot_recertify_late_mutations() {
     assert_provenance_error(builtin(&mut result, &config("absent")).await);
     assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 0);
 }
+
+#[tokio::test]
+async fn unchanged_mixed_markdown_keeps_exact_renderer_bytes_without_findings() {
+    for site in [
+        SourceSite::AnnotationText,
+        SourceSite::AnnotationAuthor,
+        SourceSite::RawBody,
+    ] {
+        let mut result = source_document(site);
+        let before = result.formatted_content.clone();
+        builtin(&mut result, &config("unmatched")).await.unwrap();
+        assert_eq!(result.formatted_content, before);
+        assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 0);
+    }
+}
+
+#[tokio::test]
+async fn mixed_markdown_never_recaptures_authority_from_a_middle_callback() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let cache = cache(Some(Arc::new(Mutation {
+        edit: Edit::RemoveFormatted,
+        calls: Arc::clone(&calls),
+    })));
+    let mut result = source_document(SourceSite::RawBody);
+    let config = config("sup");
+    stages(
+        &mut result,
+        &cache,
+        &config,
+        &[(ProcessingStage::Middle, Arc::clone(&cache.middle))],
+    )
+    .await
+    .unwrap();
+    assert_eq!(calls.lock().as_slice(), [None]);
+    assert!(result.content.ends_with(" observed edit"));
+    assert!(result.formatted_content.is_none());
+    assert_provenance_error(builtin(&mut result, &config).await);
+    assert!(result.redaction_report.is_none());
+}
+
+#[tokio::test]
+async fn mixed_markdown_preserves_generated_style_and_redacts_literal_tag_names() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("power2", vec![superscript(5, 6)], Some(1), None);
+    builder.push_paragraph("literal <sup>plain</sup>", vec![], Some(1), None);
+    builder.push_raw_block("html", "sup <sup>note</sup> <SUP>other</SUP>", Some(1));
+    let doc = builder.build();
+    let original = crate::rendering::render_markdown(&doc);
+    let mut result = derive_with_surfaces(doc, false, OutputFormat::Markdown, true);
+    assert_eq!(result.formatted_content.as_deref(), Some(original.as_str()));
+    assert!(original.contains(GENERATED_POWER));
+    assert!(original.contains(r"literal \<sup\>plain\</sup\>"), "{original:?}");
+    assert!(original.contains("sup <sup>note</sup> <SUP>other</SUP>"));
+
+    builtin(&mut result, &config("sup")).await.unwrap();
+    let formatted = result.formatted_content.as_deref().expect("proven formatted output");
+    assert!(formatted.contains(GENERATED_POWER));
+    assert!(formatted.contains(r"literal \<[REDACTED]\>plain\</[REDACTED]\>"));
+    assert!(formatted.contains("[REDACTED] <[REDACTED]>note</[REDACTED]> <[REDACTED]>other</[REDACTED]>"));
+    assert_eq!(formatted.matches("sup").count(), 2);
+    assert_eq!(result.pages.as_ref().unwrap()[0].content.matches("sup").count(), 2);
+}
+
+#[tokio::test]
+async fn raw_only_markdown_does_not_gain_generated_tag_authority() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_raw_block("html", SOURCE_TAGS, None);
+    let mut result = derive_with_surfaces(builder.build(), false, OutputFormat::Markdown, true);
+    let before = result.formatted_content.clone();
+    assert_eq!(before.as_deref(), Some("sup <sup>note</sup>\n"));
+    let error = builtin(&mut result, &config("sup")).await.unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Cannot prove complete generated Markdown redaction coverage")
+    );
+    assert_eq!(result.formatted_content, before);
+    assert!(result.redaction_report.is_none());
+}

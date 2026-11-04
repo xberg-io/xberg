@@ -450,8 +450,13 @@ impl<'a> RedactionPass<'a> {
         } else if surfaces.formatted_markdown()
             && let Some(text) = doc.formatted_content.as_deref()
         {
-            plans.formatted =
-                Some(self.plan_markdown(text, Some(&doc.content), surfaces.formatted_tag_exemptions(), limits)?);
+            plans.formatted = Some(self.plan_markdown(
+                text,
+                Some(&doc.content),
+                surfaces.formatted_tag_exemptions(),
+                surfaces.formatted_owned_tags(),
+                limits,
+            )?);
         }
         for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
             if !surfaces.page_markdown(index) {
@@ -475,12 +480,13 @@ impl<'a> RedactionPass<'a> {
         text: &str,
         plain: Option<&str>,
         tag_exemptions: bool,
+        owned_tags: Option<&[std::ops::Range<usize>]>,
         limits: &SecurityLimits,
     ) -> Result<FormattedPlan> {
         let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
         let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(invalid)?;
         let sensitive = match_ranges(&self.applicable_matches(&projection.text));
-        if let Some(matches) = content_matches(text, self.applicable_matches(text), tag_exemptions)
+        if let Some(matches) = content_matches(text, self.applicable_matches(text), tag_exemptions, owned_tags)
             && projection.covered(&sensitive, &match_ranges(&matches))
         {
             return Ok(FormattedPlan::Preserve(matches));
@@ -578,8 +584,13 @@ impl<'a> RedactionPass<'a> {
     ) -> Result<PagePlan<'a>> {
         let source = surfaces.page_backup(index);
         if !surfaces.page_is_literal(index)
-            && let FormattedPlan::Preserve(matches) =
-                self.plan_markdown(text, source, surfaces.page_tag_exemptions(index), limits)?
+            && let FormattedPlan::Preserve(matches) = self.plan_markdown(
+                text,
+                source,
+                surfaces.page_tag_exemptions(index),
+                surfaces.page_owned_tags(index),
+                limits,
+            )?
         {
             return Ok(PagePlan::Preserve(matches));
         }

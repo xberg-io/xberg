@@ -165,6 +165,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(redaction): Distinguish generated Markdown tags from source text.** Preserve genuine inline formatting while
+  redacting literal tag names in annotations and raw source blocks.
+
 - **(pdf): Preserve word and line breaks when layout reorders upright PDF text.** (#2373)
   Keep table cells searchable and leave adjacent source glyphs attached.
 

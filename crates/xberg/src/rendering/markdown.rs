@@ -3,6 +3,7 @@
 use comrak::nodes::{AstNode, NodeValue};
 use comrak::{Arena, Options, format_commonmark};
 use std::borrow::Cow;
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use crate::types::annotations::PdfAnnotation;
@@ -120,6 +121,14 @@ pub(crate) fn markdown_tag_exemptions_are_owned(doc: &InternalDocument) -> bool 
 /// [`ExtractionConfig::escape_markdown`](crate::core::config::ExtractionConfig::escape_markdown).
 /// Defaults to `true` (escaped), preserving prior behavior.
 pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
+    render_markdown_observed(doc, None).0
+}
+
+/// A second emission changes only tag nodes created from semantic annotations.
+pub(crate) fn render_markdown_observed(
+    doc: &InternalDocument,
+    mut tag_budget: Option<&mut usize>,
+) -> (String, Option<Vec<Range<usize>>>) {
     tracing::debug!(element_count = doc.elements.len(), "markdown rendering starting");
     let arena = Arena::new();
     let root = build_comrak_ast(doc, &arena);
@@ -128,41 +137,45 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
         strip_arxiv_watermark_noise(root);
     }
     keep_code_literal(root, &arena);
-    lower_standard_inline_html(root, &arena);
+    let mut nodes = tag_budget.as_deref().is_some_and(|budget| *budget > 0).then(Vec::new);
+    lower_standard_inline_html(root, &arena, &mut nodes, tag_budget.as_deref_mut());
     if !doc.escape_markdown {
         keep_text_tildes_unescaped(root, &arena);
     }
 
     if root.first_child().is_none() {
         tracing::debug!("markdown rendering: empty AST, returning empty string");
-        return finalize_annotations_appendix(doc.annotations.as_deref());
+        return (finalize_annotations_appendix(doc.annotations.as_deref()), None);
     }
 
     let mut options = comrak_options();
     options.render.width = 0;
+    let mut raw = String::new();
+    format_commonmark(root, &options, &mut raw).expect("comrak formatting should not fail");
+    let raw_len = raw.len();
+    let output = finish_markdown(raw, doc);
+    let owned = nodes
+        .zip(tag_budget)
+        .and_then(|(nodes, budget)| tag_ownership::verify(root, &options, doc, (&output, raw_len), &nodes, budget));
+    tracing::debug!(output_length = output.len(), "markdown rendering complete");
+    (output, owned)
+}
 
-    let mut output = String::new();
-    format_commonmark(root, &options, &mut output).expect("comrak formatting should not fail");
-
-    output = filter_page_marker_comments(output, doc.page_marker_format.as_deref());
-
-    output = unescape_markdown_output(output, doc.escape_markdown);
-
+fn finish_markdown(output: String, doc: &InternalDocument) -> String {
+    let output = filter_page_marker_comments(output, doc.page_marker_format.as_deref());
+    let mut output = unescape_markdown_output(output, doc.escape_markdown);
     if let Cow::Owned(s) = collapse_excess_newlines(&output) {
         output = s;
     }
-
     output = append_annotations_section(output, doc.annotations.as_deref());
-
-    let trimmed_len = output.trim_end().len();
-    if trimmed_len == 0 {
-        return String::new();
+    output.truncate(output.trim_end().len());
+    if !output.is_empty() {
+        output.push('\n');
     }
-    output.truncate(trimmed_len);
-    output.push('\n');
-    tracing::debug!(output_length = output.len(), "markdown rendering complete");
     output
 }
+
+mod tag_ownership;
 
 /// Retain canonical list boundaries and configured page markers while dropping other HTML comment lines.
 fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>) -> String {
@@ -204,20 +217,28 @@ fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
 }
 
 /// ~keep Only semantic annotations create HTML; their text children retain normal CommonMark escaping.
-fn lower_standard_inline_html<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+fn lower_standard_inline_html<'a>(
+    root: &'a AstNode<'a>,
+    arena: &'a Arena<'a>,
+    tracked: &mut Option<Vec<&'a AstNode<'a>>>,
+    mut budget: Option<&mut usize>,
+) {
     for node in root.descendants().collect::<Vec<_>>() {
         let (opening, closing) = match node.data.borrow().value {
             NodeValue::Superscript => ("<sup>", "</sup>"),
             NodeValue::Underline => ("<u>", "</u>"),
             _ => continue,
         };
-        node.insert_before(arena.alloc(AstNode::from(NodeValue::HtmlInline(opening.into()))));
+        let open = arena.alloc(AstNode::from(NodeValue::HtmlInline(opening.into())));
+        let close = arena.alloc(AstNode::from(NodeValue::HtmlInline(closing.into())));
+        node.insert_before(open);
         while let Some(child) = node.first_child() {
             child.detach();
             node.insert_before(child);
         }
-        node.insert_before(arena.alloc(AstNode::from(NodeValue::HtmlInline(closing.into()))));
+        node.insert_before(close);
         node.detach();
+        tag_ownership::track(tracked, budget.as_deref_mut(), open, close);
     }
 }
 

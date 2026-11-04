@@ -34,6 +34,7 @@ impl SurfaceContext {
         if (content_changed || formatted != witness.formatted) && self.formatted_markdown() {
             self.formatted_invalidated = true;
             self.capture.formatted = formatted;
+            self.capture.owned_tags = None;
             if !self.prefer_current_plain {
                 self.formatted_literal = document.formatted_content.clone();
             }
@@ -45,6 +46,7 @@ impl SurfaceContext {
                 expected.plain = Some(super::PlainPageBackup(page.content.clone()));
                 expected.literal = true;
                 expected.tag_exemptions = false;
+                expected.owned_tags = None;
             }
         }
         self.plain_document = Fingerprint::new(&document.content);
