@@ -214,9 +214,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Preserve long Form text when the caller marks the Form invocation as placed PDF content.** (#2310)
 
-- **(pdf): Recover text missing from a partial invisible scan layer.** (#2425)
-  In Plain Auto extraction with built-in Tesseract, check a single simple scan for uncovered text
-  bands and trailing words. Keep the native result unless OCR preserves its text and adds readable content.
+- **(pdf): Recover text missing from partial invisible scan layers.** (#2425, #2506)
+  In Plain Auto extraction with built-in Tesseract, check eligible scans independently for uncovered text
+  bands and trailing words, within the configured iteration limits. Keep each native page unless OCR preserves
+  its text and adds readable content.
 
 - **(pdf): Keep aligned financial amounts with their labels.** (#2315)
   Preserve complete native PDF rows in plain text and keep proven financial body rows out of Markdown headers.
