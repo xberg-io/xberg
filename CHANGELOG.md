@@ -179,6 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep upper rows first when stacked ruled grids merge.** (#2494)
+
 - **(redaction): Cover terms split by a superscript in HTML headings or font changes in PDF text.** (#2363)
   When the verified plain rendering covers the crossing, return it with the term redacted.
 

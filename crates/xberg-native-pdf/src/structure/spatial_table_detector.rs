@@ -3110,10 +3110,6 @@ fn detect_tables_from_intersections(
     header_source_diagnostic::event("intersection_before_merge", || {
         header_source_diagnostic::tables(&tables)
     });
-    merge_vertically_adjacent_tables(&mut tables);
-    #[cfg(test)]
-    header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
-
     // Post-merge: split tables at section dividers — full-width horizontal
     // lines that indicate separate form sections within a single grid.
     // Use merged H-edges (to detect full-width lines) but only snap (do NOT
@@ -3129,7 +3125,10 @@ fn detect_tables_from_intersections(
             "vertical": v_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
         })
     });
-    tables = split_tables_at_section_dividers(tables, &h_edges, &v_edges, config);
+    let stacked_row_cuts = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
+    #[cfg(test)]
+    header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
+    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &h_edges, &v_edges, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_section_split", || {
         header_source_diagnostic::tables(&tables)
@@ -3707,16 +3706,33 @@ const SECTION_DIVIDER_WIDTH_RATIO: f32 = 0.80;
 /// original table may have been broken into multiple smaller ones.
 fn split_tables_at_section_dividers(
     tables: Vec<Table>,
+    stacked_row_cuts: Vec<Option<Vec<usize>>>,
     h_edges: &[Edge],
     v_edges: &[Edge],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
     let mut result = Vec::new();
-    for table in tables {
-        let parts = split_table_at_section_dividers(table, h_edges, v_edges, config);
+    for (table, cuts) in tables.into_iter().zip(stacked_row_cuts) {
+        let mut parts = split_table_at_section_dividers(table, h_edges, v_edges, config);
+        // Divider matching uses the original fragment order. Only reorder a surviving whole merge. ~keep
+        if let (Some(cuts), [table]) = (cuts, parts.as_mut_slice()) {
+            order_stacked_fragments(&mut table.rows, &cuts);
+        }
         result.extend(parts);
     }
     result
+}
+
+fn order_stacked_fragments(rows: &mut [TableRow], cuts: &[usize]) {
+    if cuts.last().is_none_or(|cut| *cut >= rows.len()) {
+        return;
+    }
+    let mut start = 0;
+    for end in cuts.iter().copied().chain(std::iter::once(rows.len())) {
+        rows[start..end].reverse();
+        start = end;
+    }
+    rows.reverse();
 }
 
 /// Split a single table at section divider lines.
@@ -4039,19 +4055,24 @@ const MERGE_COL_DIFF_TOLERANCE: usize = 2;
 /// Merge tables that are vertically adjacent (small gap between bottom of one
 /// and top of another) and have similar column counts (difference <= `MERGE_COL_DIFF_TOLERANCE`).
 /// When column counts differ, the narrower table's rows are padded with empty cells.
-fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
+fn merge_vertically_adjacent_tables(
+    tables: &mut Vec<Table>,
+    h_edges: &[Edge],
+    v_edges: &[Edge],
+) -> Vec<Option<Vec<usize>>> {
     if tables.len() < 2 {
-        return;
+        return vec![None; tables.len()];
     }
 
-    // Sort tables by the top-Y of their bbox (highest Y first in PDF coords). ~keep
+    // Keep the divider pass's input order, lowest PDF Y first. ~keep
     tables.sort_by(|a, b| {
-        let ay = a.bbox.map_or(f32::NEG_INFINITY, |bb| bb.top());
-        let by = b.bbox.map_or(f32::NEG_INFINITY, |bb| bb.top());
+        let ay = a.bbox.map_or(f32::NEG_INFINITY, |bbox| bbox.y);
+        let by = b.bbox.map_or(f32::NEG_INFINITY, |bbox| bbox.y);
         crate::utils::safe_float_cmp(ay, by)
     });
 
     let mut merged: Vec<Table> = Vec::new();
+    let mut stacked_row_cuts = Vec::new();
     for table in tables.drain(..) {
         let should_merge = merged.last().is_some_and(|prev: &Table| {
             let col_diff = (prev.col_count as isize - table.col_count as isize).unsigned_abs();
@@ -4069,6 +4090,7 @@ fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
 
         if should_merge {
             let prev = merged.last_mut().unwrap();
+            record_stacked_join(stacked_row_cuts.last_mut().unwrap(), prev, &table, h_edges, v_edges);
             let target_cols = prev.col_count.max(table.col_count);
 
             if prev.col_count < target_cols {
@@ -4117,11 +4139,54 @@ fn merge_vertically_adjacent_tables(tables: &mut Vec<Table>) {
             }
             prev.has_header = prev.has_header || table.has_header;
         } else {
+            stacked_row_cuts.push(table_has_ruled_outline(&table, h_edges, v_edges).then(Vec::new));
             merged.push(table);
         }
     }
 
     *tables = merged;
+    stacked_row_cuts
+}
+
+fn record_stacked_join(
+    cuts: &mut Option<Vec<usize>>,
+    lower: &Table,
+    upper: &Table,
+    h_edges: &[Edge],
+    v_edges: &[Edge],
+) {
+    let Some(row_cuts) = cuts else {
+        return;
+    };
+    let aligned = lower.bbox.zip(upper.bbox).is_some_and(|(lower, upper)| {
+        lower.bottom() < upper.top()
+            && (lower.left() - upper.left()).abs() <= BAND_RULE_SPAN_TOL
+            && (lower.right() - upper.right()).abs() <= BAND_RULE_SPAN_TOL
+    });
+    if aligned && lower.col_count == upper.col_count && table_has_ruled_outline(upper, h_edges, v_edges) {
+        row_cuts.push(lower.rows.len());
+    } else {
+        *cuts = None;
+    }
+}
+
+fn table_has_ruled_outline(table: &Table, h_edges: &[Edge], v_edges: &[Edge]) -> bool {
+    let Some(bounds) = table.bbox else {
+        return false;
+    };
+    let has_edge = |edges: &[Edge], coordinate: f32, start: f32, end: f32| {
+        edges.iter().any(|edge| {
+            (edge.coord - coordinate).abs() <= BAND_RULE_SPAN_TOL
+                && edge.start <= start + BAND_RULE_SPAN_TOL
+                && edge.end >= end - BAND_RULE_SPAN_TOL
+        })
+    };
+    [bounds.top(), bounds.bottom()]
+        .into_iter()
+        .all(|y| has_edge(h_edges, y, bounds.left(), bounds.right()))
+        && [bounds.left(), bounds.right()]
+            .into_iter()
+            .all(|x| has_edge(v_edges, x, bounds.top(), bounds.bottom()))
 }
 
 /// True when the page carries vertical-ruling evidence that should route
@@ -8525,7 +8590,12 @@ mod tests {
         };
 
         let mut tables = vec![table1, table2];
-        merge_vertically_adjacent_tables(&mut tables);
+        let cuts = merge_vertically_adjacent_tables(&mut tables, &[], &[]);
+        assert_eq!(
+            cuts,
+            vec![None],
+            "Merge without a ruled outline does not change fragment order"
+        );
         assert_eq!(tables.len(), 1, "Adjacent tables should be merged into one");
         assert_eq!(tables[0].rows.len(), 2, "Merged table should have 2 rows");
         assert_eq!(tables[0].col_count, 3);
@@ -8570,7 +8640,7 @@ mod tests {
         };
 
         let mut tables = vec![table1, table2];
-        merge_vertically_adjacent_tables(&mut tables);
+        let _ = merge_vertically_adjacent_tables(&mut tables, &[], &[]);
         assert_eq!(tables.len(), 2, "Tables with large gap should NOT be merged");
     }
 
