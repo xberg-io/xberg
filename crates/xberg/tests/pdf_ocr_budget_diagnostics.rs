@@ -16,11 +16,20 @@ const EMPTY_WARNING: &str = "Page 1 yielded no usable OCR text after retries; th
     from 150 to 25 DPI. Increase security_limits.max_content_size or split/crop the page and retry. \
     A blank page can also produce no text.";
 
+#[derive(Clone, Copy)]
+enum Payload {
+    None,
+    Table,
+    Formula,
+}
+
+const RECOVERED_FORMULA: &str = "x^2 + y^2";
+
 struct FixedBackend {
     name: &'static str,
     text: &'static str,
     embedded_only: bool,
-    table: bool,
+    payload: Payload,
     observed_widths: Option<Arc<Mutex<Vec<u32>>>>,
 }
 
@@ -52,11 +61,17 @@ impl OcrBackend for FixedBackend {
         }
         if !self.embedded_only || embedded {
             result.content = self.text.to_owned();
-            if self.table {
+            if matches!(self.payload, Payload::Table) {
                 result.tables.push(xberg::types::Table {
                     cells: vec![vec!["Item".to_owned(), "Amount".to_owned()]],
                     markdown: "| Item | Amount |\n| --- | --- |\n".to_owned(),
                     ..Default::default()
+                });
+            } else if matches!(self.payload, Payload::Formula) {
+                result.formulas.push(xberg::types::Formula {
+                    latex: RECOVERED_FORMULA.to_owned(),
+                    bbox: None,
+                    page: None,
                 });
             }
         }
@@ -112,6 +127,17 @@ fn extract(text: &'static str, mixed: bool, budget: usize) -> ExtractedDocument 
 }
 
 fn extract_case(text: &'static str, mixed: bool, budget: usize, pipeline: bool, embedded: bool) -> ExtractedDocument {
+    extract_with_payload(text, mixed, budget, pipeline, embedded, Payload::None)
+}
+
+fn extract_with_payload(
+    text: &'static str,
+    mixed: bool,
+    budget: usize,
+    pipeline: bool,
+    embedded: bool,
+    payload: Payload,
+) -> ExtractedDocument {
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: BACKEND.to_owned(),
@@ -139,7 +165,7 @@ fn extract_case(text: &'static str, mixed: bool, budget: usize, pipeline: bool, 
         name: BACKEND,
         text: if pipeline { "" } else { text },
         embedded_only: embedded,
-        table: false,
+        payload: if pipeline { Payload::None } else { payload },
         observed_widths: None,
     }))
     .unwrap();
@@ -147,7 +173,7 @@ fn extract_case(text: &'static str, mixed: bool, budget: usize, pipeline: bool, 
         name: "budget-diagnostic-second",
         text,
         embedded_only: false,
-        table: false,
+        payload,
         observed_widths: None,
     }))
     .unwrap();
@@ -170,6 +196,63 @@ fn budget_clamped_empty_full_and_mixed_pages_report_exact_dpi() {
                 .map(|warning| warning.message.as_ref())
                 .collect();
             assert_eq!(warnings, [EMPTY_WARNING], "mixed={mixed}");
+        }
+    }
+}
+
+#[test]
+#[serial_test::serial]
+fn retained_noise_reports_budget_warning_only_when_rendering_was_clamped() {
+    const NOISE: &str = "x y z a b c d e f g h i j k l m n o p q r s t u";
+    for mixed in [false, true] {
+        for pipeline in [false, true] {
+            for budget_mib in [1, 100] {
+                let result = extract_case(NOISE, mixed, budget_mib * 1024 * 1024, pipeline, false);
+                assert!(
+                    result.processing_warnings.iter().any(|warning| {
+                        warning.source == "ocr" && warning.message.contains("its text was retained")
+                    }),
+                    "must reach the non-discarding noise verdict: mixed={mixed}, pipeline={pipeline}"
+                );
+                let warnings: Vec<_> = result
+                    .processing_warnings
+                    .iter()
+                    .filter(|warning| warning.source == "ocr_raster_budget")
+                    .map(|warning| warning.message.as_ref())
+                    .collect();
+                let expected = if budget_mib == 1 { &[EMPTY_WARNING][..] } else { &[] };
+                assert_eq!(
+                    warnings, expected,
+                    "mixed={mixed}, pipeline={pipeline}, budget={budget_mib}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[serial_test::serial]
+fn retained_table_keeps_noisy_budget_clamped_page_quiet() {
+    const NOISY_TEXT: &str =
+        "The readable heading shows the quarterly report x y z a b c d e f g h i j k l m n o p q r s t u";
+    for mixed in [false, true] {
+        for pipeline in [false, true] {
+            let result = extract_with_payload(NOISY_TEXT, mixed, 1024 * 1024, pipeline, false, Payload::Table);
+            assert_eq!(result.tables.len(), 1, "mixed={mixed}, pipeline={pipeline}");
+            assert!(
+                result
+                    .processing_warnings
+                    .iter()
+                    .any(|warning| { warning.source == "ocr" && warning.message.contains("its text was retained") })
+            );
+            assert!(
+                result
+                    .processing_warnings
+                    .iter()
+                    .all(|warning| warning.source != "ocr_raster_budget"),
+                "mixed={mixed}, pipeline={pipeline}: {:?}",
+                result.processing_warnings
+            );
         }
     }
 }
@@ -221,13 +304,13 @@ fn successful_embedded_retry_and_later_pipeline_stage_remove_empty_diagnostic() 
     }
 }
 
-fn extract_recorded_retry(text: &'static str, table: bool) -> (ExtractedDocument, Vec<u32>) {
+fn extract_recorded_retry(text: &'static str, payload: Payload) -> (ExtractedDocument, Vec<u32>) {
     let widths = Arc::new(Mutex::new(Vec::new()));
     register_ocr_backend(Arc::new(FixedBackend {
         name: BACKEND,
         text,
         embedded_only: true,
-        table,
+        payload,
         observed_widths: Some(widths.clone()),
     }))
     .unwrap();
@@ -259,7 +342,7 @@ fn extract_recorded_retry(text: &'static str, table: bool) -> (ExtractedDocument
 #[test]
 #[serial_test::serial]
 fn discarded_embedded_retry_text_still_reports_final_empty_budget_read() {
-    let (result, widths) = extract_recorded_retry("x y z x y z x y z x y z", false);
+    let (result, widths) = extract_recorded_retry("x y z x y z x y z x y z", Payload::None);
     assert_eq!(widths, [250, 30], "both real page and embedded-image renders reach OCR");
     assert!(
         result.content.trim().is_empty(),
@@ -278,7 +361,7 @@ fn discarded_embedded_retry_text_still_reports_final_empty_budget_read() {
 #[test]
 #[serial_test::serial]
 fn retained_table_only_retry_has_no_empty_budget_diagnostic() {
-    let (result, widths) = extract_recorded_retry("", true);
+    let (result, widths) = extract_recorded_retry("", Payload::Table);
     assert_eq!(widths, [250, 30]);
     assert_eq!(result.tables.len(), 1, "the final result retains the table");
     assert_eq!(result.tables[0].cells, [vec!["Item", "Amount"]]);
@@ -289,5 +372,25 @@ fn retained_table_only_retry_has_no_empty_budget_diagnostic() {
             .filter(|warning| warning.source == "ocr_raster_budget")
             .count(),
         0
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn retained_formula_only_retry_has_no_empty_budget_diagnostic() {
+    let (result, widths) = extract_recorded_retry("", Payload::Formula);
+    assert_eq!(widths, [250, 30], "the formula comes only from the embedded retry");
+    assert!(result.content.trim().is_empty(), "{:?}", result.content);
+    assert!(result.tables.is_empty());
+    assert_eq!(result.formulas.len(), 1);
+    assert_eq!(result.formulas[0].page, Some(1));
+    assert_eq!(result.formulas[0].latex, RECOVERED_FORMULA);
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .all(|warning| warning.source != "ocr_raster_budget"),
+        "{:?}",
+        result.processing_warnings
     );
 }
