@@ -201,6 +201,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Report the actual budget limit when upscaling a JPEG with unknown DPI.** (#2531)
   Check the planned upscale without retrying at a reduced decode that cannot reuse the source DPI estimate.
 
+- **(ocr): Warn when a budget-clamped PDF render returns suspected noise.** (#2532)
+  Keep the diagnostic quiet when the selected read retains a table or formula.
+
 - **(paddle): Preserve reading order after automatically correcting rotated PDF pages.** (#2519)
   Compose the page hint with the applied pixel correction so upright labels are not reversed.
 

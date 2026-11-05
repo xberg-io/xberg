@@ -2091,19 +2091,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
-    if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        for &page_idx in &page_indices {
-            let page = (page_idx + 1) as u32;
-            if ocr_results.get(&page).is_none_or(|text| text.trim().is_empty())
-                && !table_only_xobject_recovery_pages.contains(&page)
-                && let Some(dpi) = raster_dpis.get(&page_idx)
-                && let Some(warning) = dpi.empty_text_warning(page_idx)
-            {
-                crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
-            }
-        }
-    }
-
     let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2316,6 +2303,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
         {
             super::document::put_layer_first_in_document(page_doc, None, first);
+        }
+    }
+
+    if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        let retained_formula_pages: ahash::AHashSet<_> =
+            accumulated_formulas.iter().filter_map(|formula| formula.page).collect();
+        for &page_idx in &page_indices {
+            let page = (page_idx + 1) as u32;
+            if (ocr_results.get(&page).is_none_or(|text| text.trim().is_empty()) || noise_verdict_pages.contains(&page))
+                && !table_only_xobject_recovery_pages.contains(&page)
+                && !retained_formula_pages.contains(&page)
+                && structured_ocr_pages.get(&page).is_none_or(|doc| doc.tables.is_empty())
+                && let Some(dpi) = raster_dpis.get(&page_idx)
+                && let Some(warning) = dpi.empty_text_warning(page_idx)
+            {
+                crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
+            }
         }
     }
 
@@ -4448,9 +4452,14 @@ pub(super) async fn extract_with_ocr_for_page(
             .map(|table| table.page_number)
             .chain(accumulated_formulas.iter().filter_map(|formula| formula.page))
             .collect();
+        let retained_noise_pages: ahash::AHashSet<_> = recognition_noise_verdicts
+            .iter()
+            .filter(|verdict| !verdict.discarded)
+            .map(|verdict| verdict.page_index)
+            .collect();
         for (page_idx, text) in page_texts.iter().enumerate() {
             let document_page_index = page_index_offset + page_idx;
-            if text.trim().is_empty()
+            if (text.trim().is_empty() || retained_noise_pages.contains(&document_page_index))
                 && !retained_payload_pages.contains(&((document_page_index + 1) as u32))
                 && let Some(dpi) = raster_dpis.get(&page_idx)
                 && let Some(warning) = dpi.empty_text_warning(document_page_index)
