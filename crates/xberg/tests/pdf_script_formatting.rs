@@ -312,3 +312,70 @@ fn should_preserve_scripts_inside_a_detected_ruled_pdf_table_gh2275() {
     );
     assert_eq!(result.content.matches("H~2~O").count(), 1, "{}", result.content);
 }
+
+fn raised_number_before_words(prefix: &str, number: &str, body: &str, gap: f32) -> Vec<u8> {
+    let metrics = script_pdf(&format!(
+        "BT /F1 10 Tf 1 0 0 1 72 700 Tm ({prefix}) Tj ET \
+         BT /F1 6 Tf 1 0 0 1 72 600 Tm ({number}) Tj ET"
+    ));
+    let native = xberg_native_pdf::PdfDocument::from_bytes(metrics).expect("native parses source metrics");
+    let chars = native.extract_chars(0).expect("source advances");
+    let prefix_width: f32 = chars
+        .iter()
+        .filter(|ch| ch.font_size == 10.0)
+        .map(|ch| ch.advance_width)
+        .sum();
+    let number_width: f32 = chars
+        .iter()
+        .filter(|ch| ch.font_size == 6.0)
+        .map(|ch| ch.advance_width)
+        .sum();
+    let number_x = 72.0 + prefix_width;
+    let body_x = number_x + number_width + gap;
+    script_pdf(&format!(
+        "BT /F1 10 Tf 1 0 0 1 72 700 Tm ({prefix}) Tj ET \
+         BT /F1 6 Tf 1 0 0 1 {number_x} 702.5 Tm ({number}) Tj ET \
+         BT /F1 10 Tf 1 0 0 1 {body_x} 700 Tm ({body}) Tj ET"
+    ))
+}
+
+#[test]
+fn should_keep_a_mid_sentence_raised_number_joined_to_the_following_word() {
+    let bytes = raised_number_before_words("The finding was reported in the", "5", "survey that followed", 2.0);
+    assert_eq!(
+        markdown(&bytes).trim(),
+        "The finding was reported in the<sup>5</sup>survey that followed"
+    );
+}
+
+#[test]
+fn should_separate_a_raised_numeric_note_at_the_paragraph_start() {
+    let bytes = raised_number_before_words("", "5", "The survey that followed", 2.0);
+    assert_eq!(markdown(&bytes).trim(), "5 The survey that followed");
+}
+
+#[test]
+fn should_use_the_source_gap_for_a_raised_isotope_like_prefix() {
+    for (gap, expected) in [(0.0, "13C NMR"), (2.0, "13 C NMR")] {
+        let bytes = raised_number_before_words("", "13", "C NMR", gap);
+        let native =
+            xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("native parses isotope-like source");
+        let page = native
+            .extract_page_text_with_script_geometry(0, xberg_native_pdf::document::ReadingOrder::TopToBottom)
+            .expect("native source geometry");
+        let number = page.spans.iter().find(|span| span.text == "13").expect("raised number");
+        let body = page
+            .spans
+            .iter()
+            .find(|span| span.text == "C NMR")
+            .expect("following words");
+        assert_eq!(number.font_size, 6.0);
+        assert_eq!(body.font_size, 10.0);
+        let chars = native.extract_chars(0).expect("native baseline geometry");
+        let raised = chars.iter().find(|ch| ch.char == '1').expect("raised digit");
+        let base = chars.iter().find(|ch| ch.char == 'C').expect("base letter");
+        assert!((raised.origin_y - base.origin_y - 2.5).abs() < 0.001);
+        assert!((body.bbox.x - number.bbox.right() - gap).abs() < 0.001);
+        assert_eq!(markdown(&bytes).trim(), expected, "{gap}pt source gap");
+    }
+}

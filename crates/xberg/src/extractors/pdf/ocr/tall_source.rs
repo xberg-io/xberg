@@ -251,7 +251,7 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<(Sourc
     let source = certify(attempt.document, attempt.page, width, available)?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
     let bands = source.blank_bands(&cancelled)?;
-    let plan = plan_strips(
+    let mut plan = plan_strips(
         source.width,
         source.height,
         StripLimits {
@@ -265,7 +265,13 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<(Sourc
         cancelled,
     )
     .ok()?;
-    Some((source, plan.rows))
+    // A tile boundary can leave a final strip containing only certified blank rows. ~keep
+    plan.rows.retain(|rows| {
+        !bands
+            .iter()
+            .any(|band| band.start <= rows.start && rows.end <= band.end)
+    });
+    (plan.rows.len() >= 2).then_some((source, plan.rows))
 }
 
 fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usize) -> Option<Source> {
@@ -722,7 +728,9 @@ mod tests {
         let (source, strips) = prepare(&attempt, || false).expect("admitted bounded strips");
         assert_eq!(source.height, 9000);
         assert_eq!(strips.first().unwrap().start, 0);
-        assert_eq!(strips.last().unwrap().end, source.height);
+        assert_eq!(strips.last().unwrap().end, 8812);
+        let bands = source.blank_bands(|| false).unwrap();
+        assert!(bands.iter().any(|band| band.start <= 8812 && band.end == source.height));
         let peak = 1100 * 7765 * 4
             + 128_000
             + FIXED_WORK_BYTES

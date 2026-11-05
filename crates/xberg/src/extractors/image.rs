@@ -4256,7 +4256,6 @@ mod tests {
 
         #[cfg(all(feature = "pdf", feature = "ocr-pipeline"))]
         #[tokio::test]
-        #[serial_test::serial]
         async fn standalone_image_pipeline_keeps_whole_image_scan_hints() {
             use crate::core::config::{OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds};
             use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
@@ -4276,15 +4275,7 @@ mod tests {
                     true
                 }
                 async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
-                    // ~keep: the stub holds the global `tesseract` slot, so a parallel test running real OCR lands on it too; only calls carrying this stage's probe are recorded.
-                    let probed = config
-                        .backend_options
-                        .as_ref()
-                        .and_then(|options| options.get("hint_probe"))
-                        .is_some_and(|probe| probe == "standalone_image_pipeline");
-                    if probed {
-                        *self.config.lock().unwrap() = Some(config.clone());
-                    }
+                    *self.config.lock().unwrap() = Some(config.clone());
                     Ok(ExtractedDocument {
                         content: "standalone image text".to_string(),
                         ..Default::default()
@@ -4307,11 +4298,9 @@ mod tests {
                 }
             }
 
-            crate::plugins::unregister_ocr_backend("tesseract").unwrap();
             let backend = Arc::new(TesseractHintCapturingBackend {
                 config: Mutex::new(None),
             });
-            crate::plugins::register_ocr_backend(backend.clone()).unwrap();
 
             let pipeline = OcrPipelineConfig {
                 stages: vec![OcrPipelineStage {
@@ -4322,7 +4311,7 @@ mod tests {
                     paddle_ocr_config: None,
                     paddle_ocr_settings: None,
                     vlm_config: None,
-                    backend_options: Some(serde_json::json!({ "hint_probe": "standalone_image_pipeline" })),
+                    backend_options: None,
                 }],
                 quality_thresholds: OcrQualityThresholds {
                     pipeline_min_quality: 0.0,
@@ -4338,13 +4327,12 @@ mod tests {
             };
             let png = png_with_phys_density(16, 16, REPORTER_FIXTURE_PPU);
 
-            ImageExtractor::new()
-                .extract_with_ocr_pipeline(&png, &config, &pipeline)
-                .await
-                .expect("standalone image pipeline succeeds");
-
-            crate::plugins::unregister_ocr_backend("tesseract").unwrap();
-            crate::plugins::ensure_ocr_backends_initialized();
+            crate::plugins::registry::with_test_ocr_backend(
+                backend.clone(),
+                ImageExtractor::new().extract_with_ocr_pipeline(&png, &config, &pipeline),
+            )
+            .await
+            .expect("standalone image pipeline succeeds");
 
             let captured = backend.config.lock().unwrap().clone().expect("backend was called");
             let source_dpi = captured

@@ -35,6 +35,7 @@ impl SurfaceContext {
             self.formatted_invalidated = true;
             self.capture.formatted = formatted;
             self.capture.owned_tags = None;
+            self.capture.plain_annotation_separator = None;
             if !self.prefer_current_plain {
                 self.formatted_literal = document.formatted_content.clone();
             }

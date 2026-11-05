@@ -5,6 +5,10 @@
 //! ONNX PP-LCNet classifier instead. This test drives the tesseract backend with
 //! `auto_rotate: true` end-to-end; before the fix the whole test process died
 //! with a signal.
+//!
+//! Set `XBERG_ORIENTATION_TEST_MODEL` to the pinned PP-LCNet ONNX artifact
+//! and enable `bundle-tessdata-eng` to run the isolated PDF cases locally.
+//! CI requires the model with `XBERG_REQUIRE_MODELS=1`.
 #![cfg(all(feature = "ocr", any(feature = "auto-rotate", feature = "pdf")))]
 
 #[cfg(feature = "auto-rotate")]
@@ -35,10 +39,66 @@ async fn should_extract_with_auto_rotate_without_crashing() {
     );
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
 mod helpers;
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
+fn in_orientation_test_process(case: &str, warm: bool) -> bool {
+    use std::{env, fs, process::Command};
+
+    const MODEL: &str = concat!(
+        "models--xberg-io--paddleocr-onnx-models/snapshots/bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8/",
+        "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx"
+    );
+    const CHILD_CASE: &str = "XBERG_ORIENTATION_TEST_CHILD";
+    if env::var(CHILD_CASE).as_deref() == Ok(case) {
+        return true;
+    }
+    let Some(model) = env::var_os("XBERG_ORIENTATION_TEST_MODEL") else {
+        assert_ne!(
+            env::var("XBERG_REQUIRE_MODELS").as_deref(),
+            Ok("1"),
+            "XBERG_ORIENTATION_TEST_MODEL must point to the pinned document-orientation ONNX file"
+        );
+        return false;
+    };
+
+    let root = tempfile::tempdir().expect("isolated orientation test cache");
+    let hub = root.path().join("hub");
+    fs::create_dir(&hub).expect("empty Hugging Face Hub cache");
+    if warm {
+        let destination = hub.join(MODEL);
+        fs::create_dir_all(destination.parent().expect("model cache parent")).expect("model cache directories");
+        fs::copy(model, destination).expect("copy the pinned orientation model into the test cache");
+    }
+
+    let tessdata = root.path().join("tessdata");
+    fs::create_dir(&tessdata).expect("private Tesseract data directory");
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("enable bundle-tessdata-eng for these tests");
+    fs::write(tessdata.join("eng.traineddata"), english).expect("seed pinned English data");
+
+    // A fresh process isolates both environment variables and the process-global detector. ~keep
+    let output = Command::new(env::current_exe().expect("test executable"))
+        .args(["--exact", case, "--nocapture"])
+        .env(CHILD_CASE, case)
+        .env("HF_HOME", root.path())
+        .env("HF_HUB_CACHE", &hub)
+        .env("HF_HUB_OFFLINE", "1")
+        .env("TESSDATA_PREFIX", tessdata)
+        .env("XBERG_CACHE_DIR", root.path().join("xberg"))
+        .output()
+        .expect("run isolated orientation test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+        "{case} child exited {}\n{stdout}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    false
+}
+
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
 fn rotated_pdf() -> (Vec<u8>, xberg::ExtractionConfig) {
     use xberg::core::config::PageConfig;
 
@@ -60,8 +120,10 @@ fn rotated_pdf() -> (Vec<u8>, xberg::ExtractionConfig) {
 
 #[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
 #[test]
-#[ignore = "requires the verified document-orientation model in the local cache and the PDF fixture"]
 fn implicit_pdf_ocr_recovers_a_low_confidence_rotated_page() {
+    if !in_orientation_test_process("implicit_pdf_ocr_recovers_a_low_confidence_rotated_page", true) {
+        return;
+    }
     use xberg::core::config::{ExtractionConfig, OcrConfig};
 
     let (bytes, config) = rotated_pdf();
@@ -110,10 +172,15 @@ fn implicit_pdf_ocr_recovers_a_low_confidence_rotated_page() {
     );
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
 #[test]
-#[ignore = "requires the rotated PDF fixture and an isolated empty model cache"]
 fn implicit_pdf_ocr_keeps_its_original_warning_when_no_orientation_model_is_available() {
+    if !in_orientation_test_process(
+        "implicit_pdf_ocr_keeps_its_original_warning_when_no_orientation_model_is_available",
+        false,
+    ) {
+        return;
+    }
     use xberg::core::config::{ExtractionConfig, OcrConfig};
 
     let (bytes, config) = rotated_pdf();
@@ -150,8 +217,10 @@ fn implicit_pdf_ocr_keeps_its_original_warning_when_no_orientation_model_is_avai
 
 #[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
 #[test]
-#[ignore = "requires the upright PDF fixture and a local orientation model cache"]
 fn implicit_upright_pdf_ocr_preserves_text_confidence_and_geometry() {
+    if !in_orientation_test_process("implicit_upright_pdf_ocr_preserves_text_confidence_and_geometry", true) {
+        return;
+    }
     use xberg::core::config::{ExtractionConfig, OcrConfig, PageConfig};
 
     let bytes = std::fs::read(helpers::get_test_file_path("pdf/ocr_test.pdf")).expect("upright PDF fixture");
@@ -209,4 +278,142 @@ fn implicit_upright_pdf_ocr_preserves_text_confidence_and_geometry() {
         serde_json::to_value(implicit_structure).expect("implicit geometry"),
         serde_json::to_value(disabled_structure).expect("explicit geometry")
     );
+}
+
+#[cfg(all(feature = "pdf", feature = "auto-rotate-tract"))]
+fn scan_270_text(ocr: Option<xberg::OcrConfig>) -> String {
+    let path = helpers::get_test_file_path("pdf/ocr_test_rotated_270.pdf");
+    let bytes = std::fs::read(path).expect("rotated PDF fixture");
+    let config = xberg::ExtractionConfig {
+        force_ocr: true,
+        use_cache: false,
+        ocr,
+        ..Default::default()
+    };
+    helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config)
+        .expect("PDF OCR succeeds")
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(all(feature = "pdf", feature = "auto-rotate-tract"))]
+#[test]
+fn implicit_pdf_ocr_recovers_the_empty_270_degree_scan() {
+    if !in_orientation_test_process("implicit_pdf_ocr_recovers_the_empty_270_degree_scan", true) {
+        return;
+    }
+    let expected = "Docling bundles PDF document conversion to JSON and Markdown in an easy self contained package";
+    assert_eq!(
+        scan_270_text(Some(xberg::OcrConfig::default())),
+        "",
+        "explicit orientation opt-out"
+    );
+    let implicit = scan_270_text(None);
+    assert_eq!(
+        scan_270_text(Some(xberg::OcrConfig {
+            auto_rotate: true,
+            ..Default::default()
+        })),
+        expected,
+        "explicit cached orientation control"
+    );
+    assert_eq!(implicit, expected, "implicit cached orientation recovery");
+}
+
+#[cfg(all(feature = "pdf", feature = "auto-rotate-tract"))]
+#[test]
+fn implicit_pdf_ocr_keeps_the_270_degree_scan_empty_without_a_cached_model() {
+    if !in_orientation_test_process(
+        "implicit_pdf_ocr_keeps_the_270_degree_scan_empty_without_a_cached_model",
+        false,
+    ) {
+        return;
+    }
+    assert_eq!(scan_270_text(None), "");
+}
+
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
+#[test]
+fn implicit_pdf_ocr_recovers_the_complete_rotated_table() {
+    if !in_orientation_test_process("implicit_pdf_ocr_recovers_the_complete_rotated_table", true) {
+        return;
+    }
+    use xberg::core::config::{ExtractionConfig, OcrConfig};
+
+    let bytes = include_bytes!("fixtures/ocr/rotated_financial_table.pdf");
+    let config = ExtractionConfig {
+        use_cache: false,
+        ..Default::default()
+    };
+    let extract = |config: &ExtractionConfig| {
+        helpers::extract_bytes_document_blocking(bytes, "application/pdf", config).expect("table PDF OCR succeeds")
+    };
+    assert_recovered_financial_table(&extract(&config));
+
+    let disabled = extract(&ExtractionConfig {
+        ocr: Some(OcrConfig {
+            auto_rotate: false,
+            ..Default::default()
+        }),
+        ..config
+    });
+    assert!(disabled.tables.is_empty());
+    assert!(disabled.content.split_whitespace().count() < FINANCIAL_TABLE_WORDS);
+    assert!(
+        disabled
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("recognition noise"))
+    );
+}
+
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
+const FINANCIAL_TABLE_WORDS: usize = 480;
+
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
+fn assert_recovered_financial_table(recovered: &xberg::ExtractedDocument) {
+    let [table] = recovered.tables.as_slice() else {
+        panic!("expected one table after cached orientation recovery");
+    };
+    // The snapshot captures the known OCR reading of the synthetic table, including OCR substitutions. ~keep
+    let expected: Vec<Vec<_>> = include_str!("fixtures/ocr/rotated_financial_table.tsv")
+        .lines()
+        .map(|row| row.split('\t').collect())
+        .collect();
+    assert_eq!(expected.len(), 48);
+    assert!(expected.iter().all(|row| row.len() == 8));
+    assert_eq!(table.cells, expected, "ordered table cells");
+    assert_eq!(table.page_number, 1);
+    let words: Vec<_> = expected
+        .iter()
+        .flatten()
+        .flat_map(|cell| cell.split_whitespace())
+        .collect();
+    assert_eq!(words.len(), FINANCIAL_TABLE_WORDS);
+    assert_eq!(recovered.content.split_whitespace().collect::<Vec<_>>(), words);
+    assert!(recovered.processing_warnings.is_empty());
+    assert!(
+        recovered.ocr_elements.is_none(),
+        "internal OCR evidence must stay private"
+    );
+    assert_rotated_table_box(table.bounding_box.as_ref().expect("table geometry"));
+}
+
+#[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
+fn assert_rotated_table_box(bounds: &xberg::types::BoundingBox) {
+    assert!(0.0 <= bounds.x0 && bounds.x0 < bounds.x1 && bounds.x1 <= 792.0);
+    assert!(0.0 <= bounds.y0 && bounds.y0 < bounds.y1 && bounds.y1 <= 612.48);
+    for (actual, ink) in [
+        (bounds.x0, 31.20),
+        (bounds.y0, 29.28),
+        (bounds.x1, 737.76),
+        (bounds.y1, 568.80),
+    ] {
+        assert!(
+            (actual - ink).abs() <= 10.0,
+            "{actual} must bound the drawn table near {ink}"
+        );
+    }
 }
