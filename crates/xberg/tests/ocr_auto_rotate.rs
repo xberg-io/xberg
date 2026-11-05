@@ -280,6 +280,60 @@ fn implicit_upright_pdf_ocr_preserves_text_confidence_and_geometry() {
     );
 }
 
+#[cfg(all(feature = "pdf", feature = "auto-rotate-tract"))]
+fn scan_270_text(ocr: Option<xberg::OcrConfig>) -> String {
+    let path = helpers::get_test_file_path("pdf/ocr_test_rotated_270.pdf");
+    let bytes = std::fs::read(path).expect("rotated PDF fixture");
+    let config = xberg::ExtractionConfig {
+        force_ocr: true,
+        use_cache: false,
+        ocr,
+        ..Default::default()
+    };
+    helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config)
+        .expect("PDF OCR succeeds")
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(all(feature = "pdf", feature = "auto-rotate-tract"))]
+#[test]
+fn implicit_pdf_ocr_recovers_the_empty_270_degree_scan() {
+    if !in_orientation_test_process("implicit_pdf_ocr_recovers_the_empty_270_degree_scan", true) {
+        return;
+    }
+    let expected = "Docling bundles PDF document conversion to JSON and Markdown in an easy self contained package";
+    assert_eq!(
+        scan_270_text(Some(xberg::OcrConfig::default())),
+        "",
+        "explicit orientation opt-out"
+    );
+    let implicit = scan_270_text(None);
+    assert_eq!(
+        scan_270_text(Some(xberg::OcrConfig {
+            auto_rotate: true,
+            ..Default::default()
+        })),
+        expected,
+        "explicit cached orientation control"
+    );
+    assert_eq!(implicit, expected, "implicit cached orientation recovery");
+}
+
+#[cfg(all(feature = "pdf", feature = "auto-rotate-tract"))]
+#[test]
+fn implicit_pdf_ocr_keeps_the_270_degree_scan_empty_without_a_cached_model() {
+    if !in_orientation_test_process(
+        "implicit_pdf_ocr_keeps_the_270_degree_scan_empty_without_a_cached_model",
+        false,
+    ) {
+        return;
+    }
+    assert_eq!(scan_270_text(None), "");
+}
+
 #[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]
 #[test]
 fn implicit_pdf_ocr_recovers_the_complete_rotated_table() {

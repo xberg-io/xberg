@@ -12,7 +12,7 @@ log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 cargo test --locked -p xberg --no-default-features --features "${TRACT_FEATURES:?Tract-only features required}" \
   --test ocr_auto_rotate -- implicit_ --color never 2>&1 | tee "$log"
-if ! grep -qF 'test result: ok. 4 passed; 0 failed; 0 ignored;' "$log"; then
-  echo "Expected four executed PDF orientation tests" >&2
+if ! grep -qF 'test result: ok. 6 passed; 0 failed; 0 ignored;' "$log"; then
+  echo "Expected six executed PDF orientation tests" >&2
   exit 1
 fi
