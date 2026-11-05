@@ -1,5 +1,6 @@
 mod contrast;
 mod monotonicity;
+mod otsu;
 
 #[allow(
     unsafe_code,

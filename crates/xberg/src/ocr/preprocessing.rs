@@ -46,6 +46,14 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     let gray = pix
         .to_grayscale()
         .map_err(preprocessing_error("convert to grayscale"))?;
+    // Only non-binarized contrast re-reads the color source. Release it before
+    // thresholding allocates full-page grayscale tiles and sampling copies. ~keep
+    let contrast_source = if !binarization_enabled && config.contrast_enhance {
+        Some(pix)
+    } else {
+        drop(pix);
+        None
+    };
     // ~keep normalize_shaded_rows only touches `gray`; the `contrast_enhance` path with
     // binarization disabled below reconverts from the original `pix` and does not see it
     // (GH#1785 scope: the fix targets the binarized path, which is the config default).
@@ -77,7 +85,7 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
         gray.invert().map_err(preprocessing_error("invert colors"))?
     } else if binarization_enabled {
         gray
-    } else if config.contrast_enhance {
+    } else if let Some(pix) = contrast_source {
         drop(gray);
         enhance_non_binarized(pix, should_invert)?
     } else if should_invert {
@@ -85,7 +93,6 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     } else {
         gray
     };
-
     if config.denoise {
         processed = apply_optional(processed, "denoise", |source| {
             source.median_filter(DENOISE_KERNEL_SIZE, DENOISE_KERNEL_SIZE)
