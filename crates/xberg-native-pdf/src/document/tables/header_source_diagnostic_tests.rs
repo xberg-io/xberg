@@ -289,3 +289,51 @@ fn wildomar_bordered_section_handling_conserves_admitted_labels_and_body() {
         text_fallback: false,
     });
 }
+
+#[test]
+fn wildomar_complete_bold_header_keeps_source_roles_without_changing_cells() {
+    let bytes =
+        include_bytes!("../../../../../fixtures/repros/table-snapshot-consistency/fixture/wildomar-p17-repro.pdf");
+    assert_eq!(
+        Sha256::digest(bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>(),
+        "d21fb4bd4af939c647cd07adc4afe0344b06029879f1f347a81f0aee63776bbe"
+    );
+    let document = PdfDocument::from_bytes(bytes.to_vec()).unwrap();
+    let (tables, events) = header_source_diagnostic::capture(|| {
+        document
+            .extract_tables_with_config(0, TableDetectionConfig::strict())
+            .unwrap()
+    });
+    assert_wildomar_source_words(&events);
+    assert_wildomar_source_assignment(&events);
+    let matches: Vec<_> = tables
+        .iter()
+        .filter(|table| {
+            table.rows.first().is_some_and(|row| {
+                row.cells.iter().map(|cell| cell.text.as_str()).collect::<Vec<_>>()
+                    == ["Tests", "Test Method", "Requirements"]
+            })
+        })
+        .collect();
+    assert_eq!(matches.len(), 1, "one independently identified source table");
+    let table = matches[0];
+    assert_eq!((table.rows.len(), table.col_count), (5, 3));
+    assert!(
+        table
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .all(|cell| cell.rowspan == 1 && cell.colspan == 1)
+    );
+    assert!(table.has_header, "the bold shaded source header must retain its role");
+    assert!(table.rows[0].is_header);
+    assert!(table.rows[0].cells.iter().all(|cell| cell.is_header));
+    assert!(
+        table.rows[1..]
+            .iter()
+            .all(|row| !row.is_header && row.cells.iter().all(|cell| !cell.is_header))
+    );
+}

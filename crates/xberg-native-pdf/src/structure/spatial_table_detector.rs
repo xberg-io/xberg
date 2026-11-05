@@ -8,6 +8,8 @@ use crate::layout::text_block::TextSpan;
 use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_for_cell};
 use std::collections::HashMap;
 
+mod source_headers;
+
 /// Disjoint-set (union-find) with path compression.
 struct UnionFind {
     parent: Vec<usize>,
@@ -3126,6 +3128,10 @@ fn detect_tables_from_intersections(
         })
     });
     let stacked_row_cuts = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
+    let shading = source_headers::shading_rectangles(lines);
+    for table in &mut tables {
+        source_headers::infer_complete_leading_header(table, &shading);
+    }
     #[cfg(test)]
     header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
     tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &h_edges, &v_edges, config);
@@ -6240,6 +6246,89 @@ mod tests {
             table.rows[11].cells.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(),
             ["12", "295"]
         );
+    }
+
+    fn source_header_probe(
+        labels: [&str; 3],
+        bold_rows: &[usize],
+        shaded_rows: &[usize],
+        unshaded_header_column: Option<usize>,
+    ) -> Vec<Table> {
+        use crate::elements::PathContent;
+        let mut paths = Vec::new();
+        for row in 0..=3 {
+            paths.push(PathContent::line(0., row as f32 * 20., 240., row as f32 * 20.));
+        }
+        for column in 0..=3 {
+            paths.push(PathContent::line(column as f32 * 80., 0., column as f32 * 80., 60.));
+        }
+        let mut spans = Vec::new();
+        for row in 0..3 {
+            for column in 0..3 {
+                let text = if row == 0 {
+                    labels[column]
+                } else {
+                    ["alpha", "beta", "gamma"][column]
+                };
+                let mut span = create_test_span(text, column as f32 * 80. + 5., 45. - row as f32 * 20., 40., 10.);
+                if bold_rows.contains(&row) {
+                    span.font_weight = FontWeight::Bold;
+                }
+                spans.push(span);
+                if shaded_rows.contains(&row) && !(row == 0 && unshaded_header_column == Some(column)) {
+                    let mut fill = PathContent::rect(column as f32 * 80., 40. - row as f32 * 20., 80., 20.);
+                    fill.stroke_color = None;
+                    fill.fill_color = Some(Color::new(0.85, 0.85, 0.85));
+                    paths.push(fill);
+                }
+            }
+        }
+        let tables = detect_tables_with_lines(&spans, &paths, &TableDetectionConfig::strict());
+        assert_eq!(tables.len(), 1, "actual ruled detector must execute: {tables:?}");
+        assert_eq!((tables[0].rows.len(), tables[0].col_count), (3, 3));
+        tables
+    }
+
+    #[test]
+    fn source_header_complete_shaded_bold_labels_have_one_header_row() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None);
+        assert!(tables[0].has_header);
+        assert!(tables[0].rows[0].is_header);
+        assert!(tables[0].rows[0].cells.iter().all(|cell| cell.is_header));
+        assert!(tables[0].rows[1..].iter().all(|row| !row.is_header));
+    }
+
+    #[test]
+    fn source_header_bold_numeric_first_row_is_not_promoted() {
+        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None);
+        assert!(!tables[0].has_header);
+        assert!(tables[0].rows.iter().all(|row| !row.is_header));
+    }
+
+    #[test]
+    fn source_header_bold_body_is_not_promoted_to_a_second_tier() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None);
+        assert!(!tables[0].rows[1].is_header);
+        assert!(tables[0].rows[1].cells.iter().all(|cell| !cell.is_header));
+    }
+
+    #[test]
+    fn source_header_bold_without_independent_shading_is_not_promoted() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None);
+        assert!(!tables[0].has_header);
+    }
+
+    #[test]
+    fn source_header_body_shading_does_not_prove_a_leading_header() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None);
+        assert!(!tables[0].has_header);
+    }
+
+    #[test]
+    fn source_header_partial_shading_is_not_promoted() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1));
+        assert!(!tables[0].has_header);
+        assert!(tables[0].rows.iter().all(|row| !row.is_header));
     }
 
     fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> TextSpan {
