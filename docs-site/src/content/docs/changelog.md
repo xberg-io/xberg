@@ -181,10 +181,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(swift): Lower the Swift package's macOS floor from 26 to 14.**
+- **(swift): Lower the Swift package's macOS floor from 26 to 14.** (#2528)
   The bundled ONNX Runtime needs macOS 13.4, and nothing in xberg needs a later release; the manifests keep `swift-tools-version: 6.2`, which the static-library artifact bundle needs.
 
-- **(cli): The macOS CLI ships a libheif built for its own macOS floor.**
+- **(cli): The macOS CLI ships a libheif built for its own macOS floor.** (#2528)
   The CLI bundled the runner's Homebrew libheif and codecs, which need macOS 15 on Apple Silicon and 14 on Intel; it now builds them from source for macOS 11, as the wheels already do.
 - **(ocr): Recover language-only explicit sideways PDF scans with cached Tesseract orientation data.** (#2496)
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
