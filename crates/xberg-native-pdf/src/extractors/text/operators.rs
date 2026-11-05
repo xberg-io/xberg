@@ -16,7 +16,9 @@ impl<'doc> TextExtractor<'doc> {
             Operator::Tf { font, size } => {
                 let same_font = {
                     let state = self.state_stack.current();
-                    state.font_size == size && state.font_name.as_deref() == Some(font.as_str())
+                    state.font_size == size
+                        && state.font_name.as_deref() == Some(font.as_str())
+                        && self.cached_current_font.as_ref().map(Arc::as_ptr) == self.fonts.get(&font).map(Arc::as_ptr)
                 };
                 if !same_font {
                     // Flush Tj buffer before changing font — the buffer decodes bytes

@@ -189,7 +189,7 @@ fn equal_nonempty_font_scopes_reuse_the_same_cached_form_spans() {
     assert_eq!(cached_span_allocation(), first, "warm read must reuse the stored spans");
 }
 
-fn shadowed_selected_font_pdf(form_glyph: &str) -> Vec<u8> {
+fn shadowed_selected_font_pdf(form_glyph: &str, form_size: u32) -> Vec<u8> {
     let page = |font| {
         format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R \
@@ -197,7 +197,7 @@ fn shadowed_selected_font_pdf(form_glyph: &str) -> Vec<u8> {
         )
     };
     let stream = |content: &str| format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
-    let form_text = "BT /F1 13 Tf 20 110 Td (A) Tj /F2 12 Tf 40 0 Td (Own) Tj ET";
+    let form_text = format!("BT /F1 {form_size} Tf 20 110 Td (A) Tj /F2 12 Tf 40 0 Td (Own) Tj ET");
     let form = format!(
         "<< /Type /XObject /Subtype /Form /BBox [0 0 200 200] \
          /Resources << /Font << /F1 10 0 R /F2 9 0 R >> >> /Length {} >>\nstream\n{form_text}\nendstream",
@@ -231,8 +231,8 @@ fn shadowed_selected_font_pdf(form_glyph: &str) -> Vec<u8> {
     )
 }
 
-fn assert_shadowed_selected_font_survives_form(form_glyph: &str, expected: [&str; 2]) {
-    let pdf = shadowed_selected_font_pdf(form_glyph);
+fn assert_shadowed_selected_font_survives_form(form_glyph: &str, form_size: u32, expected: [&str; 2]) {
+    let pdf = shadowed_selected_font_pdf(form_glyph, form_size);
     for page in 0..2 {
         let doc = PdfDocument::from_bytes(pdf.clone()).expect("open cold caller context");
         assert_eq!(span_text(&doc, page), expected[page], "cold page {page}");
@@ -248,31 +248,43 @@ fn assert_shadowed_selected_font_survives_form(form_glyph: &str, expected: [&str
 
 #[test]
 fn form_cache_misses_restore_the_callers_selected_shadowed_font() {
-    assert_shadowed_selected_font_survives_form("D", ["BDOwnB", "CDOwnC"]);
+    assert_shadowed_selected_font_survives_form("D", 13, ["BDOwnB", "CDOwnC"]);
 }
 
 #[test]
 fn form_cache_misses_do_not_drop_caller_words_as_form_font_spaces() {
-    assert_shadowed_selected_font_survives_form("space", ["B OwnB", "C OwnC"]);
+    assert_shadowed_selected_font_survives_form("space", 13, ["B OwnB", "C OwnC"]);
 }
 
 #[test]
 fn form_cache_misses_restore_the_callers_character_decoder() {
-    for (glyph, expected) in [("D", ["BDOwnB", "CDOwnC"]), ("space", ["BOwnB", "COwnC"])] {
-        let pdf = shadowed_selected_font_pdf(glyph);
-        for order in [[0, 1], [1, 0]] {
-            let doc = PdfDocument::from_bytes(pdf.clone()).expect("open shared character contexts");
-            for page in order.into_iter().chain(order) {
-                doc.page_chars_cache.lock().unwrap().clear();
-                let actual: String = doc
-                    .extract_chars(page)
-                    .expect("extract independent character layer")
-                    .iter()
-                    .map(|character| character.char)
-                    .filter(|character| !character.is_whitespace())
-                    .collect();
-                assert_eq!(actual, expected[page], "glyph {glyph}, page {page}, order {order:?}");
+    for form_size in [12, 13] {
+        for (glyph, expected) in [("D", ["BDOwnB", "CDOwnC"]), ("space", ["BOwnB", "COwnC"])] {
+            let pdf = shadowed_selected_font_pdf(glyph, form_size);
+            for order in [[0, 1], [1, 0]] {
+                let doc = PdfDocument::from_bytes(pdf.clone()).expect("open shared character contexts");
+                for page in order.into_iter().chain(order) {
+                    doc.page_chars_cache.lock().unwrap().clear();
+                    let actual: String = doc
+                        .extract_chars(page)
+                        .expect("extract independent character layer")
+                        .iter()
+                        .map(|character| character.char)
+                        .filter(|character| !character.is_whitespace())
+                        .collect();
+                    assert_eq!(actual, expected[page], "glyph {glyph}, page {page}, order {order:?}");
+                }
             }
         }
     }
+}
+
+#[test]
+fn same_size_form_font_selection_uses_the_local_resource_binding() {
+    assert_shadowed_selected_font_survives_form("D", 12, ["BDOwnB", "CDOwnC"]);
+}
+
+#[test]
+fn same_size_form_space_font_does_not_reuse_the_callers_glyphs() {
+    assert_shadowed_selected_font_survives_form("space", 12, ["B OwnB", "C OwnC"]);
 }

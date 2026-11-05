@@ -183,6 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Restore caller font bindings before resuming text after a Form.** (#2516)
   Keep caller words when a Form shadows the selected font resource name, on cold and warm reads.
+  Resolve a Form's own font binding even when its name and size match the caller's selection.
 
 - **(pdf): Keep stepped-baseline prose panels in source order and preserve their separate lines.** (#2323)
 
