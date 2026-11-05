@@ -10,6 +10,9 @@ mod format;
 mod initialization;
 mod page_markers;
 
+#[cfg(all(test, feature = "quality"))]
+mod normalization_tests;
+
 #[cfg(test)]
 mod tests;
 
@@ -1221,6 +1224,15 @@ fn discard_diverged_formatted_content(result: &mut ExtractedDocument, source: Op
     // `content` never moved — the rendering still stands for it.
     if result.content == *source_content {
         return;
+    }
+    #[cfg(feature = "quality")]
+    {
+        use unicode_normalization::UnicodeNormalization;
+        // Terminal NFC changes the plain-text representation without making its rendering stale.
+        // Compare only plain text: markup can contain byte-sensitive identifiers. ~keep
+        if source_content.nfc().eq(result.content.chars()) {
+            return;
+        }
     }
     // Both moved: a processor rewrote the rendering alongside the text, so it is current.
     if result.formatted_content.as_deref() != Some(source_formatted.as_str()) {
