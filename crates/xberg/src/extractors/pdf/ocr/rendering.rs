@@ -265,6 +265,8 @@ mod png_encode_peak_tests;
 /// the DPI `ImageExtractionConfig` requests, not the historical literal 150.
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 mod render_dpi_tests;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+mod rgb_retention_tests;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn clone_rgb_for_png_encode(
@@ -893,12 +895,12 @@ fn render_one_selected_page(
         rotation,
         security_limits,
     )?;
-    let img = crate::extraction::image_decode::decode_standard_image_with_security_limits(&data, security_limits)
+    let img = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(&data, security_limits)
         .map_err(|e| crate::XbergError::Parsing {
             message: format!("Failed to decode rendered page {}: {}", idx + 1, e),
             source: None,
         })?;
-    Ok(((idx, img), dpi))
+    Ok(((idx, image::DynamicImage::ImageRgb8(img)), dpi))
 }
 
 /// Render every page in `page_indices`, in parallel across the configured thread budget.
