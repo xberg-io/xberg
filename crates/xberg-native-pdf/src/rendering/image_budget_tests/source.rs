@@ -17,7 +17,15 @@ fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
 }
 
 pub(super) fn document(jpeg: &[u8], declared: u32, overlay: bool) -> PdfDocument {
-    let mut content = b"q 32 0 0 32 0 0 cm /Im0 Do Q\n".to_vec();
+    document_with_paint(jpeg, declared, overlay, false)
+}
+
+pub(super) fn document_with_paint(jpeg: &[u8], declared: u32, overlay: bool, inset: bool) -> PdfDocument {
+    let mut content = if inset {
+        b"q 16 0 0 16 4 4 cm /Im0 Do Q\n".to_vec()
+    } else {
+        b"q 32 0 0 32 0 0 cm /Im0 Do Q\n".to_vec()
+    };
     if overlay {
         content.extend(b"1 0 0 rg 0 0 10 10 re f\n");
     }

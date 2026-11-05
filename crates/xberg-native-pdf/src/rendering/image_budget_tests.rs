@@ -47,6 +47,8 @@ fn prior_unbounded_render_cannot_bypass_a_later_source_image_budget() {
     let (image, _) = renderer.render_page_with_budget(0, &document, None).unwrap();
     assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
     assert_refused(&mut renderer, &document);
+    let (image, _) = renderer.render_page_with_budget(0, &document, None).unwrap();
+    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
 }
 
 #[test]
@@ -90,4 +92,40 @@ fn an_unqualified_cmyk_dictionary_does_not_guess_the_encoded_jpeg_channels() {
         budget.error().is_some(),
         "unqualified source failure must propagate past per-paint catches"
     );
+}
+
+#[test]
+fn an_affordable_inset_image_retains_its_overlay_and_white_page_margin() {
+    let document = source::document_with_paint(&source::jpeg(32), 32, true, true);
+    let (image, _) = renderer().render_page_with_budget(0, &document, budget()).unwrap();
+    for expected in [[0, 0, 0], [255, 0, 0], [255, 255, 255]] {
+        assert!(
+            image.data.chunks_exact(4).any(|pixel| pixel[..3] == expected),
+            "paint {expected:?}"
+        );
+    }
+}
+
+#[test]
+fn jpeg_budget_counts_spare_encoded_capacity_and_refuses_arithmetic_overflow() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let mut bytes = source::jpeg(32);
+    bytes.reserve_exact(LIMIT);
+    let image = PdfImage::new(32, 32, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(bytes));
+    assert!(image_budget::ImageBudget::new(LIMIT).admit_jpeg(&image, 0).is_err());
+    let mut budget = image_budget::ImageBudget::new(usize::MAX);
+    assert!(budget.admit_jpeg(&image, u64::MAX).is_err());
+    assert!(budget.error().is_some());
+}
+
+#[test]
+fn encoded_unsupported_precision_is_not_admitted_as_an_eight_bit_dictionary() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let mut bytes = source::jpeg(32);
+    let frame = bytes.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    bytes[frame + 4] = 12;
+    let image = PdfImage::new(32, 32, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(bytes));
+    let mut budget = image_budget::ImageBudget::new(LIMIT);
+    assert!(budget.admit_jpeg(&image, 0).is_err());
+    assert!(budget.error().is_some());
 }
