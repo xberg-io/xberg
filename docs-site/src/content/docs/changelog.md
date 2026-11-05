@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(paddle): Preserve reading order after automatically correcting rotated PDF pages.** (#2519)
+  Compose the page hint with the applied pixel correction so upright labels are not reversed.
+
 - **(pdf): Retain source words in merged table cells and two drawn header bands.** (#2332)
   Preserve the source-backed header rowspan in HTML and the public table grid.
 
