@@ -1370,6 +1370,37 @@ const NOUN_READ: &str = "Gather Pebble Lantern\n\
     turnip anvil drizzle buckle cinder pantry heron welter\n\
     Stamped received";
 
+/// The structured document a line-level OCR backend returns for the page of [`lines_pdf`]: one
+/// `OcrText { level: Line }` element per line of `text`, with its box in the pixels of a
+/// `width` by `height` raster of the page (top-left origin, as hOCR gives it), at the place the
+/// text layer draws that line. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn ocr_line_document(text: &str, width: f64, height: f64) -> crate::types::internal::InternalDocument {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    let (sx, sy) = (width / 612.0, height / 792.0);
+    let mut doc = InternalDocument::new("pdf");
+    for (i, line) in text.lines().enumerate() {
+        let baseline = 730.0 - 16.0 * i as f64;
+        let mut element = InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Line,
+            },
+            line,
+            0,
+        );
+        element.bbox = Some(crate::types::BoundingBox {
+            x0: 72.0 * sx,
+            y0: (792.0 - baseline - 10.0) * sy,
+            x1: (72.0 + 6.5 * line.len() as f64) * sx,
+            y1: (792.0 - baseline + 3.0) * sy,
+        });
+        doc.push_element(element);
+    }
+    doc
+}
+
 /// A one-page PDF whose text layer holds `lines`, one line each, in Helvetica. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn lines_pdf(lines: &[&str]) -> Vec<u8> {
@@ -1590,7 +1621,9 @@ async fn should_put_a_confirmed_layer_first_on_the_accepted_stage_of_a_pipeline_
 
 /// Page route (#2439): OCR misreads one word on every line of a correct layer. The structured page
 /// that the other output formats render holds each layer line once, and not the OCR copy beside
-/// it, on both the single-backend route and the pipeline route. ~keep
+/// it, on both the single-backend route and the pipeline route. The page's text layer has
+/// positions and the OCR backend returns one line element per line with its box, as the built-in
+/// backends do: the merge removes a copy only where the layer line owns its place. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial_test::serial]
@@ -1614,12 +1647,15 @@ async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_replaced_page(
         }
         async fn process_image(
             &self,
-            _: &[u8],
+            image: &[u8],
             _: &crate::core::config::OcrConfig,
         ) -> crate::Result<crate::types::ExtractedDocument> {
+            let (width, height) = image::load_from_memory(image)
+                .map(|image| (f64::from(image.width()), f64::from(image.height())))
+                .unwrap_or((612.0, 792.0));
             Ok(crate::types::ExtractedDocument {
                 content: self.text.clone(),
-                ocr_internal_document: Some(super::document::flat_ocr_page_document(&self.text)),
+                ocr_internal_document: Some(ocr_line_document(&self.text, width, height)),
                 ..Default::default()
             })
         }
@@ -1679,7 +1715,7 @@ async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_replaced_page(
         }),
         ..Default::default()
     };
-    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let pdf = lines_pdf(&HARBOUR_LAYER);
     let layer = HARBOUR_LAYER.join("\n");
     let boundary = [crate::types::PageBoundary {
         byte_start: 0,
@@ -1703,6 +1739,10 @@ async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_replaced_page(
         let page = structured
             .get(&1)
             .unwrap_or_else(|| panic!("{route}: the replaced page has a structured document"));
+        assert!(
+            !page.elements.is_empty(),
+            "{route}: the structured page holds the OCR lines, or this test proves nothing"
+        );
         let text: Vec<&str> = page.elements.iter().map(|element| element.text.as_str()).collect();
         let text = text.join("\n");
         for line in HARBOUR_LAYER {

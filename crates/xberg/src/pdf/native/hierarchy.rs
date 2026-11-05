@@ -991,7 +991,6 @@ fn normalize_script_span(
 /// # Returns
 ///
 /// Vector of `SegmentData` objects with font metrics for hierarchy detection.
-#[cfg(test)]
 pub(crate) fn extract_segments_from_page(
     doc: &mut NativeDocument,
     page_index: usize,

@@ -276,8 +276,6 @@ pub(crate) struct LineAt {
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 impl LineAt {
-    /// Test-only until the pipeline builds the boxes of a page; that change lifts the gate. ~keep
-    #[cfg(test)]
     pub(crate) fn new(line: &str, bbox: LineBox) -> Self {
         Self {
             key: line_key(line),
@@ -292,6 +290,69 @@ impl LineAt {
 pub(crate) struct PageLineBoxes {
     pub(crate) layer: Vec<LineAt>,
     pub(crate) ocr: Vec<LineAt>,
+}
+/// The box of a run of segments on one line: the segments' extent in PDF points. `top` is the
+/// lower coordinate on the vertical axis: both sides of a merge give their boxes in the same
+/// bottom-left frame, so the overlap test does not depend on which way the axis runs. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn segments_line_at(segments: &[crate::pdf::hierarchy::SegmentData]) -> Option<LineAt> {
+    let mut bbox: Option<LineBox> = None;
+    for segment in segments {
+        let next = LineBox {
+            left: segment.x,
+            top: segment.y,
+            right: segment.x + segment.width,
+            bottom: segment.y + segment.height,
+        };
+        bbox = Some(match bbox {
+            None => next,
+            Some(b) => LineBox {
+                left: b.left.min(next.left),
+                top: b.top.min(next.top),
+                right: b.right.max(next.right),
+                bottom: b.bottom.max(next.bottom),
+            },
+        });
+    }
+    let text = segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let line = LineAt::new(&text, bbox?);
+    (!line.key.is_empty()).then_some(line)
+}
+/// The share of a segment's height within which the next segment's baseline is on the same
+/// line. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const SAME_LINE_BASELINE_SHARE: f32 = 0.5;
+/// The line boxes of a page's merge: one per native line, from the segments of the text layer
+/// grouped by baseline in their order, and one per OCR paragraph line. Both come in PDF points.
+/// `None` when either side has no line: the merge of that page removes nothing (rule 3). ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn page_line_boxes(
+    native: &[crate::pdf::hierarchy::SegmentData],
+    ocr: &[crate::pdf::structure::types::PdfParagraph],
+) -> Option<PageLineBoxes> {
+    let mut layer = Vec::new();
+    let mut run: Vec<crate::pdf::hierarchy::SegmentData> = Vec::new();
+    for segment in native {
+        let same_line = run.last().is_some_and(|last| {
+            (last.baseline_y - segment.baseline_y).abs() <= SAME_LINE_BASELINE_SHARE * last.height.max(1.0)
+        });
+        if !same_line && !run.is_empty() {
+            layer.extend(segments_line_at(&run));
+            run.clear();
+        }
+        run.push(segment.clone());
+    }
+    layer.extend(segments_line_at(&run));
+    let ocr: Vec<LineAt> = ocr
+        .iter()
+        .flat_map(|paragraph| paragraph.lines.iter())
+        .filter_map(|line| segments_line_at(&line.segments))
+        .collect();
+    (!layer.is_empty() && !ocr.is_empty()).then_some(PageLineBoxes { layer, ocr })
 }
 /// The readable text layers of a run by one-indexed page, and the line boxes of the pages that
 /// have them. A page in `lines` and not in `boxes` gets its layer first and loses no OCR line. ~keep

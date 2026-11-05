@@ -2072,14 +2072,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
     if let Some(layers) = page_layers.as_ref() {
         for (page_number, text) in &mut accepted_replacements {
+            let boxes = layers.get(page_number).and_then(|_| {
+                page_merge_line_boxes(content, *page_number, ocr_page_paragraphs.get(page_number), config)
+            });
             if let Some(layer) = layers.get(page_number)
-                // No line boxes reach the page route yet: nothing is removed, the layer goes first. ~keep
                 && let Some(first) = super::document::layer_lines_to_put_first(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
-                    None,
+                    boxes.as_ref(),
                 )
             {
                 *text = super::document::text_with_layer_first(text, &first);
@@ -2493,7 +2495,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         page_texts,
         rasters,
         formulas,
-        _raw_page_paragraphs,
+        raw_page_paragraphs,
         preprocessing,
         ocr_confidence,
         recognition_noise_verdicts,
@@ -2515,8 +2517,12 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
     .await?;
     let (text, page_texts, doc) = with_run_layers_first(
         run_layers,
-        &recognition_noise_verdicts,
-        0,
+        RunLayerSources {
+            verdicts: &recognition_noise_verdicts,
+            page_index_offset: 0,
+            content,
+            raw_page_paragraphs: &raw_page_paragraphs,
+        },
         text,
         page_texts,
         doc,
@@ -5544,30 +5550,82 @@ pub(super) fn attach_unread_page_failures(
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn with_run_layers_first(
     layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
-    verdicts: &[OcrPageNoiseVerdict],
-    page_index_offset: usize,
+    run: RunLayerSources<'_>,
     mut text: String,
     mut page_texts: Vec<String>,
     mut doc: Option<crate::types::internal::InternalDocument>,
     config: &ExtractionConfig,
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
-        // The run carries no line boxes yet, so no OCR copy is removed: the layer lines go first and
-        // every OCR line stays (a duplicate is the accepted cost, a lost line is not). ~keep
+        let mut boxes = ahash::AHashMap::new();
+        for page_number in layers.keys().copied() {
+            let paragraphs = (page_number as usize)
+                .checked_sub(run.page_index_offset + 1)
+                .and_then(|local| run.raw_page_paragraphs.get(local));
+            if let Some(content) = run.content
+                && let Some(page_boxes) = page_merge_line_boxes(content, page_number, paragraphs, config)
+            {
+                boxes.insert(page_number, page_boxes);
+            }
+        }
         super::document::put_layers_first_in_run(
             &mut text,
             &mut page_texts,
             doc.as_mut(),
             super::document::PageLayers {
                 lines: &layers,
-                boxes: &ahash::AHashMap::default(),
+                boxes: &boxes,
             },
-            verdicts,
-            page_index_offset,
+            run.verdicts,
+            run.page_index_offset,
             config,
         );
     }
     (text, page_texts, doc)
+}
+
+/// What a whole-document run gives the layer merge beside its text: the noise verdicts, the
+/// document bytes for the native segment pass, and the OCR paragraphs of each page by local
+/// index. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct RunLayerSources<'a> {
+    verdicts: &'a [OcrPageNoiseVerdict],
+    page_index_offset: usize,
+    content: Option<&'a [u8]>,
+    raw_page_paragraphs: &'a [Vec<crate::pdf::structure::types::PdfParagraph>],
+}
+
+/// The line boxes of one replaced page's merge, in PDF points on both sides: the text layer's
+/// segments from the native segment pass, run here only for a replaced page with a readable
+/// layer, and the OCR paragraph lines. `None` without the `pdf` feature, when the document does
+/// not open, or when either side has no line: that page's merge removes nothing. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn page_merge_line_boxes(
+    content: &[u8],
+    page_number: u32,
+    ocr_paragraphs: Option<&Vec<crate::pdf::structure::types::PdfParagraph>>,
+    config: &ExtractionConfig,
+) -> Option<super::document::PageLineBoxes> {
+    #[cfg(feature = "pdf")]
+    {
+        let artifacts =
+            crate::pdf::native::hierarchy::ArtifactRetention::from_content_filter(config.content_filter.as_ref());
+        let passwords = config
+            .pdf_options
+            .as_ref()
+            .and_then(|options| options.passwords.as_deref())
+            .unwrap_or(&[]);
+        let mut doc = crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords).ok()?;
+        let page_index = (page_number as usize).checked_sub(1)?;
+        let segments =
+            crate::pdf::native::hierarchy::extract_segments_from_page(&mut doc, page_index, artifacts).ok()?;
+        super::document::page_line_boxes(&segments, ocr_paragraphs.map_or(&[], Vec::as_slice))
+    }
+    #[cfg(not(feature = "pdf"))]
+    {
+        let _ = (content, page_number, ocr_paragraphs, config);
+        None
+    }
 }
 
 /// What a pipeline run gives to each of its stages without a change: the parameters of
@@ -5818,8 +5876,12 @@ async fn run_ocr_pipeline_stages(
                 if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,
-                        &stage_recognition_noise_verdicts,
-                        inputs.page_index_offset,
+                        RunLayerSources {
+                            verdicts: &stage_recognition_noise_verdicts,
+                            page_index_offset: inputs.page_index_offset,
+                            content: inputs.content,
+                            raw_page_paragraphs: &stage_raw_paragraphs,
+                        },
                         text,
                         stage_page_texts,
                         stage_doc,
@@ -5917,8 +5979,12 @@ async fn run_ocr_pipeline_stages(
         )) => {
             let (text, page_texts, doc) = with_run_layers_first(
                 run_layers,
-                &noise_verdicts,
-                inputs.page_index_offset,
+                RunLayerSources {
+                    verdicts: &noise_verdicts,
+                    page_index_offset: inputs.page_index_offset,
+                    content: inputs.content,
+                    raw_page_paragraphs: &raw_page_paragraphs,
+                },
                 text,
                 page_texts,
                 doc,
