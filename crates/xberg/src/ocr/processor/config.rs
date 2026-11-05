@@ -7,7 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
-const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 16;
+const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 17;
 
 /// Compute a deterministic hash of the OCR configuration.
 ///
@@ -406,11 +406,10 @@ mod tests {
 
         // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
         // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Version 16 assembles non-upright PSM1
-        // tables in recognition coordinates; older payloads contain grids assembled before that
-        // correction and return without running table assembly again.
+        // silently reusing entries computed the old way. Version 17 recovers fully witnessed
+        // scan grids that previous results serialized as fragmented text without any table.
         assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 16,
+            TESSERACT_RESULT_SCHEMA_VERSION, 17,
             "a bump must be deliberate: state here which change made an old entry wrong"
         );
         assert_ne!(
