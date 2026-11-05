@@ -126,6 +126,7 @@ async fn run_retry_with(
         SparseRetryPolicy {
             whole_page_raster: true,
             allow_standard_retry: true,
+            script_second_pass: false,
         },
         Some(&token),
     )
