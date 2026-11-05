@@ -192,6 +192,13 @@ impl Preparation<'_> {
         } else {
             (width, height)
         };
+        if let (Some(dpi), Some(policy)) = (dpi, policy)
+            && let Some(target_dpi) = self.known_budgeted_upscale(&decoded, native_dimensions, dpi, policy)?
+        {
+            return self
+                .finish_budgeted_upscale(decoded, dpi, policy, target_dpi)
+                .map(Candidate::Ready);
+        }
         if self.native_needs_retry(native_dimensions, policy)? {
             self.check_unknown_dpi_upscale(&decoded, native_dimensions, dpi, policy)?;
             return Ok(retry_candidate(decoded, policy));
@@ -201,6 +208,125 @@ impl Preparation<'_> {
             return Ok(retry_candidate(decoded, policy));
         }
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
+    }
+
+    fn known_budgeted_upscale(
+        &self,
+        decoded: &DecodedOcrImage,
+        normalized: (u32, u32),
+        source_dpi: f64,
+        policy: &ImagePreprocessingConfig,
+    ) -> crate::Result<Option<i32>> {
+        let (width, height) = decoded.image.dimensions();
+        if !source_dpi.is_finite()
+            || source_dpi <= 0.0
+            || normalized.0 <= width
+            || normalized.1 <= height
+            || self.is_jpeg()
+            || !matches!(
+                image::guess_format(self.bytes),
+                Ok(image::ImageFormat::Png | image::ImageFormat::Tiff)
+            )
+            || self.source_dpi(width, height).is_none()
+            || self.known_native_fits(normalized, Some(policy))?
+        {
+            return Ok(None);
+        }
+        let mut dpi_config = ocr_dpi_config(policy, self.images);
+        dpi_config.auto_adjust_dpi = false;
+        let source = decoded.image.as_raw();
+        let source_extra = source.capacity().saturating_sub(source.len());
+        let resize_limit = self.limits.max_content_size.saturating_sub(source_extra);
+        if native_image_budget::known_phase_peak(width, height, self.bytes.len(), Some(policy))?
+            .is_none_or(|peak| peak > resize_limit as u64)
+        {
+            return Ok(None);
+        }
+        let lower = source_dpi.ceil() as i32;
+        let Some(upper) = dpi_workspace::largest_unclamped_upscale(
+            lower,
+            policy.target_dpi,
+            width.max(height),
+            source_dpi,
+            dpi_config.max_image_dimension,
+        )?
+        else {
+            return Ok(None);
+        };
+        dpi_workspace::largest_feasible_upscale(lower, upper, |target| {
+            dpi_config.target_dpi = target;
+            let dimensions = normalized_image_dimensions(width, height, &dpi_config, Some(source_dpi));
+            let native_peak =
+                native_image_budget::known_phase_peak(dimensions.0, dimensions.1, self.bytes.len(), Some(policy))?;
+            let native_limit = if dimensions == (width, height) {
+                resize_limit
+            } else {
+                self.limits.max_content_size
+            };
+            Ok(dimensions.0 <= normalized.0
+                && dimensions.1 <= normalized.1
+                && native_peak.is_some_and(|peak| peak <= native_limit as u64)
+                && dpi_workspace::check_known_dpi_resize(
+                    width,
+                    height,
+                    source_dpi,
+                    &dpi_config,
+                    self.bytes.len(),
+                    resize_limit,
+                )
+                .is_ok())
+        })
+    }
+
+    fn finish_budgeted_upscale(
+        &self,
+        decoded: DecodedOcrImage,
+        source_dpi: f64,
+        policy: &ImagePreprocessingConfig,
+        target_dpi: i32,
+    ) -> crate::Result<PreparedOcrImage> {
+        let images = ImageExtractionConfig {
+            auto_adjust_dpi: false,
+            ..self.images.cloned().unwrap_or_default()
+        };
+        let bounded_policy = ImagePreprocessingConfig {
+            target_dpi,
+            ..policy.clone()
+        };
+        let (width, height) = decoded.image.dimensions();
+        let mut prepared = prepare_decided_ocr_image(
+            decoded.image.into_raw(),
+            width,
+            height,
+            Some(&bounded_policy),
+            Some(&images),
+            self.ci_debug_enabled,
+            Some(source_dpi),
+        );
+        let extra_capacity = prepared.data.capacity().saturating_sub(prepared.data.len()) as u64;
+        let peak = native_image_budget::known_phase_peak(
+            prepared.width,
+            prepared.height,
+            self.bytes.len(),
+            prepared.preprocessing.as_ref(),
+        )?;
+        if peak
+            .and_then(|peak| peak.checked_add(extra_capacity))
+            .is_none_or(|peak| peak > self.limits.max_content_size as u64)
+        {
+            return Err(self.native_error("OCR preprocessing and native image workspace"));
+        }
+        if let Some(metadata) = &mut prepared.image_preprocessing {
+            if metadata.skipped_resize {
+                prepared.source_dpi = source_dpi.round() as i32;
+                metadata.final_dpi = prepared.source_dpi;
+                metadata.scale_factor = 1.0;
+            }
+            metadata.target_dpi = policy.target_dpi;
+            metadata.calculated_dpi = Some(metadata.final_dpi);
+            metadata.auto_adjusted = true;
+        }
+        Ok(prepared)
     }
 
     fn check_unknown_dpi_upscale(
@@ -405,4 +531,53 @@ fn retry_candidate(decoded: DecodedOcrImage, preprocessing: Option<&ImagePreproc
     // Release the rejected raster before the caller starts another decode. ~keep
     drop(decoded);
     Candidate::Retry(Assessment { policy, maximum_pixels })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn budgeted_png_without_resize_keeps_the_real_source_resolution() {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(200, 100, image::Rgb([245; 3]))
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        let encoded = encoded.into_inner();
+        let policy = ImagePreprocessingConfig {
+            contrast_enhance: true,
+            binarization_method: "none".into(),
+            deskew: false,
+            ..Default::default()
+        };
+        let limit = native_image_budget::known_phase_peak(200, 100, encoded.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        let config = TesseractConfig {
+            source_dpi: Some(100.0),
+            preprocessing: Some(policy),
+            ..Default::default()
+        };
+        let images = ImageExtractionConfig {
+            auto_adjust_dpi: false,
+            ..Default::default()
+        };
+        let result = prepare_encoded_ocr_image(
+            &encoded,
+            &SecurityLimits {
+                max_content_size: limit,
+                ..Default::default()
+            },
+            &config,
+            Some(&images),
+            false,
+        )
+        .expect("the original raster fits its exact workspace");
+        assert_eq!((result.width, result.height, result.source_dpi), (200, 100, 100));
+        let metadata = result.image_preprocessing.expect("budget-aware DPI metadata");
+        assert_eq!(metadata.target_dpi, 300);
+        assert_eq!(metadata.final_dpi, 100);
+        assert_eq!(metadata.scale_factor, 1.0);
+        assert!(metadata.skipped_resize);
+    }
 }

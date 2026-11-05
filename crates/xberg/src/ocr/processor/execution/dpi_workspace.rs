@@ -32,6 +32,42 @@ pub(super) fn check_known_dpi_resize(
     Ok(())
 }
 
+/// Avoid the second rounding at the dimension clamp, which can shrink the short axis as DPI increases.
+pub(super) fn largest_unclamped_upscale(
+    lower: i32,
+    upper: i32,
+    long_side: u32,
+    source_dpi: f64,
+    dimension_cap: i32,
+) -> crate::Result<Option<i32>> {
+    largest_feasible_upscale(lower, upper, |target| {
+        let width = f64::from(long_side) * (f64::from(target) / source_dpi);
+        Ok(width.round() <= f64::from(dimension_cap))
+    })
+}
+
+/// Admission for unclamped upscales is monotone: destination buffers grow while filter support stays fixed.
+pub(super) fn largest_feasible_upscale(
+    mut lower: i32,
+    mut upper: i32,
+    mut fits: impl FnMut(i32) -> crate::Result<bool>,
+) -> crate::Result<Option<i32>> {
+    let mut best = None;
+    while lower <= upper {
+        let target = lower + (upper - lower) / 2;
+        if fits(target)? {
+            best = Some(target);
+            let Some(next) = target.checked_add(1) else {
+                break;
+            };
+            lower = next;
+        } else {
+            upper = target - 1;
+        }
+    }
+    Ok(best)
+}
+
 pub(super) fn has_no_resize_reduction(
     width: u32,
     height: u32,
@@ -129,6 +165,26 @@ mod tests {
         assert_eq!(resize_peak(10, 10, 20, 10, 0), Some(expected));
         assert!(resize_peak(u32::MAX, u32::MAX, u32::MAX - 1, u32::MAX - 1, 0).is_none());
         assert!(axis_workspace(1, 0).is_none());
+    }
+
+    #[test]
+    fn dpi_search_stops_before_dimension_clamping_can_reverse_rounding() {
+        let config = ImageDpiConfig {
+            target_dpi: 177,
+            auto_adjust_dpi: false,
+            ..Default::default()
+        };
+        let mut next = config.clone();
+        next.target_dpi = 178;
+        assert_eq!(
+            crate::image::preprocessing::normalized_image_dimensions(873, 1725, &config, Some(72.0)),
+            (2073, 4096)
+        );
+        assert_eq!(
+            crate::image::preprocessing::normalized_image_dimensions(873, 1725, &next, Some(72.0)),
+            (2072, 4096)
+        );
+        assert_eq!(largest_unclamped_upscale(72, 178, 1725, 72.0, 4096).unwrap(), Some(170));
     }
 
     #[test]
