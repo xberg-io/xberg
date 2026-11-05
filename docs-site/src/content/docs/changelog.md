@@ -52,9 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(pdf): OCR of scanned PDF pages no longer waits for a whole batch of pages.** (GH#2428)
-  A page starts recognition as soon as an earlier page frees a slot, and the next pages render while others
-  recognize. Page order and page text do not change.
+- **(pdf): Whole-document OCR of a scanned PDF no longer waits for a whole batch of pages.** (GH#2428)
+  This applies when the whole document runs through one OCR stage, as with `force_ocr` and an explicit OCR
+  pipeline. A page starts recognition as soon as an earlier page frees a slot, and the next batch renders while
+  others recognize. The free-memory estimate limits how many pages are held at once. The default Tesseract
+  route checks each page on its own and does not change. Page order and page text do not change.
 - **(pdf): Reuse each page's words and ruling paths across both ruled-table detectors.** (#2429)
   Strict and bordered detection retain their existing thresholds and precedence.
 
