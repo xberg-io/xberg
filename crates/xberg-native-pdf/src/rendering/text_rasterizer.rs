@@ -696,13 +696,19 @@ impl TextRasterizer {
                         );
                     }
 
-                    if has_unicode_cmap {
+                    let cid_truetype = info.subtype == "Type0"
+                        && info.cid_to_gid_map.is_some()
+                        && info.cid_font_type.as_deref() == Some("CIDFontType2");
+                    // Unicode cmap presence does not recover codes dropped by ToUnicode. For
+                    // identity-encoded TrueType runs, the original CIDs still own their outlines. ~keep
+                    let lost_identity_run = cid_truetype
+                        && matches!(info.encoding, crate::fonts::Encoding::Identity)
+                        && info.embedded_cid_map.is_none()
+                        && decode_drops.reason().is_some();
+                    if has_unicode_cmap && !lost_identity_run {
                         tracing::trace!("Using embedded PDF font data");
                         Some((None, Arc::clone(embedded), 0, false))
-                    } else if info.subtype == "Type0"
-                        && info.cid_to_gid_map.is_some()
-                        && info.cid_font_type.as_deref() == Some("CIDFontType2")
-                    {
+                    } else if cid_truetype {
                         tracing::trace!("Using embedded PDF font with CIDToGIDMap (CIDFontType2)");
                         Some((None, Arc::clone(embedded), 0, true))
                     } else if info.cff_gid_map.is_some()

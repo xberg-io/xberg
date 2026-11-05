@@ -1,9 +1,16 @@
-//! A page whose OCR text is judged recognition noise keeps its readable text layer first.
+//! A replaced page keeps its readable text layer first when its OCR text is judged recognition
+//! noise, or when its OCR text confirms a layer that passes the per-page quality check.
 
 use super::document::{clean_native_page_layers, layer_lines_absent_from_ocr};
 use super::scoring::native_layer_is_clean;
 use crate::core::config::OcrQualityThresholds;
 use crate::types::PageBoundary;
+
+#[path = "native_retention_stress_tests.rs"]
+mod native_retention_stress_tests;
+
+#[path = "photo_layer_tests/review_2505.rs"]
+mod review_2505;
 
 #[test]
 fn should_call_a_short_readable_title_a_clean_layer() {
@@ -18,12 +25,16 @@ fn should_not_call_empty_or_symbol_only_text_a_clean_layer() {
 }
 
 #[test]
-fn should_skip_layer_lines_the_ocr_text_already_holds() {
+fn should_require_complete_source_rows_before_omitting_native_lines_without_geometry() {
     let ocr = "intro\nMEETING  notes!\nbody";
-    assert_eq!(layer_lines_absent_from_ocr("Meeting Notes", ocr), None);
+    assert_eq!(
+        layer_lines_absent_from_ocr("Meeting Notes", ocr).as_deref(),
+        Some("Meeting Notes")
+    );
+    assert_eq!(layer_lines_absent_from_ocr("Meeting Notes", "MEETING   notes"), None);
     assert_eq!(
         layer_lines_absent_from_ocr("Meeting Notes\nBudget 2026", ocr).as_deref(),
-        Some("Budget 2026")
+        Some("Meeting Notes\nBudget 2026")
     );
 }
 
@@ -40,8 +51,8 @@ fn should_keep_a_layer_word_that_the_ocr_text_holds_only_across_a_word_boundary(
         Some("Quill")
     );
     assert_eq!(
-        layer_lines_absent_from_ocr("Quill Marrow", "the quill marrow road"),
-        None
+        layer_lines_absent_from_ocr("Quill Marrow", "the quill marrow road").as_deref(),
+        Some("Quill Marrow")
     );
     assert_eq!(
         layer_lines_absent_from_ocr("Plot 100", "plot 1OO").as_deref(),
@@ -110,6 +121,7 @@ fn should_put_the_layer_before_the_structured_page_and_shift_relationships() {
 fn should_put_the_layer_first_on_the_noise_page_of_a_whole_document_run_only() {
     use super::document::{flat_ocr_page_document, put_layers_first_in_run};
     use super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
     use crate::types::internal::{Relationship, RelationshipKind, RelationshipTarget};
 
     let verdict = |page_index: usize, discarded: bool| OcrPageNoiseVerdict {
@@ -151,10 +163,13 @@ fn should_put_the_layer_first_on_the_noise_page_of_a_whole_document_run_only() {
         &mut text,
         &mut page_texts,
         Some(&mut doc),
-        &layers,
+        super::document::PageLayers {
+            lines: &layers,
+            boxes: &ahash::AHashMap::default(),
+        },
         &[verdict(1, false), verdict(2, true)],
         0,
-        None,
+        &ExtractionConfig::default(),
     );
     assert_eq!(page_texts[1], "Meeting Notes\n\nxq zv wj");
     assert_eq!(page_texts[0], "page one text");
@@ -530,7 +545,11 @@ async fn should_put_the_layer_first_on_a_noise_page_of_a_single_backend_whole_do
         document.elements.iter().any(|element| element.text == TITLE),
         "the structured document holds the layer"
     );
-    assert_eq!(with_ocr_words.0, NOISY, "a layer made of OCR words adds nothing");
+    assert_eq!(
+        with_ocr_words.0,
+        format!("a b c\n\n{NOISY}"),
+        "a wider OCR row cannot certify the native row without geometry"
+    );
 }
 
 /// Two pages with identical OCR text and a layer only on the later page: the layer goes on page 2
@@ -539,6 +558,7 @@ async fn should_put_the_layer_first_on_a_noise_page_of_a_single_backend_whole_do
 fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
     use super::document::{flat_ocr_page_document, put_layers_first_in_run};
     use super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
 
     let verdict = |page_index: usize| OcrPageNoiseVerdict {
         page_index,
@@ -563,10 +583,13 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         &mut text,
         &mut page_texts,
         Some(&mut doc),
-        &layers,
+        super::document::PageLayers {
+            lines: &layers,
+            boxes: &ahash::AHashMap::default(),
+        },
         &[verdict(0), verdict(1)],
         0,
-        None,
+        &ExtractionConfig::default(),
     );
     assert_eq!(page_texts, ["xq zv wj", "Meeting Notes\n\nxq zv wj"]);
     assert_eq!(text, "xq zv wj\n\nMeeting Notes\n\nxq zv wj");
@@ -574,15 +597,359 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
     assert_eq!(texts, ["xq zv wj", "Meeting Notes", "xq zv wj"]);
 
     let mut marked_pages = vec!["xq zv wj".to_string(), "xq zv wj".to_string()];
+    let marked_config = ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "<p{page_num}>".to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
     let mut marked = "<p1>xq zv wj<p2>xq zv wj".to_string();
     put_layers_first_in_run(
         &mut marked,
         &mut marked_pages,
         None,
-        &layers,
+        super::document::PageLayers {
+            lines: &layers,
+            boxes: &ahash::AHashMap::default(),
+        },
         &[verdict(1)],
         0,
-        Some("<p{page_num}>"),
+        &marked_config,
     );
     assert_eq!(marked, "<p1>xq zv wj<p2>Meeting Notes\n\nxq zv wj");
+}
+
+/// Six lines of plain prose: a layer that passes the per-page quality check. ~keep
+const HARBOUR_LAYER: [&str; 6] = [
+    "The committee met on Tuesday to review the annual budget for the harbour district.",
+    "Members agreed that the proposal was sound and asked for a revised timetable.",
+    "The treasurer will prepare the final report before the next quarterly meeting.",
+    "Repairs to the north pier start in March and finish before the summer season.",
+    "A public notice about the closure goes to every household along the coast road.",
+    "The next meeting takes place in the spring at the library on Market Street.",
+];
+
+/// What the OCR backend of the page-route test reads: four of the six layer lines, or all six. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const HARBOUR_PARTIAL_READ: &str = "\
+    The committee met on Tuesday to review the annual budget for the harbour district.\n\
+    Members agreed that the proposal was sound and asked for a revised timetable.\n\
+    The treasurer will prepare the final report before the next quarterly meeting.\n\
+    A public notice about the closure goes to every household along the coast road.";
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const HARBOUR_FULL_READ: &str = "\
+    The committee met on Tuesday to review the annual budget for the harbour district.\n\
+    Members agreed that the proposal was sound and asked for a revised timetable.\n\
+    The treasurer will prepare the final report before the next quarterly meeting.\n\
+    Repairs to the north pier start in March and finish before the summer season.\n\
+    A public notice about the closure goes to every household along the coast road.\n\
+    The next meeting takes place in the spring at the library on Market Street.";
+
+/// Shift every ASCII letter three places, as a wrong `/ToUnicode` map does: the shape of the
+/// text stays clean and no word is a word of the true text. ~keep
+fn rot3(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            'a'..='z' => (((c as u8 - b'a' + 3) % 26) + b'a') as char,
+            'A'..='Z' => (((c as u8 - b'A' + 3) % 26) + b'A') as char,
+            _ => c,
+        })
+        .collect()
+}
+
+/// A line with its longest word misread: one letter added. ~keep
+fn misread_longest_word(line: &str) -> String {
+    let stem = |word: &str| word.trim_end_matches(|c: char| !c.is_alphanumeric()).to_string();
+    let longest = line
+        .split(' ')
+        .map(stem)
+        .max_by_key(|word| word.len())
+        .unwrap_or_default();
+    line.replacen(&longest, &format!("{longest}x"), 1)
+}
+
+fn layer_first_fixture(layer: &str) -> super::document::LayerFirst {
+    super::document::LayerFirst {
+        lines: layer.to_string(),
+    }
+}
+
+fn row_box(row: usize) -> super::document::LineBox {
+    let top = row as f32 * 12.0;
+    super::document::LineBox {
+        left: 0.0,
+        top,
+        right: 500.0,
+        bottom: top + 10.0,
+    }
+}
+
+/// The non-empty lines of a text, each on the row of `rows` with its index. ~keep
+fn lines_at_rows(text: &str, rows: &[usize]) -> Vec<super::document::LineAt> {
+    let lines: Vec<&str> = text.lines().filter(|line| !line.trim().is_empty()).collect();
+    assert_eq!(lines.len(), rows.len(), "one row per non-empty line");
+    lines
+        .iter()
+        .zip(rows)
+        .map(|(line, row)| super::document::LineAt::new(line, row_box(*row)))
+        .collect()
+}
+
+/// The boxes of a page whose layer lines sit on rows 0.. in order, and whose OCR lines are given. ~keep
+fn page_boxes(layer: &[&str], ocr: &[super::document::LineAt]) -> super::document::PageLineBoxes {
+    super::document::PageLineBoxes {
+        layer: layer
+            .iter()
+            .enumerate()
+            .map(|(row, line)| super::document::LineAt::new(line, row_box(row)))
+            .collect(),
+        ocr: ocr.to_vec(),
+    }
+}
+
+/// Six lines of numbers: a layer that passes the per-page quality check and has no word with a
+/// letter. ~keep
+const LEDGER_LAYER: [&str; 6] = [
+    "1042 2087 3315 4471 5530 6694",
+    "7120 8243 9356 1468 2579 3681",
+    "4792 5804 6915 7026 8137 9248",
+    "1359 2460 3571 4682 5793 6804",
+    "7915 8026 9137 1248 2359 3460",
+    "4571 5682 6793 7804 8915 9026",
+];
+
+/// A page of common nouns in no order that the language check calls implausible: a correct
+/// layer that the check sends to OCR (#2439). ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const NOUN_LINES: [&str; 15] = [
+    "Gather Pebble Lantern",
+    "marble fiddle orchard sprocket ladle quiver tundra bramble",
+    "pewter saddle cobbler thimble garnet basin hollow ferment",
+    "rafter nozzle meadow scaffold parsnip tinder ledger ripple",
+    "kettle bauble furrow gimlet canopy trowel muslin quarry",
+    "lintel spindle hazel pommel barley dowel sorrel wicket",
+    "copper flagon trellis mortar skein gusset paddle rivet",
+    "almond burrow cistern tassel freckle hamper pigeon funnel",
+    "walnut grommet shutter beacon dapple girder lattice nutmeg",
+    "turnip anvil drizzle buckle cinder pantry heron welter",
+    "gravel tumbler lagoon pivot sorghum brisket jigsaw thistle",
+    "velvet cobble ferrule mantle quince sedge ratchet pulley",
+    "wicker tallow ember swivel cudgel prism oxbow kindling",
+    "mitten chisel gourd rampart slate bobbin culvert wren",
+    "pumice clasp jetty mullion gable hearth sluice vellum",
+];
+
+/// What the OCR backend of the extractor test reads: the first ten lines of [`NOUN_LINES`] and one
+/// line that the layer lacks. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const NOUN_READ: &str = "Gather Pebble Lantern\n\
+    marble fiddle orchard sprocket ladle quiver tundra bramble\n\
+    pewter saddle cobbler thimble garnet basin hollow ferment\n\
+    rafter nozzle meadow scaffold parsnip tinder ledger ripple\n\
+    kettle bauble furrow gimlet canopy trowel muslin quarry\n\
+    lintel spindle hazel pommel barley dowel sorrel wicket\n\
+    copper flagon trellis mortar skein gusset paddle rivet\n\
+    almond burrow cistern tassel freckle hamper pigeon funnel\n\
+    walnut grommet shutter beacon dapple girder lattice nutmeg\n\
+    turnip anvil drizzle buckle cinder pantry heron welter\n\
+    Stamped received";
+
+/// The structured document a line-level OCR backend returns for the page of [`lines_pdf`]: one
+/// `OcrText { level: Line }` element per line of `text`, with its box in the pixels of a
+/// `width` by `height` raster of the page (top-left origin, as hOCR gives it), at the place the
+/// text layer draws that line. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn ocr_line_document(text: &str, width: f64, height: f64) -> crate::types::internal::InternalDocument {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    let (sx, sy) = (width / 612.0, height / 792.0);
+    let mut doc = InternalDocument::new("pdf");
+    for (i, line) in text.lines().enumerate() {
+        let baseline = 730.0 - 16.0 * i as f64;
+        let mut element = InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Line,
+            },
+            line,
+            0,
+        );
+        element.bbox = Some(crate::types::BoundingBox {
+            x0: 72.0 * sx,
+            y0: (792.0 - baseline - 10.0) * sy,
+            x1: (72.0 + 6.5 * line.len() as f64) * sx,
+            y1: (792.0 - baseline + 3.0) * sy,
+        });
+        doc.push_element(element);
+    }
+    doc
+}
+
+/// A one-page PDF whose text layer holds `lines`, one line each, in Helvetica. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn lines_pdf(lines: &[&str]) -> Vec<u8> {
+    use lopdf::content::{Content, Operation};
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let mut document = Document::with_version("1.5");
+    let pages_id = document.new_object_id();
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+        "Encoding" => "WinAnsiEncoding",
+    });
+    let mut operations = vec![
+        Operation::new("BT", vec![]),
+        Operation::new("Tf", vec!["F1".into(), 13.into()]),
+        Operation::new("TL", vec![16.into()]),
+        Operation::new("Td", vec![72.into(), 730.into()]),
+    ];
+    for line in lines {
+        operations.push(Operation::new("Tj", vec![Object::string_literal(*line)]));
+        operations.push(Operation::new("T*", vec![]));
+    }
+    operations.push(Operation::new("ET", vec![]));
+    let content = Content { operations };
+    let content_id = document.add_object(Stream::new(
+        dictionary! {},
+        content.encode().expect("the page content must encode"),
+    ));
+    let page_id = document.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages_id,
+        "Contents" => content_id,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+    });
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_id.into()],
+            "Count" => 1,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    document.trailer.set("Root", catalog_id);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).expect("the page PDF must serialize");
+    bytes
+}
+
+/// An OCR backend that returns fixed text and its structured document with one line element per
+/// line, with its box in the pixels of the image it reads, as the built-in backends do. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+struct StructuredBackend {
+    name: &'static str,
+    text: String,
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[async_trait::async_trait]
+impl crate::plugins::OcrBackend for StructuredBackend {
+    fn backend_type(&self) -> crate::plugins::OcrBackendType {
+        crate::plugins::OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(
+        &self,
+        image: &[u8],
+        _: &crate::core::config::OcrConfig,
+    ) -> crate::Result<crate::types::ExtractedDocument> {
+        let (width, height) = image::load_from_memory(image)
+            .map(|image| (f64::from(image.width()), f64::from(image.height())))
+            .unwrap_or((612.0, 792.0));
+        Ok(crate::types::ExtractedDocument {
+            content: self.text.clone(),
+            ocr_internal_document: Some(ocr_line_document(&self.text, width, height)),
+            ..Default::default()
+        })
+    }
+    fn confidence_semantics(&self) -> crate::plugins::ConfidenceSemantics {
+        crate::plugins::ConfidenceSemantics::Legibility { scale_max: 100.0 }
+    }
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+impl crate::plugins::Plugin for StructuredBackend {
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_string()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+/// Eight lines of invented minutes: the layer of the ownership tests. ~keep
+const MINUTES: [&str; 8] = [
+    "Harbour committee minutes",
+    "Members present at the meeting",
+    "Repairs to the north pier",
+    "Total 100",
+    "Treasurer report accepted",
+    "Library hours extended",
+    "Public notice posted",
+    "Next meeting in spring",
+];
+
+/// The merge of one confirmed page whose OCR lines sit on `ocr_rows`, as the page text. ~keep
+fn merge_at_rows(layer: &[&str], ocr: &str, ocr_rows: &[usize]) -> String {
+    use super::document::put_layers_first_in_run;
+    let mut page_texts = vec![ocr.to_string()];
+    let mut text = ocr.to_string();
+    let layers = ahash::AHashMap::from([(1u32, layer.join("\n"))]);
+    let boxes = ahash::AHashMap::from([(1u32, page_boxes(layer, &lines_at_rows(ocr, ocr_rows)))]);
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        None,
+        super::document::PageLayers {
+            lines: &layers,
+            boxes: &boxes,
+        },
+        &[],
+        0,
+        &crate::core::config::ExtractionConfig::default(),
+    );
+    page_texts.remove(0)
+}
+
+fn count_line(page: &str, needle: &str) -> usize {
+    page.lines().filter(|line| line.trim() == needle).count()
+}
+
+#[path = "photo_layer_tests/confirmed_layers.rs"]
+mod confirmed_layers;
+
+#[path = "photo_layer_tests/occurrence_retention.rs"]
+mod occurrence_retention;
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn zero_quality_pipeline(backend: &str) -> crate::core::config::OcrPipelineConfig {
+    use crate::core::config::{OcrPipelineConfig, OcrPipelineStage};
+    OcrPipelineConfig {
+        stages: vec![OcrPipelineStage {
+            backend: backend.to_string(),
+            priority: 100,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        }],
+        quality_thresholds: OcrQualityThresholds {
+            pipeline_min_quality: 0.0,
+            ..Default::default()
+        },
+    }
 }

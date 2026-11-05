@@ -33,8 +33,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// (REPLACEMENT CHARACTER) into `extract_text` / `extract_words` /
 /// `extract_spans` output.
 ///
-/// The historical default is to silently drop `U+FFFD` chars, which
-/// is preserved here for back-compat. Setting `true` makes the
+/// Simple fonts retain the historical default of dropping `U+FFFD`.
+/// Type0 extraction always keeps one marker per unmapped glyph so OCR
+/// routing can detect the loss. Setting `true` makes the
 /// high-level accessors consistent with `extract_chars` (which
 /// always preserves FFFD) so callers can detect unmapped-glyph
 /// pages without diffing the two accessors' outputs.
@@ -2050,7 +2051,9 @@ impl TjBuffer {
             bytes,
             font,
             DecodePolicy {
-                preserve_unmapped: preserve_unmapped_glyphs(),
+                // A Type0 glyph with no Unicode value stays as U+FFFD, so the routing gates
+                // that count U+FFFD see the loss. A simple font keeps its historical drop. ~keep
+                preserve_unmapped: preserve_unmapped_glyphs() || font.is_some_and(|f| f.subtype == "Type0"),
                 decompose_ligatures: false,
                 question_mark_for_invalid: true,
             },
