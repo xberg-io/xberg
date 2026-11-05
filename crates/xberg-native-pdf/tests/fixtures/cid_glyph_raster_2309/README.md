@@ -9,6 +9,8 @@ The generator uses that bundled font rather than a host font, preserves its time
 and uses fonttools 4.68.0 from `uv.lock`.
 
 Run `python3 generate.py OUTPUT.pdf MODE` with that pinned fonttools available.
+For the NUL mapping, use `python3 generate.py unicode_nul_mapping.pdf nul`;
+the generator rejects Windows-reserved device filenames.
 The supported modes are:
 
 - `nul`: the posted two-entry Unicode font cmap and all ToUnicode values U+0000.
@@ -29,7 +31,7 @@ The fonttools source archive SHA-256 is
 
 | File | SHA-256 |
 | --- | --- |
-| nul.pdf | df8db9722d21fbccbdea10a91d87d15c5189e520e5629d0c5917cab2acf2588c |
+| unicode_nul_mapping.pdf | df8db9722d21fbccbdea10a91d87d15c5189e520e5629d0c5917cab2acf2588c |
 | missing.pdf | 9dc3fd580a22ac35f4616bc43affbf0767a374af4934c72a6021d628b9aee3fa |
 | partial.pdf | 1653545e9bc23c8d459737eb84f1d3dfc69d7e6c256aafa0ac0c1e8e4893885a |
 | good.pdf | e754acc67cc13002d46885df63a5da145f1abb9bbc3daa1be4d2ff41f3d4c3a6 |

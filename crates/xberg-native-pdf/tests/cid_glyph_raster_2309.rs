@@ -40,7 +40,9 @@ fn assert_undecodable_run_uses_its_original_cid_outlines(pdf: &[u8]) {
 
 #[test]
 fn should_paint_cid_truetype_outlines_when_tounicode_maps_every_code_to_nul() {
-    assert_undecodable_run_uses_its_original_cid_outlines(include_bytes!("fixtures/cid_glyph_raster_2309/nul.pdf"));
+    assert_undecodable_run_uses_its_original_cid_outlines(include_bytes!(
+        "fixtures/cid_glyph_raster_2309/unicode_nul_mapping.pdf"
+    ));
 }
 
 #[test]

@@ -222,7 +222,6 @@ async fn should_keep_the_title_first_in_the_page_by_page_whole_document_pipeline
     };
     let hints = PageOcrHints {
         source_dpi: None,
-        #[cfg(feature = "layout-detection")]
         raster_dpis: None,
         known_full_page_scan: false,
         single_block_pages: None,
