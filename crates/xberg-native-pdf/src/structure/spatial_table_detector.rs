@@ -4687,6 +4687,11 @@ fn merged_grid_span_indices<'a>(
     column: usize,
 ) -> std::borrow::Cow<'a, [usize]> {
     let merge = &merges[row][column];
+    // Missing separators cannot let an empty inferred row anchor claim a later source
+    // occurrence; that can move a diagram label into an unrelated header (#2520). ~keep
+    if merge.rowspan > 1 && grid.cells[row][column].is_empty() {
+        return std::borrow::Cow::Borrowed(&grid.cells[row][column]);
+    }
     if merge.rowspan <= 1 && merge.colspan <= 1 {
         return std::borrow::Cow::Borrowed(&grid.cells[row][column]);
     }
@@ -6769,7 +6774,7 @@ mod tests {
         assert_eq!((table.rows[0].cells[0].rowspan, table.rows[0].cells[0].colspan), (2, 3));
     }
 
-    fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> TextSpan {
+    pub(super) fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> TextSpan {
         TextSpan {
             provenance: None,
             text_rise: 0.0,
@@ -10654,3 +10659,7 @@ pub(crate) mod header_source_diagnostic;
 #[cfg(test)]
 #[path = "spatial_table_detector/section_conservation_tests.rs"]
 mod section_conservation_tests;
+
+#[cfg(test)]
+#[path = "spatial_table_detector/merged_span_source_tests.rs"]
+mod merged_span_source_tests;
