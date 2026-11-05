@@ -2,6 +2,26 @@ use super::{ImageSource, StreamFilters, adds_text_preserving_native, decode_prob
 use xberg_native_pdf::content::parser::visit_complete_content_stream;
 
 #[test]
+fn visible_native_line_audit_rejects_hidden_or_unowned_paint() {
+    let prove = |stream: &str, text| super::painted_literal_image(stream.as_bytes(), text, |font| font == "F");
+    let painted = "/Scan Do BT /F 56 Tf 1 0 0 1 150 640 Tm (SECTION TITLE) Tj ET";
+    assert_eq!(prove(painted, "SECTION TITLE").as_deref(), Some("Scan"));
+    assert_eq!(prove(painted, "SECTION TITLES"), None);
+    for incompatible in [
+        painted.replace("56 Tf", "56 Tf 3 Tr"),
+        painted.replace("56 Tf", "56 Tf 7 Tr"),
+        painted.replace("/F 56", "/Other 56"),
+        painted.replace("/Scan Do ", ""),
+        format!("{painted} /Cover Do"),
+        format!("{painted} 0 0 10 10 re f"),
+        painted.replace("Tj", "Tj (REPEAT) Tj"),
+        painted.replace("Tj ET", "Tj"),
+    ] {
+        assert_eq!(prove(&incompatible, "SECTION TITLE"), None, "{incompatible}");
+    }
+}
+
+#[test]
 fn literal_growth_must_preserve_native_order_and_repeated_words() {
     assert!(!adds_text_preserving_native("Page 7", "Page 7 Page 7"));
     assert!(!adds_text_preserving_native("Page 7", "Page 7 more words Page 7"));

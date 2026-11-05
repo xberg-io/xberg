@@ -1116,18 +1116,8 @@ fn config_with_layout_acceleration_override(
     std::borrow::Cow::Owned(effective)
 }
 
-#[cfg(all(test, paddle_ocr, feature = "ocr"))]
-async fn run_ocr_with_layout(
-    content: &[u8],
-    config: &ExtractionConfig,
-    path: Option<&std::path::Path>,
-    page_ocr_hints: Option<ocr::PageOcrHints>,
-    #[cfg(feature = "layout-detection")] precomputed_layout_images: Option<Vec<image::RgbImage>>,
-    #[cfg(feature = "layout-detection")] precomputed_layout_detections: Option<Vec<crate::layout::DetectionResult>>,
-    #[cfg(feature = "layout-detection")] precomputed_layout_acceleration_override: Option<
-        crate::core::config::acceleration::AccelerationConfig,
-    >,
-) -> ocr::OcrRunResult<(
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type WholePageOcrOutput = (
     String,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -1141,7 +1131,21 @@ async fn run_ocr_with_layout(
     OcrLayoutGateDecisions,
     Option<crate::types::ProcessingWarning>,
     Vec<crate::types::ProcessingWarning>,
-)> {
+    bool,
+);
+
+#[cfg(all(test, paddle_ocr, feature = "ocr"))]
+async fn run_ocr_with_layout(
+    content: &[u8],
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<ocr::PageOcrHints>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_images: Option<Vec<image::RgbImage>>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_detections: Option<Vec<crate::layout::DetectionResult>>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_acceleration_override: Option<
+        crate::core::config::acceleration::AccelerationConfig,
+    >,
+) -> ocr::OcrRunResult<WholePageOcrOutput> {
     run_ocr_with_layout_pages(
         content,
         config,
@@ -1182,21 +1186,7 @@ async fn run_ocr_with_layout_pages(
     #[cfg(feature = "layout-detection")] precomputed_layout_acceleration_override: Option<
         crate::core::config::acceleration::AccelerationConfig,
     >,
-) -> ocr::OcrRunResult<(
-    String,
-    Vec<crate::types::Table>,
-    Vec<crate::types::OcrElement>,
-    Option<crate::types::internal::InternalDocument>,
-    Vec<crate::types::LlmUsage>,
-    Vec<String>,
-    Option<Vec<crate::types::ExtractedImage>>,
-    Vec<crate::types::Formula>,
-    ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
-    ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-    OcrLayoutGateDecisions,
-    Option<crate::types::ProcessingWarning>,
-    Vec<crate::types::ProcessingWarning>,
-)> {
+) -> ocr::OcrRunResult<WholePageOcrOutput> {
     let PageOcrLayoutContext {
         pages: layout_pages,
         hints: page_ocr_hints,
@@ -1374,6 +1364,7 @@ async fn run_ocr_with_layout_pages(
                 ocr_layout_gate_decisions,
                 layout_warning,
                 layout_glyph_drop_warnings,
+                false,
             ));
         }
 
@@ -1436,22 +1427,26 @@ async fn run_ocr_with_layout_pages(
             ocr_layout_gate_decisions,
             layout_warning,
             layout_glyph_drop_warnings,
+            false,
         ));
     }
 
     let (
-        mut text,
-        _mean_conf,
-        mut ocr_tables,
-        ocr_elements,
-        mut ocr_doc,
-        llm_usage,
-        ocr_pts,
-        ocr_rasters,
-        formulas,
-        preprocessing,
-        ocr_confidence,
-    ) = Box::pin(ocr::extract_with_ocr_with_page_hints(
+        (
+            mut text,
+            _mean_conf,
+            mut ocr_tables,
+            ocr_elements,
+            mut ocr_doc,
+            llm_usage,
+            ocr_pts,
+            ocr_rasters,
+            formulas,
+            preprocessing,
+            ocr_confidence,
+        ),
+        discarded_visible_native_page,
+    ) = Box::pin(ocr::extract_with_ocr_with_page_hints_and_evidence(
         Some(content),
         #[cfg(feature = "layout-detection")]
         ocr_images,
@@ -1489,6 +1484,7 @@ async fn run_ocr_with_layout_pages(
         ocr_layout_gate_decisions,
         layout_warning,
         layout_glyph_drop_warnings,
+        discarded_visible_native_page,
     ))
 }
 
@@ -2946,6 +2942,7 @@ impl PdfExtractor {
                 gate_audit,
                 layout_warning,
                 layout_glyph_drop_warnings,
+                _,
             ) = run_ocr_with_layout_pages(
                 content,
                 config,
@@ -3308,6 +3305,7 @@ impl PdfExtractor {
                             gate_audit,
                             layout_warning,
                             layout_glyph_drop_warnings,
+                            discarded_visible_native_page,
                         )) => {
                             if let Some(warning) = layout_warning {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
@@ -3321,7 +3319,18 @@ impl PdfExtractor {
                                 .is_some_and(khmer_retention::KhmerRetention::confirmed);
                             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                             let preserve_known_khmer = false;
-                            if preserve_known_khmer {
+                            let preserve_native_after_discard = discarded_visible_native_page
+                                && pdf_metadata
+                                    .pdf_specific
+                                    .fabricated_text_pages
+                                    .as_ref()
+                                    .is_some_and(Vec::is_empty)
+                                && pdf_metadata
+                                    .pdf_specific
+                                    .implausible_text_pages
+                                    .as_ref()
+                                    .is_some_and(Vec::is_empty);
+                            if preserve_known_khmer || preserve_native_after_discard {
                                 let (warnings, failures) = ocr_doc
                                     .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                     .unwrap_or_default();

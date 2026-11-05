@@ -277,3 +277,48 @@ fn jpeg_mask_budget_counts_live_parent_buffers_and_luma_conversion() {
     );
     assert!(budget.error().is_some());
 }
+
+#[test]
+fn text_contrast_probe_declines_raw_and_masked_backgrounds() {
+    let jpeg = source::jpeg(32);
+    let raw = vec![0; 32 * 32 * 3];
+    for (encoding, pixels, expected) in [
+        ("/Filter /DCTDecode", jpeg.as_slice(), true),
+        ("", raw.as_slice(), false),
+        (
+            "/Filter /DCTDecode /Mask [255 255 255 255 255 255]",
+            jpeg.as_slice(),
+            false,
+        ),
+    ] {
+        let doc = source::contrast_title_document(pixels, encoding);
+        let chars = doc.extract_chars(0).unwrap();
+        let [title] = chars.as_slice() else {
+            panic!("expected one native glyph")
+        };
+        assert_eq!(title.char, 'A');
+        assert_eq!(
+            super::super::exact_text_show_has_contrast(&doc, b"A", &[title.bbox], LIMIT).unwrap(),
+            expected,
+            "{encoding}"
+        );
+    }
+}
+
+#[test]
+fn wrapped_jpeg_contrast_probe_charges_filters_and_actual_codestream_pixels() {
+    const FILTERS: &str = "/Filter [/ASCII85Decode /DCTDecode]";
+    let probe = |stored: &[u8], budget| {
+        let doc = source::contrast_title_document(stored, FILTERS);
+        let glyph = doc.extract_chars(0).unwrap().remove(0);
+        super::super::exact_text_show_has_contrast(&doc, b"A", &[glyph.bbox], budget)
+    };
+    let small = source::wrap_ascii85(&source::jpeg(32));
+    assert!(probe(&small, LIMIT).unwrap());
+    assert!(!probe(&small, small.len() * 16).unwrap());
+
+    let large = source::wrap_ascii85(&source::jpeg(1200));
+    let error = probe(&large, LIMIT).unwrap_err();
+    assert!(error.to_string().contains("JPEG source image rasters"), "{error}");
+    assert!(error.to_string().contains("working budget"), "{error}");
+}

@@ -172,6 +172,123 @@ fn audited_image_name(doc: &PdfDocument, page: usize, content: &Object, byte_lim
     (doc.get_page_content_data(page).ok()? == bytes).then_some(source)
 }
 
+/// Certify one literal native line painted above a raster by a simple page stream.
+pub(super) fn has_visible_native_line(doc: &PdfDocument, layer: &str, byte_limit: usize) -> bool {
+    const MAX_AUDITED_LINE_BYTES: usize = 128;
+    if layer.len() > MAX_AUDITED_LINE_BYTES {
+        return false;
+    }
+    let verify = || {
+        let (frame, content) = page_frame_and_contents(doc, 0)?;
+        let Object::Stream { dict, data } = content else {
+            return None;
+        };
+        if dict.contains_key("DecodeParms") {
+            return None;
+        }
+        let filters = stream_filters(dict.get("Filter"))?;
+        let bytes = decode_probe_stream(&data, filters, MAX_CONTENT_BYTES.min(byte_limit / 4), byte_limit)?;
+        let fonts = simple_font_resources(doc, 0)?;
+        let image = painted_literal_image(&bytes, layer, |font| fonts.contains_key(font))?;
+        let resources = doc.get_page_resources(0).ok()?;
+        let xobjects = doc.resolve_object(resources.as_dict()?.get("XObject")?).ok()?;
+        let Object::Stream { dict, .. } = doc.resolve_object(xobjects.as_dict()?.get(&image)?).ok()? else {
+            return None;
+        };
+        if dict.get("Subtype").and_then(Object::as_name) != Some("Image") || doc.get_page_content_data(0).ok()? != bytes
+        {
+            return None;
+        }
+        let images = doc.page_image_handles(0).ok()?;
+        let [image] = images.as_slice() else { return None };
+        if image.is_inline || image.rotation_degrees != 0.0 || !covers_frame(image.bbox, frame) {
+            return None;
+        }
+        native_line_glyphs(doc, layer, frame)
+    };
+    let Some(glyphs) = verify() else { return false };
+    match xberg_native_pdf::rendering::exact_text_show_has_contrast(doc, layer.as_bytes(), &glyphs, byte_limit) {
+        Ok(visible) => visible,
+        Err(error) => {
+            tracing::debug!(%error, "could not verify painted native line contrast");
+            false
+        }
+    }
+}
+
+fn native_line_glyphs(doc: &PdfDocument, layer: &str, frame: Rect) -> Option<Vec<Rect>> {
+    let chars = doc.extract_chars(0).ok()?;
+    if !chars
+        .iter()
+        .map(|character| character.char)
+        .filter(|c| !c.is_whitespace())
+        .eq(layer.chars().filter(|c| !c.is_whitespace()))
+    {
+        return None;
+    }
+    chars
+        .iter()
+        .filter(|character| !character.char.is_whitespace())
+        .map(|character| {
+            let bounds = character.bbox;
+            (character.rotation_degrees == 0.0
+                && finite_box(bounds)
+                && bounds.left() >= frame.left()
+                && bounds.right() <= frame.right()
+                && bounds.top() >= frame.top()
+                && bounds.bottom() <= frame.bottom())
+            .then_some(bounds)
+        })
+        .collect()
+}
+
+fn painted_literal_image(content: &[u8], layer: &str, font_is_known: impl Fn(&str) -> bool) -> Option<String> {
+    let mut depth = 0usize;
+    let mut inside_text = false;
+    let mut known_font = false;
+    let mut painted = false;
+    let mut image = None;
+    let complete = visit_complete_content_stream(content, MAX_OPERATORS, |op| {
+        match op {
+            Operator::SaveState if !inside_text && !painted => depth += 1,
+            Operator::RestoreState if !inside_text && depth > 0 => depth -= 1,
+            Operator::Cm { a, b, c, d, e, f } if !inside_text && !painted && positive_axis_matrix(a, b, c, d, e, f) => {
+            }
+            Operator::Do { name } if !inside_text && !painted && image.is_none() => image = Some(name),
+            Operator::SetFillRgb { r, g, b }
+                if !inside_text && [r, g, b].into_iter().all(|v| (0.0..=1.0).contains(&v)) => {}
+            Operator::BeginText if !inside_text && depth == 0 => inside_text = true,
+            Operator::EndText if inside_text => inside_text = false,
+            Operator::Tf { font, size } if inside_text && size.is_finite() && size > 0.0 && font_is_known(&font) => {
+                known_font = true;
+            }
+            Operator::Tr { render: 0 } | Operator::TStar if inside_text => {}
+            Operator::TL { leading } if inside_text && leading.is_finite() => {}
+            Operator::Tm { a, b, c, d, e, f } if inside_text && positive_axis_matrix(a, b, c, d, e, f) => {}
+            Operator::Tj { text }
+                if inside_text
+                    && known_font
+                    && !painted
+                    && image.is_some()
+                    && text.iter().all(|byte| byte.is_ascii_alphanumeric() || *byte == b' ')
+                    && std::str::from_utf8(&text).is_ok_and(|text| text.trim() == layer) =>
+            {
+                painted = true;
+            }
+            _ => return false,
+        }
+        true
+    })
+    .ok()?;
+    (complete && depth == 0 && !inside_text && painted)
+        .then_some(image)
+        .flatten()
+}
+
+fn positive_axis_matrix(a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) -> bool {
+    a.is_finite() && d.is_finite() && a > 0.0 && d > 0.0 && b == 0.0 && c == 0.0 && e.is_finite() && f.is_finite()
+}
+
 fn resolved_page_box(doc: &PdfDocument, object: &Object) -> Option<Rect> {
     let resolved = doc.resolve_object(object).ok()?;
     let [x0, y0, x1, y1] = resolved.as_array()?.as_slice() else {
@@ -204,16 +321,7 @@ fn hidden_text_image_name(content: &[u8], font_is_known: impl Fn(&str) -> bool) 
                 mode = previous_mode;
                 known_font = previous_font;
             }
-            Operator::Cm { a, b, c, d, e, f }
-                if !inside_text
-                    && a.is_finite()
-                    && d.is_finite()
-                    && a > 0.0
-                    && d > 0.0
-                    && b == 0.0
-                    && c == 0.0
-                    && e.is_finite()
-                    && f.is_finite() => {}
+            Operator::Cm { a, b, c, d, e, f } if !inside_text && positive_axis_matrix(a, b, c, d, e, f) => {}
             Operator::Do { name } if !inside_text && image.is_none() => image = Some(name),
             Operator::BeginText if !inside_text => inside_text = true,
             Operator::EndText if inside_text => inside_text = false,
