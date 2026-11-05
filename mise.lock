@@ -208,39 +208,39 @@ url_api = "https://api.github.com/repos/taiki-e/cargo-llvm-cov/releases/assets/5
 provenance = "github-attestations"
 
 [[tools."github:xberg-io/alef"]]
-version = "0.122.2"
+version = "0.123.0"
 backend = "github:xberg-io/alef"
-specifiers = ["0.122.2"]
+specifiers = ["0.123.0"]
 
 [tools."github:xberg-io/alef"."platforms.linux-arm64"]
-checksum = "sha256:1a8aa63c2d2aa22529390f70e2496d57e367cbfcfe0e23eaf5e88bcb9f3ea0fb"
+checksum = "sha256:a8a41d560bf858d88afed4d820eed8e1081801239063363230525107e8dbdd69"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.122.2/alef-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/709859372"
+url = "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/710540658"
 
 [tools."github:xberg-io/alef"."platforms.linux-x64"]
-checksum = "sha256:228b52d8234b85b0dbd62772f39a9a08f500025c848ae8f06a44a21b016108b3"
+checksum = "sha256:69fc0bf595a472cafefd9b10f2729c247a2ebede7aaf099a020b83bf56112f96"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.122.2/alef-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/709859166"
+url = "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/710540404"
 
 [tools."github:xberg-io/alef"."platforms.macos-arm64"]
-checksum = "sha256:21587728661f06b458dd4d77003d873e42f42f54b925e79618b2c076e708bb6d"
+checksum = "sha256:794dd9a1fcfffe16647a2deef1c2017f2407c76ee191873a61c911b62ac62245"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.122.2/alef-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/709859603"
+url = "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/710541076"
 
 [tools."github:xberg-io/alef"."platforms.macos-x64"]
-checksum = "sha256:44290510142067f90c78941cbad6baaba9342e0fae5e58c393b364e6fa9b14a2"
+checksum = "sha256:0661fd3aa89f342c31401a5535e4f11080d807444ce53179e41037741c7269dd"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.122.2/alef-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/709859828"
+url = "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/710541347"
 
 [tools."github:xberg-io/alef"."platforms.windows-x64"]
-checksum = "sha256:4da347618ebbc02c958fba1e4e2148bbe4ca14893e036e7e4538fd65dc4c51f6"
+checksum = "sha256:fb31c262e2abe5d998c2ca4c7cf5f5f2bd7d4b400d5e54431167d2d8a63180fc"
 checksum_source = "mise-versions"
-url = "https://github.com/xberg-io/alef/releases/download/v0.122.2/alef-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/709860062"
+url = "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/xberg-io/alef/releases/assets/710541427"
 
 [[tools.go]]
 version = "1.27.3"

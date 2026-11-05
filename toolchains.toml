@@ -18,5 +18,5 @@ task_sets = [
 "plugin:verify" = "Check plugin source and root served-skill locks before Xberg artifact verification"
 
 [overrides."github:xberg-io/alef"]
-version = "0.122.2"
-reason = "Alef 0.122.2 generates the Swift TesseractConfig DTO through [crates.swift] lenient_serde_types and clippy-clean Node conversions"
+version = "0.123.0"
+reason = "Match alef.toml and CI so local verification understands the current Python host alias configuration"
