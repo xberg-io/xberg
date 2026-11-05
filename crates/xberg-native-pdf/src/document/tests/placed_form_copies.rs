@@ -305,9 +305,13 @@ fn child_pages() -> [(&'static str, [String; 2], usize); 3] {
     let scope = placed("/C Do\n");
     let plain = "/C Do\n".to_string();
     [
-        ("tagged parent, then a scope", ["/P Do\n".to_string(), scope.clone()], 0),
+        (
+            "tagged parent, then a scope",
+            ["/P Do\n".to_string(), scope.clone()],
+            240,
+        ),
         ("scope, then no scope", [scope.clone(), plain.clone()], 240),
-        ("no scope, then a scope", [plain, scope], 0),
+        ("no scope, then a scope", [plain, scope], 240),
     ]
 }
 
@@ -363,6 +367,7 @@ fn test_wrapper_that_skipped_its_child_reads_the_child_on_the_next_page() {
 }
 
 /// A child form reads on page 1 as on a fresh document, whatever read page 0 first.
+/// Each page paints the child once; a placed scope alone is not duplicate evidence.
 #[test]
 fn test_an_earlier_call_does_not_change_a_child_in_a_placed_scope() {
     let routes = earlier_calls();
