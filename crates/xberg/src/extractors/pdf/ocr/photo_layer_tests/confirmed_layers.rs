@@ -226,6 +226,7 @@ async fn should_keep_the_title_first_in_the_page_by_page_whole_document_pipeline
         known_full_page_scan: false,
         single_block_pages: None,
         native_page_layers: Some(Arc::new(ahash::AHashMap::from([(1, TITLE.to_string())]))),
+        ..Default::default()
     };
     let result = Box::pin(extract_full_document_ocr_pipeline_per_page(
         &pdf,

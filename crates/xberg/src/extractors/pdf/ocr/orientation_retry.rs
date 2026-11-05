@@ -105,12 +105,13 @@ impl OrientationRetry {
         config: &OcrConfig,
         original: crate::Result<ExtractedDocument>,
         cancel: Option<&CancellationToken>,
+        allow_prose: bool,
     ) -> crate::Result<ExtractedDocument> {
         let original = original?;
         check_cancelled(cancel)?;
         if let Some(requested) = &self.recognition_config {
             let result = self
-                .after_recognition(backend, raster, config, original, cancel)
+                .after_recognition(backend, raster, config, original, cancel, allow_prose)
                 .await?;
             check_cancelled(cancel)?;
             return Ok(recognition::restore_elements(result, requested));
@@ -209,6 +210,7 @@ impl OrientationRetry {
         config: &OcrConfig,
         original: ExtractedDocument,
         cancel: Option<&CancellationToken>,
+        allow_prose: bool,
     ) -> crate::Result<ExtractedDocument> {
         let confidence = backend.confidence_semantics();
         if !recognition::primary_supported(&original) || !self.noise(&original, confidence).low_confidence {
@@ -231,6 +233,7 @@ impl OrientationRetry {
                 &self.thresholds,
                 confidence,
                 config,
+                allow_prose,
             )),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {

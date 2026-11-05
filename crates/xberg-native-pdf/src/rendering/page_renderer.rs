@@ -577,6 +577,10 @@ impl PageRenderer {
             .map(|(image, _)| image)
     }
 
+    pub(super) fn type0_ink_loss(&self) -> bool {
+        self.text_rasterizer.type0_ink_loss()
+    }
+
     pub(super) fn render_page_with_budget(
         &mut self,
         page_num: usize,
