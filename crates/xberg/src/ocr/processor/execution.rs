@@ -1283,6 +1283,7 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             height as usize,
             lower_mode_max,
             lower_mode_pixels,
+            (!bright_mean).then_some(foreground_pixels),
         )
 }
 
@@ -1344,6 +1345,7 @@ fn lower_mode_has_text_structure(
     height: usize,
     lower_mode_max: u8,
     lower_mode_pixels: usize,
+    dense_foreground_pixels: Option<usize>,
 ) -> bool {
     if width.checked_mul(height) != Some(rgb_data.len() / RGB_CHANNEL_COUNT) {
         return false;
@@ -1357,7 +1359,15 @@ fn lower_mode_has_text_structure(
             (channel_sum + 1) / RGB_CHANNEL_COUNT as u16 <= u16::from(lower_mode_max)
         })
         .collect();
-    lower_mode_mask_has_text_structure(&lower_mode_mask, width, height, lower_mode_pixels)
+    // A filled panel also passes the legacy narrow-glyph exemption. In the new
+    // dark-mean lane, open glyph shapes must explain the foreground instead. ~keep
+    mask_has_text_structure(
+        &lower_mode_mask,
+        width,
+        height,
+        dense_foreground_pixels.unwrap_or(lower_mode_pixels),
+        dense_foreground_pixels.is_some(),
+    )
 }
 
 pub(crate) fn lower_mode_mask_has_text_structure(
@@ -1365,6 +1375,16 @@ pub(crate) fn lower_mode_mask_has_text_structure(
     width: usize,
     height: usize,
     lower_mode_pixels: usize,
+) -> bool {
+    mask_has_text_structure(lower_mode_mask, width, height, lower_mode_pixels, false)
+}
+
+fn mask_has_text_structure(
+    lower_mode_mask: &[bool],
+    width: usize,
+    height: usize,
+    foreground_pixels: usize,
+    require_dense_text: bool,
 ) -> bool {
     let Some(pixel_count) = width.checked_mul(height) else {
         return false;
@@ -1376,6 +1396,7 @@ pub(crate) fn lower_mode_mask_has_text_structure(
     let mut visited = vec![false; pixel_count];
     let mut component_stack = Vec::new();
     let mut structured_pixels = 0usize;
+    let mut largest_structured_component = 0usize;
     for start in 0..pixel_count {
         if !lower_mode_mask[start] || visited[start] {
             continue;
@@ -1385,15 +1406,17 @@ pub(crate) fn lower_mode_mask_has_text_structure(
             &mut visited,
             &mut component_stack,
             start,
-            width,
-            height,
+            (width, height),
+            !require_dense_text,
         );
         let Some(total) = structured_pixels.checked_add(component_pixels) else {
             return false;
         };
         structured_pixels = total;
+        largest_structured_component = largest_structured_component.max(component_pixels);
     }
-    structured_pixels >= lower_mode_pixels.div_ceil(2)
+    let minimum_pixels = foreground_pixels.div_ceil(2);
+    structured_pixels >= minimum_pixels && (!require_dense_text || largest_structured_component < minimum_pixels)
 }
 
 fn structured_component_size(
@@ -1401,9 +1424,10 @@ fn structured_component_size(
     visited: &mut [bool],
     stack: &mut Vec<usize>,
     start: usize,
-    width: usize,
-    height: usize,
+    dimensions: (usize, usize),
+    allow_narrow_components: bool,
 ) -> usize {
+    let (width, height) = dimensions;
     stack.clear();
     stack.push(start);
     visited[start] = true;
@@ -1441,14 +1465,21 @@ fn structured_component_size(
         }
     }
 
-    if component_is_text_like(size, min_x, max_x, min_y, max_y) {
+    if component_is_text_like(size, min_x, max_x, min_y, max_y, allow_narrow_components) {
         size
     } else {
         0
     }
 }
 
-fn component_is_text_like(size: usize, min_x: usize, max_x: usize, min_y: usize, max_y: usize) -> bool {
+fn component_is_text_like(
+    size: usize,
+    min_x: usize,
+    max_x: usize,
+    min_y: usize,
+    max_y: usize,
+    allow_narrow_components: bool,
+) -> bool {
     if min_x >= max_x || min_y >= max_y {
         return false;
     }
@@ -1468,7 +1499,7 @@ fn component_is_text_like(size: usize, min_x: usize, max_x: usize, min_y: usize,
     let is_narrow = short_side
         .checked_mul(CLEAN_PAGE_TEXT_COMPONENT_MIN_NARROW_ASPECT_RATIO)
         .is_some_and(|minimum_long_side| long_side >= minimum_long_side);
-    scaled_size <= maximum_fill || is_narrow
+    scaled_size <= maximum_fill || (allow_narrow_components && is_narrow)
 }
 
 fn prepare_preprocessed_ocr_image(
@@ -5473,6 +5504,84 @@ mod tests {
                 Some("otsu")
             );
         }
+    }
+
+    #[test]
+    fn dark_mean_graphics_do_not_gain_the_legacy_narrow_glyph_exemption() {
+        const SIDE: u32 = 512;
+        for (left, top, width, height) in [(16, 100, 480, 80), (400, 16, 80, 480)] {
+            let mut rgb_data = Vec::new();
+            let mut panel_mask = Vec::new();
+            for y in 0..SIDE {
+                for x in 0..SIDE {
+                    let panel = (left..left + width).contains(&x) && (top..top + height).contains(&y);
+                    panel_mask.push(panel);
+                    let pixel = if glyph_mask(x, y, 0) {
+                        [156; 3]
+                    } else if panel {
+                        [0, 0, 225]
+                    } else {
+                        [255; 3]
+                    };
+                    rgb_data.extend_from_slice(&pixel);
+                }
+            }
+            assert!(lower_mode_mask_has_text_structure(
+                &panel_mask,
+                SIDE as usize,
+                SIDE as usize,
+                (width * height) as usize
+            ));
+            assert!(!should_apply_default_preprocessing(&rgb_data, SIDE, SIDE));
+        }
+    }
+
+    #[test]
+    fn dark_mean_connected_grid_does_not_establish_dense_text() {
+        const SIDE: u32 = 512;
+        let mut rgb_data = Vec::new();
+        let mut grid_mask = Vec::new();
+        for y in 0..SIDE {
+            for x in 0..SIDE {
+                let grid =
+                    (16..496).contains(&x) && (100..500).contains(&y) && ((x - 16) % 9 == 0 || (y - 100) % 9 == 0);
+                grid_mask.push(grid);
+                let pixel = if glyph_mask(x, y, 0) {
+                    [156; 3]
+                } else if grid {
+                    [0, 0, 225]
+                } else {
+                    [255; 3]
+                };
+                rgb_data.extend_from_slice(&pixel);
+            }
+        }
+        let grid_pixels = grid_mask.iter().filter(|&&pixel| pixel).count();
+        assert_eq!(grid_pixels, 40770);
+        assert!(lower_mode_mask_has_text_structure(
+            &grid_mask,
+            SIDE as usize,
+            SIDE as usize,
+            grid_pixels
+        ));
+        assert!(!should_apply_default_preprocessing(&rgb_data, SIDE, SIDE));
+    }
+
+    #[test]
+    fn dark_mean_few_glyphs_beside_a_gray_graphic_do_not_justify_preprocessing() {
+        let (mut rgb_data, glyphs) = contrast_fixture(DARK_TEXT, true, 0);
+        assert_eq!(glyphs, 384);
+        for (index, pixel) in rgb_data.as_chunks_mut::<RGB_CHANNEL_COUNT>().0.iter_mut().enumerate() {
+            if index % (CONTRAST_FIXTURE_WIDTH as usize) < 90 && *pixel != DARK_TEXT {
+                *pixel = [105; 3];
+            }
+        }
+        assert!(aggregate_foreground_contrast(&rgb_data) >= CLEAN_PAGE_MIN_FOREGROUND_CONTRAST);
+        assert!(!should_apply_default_preprocessing(
+            &rgb_data,
+            CONTRAST_FIXTURE_WIDTH,
+            CONTRAST_FIXTURE_HEIGHT
+        ));
     }
 
     #[test]

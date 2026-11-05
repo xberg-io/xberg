@@ -179,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
+  Retain words beside large graphics while preserving the dense-text recovery introduced in #2475.
+
 - **(pdf): Restore caller font bindings before resuming text after a Form.** (#2516)
   Keep caller words when a Form shadows the selected font resource name, on cold and warm reads.
   Resolve a Form's own font binding even when its name and size match the caller's selection.
