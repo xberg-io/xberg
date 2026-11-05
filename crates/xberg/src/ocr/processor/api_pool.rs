@@ -47,7 +47,8 @@ struct PoolState<K, V> {
     idle: Vec<(K, V)>,
 }
 
-/// A keyed pool that holds at most `capacity` resources checked out at once.
+/// A keyed pool that holds at most `capacity` resources checked out at once; an idle resource
+/// of the key is reused, as a new one is built, only while a checkout slot is free.
 ///
 /// An idle resource of another key stays in the pool until the pool holds twice `capacity`
 /// resources, checked out and idle together; then the resource released longest ago goes. A run
@@ -78,13 +79,13 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
     {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         loop {
-            if let Some(index) = state.idle.iter().position(|(idle_key, _)| idle_key == &key) {
-                let value = state.idle.remove(index).1;
-                state.checked_out += 1;
-                return Ok(ResourceLease::new(Arc::clone(self), key, value));
-            }
-
             if state.checked_out < self.capacity {
+                if let Some(index) = state.idle.iter().position(|(idle_key, _)| idle_key == &key) {
+                    let value = state.idle.remove(index).1;
+                    state.checked_out += 1;
+                    return Ok(ResourceLease::new(Arc::clone(self), key, value));
+                }
+
                 let full = state.checked_out + state.idle.len() >= self.kept_resources();
                 let stale = full.then(|| state.idle.remove(0));
                 state.checked_out += 1;
@@ -514,6 +515,31 @@ mod tests {
         drop(german);
         let english = pool.checkout::<(), _>("eng", || Ok(4)).unwrap();
         assert_eq!(*english, 4, "the English resource was the one released longest ago");
+    }
+
+    /// An idle resource of the key is a hit only while a checkout slot is free: with the slot
+    /// taken by another key, the checkout waits for a release instead of passing the capacity.
+    #[test]
+    fn a_key_hit_never_passes_the_capacity() {
+        let pool = ResourcePool::new(1);
+        drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
+        let german = pool.checkout::<(), _>("deu", || Ok(2)).unwrap();
+        let peak = Arc::new(AtomicUsize::new(0));
+        let waiter = {
+            let pool = Arc::clone(&pool);
+            let peak = Arc::clone(&peak);
+            thread::spawn(move || {
+                let english = pool.checkout::<(), _>("eng", || Ok(3)).unwrap();
+                peak.fetch_max(pool.counts().0, Ordering::SeqCst);
+                drop(english);
+            })
+        };
+        thread::sleep(std::time::Duration::from_millis(300));
+        peak.fetch_max(pool.counts().0, Ordering::SeqCst);
+        drop(german);
+        waiter.join().unwrap();
+        let peak = peak.load(Ordering::SeqCst);
+        assert!(peak <= 1, "{peak} resources checked out at capacity 1");
     }
 
     /// A key hit in the middle of the idle list keeps the release order of the others, so the
