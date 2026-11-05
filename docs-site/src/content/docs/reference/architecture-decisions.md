@@ -24,3 +24,4 @@ same change as a new record.
 | [0009](https://github.com/xberg-io/xberg/blob/main/adrs/0009-preserve-certified-painted-pdf-cells-when-text-has-decorative-paint.md) | Preserve certified painted PDF cells when text has decorative paint | accepted | 2026-11-05 |
 | [0010](https://github.com/xberg-io/xberg/blob/main/adrs/0010-reuse-immutable-windows-wheels-for-isolated-qualification.md) | Reuse immutable Windows wheels for isolated qualification | accepted | 2026-11-05 |
 | [0011](https://github.com/xberg-io/xberg/blob/main/adrs/0011-carry-per-input-pdf-layout-options-in-an-additive-batch-input.md) | Carry per-input PDF layout options in an additive batch input | accepted | 2026-11-05 |
+| [0012](https://github.com/xberg-io/xberg/blob/main/adrs/0012-expose-source-proven-pdf-layout-text-through-an-opt-in-rust-result.md) | Expose source-proven PDF layout text through an opt-in Rust result | accepted | 2026-11-05 |

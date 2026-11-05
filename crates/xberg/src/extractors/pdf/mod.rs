@@ -330,6 +330,9 @@ fn extract_native_blocking(
     #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
         crate::core::config::acceleration::AccelerationConfig,
     >,
+    #[cfg(feature = "layout-detection")] region_text_layout: Option<
+        crate::engine::layout_region_text::RegionTextLayout,
+    >,
 ) -> Result<NativeBlockingOutput> {
     ensure_pdf_not_cancelled(&config)?;
     let passwords = config
@@ -363,19 +366,13 @@ fn extract_native_blocking(
         &config,
         &outline_entries,
         #[cfg(feature = "layout-detection")]
-        layout_hints.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_images.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_results.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_acceleration_override.as_ref(),
+        extraction::NativeLayoutInput {
+            hints: layout_hints.as_deref(),
+            images: layout_images.as_deref(),
+            results: layout_results.as_deref(),
+            acceleration: layout_acceleration_override.as_ref(),
+            region_text: region_text_layout.as_ref(),
+        },
     )?;
     ensure_pdf_not_cancelled(&config)?;
 
@@ -2741,6 +2738,19 @@ impl PdfExtractor {
 
         let blocking_content = content.to_vec();
         let blocking_config = config.clone();
+        #[cfg(feature = "layout-detection")]
+        let region_text_layout = layout_pages
+            .filter(|pages| pages.region_text.is_some() && crate::engine::layout_region_text::capture_allowed(config))
+            .zip(markdown_layout_detections.as_deref())
+            .map(
+                |(selection, detections)| crate::engine::layout_region_text::RegionTextLayout {
+                    selection: selection.clone(),
+                    detector_classes: detections
+                        .iter()
+                        .map(|page| page.detections.iter().map(|detection| detection.class_name).collect())
+                        .collect(),
+                },
+            );
         let native_output = spawn_pdf_blocking(move || {
             extract_native_blocking(
                 blocking_content,
@@ -2753,6 +2763,8 @@ impl PdfExtractor {
                 markdown_layout_hints,
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_acceleration_override,
+                #[cfg(feature = "layout-detection")]
+                region_text_layout,
             )
         })
         .await?;

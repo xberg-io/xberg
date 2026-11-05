@@ -6,6 +6,10 @@ use crate::Result;
 use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::types::{PageBoundary, PageContent, PdfAnnotation};
 
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+#[path = "extraction/layout_region_text.rs"]
+mod layout_region_text;
+
 #[cfg(test)]
 #[path = "extraction/native_table_metadata_tests.rs"]
 mod native_table_metadata_tests;
@@ -585,6 +589,15 @@ fn map_native_text_error(error: crate::pdf::error::PdfError) -> crate::XbergErro
     }
 }
 
+#[cfg(feature = "layout-detection")]
+pub(super) struct NativeLayoutInput<'a> {
+    pub(super) hints: Option<&'a [Vec<crate::pdf::structure::types::LayoutHint>]>,
+    pub(super) images: Option<&'a [image::RgbImage]>,
+    pub(super) results: Option<&'a [crate::pdf::structure::types::PageLayoutResult]>,
+    pub(super) acceleration: Option<&'a crate::core::config::acceleration::AccelerationConfig>,
+    pub(super) region_text: Option<&'a crate::engine::layout_region_text::RegionTextLayout>,
+}
+
 /// Extract text, metadata, tables, and annotations from a PDF document using the xberg_native_pdf backend.
 ///
 /// Accepts an authenticated `NativeDocument`, then delegates to each native extraction module.
@@ -604,15 +617,12 @@ pub(crate) fn extract_all_from_native_document(
     mut doc: crate::pdf::native::NativeDocument,
     config: &ExtractionConfig,
     outline_entries: &[crate::pdf::bookmarks::PdfOutlineEntry],
-    layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
-    #[cfg(feature = "layout-detection")] layout_images: Option<&[image::RgbImage]>,
-    #[cfg(not(feature = "layout-detection"))] _layout_images: Option<()>,
-    #[cfg(feature = "layout-detection")] layout_results: Option<&[crate::pdf::structure::types::PageLayoutResult]>,
-    #[cfg(not(feature = "layout-detection"))] _layout_results: Option<()>,
-    #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
-        &crate::core::config::acceleration::AccelerationConfig,
-    >,
+    #[cfg(feature = "layout-detection")] layout: NativeLayoutInput<'_>,
 ) -> Result<PdfExtractionPhaseResult> {
+    #[cfg(feature = "layout-detection")]
+    let layout_hints = layout.hints;
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_hints = None::<&[Vec<crate::pdf::structure::types::LayoutHint>]>;
     let _span = tracing::debug_span!("extract_xberg_native_pdf").entered();
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
     let artifacts =
@@ -659,7 +669,14 @@ pub(crate) fn extract_all_from_native_document(
     if config.pdf_options.as_ref().is_some_and(|opts| opts.reading_order)
         && let Some(hints) = layout_hints
     {
-        match apply_reading_order_reordering(&mut doc, &native_text, hints, config.pages.as_ref(), margins) {
+        match apply_reading_order_reordering(
+            &mut doc,
+            &native_text,
+            hints,
+            config.pages.as_ref(),
+            margins,
+            layout.region_text,
+        ) {
             Ok((reordered, reordered_boundaries, reordered_per_page)) => {
                 native_text = reordered;
                 // Reordering rebuilds the text, so boundaries computed against
@@ -992,9 +1009,9 @@ pub(crate) fn extract_all_from_native_document(
                 allow_single_column,
                 cancel_token: config.cancel_token.as_ref(),
                 #[cfg(feature = "layout-detection")]
-                layout_images,
+                layout_images: layout.images,
                 #[cfg(feature = "layout-detection")]
-                layout_results,
+                layout_results: layout.results,
                 #[cfg(feature = "layout-detection")]
                 table_model: config.layout.as_ref().map(|l| l.table_model).unwrap_or_default(),
                 #[cfg(feature = "layout-detection")]
@@ -1004,7 +1021,7 @@ pub(crate) fn extract_all_from_native_document(
                     .map(|l| l.table_overlap_preference)
                     .unwrap_or_default(),
                 #[cfg(feature = "layout-detection")]
-                acceleration: effective_layout_acceleration(config, layout_acceleration_override),
+                acceleration: effective_layout_acceleration(config, layout.acceleration),
                 #[cfg(feature = "layout-detection")]
                 session_thread_budget: crate::core::config::concurrency::resolve_thread_budget(
                     config.concurrency.as_ref(),
@@ -1121,6 +1138,7 @@ fn apply_reading_order_reordering(
     layout_hints_per_page: &[Vec<crate::pdf::structure::types::LayoutHint>],
     page_config: Option<&crate::core::config::PageConfig>,
     margins: crate::pdf::native::text::PageMarginFractions,
+    region_text_layout: Option<&crate::engine::layout_region_text::RegionTextLayout>,
 ) -> Result<(String, Vec<crate::types::PageBoundary>, Vec<String>)> {
     use crate::extractors::pdf::{reading_order, rotation::page_has_rotated_spans};
     use crate::pdf::native::text::{assemble_upright_layout_text, extract_spans_from_page, rotation_span};
@@ -1142,6 +1160,7 @@ fn apply_reading_order_reordering(
     }
 
     let mut reordered_pages = Vec::with_capacity(page_count);
+    let mut region_evidence = Vec::new();
 
     for (page_idx, hints) in layout_hints_per_page.iter().enumerate().take(page_count) {
         let (native_spans, reordered_sparse_columns) = extract_spans_from_page(&mut doc.doc, page_idx, margins)
@@ -1162,6 +1181,18 @@ fn apply_reading_order_reordering(
 
         let text = if page_has_rotated_spans(&spans) {
             reading_order::assemble_reading_order_text(&spans, &span_order)
+        } else if let Some(layout) = region_text_layout.filter(|layout| layout.selection.contains_index(page_idx))
+            && let Some(classes) = layout
+                .detector_classes
+                .get(page_idx)
+                .filter(|classes| classes.len() == hints.len())
+            && let Some(page_number) = u32::try_from(page_idx).ok().and_then(|index| index.checked_add(1))
+            && let Some(area) = layout_region_text::page_area(&doc.doc, page_idx, hints)
+        {
+            let (text, pending) =
+                layout_region_text::assemble(page_number, &native_spans, &spans, &span_order, hints, classes, area);
+            region_evidence.extend(pending);
+            text
         } else {
             assemble_upright_layout_text(&native_spans, &span_order)
         };
@@ -1172,6 +1203,9 @@ fn apply_reading_order_reordering(
         return Ok((native_text.to_string(), Vec::new(), Vec::new()));
     }
 
+    if let Some(collector) = region_text_layout.and_then(|layout| layout.selection.region_text.as_ref()) {
+        collector.lock().extend(region_evidence);
+    }
     let (content, boundaries) = join_pages_with_boundaries(&reordered_pages, page_config);
     Ok((content, boundaries, reordered_pages))
 }
@@ -1764,9 +1798,43 @@ mod tests {
         ];
         let mut doc = NativeDocument::open_bytes(&layout_spacing_pdf()).expect("layout spacing PDF must open");
         let margins = PageMarginFractions { top: 0.0, bottom: 0.0 };
+        let hints = [page_hints.clone(), page_hints];
+        let legacy = super::apply_reading_order_reordering(&mut doc, "", &hints, None, margins, None).unwrap();
+        let mut selection = crate::core::layout_pages::LayoutPageSelection::new(vec![2]);
+        let collector = crate::engine::layout_region_text::RegionTextCollector::default();
+        selection.region_text = Some(collector.clone());
+        let layout = crate::engine::layout_region_text::RegionTextLayout {
+            selection,
+            detector_classes: vec![
+                Vec::new(),
+                vec![crate::layout::LayoutClass::Text, crate::layout::LayoutClass::Table],
+            ],
+        };
         let (content, boundaries, pages) =
-            super::apply_reading_order_reordering(&mut doc, "", &[page_hints.clone(), page_hints], None, margins)
+            super::apply_reading_order_reordering(&mut doc, "", &hints, None, margins, Some(&layout))
                 .expect("layout order must assemble both pages");
+        assert_eq!(legacy.0, content);
+        assert_eq!(legacy.2, pages);
+        assert_eq!(
+            serde_json::to_value(legacy.1).unwrap(),
+            serde_json::to_value(&boundaries).unwrap()
+        );
+
+        let evidence = collector.lock();
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(evidence[0].page_number, 2);
+        assert_eq!(evidence[0].fingerprint, blake3::hash(pages[1].as_bytes()));
+        assert_eq!(
+            evidence[0]
+                .regions
+                .iter()
+                .map(|(region, range)| { (region.class_name.as_str(), pages[1].get(range.clone()).unwrap()) })
+                .collect::<Vec<_>>(),
+            [
+                ("text", "Page 2 starts here.\nA separate body line."),
+                ("table", "Model Recall Precision Latency\n\nalpha 0.91 0.88 12ms"),
+            ]
+        );
 
         assert_eq!(pages.len(), 2);
         assert_eq!(boundaries.len(), 2);

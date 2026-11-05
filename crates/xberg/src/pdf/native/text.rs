@@ -912,12 +912,21 @@ fn append_visual_word_gap(text: &mut String, gap: f32, font_size: f32) {
 fn assemble_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     let notes = numeric_notes(spans);
     let ordered = order_spans_with_inline_fragments(spans, &notes);
-    assemble_ordered_page_text(spans, ordered, &notes)
+    assemble_ordered_page_text(spans, ordered, &notes, |_, _| {})
 }
 
 /// Add native separators to the selected order without relocating inline fragments.
 #[cfg(feature = "layout-detection")]
 pub(crate) fn assemble_upright_layout_text(spans: &[xberg_native_pdf::layout::TextSpan], order: &[usize]) -> String {
+    assemble_upright_layout_text_observed(spans, order, |_, _| {})
+}
+
+#[cfg(feature = "layout-detection")]
+pub(crate) fn assemble_upright_layout_text_observed(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+    observe: impl FnMut(usize, usize),
+) -> String {
     let notes = numeric_notes(spans);
     let mut anchors = inline_fragment_anchors(spans);
     for (index, anchor) in anchors.iter_mut().enumerate() {
@@ -943,13 +952,14 @@ pub(crate) fn assemble_upright_layout_text(spans: &[xberg_native_pdf::layout::Te
             following: spans.get(index + 1),
         })
     });
-    assemble_ordered_page_text(spans, ordered, &notes)
+    assemble_ordered_page_text(spans, ordered, &notes, observe)
 }
 
 fn assemble_ordered_page_text<'a>(
     spans: &[xberg_native_pdf::layout::TextSpan],
     ordered: impl IntoIterator<Item = OrderedSpan<'a>>,
     notes: &HashMap<&str, &xberg_native_pdf::layout::TextSpan>,
+    mut observe: impl FnMut(usize, usize),
 ) -> String {
     let mut heights: Vec<f32> = spans.iter().map(|span| span.bbox.height).collect();
     heights.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -985,7 +995,9 @@ fn assemble_ordered_page_text<'a>(
                 notes,
             );
         }
+        let start = text.len();
         text.push_str(&span.text);
+        observe(start, text.len());
         prev_span = Some(span);
     }
 

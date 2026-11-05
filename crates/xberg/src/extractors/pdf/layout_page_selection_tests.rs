@@ -291,3 +291,112 @@ fn should_bound_the_public_explicit_layout_future_size_gh2255() {
         "explicit-layout future uses {future_bytes} bytes versus ordinary extraction {ordinary_bytes}; keep native work boxed"
     );
 }
+
+#[tokio::test]
+async fn region_text_opt_in_preserves_legacy_result_for_an_unselected_native_page() {
+    let engine = Engine::new_default();
+    let mut config = config();
+    config.pdf_options.get_or_insert_with(Default::default).reading_order = true;
+    let ordinary = engine
+        .extract_with_layout_pages(input(), &config, vec![])
+        .await
+        .unwrap();
+    let opted_in = engine
+        .extract_with_layout_region_text(input(), &config, vec![])
+        .await
+        .unwrap();
+    assert_eq!(ordinary.results.len(), 1);
+    assert_eq!(
+        serde_json::to_value(ordinary).unwrap(),
+        serde_json::to_value(opted_in.extraction).unwrap()
+    );
+    assert!(opted_in.regions.is_empty());
+}
+
+async fn extract_selected_chart(request: ExtractInput) -> crate::engine::LayoutRegionTextExtraction {
+    use super::layout_runner::TEST_SELECTED_PAGE_DETECTIONS;
+    use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
+
+    let detection = DetectionResult::new(
+        612,
+        792,
+        vec![LayoutDetection::new(
+            LayoutClass::Chart,
+            0.75,
+            BBox::new(60., 40., 560., 90.),
+        )],
+    );
+    TEST_SELECTED_PAGE_DETECTIONS
+        .scope(detection, async {
+            Engine::new_default()
+                .extract_with_layout_region_text(request, &config(), vec![1])
+                .await
+                .unwrap()
+        })
+        .await
+}
+
+#[tokio::test]
+async fn selected_chart_returns_exact_native_page_text_with_original_detector_class() {
+    let output = extract_selected_chart(input()).await;
+    let [result] = output.extraction.results.as_slice() else {
+        panic!("expected one actual PDF result")
+    };
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("expected one actual PDF page")
+    };
+    let [selected] = output.regions.as_slice() else {
+        panic!("expected one certified chart region")
+    };
+    assert_eq!(page.content, NATIVE_TEXT);
+    assert_eq!(selected.page_number, 1);
+    assert_eq!(selected.region.class_name, "chart");
+    assert_eq!(selected.region.confidence, 0.75);
+    assert_eq!(
+        selected.region.bounding_box,
+        crate::BoundingBox {
+            x0: 60.,
+            y0: 702.,
+            x1: 560.,
+            y1: 752.
+        }
+    );
+    assert_eq!(selected.text, NATIVE_TEXT);
+}
+
+#[cfg(feature = "redaction")]
+#[tokio::test]
+async fn selected_chart_omits_text_for_per_input_and_empty_external_redaction() {
+    use crate::core::config::RedactionOffsetEncoding;
+    use crate::core::config::redaction::{RedactionConfig, RedactionTerm};
+    use crate::text::redaction::external::{ExternalRedactionRequest, scope_external_redaction};
+
+    let mut request = input();
+    request.config = Some(FileExtractionConfig {
+        redaction: Some(RedactionConfig {
+            custom_terms: vec![RedactionTerm::labeled("marker", "complete native paragraph")],
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    let output = extract_selected_chart(request).await;
+    let [result] = output.extraction.results.as_slice() else {
+        panic!("expected one actual redacted PDF result")
+    };
+    assert_eq!(result.content, "Explicit layout selection preserves the [REDACTED].");
+    assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 3);
+    assert!(
+        !serde_json::to_string(&output)
+            .unwrap()
+            .contains("complete native paragraph")
+    );
+    assert!(output.regions.is_empty());
+
+    let request = ExternalRedactionRequest::new(Vec::new(), RedactionOffsetEncoding::UnicodeCodePoints, 1, false);
+    let output = scope_external_redaction(request, extract_selected_chart(input())).await;
+    let [result] = output.extraction.results.as_slice() else {
+        panic!("expected one actual PDF result")
+    };
+    assert_eq!(result.content, NATIVE_TEXT);
+    assert!(output.regions.is_empty());
+}

@@ -3,6 +3,8 @@ use crate::types::ProcessingWarning;
 #[derive(Clone, Debug)]
 pub(crate) struct LayoutPageSelection {
     pages: std::collections::BTreeSet<u32>,
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    pub(crate) region_text: Option<crate::engine::layout_region_text::RegionTextCollector>,
 }
 
 #[cfg_attr(not(all(feature = "pdf", feature = "layout-detection")), allow(dead_code))]
@@ -10,6 +12,8 @@ impl LayoutPageSelection {
     pub(crate) fn new(pages: Vec<u32>) -> Self {
         Self {
             pages: pages.into_iter().collect(),
+            #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+            region_text: None,
         }
     }
 
