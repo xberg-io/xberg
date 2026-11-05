@@ -4701,7 +4701,7 @@ pub(super) fn ocr_page_working_set_bytes(
 /// [`validate_png_encode_batch_peak`]'s own per-page accounting: the source raster, the RGB
 /// conversion buffer, and the PNG output buffer.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> crate::Result<u64> {
+pub(crate) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> crate::Result<u64> {
     let source = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
     let conversion = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
     let output = crate::extraction::image_decode::decoded_byte_count(width, height, OCR_PNG_ENCODE_BYTES_PER_PIXEL)?

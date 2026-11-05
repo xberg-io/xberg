@@ -1057,7 +1057,7 @@ const _: () = assert!(MIN_ORIENTATION_CONFIDENCE == crate::doc_orientation::MIN_
 /// not tell us what resolution it really is.
 ///
 /// Only a fallback. `TesseractConfig::source_dpi`, when the caller knows the true value, takes
-/// precedence — see [`prepare_decided_ocr_image`].
+/// precedence — see [`prepare_ocr_image`].
 const RAW_IMAGE_SOURCE_DPI: i32 = 72;
 /// Source resolution retained when explicit DPI normalization fails.
 const PREPROCESSING_FALLBACK_SOURCE_DPI: i32 = 300;
@@ -1087,109 +1087,6 @@ const RGB_CHANNEL_MAX: f64 = u8::MAX as f64;
 /// Number of channels in an RGB pixel.
 const RGB_CHANNEL_COUNT: usize = 3;
 
-#[cfg(test)]
-mod reduced_jpeg_dpi_tests;
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod reduced_jpeg_memory_tests;
-
-fn prepare_encoded_ocr_image(
-    bytes: &[u8],
-    limits: &SecurityLimits,
-    config: &TesseractConfig,
-    images: Option<&crate::core::config::ImageExtractionConfig>,
-    ci_debug_enabled: bool,
-) -> crate::Result<PreparedOcrImage> {
-    use crate::image::preprocessing::normalization_requires_resize;
-    let source_dpi = |width, height| resolve_known_source_dpi(config.source_dpi, bytes, width, height);
-    // A reduced decode cannot be resized within the limit, so prefer a scale that already meets
-    // the DPI target of the preprocessing that would run. ~keep
-    let planned_preprocessing = config.preprocessing.clone().unwrap_or_default();
-    let planned_dpi = ocr_dpi_config(&planned_preprocessing, images);
-    let decoded = crate::extraction::image::load_image_for_ocr_with_scale(bytes, limits, |scale| {
-        source_dpi(scale.original_width, scale.original_height).is_some_and(|dpi| {
-            !normalization_requires_resize(
-                scale.width,
-                scale.height,
-                &planned_dpi,
-                dpi / f64::from(scale.denominator),
-            )
-        })
-    })?;
-    let dpi = source_dpi(decoded.original_width, decoded.original_height)
-        .map(|dpi| dpi / f64::from(decoded.scale_denominator));
-    let (width, height) = decoded.image.dimensions();
-    log_ci_debug(ci_debug_enabled, "image", || {
-        format!("dimensions={width}x{height} color_type=RGB8")
-    });
-    let preprocessing = ocr_preprocessing_decision(
-        decoded.image.as_raw(),
-        width,
-        height,
-        config.preprocessing.as_ref(),
-        config.known_full_page_scan,
-    );
-    if decoded.scale_denominator != 1
-        && let Some(preprocessing) = preprocessing.as_deref()
-    {
-        let dpi_config = ocr_dpi_config(preprocessing, images);
-        if dpi.is_none_or(|dpi| normalization_requires_resize(width, height, &dpi_config, dpi)) {
-            // No public setting gives the source DPI of a standalone image, so an unknown DPI
-            // leaves only the limit as the remedy. ~keep
-            let (reason, remedy) = dpi.map_or_else(
-                || (", and its source DPI is unknown, so", String::new()),
-                |dpi| (", and", format!(", or set target_dpi to {}", dpi.round())),
-            );
-            return Err(crate::XbergError::validation(format!(
-                "The image exceeds security_limits.max_content_size ({} bytes) at its source resolution{reason} a \
-                 reduced-size image cannot be resized to target_dpi {} within that limit. Raise \
-                 security_limits.max_content_size{remedy}",
-                limits.max_content_size, dpi_config.target_dpi,
-            )));
-        }
-    }
-    Ok(prepare_decided_ocr_image(
-        decoded.image.into_raw(),
-        width,
-        height,
-        preprocessing.as_deref(),
-        images,
-        ci_debug_enabled,
-        dpi,
-    ))
-}
-
-/// The preprocessing that OCR applies to this raster, or `None` when the raster passes through
-/// unchanged. The one place that decides it; the default check scans every pixel.
-fn ocr_preprocessing_decision<'a>(
-    rgb_data: &[u8],
-    width: u32,
-    height: u32,
-    preprocessing: Option<&'a crate::types::ImagePreprocessingConfig>,
-    known_full_page_scan: bool,
-) -> Option<std::borrow::Cow<'a, crate::types::ImagePreprocessingConfig>> {
-    match preprocessing {
-        Some(preprocessing) => Some(std::borrow::Cow::Borrowed(preprocessing)),
-        None if known_full_page_scan || should_apply_default_preprocessing(rgb_data, width, height) => {
-            Some(std::borrow::Cow::Owned(Default::default()))
-        }
-        None => None,
-    }
-}
-
-/// `target_dpi` always comes from the (Tesseract-specific) `preprocessing` config, which takes
-/// precedence when explicitly set. The dimension/auto-adjust limits have no home in
-/// `ImagePreprocessingConfig`, so they come from the real `ImageExtractionConfig` when the caller
-/// has one, instead of being silently defaulted (issue #209).
-fn ocr_dpi_config(
-    preprocessing: &crate::types::ImagePreprocessingConfig,
-    images_config: Option<&crate::core::config::ImageExtractionConfig>,
-) -> crate::types::ImageDpiConfig {
-    crate::types::ImageDpiConfig {
-        target_dpi: preprocessing.target_dpi,
-        ..images_config.map(Into::into).unwrap_or_default()
-    }
-}
-
 struct PreparedOcrImage {
     data: Vec<u8>,
     width: u32,
@@ -1217,7 +1114,6 @@ struct PreparedOcrImage {
 /// binarisation and deskew just because shaded table rows or a grey background read as dark
 /// (GH#1894). The heuristic remains the only signal for a caller with no scan-detection result of
 /// its own.
-#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn prepare_ocr_image(
     rgb_data: Vec<u8>,
@@ -1229,28 +1125,18 @@ fn prepare_ocr_image(
     known_source_dpi: Option<f64>,
     known_full_page_scan: bool,
 ) -> PreparedOcrImage {
-    let preprocessing = ocr_preprocessing_decision(&rgb_data, width, height, preprocessing, known_full_page_scan);
-    prepare_decided_ocr_image(
-        rgb_data,
-        width,
-        height,
-        preprocessing.as_deref(),
-        images_config,
-        ci_debug_enabled,
-        known_source_dpi,
-    )
-}
-
-fn prepare_decided_ocr_image(
-    rgb_data: Vec<u8>,
-    width: u32,
-    height: u32,
-    preprocessing: Option<&crate::types::ImagePreprocessingConfig>,
-    images_config: Option<&crate::core::config::ImageExtractionConfig>,
-    ci_debug_enabled: bool,
-    known_source_dpi: Option<f64>,
-) -> PreparedOcrImage {
     let Some(preprocessing) = preprocessing else {
+        if known_full_page_scan || should_apply_default_preprocessing(&rgb_data, width, height) {
+            return prepare_preprocessed_ocr_image(
+                rgb_data,
+                width,
+                height,
+                &crate::types::ImagePreprocessingConfig::default(),
+                images_config,
+                ci_debug_enabled,
+                known_source_dpi,
+            );
+        }
         return PreparedOcrImage {
             data: rgb_data,
             width,
@@ -1263,6 +1149,7 @@ fn prepare_decided_ocr_image(
             image_preprocessing: None,
         };
     };
+
     prepare_preprocessed_ocr_image(
         rgb_data,
         width,
@@ -1535,7 +1422,20 @@ fn prepare_preprocessed_ocr_image(
     ci_debug_enabled: bool,
     known_source_dpi: Option<f64>,
 ) -> PreparedOcrImage {
-    let dpi_config = ocr_dpi_config(preprocessing, images_config);
+    // `target_dpi` always comes from the (Tesseract-specific) `preprocessing` config, which
+    // takes precedence when explicitly set. The dimension/auto-adjust limits have no home in
+    // `ImagePreprocessingConfig`, so they come from the real `ImageExtractionConfig` when the
+    // caller has one, instead of being silently defaulted (issue #209).
+    let dpi_config = match images_config {
+        Some(images_config) => crate::types::ImageDpiConfig {
+            target_dpi: preprocessing.target_dpi,
+            ..crate::types::ImageDpiConfig::from(images_config)
+        },
+        None => crate::types::ImageDpiConfig {
+            target_dpi: preprocessing.target_dpi,
+            ..Default::default()
+        },
+    };
     // `known_source_dpi` is the whole point of this parameter: passing `None` here makes
     // `normalize_image_dpi_owned` guess the resolution from the text size (72 DPI when it finds
     // none), which on a page rendered at 150 inflates the
@@ -2063,10 +1963,32 @@ pub(super) fn perform_ocr(
     });
 
     let security_limits = security_limits_for_ocr(config, extraction_config);
+    let raster = crate::extraction::image::decode_ocr_raster(image_bytes, &security_limits, |_, _| true)
+        .map_err(|e| OcrError::ImageProcessingFailed(e.to_string()))?;
+    let (orig_width, orig_height) = raster.image.dimensions();
+
+    log_ci_debug(ci_debug_enabled, "image", || {
+        format!("dimensions={}x{} color_type=RGB8", orig_width, orig_height)
+    });
+
     let images_config = extraction_config.and_then(|extraction_config| extraction_config.images.as_ref());
-    let prepared_image =
-        prepare_encoded_ocr_image(image_bytes, &security_limits, config, images_config, ci_debug_enabled)
-            .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
+    let known_source_dpi = raster.raster_dpi(resolve_known_source_dpi(
+        config.source_dpi,
+        image_bytes,
+        raster.source_width,
+        raster.source_height,
+    ));
+    let rgb_data = raster.image.into_raw();
+    let prepared_image = prepare_ocr_image(
+        rgb_data,
+        orig_width,
+        orig_height,
+        config.preprocessing.as_ref(),
+        images_config,
+        ci_debug_enabled,
+        known_source_dpi,
+        config.known_full_page_scan,
+    );
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut image_data = prepared_image.data;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]

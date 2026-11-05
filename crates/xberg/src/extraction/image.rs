@@ -18,23 +18,10 @@ use std::collections::HashMap;
 use std::io::Cursor;
 
 #[cfg(feature = "ocr")]
-mod bounded_jpeg;
-
-#[cfg(all(feature = "ocr", feature = "pdf"))]
-pub(crate) use bounded_jpeg::load_image_for_ocr_within;
+#[path = "image/ocr_raster.rs"]
+mod ocr_raster;
 #[cfg(feature = "ocr")]
-pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr_with_scale};
-#[cfg(feature = "ocr")]
-#[doc(hidden)]
-pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
-
-#[cfg(feature = "ocr")]
-pub(crate) struct DecodedOcrImage {
-    pub image: image::RgbImage,
-    pub original_width: u32,
-    pub original_height: u32,
-    pub scale_denominator: u8,
-}
+pub(crate) use ocr_raster::{decode_ocr_raster, oversized_jpeg_dimensions};
 
 /// JP2 file signature: 12-byte box starting with length 0x0000000C and type "jP  "
 const JP2_MAGIC: &[u8] = &[0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20];
@@ -481,8 +468,7 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
 /// for all other formats.
 #[cfg(feature = "ocr")]
 pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) -> Result<image::DynamicImage> {
-    load_image_for_ocr_with_scale(image_bytes, limits, |_| true)
-        .map(|decoded| image::DynamicImage::ImageRgb8(decoded.image))
+    decode_image_to_rgb8_with_security_limits(image_bytes, limits).map(image::DynamicImage::ImageRgb8)
 }
 
 /// Meters-per-inch, used to convert a PNG `pHYs` pixels-per-metre density into DPI.
@@ -847,17 +833,6 @@ pub(crate) fn extract_image_metadata_with_security_limits(
         }
     }
 
-    // OCR decodes an oversized JPEG at a reduced size, so the metadata probe admits it the same way,
-    // from the frame header alone. ~keep
-    #[cfg(feature = "ocr")]
-    if let Some((width, height)) = admit_oversized_jpeg(bytes, limits)? {
-        return Ok(ExtractedImageMetadata {
-            width,
-            height,
-            format: "JPEG".to_string(),
-            exif_data: extract_exif_data(bytes),
-        });
-    }
     let decoded = decode_standard_image_with_security_limits(bytes, limits)?;
     let format = image::guess_format(bytes)
         .map_err(|error| XbergError::parsing(format!("Failed to read image format: {error}")))?;
@@ -867,6 +842,27 @@ pub(crate) fn extract_image_metadata_with_security_limits(
         format: format!("{format:?}").to_uppercase(),
         exif_data: extract_exif_data(bytes),
     })
+}
+
+/// The metadata of an image file that OCR reads. A JPEG whose full-size decode is over the limit
+/// takes its size from the frame header when OCR can decode it at a reduced scale.
+#[cfg(feature = "ocr")]
+pub(crate) fn extract_ocr_image_metadata_with_security_limits(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+) -> Result<ExtractedImageMetadata> {
+    match extract_image_metadata_with_security_limits(bytes, limits) {
+        Err(error @ XbergError::Validation { .. }) => {
+            let (width, height) = oversized_jpeg_dimensions(bytes, limits).ok_or(error)?;
+            Ok(ExtractedImageMetadata {
+                width,
+                height,
+                format: "JPEG".to_string(),
+                exif_data: extract_exif_data(bytes),
+            })
+        }
+        result => result,
+    }
 }
 
 /// Result of OCR extraction from an image with optional page tracking.
@@ -1005,7 +1001,3 @@ mod tests;
 #[cfg(all(test, feature = "ocr"))]
 #[path = "image/jp2_decode_tests.rs"]
 mod jp2_decode_tests;
-
-#[cfg(all(test, feature = "ocr"))]
-#[path = "image/jpeg_fixture.rs"]
-pub(crate) mod jpeg_fixture;

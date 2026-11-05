@@ -363,6 +363,20 @@ fn conversion_peak_bytes(
         .ok_or_else(|| image_dimension_error(probe.width, probe.height, u64::MAX, u64::MAX))
 }
 
+/// The live bytes of an RGB8 decode of a `width` x `height` JPEG stored as `color_type`, by the
+/// same measure that `decode_standard_rgb8` checks before it decodes.
+#[cfg(feature = "ocr")]
+pub(crate) fn jpeg_rgb8_peak_bytes(width: u32, height: u32, color_type: ColorType, encoded_bytes: u64) -> Result<u64> {
+    let probe = StandardImageProbe {
+        width,
+        height,
+        format: ImageFormat::Jpeg,
+        color_type,
+        decoded_bytes: decoded_byte_count(width, height, u64::from(color_type.bytes_per_pixel()))?,
+    };
+    conversion_peak_bytes(probe, ColorType::Rgb8, encoded_bytes, 0)
+}
+
 #[cfg(any(
     test,
     feature = "ocr",

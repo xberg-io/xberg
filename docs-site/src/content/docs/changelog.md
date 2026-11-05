@@ -181,23 +181,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Admit stored image inputs before additional whole-document recovery copies.** (#2339)
-  Preserve legacy formats; the per-page stored-input allowance does not bound filter-expanded or pixel/PNG outputs.
+- **(ocr): OCR an oversized JPEG file at a reduced scale instead of failing on the image memory limit.** (#2339)
+  When the full-size raster of a JPEG file does not fit `security_limits.max_content_size`, OCR decodes it at the
+  finest of 1/2, 1/4 and 1/8 scale that fits, and divides the source DPI by that scale. With an explicit
+  `ocr.pipeline`, the scale must also fit the image encode of each stage. Progressive, lossless, CMYK and other
+  image formats keep the size error.
 
-- **(pdf): Keep the preferred OCR stage policy when retrying original embedded images.** (#2339)
-  Preserve language, preprocessing and backend options before page-render hints in whole-document and detached recovery.
-
-- **(pdf): Preserve cancellation and the smaller image byte cap during whole-document OCR recovery.** (#2339)
-  Forward the minimum outer/OCR cap without changing other security limits, and discard retry results when cancelled.
-  Whole-document and page recovery take their other security limits from the same base.
-
-- **(ocr): Decode oversized JPEG scans at a reduced IDCT scale that fits the content size limit.** (#2339)
-  8-bit color and grayscale scans, baseline or progressive, decode at 1/2, 1/4 or 1/8; fitting images keep their dimensions.
-  The scale is the finest one that fits and needs no DPI resize, so a higher limit never turns a success into an error.
-  When no fitting scale meets target_dpi, the error names the limit to raise and the target_dpi to set.
-  Lossless, hierarchical, arithmetic-coded, 12-bit and CMYK scans keep the size-limit error, which names the reason.
-  Standalone JPEG files that only a reduced decode can take are no longer rejected by the image metadata check.
-  With `ocr.pipeline` set, a JPEG whose per-stage PNG encode does not fit decodes at the finest scale whose encode fits.
 - **(pdf): Keep touching glyphs together when coordinate rounding produces a tiny overlap.**
   Avoid inserting a word boundary while retaining correction for genuine fallback-font overlap.
 
