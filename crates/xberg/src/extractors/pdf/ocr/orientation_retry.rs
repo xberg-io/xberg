@@ -1,6 +1,8 @@
 //! Bounded orientation recovery for low-confidence whole-page PDF OCR.
 
 mod recognition;
+#[cfg(auto_rotate)]
+mod two_tables;
 
 use std::sync::Arc;
 
@@ -54,12 +56,21 @@ impl OrientationRetry {
             .map_or(cfg!(auto_rotate), recognition_retry_eligible)
     }
 
-    pub(super) fn primary_config(&self, config: &OcrConfig) -> OcrConfig {
-        if self.recognition_config.is_some() {
-            recognition::capture_words(config)
-        } else {
-            config.clone()
+    pub(super) fn primary_config(&self, config: &OcrConfig) -> Option<OcrConfig> {
+        self.recognition_config
+            .as_ref()
+            .map(|_| recognition::capture_words(config))
+    }
+
+    #[cfg(feature = "pdf")]
+    pub(super) async fn read_primary<T>(&self, config: &OcrConfig, read: impl std::future::Future<Output = T>) -> T {
+        #[cfg(auto_rotate)]
+        if self.recognition_config.is_none() && config.element_config.is_none() {
+            use crate::ocr::tesseract_backend::orientation_evidence::{CAPTURE, Capture};
+            return CAPTURE.scope(Capture::Primary, read).await;
         }
+        let _ = config;
+        read.await
     }
 
     fn noise(&self, result: &ExtractedDocument, confidence: ConfidenceSemantics) -> OcrRecognitionNoiseDecision {
@@ -118,8 +129,11 @@ impl OrientationRetry {
         }
         #[cfg(auto_rotate)]
         {
-            let result = self.after_implicit(backend, raster, config, original, cancel).await?;
+            let mut result = self.after_implicit(backend, raster, config, original, cancel).await?;
             check_cancelled(cancel)?;
+            if config.element_config.is_none() {
+                result.ocr_elements = None;
+            }
             Ok(result)
         }
         #[cfg(not(auto_rotate))]
@@ -160,6 +174,17 @@ impl OrientationRetry {
         }
 
         let (rotated_config, row_threshold) = implicit_config(config);
+        #[cfg(feature = "pdf")]
+        let retry = {
+            use crate::ocr::tesseract_backend::orientation_evidence::{CAPTURE, Capture};
+            CAPTURE
+                .scope(
+                    Capture::TwoTableCandidate,
+                    backend.process_image_owned(raster, &rotated_config),
+                )
+                .await
+        };
+        #[cfg(not(feature = "pdf"))]
         let retry = backend.process_image_owned(raster, &rotated_config).await;
         check_cancelled(cancel)?;
         self.select_implicit(retry, original, config, confidence, row_threshold)
@@ -175,7 +200,7 @@ impl OrientationRetry {
         row_threshold: f64,
     ) -> crate::Result<ExtractedDocument> {
         match retry {
-            Ok(mut candidate) if self.accepts(&candidate, confidence, row_threshold) => {
+            Ok(mut candidate) if self.accepts_implicit(&candidate, &original, config, confidence, row_threshold) => {
                 let evidence = candidate.ocr_elements.take().unwrap_or_default();
                 candidate.ocr_elements = config
                     .element_config
@@ -244,6 +269,24 @@ impl OrientationRetry {
     }
 
     #[cfg(auto_rotate)]
+    fn accepts_implicit(
+        &self,
+        result: &ExtractedDocument,
+        original: &ExtractedDocument,
+        config: &OcrConfig,
+        confidence: ConfidenceSemantics,
+        row_threshold: f64,
+    ) -> bool {
+        if result.tables.len() != 2 {
+            return self.accepts(result, confidence, row_threshold);
+        }
+        let default_limits = SecurityLimits::default();
+        let limits = config.security_limits.as_ref().unwrap_or(&default_limits);
+        two_tables::complete_text(result, original, &self.thresholds, limits, row_threshold)
+            .is_some_and(|text| self.recovered_text_passes(result, &text, confidence))
+    }
+
+    #[cfg(auto_rotate)]
     fn accepts(&self, result: &ExtractedDocument, confidence: ConfidenceSemantics, row_threshold: f64) -> bool {
         if result.content.trim().is_empty()
             || !result.formulas.is_empty()
@@ -261,6 +304,11 @@ impl OrientationRetry {
             table_text = text;
             &table_text
         };
+        self.recovered_text_passes(result, text, confidence)
+    }
+
+    #[cfg(auto_rotate)]
+    fn recovered_text_passes(&self, result: &ExtractedDocument, text: &str, confidence: ConfidenceSemantics) -> bool {
         let mean_confidence = mean_text_conf_of(&result.metadata.additional);
         let noise = ocr_recognition_noise_decision(text, &self.thresholds, confidence, mean_confidence);
         !noise.low_confidence && !noise.fragmented_noise && mean_confidence.is_some()
@@ -436,12 +484,12 @@ pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, ra
     let Some((width, height)) = processed_ocr_layout_dimensions(&result.metadata) else {
         return;
     };
-    let [table] = result.tables.as_mut_slice() else {
+    if !matches!(result.tables.len(), 1 | 2) {
         return;
-    };
-    if let Some(bbox) = table.bounding_box.as_mut() {
-        let scale_x = f64::from(raster.0) / f64::from(width);
-        let scale_y = f64::from(raster.1) / f64::from(height);
+    }
+    let scale_x = f64::from(raster.0) / f64::from(width);
+    let scale_y = f64::from(raster.1) / f64::from(height);
+    for bbox in result.tables.iter_mut().filter_map(|table| table.bounding_box.as_mut()) {
         bbox.x0 *= scale_x;
         bbox.x1 *= scale_x;
         bbox.y0 *= scale_y;

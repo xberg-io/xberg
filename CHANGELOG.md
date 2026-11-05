@@ -321,6 +321,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover complete tables on sideways PDF scans with a cached orientation model.** (#2314)
   The implicit Tesseract retry accepts a confident complete table and maps it to the PDF page.
 
+- **(ocr): Recover two complete tables on a sideways scan when all words are accounted for.** (#2497)
+
 - **(pdf): Preserve raised numeric suffixes when native glyph edges slightly overlap.** (#2489)
   Keep negative exponents and squared labels with their bases in Markdown.
 

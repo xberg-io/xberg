@@ -3638,12 +3638,6 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                let config_clone = if let Some((retry, _)) = &retry {
-                    retry.primary_config(&config_clone)
-                } else {
-                    config_clone
-                };
-                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let allow_prose = detached_page.is_none() && images.is_none();
                 let retained_pixels = batch_slice
                     .as_ref()
@@ -3668,18 +3662,33 @@ pub(super) async fn extract_with_ocr_for_page(
                         Ok(configs) => configs,
                         Err(error) => return (idx, correction_degrees, upright_width, upright_height, Err(error)),
                     };
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let primary_config = retry
+                        .as_ref()
+                        .and_then(|(retry, _)| retry.primary_config(&config_clone));
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let read_config = primary_config.as_ref().unwrap_or(&config_clone);
+                    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                    let read_config = &config_clone;
+                    let read = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
                         &backend_clone,
                         upright_data,
                         &original_config,
-                        &config_clone,
+                        read_config,
                         crate::extractors::image::SparseRetryPolicy {
                             whole_page_raster,
                             allow_standard_retry: false,
                         },
                         cancel_token.as_ref(),
-                    )
-                    .await;
+                    );
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let result = if let Some((retry, _)) = &retry {
+                        retry.read_primary(&config_clone, read).await
+                    } else {
+                        read.await
+                    };
+                    #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+                    let result = read.await;
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let result = if let Some((retry, raster)) = retry {
                         retry
