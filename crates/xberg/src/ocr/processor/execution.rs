@@ -6,6 +6,10 @@
 #[path = "execution/recognition_orientation.rs"]
 mod recognition_orientation;
 
+#[cfg(feature = "pdf")]
+#[path = "execution/full_scan_table.rs"]
+mod full_scan_table;
+
 use super::api_pool::TesseractApiPool;
 use super::config::apply_tesseract_variables;
 use super::dictionary::WordDictionary;
@@ -2566,6 +2570,12 @@ pub(super) fn perform_ocr(
         } else {
             table_regions(&words)
         };
+        #[cfg(feature = "pdf")]
+        let can_prove_scan_grid = config.known_full_page_scan
+            && regions.len() == 1
+            && dictionary_filtered_line_count == 0
+            && hocr_for_tables.is_some()
+            && full_scan_table::uses_default_table_thresholds(config);
         tables.extend(oriented.into_iter().flatten());
         for (region_index, mut region) in regions.into_iter().enumerate() {
             if region.words.len() < MIN_TABLE_CANDIDATE_WORDS {
@@ -2673,7 +2683,12 @@ pub(super) fn perform_ocr(
             }
 
             #[cfg(feature = "pdf")]
-            let cleaned = post_process_table(table, false, false);
+            let cleaned = post_process_table(table, false, false).or_else(|| {
+                if !can_prove_scan_grid {
+                    return None;
+                }
+                full_scan_table::recover(tsv_data, &content, &region.bounding_box(), &security_limits)
+            });
             #[cfg(not(feature = "pdf"))]
             let cleaned = Some(table);
             let Some(cleaned) = cleaned else {

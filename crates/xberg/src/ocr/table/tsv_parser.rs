@@ -19,11 +19,11 @@ pub(crate) fn extract_words_from_tsv(tsv_data: &str, min_confidence: f64) -> Res
 
 /// The page, block, paragraph and line numbers Tesseract gives a word: words with one key sit on
 /// one text line.
-type TextLine = [u32; 4];
+pub(crate) type TextLine = [u32; 4];
 
 /// The words of [`extract_words_from_tsv`], each with its [`TextLine`], or `None` when a line
 /// field does not parse.
-fn words_on_lines(tsv_data: &str, min_confidence: f64) -> Vec<(Option<TextLine>, HocrWord)> {
+pub(crate) fn words_on_lines(tsv_data: &str, min_confidence: f64) -> Vec<(Option<TextLine>, HocrWord)> {
     let mut words = Vec::new();
 
     for (line_num, line) in tsv_data.lines().enumerate() {
