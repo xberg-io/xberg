@@ -15,7 +15,7 @@ use crate::Result;
 use crate::core::config::ExtractInputKind;
 #[cfg(feature = "redaction")]
 use crate::core::config::{ExternalRedactionFinding, RedactionOffsetEncoding};
-use crate::core::config::{ExtractInput, ExtractionConfig, ExtractionResult};
+use crate::core::config::{ExtractInput, ExtractInputWithOptions, ExtractionConfig, ExtractionResult};
 
 #[cfg(all(feature = "url-ingestion", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod crawl_handle;
@@ -212,6 +212,23 @@ impl Engine {
     pub async fn extract_batch(
         &self,
         inputs: Vec<ExtractInput>,
+        config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
+        self.extract_batch_inputs(inputs, config).await
+    }
+
+    /// Extract a batch whose inputs carry additional per-input options.
+    pub async fn extract_batch_with_input_options(
+        &self,
+        inputs: Vec<ExtractInputWithOptions>,
+        config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
+        self.extract_batch_inputs(inputs, config).await
+    }
+
+    async fn extract_batch_inputs<I: extract_impl::BatchInputRef>(
+        &self,
+        inputs: Vec<I>,
         config: &ExtractionConfig,
     ) -> Result<ExtractionResult> {
         #[cfg(feature = "tokio-runtime")]

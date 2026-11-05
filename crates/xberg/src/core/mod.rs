@@ -64,4 +64,4 @@ pub use server_config::ServerConfig;
 
 #[cfg(feature = "pdf")]
 pub use config::PdfConfig;
-pub use extract::{extract, extract_batch};
+pub use extract::{extract, extract_batch, extract_batch_with_input_options};

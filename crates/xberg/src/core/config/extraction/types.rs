@@ -257,6 +257,40 @@ impl ExtractInput {
     }
 }
 
+/// An extraction input with additional per-input options.
+///
+/// The contained input retains its existing file overrides. An omitted layout
+/// option inherits the batch setting; an explicit boolean selects it for this input.
+/// Construct with [`Self::new`] or [`Default`] to allow future options to be added.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+#[expect(
+    clippy::manual_non_exhaustive,
+    reason = "Alef requires a private field for Default-based Dart/PHP construction"
+)]
+pub struct ExtractInputWithOptions {
+    /// The bytes or URI input, including its existing file overrides.
+    pub input: ExtractInput,
+    /// Override the existing native PDF layout setting for this input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub use_layout_for_markdown: Option<bool>,
+    #[serde(skip)]
+    _private: (),
+}
+
+impl ExtractInputWithOptions {
+    /// Wrap an input while inheriting the batch's layout setting.
+    pub const fn new(input: ExtractInput) -> Self {
+        Self {
+            input,
+            use_layout_for_markdown: None,
+            _private: (),
+        }
+    }
+}
+
 /// Non-fatal per-input extraction error captured by [`ExtractionResult`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]

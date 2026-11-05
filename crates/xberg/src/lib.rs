@@ -268,7 +268,9 @@ pub use core::extract::extract_with_external_redaction;
 pub use core::extract::extract_with_layout_pages;
 #[cfg(feature = "url-ingestion")]
 pub use core::extract::map_url;
-pub use core::extract::{extract, extract_batch};
+pub use core::extract::{
+    extract, extract_batch, extract_batch_with_input_options, extract_batch_with_input_options_json,
+};
 #[cfg(feature = "pdf")]
 pub use core::split::{SplitConfig, SplitSegment, SplitStrategy, split_and_extract};
 #[cfg(feature = "redaction")]
@@ -278,13 +280,14 @@ pub use core::config::{
     AccelerationConfig, BedrockConfig, CallMode, CaptionAltTextMode, CaptioningConfig, ChunkClassificationConfig,
     ChunkClassificationDefinition, ChunkSizing, ChunkerType, ChunkingConfig, ConcurrencyConfig, ContentFilterConfig,
     CredentialProviderConfig, CsvConfig, EmailConfig, EmbeddingConfig, EmbeddingModelType, ExecutionProviderType,
-    ExternalRedactionFinding, ExtractInput, ExtractInputKind, ExtractionConfig, ExtractionErrorItem, ExtractionResult,
-    ExtractionSummary, FileExtractionConfig, GeoJsonExtractionConfig, ImageExtractionConfig, JupyterCellRendering,
-    LanguageDetectionConfig, LlmBudgetConfig, LlmCacheConfig, LlmConfig, LlmProviderConfig, LlmRateLimitConfig,
-    MergeMode, MimeDetectionPolicy, NerBackendKind, NerConfig, OcrConfig, OutputFormat, PageClassificationConfig,
-    PageConfig, PostProcessorConfig, RedactionConfig, RedactionOffsetEncoding, RedactionPattern, RedactionTerm,
-    RerankerConfig, RerankerHead, RerankerModelType, StructuredExtractionConfig, SummarizationConfig,
-    TableChunkingMode, TokenReductionOptions, TranslationConfig, UrlExtractionConfig, UrlExtractionMode,
+    ExternalRedactionFinding, ExtractInput, ExtractInputKind, ExtractInputWithOptions, ExtractionConfig,
+    ExtractionErrorItem, ExtractionResult, ExtractionSummary, FileExtractionConfig, GeoJsonExtractionConfig,
+    ImageExtractionConfig, JupyterCellRendering, LanguageDetectionConfig, LlmBudgetConfig, LlmCacheConfig, LlmConfig,
+    LlmProviderConfig, LlmRateLimitConfig, MergeMode, MimeDetectionPolicy, NerBackendKind, NerConfig, OcrConfig,
+    OutputFormat, PageClassificationConfig, PageConfig, PostProcessorConfig, RedactionConfig, RedactionOffsetEncoding,
+    RedactionPattern, RedactionTerm, RerankerConfig, RerankerHead, RerankerModelType, StructuredExtractionConfig,
+    SummarizationConfig, TableChunkingMode, TokenReductionOptions, TranslationConfig, UrlExtractionConfig,
+    UrlExtractionMode,
 };
 pub use core::config::{
     LateInteractionConfig, LateInteractionModelType, SparseEmbeddingConfig, SparseEmbeddingModelType,
