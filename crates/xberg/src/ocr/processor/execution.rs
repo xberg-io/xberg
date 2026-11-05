@@ -1092,6 +1092,9 @@ mod reduced_jpeg_dpi_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod reduced_jpeg_memory_tests;
 
+#[cfg(test)]
+mod unknown_dpi_memory_tests;
+
 mod dpi_workspace;
 mod native_image_budget;
 
@@ -1133,7 +1136,7 @@ fn prepare_encoded_ocr_image(
                 )
             })
         })?;
-        let dpi = source_dpi(decoded.original_width, decoded.original_height)
+        let mut dpi = source_dpi(decoded.original_width, decoded.original_height)
             .map(|dpi| dpi / f64::from(decoded.scale_denominator));
         let (width, height) = decoded.image.dimensions();
         log_ci_debug(ci_debug_enabled, "image", || {
@@ -1155,6 +1158,30 @@ fn prepare_encoded_ocr_image(
             // Release the old raster before asking the decoder for a smaller one. ~keep
             drop(decoded);
             continue;
+        }
+        if is_jpeg
+            && decoded.scale_denominator == 1
+            && dpi.is_none()
+            && let Some(preprocessing) = preprocessing.as_deref()
+        {
+            let retained = bytes
+                .len()
+                .checked_mul(2)
+                .and_then(|encoded| encoded.checked_add(decoded.image.as_raw().capacity()));
+            let available = retained
+                .and_then(|retained| limits.max_content_size.checked_sub(retained))
+                .ok_or_else(|| {
+                    crate::XbergError::validation(
+                        "JPEG DPI estimation workspace exceeds security_limits.max_content_size",
+                    )
+                })?;
+            dpi = Some(crate::image::preprocessing::bounded_unknown_raster_dpi(
+                decoded.image.as_raw(),
+                width as usize,
+                height as usize,
+                preprocessing.target_dpi,
+                available as u64,
+            )?);
         }
         if decoded.scale_denominator != 1
             && let Some(preprocessing) = preprocessing.as_deref()
