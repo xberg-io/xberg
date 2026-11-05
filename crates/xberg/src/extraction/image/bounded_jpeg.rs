@@ -80,7 +80,7 @@ pub(crate) fn load_image_for_ocr_with_scale(
     limits: &SecurityLimits,
     accept: impl Fn(ReducedScale) -> bool,
 ) -> Result<DecodedOcrImage> {
-    load_reduced_or_full(image_bytes, limits, |_, _| true, accept, true)
+    load_reduced_or_full(image_bytes, limits, |_| true, accept, |_| false, true)
 }
 
 /// Decode a JPEG for a caller that holds more than the decoded raster: `fits` approves the output
@@ -93,27 +93,38 @@ pub(crate) fn load_image_for_ocr_within(
     limits: &SecurityLimits,
     fits: impl Fn(u32, u32) -> bool,
 ) -> Result<DecodedOcrImage> {
-    load_reduced_or_full(image_bytes, limits, fits, |_| true, true)
+    load_reduced_or_full(
+        image_bytes,
+        limits,
+        |scale| fits(scale.width, scale.height),
+        |_| true,
+        |_| false,
+        true,
+    )
 }
 
 /// Require the full or reduced output to satisfy the caller's downstream image budget.
 pub(crate) fn load_image_for_ocr_with_processing(
     image_bytes: &[u8],
     limits: &SecurityLimits,
-    fits: impl Fn(u32, u32) -> bool,
+    fits: impl Fn(ReducedScale) -> bool,
     accept: impl Fn(ReducedScale) -> bool,
+    prefer_reduced: impl Fn(ReducedScale) -> bool,
 ) -> Result<DecodedOcrImage> {
-    load_reduced_or_full(image_bytes, limits, fits, accept, false)
+    load_reduced_or_full(image_bytes, limits, fits, accept, prefer_reduced, false)
 }
 
 fn load_reduced_or_full(
     image_bytes: &[u8],
     limits: &SecurityLimits,
-    fits: impl Fn(u32, u32) -> bool,
+    fits: impl Fn(ReducedScale) -> bool,
     accept: impl Fn(ReducedScale) -> bool,
+    prefer_reduced: impl Fn(ReducedScale) -> bool,
     allow_full_fallback: bool,
 ) -> Result<DecodedOcrImage> {
-    if let Some((frame, scale)) = admit_reduced_decode(image_bytes, limits, fits, accept, allow_full_fallback)? {
+    if let Some((frame, scale)) =
+        admit_reduced_decode(image_bytes, limits, fits, accept, prefer_reduced, allow_full_fallback)?
+    {
         return decode(image_bytes, &frame, scale);
     }
     let image = decode_image_to_rgb8_with_security_limits(image_bytes, limits)?;
@@ -131,7 +142,7 @@ fn load_reduced_or_full(
 /// gets the same error as the OCR path.
 pub(crate) fn admit_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<(u32, u32)>> {
     Ok(
-        admit_reduced_decode(bytes, limits, |_, _| true, |_| false, true)?
+        admit_reduced_decode(bytes, limits, |_| true, |_| false, |_| false, true)?
             .map(|(frame, _)| (frame.width, frame.height)),
     )
 }
@@ -143,8 +154,9 @@ pub(crate) fn admit_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Res
 fn admit_reduced_decode(
     bytes: &[u8],
     limits: &SecurityLimits,
-    fits: impl Fn(u32, u32) -> bool,
+    fits: impl Fn(ReducedScale) -> bool,
     accept: impl Fn(ReducedScale) -> bool,
+    prefer_reduced: impl Fn(ReducedScale) -> bool,
     allow_full_fallback: bool,
 ) -> Result<Option<(Frame, ReducedScale)>> {
     if !bytes.starts_with(&[0xff, 0xd8]) {
@@ -158,12 +170,14 @@ fn admit_reduced_decode(
     let maximum = u64::try_from(limits.max_content_size).unwrap_or(u64::MAX);
     let full_peak = full_decode_peak(&frame, encoded)?;
     let full_fits = full_peak <= maximum;
-    if full_fits && fits(frame.width, frame.height) {
+    let full_scale = reduced_scale(&frame, 1);
+    let full_admitted = full_fits && fits(full_scale);
+    if full_admitted && !prefer_reduced(full_scale) {
         return Ok(None);
     }
     // A full decode within the limit stays the answer when no reduced decode is possible. ~keep
     let reject = |reason: &str| {
-        if full_fits && allow_full_fallback {
+        if full_admitted || full_fits && allow_full_fallback {
             Ok(None)
         } else {
             Err(reduced_decode_error(&frame, full_peak, maximum, reason))
@@ -176,17 +190,14 @@ fn admit_reduced_decode(
         .iter()
         .filter_map(|&denominator| {
             let scale = reduced_scale(&frame, denominator);
-            (reduced_peak(&frame, scale, encoded).is_some_and(|peak| peak <= maximum)
-                && fits(scale.width, scale.height))
-            .then_some(scale)
+            (reduced_peak(&frame, scale, encoded).is_some_and(|peak| peak <= maximum) && fits(scale)).then_some(scale)
         })
         .collect();
-    let Some(scale) = fitting
-        .iter()
-        .copied()
-        .find(|&scale| accept(scale))
-        .or(fitting.first().copied())
-    else {
+    let approved = fitting.iter().copied().find(|&scale| accept(scale));
+    if full_admitted && approved.is_none() {
+        return Ok(None);
+    }
+    let Some(scale) = approved.or(fitting.first().copied()) else {
         return reject(if frame.process == Process::Progressive {
             "a progressive JPEG keeps full-resolution coefficients, so even a 1/8 reduced decode does not fit"
         } else {

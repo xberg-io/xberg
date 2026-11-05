@@ -1093,6 +1093,8 @@ mod reduced_jpeg_dpi_tests;
 mod reduced_jpeg_memory_tests;
 
 #[cfg(test)]
+mod native_resize_admission_tests;
+#[cfg(test)]
 mod unknown_dpi_memory_tests;
 
 mod dpi_workspace;
@@ -1113,29 +1115,59 @@ fn prepare_encoded_ocr_image(
     // the DPI target of the preprocessing that would run. ~keep
     let planned_preprocessing = config.preprocessing.clone().unwrap_or_default();
     let planned_dpi = ocr_dpi_config(&planned_preprocessing, images);
-    let mut assessed_policy = config.preprocessing.clone().map(Some);
+    let mut assessed_policy = config
+        .preprocessing
+        .clone()
+        .map(Some)
+        .or_else(|| config.known_full_page_scan.then(|| Some(Default::default())));
     let mut maximum_pixels = u64::MAX;
     let is_jpeg = bytes.starts_with(&[0xff, 0xd8]);
     // Full, half, quarter and eighth are the only JPEG output candidates. ~keep
     for _ in 0..JPEG_PREPARATION_CANDIDATES {
-        let fits = |width, height| {
-            let pixels = u64::from(width) * u64::from(height);
-            pixels <= maximum_pixels
-                && assessed_policy.as_ref().is_none_or(|policy| {
-                    native_image_budget::known_phase_peak(width, height, bytes.len(), policy.as_ref())
-                        .is_ok_and(|peak| peak.is_none_or(|peak| peak <= limits.max_content_size as u64))
+        let decoded = crate::extraction::image::load_image_for_ocr_with_processing(
+            bytes,
+            limits,
+            |scale| {
+                let pixels = u64::from(scale.width) * u64::from(scale.height);
+                pixels <= maximum_pixels
+                    && assessed_policy.as_ref().is_none_or(|policy| {
+                        let dimensions = if scale.denominator == 1
+                            && let Some(preprocessing) = policy.as_ref()
+                        {
+                            source_dpi(scale.original_width, scale.original_height).map(|dpi| {
+                                crate::image::preprocessing::normalized_image_dimensions(
+                                    scale.width,
+                                    scale.height,
+                                    &ocr_dpi_config(preprocessing, images),
+                                    Some(dpi),
+                                )
+                            })
+                        } else {
+                            Some((scale.width, scale.height))
+                        };
+                        dimensions.is_none_or(|(width, height)| {
+                            native_image_budget::known_phase_peak(width, height, bytes.len(), policy.as_ref())
+                                .is_ok_and(|peak| peak.is_none_or(|peak| peak <= limits.max_content_size as u64))
+                        })
+                    })
+            },
+            |scale| {
+                source_dpi(scale.original_width, scale.original_height).is_some_and(|dpi| {
+                    !normalization_requires_resize(
+                        scale.width,
+                        scale.height,
+                        &planned_dpi,
+                        dpi / f64::from(scale.denominator),
+                    )
                 })
-        };
-        let decoded = crate::extraction::image::load_image_for_ocr_with_processing(bytes, limits, fits, |scale| {
-            source_dpi(scale.original_width, scale.original_height).is_some_and(|dpi| {
-                !normalization_requires_resize(
-                    scale.width,
-                    scale.height,
-                    &planned_dpi,
-                    dpi / f64::from(scale.denominator),
-                )
-            })
-        })?;
+            },
+            |scale| {
+                assessed_policy.as_ref().is_some_and(|policy| {
+                    native_image_budget::known_phase_peak(scale.width, scale.height, bytes.len(), policy.as_ref())
+                        .is_ok_and(|peak| peak.is_some_and(|peak| peak > limits.max_content_size as u64))
+                })
+            },
+        )?;
         let mut dpi = source_dpi(decoded.original_width, decoded.original_height)
             .map(|dpi| dpi / f64::from(decoded.scale_denominator));
         let (width, height) = decoded.image.dimensions();
@@ -1149,16 +1181,6 @@ fn prepare_encoded_ocr_image(
             config.preprocessing.as_ref(),
             config.known_full_page_scan,
         );
-        if is_jpeg
-            && native_image_budget::known_phase_peak(width, height, bytes.len(), preprocessing.as_deref())?
-                .is_some_and(|peak| peak > limits.max_content_size as u64)
-        {
-            assessed_policy = Some(preprocessing.as_deref().cloned());
-            maximum_pixels = (u64::from(width) * u64::from(height)).saturating_sub(1);
-            // Release the old raster before asking the decoder for a smaller one. ~keep
-            drop(decoded);
-            continue;
-        }
         if is_jpeg
             && decoded.scale_denominator == 1
             && dpi.is_none()
@@ -1182,6 +1204,36 @@ fn prepare_encoded_ocr_image(
                 preprocessing.target_dpi,
                 available as u64,
             )?);
+        }
+        let native_dimensions = if decoded.scale_denominator == 1
+            && let Some(preprocessing) = preprocessing.as_deref()
+        {
+            dpi.map(|dpi| {
+                crate::image::preprocessing::normalized_image_dimensions(
+                    width,
+                    height,
+                    &ocr_dpi_config(preprocessing, images),
+                    Some(dpi),
+                )
+            })
+            .unwrap_or((width, height))
+        } else {
+            (width, height)
+        };
+        if is_jpeg
+            && native_image_budget::known_phase_peak(
+                native_dimensions.0,
+                native_dimensions.1,
+                bytes.len(),
+                preprocessing.as_deref(),
+            )?
+            .is_some_and(|peak| peak > limits.max_content_size as u64)
+        {
+            assessed_policy = Some(preprocessing.as_deref().cloned());
+            maximum_pixels = (u64::from(width) * u64::from(height)).saturating_sub(1);
+            // Release the old raster before asking the decoder for a smaller one. ~keep
+            drop(decoded);
+            continue;
         }
         if decoded.scale_denominator != 1
             && let Some(preprocessing) = preprocessing.as_deref()
