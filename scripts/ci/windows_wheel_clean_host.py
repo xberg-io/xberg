@@ -21,6 +21,9 @@ from typing import TypeVar
 import windows_wheel_closure as closure
 
 T = TypeVar("T")
+LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x1000
+LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR = 0x0100
+ERROR_MOD_NOT_FOUND = 126
 
 
 def record_hash(data: bytes) -> str:
@@ -135,6 +138,20 @@ def loaded_modules() -> list[Path]:
     return result
 
 
+def load_library_error(path: str, flags: int) -> int:
+    # ~keep Keep the native status: ctypes.WinDLL can replace it with a FileNotFoundError.
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    load = kernel.LoadLibraryExW
+    load.argtypes = [wintypes.LPCWSTR, wintypes.HANDLE, wintypes.DWORD]
+    load.restype = wintypes.HMODULE
+    if load(path, None, flags):
+        return 0
+    error = ctypes.get_last_error()
+    if not error:
+        raise ValueError(f"loader failed without a Windows error code: {path}")
+    return error
+
+
 def baseline(python_root: Path, msvcp: list[str]) -> dict:
     import winreg
 
@@ -172,13 +189,11 @@ def baseline(python_root: Path, msvcp: list[str]) -> dict:
         paths = "\n".join(sorted(unexpected_runtime_paths))
         raise ValueError(f"baseline contains VC runtime files:\n{paths}")
     for name in names:
-        try:
-            ctypes.WinDLL(name)
-        except OSError as error:
-            if error.winerror != 126:
-                raise ValueError(f"baseline load failed for wrong reason: {name}: {error}") from error
-        else:
+        error = load_library_error(name, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)
+        if not error:
             raise ValueError(f"baseline unexpectedly loads {name}")
+        if error != ERROR_MOD_NOT_FOUND:
+            raise ValueError(f"baseline load failed for wrong reason: {name}: Windows error {error}")
     verify_modules(loaded_modules(), python_root / "absent-wheel", python_root)
     return {
         "registry_absent": True,
@@ -208,13 +223,12 @@ def run_child(python: Path, *arguments: str) -> subprocess.CompletedProcess[str]
 
 
 def native_probe(dependency: str, ort: Path, *, missing: bool) -> None:
-    try:
-        ctypes.WinDLL(str(ort), winmode=0x00001100)
-    except OSError as error:
-        if missing and error.winerror == 126:
-            print(f"MISSING_DEPENDENCY:{dependency}:126")
+    error = load_library_error(str(ort), LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR)
+    if error:
+        if missing and error == ERROR_MOD_NOT_FOUND:
+            print(f"MISSING_DEPENDENCY:{dependency}:{error}")
             sys.exit(23)
-        raise
+        raise ctypes.WinError(error)
     if missing:
         raise ValueError("native load unexpectedly succeeded without runtime")
 

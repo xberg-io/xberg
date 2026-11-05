@@ -203,11 +203,15 @@ jobs:
       - name: Resolve prior Windows wheel
         id: prior-wheel
         if: inputs.windows_producer_run_id != ''
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           WHEEL_PRODUCER_RUN_ID: ${{ inputs.windows_producer_run_id }}
           WHEEL_PLATFORM: ${{ inputs.platform }}
-        run: mise exec -- python scripts/ci/resolve_windows_wheel_artifact.py
+        run: |
+          $pythonRoot = (mise where python).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $pythonRoot) { throw 'Locked mise Python installation unavailable' }
+          & (Join-Path $pythonRoot "python.exe") scripts/ci/resolve_windows_wheel_artifact.py
       - uses: actions/download-artifact@v8
         if: inputs.windows_producer_run_id != ''
         with:
@@ -229,7 +233,7 @@ jobs:
         env:
           WHEEL_SOURCE_SHA: ${{ steps.prior-wheel.outputs.source_sha }}
         run: |
-          mise exec -- pwsh -NoProfile -File scripts/ci/qualify-windows-wheel-clean-host.ps1 -WheelDirectory wheelhouse -SourceSha "$env:GITHUB_SHA" -WheelSourceSha "$env:WHEEL_SOURCE_SHA" -OutputDirectory clean-host-receipts
+          & ./scripts/ci/qualify-windows-wheel-clean-host.ps1 -WheelDirectory wheelhouse -SourceSha "$env:GITHUB_SHA" -WheelSourceSha "$env:WHEEL_SOURCE_SHA" -OutputDirectory clean-host-receipts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item windows-wheel-artifact.json clean-host-receipts/
       - name: Qualify isolated Windows userspace
