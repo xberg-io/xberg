@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
+  Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
+
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
 
