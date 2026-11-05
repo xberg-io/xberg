@@ -391,4 +391,5 @@ mod tests {
     }
 }
 
+#[cfg(feature = "pdf")]
 pub mod pdf_panels;
