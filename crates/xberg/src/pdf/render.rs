@@ -965,12 +965,43 @@ pub(crate) fn render_page_with_safeguards(
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
-pub(crate) fn render_pdf_ocr_page(
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OcrRasterDpi {
+    requested: u32,
+    actual: u32,
+    budget_clamped: bool,
+}
+
+/// Native OCR render provenance by zero-indexed physical PDF page, paired with that render's image.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) type OcrRasterDpis = ahash::AHashMap<usize, OcrRasterDpi>;
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl OcrRasterDpi {
+    pub(crate) fn empty_text_warning(self, page_index: usize) -> Option<ProcessingWarning> {
+        self.budget_clamped.then(|| {
+            warning(
+                "ocr_raster_budget",
+                format!(
+                    "Page {} yielded no usable OCR text after retries; the raster budget reduced rendering \
+                 from {} to {} DPI. Increase security_limits.max_content_size or split/crop the page and retry. \
+                 A blank page can also produce no text.",
+                    page_index + 1,
+                    self.requested,
+                    self.actual
+                ),
+            )
+        })
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) fn render_pdf_ocr_page_with_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     security_limits: &crate::extractors::security::SecurityLimits,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
     let (requested, planned) =
         crate::image::dpi::planned_pdf_ocr_render_dpi(doc, page_index, images_config, security_limits);
     let media = doc.get_page_info(page_index)?.media_box;
@@ -991,16 +1022,23 @@ pub(crate) fn render_pdf_ocr_page(
             )
         })
     })?;
-    if dpi < requested.max(1) as u32 && (planned < requested || dpi < options.dpi) {
+    let raster_dpi = OcrRasterDpi {
+        requested: requested.max(1) as u32,
+        actual: dpi,
+        budget_clamped: dpi < requested.max(1) as u32 && (planned < requested || dpi < options.dpi),
+    };
+    if raster_dpi.budget_clamped {
         record_render_warning(warning(
             PDF_RENDER_WARNING_SOURCE,
             format!(
-                "Page {} OCR render DPI was reduced from {requested} to {dpi} to fit security_limits.max_content_size",
-                page_index + 1
+                "Page {} OCR render DPI was reduced from {} to {} to fit security_limits.max_content_size",
+                page_index + 1,
+                raster_dpi.requested,
+                raster_dpi.actual
             ),
         ));
     }
-    Ok(rendered)
+    Ok((rendered, raster_dpi))
 }
 
 fn safeguarded_render_options(

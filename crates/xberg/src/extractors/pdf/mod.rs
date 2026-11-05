@@ -1214,6 +1214,8 @@ async fn run_ocr_with_layout_pages(
     let mut layout_acceleration_override = precomputed_layout_acceleration_override;
 
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    let mut layout_raster_dpis = crate::pdf::render::OcrRasterDpis::new();
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     let owned_layout = if precomputed_layout_detections.is_none() || precomputed_layout_images.is_none() {
         if let Some(layout_config) = config.resolved_layout_config() {
             let thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
@@ -1235,6 +1237,7 @@ async fn run_ocr_with_layout_pages(
                             layout_runner::LayoutRunOutput {
                                 data: Some(layout),
                                 gate_decisions,
+                                raster_dpis,
                             },
                         acceleration_override,
                         warning,
@@ -1242,6 +1245,7 @@ async fn run_ocr_with_layout_pages(
                     glyph_drop_warnings,
                 )) => {
                     layout_acceleration_override = acceleration_override;
+                    layout_raster_dpis = raster_dpis;
                     layout_warning = warning;
                     layout_glyph_drop_warnings = glyph_drop_warnings;
                     ocr_layout_gate_decisions = layout_gate_metadata(gate_decisions.as_deref());
@@ -1253,6 +1257,7 @@ async fn run_ocr_with_layout_pages(
                             layout_runner::LayoutRunOutput {
                                 data: None,
                                 gate_decisions,
+                                ..
                             },
                         acceleration_override: _,
                         warning,
@@ -1303,6 +1308,15 @@ async fn run_ocr_with_layout_pages(
     let effective_config = config_with_layout_acceleration_override(config, layout_acceleration_override);
     #[cfg(feature = "layout-detection")]
     let config = effective_config.as_ref();
+
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    let page_ocr_hints = {
+        let mut hints = page_ocr_hints;
+        if prepared_layout_inputs.is_some() && !layout_raster_dpis.is_empty() {
+            hints.get_or_insert_with(Default::default).raster_dpis = Some(std::sync::Arc::new(layout_raster_dpis));
+        }
+        hints
+    };
 
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
@@ -2431,6 +2445,7 @@ fn automatic_unmapped_text_hints(metadata: &crate::pdf::metadata::PdfExtractionM
         known_full_page_scan: false,
         single_block_pages: Some(std::sync::Arc::new(pages.iter().copied().collect())),
         native_page_layers: None,
+        ..Default::default()
     })
 }
 
@@ -2458,6 +2473,7 @@ fn whole_document_ocr_hints(
                 known_full_page_scan: false,
                 single_block_pages: None,
                 native_page_layers: None,
+                ..Default::default()
             })
             .native_page_layers = layers;
     }

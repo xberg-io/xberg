@@ -179,6 +179,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Report empty OCR reads after the raster budget reduces page DPI.** (#2504)
+  Include requested and actual DPI after retries, without warning on useful low-DPI text or recovered tables.
+
+- **(pdf): Keep touching glyphs together when coordinate rounding produces a tiny overlap.**
+  Avoid inserting a word boundary while retaining correction for genuine fallback-font overlap.
+
 - **(pdf): Admit stored image inputs before additional whole-document recovery copies.** (#2339)
   Preserve legacy formats; the per-page stored-input allowance does not bound filter-expanded or pixel/PNG outputs.
 

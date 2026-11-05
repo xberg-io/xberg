@@ -94,6 +94,7 @@ type LayoutForMarkdownOutput = (
 pub(super) struct LayoutRunOutput {
     pub data: Option<LayoutForMarkdownOutput>,
     pub gate_decisions: Option<Vec<PageGateDecision>>,
+    pub raster_dpis: crate::pdf::render::OcrRasterDpis,
 }
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -103,6 +104,7 @@ struct RenderedLayoutPage {
     page_height_pts: f32,
     rotation: u32,
     image: Option<image::RgbImage>,
+    raster_dpi: Option<crate::pdf::render::OcrRasterDpi>,
     /// `false` when the `Auto` gate skipped this page: it stays out of the
     /// ONNX batch and keeps an empty detection, exactly like a page where the
     /// model ran and found nothing.
@@ -457,8 +459,8 @@ fn render_layout_chunk(
             };
             let run_inference = gate_selects_page(gate_decisions, page_index);
             let skip_render = !run_inference && gated_handling == GatedPageHandling::SkipRender;
-            let (image, render_failure) = if skip_render {
-                (None, None)
+            let (image, render_failure, raster_dpi) = if skip_render {
+                (None, None, None)
             } else {
                 match render_layout_page(
                     doc,
@@ -469,8 +471,8 @@ fn render_layout_chunk(
                     normalize_for_ocr,
                     budget,
                 ) {
-                    Ok(image) => (Some(image), None),
-                    Err(reason) => (None, Some(reason)),
+                    Ok((image, dpi)) => (Some(image), None, dpi),
+                    Err(reason) => (None, Some(reason), None),
                 }
             };
 
@@ -485,6 +487,7 @@ fn render_layout_chunk(
                 page_height_pts,
                 rotation,
                 image,
+                raster_dpi,
                 run_inference,
                 render_failure,
                 inference_crop,
@@ -620,10 +623,11 @@ fn render_layout_page(
     rotation: u32,
     normalize_for_ocr: bool,
     budget: RenderBudget<'_>,
-) -> std::result::Result<image::RgbImage, String> {
+) -> std::result::Result<(image::RgbImage, Option<crate::pdf::render::OcrRasterDpi>), String> {
     // OCR and layout-only renders retain their distinct DPI policies.
-    let rendered = if normalize_for_ocr {
-        crate::pdf::render::render_pdf_ocr_page(doc, page_index, budget.images_config, budget.security_limits)
+    let (rendered, raster_dpi) = if normalize_for_ocr {
+        crate::pdf::render::render_pdf_ocr_page_with_dpi(doc, page_index, budget.images_config, budget.security_limits)
+            .map(|(image, dpi)| (image, Some(dpi)))
     } else {
         let (media_width_pt, media_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_index);
         let render_dpi = crate::image::dpi::effective_pdf_render_dpi(
@@ -637,6 +641,7 @@ fn render_layout_page(
             render_dpi.max(1) as u32,
             Some(budget.security_limits.max_content_size),
         )
+        .map(|image| (image, None))
     }
     .map_err(|error| {
         tracing::warn!(
@@ -672,6 +677,7 @@ fn render_layout_page(
     };
 
     crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(&rendered_data, budget.security_limits)
+        .map(|image| (image, raster_dpi))
         .map_err(|error| {
             tracing::warn!(
                 page = page_index + 1,
@@ -901,6 +907,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
             LayoutRunOutput {
                 data: Some((Vec::new(), Vec::new(), Vec::new(), Vec::new())),
                 gate_decisions: None,
+                raster_dpis: Default::default(),
             },
             None,
         ));
@@ -920,6 +927,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
             LayoutRunOutput {
                 data: None,
                 gate_decisions,
+                raster_dpis: Default::default(),
             },
             None,
         ));
@@ -935,6 +943,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
     let mut all_hints: Vec<Vec<LayoutHint>> = Vec::with_capacity(page_count);
     let mut all_detections: Vec<crate::layout::DetectionResult> = Vec::with_capacity(page_count);
     let mut render_failures: Vec<String> = Vec::new();
+    let mut raster_dpis = crate::pdf::render::OcrRasterDpis::new();
 
     let total_chunks = page_count.div_ceil(LAYOUT_BATCH_CHUNK_SIZE);
 
@@ -953,6 +962,11 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
             },
         );
         let rendered = pages.iter().filter(|page| page.image.is_some()).count();
+        raster_dpis.extend(
+            pages
+                .iter()
+                .filter_map(|page| page.raster_dpi.map(|dpi| (page.page_index, dpi))),
+        );
         render_failures.extend(pages.iter().filter_map(|page| page.render_failure.clone()));
         tracing::debug!(
             chunk_idx,
@@ -986,6 +1000,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
         LayoutRunOutput {
             data: Some((all_images, all_layout_results, all_hints, all_detections)),
             gate_decisions,
+            raster_dpis,
         },
         render_warning,
     ))
@@ -1076,12 +1091,14 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                     LayoutRunOutput {
                         data: Some((images, results, hints, detections)),
                         gate_decisions,
+                        raster_dpis,
                     },
                 acceleration_override,
                 warning,
             },
             glyph_drop_warnings,
         )) => {
+            drop(raster_dpis);
             let total_hints: usize = hints.iter().map(|h| h.len()).sum();
             tracing::info!(
                 pages = images.len(),
@@ -1105,12 +1122,14 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                     LayoutRunOutput {
                         data: None,
                         gate_decisions,
+                        raster_dpis,
                     },
                 acceleration_override: _,
                 warning,
             },
             glyph_drop_warnings,
         )) => {
+            drop(raster_dpis);
             tracing::info!("layout-for-markdown: auto gate skipped every page, continuing without layout hints");
             (
                 None,
@@ -1464,6 +1483,7 @@ mod tests {
             run_inference: true,
             render_failure: None,
             inference_crop: None,
+            raster_dpi: None,
         }
     }
 
@@ -2330,7 +2350,7 @@ mod tests {
 
     /// #1828: `render_layout_chunk`'s OCR-input render (`GatedPageHandling::RenderWithoutInference`,
     /// i.e. `normalize_for_ocr`) must make the same scan-density render-DPI decision the
-    /// non-layout OCR routes make (`crate::pdf::render::render_pdf_ocr_page`), not the plain
+    /// non-layout OCR routes make (`crate::pdf::render::render_pdf_ocr_page_with_dpi`), not the plain
     /// `effective_pdf_render_dpi` the markdown-structure render (`SkipRender`) uses. A scan page
     /// (one full-page 400x400px raster over a 100x100pt page, 288 dpi) renders its OCR input at
     /// that density -- 400x400px, not the 150 dpi default's ~208x208px -- while the same page's
@@ -2373,6 +2393,77 @@ mod tests {
             (209, 209),
             "the markdown-structure render must be unaffected and keep the 150 dpi default \
              (100pt * 150/72 rounds to 209px)"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn ocr_layout_render_retains_exact_budget_dpi_with_its_image() {
+        let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(720.0, 720.0);
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf).unwrap();
+        let limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 1024 * 1024,
+            ..Default::default()
+        };
+        let pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::RenderWithoutInference,
+            RenderBudget {
+                security_limits: &limits,
+                images_config: None,
+            },
+        );
+        assert_eq!(pages[0].image.as_ref().unwrap().dimensions(), (250, 250));
+        let warning = pages[0]
+            .raster_dpi
+            .expect("the actual layout render retains its DPI")
+            .empty_text_warning(0)
+            .expect("the budget clamped this page");
+        assert_eq!(warning.source, "ocr_raster_budget");
+        assert_eq!(
+            warning.message,
+            "Page 1 yielded no usable OCR text after retries; the raster budget reduced rendering \
+            from 150 to 25 DPI. Increase security_limits.max_content_size or split/crop the page and retry. \
+            A blank page can also produce no text."
+        );
+    }
+
+    #[test]
+    fn layout_only_budget_refusal_does_not_claim_reduced_ocr_dpi() {
+        let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(720.0, 720.0);
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf).unwrap();
+        let limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 1024 * 1024,
+            ..Default::default()
+        };
+        let pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::SkipRender,
+            RenderBudget {
+                security_limits: &limits,
+                images_config: None,
+            },
+        );
+        assert!(
+            pages[0].image.is_none(),
+            "the fixed-DPI render must fail rather than downsample"
+        );
+        assert!(pages[0].raster_dpi.is_none(), "a failed render has no actual OCR DPI");
+        let error = pages[0]
+            .render_failure
+            .as_deref()
+            .expect("the budget refusal is retained");
+        assert!(
+            error.contains("PDF raster 1500x1500 exceeds security_limits.max_content_size (1048576 bytes)"),
+            "{error}"
         );
     }
 

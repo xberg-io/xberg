@@ -324,6 +324,7 @@ async fn should_pick_the_same_pipeline_stage_with_and_without_a_text_layer() {
         known_full_page_scan: false,
         single_block_pages: None,
         native_page_layers: layers.map(Arc::new),
+        ..Default::default()
     };
     let run = |pipeline: OcrPipelineConfig, hints: PageOcrHints| {
         let (config, images) = (&config, &images);
@@ -502,6 +503,7 @@ async fn should_put_the_layer_first_on_a_noise_page_of_a_single_backend_whole_do
                 known_full_page_scan: false,
                 single_block_pages: None,
                 native_page_layers: Some(Arc::new(ahash::AHashMap::from([(1, layer.to_string())]))),
+                ..Default::default()
             };
             extract_with_ocr_with_page_hints(
                 None,

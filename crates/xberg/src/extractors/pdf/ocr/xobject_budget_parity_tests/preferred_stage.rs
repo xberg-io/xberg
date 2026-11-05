@@ -281,6 +281,7 @@ async fn assert_preferred(detached: bool, matching: bool, unavailable: bool) {
             known_full_page_scan: false,
             single_block_pages: None,
             native_page_layers: None,
+            ..Default::default()
         }),
         0,
         Some(super::super::DetachedOcrPage {

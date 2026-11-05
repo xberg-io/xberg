@@ -64,6 +64,7 @@ async fn qualify(detached: bool) {
                 known_full_page_scan: true,
                 single_block_pages: None,
                 native_page_layers: None,
+                ..Default::default()
             };
             let result = run_ocr_pipeline_for_page(
                 None,
