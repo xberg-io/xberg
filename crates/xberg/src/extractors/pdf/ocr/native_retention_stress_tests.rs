@@ -537,3 +537,36 @@ fn should_keep_lexical_alternative_geometry_annotations_and_source_order() {
         );
     }
 }
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() {
+    use super::super::document::native_survives_type0_ink_loss;
+    let native = "budget budget budget design design archive reader source \u{FFFD}";
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    assert!(native_survives_type0_ink_loss(
+        native,
+        "budget budget budget budget budget",
+        &thresholds
+    ));
+    assert!(!native_survives_type0_ink_loss(
+        native,
+        "budget design archive reader",
+        &thresholds
+    ));
+    assert!(!native_survives_type0_ink_loss(
+        native,
+        "budget budget budget design design archive reader source",
+        &thresholds
+    ));
+    assert!(!native_survives_type0_ink_loss(
+        "budget budget budget design archive reader",
+        "wrong",
+        &thresholds
+    ));
+    assert!(!native_survives_type0_ink_loss(
+        "\u{FFFD} \u{FFFD} \u{FFFD}",
+        "wrong",
+        &thresholds
+    ));
+}

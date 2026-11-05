@@ -89,3 +89,22 @@ fn should_keep_nonidentity_cmap_runs_on_their_existing_unicode_route() {
         "custom code-to-CID geometry must retain its baseline Unicode route"
     );
 }
+
+#[test]
+fn ink_loss_distinguishes_unpainted_type0_glyphs_from_recovered_decode_misses() {
+    let fixtures: [(&[u8], bool); 5] = [
+        (include_bytes!("fixtures/cid_glyph_raster_2309/custom.pdf"), true),
+        (include_bytes!("fixtures/cid_glyph_raster_2309/partial.pdf"), false),
+        (include_bytes!("fixtures/cid_glyph_raster_2309/missing.pdf"), false),
+        (GOOD, false),
+        (DIRECT, false),
+    ];
+    for (source, expected_loss) in fixtures {
+        let document = PdfDocument::from_bytes(source.to_vec()).unwrap();
+        let (rendered, dpi, actual_loss) =
+            xberg_native_pdf::rendering::render_png_page_with_ink_evidence(&document, 0, 150, 150, 64 * 1024 * 1024)
+                .unwrap();
+        assert_eq!((rendered.width, rendered.height, dpi), (1275, 1650, 150));
+        assert_eq!(actual_loss, expected_loss);
+    }
+}

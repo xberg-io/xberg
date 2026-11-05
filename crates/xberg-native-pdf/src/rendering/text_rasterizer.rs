@@ -462,6 +462,7 @@ pub struct TextRasterizer {
     /// so a broken font would otherwise push one warning per Tj/TJ element
     /// (#991 asked for once per font).
     warned_fonts: std::sync::Mutex<std::collections::HashSet<(String, &'static str)>>,
+    type0_ink_loss: std::sync::atomic::AtomicBool,
 }
 
 impl TextRasterizer {
@@ -470,6 +471,7 @@ impl TextRasterizer {
         Self {
             fontdb: system_fontdb(),
             warned_fonts: Default::default(),
+            type0_ink_loss: Default::default(),
         }
     }
 
@@ -481,6 +483,7 @@ impl TextRasterizer {
         Self {
             fontdb,
             warned_fonts: Default::default(),
+            type0_ink_loss: Default::default(),
         }
     }
 
@@ -488,8 +491,19 @@ impl TextRasterizer {
     /// calls this at the start of every page, making the warning
     /// once-per-font-per-page rather than once per process.
     pub(crate) fn reset_page_warnings(&self) {
+        self.type0_ink_loss.store(false, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut warned) = self.warned_fonts.lock() {
             warned.clear();
+        }
+    }
+
+    pub(super) fn type0_ink_loss(&self) -> bool {
+        self.type0_ink_loss.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn record_type0_ink_loss(&self, tally: &GlyphDropTally, font: Option<&crate::fonts::FontInfo>) {
+        if tally.reason().is_some() && font.is_some_and(|font| font.subtype == "Type0") {
+            self.type0_ink_loss.store(true, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -511,8 +525,9 @@ impl TextRasterizer {
     /// Emit the tally's warning for codes the decode could not map, so the
     /// shaped text never carried them. Only paths that paint from the
     /// decoded string may call this.
-    fn report_omitted_drops(&self, tally: &GlyphDropTally, font_name: &str) {
-        self.emit_drop_warning(tally, font_name, tally.warning_omitted("redacted"));
+    fn report_omitted_drops(&self, tally: &GlyphDropTally, font: &crate::fonts::FontInfo) {
+        self.record_type0_ink_loss(tally, Some(font));
+        self.emit_drop_warning(tally, &font.base_font, tally.warning_omitted("redacted"));
     }
 
     fn emit_drop_warning(
@@ -782,7 +797,7 @@ impl TextRasterizer {
                         );
                         if let Some((fb_id, fallback_data, fallback_idx)) = self.load_font_data(pdf_font_name) {
                             if let Some(ref info) = font_info {
-                                self.report_omitted_drops(&decode_drops, &info.base_font);
+                                self.report_omitted_drops(&decode_drops, info);
                             }
                             return self.render_unicode_text(
                                 pixmap,
@@ -805,7 +820,7 @@ impl TextRasterizer {
                 }
             }
             if let Some(ref info) = font_info {
-                self.report_omitted_drops(&decode_drops, &info.base_font);
+                self.report_omitted_drops(&decode_drops, info);
             }
             Ok(self.render_unicode_text(
                 pixmap,
@@ -827,7 +842,7 @@ impl TextRasterizer {
             let font_name = font_info.as_ref().map(|i| i.base_font.as_str()).unwrap_or("unknown");
             Self::warn_font_not_found(font_name);
             if let Some(ref info) = font_info {
-                self.report_omitted_drops(&decode_drops, &info.base_font);
+                self.report_omitted_drops(&decode_drops, info);
             }
             Ok(self.render_text_fallback(pixmap, &unicode_text, &paint, base_transform, gs, clip_mask)?)
         }
@@ -1547,6 +1562,7 @@ impl TextRasterizer {
             }
         }
 
+        self.record_type0_ink_loss(&unicode_dropped, font_info);
         self.report_drops(
             &unicode_dropped,
             font_info.map(|f| f.base_font.as_str()).unwrap_or("<system fallback>"),
@@ -1723,6 +1739,7 @@ impl TextRasterizer {
                 }
             }
         }
+        self.record_type0_ink_loss(&dropped, Some(font_info));
         self.report_drops(&dropped, &font_info.base_font);
 
         Ok(if wmode == 0 { x_cursor } else { y_cursor })

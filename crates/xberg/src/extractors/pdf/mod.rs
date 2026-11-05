@@ -2488,6 +2488,18 @@ fn whole_document_ocr_hints(
             })
             .native_page_layers = layers;
     }
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        })
+        && let Some([boundary]) = boundaries
+        && boundary.page_number == 1
+        && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
+        && native.contains(unmapped_glyphs::LOST_GLYPH_MARKER)
+    {
+        hints.get_or_insert_with(Default::default).single_native_type0_page = Some(native.into());
+    }
     hints
 }
 

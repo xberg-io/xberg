@@ -168,6 +168,8 @@ async fn read_mixed(
             single_block: &[],
             native_layers: None,
             hidden_layer_backend: None,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            single_native_type0_page: None,
             raster_dpis,
         },
         pdf,
