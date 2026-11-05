@@ -115,6 +115,32 @@ fn unsigned_point(spans: &[TextSpan]) -> usize {
 }
 
 #[test]
+fn stacked_subscript_leaves_the_raised_decimal_unassociated() {
+    let (doc, mut spans) = actual_source();
+    let authority = Authority::load(&doc.doc, 0).unwrap();
+    let number = spans.iter().position(|span| span.text == "258").unwrap();
+    let point = unsigned_point(&spans);
+    let base = prove_power(&spans, &authority, number, point)
+        .expect("the same decimal is claimable without the subscript")
+        .base;
+    let mut subscript = spans[number].clone();
+    subscript.text = "7".into();
+    subscript.bbox.width /= 3.0;
+    subscript.bbox.y += baseline(&spans[base]) - baseline(&subscript) - spans[base].font_size * 0.25;
+    spans.push(subscript);
+
+    let original = glyphs(&spans);
+    let runs = prepare_test(&mut spans, || Some(authority));
+    let powers: Vec<String> = runs
+        .iter()
+        .map(|run| run.members.iter().map(|&i| spans[i].text.as_str()).collect())
+        .collect();
+    assert_eq!(powers, ["−0.15"], "the stacked 2.58 must remain unassociated");
+    assert!(spans.iter().any(|span| span.text == "258"));
+    assert_eq!(glyphs(&spans), original);
+}
+
+#[test]
 fn duplicate_source_digits_or_points_cannot_supply_a_decimal_power() {
     for duplicate in ['2', '.'] {
         let (doc, mut spans) = actual_source();
