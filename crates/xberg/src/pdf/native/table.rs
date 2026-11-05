@@ -20,6 +20,7 @@ use crate::types::{BoundingBox, ProcessingWarning, Table};
 use std::collections::HashSet;
 
 pub(crate) mod scripts;
+mod source_columns;
 
 #[derive(Debug)]
 pub(crate) struct NativeTable {
@@ -350,12 +351,15 @@ pub(crate) fn extract_tables_heuristic(
         // One `extract_paths` call per page, reusing the layout gate's own rule
         // counter. A page whose paths cannot be read counts as unruled, which
         // is the conservative direction (the geometric gate still applies).
-        let horizontal_rules = super::guard_native_panic(
+        let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
+        let paths = super::guard_native_panic(
             || doc.doc.extract_paths(page_idx).map_err(|error| error.to_string()),
             |message| message,
         )
         .ok()
-        .map_or(0, |paths| crate::pdf::rules::count_rules(&paths).0);
+        .unwrap_or_default();
+        let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
+        let column_rules = source_columns::PageRules::new(&paths, source_columns::supports_page_frame(segments));
 
         let page_tables_start = tables.len();
         tables.extend(reconstruct_page_region_tables(
@@ -364,6 +368,7 @@ pub(crate) fn extract_tables_heuristic(
             page_number,
             allow_single_column,
             horizontal_rules,
+            &column_rules,
         ));
 
         // GH#1358: a page with a rotated run whose frame needed lifting (see
@@ -377,7 +382,7 @@ pub(crate) fn extract_tables_heuristic(
         // spuriously overlaps. Drop the bounding box rather than trust a
         // fabricated one; the table's cell content is unaffected, and
         // downstream page assignment and dedup are bbox-agnostic.
-        if crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height) {
+        if lifted_frame {
             for table in &mut tables[page_tables_start..] {
                 table.bounding_box = None;
             }
@@ -399,6 +404,7 @@ fn reconstruct_page_region_tables(
     page_number: u32,
     allow_single_column: bool,
     horizontal_rules: usize,
+    column_rules: &source_columns::PageRules<'_>,
 ) -> Vec<Table> {
     let mut tables = Vec::new();
     let mut index = 0;
@@ -412,6 +418,7 @@ fn reconstruct_page_region_tables(
                 page_number,
                 allow_single_column,
                 horizontal_rules,
+                column_rules,
             ));
             index += 1;
             continue;
@@ -450,6 +457,7 @@ fn reconstruct_page_region_tables(
                 page_number,
                 allow_single_column,
                 horizontal_rules,
+                column_rules,
             ));
             index += 1;
             continue;
@@ -740,10 +748,16 @@ fn reconstruct_region_tables(
     page_number: u32,
     allow_single_column: bool,
     horizontal_rules: usize,
+    column_rules: &source_columns::PageRules<'_>,
 ) -> Vec<Table> {
-    let Some(parent) =
-        reconstruct_region_table(region, page_height, page_number, allow_single_column, horizontal_rules)
-    else {
+    let Some(parent) = source_columns::reconstruct_region_table(
+        region,
+        page_height,
+        page_number,
+        allow_single_column,
+        horizontal_rules,
+        column_rules,
+    ) else {
         return Vec::new();
     };
     if parent.cells.first().map_or(0, Vec::len) < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
@@ -2792,7 +2806,7 @@ mod tests {
             "right child must independently pass the existing validation chain"
         );
 
-        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0);
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
         assert_eq!(
             tables.len(),
             2,
@@ -3176,7 +3190,14 @@ mod tests {
             "a large normalized vertical gap must stop same-track tables from chaining"
         );
 
-        let tables = reconstruct_page_region_tables(&[first, second], 792.0, 1, false, 0);
+        let tables = reconstruct_page_region_tables(
+            &[first, second],
+            792.0,
+            1,
+            false,
+            0,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert_eq!(tables.len(), 2, "independent aligned tables must remain distinct");
     }
 
@@ -3202,7 +3223,14 @@ mod tests {
             "a nearby table without a descriptor-only section label must not chain"
         );
 
-        let tables = reconstruct_page_region_tables(&[first, second], 792.0, 1, false, 0);
+        let tables = reconstruct_page_region_tables(
+            &[first, second],
+            792.0,
+            1,
+            false,
+            0,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert_eq!(tables.len(), 2, "nearby independent tables must remain distinct");
     }
 
@@ -3224,7 +3252,14 @@ mod tests {
             "a nearby Security/Value header must not be treated as a continuation label"
         );
 
-        let tables = reconstruct_page_region_tables(&[first, second], 792.0, 1, false, 0);
+        let tables = reconstruct_page_region_tables(
+            &[first, second],
+            792.0,
+            1,
+            false,
+            0,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert_eq!(tables.len(), 2, "ordinary table headers must remain distinct");
     }
 
@@ -3234,7 +3269,7 @@ mod tests {
         extend_grid_words(&mut words, &[20, 100, 180, 260]);
         extend_grid_words(&mut words, &[320, 400, 480, 560]);
 
-        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0);
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
         assert_eq!(
             tables.len(),
             1,
@@ -4558,7 +4593,16 @@ mod tests {
     fn gh1760_page_tables(words: &[crate::pdf::table_reconstruct::HocrWord]) -> Vec<Table> {
         cluster_words_into_vertical_regions(words)
             .iter()
-            .flat_map(|region| reconstruct_region_tables(region, GH1760_PAGE_HEIGHT, 1, false, 0))
+            .flat_map(|region| {
+                reconstruct_region_tables(
+                    region,
+                    GH1760_PAGE_HEIGHT,
+                    1,
+                    false,
+                    0,
+                    &source_columns::PageRules::new(&[], true),
+                )
+            })
             .collect()
     }
 
@@ -4674,7 +4718,14 @@ mod tests {
         // reconstructor, a three-row unruled region is below the row count at which
         // `column_text_flow` and `row_continuation_flow` can fire, so nothing in
         // post-processing can judge it. It must be refused for want of evidence. ~keep
-        let tables = reconstruct_region_tables(&gh1760_band_region(), GH1760_PAGE_HEIGHT, 1, false, 0);
+        let tables = reconstruct_region_tables(
+            &gh1760_band_region(),
+            GH1760_PAGE_HEIGHT,
+            1,
+            false,
+            0,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert!(
             tables.is_empty(),
             "an unruled three-row region with no numeric cells has nothing saying `table`; \
@@ -4757,7 +4808,14 @@ mod tests {
             gh1760_push_line(&mut region, line, 0);
         }
 
-        let tables = reconstruct_region_tables(&region, GH1760_PAGE_HEIGHT, 1, false, 0);
+        let tables = reconstruct_region_tables(
+            &region,
+            GH1760_PAGE_HEIGHT,
+            1,
+            false,
+            0,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert_eq!(
             tables.len(),
             1,
@@ -4772,7 +4830,14 @@ mod tests {
         // #1399's ruling-line signal is counted per page, not per region, so a paper
         // whose real table is ruled would otherwise admit every short band on the same
         // page. The evidence requirement is therefore tested ahead of it. ~keep
-        let tables = reconstruct_region_tables(&gh1760_band_region(), GH1760_PAGE_HEIGHT, 1, false, 6);
+        let tables = reconstruct_region_tables(
+            &gh1760_band_region(),
+            GH1760_PAGE_HEIGHT,
+            1,
+            false,
+            6,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert!(
             tables.is_empty(),
             "rules drawn for another table on the page are not evidence about this band; \
@@ -4811,7 +4876,9 @@ mod tests {
         let regions = cluster_words_into_vertical_regions(&words);
         let tables: Vec<_> = regions
             .iter()
-            .flat_map(|region| reconstruct_region_tables(region, 792.0, 2, false, 0))
+            .flat_map(|region| {
+                reconstruct_region_tables(region, 792.0, 2, false, 0, &source_columns::PageRules::new(&[], true))
+            })
             .collect();
         assert!(
             tables.is_empty(),
@@ -4974,7 +5041,14 @@ mod tests {
             .find(|region| region.iter().all(|word| word.left >= PAGE_SIX_PROSE_LEFT))
             .expect("page six must retain the neighbouring prose as a separate region");
 
-        let tables = reconstruct_region_tables(table_region, 792.0, 6, false, 0);
+        let tables = reconstruct_region_tables(
+            table_region,
+            792.0,
+            6,
+            false,
+            0,
+            &source_columns::PageRules::new(&[], true),
+        );
         assert_eq!(
             tables.len(),
             1,
@@ -4983,7 +5057,15 @@ mod tests {
         assert_eq!(tables[0].cells.len(), GH1769_TABLE_ROWS + 1);
         assert_eq!(tables[0].cells[0].len(), GH1769_TABLE_COLUMNS.len());
         assert!(
-            reconstruct_region_tables(prose_region, 792.0, 6, false, 0).is_empty(),
+            reconstruct_region_tables(
+                prose_region,
+                792.0,
+                6,
+                false,
+                0,
+                &source_columns::PageRules::new(&[], true)
+            )
+            .is_empty(),
             "the neighbouring prose must remain ordinary page content"
         );
     }
