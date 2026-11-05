@@ -100,15 +100,37 @@ def verify_wheel(wheel: Path) -> dict:
     }
 
 
-def verify_modules(modules: list[Path], wheel_root: Path, python_root: Path) -> None:
+def is_inbox_msvcp(path: Path, resolved: Path) -> bool:
+    if path.name.lower() != "msvcp_win.dll":
+        return False
+    system_root = Path(os.environ["SYSTEMROOT"])
+    return any(
+        path.parent == system_root / directory and resolved == system_root.resolve() / directory / path.name
+        for directory in ("System32", "SysWOW64")
+    )
+
+
+def verify_modules(
+    modules: list[Path], wheel_root: Path, python_root: Path, *, require_wheel_msvcp: bool = False
+) -> None:
+    wheel_root = wheel_root.resolve()
+    python_root = python_root.resolve()
+    wheel_msvcp_loaded = False
     for path in modules:
         name = path.name.lower()
-        if name.startswith(("msvcp", "concrt", "vcomp")) and not path.resolve().is_relative_to(wheel_root.resolve()):
+        if not name.startswith(("msvcp", "concrt", "vcomp", "vcruntime")):
+            continue
+        resolved = path.resolve()
+        in_wheel = resolved.is_relative_to(wheel_root)
+        if name.startswith("vcruntime"):
+            if not in_wheel and not resolved.is_relative_to(python_root):
+                raise ValueError(f"VCRUNTIME module outside allowed app-local roots: {path}")
+        elif not in_wheel and not is_inbox_msvcp(path, resolved):
             raise ValueError(f"runtime module outside wheel: {path}")
-        if name.startswith("vcruntime") and not any(
-            path.resolve().is_relative_to(root.resolve()) for root in (wheel_root, python_root)
-        ):
-            raise ValueError(f"VCRUNTIME module outside allowed app-local roots: {path}")
+        if in_wheel and resolved.name.lower().startswith("msvcp140"):
+            wheel_msvcp_loaded = True
+    if require_wheel_msvcp and not wheel_msvcp_loaded:
+        raise ValueError("no wheel MSVCP runtime actually loaded")
 
 
 def loaded_modules() -> list[Path]:
@@ -239,11 +261,9 @@ def positive(site: Path, python_root: Path, ort: Path, fixture: Path) -> dict:
 
     asyncio.run(smoke_test_python_wheel.run(str(fixture), "XBERG MUSL SMOKE 490"))
     modules = loaded_modules()
-    verify_modules(modules, ort.parent, python_root)
+    verify_modules(modules, ort.parent, python_root, require_wheel_msvcp=True)
     if not any(path.suffix.lower() == ".pyd" and path.resolve().is_relative_to(site.resolve()) for path in modules):
         raise ValueError("no wheel native module loaded")
-    if not any(path.name.lower().startswith("msvcp") for path in modules):
-        raise ValueError("no wheel MSVCP runtime actually loaded")
     if ort.resolve() not in [path.resolve() for path in modules]:
         raise ValueError("wheel ONNX Runtime was not loaded")
     return {

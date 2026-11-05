@@ -317,6 +317,40 @@ class CleanHostGuards(unittest.TestCase):
         assert '\'["ubuntu-latest","ubuntu-24.04-arm","windows-2022","macos-26","macos-26-intel"]\'' in workflow
 
 
+class RuntimeModuleGuards(unittest.TestCase):
+    def setUp(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.wheel = self.root / "venv/xberg"
+        self.python = self.root / "python"
+        self.enterContext(patch.dict(clean.os.environ, {"SYSTEMROOT": str(self.root / "Windows")}))
+
+    def test_audit_allows_only_direct_system_msvcp_win_module(self) -> None:
+        inbox_modules = [
+            self.root / "Windows/System32/msvcp_win.dll",
+            self.root / "Windows/SysWOW64/MSVCP_WIN.DLL",
+        ]
+        clean.verify_modules(inbox_modules, self.wheel, self.python)
+        for name in (
+            "Windows/System32/nested/msvcp_win.dll",
+            "Windows/msvcp_win.dll",
+            "other/System32/msvcp_win.dll",
+            "python/msvcp_win.dll",
+            "Windows/System32/msvcp_win_extra.dll",
+        ):
+            with self.subTest(name=name), expected_error(ValueError, "outside wheel"):
+                clean.verify_modules([self.root / name], self.wheel, self.python)
+
+    def test_intact_probe_requires_loaded_app_local_msvcp140(self) -> None:
+        inbox = self.root / "Windows/System32/msvcp_win.dll"
+        with expected_error(ValueError, "no wheel MSVCP runtime actually loaded"):
+            clean.verify_modules(
+                [inbox, self.wheel / "msvcp_win.dll"], self.wheel, self.python, require_wheel_msvcp=True
+            )
+        clean.verify_modules([inbox, self.wheel / "MSVCP140.DLL"], self.wheel, self.python, require_wheel_msvcp=True)
+
+
 class NativeLoaderGuards(unittest.TestCase):
     def test_negative_native_probe_uses_the_numeric_loader_result(self) -> None:
         ort = Path.cwd() / "onnxruntime.dll"
