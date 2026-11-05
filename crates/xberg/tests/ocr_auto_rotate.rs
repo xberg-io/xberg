@@ -7,7 +7,8 @@
 //! with a signal.
 //!
 //! Set `XBERG_ORIENTATION_TEST_MODEL` to the pinned PP-LCNet ONNX artifact
-//! to run the isolated PDF cases locally. CI requires it with `XBERG_REQUIRE_MODELS=1`.
+//! and enable `bundle-tessdata-eng` to run the isolated PDF cases locally.
+//! CI requires the model with `XBERG_REQUIRE_MODELS=1`.
 #![cfg(all(feature = "ocr", any(feature = "auto-rotate", feature = "pdf")))]
 
 #[cfg(feature = "auto-rotate")]
@@ -71,6 +72,11 @@ fn in_orientation_test_process(case: &str, warm: bool) -> bool {
         fs::copy(model, destination).expect("copy the pinned orientation model into the test cache");
     }
 
+    let tessdata = root.path().join("tessdata");
+    fs::create_dir(&tessdata).expect("private Tesseract data directory");
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("enable bundle-tessdata-eng for these tests");
+    fs::write(tessdata.join("eng.traineddata"), english).expect("seed pinned English data");
+
     // A fresh process isolates both environment variables and the process-global detector. ~keep
     let output = Command::new(env::current_exe().expect("test executable"))
         .args(["--exact", case, "--nocapture"])
@@ -78,6 +84,7 @@ fn in_orientation_test_process(case: &str, warm: bool) -> bool {
         .env("HF_HOME", root.path())
         .env("HF_HUB_CACHE", &hub)
         .env("HF_HUB_OFFLINE", "1")
+        .env("TESSDATA_PREFIX", tessdata)
         .env("XBERG_CACHE_DIR", root.path().join("xberg"))
         .output()
         .expect("run isolated orientation test");
