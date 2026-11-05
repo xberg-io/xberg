@@ -1,0 +1,28 @@
+name: Qualify OCR orientation
+description: Run implicit and explicit OCR recovery controls with verified cached model artifacts
+runs:
+  using: composite
+  steps:
+    - name: Qualify implicit cached orientation recovery
+      shell: bash
+      run: bash scripts/ci/rust/run-ocr-orientation-tests.sh
+
+    - name: Cache pinned OSD qualification model
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/xberg-osd-87416418657359cb
+        key: explicit-sideways-osd-9cf5d576fcc47564f11265841e5ca8390
+
+    - name: Qualify explicit sideways OCR with offline model caches
+      shell: bash
+      run: |
+        export XBERG_OSD_TEST_MODEL="${RUNNER_TEMP:?}/xberg-osd-87416418657359cb/osd.traineddata"
+        if [ ! -s "$XBERG_OSD_TEST_MODEL" ]; then
+          source scripts/lib/tessdata.sh
+          mkdir -p "$(dirname "$XBERG_OSD_TEST_MODEL")"
+          revision=87416418657359cb625c412a48b6e1d6d41c29bd
+          model_base=https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast
+          download_traineddata osd "$XBERG_OSD_TEST_MODEL" "${model_base}/${revision}/osd.traineddata"
+        fi
+        mise run rust:test:explicit-sideways warm
+        mise run rust:test:explicit-sideways native

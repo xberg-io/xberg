@@ -179,6 +179,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Recover language-only explicit sideways PDF scans with cached Tesseract orientation data.** (#2496)
+  Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
+  Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
+
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
 

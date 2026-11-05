@@ -6,6 +6,8 @@
 //! [`crate::engine::extract_impl`], reached via [`crate::extract_batch`].
 
 mod bytes;
+pub(crate) mod cache_context;
+pub(crate) mod cacheability;
 mod file;
 mod helpers;
 mod lenient;

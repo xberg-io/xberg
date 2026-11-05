@@ -7,7 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
-const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 15;
+const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 16;
 
 /// Compute a deterministic hash of the OCR configuration.
 ///
@@ -406,11 +406,11 @@ mod tests {
 
         // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
         // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Version 15 honors the requested OCR
-        // engine mode during native initialization; older entries may contain output from
-        // automatic mode even when the caller explicitly requested a different engine.
+        // silently reusing entries computed the old way. Version 16 assembles non-upright PSM1
+        // tables in recognition coordinates; older payloads contain grids assembled before that
+        // correction and return without running table assembly again.
         assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 15,
+            TESSERACT_RESULT_SCHEMA_VERSION, 16,
             "a bump must be deliberate: state here which change made an old entry wrong"
         );
         assert_ne!(
@@ -759,5 +759,79 @@ mod tests {
         let mut sorted_names = names.clone();
         sorted_names.sort_unstable();
         assert_eq!(names, sorted_names, "the variable set must be returned in sorted order");
+    }
+    fn assembled_cache_grid(rows: usize, columns: usize, label: &str) -> crate::types::OcrExtractionResult {
+        crate::types::OcrExtractionResult {
+            content: label.into(),
+            mime_type: "text/markdown".into(),
+            metadata: std::collections::HashMap::new(),
+            tables: vec![crate::types::OcrTable {
+                cells: vec![vec![label.into(); columns]; rows],
+                markdown: label.into(),
+                page_number: 1,
+                bounding_box: None,
+            }],
+            ocr_elements: None,
+            internal_document: None,
+        }
+    }
+
+    #[test]
+    fn schema15_assembled_table_artifact_is_not_reused_for_recognition_frame_assembly() {
+        let directory = tempfile::tempdir().unwrap();
+        let cache = crate::ocr::cache::OcrCache::new(Some(directory.path().into())).unwrap();
+        let config = TesseractConfig {
+            psm: 1,
+            output_format: "markdown".into(),
+            enable_table_detection: true,
+            use_cache: true,
+            ..Default::default()
+        };
+        let previous = hash_config_for_schema(&config, TEST_TESSDATA_PATH, 15);
+        let current = hash_config(&config, TEST_TESSDATA_PATH);
+        cache
+            .set_cached_result(
+                "sideways-page",
+                "tesseract",
+                &previous,
+                None,
+                &assembled_cache_grid(13, 48, "previous assembled grid"),
+            )
+            .unwrap();
+        assert_eq!(cache.get_stats().unwrap().total_files, 1);
+        let stored = cache
+            .get_cached_result("sideways-page", "tesseract", &previous, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (stored.tables[0].cells.len(), stored.tables[0].cells[0].len()),
+            (13, 48)
+        );
+        assert!(
+            cache
+                .get_cached_result("sideways-page", "tesseract", &current, None)
+                .unwrap()
+                .is_none(),
+            "the current schema must not return a valid but stale assembled schema15 grid"
+        );
+        cache
+            .set_cached_result(
+                "sideways-page",
+                "tesseract",
+                &current,
+                None,
+                &assembled_cache_grid(48, 8, "recognition-frame grid"),
+            )
+            .unwrap();
+        let current = cache
+            .get_cached_result("sideways-page", "tesseract", &current, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.content, "recognition-frame grid");
+        assert_eq!(
+            (current.tables[0].cells.len(), current.tables[0].cells[0].len()),
+            (48, 8)
+        );
+        assert_eq!(cache.get_stats().unwrap().total_files, 2);
     }
 }

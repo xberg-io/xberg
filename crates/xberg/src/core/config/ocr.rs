@@ -1207,18 +1207,7 @@ impl OcrConfig {
         all(feature = "liter-llm", not(target_arch = "wasm32")),
     ))]
     pub(crate) fn effective_languages(&self) -> Vec<String> {
-        let langs: Vec<String> = self
-            .language
-            .iter()
-            .map(|lang| lang.trim())
-            .filter(|lang| !lang.is_empty())
-            .map(str::to_string)
-            .collect();
-        if langs.is_empty() {
-            vec![DEFAULT_OCR_LANGUAGE.to_string()]
-        } else {
-            langs
-        }
+        effective_languages_for(&self.language)
     }
 
     /// Resolve the language Tesseract should use, reconciling [`Self::language`] with
@@ -1239,13 +1228,7 @@ impl OcrConfig {
         all(feature = "liter-llm", not(target_arch = "wasm32")),
     ))]
     pub(crate) fn effective_tesseract_language(&self) -> Vec<String> {
-        if self.language != [DEFAULT_OCR_LANGUAGE.to_string()] {
-            return self.effective_languages();
-        }
-        match &self.tesseract_config {
-            Some(tess) if !tess.language.is_empty() => tess.language.clone(),
-            _ => self.effective_languages(),
-        }
+        effective_tesseract_language_for(&self.language, self.tesseract_config.as_ref())
     }
 
     /// Returns the effective quality thresholds, using configured values or defaults.
@@ -1531,6 +1514,47 @@ fn default_tesseract_backend() -> String {
 /// backend. Use [`OcrConfig::effective_languages`] rather than this constant
 /// directly when a defaulted language list is needed.
 pub(crate) const DEFAULT_OCR_LANGUAGE: &str = "eng";
+
+#[cfg(any(
+    feature = "ocr",
+    feature = "ocr-wasm",
+    feature = "ocr-pipeline",
+    paddle_ocr,
+    all(feature = "liter-llm", not(target_arch = "wasm32"))
+))]
+fn effective_languages_for(language: &[String]) -> Vec<String> {
+    let languages: Vec<_> = language
+        .iter()
+        .map(|language| language.trim())
+        .filter(|language| !language.is_empty())
+        .map(str::to_string)
+        .collect();
+    if languages.is_empty() {
+        vec![DEFAULT_OCR_LANGUAGE.to_string()]
+    } else {
+        languages
+    }
+}
+
+#[cfg(any(
+    feature = "ocr",
+    feature = "ocr-wasm",
+    feature = "ocr-pipeline",
+    paddle_ocr,
+    all(feature = "liter-llm", not(target_arch = "wasm32"))
+))]
+pub(crate) fn effective_tesseract_language_for(
+    language: &[String],
+    tesseract: Option<&crate::types::TesseractConfig>,
+) -> Vec<String> {
+    if language.len() == 1
+        && language[0] == DEFAULT_OCR_LANGUAGE
+        && let Some(tesseract) = tesseract.filter(|tesseract| !tesseract.language.is_empty())
+    {
+        return tesseract.language.clone();
+    }
+    effective_languages_for(language)
+}
 
 fn default_eng() -> Vec<String> {
     vec![DEFAULT_OCR_LANGUAGE.to_string()]

@@ -29,6 +29,18 @@ struct ApiKey {
     tessdata_path: String,
     language: String,
     oem: u8,
+    osd_revision: Option<blake3::Hash>,
+}
+
+impl ApiKey {
+    fn for_models(models: &super::model_context::ModelContext, language: &str, oem: u8) -> Self {
+        Self {
+            tessdata_path: models.directory.clone(),
+            language: language.into(),
+            oem,
+            osd_revision: models.osd_revision,
+        }
+    }
 }
 
 struct PoolState<K, V> {
@@ -161,6 +173,13 @@ impl<K: PartialEq, V> ResourceLease<K, V> {
         self.release_with(|_| false);
     }
 
+    fn release_for_models<F>(&mut self, models: &super::model_context::ModelContext, reset: F)
+    where
+        F: FnOnce(&V) -> bool,
+    {
+        self.release_with(|value| models.if_current(|| reset(value)).unwrap_or(false));
+    }
+
     fn release_with<F>(&mut self, reset: F)
     where
         F: FnOnce(&V) -> bool,
@@ -252,17 +271,14 @@ impl TesseractApiPool {
 
     pub(super) fn checkout(
         self: &Arc<Self>,
-        tessdata_path: &str,
+        models: &super::model_context::ModelContext,
         language: &str,
         oem: u8,
     ) -> Result<TesseractApiLease, OcrError> {
         crate::core::config_validation::validate_tesseract_oem(i32::from(oem))
             .map_err(|error| OcrError::InvalidConfiguration(error.to_string()))?;
-        let key = ApiKey {
-            tessdata_path: tessdata_path.to_string(),
-            language: language.to_string(),
-            oem,
-        };
+        let tessdata_path = &models.directory;
+        let key = ApiKey::for_models(models, language, oem);
         let lease = self.resources.checkout(key, || {
             let api = TesseractAPI::new().map_err(|error| {
                 OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
@@ -280,12 +296,16 @@ impl TesseractApiPool {
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
             })
         })?;
-        Ok(TesseractApiLease { inner: lease })
+        Ok(TesseractApiLease {
+            inner: lease,
+            models: models.clone(),
+        })
     }
 }
 
 pub(super) struct TesseractApiLease {
     inner: ResourceLease<ApiKey, PooledTesseractApi>,
+    models: super::model_context::ModelContext,
 }
 
 impl TesseractApiLease {
@@ -304,16 +324,17 @@ impl Deref for TesseractApiLease {
 
 impl Drop for TesseractApiLease {
     fn drop(&mut self) {
-        self.inner.release_with(|api| match api.primary.clear() {
-            Ok(()) => true,
-            Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    "Failed to clear Tesseract API before returning it to the idle pool; discarding handle"
-                );
-                false
-            }
-        });
+        self.inner
+            .release_for_models(&self.models, |api| match api.primary.clear() {
+                Ok(()) => true,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to clear Tesseract API before returning it to the idle pool; discarding handle"
+                    );
+                    false
+                }
+            });
     }
 }
 
@@ -322,6 +343,95 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
+
+    #[test]
+    fn changed_revision_during_initialization_discards_handle_before_rollback() {
+        assert_revision_change_discards_handle(true);
+    }
+
+    #[test]
+    fn changed_revision_during_use_discards_handle_before_rollback() {
+        assert_revision_change_discards_handle(false);
+    }
+
+    fn assert_revision_change_discards_handle(during_initialization: bool) {
+        let models = tempfile::tempdir().unwrap();
+        let osd = models.path().join("osd.traineddata");
+        std::fs::write(&osd, b"revision one").unwrap();
+        let snapshot =
+            super::super::model_context::ModelContext::for_path(models.path().to_str().unwrap().into(), 1).unwrap();
+        let pool = ResourcePool::new(1);
+        let constructions = AtomicUsize::new(0);
+        let mut uncertain = pool
+            .checkout(ApiKey::for_models(&snapshot, "eng", 1), || {
+                if during_initialization {
+                    std::fs::write(&osd, b"revision two").unwrap();
+                }
+                Ok::<usize, ()>(constructions.fetch_add(1, Ordering::SeqCst))
+            })
+            .unwrap();
+        if !during_initialization {
+            std::fs::write(&osd, b"revision two").unwrap();
+        }
+        uncertain.release_for_models(&snapshot.clone(), |_| true);
+        std::fs::write(&osd, b"revision one").unwrap();
+        assert!(
+            snapshot.if_current(|| ()).is_none(),
+            "rollback must not clear a failed lease validation"
+        );
+        let snapshot =
+            super::super::model_context::ModelContext::for_path(models.path().to_str().unwrap().into(), 1).unwrap();
+        let mut restored = pool
+            .checkout(ApiKey::for_models(&snapshot, "eng", 1), || {
+                Ok::<usize, ()>(constructions.fetch_add(1, Ordering::SeqCst))
+            })
+            .unwrap();
+        assert_eq!(
+            *restored, 1,
+            "rollback must construct instead of reusing the B handle labeled A"
+        );
+        assert_eq!(constructions.load(Ordering::SeqCst), 2);
+        restored.release_for_models(&snapshot, |_| true);
+        let reused = pool
+            .checkout(ApiKey::for_models(&snapshot, "eng", 1), || {
+                Ok::<usize, ()>(constructions.fetch_add(1, Ordering::SeqCst))
+            })
+            .unwrap();
+        assert_eq!(*reused, 1, "unchanged qualified handle remains reusable");
+        assert_eq!(constructions.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn changed_osd_bytes_construct_a_new_resource_instead_of_reusing_the_old_handle() {
+        let models = tempfile::tempdir().unwrap();
+        let osd = models.path().join("osd.traineddata");
+        std::fs::write(&osd, b"revision one").unwrap();
+        let context =
+            || super::super::model_context::ModelContext::for_path(models.path().to_str().unwrap().into(), 1).unwrap();
+        let pool = ResourcePool::new(1);
+        let constructions = AtomicUsize::new(0);
+        let construct = || Ok::<usize, ()>(constructions.fetch_add(1, Ordering::SeqCst));
+        drop(
+            pool.checkout(ApiKey::for_models(&context(), "eng", 1), construct)
+                .unwrap(),
+        );
+        drop(
+            pool.checkout(ApiKey::for_models(&context(), "eng", 1), construct)
+                .unwrap(),
+        );
+        assert_eq!(
+            constructions.load(Ordering::SeqCst),
+            1,
+            "unchanged models reuse the handle"
+        );
+        std::fs::write(&osd, b"revision two").unwrap();
+        assert_eq!(std::fs::metadata(&osd).unwrap().len(), 12);
+        let changed = pool
+            .checkout(ApiKey::for_models(&context(), "eng", 1), construct)
+            .unwrap();
+        assert_eq!(*changed, 1, "the second revision owns a newly constructed resource");
+        assert_eq!(constructions.load(Ordering::SeqCst), 2);
+    }
 
     #[test]
     #[ignore = "requires installed eng and khm Tesseract packs"]
@@ -335,7 +445,11 @@ mod tests {
         let before = super::super::dictionary::secondary_initialization_count();
         for _ in 0..2 {
             let api = pool
-                .checkout(&path, "eng+khm", 1)
+                .checkout(
+                    &super::super::model_context::ModelContext::for_path(path.clone(), 6).unwrap(),
+                    "eng+khm",
+                    1,
+                )
                 .expect("initialize configured language session");
             let word = "xbergsecondaryloadprobe";
             assert_eq!(api.is_valid_word(word).unwrap(), 0, "the primary must reject the probe");
@@ -351,6 +465,7 @@ mod tests {
             tessdata_path: "models".into(),
             language: "eng".into(),
             oem,
+            osd_revision: None,
         };
         drop(pool.checkout::<(), _>(key(1), || Ok(1)).unwrap());
         let reused = pool
@@ -383,15 +498,32 @@ mod tests {
             resources: ResourcePool::new(1),
         });
         for unavailable in [0, 2] {
-            let lstm = pool.checkout(path, "eng", 1).expect("LSTM mode initializes");
+            let lstm = pool
+                .checkout(
+                    &super::super::model_context::ModelContext::for_path(path.into(), 6).unwrap(),
+                    "eng",
+                    1,
+                )
+                .expect("LSTM mode initializes");
             assert_eq!(lstm.get_int_variable("tessedit_ocr_engine_mode").unwrap(), 1);
             drop(lstm);
             assert_eq!(pool.resources.counts(), (0, 1));
-            assert!(pool.checkout(path, "eng", unavailable).is_err());
+            assert!(
+                pool.checkout(
+                    &super::super::model_context::ModelContext::for_path(path.into(), 6).unwrap(),
+                    "eng",
+                    unavailable
+                )
+                .is_err()
+            );
             assert_eq!(pool.resources.counts(), (0, 0));
         }
         let automatic = pool
-            .checkout(path, "eng", 3)
+            .checkout(
+                &super::super::model_context::ModelContext::for_path(path.into(), 6).unwrap(),
+                "eng",
+                3,
+            )
             .expect("default mode initializes after failure");
         assert_eq!(automatic.get_int_variable("tessedit_ocr_engine_mode").unwrap(), 1);
         drop(automatic);
@@ -404,7 +536,11 @@ mod tests {
             resources: ResourcePool::new(1),
         });
         assert!(matches!(
-            pool.checkout("", "eng", 4),
+            pool.checkout(
+                &super::super::model_context::ModelContext::for_path(String::new(), 6).unwrap(),
+                "eng",
+                4
+            ),
             Err(OcrError::InvalidConfiguration(_))
         ));
         assert_eq!(pool.resources.counts(), (0, 0));
@@ -547,6 +683,7 @@ mod tests {
             tessdata_path: path.to_owned(),
             language: language.to_owned(),
             oem,
+            osd_revision: None,
         }
     }
 
