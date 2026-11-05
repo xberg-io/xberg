@@ -5,8 +5,8 @@
 
 use crate::Result;
 use crate::core::config::OcrConfig;
-use crate::ocr::processor::OcrProcessor;
 use crate::ocr::processor::validation::TessdataEnv;
+use crate::ocr::processor::{ImageOcrPolicy, OcrProcessor};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use ahash::AHashMap;
@@ -503,6 +503,30 @@ impl TesseractBackend {
         config: &OcrConfig,
         allow_bounded_inferred_upscale: bool,
     ) -> Result<ExtractedDocument> {
+        let policy = if allow_bounded_inferred_upscale {
+            ImageOcrPolicy::BoundedInferredUpscale
+        } else {
+            ImageOcrPolicy::Default
+        };
+        self.process_image_with_policy(image_bytes, config, policy).await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) async fn process_standalone_psm6_image(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneDotLeaderRows)
+            .await
+    }
+
+    async fn process_image_with_policy(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        policy: ImageOcrPolicy,
+    ) -> Result<ExtractedDocument> {
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -522,12 +546,7 @@ impl TesseractBackend {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                processor.process_image_with_dpi_policy(
-                    image_bytes.as_slice(),
-                    &tess_config_clone,
-                    output_format,
-                    allow_bounded_inferred_upscale,
-                )
+                processor.process_image_with_policy(image_bytes.as_slice(), &tess_config_clone, output_format, policy)
             }))
             .unwrap_or_else(|_| {
                 Err(crate::ocr::error::OcrError::ProcessingFailed(

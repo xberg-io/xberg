@@ -47,6 +47,13 @@ pub struct OcrProcessor {
     api_pool: std::sync::Arc<api_pool::TesseractApiPool>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImageOcrPolicy {
+    Default,
+    BoundedInferredUpscale,
+    StandaloneDotLeaderRows,
+}
+
 impl OcrProcessor {
     pub(crate) fn new(cache_dir: Option<std::path::PathBuf>) -> Result<Self, OcrError> {
         let cache = OcrCache::new(cache_dir)?;
@@ -68,15 +75,15 @@ impl OcrProcessor {
         image_bytes: &[u8],
         config: &TesseractConfig,
     ) -> Result<OcrExtractionResult, OcrError> {
-        self.process_image_with_dpi_policy(image_bytes, config, None, false)
+        self.process_image_with_policy(image_bytes, config, None, ImageOcrPolicy::Default)
     }
 
-    pub(crate) fn process_image_with_dpi_policy(
+    pub(crate) fn process_image_with_policy(
         &self,
         image_bytes: &[u8],
         config: &TesseractConfig,
         output_format: Option<crate::core::config::OutputFormat>,
-        allow_bounded_inferred_upscale: bool,
+        policy: ImageOcrPolicy,
     ) -> Result<OcrExtractionResult, OcrError> {
         #[cfg(feature = "otel")]
         let span = crate::telemetry::spans::ocr_span("tesseract", &config.language);
@@ -85,13 +92,13 @@ impl OcrProcessor {
         #[cfg(feature = "otel")]
         let start = Instant::now();
 
-        let result = execution::process_image_with_cache_and_dpi_policy(
+        let result = execution::process_image_with_cache_and_policy(
             image_bytes,
             config,
             &self.cache,
             &self.api_pool,
             output_format,
-            allow_bounded_inferred_upscale,
+            policy,
         );
 
         #[cfg(feature = "otel")]

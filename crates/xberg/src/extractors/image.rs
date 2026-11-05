@@ -2558,6 +2558,13 @@ pub(crate) struct SparseRetryPolicy {
     pub(crate) allow_standard_retry: bool,
 }
 
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[derive(Default)]
+struct StandaloneTesseract<'a> {
+    sparse_retry: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
+    dot_leader_rows: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
+}
+
 #[cfg(any(feature = "pdf", test))]
 #[cfg(all(
     not(target_arch = "wasm32"),
@@ -2578,7 +2585,7 @@ pub(crate) async fn process_whole_image_ocr_with_sparse_retry(
         retry_policy,
         cancel_token,
         #[cfg(feature = "ocr")]
-        None,
+        StandaloneTesseract::default(),
     )
     .await
 }
@@ -2593,7 +2600,7 @@ async fn process_whole_image_ocr(
     configs: (&crate::core::config::OcrConfig, &crate::core::config::OcrConfig),
     retry_policy: SparseRetryPolicy,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
-    #[cfg(feature = "ocr")] standalone_tesseract: Option<&crate::ocr::tesseract_backend::TesseractBackend>,
+    #[cfg(feature = "ocr")] standalone: StandaloneTesseract<'_>,
 ) -> crate::Result<crate::types::ExtractedDocument> {
     let (original_config, effective_config) = configs;
     let SparseRetryPolicy {
@@ -2608,8 +2615,21 @@ async fn process_whole_image_ocr(
     } else {
         std::borrow::Cow::Borrowed(effective_config)
     };
+    let primary_bytes = std::sync::Arc::clone(&image_bytes);
+    #[cfg(feature = "ocr")]
+    let primary = match standalone.dot_leader_rows {
+        Some(tesseract) => {
+            Box::pin(tesseract.process_standalone_psm6_image(primary_bytes, effective_config.as_ref())).await?
+        }
+        None => {
+            backend
+                .process_image_owned(primary_bytes, effective_config.as_ref())
+                .await?
+        }
+    };
+    #[cfg(not(feature = "ocr"))]
     let primary = backend
-        .process_image_owned(std::sync::Arc::clone(&image_bytes), effective_config.as_ref())
+        .process_image_owned(primary_bytes, effective_config.as_ref())
         .await?;
     let rtl_retry = should_retry_sparse_rtl_ocr(original_config, effective_config.as_ref(), &primary);
     if !whole_page_raster && !rtl_retry {
@@ -2631,7 +2651,7 @@ async fn process_whole_image_ocr(
     };
     let fallback_bytes = std::sync::Arc::clone(&image_bytes);
     #[cfg(feature = "ocr")]
-    let fallback_result = match standalone_tesseract.filter(|_| standard_retry) {
+    let fallback_result = match standalone.sparse_retry.filter(|_| standard_retry) {
         Some(tesseract) => {
             Box::pin(tesseract.process_image_with_dpi_policy(fallback_bytes, &fallback_config, true)).await
         }
@@ -3026,7 +3046,7 @@ impl ImageExtractor {
         }
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        let standalone_tesseract;
+        let (standalone_tesseract, psm6_tesseract);
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
@@ -3034,9 +3054,19 @@ impl ImageExtractor {
             let backend = registry.get(&ocr_config.backend)?;
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
-                standalone_tesseract = is_implicit_horizontal_tesseract(ocr_config)
+                let explicit_psm6 = ocr_config
+                    .tesseract_config
+                    .as_ref()
+                    .is_some_and(|config| config.psm == Some(crate::ocr::types::PSMMode::SingleBlock as i32));
+                let sparse_retry = is_implicit_horizontal_tesseract(ocr_config);
+                let builtin = (explicit_psm6 || sparse_retry)
                     .then(|| registry.builtin_tesseract_for(&backend))
                     .flatten();
+                (standalone_tesseract, psm6_tesseract) = if explicit_psm6 {
+                    (None, builtin)
+                } else {
+                    (builtin, None)
+                };
             }
             backend
         };
@@ -3116,12 +3146,15 @@ impl ImageExtractor {
             },
             config.cancel_token.as_ref(),
             #[cfg(feature = "ocr")]
-            standalone_tesseract.as_deref().filter(|_| {
-                ocr_config
-                    .tesseract_config
-                    .as_ref()
-                    .is_none_or(|config| config.preprocessing.is_none())
-            }),
+            StandaloneTesseract {
+                sparse_retry: standalone_tesseract.as_deref().filter(|_| {
+                    ocr_config
+                        .tesseract_config
+                        .as_ref()
+                        .is_none_or(|config| config.preprocessing.is_none())
+                }),
+                dot_leader_rows: psm6_tesseract.as_deref(),
+            },
         )
         .await?;
         #[cfg(target_arch = "wasm32")]
