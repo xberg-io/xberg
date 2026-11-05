@@ -2864,7 +2864,7 @@ fn producer_financial_row_order(spans: &[TextSpan], page_index: usize) -> Option
     Some((order, first_line.len()))
 }
 
-fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+pub(super) fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
     matches!(
         doc.get_page_rotation_status(page_index),
         Ok(PageRotation::Absent | PageRotation::Valid(0))

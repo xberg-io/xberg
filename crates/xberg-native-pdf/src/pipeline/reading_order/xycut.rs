@@ -291,6 +291,9 @@ const MIN_STRADDLING_INK_PTS: f32 = 60.0;
 /// returned by this function is therefore a genuinely CONTINUOUS run of ink, which is what
 /// both `peel_full_width_line_bands` and `partition_lines_at` need "line" to mean. ~keep
 fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Vec<usize>> {
+    if let Some(lines) = source_stepped_prose_lines(all_spans, indices) {
+        return lines;
+    }
     let mut order: Vec<usize> = indices.to_vec();
     order.sort_by(|&a, &b| {
         all_spans[b]
@@ -335,6 +338,144 @@ fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Ve
         }
     }
     lines
+}
+
+const MIN_STEPPED_PROSE_LINES: usize = 4;
+const MIN_PROSE_WORDS_PER_LINE: usize = 4;
+const MAX_STEPPED_PROSE_SLOPE: f32 = 0.05;
+const MAX_SOURCE_PROSE_COLUMNS: usize = 2;
+const SOURCE_ROW_RESET_EM: f32 = 0.5;
+
+/// Internal bridge for retaining certified native rows during structure projection.
+#[doc(hidden)]
+pub fn certified_stepped_prose_rows(spans: &[TextSpan]) -> Option<Vec<Vec<usize>>> {
+    source_stepped_prose_lines(spans, &(0..spans.len()).collect::<Vec<_>>())
+}
+
+// Quantized y bands can split each stepped baseline into several pieces. Trust
+// stream order only when every retained run certifies complete adjacent prose rows. ~keep
+fn source_stepped_prose_lines(spans: &[TextSpan], indices: &[usize]) -> Option<Vec<Vec<usize>>> {
+    let first = spans.get(*indices.first()?)?;
+    if !indices
+        .iter()
+        .all(|&index| plain_stepped_prose_span(&spans[index], first))
+    {
+        return None;
+    }
+    let mut order = indices.to_vec();
+    order.sort_by_key(|&index| spans[index].sequence);
+    if order
+        .windows(2)
+        .any(|pair| spans[pair[0]].sequence == spans[pair[1]].sequence)
+    {
+        return None;
+    }
+    let mut lines: Vec<Vec<usize>> = Vec::new();
+    for index in order {
+        let continues = lines
+            .last()
+            .is_some_and(|line| prose_run_continues(&spans[line[0]], &spans[*line.last().unwrap()], &spans[index]));
+        if !continues {
+            lines.push(Vec::new());
+        }
+        lines.last_mut()?.push(index);
+    }
+    stepped_prose_lines_are_complete(spans, &lines).then_some(lines)
+}
+
+fn plain_stepped_prose_span(span: &TextSpan, first: &TextSpan) -> bool {
+    same_stepped_prose_style(span, first)
+        && span.rotation_degrees == 0.0
+        && span.page_rotation_applied == 0
+        && span.wmode == 0
+        && !span.rtl_draw_logical
+        && !span.mirrored
+        && span.mcid.is_none()
+        && span.mcid_scope == first.mcid_scope
+        && !span.offset_semantic
+        && !span.split_boundary_before
+        && span.heading_level.is_none()
+        && span.artifact_type.is_none()
+        && plain_stepped_prose_geometry(span)
+}
+
+fn same_stepped_prose_style(span: &TextSpan, first: &TextSpan) -> bool {
+    span.font_size.is_finite()
+        && span.font_size > 0.0
+        && span.font_size == first.font_size
+        && span.font_name == first.font_name
+        && span.font_weight == crate::layout::FontWeight::Normal
+        && !span.is_italic
+        && !span.is_monospace
+        && span.color == first.color
+        && span.text_rise == 0.0
+        && span.char_spacing == 0.0
+        && span.word_spacing == 0.0
+        && span.horizontal_scaling == 100.0
+}
+
+fn plain_stepped_prose_geometry(span: &TextSpan) -> bool {
+    span.bbox.x.is_finite()
+        && span.bbox.y.is_finite()
+        && span.bbox.width.is_finite()
+        && span.bbox.width > 0.0
+        && span.bbox.height.is_finite()
+        && span.bbox.height > 0.0
+        && !span.text.is_empty()
+        && span
+            .text
+            .chars()
+            .all(|character| character.is_ascii_alphabetic() || character == ' ')
+}
+
+fn prose_run_continues(first: &TextSpan, previous: &TextSpan, current: &TextSpan) -> bool {
+    let dx = current.bbox.x - first.bbox.x;
+    current.bbox.x > previous.bbox.x
+        && dx > 0.0
+        && (current.bbox.x - previous.bbox.right()).abs() <= first.font_size * MAX_INTRA_LINE_GAP_EM
+        && (current.bbox.y - first.bbox.y).abs() <= MAX_STEPPED_PROSE_SLOPE * dx
+}
+
+fn stepped_prose_lines_are_complete(spans: &[TextSpan], lines: &[Vec<usize>]) -> bool {
+    if lines.len() < MIN_STEPPED_PROSE_LINES {
+        return false;
+    }
+    let first = &spans[lines[0][0]];
+    let mut stepped = 0;
+    let mut columns = 1;
+    for (line_number, line) in lines.iter().enumerate() {
+        let start = &spans[line[0]];
+        let end = &spans[*line.last().unwrap()];
+        if line.len() < 2
+            || line
+                .iter()
+                .map(|&i| spans[i].text.split_whitespace().count())
+                .sum::<usize>()
+                < MIN_PROSE_WORDS_PER_LINE
+        {
+            return false;
+        }
+        stepped += usize::from((end.bbox.y - start.bbox.y).abs() > XYCUT_LINE_Y_TOLERANCE_PTS);
+        if line_number > 0 {
+            let previous = &spans[lines[line_number - 1][0]];
+            if !prose_source_row_reset(first, previous, start, &mut columns) {
+                return false;
+            }
+        }
+    }
+    stepped >= MIN_STEPPED_PROSE_LINES && columns <= MAX_SOURCE_PROSE_COLUMNS
+}
+
+fn prose_source_row_reset(first: &TextSpan, previous: &TextSpan, current: &TextSpan, columns: &mut usize) -> bool {
+    let half_em = first.font_size * SOURCE_ROW_RESET_EM;
+    if (current.bbox.x - previous.bbox.x).abs() < half_em {
+        return previous.bbox.y - current.bbox.y > half_em;
+    }
+    if current.bbox.x > previous.bbox.x + first.font_size && (current.bbox.y - first.bbox.y).abs() < half_em {
+        *columns += 1;
+        return true;
+    }
+    false
 }
 
 impl Default for XYCutStrategy {
@@ -2492,6 +2633,9 @@ impl XYCutStrategy {
     /// into `ROW_BAND_TOLERANCE_PT`-wide bands before comparing, so runs
     /// sharing a baseline band stay ordered by X regardless of height. ~keep
     fn sort_indices(&self, all_spans: &[TextSpan], indices: &[usize]) -> Vec<usize> {
+        if let Some(lines) = source_stepped_prose_lines(all_spans, indices) {
+            return lines.into_iter().flatten().collect();
+        }
         let mut sorted: Vec<usize> = indices.to_vec();
         sorted.sort_by(|&a, &b| {
             crate::utils::row_aware_span_cmp(
@@ -2832,6 +2976,72 @@ mod tests {
             vec!["A1", "A2", "B1", "B2"],
             "two distinct 14pt-apart lines must stay in row-major order, not interleave by X"
         );
+    }
+
+    fn stepped_prose_spans(slope: f32) -> Vec<TextSpan> {
+        let mut spans = Vec::new();
+        for x in [72.0, 320.0] {
+            for row in 0..4 {
+                for (run, text) in ["harbor meadow ", "lantern orchard ", "compass thimble"]
+                    .iter()
+                    .enumerate()
+                {
+                    let mut span = make_span_text(
+                        x + run as f32 * 55.0,
+                        700.0 - row as f32 * 9.0 + run as f32 * 55.0 * slope,
+                        54.0,
+                        8.0,
+                        text,
+                        8.0,
+                    );
+                    span.sequence = spans.len();
+                    spans.push(span);
+                }
+            }
+        }
+        spans
+    }
+
+    #[test]
+    fn stepped_prose_runs_keep_source_order_inside_existing_column_partitions() {
+        for slope in [-0.022, 0.022] {
+            let mut spans = stepped_prose_spans(slope);
+            spans.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
+            let strategy = XYCutStrategy::new();
+            let context = ReadingOrderContext::new().with_column_gutter(276.0);
+            let ordered = strategy.apply(spans, &context).unwrap();
+            let actual = ordered.iter().map(|item| item.span.sequence).collect::<Vec<_>>();
+            assert_eq!(actual, (0..24).collect::<Vec<_>>(), "slope {slope}");
+        }
+    }
+
+    #[test]
+    fn source_row_evidence_abstains_for_normal_columns_and_unsafe_runs() {
+        let indices = (0..24).collect::<Vec<_>>();
+        let level = stepped_prose_spans(0.0);
+        assert!(source_stepped_prose_lines(&level, &indices).is_none());
+        let valid = stepped_prose_spans(0.022);
+        assert!(source_stepped_prose_lines(&valid, &indices).is_some());
+        let changes: [(&str, fn(&mut TextSpan)); 10] = [
+            ("math", |span| span.text.push_str(" + x")),
+            ("RTL", |span| span.rtl_draw_logical = true),
+            ("tagged", |span| span.mcid = Some(7)),
+            ("heading", |span| span.heading_level = Some(2)),
+            ("bold", |span| span.font_weight = crate::layout::FontWeight::Bold),
+            ("character spacing", |span| span.char_spacing = 1.0),
+            ("source split", |span| span.split_boundary_before = true),
+            ("wide gap", |span| span.bbox.x += 80000.0),
+            ("nonfinite", |span| span.bbox.y = f32::NAN),
+            ("wide slope", |span| span.bbox.y += 10.0),
+        ];
+        for (name, change) in changes {
+            let mut spans = valid.clone();
+            change(&mut spans[1]);
+            assert!(source_stepped_prose_lines(&spans, &indices).is_none(), "{name}");
+        }
+        let mut duplicate = valid;
+        duplicate[1].sequence = duplicate[0].sequence;
+        assert!(source_stepped_prose_lines(&duplicate, &indices).is_none());
     }
 
     #[test]

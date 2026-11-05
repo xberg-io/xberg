@@ -16,6 +16,8 @@ pub(super) use literal_prime::{LiteralPrimeWitness, capture_literal_primes};
 const ROW_CANDIDATE_MAX_SHIFT_EM: f32 = 0.5;
 const MAX_CANDIDATE_EDGES: usize = 64;
 const NUMERIC_SUFFIX_OVERHANG_EM: f32 = 0.005;
+const MIN_PROSE_PANEL_ROWS: usize = 3;
+const PROSE_PANEL_START_TOLERANCE_EM: f32 = 0.5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SegmentKey {
@@ -101,6 +103,7 @@ impl ScriptOwner {
 pub(crate) struct NativePageSegments {
     pub(crate) segments: Vec<SegmentData>,
     owners: Vec<ScriptOwner>,
+    prose_rows: Vec<Vec<SegmentKey>>,
 }
 
 impl NativePageSegments {
@@ -148,7 +151,44 @@ impl NativePageSegments {
             .into_iter()
             .filter(|owner| owner.survives_inventory(&source_counts) && owner.survives_inventory(&retained_counts))
             .collect();
-        Self { segments, owners }
+        let prose_rows = certified_prose_row_keys(&spans, &projected);
+        Self {
+            segments,
+            owners,
+            prose_rows,
+        }
+    }
+
+    pub(crate) fn clear_prose_rows(&mut self) {
+        self.prose_rows.clear();
+    }
+
+    pub(crate) fn surviving_prose_rows(&self, segments: &[SegmentData]) -> Option<Vec<Vec<SegmentData>>> {
+        let expected = self.prose_rows.iter().flatten().count();
+        if self.prose_rows.is_empty() || segments.len() != expected {
+            return None;
+        }
+        let expected_inventory: HashMap<_, _> = self
+            .prose_rows
+            .iter()
+            .flatten()
+            .map(|key| (key.clone(), 1usize))
+            .collect();
+        if expected_inventory.len() != expected || projection_counts(segments) != expected_inventory {
+            return None;
+        }
+        let by_key: HashMap<_, _> = segments
+            .iter()
+            .map(|segment| (SegmentKey::from(segment), segment))
+            .collect();
+        self.prose_rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|key| by_key.get(key).map(|segment| (*segment).clone()))
+                    .collect()
+            })
+            .collect()
     }
 
     pub(crate) fn has_literal_primes(&self) -> bool {
@@ -455,6 +495,31 @@ pub(crate) fn extract_all_segment_carriers(
     Ok((pages, false))
 }
 
+fn certified_prose_row_keys(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<Vec<SegmentKey>> {
+    let Some(rows) = xberg_native_pdf::pipeline::reading_order::xycut::certified_stepped_prose_rows(spans) else {
+        return Vec::new();
+    };
+    let first_x = spans[rows[0][0]].bbox.x;
+    let tolerance = spans[rows[0][0]].font_size * PROSE_PANEL_START_TOLERANCE_EM;
+    let left = rows
+        .iter()
+        .filter(|row| (spans[row[0]].bbox.x - first_x).abs() < tolerance)
+        .count();
+    if left < MIN_PROSE_PANEL_ROWS
+        || rows.len() - left < MIN_PROSE_PANEL_ROWS
+        || projected.iter().any(|segment| segment.assigned_role.is_some())
+    {
+        return Vec::new();
+    }
+    rows.into_iter()
+        .map(|row| {
+            row.into_iter()
+                .map(|index| SegmentKey::from(&projected[index]))
+                .collect()
+        })
+        .collect()
+}
+
 fn extract_page(
     doc: &mut super::NativeDocument,
     page: usize,
@@ -464,12 +529,17 @@ fn extract_page(
 ) -> crate::pdf::error::Result<NativePageSegments> {
     let mut prime_witnesses = Vec::new();
     let spans = super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses))?;
-    Ok(NativePageSegments::from_final_spans_with_primes(
-        spans,
-        roles,
-        artifacts,
-        prime_witnesses,
-    ))
+    let mut captured = NativePageSegments::from_final_spans_with_primes(spans, roles, artifacts, prime_witnesses);
+    if !captured.prose_rows.is_empty()
+        && (!doc
+            .doc
+            .get_annotations(page)
+            .is_ok_and(|annotations| annotations.is_empty())
+            || !super::super::text::untagged_upright_page(&doc.doc, page))
+    {
+        captured.clear_prose_rows();
+    }
+    Ok(captured)
 }
 
 #[cfg(test)]

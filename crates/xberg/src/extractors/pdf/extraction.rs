@@ -900,6 +900,12 @@ pub(crate) fn extract_all_from_native_document(
             })?,
         };
 
+        if config.pdf_options.as_ref().is_some_and(|options| options.reading_order) {
+            for page in &mut native_pages {
+                page.clear_prose_rows();
+            }
+        }
+
         for (page_index, page) in native_pages.iter_mut().enumerate() {
             let (llx, lower_y, urx, upper_y) =
                 doc.doc

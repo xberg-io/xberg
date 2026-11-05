@@ -179,6 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep stepped-baseline prose panels in source order and preserve their separate lines.** (#2323)
+
 - **(markdown): Retain rendered headings and scripts after canonical Unicode normalization.** (#2512)
   Equivalent plain-text forms keep their rendering, while meaningful post-processor edits still trigger the stale-rendering safeguard.
 

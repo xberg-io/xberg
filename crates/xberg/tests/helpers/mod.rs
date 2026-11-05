@@ -390,3 +390,5 @@ mod tests {
         }
     }
 }
+
+pub mod pdf_panels;

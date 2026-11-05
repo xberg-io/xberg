@@ -1036,7 +1036,7 @@ fn paragraph_has_scripts(para: &PdfParagraph) -> bool {
 /// Extract plain text and inline annotations from a paragraph.
 ///
 /// Keep legacy text runs intact when only part of a run supports script markup.
-fn extract_text_and_annotations(
+pub(super) fn extract_text_and_annotations(
     para: &PdfParagraph,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> (String, Vec<TextAnnotation>) {

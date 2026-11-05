@@ -60,6 +60,7 @@ const SPARSE_FONT_TIER_TOLERANCE: f32 = 0.5;
 // unique document title; reserve H1 for a title and emit these sections as H2. ~keep
 const SPARSE_REPEATED_TIER_HEADING_LEVEL: u8 = 2;
 
+mod prose_rows;
 mod script_evidence;
 
 type HeadingMap = Vec<(f32, Option<u8>)>;
@@ -4093,8 +4094,17 @@ fn build_document_structure_with_native(
     // independent layout geometry projection controls final reading order.
     reorder_pages_by_layout_region(&mut all_page_paragraphs);
     if let Some(native_pages) = native_pages {
+        let preserve_prose_rows = page_count == 1
+            && !used_structure_tree
+            && outline_entries.is_empty()
+            && emitted_tables.is_empty()
+            && images.is_none_or(|images| images.is_empty())
+            && layout_hints.is_none_or(|hints| hints.iter().all(Vec::is_empty));
         for (paragraphs, page) in all_page_paragraphs.iter_mut().zip(native_pages) {
             script_evidence::associate_surviving_suffixes(paragraphs, &page);
+            if preserve_prose_rows {
+                prose_rows::preserve_certified_panel_rows(paragraphs, &page, &witnesses.hyphens);
+            }
         }
     }
 
