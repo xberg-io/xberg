@@ -37,6 +37,7 @@ To request a subset:
 | --- | --- | --- |
 | `det` | `v2/det/server.onnx` | Server-tier text detection. |
 | `cls` | `v2/classifiers/PP-LCNet_x1_0_textline_ori.onnx` | Text-line orientation. |
+| `doc-ori` | `v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx` | Page orientation. |
 | `rec` | `v2/rec/unified_server/model.onnx`, `dict.txt` | Unified server recognition and dictionary. |
 
 ## Outputs

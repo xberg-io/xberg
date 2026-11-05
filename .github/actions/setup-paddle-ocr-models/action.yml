@@ -7,7 +7,7 @@ inputs:
     required: false
     default: "true"
   models:
-    description: Comma-separated runtime model groups to setup (det,cls,rec)
+    description: Comma-separated runtime model groups to set up (det,cls,rec,doc-ori)
     required: false
     default: "det,cls,rec"
   cache-key-suffix:
@@ -72,6 +72,11 @@ runs:
           FILES+=("v2/classifiers/PP-LCNet_x1_0_textline_ori.onnx")
           CHECKSUMS+=("1090f9f483a115f904beefe04acc9d28edf0c0b7b08cf0dd8d0ea59a9e0f2735")
           AVAILABLE+=("cls")
+        fi
+        if [[ ",$REQUESTED_MODELS," == *,doc-ori,* ]]; then
+          FILES+=("v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx")
+          CHECKSUMS+=("6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947")
+          AVAILABLE+=("doc-ori")
         fi
         if [[ ",$REQUESTED_MODELS," == *,rec,* ]]; then
           FILES+=("v2/rec/unified_server/model.onnx" "v2/rec/unified_server/dict.txt")
