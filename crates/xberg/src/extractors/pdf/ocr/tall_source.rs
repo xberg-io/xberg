@@ -513,7 +513,7 @@ fn decode_exact_gray(compressed: &[u8], pixels: usize) -> Option<Vec<u8>> {
     Some(samples)
 }
 
-fn image_name(paint: &[u8], frame: Rect) -> Option<String> {
+pub(super) fn image_name(paint: &[u8], frame: Rect) -> Option<String> {
     let mut index = 0;
     let mut image = None;
     let complete = visit_complete_content_stream(paint, 4, |operator| {

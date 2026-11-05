@@ -278,6 +278,8 @@ async fn assert_preferred(detached: bool, matching: bool, unavailable: bool) {
         0,
         Some(super::super::DetachedOcrPage {
             document: &frame.native,
+            #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+            stored_scan: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             orientation_retry: None,
         }),
