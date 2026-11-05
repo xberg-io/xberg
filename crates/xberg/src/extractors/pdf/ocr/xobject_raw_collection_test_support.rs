@@ -27,6 +27,7 @@ pub(super) async fn whole(
     Ok(result)
 }
 
+#[cfg(feature = "ocr")]
 pub(super) async fn detached(
     doc: &xberg_native_pdf::PdfDocument,
     config: &ExtractionConfig,
