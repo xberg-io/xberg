@@ -194,6 +194,7 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
             dictionary_filter,
             protected_words: None,
             table_rows: None,
+            claimed_words: None,
         },
     )
 }
@@ -204,6 +205,7 @@ struct HocrLinePolicy<'a> {
     dictionary_filter: Option<&'a DictionaryLineFilter<'a>>,
     protected_words: Option<&'a HashSet<PositionedWord>>,
     table_rows: Option<(&'a BoundingBox, ExactTableRows)>,
+    claimed_words: Option<HashSet<PositionedWord>>,
 }
 
 pub(crate) fn parse_hocr_preserving_rejected_table_words(
@@ -234,6 +236,7 @@ pub(crate) fn parse_hocr_preserving_rejected_table_words(
             dictionary_filter: Some(dictionary_filter),
             protected_words: Some(&protected_words),
             table_rows: None,
+            claimed_words: None,
         },
     )
 }
@@ -252,6 +255,34 @@ pub(crate) fn parse_hocr_without_claimed_table_rows(
             dictionary_filter: None,
             protected_words: None,
             table_rows: Some((bbox, ExactTableRows::new(cells))),
+            claimed_words: None,
+        },
+    )
+    .document
+}
+
+pub(crate) fn parse_hocr_without_proved_table_fragments(
+    hocr_html: &str,
+    page_offset: u32,
+    words: Vec<&HocrWord>,
+) -> InternalDocument {
+    let claimed_words = words
+        .into_iter()
+        .map(|word| {
+            (
+                [word.left, word.top, word.left + word.width, word.top + word.height],
+                word.text.clone(),
+            )
+        })
+        .collect();
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter: None,
+            protected_words: None,
+            table_rows: None,
+            claimed_words: Some(claimed_words),
         },
     )
     .document
@@ -882,6 +913,10 @@ fn parse_paragraph(
         });
     }
 
+    if let Some(words) = line_policy.claimed_words.as_mut() {
+        lines.retain(|line| !claim_proved_table_fragment(line, words));
+    }
+
     let all_words: Vec<&HocrWordInfo> = lines.iter().flat_map(|l| l.words.iter()).collect();
     if all_words.is_empty() {
         return (None, pos, removed_line_count);
@@ -1095,6 +1130,24 @@ fn parse_paragraph(
     }
 
     (Some(elem), pos, removed_line_count)
+}
+
+fn claim_proved_table_fragment(line: &HocrLineInfo, words: &mut HashSet<PositionedWord>) -> bool {
+    if line.words.is_empty() {
+        return false;
+    }
+    let fragment: HashSet<_> = line
+        .words
+        .iter()
+        .map(|word| ([word.x0, word.y0, word.x1, word.y1], word.text.clone()))
+        .collect();
+    if fragment.len() != line.words.len() || !fragment.is_subset(words) {
+        return false;
+    }
+    for word in fragment {
+        words.remove(&word);
+    }
+    true
 }
 
 fn line_is_inside_table(line: &HocrLineInfo, bbox: &BoundingBox) -> bool {
