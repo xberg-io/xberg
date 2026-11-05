@@ -1,0 +1,72 @@
+name: Qualify detached rotated table geometry
+
+on:
+  push:
+    branches: [codex/qualify-detached-rotated-table-2498]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: detached-rotated-table-2498-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  canonical-tract:
+    if: github.repository == 'xberg-io/xberg'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      RUST_MIN_STACK: 16777216
+      OMP_THREAD_LIMIT: 1
+      BUILD_PROFILE: ci
+      TRACT_FEATURES: "ocr,pdf,auto-rotate-tract,layout-tract,sceptre-ocr-tract,paddle-ocr-tract,bundle-tessdata-eng"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: |
+            pdf/ocr_test*.pdf
+
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-tract-no-ort
+          use-sccache: "true"
+          install-llvm-cov: "false"
+
+      - uses: ./.github/actions/install-system-deps
+
+      - uses: ./.github/actions/setup-tesseract-cache
+        with:
+          label: tract-no-ort
+
+      - uses: ./.github/actions/setup-paddle-ocr-models
+        with:
+          models: doc-ori
+          cache-key-suffix: document-orientation-onnx
+
+      - name: Run canonical tract orientation qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          cargo tree --locked -p xberg --no-default-features --features "$TRACT_FEATURES" -e normal,build,dev \
+            > "$RUNNER_TEMP/2498-dependency-tree.log"
+          if grep -Eq '(^|[[:space:]])ort v[0-9]' "$RUNNER_TEMP/2498-dependency-tree.log"; then
+            echo "::error::ORT is present in the tract-only profile"
+            exit 1
+          fi
+          bash scripts/ci/rust/run-ocr-orientation-tests.sh 2>&1 | tee "$RUNNER_TEMP/2498-orientation.log"
+          test "$(grep -Fxc 'test implicit_detached_pdf_ocr_scales_recovered_table_to_page ... ok' "$RUNNER_TEMP/2498-orientation.log")" = 1
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: detached-table-2498-canonical-tract
+          path: ${{ runner.temp }}/2498-*.log
+          if-no-files-found: warn
