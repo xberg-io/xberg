@@ -1110,6 +1110,7 @@ mod dpi_workspace;
 mod native_image_budget;
 
 mod encoded_image;
+#[cfg(test)]
 use encoded_image::prepare_encoded_ocr_image;
 
 /// The preprocessing that OCR applies to this raster, or `None` when the raster passes through
@@ -2041,6 +2042,7 @@ pub(super) fn perform_ocr(
     api_pool: &Arc<TesseractApiPool>,
     extraction_config: Option<&ExtractionConfig>,
     models: &ModelContext,
+    allow_bounded_inferred_upscale: bool,
 ) -> Result<OcrExtractionResult, OcrError> {
     let ci_debug_enabled = env::var_os("XBERG_CI_DEBUG").is_some();
     log_ci_debug(ci_debug_enabled, "perform_ocr:start", || {
@@ -2055,9 +2057,15 @@ pub(super) fn perform_ocr(
 
     let security_limits = security_limits_for_ocr(config, extraction_config);
     let images_config = extraction_config.and_then(|extraction_config| extraction_config.images.as_ref());
-    let prepared_image =
-        prepare_encoded_ocr_image(image_bytes, &security_limits, config, images_config, ci_debug_enabled)
-            .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
+    let prepared_image = encoded_image::prepare_with_dpi_policy(
+        image_bytes,
+        &security_limits,
+        config,
+        images_config,
+        ci_debug_enabled,
+        allow_bounded_inferred_upscale,
+    )
+    .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut image_data = prepared_image.data;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
@@ -2892,12 +2900,30 @@ pub(super) fn process_image_with_cache(
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
 ) -> Result<OcrExtractionResult, OcrError> {
+    process_image_with_cache_and_dpi_policy(image_bytes, config, cache, api_pool, output_format, false)
+}
+
+pub(super) fn process_image_with_cache_and_dpi_policy(
+    image_bytes: &[u8],
+    config: &TesseractConfig,
+    cache: &OcrCache,
+    api_pool: &Arc<TesseractApiPool>,
+    output_format: Option<crate::core::config::OutputFormat>,
+    allow_bounded_inferred_upscale: bool,
+) -> Result<OcrExtractionResult, OcrError> {
     config.validate().map_err(OcrError::InvalidConfiguration)?;
 
     let resolved = resolve_config_language(config)?;
     let config = resolved.as_ref().unwrap_or(config);
 
-    process_image_resolved(image_bytes, config, cache, api_pool, output_format)
+    process_image_resolved(
+        image_bytes,
+        config,
+        cache,
+        api_pool,
+        output_format,
+        allow_bounded_inferred_upscale,
+    )
 }
 
 /// Inner implementation operating on an already-resolved config.
@@ -2911,12 +2937,16 @@ fn process_image_resolved(
     cache: &OcrCache,
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
+    allow_bounded_inferred_upscale: bool,
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
     // Share one resolved model revision between cached output and its native handle. ~keep
     let models = ModelContext::resolve(config)?;
-    let config_str = models.result_key(config);
+    let mut config_str = models.result_key(config);
+    if allow_bounded_inferred_upscale {
+        config_str.push_str(":bounded-inferred-upscale");
+    }
 
     // `output_format` is part of the cache identity: it selects the renderer and
     // therefore the `content` and `mime_type` of the result. Omitting it served a
@@ -2939,7 +2969,14 @@ fn process_image_resolved(
         ..Default::default()
     });
 
-    let result = perform_ocr(image_bytes, config, api_pool, extraction_config.as_ref(), &models)?;
+    let result = perform_ocr(
+        image_bytes,
+        config,
+        api_pool,
+        extraction_config.as_ref(),
+        &models,
+        allow_bounded_inferred_upscale,
+    )?;
 
     if config.use_cache
         && let Some(Err(e)) = models.if_current(|| {
@@ -3015,7 +3052,7 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None) {
+                match process_image_resolved(&image_bytes, config, cache, api_pool, None, false) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -3050,7 +3087,7 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None) {
+                match process_image_resolved(&image_bytes, config, cache, api_pool, None, false) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,

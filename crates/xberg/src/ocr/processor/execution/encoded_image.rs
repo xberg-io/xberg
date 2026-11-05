@@ -15,6 +15,7 @@ struct Preparation<'a> {
     config: &'a TesseractConfig,
     images: Option<&'a ImageExtractionConfig>,
     ci_debug_enabled: bool,
+    allow_bounded_inferred_upscale: bool,
 }
 
 struct Assessment {
@@ -28,6 +29,7 @@ enum Candidate {
     Retry(Assessment),
 }
 
+#[cfg(test)]
 pub(super) fn prepare_encoded_ocr_image(
     bytes: &[u8],
     limits: &SecurityLimits,
@@ -35,12 +37,24 @@ pub(super) fn prepare_encoded_ocr_image(
     images: Option<&ImageExtractionConfig>,
     ci_debug_enabled: bool,
 ) -> crate::Result<PreparedOcrImage> {
+    prepare_with_dpi_policy(bytes, limits, config, images, ci_debug_enabled, false)
+}
+
+pub(super) fn prepare_with_dpi_policy(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    config: &TesseractConfig,
+    images: Option<&ImageExtractionConfig>,
+    ci_debug_enabled: bool,
+    allow_bounded_inferred_upscale: bool,
+) -> crate::Result<PreparedOcrImage> {
     let preparation = Preparation {
         bytes,
         limits,
         config,
         images,
         ci_debug_enabled,
+        allow_bounded_inferred_upscale,
     };
     let mut assessment = Assessment {
         policy: config
@@ -208,7 +222,7 @@ impl Preparation<'_> {
             (width, height)
         };
         if let (Some(dpi), Some(policy)) = (dpi, policy)
-            && let Some(target_dpi) = self.known_budgeted_upscale(&decoded, native_dimensions, dpi, policy)?
+            && let Some(target_dpi) = self.budgeted_upscale(&decoded, native_dimensions, dpi, policy)?
         {
             return self
                 .finish_budgeted_upscale(decoded, dpi, policy, target_dpi)
@@ -243,7 +257,7 @@ impl Preparation<'_> {
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
     }
 
-    fn known_budgeted_upscale(
+    fn budgeted_upscale(
         &self,
         decoded: &DecodedOcrImage,
         normalized: (u32, u32),
@@ -260,7 +274,7 @@ impl Preparation<'_> {
                 image::guess_format(self.bytes),
                 Ok(image::ImageFormat::Png | image::ImageFormat::Tiff)
             )
-            || self.source_dpi(width, height).is_none()
+            || (!self.allow_bounded_inferred_upscale && self.source_dpi(width, height).is_none())
             || self.known_native_fits(normalized, Some(policy))?
         {
             return Ok(None);

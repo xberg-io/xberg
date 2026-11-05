@@ -66,7 +66,7 @@ pub(crate) fn builtin_ocr_backend_names() -> Vec<&'static str> {
 pub struct OcrBackendRegistry {
     pub(super) backends: AHashMap<String, Arc<dyn OcrBackend>>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    builtin_tesseract: Option<std::sync::Weak<dyn OcrBackend>>,
+    builtin_tesseract: Option<std::sync::Weak<crate::ocr::tesseract_backend::TesseractBackend>>,
     #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     builtin_paddle: Option<std::sync::Weak<dyn OcrBackend>>,
 }
@@ -129,8 +129,8 @@ impl OcrBackendRegistry {
         {
             use crate::ocr::tesseract_backend::TesseractBackend;
             tracing::info!("Initializing Tesseract OCR backend");
-            let backend: Arc<dyn OcrBackend> = Arc::new(TesseractBackend::new());
-            match self.register(Arc::clone(&backend)) {
+            let backend = Arc::new(TesseractBackend::new());
+            match self.register(backend.clone()) {
                 Ok(()) => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
@@ -280,10 +280,18 @@ impl OcrBackendRegistry {
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) fn is_builtin_tesseract(&self, backend: &Arc<dyn OcrBackend>) -> bool {
+        self.builtin_tesseract_for(backend).is_some()
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) fn builtin_tesseract_for(
+        &self,
+        backend: &Arc<dyn OcrBackend>,
+    ) -> Option<Arc<crate::ocr::tesseract_backend::TesseractBackend>> {
         self.builtin_tesseract
             .as_ref()
             .and_then(std::sync::Weak::upgrade)
-            .is_some_and(|builtin| Arc::ptr_eq(&builtin, backend))
+            .filter(|builtin| std::ptr::addr_eq(Arc::as_ptr(builtin), Arc::as_ptr(backend)))
     }
 
     #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]

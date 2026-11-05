@@ -62,44 +62,21 @@ impl OcrProcessor {
         self.api_pool.capacity()
     }
 
+    #[cfg(test)]
     pub(crate) fn process_image(
         &self,
         image_bytes: &[u8],
         config: &TesseractConfig,
     ) -> Result<OcrExtractionResult, OcrError> {
-        #[cfg(feature = "otel")]
-        let span = crate::telemetry::spans::ocr_span("tesseract", &config.language);
-        #[cfg(feature = "otel")]
-        let _guard = span.enter();
-        #[cfg(feature = "otel")]
-        let start = Instant::now();
-
-        let result = execution::process_image_with_cache(image_bytes, config, &self.cache, &self.api_pool, None);
-
-        #[cfg(feature = "otel")]
-        {
-            let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
-            crate::telemetry::metrics::get_metrics().ocr_duration_ms.record(
-                duration_ms,
-                &[
-                    opentelemetry::KeyValue::new(crate::telemetry::conventions::OCR_BACKEND, "tesseract"),
-                    opentelemetry::KeyValue::new(crate::telemetry::conventions::OCR_LANGUAGE, config.language.clone()),
-                ],
-            );
-        }
-
-        result
+        self.process_image_with_dpi_policy(image_bytes, config, None, false)
     }
 
-    /// Process an image with OCR and respect the output format from ExtractionConfig.
-    ///
-    /// This variant allows specifying an output format (Plain, Markdown, Djot) which
-    /// affects how the OCR result's mime_type is set when markdown output is requested.
-    pub(crate) fn process_image_with_format(
+    pub(crate) fn process_image_with_dpi_policy(
         &self,
         image_bytes: &[u8],
         config: &TesseractConfig,
-        output_format: crate::core::config::OutputFormat,
+        output_format: Option<crate::core::config::OutputFormat>,
+        allow_bounded_inferred_upscale: bool,
     ) -> Result<OcrExtractionResult, OcrError> {
         #[cfg(feature = "otel")]
         let span = crate::telemetry::spans::ocr_span("tesseract", &config.language);
@@ -108,8 +85,14 @@ impl OcrProcessor {
         #[cfg(feature = "otel")]
         let start = Instant::now();
 
-        let result =
-            execution::process_image_with_cache(image_bytes, config, &self.cache, &self.api_pool, Some(output_format));
+        let result = execution::process_image_with_cache_and_dpi_policy(
+            image_bytes,
+            config,
+            &self.cache,
+            &self.api_pool,
+            output_format,
+            allow_bounded_inferred_upscale,
+        );
 
         #[cfg(feature = "otel")]
         {
