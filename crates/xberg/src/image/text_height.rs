@@ -75,7 +75,7 @@ pub(crate) fn median_glyph_height(rgb_data: &[u8], width: usize, height: usize) 
 
 /// Heap-buffer upper bound for the pinned Rust1.99 glyph estimator.
 #[cfg(feature = "ocr")]
-pub(super) fn glyph_workspace_bound(width: usize, height: usize) -> Option<u64> {
+pub(crate) fn glyph_workspace_bound(width: usize, height: usize) -> Option<u64> {
     let pixels = width.checked_mul(height)?;
     if pixels == 0 || pixels > MAX_SCANNED_PIXELS {
         return Some(0);
