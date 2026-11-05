@@ -422,14 +422,22 @@ mod tests {
             drop(lstm);
             assert_eq!(pool.resources.counts(), (0, 1));
             assert!(pool.checkout(path, "eng", unavailable).is_err());
-            assert_eq!(pool.resources.counts(), (0, 0));
+            assert_eq!(
+                pool.resources.counts(),
+                (0, 1),
+                "the failed build frees its slot and the idle LSTM engine stays"
+            );
         }
         let automatic = pool
             .checkout(path, "eng", 3)
             .expect("default mode initializes after failure");
         assert_eq!(automatic.get_int_variable("tessedit_ocr_engine_mode").unwrap(), 1);
         drop(automatic);
-        assert_eq!(pool.resources.counts(), (0, 1));
+        assert_eq!(
+            pool.resources.counts(),
+            (0, 2),
+            "the default-mode engine idles beside the LSTM one under the kept bound"
+        );
     }
 
     #[test]
