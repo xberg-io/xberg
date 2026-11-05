@@ -102,39 +102,45 @@ class CleanHostGuards(unittest.TestCase):
         load.assert_called_once_with("msvcp140.dll")
         return result
 
-    def test_exact_inbox_clr_sidecar_is_allowed_in_system_directories(self) -> None:
+    def test_exact_inbox_clr_sidecars_are_allowed_in_system_directories(self) -> None:
         result = self.baseline_with_files(
             [
                 "Windows/System32/msvcp140_clr0400.dll",
                 "Windows/SysWOW64/MSVCP140_CLR0400.dll",
+                "Windows/System32/vcruntime140_clr0400.dll",
+                "Windows/SysWOW64/VCRUNTIME140_CLR0400.dll",
             ]
         )
         assert result["global_files_absent"] is True
         assert result["msvcp_load_failures"] == ["msvcp140.dll"]
         assert result["inbox_clr_files"] == [
             "SysWOW64/MSVCP140_CLR0400.dll",
+            "SysWOW64/VCRUNTIME140_CLR0400.dll",
             "System32/msvcp140_clr0400.dll",
+            "System32/vcruntime140_clr0400.dll",
         ]
 
-    def test_inbox_allowance_does_not_cover_other_runtime_files_or_paths(self) -> None:
-        for name in (
+    def test_all_unexpected_runtime_paths_are_reported_together(self) -> None:
+        unexpected = [
             "Windows/System32/msvcp140.dll",
             "Windows/SysWOW64/vcruntime140.dll",
             "Windows/System32/msvcp140_clr0401.dll",
             "Windows/System32/subdir/msvcp140_clr0400.dll",
+            "Windows/System32/subdir/vcruntime140_clr0400.dll",
+            "Windows/SysWOW64/vcruntime140_clr0401.dll",
             "python/msvcp140_clr0400.dll",
-        ):
-            with self.subTest(name=name):
-                try:
-                    with expected_error(ValueError, "baseline contains VC runtime"):
-                        self.baseline_with_files([name])
-                finally:
-                    (self.root / name).unlink()
+        ]
+        paths = sorted(str(self.root / name) for name in unexpected)
+        with expected_error(ValueError, "\n".join(["baseline contains VC runtime files:", *paths])):
+            self.baseline_with_files([*unexpected, "Windows/System32/msvcp140_clr0400.dll"])
 
     def test_inbox_allowance_does_not_cover_loaded_modules(self) -> None:
-        name = "Windows/System32/msvcp140_clr0400.dll"
-        with expected_error(ValueError, "outside wheel"):
-            self.baseline_with_files([name], [self.root / name])
+        for name, error in (
+            ("Windows/System32/msvcp140_clr0400.dll", "outside wheel"),
+            ("Windows/System32/vcruntime140_clr0400.dll", "outside allowed"),
+        ):
+            with self.subTest(name=name), expected_error(ValueError, error):
+                self.baseline_with_files([name], [self.root / name])
 
     def test_global_or_python_msvcp_module_is_rejected(self) -> None:
         for location in (self.root / "Windows/System32", self.root / "python"):
