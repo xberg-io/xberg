@@ -134,6 +134,12 @@ fn assert_decode_budget_failure(image: &image::DynamicImage) {
 }
 
 fn embedded_image_pdf() -> Vec<u8> {
+    embedded_image_pdf_with_copies(1)
+}
+
+fn embedded_image_pdf_with_copies(copies: usize) -> Vec<u8> {
+    use std::fmt::Write as _;
+
     let pixels = image::RgbImage::from_pixel(32, 24, image::Rgb([0, 0, 0]));
     let mut jpeg = Vec::new();
     image::codecs::jpeg::JpegEncoder::new(&mut jpeg)
@@ -141,17 +147,25 @@ fn embedded_image_pdf() -> Vec<u8> {
         .unwrap();
     let mut document = Document::with_version("1.7");
     let pages = document.new_object_id();
-    let image = document.add_object(Stream::new(
-        dictionary! {
-            "Type" => "XObject", "Subtype" => "Image", "Width" => 32, "Height" => 24,
-            "ColorSpace" => "DeviceRGB", "BitsPerComponent" => 8, "Filter" => "DCTDecode",
-        },
-        jpeg,
-    ));
-    let content = document.add_object(Stream::new(dictionary! {}, b"q 72 0 0 72 0 0 cm /Im0 Do Q".to_vec()));
+    let mut xobjects = lopdf::Dictionary::new();
+    let mut paint = String::from("q 72 0 0 72 0 0 cm");
+    for index in 0..copies {
+        let name = format!("Im{index}");
+        let image = document.add_object(Stream::new(
+            dictionary! {
+                "Type" => "XObject", "Subtype" => "Image", "Width" => 32, "Height" => 24,
+                "ColorSpace" => "DeviceRGB", "BitsPerComponent" => 8, "Filter" => "DCTDecode",
+            },
+            jpeg.clone(),
+        ));
+        write!(paint, " /{name} Do").unwrap();
+        xobjects.set(name, image);
+    }
+    paint.push_str(" Q");
+    let content = document.add_object(Stream::new(dictionary! {}, paint.into_bytes()));
     let page = document.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(72), Object::Integer(72)],
-        "Rotate" => 90, "Contents" => content, "Resources" => dictionary! { "XObject" => dictionary! { "Im0" => image } },
+        "Rotate" => 90, "Contents" => content, "Resources" => dictionary! { "XObject" => xobjects },
     });
     document.objects.insert(
         pages,
@@ -216,7 +230,11 @@ async fn run_case_with_image_capture(
         Some(72.0 / HEIGHT as f32),
         None,
         page_index_offset,
-        source,
+        source.map(|document| DetachedOcrPage {
+            document,
+            #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+            orientation_retry: None,
+        }),
     ))
     .await
 }
@@ -450,7 +468,11 @@ async fn run_case_with_explicit_caps(
         Some(72.0 / HEIGHT as f32),
         None,
         0,
-        Some(doc),
+        Some(DetachedOcrPage {
+            document: doc,
+            #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+            orientation_retry: None,
+        }),
     ))
     .await
 }
@@ -666,3 +688,121 @@ async fn detached_recovery_image_description_reports_stage_failure_without_claim
         Some("recovered from raw image XObject (embedded_jpeg) after all page OCR stages failed")
     );
 }
+
+#[tokio::test]
+#[serial_test::serial]
+async fn whole_document_recovery_applies_the_lower_explicit_decode_cap() {
+    const TIGHT_CAP: usize = 2048;
+    const ROOMY_CAP: usize = 8192;
+
+    let (_guard, calls) = register_backend();
+    let pdf = embedded_image_pdf();
+    let document = xberg_native_pdf::PdfDocument::from_bytes(pdf.clone()).unwrap();
+    let handles = document.page_image_handles(0).unwrap();
+    let [image] = handles.as_slice() else {
+        panic!("expected exactly one embedded JPEG");
+    };
+    let jpeg = image.raw_compressed_bytes_with_limit(TIGHT_CAP).unwrap();
+    let security_limits = |max_content_size| SecurityLimits {
+        max_content_size,
+        ..Default::default()
+    };
+    let error =
+        crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(&jpeg, &security_limits(TIGHT_CAP))
+            .expect_err("the JPEG fits its stored-byte cap but its decoded pixels do not");
+    assert!(error.to_string().contains("Image dimensions 32x24 require"));
+
+    for (outer, nested, expected) in [
+        (Some(ROOMY_CAP), None, Some(RECOVERED)),
+        (Some(TIGHT_CAP), None, None),
+        (Some(TIGHT_CAP), Some(ROOMY_CAP), None),
+        (Some(ROOMY_CAP), Some(TIGHT_CAP), None),
+        (None, Some(TIGHT_CAP), None),
+    ] {
+        let config = ExtractionConfig {
+            security_limits: outer.map(security_limits),
+            ..Default::default()
+        };
+        let ocr = OcrConfig {
+            security_limits: nested.map(security_limits),
+            ..Default::default()
+        };
+        let recovered = recover_pipeline_document_from_image_xobjects(Some(&pdf), &config, &ocr, BACKEND)
+            .await
+            .unwrap();
+        assert_eq!(
+            recovered.as_ref().map(|outcome| outcome.text.as_str()),
+            expected,
+            "outer={outer:?}, nested={nested:?}"
+        );
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 5);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn cancelled_whole_document_recovery_does_not_call_the_backend() {
+    let (_guard, calls) = register_backend();
+    let token = crate::cancellation::CancellationToken::new();
+    token.cancel();
+    let config = ExtractionConfig {
+        cancel_token: Some(token),
+        ..Default::default()
+    };
+    let pdf = embedded_image_pdf();
+    let result =
+        recover_pipeline_document_from_image_xobjects(Some(&pdf), &config, &OcrConfig::default(), BACKEND).await;
+    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+async fn assert_recovery_stops_after_first_of_two_jpegs(detached: bool) {
+    let token = crate::cancellation::CancellationToken::new();
+    let calls = Arc::new(AtomicUsize::new(0));
+    crate::plugins::register_ocr_backend(Arc::new(RecoveryBackend {
+        calls: calls.clone(),
+        cancel_during_recovery: Some((token.clone(), true)),
+        observed_content_cap: None,
+    }))
+    .unwrap();
+    let _guard = BackendGuard;
+    let pdf = embedded_image_pdf_with_copies(2);
+    let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf.clone()).unwrap();
+    let handles = doc.page_image_handles(0).unwrap();
+    assert_eq!(
+        handles.iter().map(|image| image.paint_order).collect::<Vec<_>>(),
+        [0, 1]
+    );
+    let config = ExtractionConfig {
+        cancel_token: Some(token.clone()),
+        ..Default::default()
+    };
+    let ocr = OcrConfig::default();
+    let result = if detached {
+        recover_pipeline_page_from_image_xobjects(&doc, 0, &config, &ocr, BACKEND).await
+    } else {
+        recover_pipeline_document_from_image_xobjects(Some(&pdf), &config, &ocr, BACKEND).await
+    };
+    assert!(token.is_cancelled());
+    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "the second JPEG must not reach the backend after the first cancels"
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn detached_recovery_stops_after_first_of_two_jpegs_on_cancellation() {
+    assert_recovery_stops_after_first_of_two_jpegs(true).await;
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn whole_document_recovery_stops_after_first_of_two_jpegs_on_cancellation() {
+    assert_recovery_stops_after_first_of_two_jpegs(false).await;
+}
+
+#[path = "stored_jpeg_recovery_tests.rs"]
+mod stored_jpeg_recovery_tests;

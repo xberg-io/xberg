@@ -95,9 +95,43 @@ pub static VALIDATOR_REGISTRY: LazyLock<Arc<RwLock<ValidatorRegistry>>> =
 pub static RENDERER_REGISTRY: LazyLock<Arc<RwLock<RendererRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(RendererRegistry::new())));
 
+#[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
+tokio::task_local! {
+    static TEST_OCR_BACKEND_REGISTRY: Arc<RwLock<OcrBackendRegistry>>;
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
+pub(crate) async fn with_test_ocr_backend<F: std::future::Future>(
+    backend: Arc<dyn crate::plugins::OcrBackend>,
+    future: F,
+) -> F::Output {
+    let mut registry = OcrBackendRegistry::new_empty();
+    registry.register(backend).expect("register isolated test backend");
+    TEST_OCR_BACKEND_REGISTRY
+        .scope(Arc::new(RwLock::new(registry)), future)
+        .await
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr-pipeline", feature = "tokio-runtime"))]
+pub(crate) fn inherit_test_ocr_backend<F: std::future::Future>(
+    future: F,
+) -> impl std::future::Future<Output = F::Output> {
+    let registry = TEST_OCR_BACKEND_REGISTRY.try_with(Arc::clone).ok();
+    async move {
+        match registry {
+            Some(registry) => TEST_OCR_BACKEND_REGISTRY.scope(registry, future).await,
+            None => future.await,
+        }
+    }
+}
+
 /// Get the global OCR backend registry.
 #[cfg_attr(alef, alef(skip))]
 pub fn get_ocr_backend_registry() -> Arc<RwLock<OcrBackendRegistry>> {
+    #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
+    if let Ok(registry) = TEST_OCR_BACKEND_REGISTRY.try_with(Arc::clone) {
+        return registry;
+    }
     OCR_BACKEND_REGISTRY.clone()
 }
 

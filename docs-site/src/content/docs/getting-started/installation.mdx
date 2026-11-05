@@ -695,11 +695,11 @@ Kotlin Android uses the Android AAR (`io.xberg:xberg-android`). It embeds JNI li
 
 ### Swift
 
-Swift Package Manager from `swift-tools-version: 6.0` upward. `Package.swift` declares macOS 14+ and iOS 16+ (the bundled ONNX Runtime requires macOS 13.4); SwiftPM has no platform declaration for Linux, so no minimum is stated there. The package pulls a prebuilt static library through a `binaryTarget` (`RustBridgeBinary`), so consuming it needs no local cargo build.
+Swift Package Manager from `swift-tools-version: 6.2` upward. `Package.swift` declares macOS 26+ and iOS 16+ (the bundled ONNX Runtime requires macOS 13.4); SwiftPM has no platform declaration for Linux, so no minimum is stated there. The package pulls a prebuilt static library through a `binaryTarget` (`RustBridgeBinary`), so consuming it needs no local cargo build.
 
 ### Zig
 
-Requires Zig 0.16.0 or higher (declared via `minimum_zig_version` in `build.zig.zon`). The Zig binding consumes the C FFI surface from `xberg-ffi` via `linkSystemLibrary`; the build expects the consumer to provide a search path to the prebuilt `libxberg_ffi` and the C header `xberg.h`. The `zig fetch` command above pins the source archive in `build.zig.zon`; wire it into `build.zig` via `b.dependency("xberg", ...)`.
+Requires Zig 0.17.0 or higher (declared via `minimum_zig_version` in `build.zig.zon`). The Zig binding consumes the C FFI surface from `xberg-ffi` via `linkSystemLibrary`; the build expects the consumer to provide a search path to the prebuilt `libxberg_ffi` and the C header `xberg.h`. The `zig fetch` command above pins the source archive in `build.zig.zon`; wire it into `build.zig` via `b.dependency("xberg", ...)`.
 
 ---
 

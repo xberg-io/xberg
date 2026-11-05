@@ -18,6 +18,10 @@ on:
       - ".github/workflows/ai-rulez-validation.yml"
 permissions:
   contents: read
+concurrency:
+  group: ai-rulez-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     if: github.ref == 'refs/heads/main'

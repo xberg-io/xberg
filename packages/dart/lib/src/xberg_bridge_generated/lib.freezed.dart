@@ -2150,7 +2150,7 @@ return largeAndManyPages(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PlatformInt64 sizeBytes,  PlatformInt64 thresholdBytes)?  largeFile,TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  manyPages,TResult Function( PlatformInt64 pageCount,  bool forceOcr)?  ocrRequired,TResult Function( PlatformInt64 sizeBytes,  PlatformInt64 pageCount)?  largeAndManyPages,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( BigInt sizeBytes,  BigInt thresholdBytes)?  largeFile,TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  manyPages,TResult Function( PlatformInt64 pageCount,  bool forceOcr)?  ocrRequired,TResult Function( BigInt sizeBytes,  PlatformInt64 pageCount)?  largeAndManyPages,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ChunkingReason_LargeFile() when largeFile != null:
 return largeFile(_that.sizeBytes,_that.thresholdBytes);case ChunkingReason_ManyPages() when manyPages != null:
@@ -2174,7 +2174,7 @@ return largeAndManyPages(_that.sizeBytes,_that.pageCount);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PlatformInt64 sizeBytes,  PlatformInt64 thresholdBytes)  largeFile,required TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)  manyPages,required TResult Function( PlatformInt64 pageCount,  bool forceOcr)  ocrRequired,required TResult Function( PlatformInt64 sizeBytes,  PlatformInt64 pageCount)  largeAndManyPages,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( BigInt sizeBytes,  BigInt thresholdBytes)  largeFile,required TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)  manyPages,required TResult Function( PlatformInt64 pageCount,  bool forceOcr)  ocrRequired,required TResult Function( BigInt sizeBytes,  PlatformInt64 pageCount)  largeAndManyPages,}) {final _that = this;
 switch (_that) {
 case ChunkingReason_LargeFile():
 return largeFile(_that.sizeBytes,_that.thresholdBytes);case ChunkingReason_ManyPages():
@@ -2194,7 +2194,7 @@ return largeAndManyPages(_that.sizeBytes,_that.pageCount);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PlatformInt64 sizeBytes,  PlatformInt64 thresholdBytes)?  largeFile,TResult? Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  manyPages,TResult? Function( PlatformInt64 pageCount,  bool forceOcr)?  ocrRequired,TResult? Function( PlatformInt64 sizeBytes,  PlatformInt64 pageCount)?  largeAndManyPages,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( BigInt sizeBytes,  BigInt thresholdBytes)?  largeFile,TResult? Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  manyPages,TResult? Function( PlatformInt64 pageCount,  bool forceOcr)?  ocrRequired,TResult? Function( BigInt sizeBytes,  PlatformInt64 pageCount)?  largeAndManyPages,}) {final _that = this;
 switch (_that) {
 case ChunkingReason_LargeFile() when largeFile != null:
 return largeFile(_that.sizeBytes,_that.thresholdBytes);case ChunkingReason_ManyPages() when manyPages != null:
@@ -2216,9 +2216,9 @@ class ChunkingReason_LargeFile extends ChunkingReason {
 
 
 /// Actual size in bytes.
- final  PlatformInt64 sizeBytes;
+ final  BigInt sizeBytes;
 /// Threshold in bytes.
- final  PlatformInt64 thresholdBytes;
+ final  BigInt thresholdBytes;
 
 /// Create a copy of ChunkingReason
 /// with the given fields replaced by the non-null parameter values.
@@ -2252,7 +2252,7 @@ abstract mixin class $ChunkingReason_LargeFileCopyWith<$Res> implements $Chunkin
   factory $ChunkingReason_LargeFileCopyWith(ChunkingReason_LargeFile value, $Res Function(ChunkingReason_LargeFile) _then) = _$ChunkingReason_LargeFileCopyWithImpl;
 @useResult
 $Res call({
- PlatformInt64 sizeBytes, PlatformInt64 thresholdBytes
+ BigInt sizeBytes, BigInt thresholdBytes
 });
 
 
@@ -2272,8 +2272,8 @@ class _$ChunkingReason_LargeFileCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') $Res call({Object? sizeBytes = null,Object? thresholdBytes = null,}) {
   return _then(ChunkingReason_LargeFile(
 sizeBytes: null == sizeBytes ? _self.sizeBytes : sizeBytes // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,thresholdBytes: null == thresholdBytes ? _self.thresholdBytes : thresholdBytes // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,
+as BigInt,thresholdBytes: null == thresholdBytes ? _self.thresholdBytes : thresholdBytes // ignore: cast_nullable_to_non_nullable
+as BigInt,
   ));
 }
 
@@ -2432,7 +2432,7 @@ class ChunkingReason_LargeAndManyPages extends ChunkingReason {
 
 
 /// Actual size in bytes.
- final  PlatformInt64 sizeBytes;
+ final  BigInt sizeBytes;
 /// Actual page count.
  final  PlatformInt64 pageCount;
 
@@ -2468,7 +2468,7 @@ abstract mixin class $ChunkingReason_LargeAndManyPagesCopyWith<$Res> implements 
   factory $ChunkingReason_LargeAndManyPagesCopyWith(ChunkingReason_LargeAndManyPages value, $Res Function(ChunkingReason_LargeAndManyPages) _then) = _$ChunkingReason_LargeAndManyPagesCopyWithImpl;
 @useResult
 $Res call({
- PlatformInt64 sizeBytes, PlatformInt64 pageCount
+ BigInt sizeBytes, PlatformInt64 pageCount
 });
 
 
@@ -2488,7 +2488,7 @@ class _$ChunkingReason_LargeAndManyPagesCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') $Res call({Object? sizeBytes = null,Object? pageCount = null,}) {
   return _then(ChunkingReason_LargeAndManyPages(
 sizeBytes: null == sizeBytes ? _self.sizeBytes : sizeBytes // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,pageCount: null == pageCount ? _self.pageCount : pageCount // ignore: cast_nullable_to_non_nullable
+as BigInt,pageCount: null == pageCount ? _self.pageCount : pageCount // ignore: cast_nullable_to_non_nullable
 as PlatformInt64,
   ));
 }
@@ -8776,7 +8776,7 @@ return fastTextExtraction(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PlatformInt64 sizeBytes,  PlatformInt64 thresholdBytes)?  smallFile,TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  fewPages,TResult Function( double textCoverage,  PlatformInt64 avgCharsPerPage)?  textLayerDetected,TResult Function( String mimeType)?  formatNotChunkable,TResult Function()?  chunkingDisabled,TResult Function()?  fastTextExtraction,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( BigInt sizeBytes,  BigInt thresholdBytes)?  smallFile,TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  fewPages,TResult Function( double textCoverage,  PlatformInt64 avgCharsPerPage)?  textLayerDetected,TResult Function( String mimeType)?  formatNotChunkable,TResult Function()?  chunkingDisabled,TResult Function()?  fastTextExtraction,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case NoChunkingReason_SmallFile() when smallFile != null:
 return smallFile(_that.sizeBytes,_that.thresholdBytes);case NoChunkingReason_FewPages() when fewPages != null:
@@ -8802,7 +8802,7 @@ return fastTextExtraction();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PlatformInt64 sizeBytes,  PlatformInt64 thresholdBytes)  smallFile,required TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)  fewPages,required TResult Function( double textCoverage,  PlatformInt64 avgCharsPerPage)  textLayerDetected,required TResult Function( String mimeType)  formatNotChunkable,required TResult Function()  chunkingDisabled,required TResult Function()  fastTextExtraction,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( BigInt sizeBytes,  BigInt thresholdBytes)  smallFile,required TResult Function( PlatformInt64 pageCount,  PlatformInt64 threshold)  fewPages,required TResult Function( double textCoverage,  PlatformInt64 avgCharsPerPage)  textLayerDetected,required TResult Function( String mimeType)  formatNotChunkable,required TResult Function()  chunkingDisabled,required TResult Function()  fastTextExtraction,}) {final _that = this;
 switch (_that) {
 case NoChunkingReason_SmallFile():
 return smallFile(_that.sizeBytes,_that.thresholdBytes);case NoChunkingReason_FewPages():
@@ -8824,7 +8824,7 @@ return fastTextExtraction();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PlatformInt64 sizeBytes,  PlatformInt64 thresholdBytes)?  smallFile,TResult? Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  fewPages,TResult? Function( double textCoverage,  PlatformInt64 avgCharsPerPage)?  textLayerDetected,TResult? Function( String mimeType)?  formatNotChunkable,TResult? Function()?  chunkingDisabled,TResult? Function()?  fastTextExtraction,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( BigInt sizeBytes,  BigInt thresholdBytes)?  smallFile,TResult? Function( PlatformInt64 pageCount,  PlatformInt64 threshold)?  fewPages,TResult? Function( double textCoverage,  PlatformInt64 avgCharsPerPage)?  textLayerDetected,TResult? Function( String mimeType)?  formatNotChunkable,TResult? Function()?  chunkingDisabled,TResult? Function()?  fastTextExtraction,}) {final _that = this;
 switch (_that) {
 case NoChunkingReason_SmallFile() when smallFile != null:
 return smallFile(_that.sizeBytes,_that.thresholdBytes);case NoChunkingReason_FewPages() when fewPages != null:
@@ -8848,9 +8848,9 @@ class NoChunkingReason_SmallFile extends NoChunkingReason {
 
 
 /// Actual size in bytes.
- final  PlatformInt64 sizeBytes;
+ final  BigInt sizeBytes;
 /// Threshold in bytes.
- final  PlatformInt64 thresholdBytes;
+ final  BigInt thresholdBytes;
 
 /// Create a copy of NoChunkingReason
 /// with the given fields replaced by the non-null parameter values.
@@ -8884,7 +8884,7 @@ abstract mixin class $NoChunkingReason_SmallFileCopyWith<$Res> implements $NoChu
   factory $NoChunkingReason_SmallFileCopyWith(NoChunkingReason_SmallFile value, $Res Function(NoChunkingReason_SmallFile) _then) = _$NoChunkingReason_SmallFileCopyWithImpl;
 @useResult
 $Res call({
- PlatformInt64 sizeBytes, PlatformInt64 thresholdBytes
+ BigInt sizeBytes, BigInt thresholdBytes
 });
 
 
@@ -8904,8 +8904,8 @@ class _$NoChunkingReason_SmallFileCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') $Res call({Object? sizeBytes = null,Object? thresholdBytes = null,}) {
   return _then(NoChunkingReason_SmallFile(
 sizeBytes: null == sizeBytes ? _self.sizeBytes : sizeBytes // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,thresholdBytes: null == thresholdBytes ? _self.thresholdBytes : thresholdBytes // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,
+as BigInt,thresholdBytes: null == thresholdBytes ? _self.thresholdBytes : thresholdBytes // ignore: cast_nullable_to_non_nullable
+as BigInt,
   ));
 }
 
@@ -14414,7 +14414,7 @@ return other(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String field0)?  io,TResult Function( String message)?  parsing,TResult Function( String message)?  ocr,TResult Function( String message)?  validation,TResult Function( String message)?  cache,TResult Function( String message)?  imageProcessing,TResult Function( String message)?  serialization,TResult Function( String field0)?  missingDependency,TResult Function( String message,  String pluginName)?  plugin,TResult Function( String field0)?  lockPoisoned,TResult Function( String field0)?  unsupportedFormat,TResult Function( String message)?  embedding,TResult Function( String message)?  reranking,TResult Function( String message)?  transcription,TResult Function( PlatformInt64 elapsedMs,  PlatformInt64 limitMs)?  timeout,TResult Function()?  cancelled,TResult Function( String message)?  security,TResult Function( String field0)?  other,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String field0)?  io,TResult Function( String message)?  parsing,TResult Function( String message)?  ocr,TResult Function( String message)?  validation,TResult Function( String message)?  cache,TResult Function( String message)?  imageProcessing,TResult Function( String message)?  serialization,TResult Function( String field0)?  missingDependency,TResult Function( String message,  String pluginName)?  plugin,TResult Function( String field0)?  lockPoisoned,TResult Function( String field0)?  unsupportedFormat,TResult Function( String message)?  embedding,TResult Function( String message)?  reranking,TResult Function( String message)?  transcription,TResult Function( BigInt elapsedMs,  BigInt limitMs)?  timeout,TResult Function()?  cancelled,TResult Function( String message)?  security,TResult Function( String field0)?  other,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case XbergError_Io() when io != null:
 return io(_that.field0);case XbergError_Parsing() when parsing != null:
@@ -14452,7 +14452,7 @@ return other(_that.field0);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String field0)  io,required TResult Function( String message)  parsing,required TResult Function( String message)  ocr,required TResult Function( String message)  validation,required TResult Function( String message)  cache,required TResult Function( String message)  imageProcessing,required TResult Function( String message)  serialization,required TResult Function( String field0)  missingDependency,required TResult Function( String message,  String pluginName)  plugin,required TResult Function( String field0)  lockPoisoned,required TResult Function( String field0)  unsupportedFormat,required TResult Function( String message)  embedding,required TResult Function( String message)  reranking,required TResult Function( String message)  transcription,required TResult Function( PlatformInt64 elapsedMs,  PlatformInt64 limitMs)  timeout,required TResult Function()  cancelled,required TResult Function( String message)  security,required TResult Function( String field0)  other,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String field0)  io,required TResult Function( String message)  parsing,required TResult Function( String message)  ocr,required TResult Function( String message)  validation,required TResult Function( String message)  cache,required TResult Function( String message)  imageProcessing,required TResult Function( String message)  serialization,required TResult Function( String field0)  missingDependency,required TResult Function( String message,  String pluginName)  plugin,required TResult Function( String field0)  lockPoisoned,required TResult Function( String field0)  unsupportedFormat,required TResult Function( String message)  embedding,required TResult Function( String message)  reranking,required TResult Function( String message)  transcription,required TResult Function( BigInt elapsedMs,  BigInt limitMs)  timeout,required TResult Function()  cancelled,required TResult Function( String message)  security,required TResult Function( String field0)  other,}) {final _that = this;
 switch (_that) {
 case XbergError_Io():
 return io(_that.field0);case XbergError_Parsing():
@@ -14486,7 +14486,7 @@ return other(_that.field0);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String field0)?  io,TResult? Function( String message)?  parsing,TResult? Function( String message)?  ocr,TResult? Function( String message)?  validation,TResult? Function( String message)?  cache,TResult? Function( String message)?  imageProcessing,TResult? Function( String message)?  serialization,TResult? Function( String field0)?  missingDependency,TResult? Function( String message,  String pluginName)?  plugin,TResult? Function( String field0)?  lockPoisoned,TResult? Function( String field0)?  unsupportedFormat,TResult? Function( String message)?  embedding,TResult? Function( String message)?  reranking,TResult? Function( String message)?  transcription,TResult? Function( PlatformInt64 elapsedMs,  PlatformInt64 limitMs)?  timeout,TResult? Function()?  cancelled,TResult? Function( String message)?  security,TResult? Function( String field0)?  other,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String field0)?  io,TResult? Function( String message)?  parsing,TResult? Function( String message)?  ocr,TResult? Function( String message)?  validation,TResult? Function( String message)?  cache,TResult? Function( String message)?  imageProcessing,TResult? Function( String message)?  serialization,TResult? Function( String field0)?  missingDependency,TResult? Function( String message,  String pluginName)?  plugin,TResult? Function( String field0)?  lockPoisoned,TResult? Function( String field0)?  unsupportedFormat,TResult? Function( String message)?  embedding,TResult? Function( String message)?  reranking,TResult? Function( String message)?  transcription,TResult? Function( BigInt elapsedMs,  BigInt limitMs)?  timeout,TResult? Function()?  cancelled,TResult? Function( String message)?  security,TResult? Function( String field0)?  other,}) {final _that = this;
 switch (_that) {
 case XbergError_Io() when io != null:
 return io(_that.field0);case XbergError_Parsing() when parsing != null:
@@ -15475,8 +15475,8 @@ class XbergError_Timeout extends XbergError {
   const XbergError_Timeout({required this.elapsedMs, required this.limitMs}): super._();
 
 
- final  PlatformInt64 elapsedMs;
- final  PlatformInt64 limitMs;
+ final  BigInt elapsedMs;
+ final  BigInt limitMs;
 
 /// Create a copy of XbergError
 /// with the given fields replaced by the non-null parameter values.
@@ -15510,7 +15510,7 @@ abstract mixin class $XbergError_TimeoutCopyWith<$Res> implements $XbergErrorCop
   factory $XbergError_TimeoutCopyWith(XbergError_Timeout value, $Res Function(XbergError_Timeout) _then) = _$XbergError_TimeoutCopyWithImpl;
 @useResult
 $Res call({
- PlatformInt64 elapsedMs, PlatformInt64 limitMs
+ BigInt elapsedMs, BigInt limitMs
 });
 
 
@@ -15530,8 +15530,8 @@ class _$XbergError_TimeoutCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') $Res call({Object? elapsedMs = null,Object? limitMs = null,}) {
   return _then(XbergError_Timeout(
 elapsedMs: null == elapsedMs ? _self.elapsedMs : elapsedMs // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,limitMs: null == limitMs ? _self.limitMs : limitMs // ignore: cast_nullable_to_non_nullable
-as PlatformInt64,
+as BigInt,limitMs: null == limitMs ? _self.limitMs : limitMs // ignore: cast_nullable_to_non_nullable
+as BigInt,
   ));
 }
 

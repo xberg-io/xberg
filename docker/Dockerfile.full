@@ -210,7 +210,6 @@ RUN ldconfig
 
 COPY --from=builder /build/xberg /usr/local/bin/xberg
 COPY LICENSE THIRD_PARTY_LICENSES.md /usr/local/share/licenses/xberg/
-RUN chmod +x /usr/local/bin/xberg
 
 RUN groupadd -r xberg && \
     useradd -r -g xberg -d /app -s /sbin/nologin xberg && \

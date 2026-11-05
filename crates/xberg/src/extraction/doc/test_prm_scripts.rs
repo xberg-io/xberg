@@ -114,7 +114,7 @@ async fn should_apply_compact_prm_scripts_by_logical_piece_gh2275() {
                 builder::superscript(start + 2, start + 3),
                 builder::subscript(start + 8, start + 9),
             ],
-            &format!("{prefix}10^9^/l; H~2~O"),
+            &format!("{prefix}10<sup>9</sup>/l; H~2~O"),
         )
         .await;
     }
@@ -137,7 +137,7 @@ async fn should_preserve_chpx_for_unrelated_compact_prm_gh2275() {
             let runs = [("10", 0), ("9", 1), ("/l\r", 0)];
             let pieces = [(0, 2, 0, 0), (2, 3, 2, prm), (3, 6, 3, 0)];
             let bytes = with_piece_prms(script_doc(&runs, compressed), compressed, &pieces, 6);
-            assert_body_scripts(bytes, "109/l", vec![builder::superscript(2, 3)], "10^9^/l").await;
+            assert_body_scripts(bytes, "109/l", vec![builder::superscript(2, 3)], "10<sup>9</sup>/l").await;
         }
     }
 }
@@ -156,7 +156,7 @@ async fn should_keep_distinct_compact_prms_for_reused_physical_bytes_gh2275() {
             bytes,
             "999",
             vec![builder::superscript(1, 2), builder::subscript(2, 3)],
-            "9^9^~9~",
+            "9<sup>9</sup>~9~",
         )
         .await;
     }

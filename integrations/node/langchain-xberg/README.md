@@ -24,7 +24,7 @@ call, no data leaves your machine.
 npm install @xberg-io/langchain-xberg @langchain/core
 ```
 
-Node.js 20.15+ is required on a platform for which `@xberg-io/xberg` ships a prebuilt binary (Linux
+Node.js 22+ is required on a platform for which `@xberg-io/xberg` ships a prebuilt binary (Linux
 x64/arm64 glibc or musl, macOS arm64, Windows x64/arm64).
 
 ## Quick start

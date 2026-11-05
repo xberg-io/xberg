@@ -259,6 +259,14 @@ fn test_render_table_markdown_empty() {
 }
 
 #[test]
+fn table_markdown_omits_rows_without_columns() {
+    let cells = [Vec::new(), Vec::new()];
+    assert_eq!(render_table_markdown(&cells), "");
+    #[cfg(feature = "pdf")]
+    assert_eq!(render_headerless_table_markdown(&cells), "");
+}
+
+#[test]
 fn test_render_table_markdown_escapes_pipe() {
     let cells = vec![vec!["A|B".to_string()], vec!["C|D".to_string()]];
     let out = render_table_markdown(&cells);

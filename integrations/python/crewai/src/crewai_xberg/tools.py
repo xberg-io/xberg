@@ -117,7 +117,7 @@ def _first_document(result: ExtractionResult, file_path: str) -> Any:
 
     A single CrewAI tool call handles exactly one file, so ``extract`` (not
     ``extract_batch``) is the correct entry point and ``results``/``errors``
-    each hold at most one item. A missing file raises ``RuntimeError`` from
+    each hold at most one item. A missing file raises ``xberg.IoError`` from
     ``extract`` itself; per-input failures (e.g. unsupported formats) instead
     surface in ``result.errors``, which is guarded here.
     """

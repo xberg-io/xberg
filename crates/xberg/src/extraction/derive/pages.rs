@@ -7,14 +7,17 @@ use crate::types::ocr_elements::{OcrConfidence, OcrElement};
 use crate::types::page::PageContent;
 use crate::types::tables::Table;
 
+use super::surfaces::MarkupPageBody;
+
 pub(super) fn derive_pages(
     doc: &mut InternalDocument,
     content: &str,
     output_format: &crate::core::config::OutputFormat,
     content_is_plain: bool,
+    observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
     let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(doc, content_is_plain));
-    let pages = apply_page_content_format(raw_pages, doc, output_format);
+    let pages = apply_page_content_format(raw_pages, doc, output_format, observer);
     if content_is_plain
         && !reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref())
         && drop_unusable_page_boundaries(&mut doc.metadata, content)
@@ -209,30 +212,40 @@ pub(super) fn apply_page_content_format(
     pages: Option<Vec<PageContent>>,
     doc: &InternalDocument,
     output_format: &crate::core::config::OutputFormat,
+    observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
     use crate::core::config::OutputFormat;
 
-    let renderer: fn(&InternalDocument) -> String = match output_format {
-        OutputFormat::Markdown => crate::rendering::render_markdown,
-        OutputFormat::Djot => crate::rendering::render_djot,
-        OutputFormat::Html => crate::rendering::render_html,
-        OutputFormat::DocTags => crate::rendering::render_doctags,
-        OutputFormat::Plain | OutputFormat::Json | OutputFormat::Custom(_) => {
-            return pages;
-        }
+    let observe_markup = observer.captures_verified_markup()
+        && (matches!(output_format, OutputFormat::Html | OutputFormat::Djot)
+            || matches!(output_format, OutputFormat::Custom(name) if name == "html"));
+    let renderer: Option<fn(&InternalDocument) -> String> = match output_format {
+        OutputFormat::Markdown => Some(crate::rendering::render_markdown),
+        OutputFormat::Djot => Some(crate::rendering::render_djot),
+        OutputFormat::Html => Some(crate::rendering::render_html),
+        OutputFormat::DocTags => Some(crate::rendering::render_doctags),
+        OutputFormat::Custom(_) if observe_markup => None,
+        OutputFormat::Plain | OutputFormat::Json | OutputFormat::Custom(_) => return pages,
     };
 
     let pages = pages?;
     let elements_by_page = compute_page_membership(doc);
-    if elements_by_page.is_empty() {
+    if elements_by_page.is_empty() && !observe_markup {
         return Some(pages);
     }
 
     let pages = pages
         .into_iter()
-        .map(|page| match elements_by_page.get(&page.page_number) {
-            Some(elem_indices) => render_sub_page(page, elem_indices, doc, renderer),
-            None => page,
+        .enumerate()
+        .map(|(index, page)| match elements_by_page.get(&page.page_number) {
+            Some(elem_indices) => render_sub_page(page, elem_indices, doc, renderer, (index, output_format), observer),
+            None => {
+                if observe_markup {
+                    // No page body was rendered. Only an empty original has no unproved payload. ~keep
+                    observe_literal_page(&page, index, "", observer);
+                }
+                page
+            }
         })
         .collect();
 
@@ -288,10 +301,12 @@ fn compute_page_membership(doc: &InternalDocument) -> std::collections::BTreeMap
 /// Re-render one page's `content` from just the elements (and the tables/images they
 /// reference, renumbered) that belong to it.
 fn render_sub_page(
-    mut page: PageContent,
+    page: PageContent,
     elem_indices: &[usize],
     doc: &InternalDocument,
-    renderer: fn(&InternalDocument) -> String,
+    renderer: Option<fn(&InternalDocument) -> String>,
+    observation: (usize, &crate::core::config::OutputFormat),
+    observer: &mut impl super::surfaces::DerivationObserver,
 ) -> PageContent {
     let mut table_remap: ahash::AHashMap<u32, u32> = ahash::AHashMap::new();
     let mut sub_tables: Vec<Table> = Vec::new();
@@ -346,11 +361,90 @@ fn render_sub_page(
     sub_doc.ocr_text_only = doc.ocr_text_only;
     sub_doc.append_ocr_text = doc.append_ocr_text;
 
-    let rendered = renderer(&sub_doc);
+    render_observed_page(page, &sub_doc, renderer, observation, observer)
+}
+
+fn render_observed_page(
+    mut page: PageContent,
+    doc: &InternalDocument,
+    renderer: Option<fn(&InternalDocument) -> String>,
+    (index, format): (usize, &crate::core::config::OutputFormat),
+    observer: &mut impl super::surfaces::DerivationObserver,
+) -> PageContent {
+    use crate::core::config::OutputFormat;
+    if matches!(format, OutputFormat::Markdown) && observer.captures_pages() {
+        let all_owned = crate::rendering::markdown_tag_exemptions_are_owned(doc);
+        let budget = if all_owned {
+            None
+        } else {
+            observer.markdown_tag_budget()
+        };
+        let (rendered, ranges) = crate::rendering::render_markdown_observed(doc, budget);
+        if !rendered.is_empty() {
+            observer.page_from_source(
+                index,
+                page.page_number,
+                &rendered,
+                crate::rendering::render_plain(doc),
+                all_owned,
+            );
+            observer.page_tag_ranges(ranges);
+            page.content = rendered;
+        }
+        return page;
+    }
+    let rendered = match renderer {
+        Some(renderer)
+            if observer.captures_verified_markup() && matches!(format, OutputFormat::Html | OutputFormat::Djot) =>
+        {
+            let plain = crate::rendering::render_plain(doc);
+            let (rendered, verified) = if matches!(format, OutputFormat::Html) {
+                crate::rendering::render_html_checked(doc, Some(&plain))
+            } else {
+                let rendered = renderer(doc);
+                let verified = crate::rendering::has_djot_plain_body(doc);
+                (rendered, verified)
+            };
+            if rendered.is_empty() {
+                observe_literal_page(&page, index, &plain, observer);
+            } else {
+                let body = if verified {
+                    MarkupPageBody::Rendered(
+                        #[cfg(feature = "redaction")]
+                        plain,
+                    )
+                } else {
+                    MarkupPageBody::Unverified
+                };
+                observer.page_markup(index, &rendered, body);
+            }
+            rendered
+        }
+        Some(renderer) => renderer(doc),
+        None => {
+            // Custom HTML deliberately keeps the pre-render page representation. ~keep
+            observe_literal_page(&page, index, &crate::rendering::render_plain(doc), observer);
+            return page;
+        }
+    };
     if !rendered.is_empty() {
         page.content = rendered;
     }
     page
+}
+
+fn observe_literal_page(
+    page: &PageContent,
+    index: usize,
+    plain: &str,
+    observer: &mut impl super::surfaces::DerivationObserver,
+) {
+    let body = if page.content == plain {
+        MarkupPageBody::Literal
+    } else {
+        MarkupPageBody::Unverified
+    };
+    observer.page_markup(index, &page.content, body);
 }
 
 /// Extract `OcrElement` entries from OCR-typed internal elements.

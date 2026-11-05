@@ -1,4 +1,4 @@
-use super::attach_native_table_grids;
+use super::{NativeTableMetadata, attach_native_table_grids};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement, NATIVE_TABLE_GRID_ATTRIBUTE};
 use crate::types::{BoundingBox, GridCell, Table, TableGrid};
 
@@ -65,7 +65,15 @@ fn native_grid_attaches_to_the_same_final_table() {
     let original = table();
     let geometry = grid(&original, true);
     let mut doc = document(original.clone(), None);
-    attach_native_table_grids(&mut doc, &[original], &[(Some(geometry.clone()), None)]).unwrap();
+    attach_native_table_grids(
+        &mut doc,
+        &[original],
+        &[NativeTableMetadata {
+            grid: Some(geometry.clone()),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
     assert_eq!(retained(&doc), Some(geometry));
 }
 
@@ -78,7 +86,10 @@ fn native_grid_does_not_attach_after_final_cells_are_edited() {
     attach_native_table_grids(
         &mut doc,
         std::slice::from_ref(&original),
-        &[(Some(grid(&original, true)), None)],
+        &[NativeTableMetadata {
+            grid: Some(grid(&original, true)),
+            ..Default::default()
+        }],
     )
     .unwrap();
     assert_eq!(retained(&doc), None);
@@ -94,7 +105,10 @@ fn original_index_does_not_replace_recognized_table_geometry() {
     attach_native_table_grids(
         &mut doc,
         std::slice::from_ref(&original),
-        &[(Some(grid(&original, true)), None)],
+        &[NativeTableMetadata {
+            grid: Some(grid(&original, true)),
+            ..Default::default()
+        }],
     )
     .unwrap();
     assert_eq!(retained(&doc), Some(geometry));
@@ -108,8 +122,38 @@ fn native_grid_preserves_already_valid_recognizer_metadata() {
     attach_native_table_grids(
         &mut doc,
         std::slice::from_ref(&original),
-        &[(Some(grid(&original, true)), None)],
+        &[NativeTableMetadata {
+            grid: Some(grid(&original, true)),
+            ..Default::default()
+        }],
     )
     .unwrap();
     assert_eq!(retained(&doc), Some(recognized));
+}
+
+#[test]
+fn column_labels_require_exact_current_cells_and_original_header_authority() {
+    let original = table();
+    let mut metadata = NativeTableMetadata {
+        grid: Some(grid(&original, true)),
+        ..Default::default()
+    };
+    let mut retained = original.clone();
+    metadata.retain_column_labels(&mut retained);
+    assert_eq!(retained.columns, None, "grid header roles alone cannot grant authority");
+
+    metadata.complete_leading_header = true;
+    let mut repaired = original.clone();
+    repaired.cells[0][0] = "edited".to_owned();
+    metadata.retain_column_labels(&mut repaired);
+    assert_eq!(repaired.columns, None, "a repaired grid cannot inherit stale labels");
+
+    metadata.retain_column_labels(&mut retained);
+    assert_eq!(retained.columns.as_ref(), original.cells.first());
+
+    let mut blank = original;
+    blank.cells[0][0].clear();
+    metadata.grid = Some(grid(&blank, true));
+    metadata.retain_column_labels(&mut blank);
+    assert_eq!(blank.columns, None, "retained rendered labels must still be named");
 }

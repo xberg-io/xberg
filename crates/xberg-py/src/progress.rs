@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pyo3::exceptions::{PyAttributeError, PyRuntimeError};
+use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use xberg::engine::seams::{ProgressEvent, ProgressSink};
 
@@ -102,7 +102,7 @@ pub fn extract_with_progress<'py>(
         finish_progress_forwarder(worker).await;
         result
             .map(crate::ExtractionResult::from)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+            .map_err(crate::xberg_error_to_py_err)
     })
 }
 
@@ -128,7 +128,7 @@ pub fn extract_batch_with_progress<'py>(
         finish_progress_forwarder(worker).await;
         result
             .map(crate::ExtractionResult::from)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+            .map_err(crate::xberg_error_to_py_err)
     })
 }
 

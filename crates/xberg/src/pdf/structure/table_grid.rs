@@ -2,9 +2,11 @@
 use crate::types::Table;
 #[cfg(test)]
 use crate::types::TableGrid;
+#[cfg(any(feature = "layout-detection", test))]
+pub(crate) use crate::types::internal::table_grid::attach_table_grids;
 #[cfg(test)]
 use crate::types::internal::table_grid::retained_grid;
-pub(crate) use crate::types::internal::table_grid::{TableGridSidecar, attach_table_grids};
+pub(crate) use crate::types::internal::table_grid::{TableGridSidecar, attach_ruled_table_grids};
 #[cfg(test)]
 use crate::types::internal::{ElementKind, InternalDocument};
 

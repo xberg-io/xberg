@@ -144,6 +144,21 @@ pub(super) fn needs_space_between(prev: &str, next: &str) -> bool {
     !(prev_ends_cjk && next_starts_cjk)
 }
 
+/// A raised number at the start of a paragraph can label a note definition.
+pub(super) fn raised_numeric_prefix_has_word_gap(marker: &SegmentData, body: &SegmentData) -> bool {
+    const MAX_MARKER_DIGITS: usize = 3;
+    let number = marker.text.trim();
+    let (_, marker_end) = marker.upright_advance_extent();
+    let (body_start, _) = body.upright_advance_extent();
+    marker.font_size < body.font_size
+        && marker.upright_baseline() > body.upright_baseline()
+        && (1..=MAX_MARKER_DIGITS).contains(&number.len())
+        && number.bytes().all(|byte| byte.is_ascii_digit())
+        && body.text.trim_start().starts_with(char::is_alphabetic)
+        && body.text.split_whitespace().nth(1).is_some()
+        && body_start - marker_end > body.font_size * SEGMENT_GAP_SPACE_RATIO
+}
+
 /// Returns true if a space should be inserted between the last word of `prev_seg`
 /// and the first word of `next_seg`, using segment geometry to distinguish a real
 /// word gap from a kerning-run split of one word across two spans.

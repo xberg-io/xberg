@@ -510,25 +510,9 @@ pub(super) fn undo_auto_rotate_document_bboxes(
     render_width: u32,
     render_height: u32,
 ) {
-    let auto_rotated = metadata
-        .additional
-        .get(crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY)
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    if !auto_rotated {
-        return;
-    }
-    let Some(orientation) = metadata
-        .additional
-        .get(crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY)
-        .and_then(serde_json::Value::as_i64)
-    else {
+    let Some(correction_degrees) = resolved_ocr_correction_degrees(metadata) else {
         return;
     };
-    if !matches!(orientation, 0 | 90 | 180 | 270) {
-        return;
-    }
-    let correction_degrees = ((360 - orientation).rem_euclid(360)) as u16;
     if correction_degrees == 0 {
         return;
     }
@@ -597,6 +581,7 @@ pub(super) fn build_mixed_ocr_page_document(
     crate::types::internal::InternalDocument,
     Vec<crate::pdf::structure::types::PdfParagraph>,
 )> {
+    super::pipeline::undo_backend_raster_correction(result, image_width_px, image_height_px);
     let mut backend_tables = std::mem::take(&mut result.tables);
     let mut raw_backend_elements = result.ocr_elements.take().unwrap_or_default();
     let (element_layout_width, element_layout_height) =
@@ -1527,11 +1512,9 @@ pub(super) fn analyze_container_markers(
     all(feature = "ocr-pipeline", feature = "pdf")
 ))]
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
-// Same rationale, scoped to `layout-detection` only: `resolved_ocr_correction_degrees` and
-// `transform_ocr_elements_to_render_space` (both `layout-detection`-only) are the sole
-// readers of these two key names in this file.
+// The render-space adapter needs this import only with layout detection; the shared resolver imports it locally.
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
-use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
+use crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY;
 
 #[cfg(any(
     feature = "ocr",
@@ -1621,8 +1604,22 @@ pub(super) fn scale_detection_to_dimensions(
     }
     scaled
 }
-#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+#[cfg(any(
+    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")),
+    all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))
+))]
 pub(super) fn resolved_ocr_correction_degrees(metadata: &crate::types::Metadata) -> Option<u16> {
+    use crate::ocr_metadata_keys::{
+        OCR_AUTO_ROTATED_METADATA_KEY, OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY,
+    };
+    if metadata
+        .additional
+        .get(OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Some(0);
+    }
     if !metadata
         .additional
         .get(OCR_AUTO_ROTATED_METADATA_KEY)
@@ -2980,6 +2977,7 @@ mod tests {
             assigned_role: None,
         };
         let line = crate::pdf::structure::types::PdfLine {
+            native_scripts: Vec::new(),
             segments: vec![segment],
             baseline_y: 0.0,
             dominant_font_size: 12.0,

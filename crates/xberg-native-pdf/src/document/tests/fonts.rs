@@ -809,3 +809,170 @@ fn donated_truetype_cmap_is_reused_not_recomputed_per_page() {
          {PAGES} times"
     );
 }
+
+fn font_name_cache_collision_pdf() -> Vec<u8> {
+    let page = |font_id| {
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] \
+             /Resources << /Font << /F1 {font_id} 0 R >> >> /Contents 9 0 R >>"
+        )
+    };
+    let font = |glyph| {
+        format!(
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+             /Encoding << /Type /Encoding /Differences [65 /{glyph}] >> >>"
+        )
+    };
+    let text = "BT /F1 12 Tf 20 100 Td (A) Tj ET";
+    let stream = format!("<< /Length {} >>\nstream\n{text}\nendstream", text.len());
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>",
+        &[
+            (3, page(6).as_bytes()),
+            (4, page(7).as_bytes()),
+            (5, page(8).as_bytes()),
+            (6, font("a").as_bytes()),
+            (7, font("a").as_bytes()),
+            (8, font("b").as_bytes()),
+            (9, stream.as_bytes()),
+        ],
+    )
+}
+
+fn read_name_cache_fixture_page(doc: &PdfDocument, page: usize) -> String {
+    let mut extractor = crate::extractors::TextExtractor::new();
+    doc.load_fonts(&doc.get_page_resources(page).expect("page resources"), &mut extractor)
+        .expect("load page fonts");
+    let content = doc.get_page_content_data(page).expect("page content");
+    extractor
+        .extract_text_spans(&content)
+        .expect("extract page spans")
+        .into_iter()
+        .map(|span| span.text)
+        .collect()
+}
+
+#[test]
+fn font_name_cache_replacement_preserves_verified_font_identity() {
+    use super::super::fonts::FONT_NAME_SET_AFTER_VERIFY;
+    use std::sync::mpsc::sync_channel;
+    use std::time::Duration;
+
+    let doc = PdfDocument::from_bytes(font_name_cache_collision_pdf()).expect("open fixture");
+    assert_eq!(doc.page_count().expect("page count"), 3);
+    assert_eq!(read_name_cache_fixture_page(&doc, 0).trim(), "a");
+
+    let (verified, awaiting_verified) = sync_channel(1);
+    let (replaced, awaiting_replacement) = sync_channel(1);
+    let timeout = Duration::from_secs(5);
+    let aliased_text = std::thread::scope(|scope| {
+        let doc = &doc;
+        let reader = scope.spawn(move || {
+            FONT_NAME_SET_AFTER_VERIFY.set(Some(Box::new(move || {
+                verified.send(()).expect("signal verified cache hit");
+                awaiting_replacement
+                    .recv_timeout(timeout)
+                    .expect("wait for name cache replacement");
+            })));
+            read_name_cache_fixture_page(doc, 1)
+        });
+        awaiting_verified
+            .recv_timeout(timeout)
+            .expect("wait for the alias font to verify");
+        assert_eq!(read_name_cache_fixture_page(doc, 2).trim(), "b");
+        replaced.send(()).expect("resume the alias font read");
+        reader.join().expect("reader finishes")
+    });
+    assert_eq!(aliased_text.trim(), "a");
+}
+
+fn form_resources(font_dict: Object) -> Object {
+    Object::Dictionary(HashMap::from([("Font".to_owned(), font_dict)]))
+}
+
+fn alias_form_font_dict(doc: &PdfDocument) -> Object {
+    let donor_alias = ObjectRef::new(16, 0);
+    let recipient_alias = ObjectRef::new(17, 0);
+    for (original, alias) in [(11, donor_alias), (14, recipient_alias)] {
+        let font = doc.load_object(ObjectRef::new(original, 0)).expect("form font");
+        doc.object_cache.lock_or_recover().insert(alias, font);
+    }
+    Object::Dictionary(HashMap::from([
+        ("F1".to_owned(), Object::Reference(donor_alias)),
+        ("F2".to_owned(), Object::Reference(recipient_alias)),
+    ]))
+}
+
+#[test]
+fn cached_form_fonts_keep_enclosing_cmap_donor_on_every_cache_layer() {
+    use crate::extractors::TextExtractor;
+    use crate::fonts::TrueTypeCMap;
+
+    for layer in [2, 3, 4] {
+        let doc = PdfDocument::from_bytes(build_minimal_pdf(b"")).expect("open fixture");
+        let (font_dict, form) = donor_and_recipient_font_resources(&doc);
+        let warm_form = match layer {
+            2 => form.clone(),
+            3 => form_resources(doc.load_object(font_dict).expect("direct form font dictionary")),
+            4 => form_resources(alias_form_font_dict(&doc)),
+            _ => unreachable!(),
+        };
+
+        let mut page_donor =
+            crate::fonts::FontInfo::from_dict(&doc.load_object(ObjectRef::new(11, 0)).expect("local donor"), &doc)
+                .expect("parse donor");
+        page_donor.base_font = "MNOPQR+DonationTest1746".to_owned();
+        let larger_cmap = TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format4(&[(0x42, 3), (0x43, 4)]))
+            .expect("parse larger cmap");
+        page_donor.set_truetype_cmap(Some(larger_cmap));
+        let page_donor = Arc::new(page_donor);
+
+        let decode = |resources, with_enclosing_font| {
+            let mut extractor = TextExtractor::new();
+            if with_enclosing_font {
+                extractor.add_font_shared("PageDonor".to_owned(), Arc::clone(&page_donor));
+            }
+            doc.load_fonts(resources, &mut extractor).expect("load form fonts");
+            let recipient = extractor
+                .get_font_set()
+                .into_iter()
+                .find(|(name, _)| name == "F2")
+                .expect("recipient font")
+                .1;
+            recipient.truetype_cmap().expect("donated cmap").get_unicode(3)
+        };
+
+        assert_eq!(decode(&form, true), Some('B'), "layer {layer}: cold scoped donor");
+        assert_eq!(decode(&warm_form, true), Some('B'), "layer {layer}: warm scoped donor");
+        assert_eq!(decode(&warm_form, false), Some('A'), "layer {layer}: warm local donor");
+        assert_eq!(doc.donation_call_count(), 1, "layer {layer}: one dictionary donation");
+        assert_eq!(
+            doc.donation_apply_count(),
+            2,
+            "layer {layer}: only scoped reads apply donations"
+        );
+    }
+}
+
+#[test]
+fn replacing_cmap_on_font_clone_detaches_cached_unicode() {
+    use crate::fonts::TrueTypeCMap;
+
+    let doc = PdfDocument::from_bytes(build_minimal_pdf(b"")).expect("open fixture");
+    donor_and_recipient_font_resources(&doc);
+    let object = doc.load_object(ObjectRef::new(14, 0)).expect("Type0 recipient");
+    let mut original = crate::fonts::FontInfo::from_dict(&object, &doc).expect("load recipient");
+    let cmap =
+        |code| TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format4(&[(code, 3)])).expect("parse cmap");
+    original.set_truetype_cmap(Some(cmap(0x42)));
+    assert_eq!(original.char_to_unicode(3).as_deref(), Some("B"));
+    assert_eq!(original.get_byte_to_char_table()[3], 'B');
+
+    let mut other = original.clone();
+    other.set_truetype_cmap(Some(cmap(0x43)));
+    assert_eq!(other.char_to_unicode(3).as_deref(), Some("C"));
+    assert_eq!(other.get_byte_to_char_table()[3], 'C');
+    assert_eq!(original.char_to_unicode(3).as_deref(), Some("B"));
+    assert_eq!(original.get_byte_to_char_table()[3], 'B');
+}

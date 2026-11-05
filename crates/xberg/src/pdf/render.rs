@@ -354,10 +354,10 @@ fn classify_engine_warning(page_index: usize, captured: &EngineWarning) -> Proce
 /// Capture is opt-in: unless the application called
 /// [`install_pdf_render_diagnostics`], this arms nothing and is exactly
 /// equivalent to calling `render` directly, at no cost.
-fn render_page_capturing_glyph_drops(
+fn render_page_capturing_glyph_drops<T>(
     page_index: usize,
-    render: impl FnOnce() -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error>,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    render: impl FnOnce() -> std::result::Result<T, xberg_native_pdf::Error>,
+) -> std::result::Result<T, xberg_native_pdf::Error> {
     if !ENGINE_CAPTURE_ACTIVE.load(Ordering::Acquire) {
         return render();
     }
@@ -424,6 +424,32 @@ pub(crate) fn record_render_warning(warning: ProcessingWarning) {
     ENGINE_PENDING_WARNINGS.with(|pending| push_warning_deduped(&mut pending.borrow_mut(), warning));
 }
 
+/// Capture this synchronous render's warnings without leaving them on a worker that
+/// may poll another extraction while the current request awaits OCR.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(crate) fn capture_render_warnings<T>(render: impl FnOnce() -> Result<T>) -> Result<(T, Vec<ProcessingWarning>)> {
+    let prior = take_xberg_native_pdf_render_warnings();
+    let result = render();
+    let warnings = ENGINE_PENDING_WARNINGS.with(|pending| pending.replace(prior));
+    result.map(|value| (value, warnings))
+}
+
+/// Roll back warnings from a failed sequential render batch. Recording only appends, so
+/// retaining the original length preserves warnings already pending on the same thread.
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(test, not(feature = "tokio-runtime"), target_arch = "wasm32")
+))]
+pub(crate) fn discard_new_render_warnings_on_error<T>(render: impl FnOnce() -> Result<T>) -> Result<T> {
+    let prior_count = ENGINE_PENDING_WARNINGS.with(|pending| pending.borrow().len());
+    let result = render();
+    if result.is_err() {
+        ENGINE_PENDING_WARNINGS.with(|pending| pending.borrow_mut().truncate(prior_count));
+    }
+    result
+}
+
 /// Deposit warnings drained on another thread into *this* thread's pending buffer, so a later
 /// [`take_xberg_native_pdf_render_warnings`] here returns them.
 ///
@@ -462,19 +488,29 @@ pub(crate) fn par_render_pages_collecting_warnings<T: Send>(
 ) -> crate::Result<Vec<T>> {
     use rayon::prelude::*;
 
-    let rendered: Vec<(T, Vec<ProcessingWarning>)> = page_indices
+    // The caller can also execute a page. Save its pending warnings so a failed batch
+    // cannot drop unrelated diagnostics when the per-page drain runs on that thread.
+    let mut warnings = take_xberg_native_pdf_render_warnings();
+    let pages = page_indices
         .into_par_iter()
-        .map(|page_index| render(page_index).map(|page| (page, take_xberg_native_pdf_render_warnings())))
-        .collect::<crate::Result<Vec<_>>>()?;
-
-    let mut pages = Vec::with_capacity(rendered.len());
-    let mut warnings = Vec::new();
-    for (page, page_warnings) in rendered {
-        pages.push(page);
-        warnings.extend(page_warnings);
-    }
-    absorb_render_warnings(warnings);
-    Ok(pages)
+        .map(|page_index| {
+            let result = render(page_index);
+            let page_warnings = take_xberg_native_pdf_render_warnings();
+            result.map(|page| (page, page_warnings))
+        })
+        .collect::<crate::Result<Vec<_>>>()
+        .map(|rendered| {
+            let mut pages = Vec::with_capacity(rendered.len());
+            for (page, page_warnings) in rendered {
+                pages.push(page);
+                for warning in page_warnings {
+                    push_warning_deduped(&mut warnings, warning);
+                }
+            }
+            pages
+        });
+    ENGINE_PENDING_WARNINGS.with(|pending| *pending.borrow_mut() = warnings);
+    pages
 }
 
 #[cfg(all(
@@ -899,10 +935,10 @@ pub(crate) fn normalize_rendered_page_for_ocr_with_security_limits(
 /// it here is the same treatment the text path gives the total-order sort panic
 /// (#1198): the page becomes an `Err`, callers fall back to their existing
 /// render-failure handling, and the rest of the document still extracts.
-fn guard_render_panic(
+fn guard_render_panic<T>(
     page_index: usize,
-    render: impl FnOnce() -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error>,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    render: impl FnOnce() -> std::result::Result<T, xberg_native_pdf::Error>,
+) -> std::result::Result<T, xberg_native_pdf::Error> {
     super::native::guard_native_panic(render, |message| {
         xberg_native_pdf::Error::InvalidPdf(format!(
             "page {} could not be rasterized: the rasterizer panicked and was contained ({message})",
@@ -916,12 +952,62 @@ fn guard_render_panic(
 /// inputs during force_ocr / VLM / layout paths.
 ///
 /// Uses the opened document (so callers that batch multiple pages only parse once).
+/// When a byte limit is supplied, native rendering checks the actual raster at the final DPI
+/// before allocating the canvas, including when the 72 DPI floor applies.
 pub(crate) fn render_page_with_safeguards(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     base_dpi: u32,
+    max_png_working_bytes: Option<usize>,
 ) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
-    let (w_pt, h_pt) = get_page_dimensions_pt(doc, page_index);
+    let options = safeguarded_render_options(page_index, base_dpi, get_page_dimensions_pt(doc, page_index));
+    render_page_with_options(doc, page_index, &options, max_png_working_bytes)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) fn render_pdf_ocr_page(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    let (requested, planned) =
+        crate::image::dpi::planned_pdf_ocr_render_dpi(doc, page_index, images_config, security_limits);
+    let media = doc.get_page_info(page_index)?.media_box;
+    let options = safeguarded_render_options(page_index, planned.max(1) as u32, (media.width, media.height));
+    let floor = if options.dpi == 72 && media.width.max(media.height) > MAX_RENDER_DIMENSION_PX {
+        72
+    } else {
+        1
+    };
+    let (rendered, dpi) = render_page_capturing_glyph_drops(page_index, || {
+        guard_render_panic(page_index, || {
+            xberg_native_pdf::rendering::render_png_page_with_dpi_budget(
+                doc,
+                page_index,
+                options.dpi,
+                floor,
+                security_limits.max_content_size,
+            )
+        })
+    })?;
+    if dpi < requested.max(1) as u32 && (planned < requested || dpi < options.dpi) {
+        record_render_warning(warning(
+            PDF_RENDER_WARNING_SOURCE,
+            format!(
+                "Page {} OCR render DPI was reduced from {requested} to {dpi} to fit security_limits.max_content_size",
+                page_index + 1
+            ),
+        ));
+    }
+    Ok(rendered)
+}
+
+fn safeguarded_render_options(
+    page_index: usize,
+    base_dpi: u32,
+    (w_pt, h_pt): (f32, f32),
+) -> xberg_native_pdf::rendering::RenderOptions {
     let safe_dpi = choose_safe_dpi(w_pt, h_pt, base_dpi);
     if safe_dpi != base_dpi {
         tracing::warn!(
@@ -933,13 +1019,25 @@ pub(crate) fn render_page_with_safeguards(
             "reducing render DPI for page due to extreme dimensions (wide vector-heavy PDF or similar)"
         );
     }
-    let options = xberg_native_pdf::rendering::RenderOptions::with_dpi(safe_dpi);
+    xberg_native_pdf::rendering::RenderOptions::with_dpi(safe_dpi)
+}
+
+fn render_page_with_options(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    options: &xberg_native_pdf::rendering::RenderOptions,
+    max_png_working_bytes: Option<usize>,
+) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
     // The panic guard sits inside the capture wrapper, not around it, so a
     // panicking page still lets the wrapper take its thread-local buffer back
     // instead of leaving it armed on a pooled thread.
     render_page_capturing_glyph_drops(page_index, || {
         guard_render_panic(page_index, || {
-            xberg_native_pdf::rendering::render_page(doc, page_index, &options)
+            if let Some(limit) = max_png_working_bytes {
+                xberg_native_pdf::rendering::render_png_page_with_budget(doc, page_index, options.dpi, limit)
+            } else {
+                xberg_native_pdf::rendering::render_page(doc, page_index, options)
+            }
         })
     })
 }
@@ -1002,14 +1100,21 @@ pub(crate) fn document_page_count(doc: &xberg_native_pdf::PdfDocument) -> Result
 ///
 /// # Errors
 ///
-/// Returns `XbergError::Parsing` if the page cannot be rendered.
+/// Returns `XbergError::Parsing` if the page cannot be rendered within the requested budget.
 pub(crate) fn render_open_pdf_page_to_png(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     dpi: Option<i32>,
+    security_limits: Option<&crate::extractors::security::SecurityLimits>,
 ) -> Result<Vec<u8>> {
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    let rendered = render_page_with_safeguards(doc, page_index, render_dpi).map_err(|e| XbergError::Parsing {
+    let rendered = render_page_with_safeguards(
+        doc,
+        page_index,
+        render_dpi,
+        security_limits.map(|limits| limits.max_content_size),
+    )
+    .map_err(|e| XbergError::Parsing {
         message: format!("Failed to render page {page_index}: {e}"),
         source: None,
     })?;
@@ -1065,7 +1170,7 @@ impl PdfRenderSession {
             });
         }
 
-        render_open_pdf_page_to_png(&self.document, page_index, dpi)
+        render_open_pdf_page_to_png(&self.document, page_index, dpi, None)
     }
 }
 
@@ -1390,7 +1495,7 @@ mod tests {
     #[test]
     fn test_guard_render_panic_contains_panic_as_page_error() {
         // Matched rather than `expect_err`, which would require RenderedImage: Debug.
-        let message = match guard_render_panic(3, || panic!("simulated tiny-skia unwrap")) {
+        let message = match guard_render_panic::<()>(3, || panic!("simulated tiny-skia unwrap")) {
             Ok(_) => panic!("panic must not escape the guard"),
             Err(error) => error.to_string(),
         };

@@ -16,9 +16,13 @@
 //!         ocrx_word  →  word text with bbox and confidence
 //! ```
 
+use std::collections::HashSet;
+
 use memchr::memchr;
 
+use crate::ocr::table::ExactTableRows;
 use crate::ocr::table::tsv_parser::text_without_underscore_marks;
+use crate::table_core::HocrWord;
 use crate::types::extraction::BoundingBox;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use crate::types::ocr_elements::{OcrBoundingGeometry, OcrConfidence, OcrElementLevel};
@@ -183,6 +187,108 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
     dictionary_filter: Option<&DictionaryLineFilter<'_>>,
     page_offset: u32,
 ) -> HocrParseResult {
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter,
+            protected_words: None,
+            table_rows: None,
+            claimed_words: None,
+        },
+    )
+}
+
+type PositionedWord = ([u32; 4], String);
+
+struct HocrLinePolicy<'a> {
+    dictionary_filter: Option<&'a DictionaryLineFilter<'a>>,
+    protected_words: Option<&'a HashSet<PositionedWord>>,
+    table_rows: Option<(&'a BoundingBox, ExactTableRows)>,
+    claimed_words: Option<HashSet<PositionedWord>>,
+}
+
+pub(crate) fn parse_hocr_preserving_rejected_table_words(
+    hocr_html: &str,
+    dictionary_filter: &DictionaryLineFilter<'_>,
+    page_offset: u32,
+    rejected_regions: &[Vec<HocrWord>],
+) -> HocrParseResult {
+    let protected_words = rejected_regions
+        .iter()
+        .flatten()
+        .map(|word| {
+            (
+                [
+                    word.left,
+                    word.top,
+                    word.left.saturating_add(word.width),
+                    word.top.saturating_add(word.height),
+                ],
+                text_without_underscore_marks(&word.text).trim().to_owned(),
+            )
+        })
+        .collect();
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter: Some(dictionary_filter),
+            protected_words: Some(&protected_words),
+            table_rows: None,
+            claimed_words: None,
+        },
+    )
+}
+
+/// Remove exact table rows while the parser still has each physical line's word boxes.
+pub(crate) fn parse_hocr_without_claimed_table_rows(
+    hocr_html: &str,
+    page_offset: u32,
+    bbox: &BoundingBox,
+    cells: &[Vec<String>],
+) -> InternalDocument {
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter: None,
+            protected_words: None,
+            table_rows: Some((bbox, ExactTableRows::new(cells))),
+            claimed_words: None,
+        },
+    )
+    .document
+}
+
+pub(crate) fn parse_hocr_without_proved_table_fragments(
+    hocr_html: &str,
+    page_offset: u32,
+    words: Vec<&HocrWord>,
+) -> InternalDocument {
+    let claimed_words = words
+        .into_iter()
+        .map(|word| {
+            (
+                [word.left, word.top, word.left + word.width, word.top + word.height],
+                word.text.clone(),
+            )
+        })
+        .collect();
+    parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter: None,
+            protected_words: None,
+            table_rows: None,
+            claimed_words: Some(claimed_words),
+        },
+    )
+    .document
+}
+
+fn parse_hocr_document(hocr_html: &str, page_offset: u32, mut line_policy: HocrLinePolicy<'_>) -> HocrParseResult {
     let mut doc = InternalDocument::new("ocr");
     doc.mime_type = "application/x-hocr".to_string();
 
@@ -252,7 +358,7 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
                 last_page.unwrap_or(page_offset),
                 element_index,
                 &par_tag_name,
-                dictionary_filter,
+                &mut line_policy,
                 &mut retained_word_confidence_stats,
             );
             pos = end_pos;
@@ -549,6 +655,14 @@ fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'
     (invalid as f64 / candidates as f64) > filter.max_invalid_ratio
 }
 
+fn line_matches_rejected_table_words(line: &HocrLineInfo, protected_words: &HashSet<PositionedWord>) -> bool {
+    line.words.iter().all(|word| {
+        word.x0 < word.x1
+            && word.y0 < word.y1
+            && protected_words.contains(&([word.x0, word.y0, word.x1, word.y1], word.text.clone()))
+    })
+}
+
 /// Attribute key holding the paragraph's average word font size (points, as a
 /// decimal string). Consumed by markdown assembly to promote large-font
 /// paragraphs to headings (#185).
@@ -678,7 +792,7 @@ fn parse_paragraph(
     page: u32,
     element_index: u32,
     par_tag: &str,
-    dictionary_filter: Option<&DictionaryLineFilter<'_>>,
+    line_policy: &mut HocrLinePolicy<'_>,
     retained_word_confidence_stats: &mut RetainedWordConfidenceStats,
 ) -> (Option<InternalElement>, usize, usize) {
     let bytes = html.as_bytes();
@@ -773,9 +887,14 @@ fn parse_paragraph(
     }
 
     let mut removed_line_count = 0usize;
-    if let Some(filter) = dictionary_filter {
+    if let Some(filter) = line_policy.dictionary_filter {
         let lines_before = lines.len();
-        lines.retain(|line| !is_dictionary_noise_line(line, filter));
+        lines.retain(|line| {
+            !is_dictionary_noise_line(line, filter)
+                || line_policy
+                    .protected_words
+                    .is_some_and(|words| line_matches_rejected_table_words(line, words))
+        });
         removed_line_count = lines_before - lines.len();
         if removed_line_count > 0 {
             tracing::debug!(
@@ -785,6 +904,17 @@ fn parse_paragraph(
                 "removed OCR line(s) whose dictionary-checkable words are mostly not real words"
             );
         }
+    }
+
+    if let Some((bbox, rows)) = line_policy.table_rows.as_mut() {
+        lines.retain(|line| {
+            !line_is_inside_table(line, bbox)
+                || !rows.claim(line.words.iter().flat_map(|word| word.text.split_whitespace()))
+        });
+    }
+
+    if let Some(words) = line_policy.claimed_words.as_mut() {
+        lines.retain(|line| !claim_proved_table_fragment(line, words));
     }
 
     let all_words: Vec<&HocrWordInfo> = lines.iter().flat_map(|l| l.words.iter()).collect();
@@ -1000,6 +1130,36 @@ fn parse_paragraph(
     }
 
     (Some(elem), pos, removed_line_count)
+}
+
+fn claim_proved_table_fragment(line: &HocrLineInfo, words: &mut HashSet<PositionedWord>) -> bool {
+    if line.words.is_empty() {
+        return false;
+    }
+    let fragment: HashSet<_> = line
+        .words
+        .iter()
+        .map(|word| ([word.x0, word.y0, word.x1, word.y1], word.text.clone()))
+        .collect();
+    if fragment.len() != line.words.len() || !fragment.is_subset(words) {
+        return false;
+    }
+    for word in fragment {
+        words.remove(&word);
+    }
+    true
+}
+
+fn line_is_inside_table(line: &HocrLineInfo, bbox: &BoundingBox) -> bool {
+    !line.words.is_empty()
+        && line.words.iter().all(|word| {
+            word.x0 < word.x1
+                && word.y0 < word.y1
+                && f64::from(word.x0) >= bbox.x0
+                && f64::from(word.y0) >= bbox.y0
+                && f64::from(word.x1) <= bbox.x1
+                && f64::from(word.y1) <= bbox.y1
+        })
 }
 
 /// Check if a tag's class attribute contains the given class name.
@@ -2061,6 +2221,44 @@ mod tests {
     }
 
     #[test]
+    fn claimed_row_does_not_affect_retained_line_geometry_or_style() {
+        let hocr = r#"<div class="ocr_page" title="ppageno 0">
+            <p class="ocr_par">
+                <span class="ocr_line" title="baseline 0 -3; x_size 17">
+                    <span class="ocrx_word" title="bbox 10 10 50 30; x_wconf 92; x_fsize 16">Retained</span>
+                </span>
+                <span class="ocr_line" title="baseline 0 -10; x_size 35">
+                    <span class="ocrx_word" title="bbox 10 40 80 70; x_wconf 83; x_fsize 32">Claimed</span>
+                </span>
+            </p>
+        </div>"#;
+        let retained_box = BoundingBox {
+            x0: 10.0,
+            y0: 10.0,
+            x1: 50.0,
+            y1: 30.0,
+        };
+        let table_box = BoundingBox {
+            x1: 80.0,
+            y1: 70.0,
+            ..retained_box
+        };
+        let cells = vec![vec!["Claimed".to_string()]];
+        let doc = parse_hocr_without_claimed_table_rows(hocr, 4, &table_box, &cells);
+
+        assert_eq!(doc.elements.len(), 1);
+        let line = &doc.elements[0];
+        assert_eq!(line.text, "Retained");
+        assert_eq!(line.bbox, Some(retained_box));
+        assert_eq!(line.page, Some(4));
+        assert_eq!(line.ocr_confidence.as_ref().unwrap().recognition, 0.92);
+        let attrs = line.attributes.as_ref().unwrap();
+        assert_eq!(attrs[HOCR_LINE_FONT_SIZES_ATTRIBUTE], "16");
+        assert_eq!(attrs[HOCR_LINE_X_HEIGHTS_ATTRIBUTE], "17");
+        assert_eq!(attrs[HOCR_BASELINE_CONST_ATTRIBUTE], "-3");
+    }
+
+    #[test]
     fn test_paragraph_without_line_title_has_no_x_height_attributes() {
         let hocr = r#"<div class="ocr_page" title="ppageno 0">
             <p class="ocr_par">
@@ -2155,6 +2353,40 @@ mod tests {
         /// module tests is the *filtering mechanism* at a fixed, known threshold, not
         /// that the production default stays at any particular value.
         const TEST_THRESHOLD: f64 = 0.6;
+
+        #[test]
+        fn rejected_table_restores_an_exact_repeat_at_its_original_line_position() {
+            let hocr = ELEVATIONS_PAGE_HOCR.replace("OPMENT", "ELEVATION");
+            let filter = DictionaryLineFilter {
+                is_valid_word: &measured_is_valid_word,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+            let rejected_word = |text: &str, left, top, width| HocrWord {
+                text: text.to_owned(),
+                left,
+                top,
+                width,
+                height: 30,
+                confidence: 90.0,
+            };
+            let mut region = vec![
+                rejected_word("OWATS", 10, 50, 90),
+                rejected_word("DNDEVET", 110, 50, 110),
+                rejected_word("ELEVATION", 110, 10, 150),
+            ];
+            let mismatched = parse_hocr_preserving_rejected_table_words(&hocr, &filter, 1, &[region.clone()]);
+            assert_eq!(mismatched.dictionary_filtered_line_count, 1);
+            assert_eq!(mismatched.document.elements[0].text, "RIGHT ELEVATION\nLEFT ELEVATION");
+
+            region[2] = rejected_word("ELEVATION", 230, 50, 90);
+            let restored = parse_hocr_preserving_rejected_table_words(&hocr, &filter, 1, &[region]);
+            assert_eq!(restored.dictionary_filtered_line_count, 0);
+            assert_eq!(restored.document.elements.len(), 1);
+            assert_eq!(
+                restored.document.elements[0].text,
+                "RIGHT ELEVATION\nOWATS DNDEVET ELEVATION\nLEFT ELEVATION"
+            );
+        }
 
         /// The exact defect from #783: with the real (imperfect) dictionary behavior,
         /// the garbage line is still removed -- 2 invalid of 3 candidates (0.667) clears

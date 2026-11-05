@@ -4,7 +4,7 @@
 //! alphanumeric BBAN characters. The regex matches IBANs with optional space
 //! separators every four characters (the common pretty-print form).
 
-use super::PatternMatch;
+use super::{BorrowedMatch, PatternMatch};
 use crate::types::redaction::PiiCategory;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -22,26 +22,32 @@ static RE_IBAN: Lazy<Regex> =
 
 /// Find all IBAN spans in `text`, validated against country-specific length rules.
 pub fn find_all(text: &str) -> Vec<PatternMatch> {
-    let upper = text.to_ascii_uppercase();
+    super::collect_matches(text, &PiiCategory::Iban)
+}
 
-    RE_IBAN
-        .find_iter(&upper)
-        .filter_map(|m| {
-            let raw = &upper[m.start()..m.end()];
-            let cc = &raw[..2];
-            if !IBAN_COUNTRIES.contains(&cc) {
-                return None;
-            }
-            let compact: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
-            if !(15..=34).contains(&compact.len()) {
-                return None;
-            }
-            Some(PatternMatch {
-                start: m.start(),
-                end: m.end(),
-                category: PiiCategory::Iban,
-                text: text[m.start()..m.end()].to_string(),
-            })
-        })
-        .collect()
+pub(super) fn visit_matches<'s, E>(
+    text: &'s str,
+    candidate: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+    eligible: &mut impl FnMut(BorrowedMatch<'s>) -> Result<(), E>,
+) -> Result<(), E> {
+    let upper = text.to_ascii_uppercase();
+    for m in RE_IBAN.find_iter(&upper) {
+        let matched = BorrowedMatch {
+            start: m.start(),
+            end: m.end(),
+            text: &text[m.start()..m.end()],
+        };
+        candidate(matched)?;
+        let raw = &upper[m.start()..m.end()];
+        let cc = &raw[..2];
+        if !IBAN_COUNTRIES.contains(&cc) {
+            continue;
+        }
+        let compact: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
+        if !(15..=34).contains(&compact.len()) {
+            continue;
+        }
+        eligible(matched)?;
+    }
+    Ok(())
 }

@@ -1,6 +1,6 @@
 module github.com/xberg-io/xberg/packages/go/e2e
 
-go 1.26
+go 1.27
 
 require (
 	github.com/stretchr/testify v1.12.1

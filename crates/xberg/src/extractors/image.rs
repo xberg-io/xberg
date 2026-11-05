@@ -1380,6 +1380,107 @@ fn is_implicit_horizontal_tesseract(config: &crate::core::config::OcrConfig) -> 
         && !has_vertical_tesseract_language(config)
 }
 
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn sparse_table_page_text(
+    raw: &str,
+    doc: &InternalDocument,
+    source: &InternalDocument,
+    output_format: &crate::core::config::OutputFormat,
+    mime_type: &str,
+) -> Option<String> {
+    use crate::core::config::OutputFormat;
+    use crate::types::internal::ElementKind;
+
+    // The standalone builder always keeps an empty source-image reference. ~keep
+    let ([.., image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+        return None;
+    };
+    // TIFF without page tracking can share the standalone page transcript across frames. ~keep
+    if !matches!(image.kind, ElementKind::Image { image_index: 0 })
+        || !image.text.is_empty()
+        || !doc.images.is_empty()
+        || !matches!(element.kind, ElementKind::Table { table_index: 0 })
+        || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot)
+        || mime_type.to_lowercase().contains("tiff")
+        || doc
+            .metadata
+            .additional
+            .get("psm")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|psm| psm.parse().ok())
+            != Some(WHOLE_IMAGE_TESSERACT_PSM)
+    {
+        return None;
+    }
+    if source.ocr_text_claimed_by_tables {
+        return render_covered_table_page_text(raw, &table.cells, &[], &[]);
+    }
+    let (before, after) = sparse_table_surrounding_text(source, table.bounding_box.as_ref()?)?;
+    render_covered_table_page_text(raw, &table.cells, &before, &after)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn sparse_table_surrounding_text<'a>(
+    source: &'a InternalDocument,
+    table: &crate::types::extraction::BoundingBox,
+) -> Option<(Vec<&'a str>, Vec<&'a str>)> {
+    if !valid_sparse_table_bounds(table) {
+        return None;
+    }
+    let mut before = Vec::new();
+    let mut after = Vec::new();
+    for element in &source.elements {
+        let text = element.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let bbox = element.bbox.as_ref().filter(|bbox| valid_sparse_table_bounds(bbox))?;
+        if bbox.y0 >= table.y1 {
+            after.push(text);
+        } else if bbox.y1 <= table.y0 && after.is_empty() {
+            before.push(text);
+        } else {
+            return None;
+        }
+    }
+    (!before.is_empty() || !after.is_empty()).then_some((before, after))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn valid_sparse_table_bounds(bbox: &crate::types::extraction::BoundingBox) -> bool {
+    [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().all(f64::is_finite) && bbox.x0 < bbox.x1 && bbox.y0 < bbox.y1
+}
+
+// The table claim uses a word-count floor. Page text can use the row rendering only if it
+// preserves every literal token occurrence, including repeated values. ~keep
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn render_covered_table_page_text(raw: &str, cells: &[Vec<String>], before: &[&str], after: &[&str]) -> Option<String> {
+    if cells.iter().flatten().any(|cell| cell.contains(['\r', '\n'])) {
+        return None;
+    }
+    let rows = crate::rendering::common::render_table_plain(cells);
+    let text = before
+        .iter()
+        .copied()
+        .chain(std::iter::once(rows.trim_end()))
+        .chain(after.iter().copied())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    let mut remaining = std::collections::HashMap::<&str, usize>::new();
+    for word in raw.split_whitespace() {
+        *remaining.entry(word).or_default() += 1;
+    }
+    if remaining.is_empty() {
+        return None;
+    }
+    for word in text.split_whitespace() {
+        let count = remaining.get_mut(word)?;
+        *count = count.checked_sub(1)?;
+    }
+    remaining.values().all(|&count| count == 0).then_some(text)
+}
+
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -2213,6 +2314,9 @@ async fn recover_selected_rtl_identifiers_fail_open(
     match recover_selected_rtl_identifiers(backend, image_bytes, selected, fallback_config, cancel_token).await {
         Ok(()) => Ok(()),
         Err(error @ crate::XbergError::Cancelled) => Err(error),
+        Err(_) if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) => {
+            Err(crate::XbergError::Cancelled)
+        }
         Err(error) => {
             tracing::warn!(
                 backend = backend.name(),
@@ -2485,10 +2589,13 @@ pub(crate) async fn process_whole_image_ocr_with_sparse_retry(
     } else {
         sparse_image_ocr_fallback_config(effective_config.as_ref())
     };
-    let fallback = match backend
+    let fallback_result = backend
         .process_image_owned(std::sync::Arc::clone(&image_bytes), &fallback_config)
-        .await
-    {
+        .await;
+    if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    let fallback = match fallback_result {
         Ok(fallback) => fallback,
         Err(error @ crate::XbergError::Cancelled) => return Err(error),
         Err(error) => {
@@ -2871,11 +2978,19 @@ impl ImageExtractor {
             }
         }
 
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let implicit_sparse_tesseract;
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
             let registry = registry.read();
-            registry.get(&ocr_config.backend)?
+            let backend = registry.get(&ocr_config.backend)?;
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            {
+                implicit_sparse_tesseract =
+                    is_implicit_horizontal_tesseract(ocr_config) && registry.is_builtin_tesseract(&backend);
+            }
+            backend
         };
 
         let mut ocr_config_with_format = ocr_config.clone();
@@ -3102,11 +3217,18 @@ impl ImageExtractor {
             if let Some(pages) = ocr_extraction_result.page_contents {
                 doc.prebuilt_pages = Some(pages);
             } else {
-                let text = ocr_extraction_result.content.trim().to_string();
-                if !text.is_empty() {
+                let raw = ocr_extraction_result.content.trim();
+                #[cfg(not(target_arch = "wasm32"))]
+                let table_text = ocr_internal_document
+                    .as_ref()
+                    .filter(|_| implicit_sparse_tesseract && !has_public_ocr_structure)
+                    .and_then(|source| sparse_table_page_text(raw, &doc, source, &config.output_format, mime_type));
+                #[cfg(target_arch = "wasm32")]
+                let table_text: Option<String> = None;
+                if !raw.is_empty() {
                     doc.prebuilt_pages = Some(vec![crate::types::PageContent {
                         page_number: 1,
-                        content: text,
+                        content: table_text.unwrap_or_else(|| raw.to_owned()),
                         tables: page_tables,
                         image_indices: vec![],
                         image_preprocessing: None,
@@ -3979,6 +4101,10 @@ mod image_table_tests;
 #[path = "image_pipeline_reduced_tests.rs"]
 mod image_pipeline_reduced_tests;
 
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr-pipeline"))]
+#[path = "image_sparse_retry_cancellation_tests.rs"]
+mod image_sparse_retry_cancellation_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4011,10 +4137,7 @@ mod tests {
             document.elements[0].kind,
             crate::types::internal::ElementKind::ListItem { ordered: true }
         ));
-        assert_eq!(
-            crate::rendering::render_markdown(&document),
-            "- 1\\. Template for day 1\n"
-        );
+        assert_eq!(crate::rendering::render_markdown(&document), "1. Template for day 1\n");
     }
 
     #[tokio::test]
@@ -4169,7 +4292,6 @@ mod tests {
 
         #[cfg(all(feature = "pdf", feature = "ocr-pipeline"))]
         #[tokio::test]
-        #[serial_test::serial]
         async fn standalone_image_pipeline_keeps_whole_image_scan_hints() {
             use crate::core::config::{OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds};
             use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
@@ -4189,15 +4311,7 @@ mod tests {
                     true
                 }
                 async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
-                    // ~keep: the stub holds the global `tesseract` slot, so a parallel test running real OCR lands on it too; only calls carrying this stage's probe are recorded.
-                    let probed = config
-                        .backend_options
-                        .as_ref()
-                        .and_then(|options| options.get("hint_probe"))
-                        .is_some_and(|probe| probe == "standalone_image_pipeline");
-                    if probed {
-                        *self.config.lock().unwrap() = Some(config.clone());
-                    }
+                    *self.config.lock().unwrap() = Some(config.clone());
                     Ok(ExtractedDocument {
                         content: "standalone image text".to_string(),
                         ..Default::default()
@@ -4220,11 +4334,9 @@ mod tests {
                 }
             }
 
-            crate::plugins::unregister_ocr_backend("tesseract").unwrap();
             let backend = Arc::new(TesseractHintCapturingBackend {
                 config: Mutex::new(None),
             });
-            crate::plugins::register_ocr_backend(backend.clone()).unwrap();
 
             let pipeline = OcrPipelineConfig {
                 stages: vec![OcrPipelineStage {
@@ -4235,7 +4347,7 @@ mod tests {
                     paddle_ocr_config: None,
                     paddle_ocr_settings: None,
                     vlm_config: None,
-                    backend_options: Some(serde_json::json!({ "hint_probe": "standalone_image_pipeline" })),
+                    backend_options: None,
                 }],
                 quality_thresholds: OcrQualityThresholds {
                     pipeline_min_quality: 0.0,
@@ -4251,13 +4363,12 @@ mod tests {
             };
             let png = png_with_phys_density(16, 16, REPORTER_FIXTURE_PPU);
 
-            ImageExtractor::new()
-                .extract_with_ocr_pipeline(&png, &config, &pipeline)
-                .await
-                .expect("standalone image pipeline succeeds");
-
-            crate::plugins::unregister_ocr_backend("tesseract").unwrap();
-            crate::plugins::ensure_ocr_backends_initialized();
+            crate::plugins::registry::with_test_ocr_backend(
+                backend.clone(),
+                ImageExtractor::new().extract_with_ocr_pipeline(&png, &config, &pipeline),
+            )
+            .await
+            .expect("standalone image pipeline succeeds");
 
             let captured = backend.config.lock().unwrap().clone().expect("backend was called");
             let source_dpi = captured
@@ -4545,6 +4656,66 @@ mod tests {
 
             unregister_ocr_backend(NAME).unwrap();
         }
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn covered_table_page_text_requires_exact_literal_token_multiplicity() {
+        let cells = vec![
+            vec!["Rent".to_owned(), "14".to_owned()],
+            vec!["Repairs".to_owned(), "20".to_owned()],
+            vec!["Storage".to_owned(), "14".to_owned()],
+        ];
+        let retained = render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n14", &cells, &[], &[]);
+        assert_eq!(retained.as_deref(), Some("Rent 14\nRepairs 20\nStorage 14"));
+        assert_eq!(
+            render_covered_table_page_text("Rent\nRepairs\nStorage\n14\n20\n20", &cells, &[], &[]),
+            None
+        );
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn sparse_table_page_text_rejects_a_cell_that_cannot_fit_on_one_line() {
+        let cells = vec![vec!["Annual\nRent".to_owned(), "14".to_owned()]];
+        assert_eq!(render_covered_table_page_text("Annual Rent 14", &cells, &[], &[]), None);
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn sparse_table_context_requires_finite_nonoverlapping_bounds_in_reading_order() {
+        use crate::types::extraction::BoundingBox;
+        use crate::types::internal::{ElementKind, InternalElement};
+
+        let bounds = |y0, y1| BoundingBox {
+            x0: 0.0,
+            y0,
+            x1: 100.0,
+            y1,
+        };
+        let table = bounds(20.0, 60.0);
+        let text_element = |text, bbox| {
+            let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+            element.bbox = Some(bbox);
+            element
+        };
+        let mut doc = InternalDocument::new("test");
+        doc.elements = vec![
+            text_element("Heading", bounds(1.0, 10.0)),
+            text_element("Caption", bounds(70.0, 90.0)),
+        ];
+        assert_eq!(
+            sparse_table_surrounding_text(&doc, &table),
+            Some((vec!["Heading"], vec!["Caption"]))
+        );
+
+        doc.elements.swap(0, 1);
+        assert_eq!(sparse_table_surrounding_text(&doc, &table), None);
+        doc.elements.swap(0, 1);
+        doc.elements[1].bbox = Some(bounds(50.0, 90.0));
+        assert_eq!(sparse_table_surrounding_text(&doc, &table), None);
+        doc.elements[1].bbox = Some(bounds(70.0, f64::INFINITY));
+        assert_eq!(sparse_table_surrounding_text(&doc, &table), None);
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
@@ -5518,6 +5689,87 @@ mod tests {
                 .await,
                 Err(crate::XbergError::Cancelled)
             ));
+        }
+
+        #[tokio::test]
+        async fn recover_selected_rtl_identifiers_keeps_cancellation_when_recovery_errors() {
+            use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+
+            struct CancellingFailingRecoveryBackend(crate::cancellation::CancellationToken);
+
+            #[async_trait::async_trait]
+            impl OcrBackend for CancellingFailingRecoveryBackend {
+                fn backend_type(&self) -> OcrBackendType {
+                    OcrBackendType::Custom
+                }
+                fn supports_language(&self, _: &str) -> bool {
+                    true
+                }
+                async fn process_image(
+                    &self,
+                    _: &[u8],
+                    _: &crate::core::config::OcrConfig,
+                ) -> crate::Result<crate::types::ExtractedDocument> {
+                    self.0.cancel();
+                    Err(crate::XbergError::Other("recovery interrupted".to_string()))
+                }
+            }
+
+            impl Plugin for CancellingFailingRecoveryBackend {
+                fn name(&self) -> &str {
+                    "cancelling-failing-recovery"
+                }
+                fn version(&self) -> String {
+                    "1.0.0".to_string()
+                }
+                fn initialize(&self) -> crate::Result<()> {
+                    Ok(())
+                }
+                fn shutdown(&self) -> crate::Result<()> {
+                    Ok(())
+                }
+            }
+
+            let mut word = crate::types::OcrElement {
+                text: "880-2026-104".to_string(),
+                level: crate::types::OcrElementLevel::Word,
+                geometry: crate::types::OcrBoundingGeometry::Rectangle {
+                    left: 1,
+                    top: 1,
+                    width: 8,
+                    height: 8,
+                },
+                ..Default::default()
+            };
+            word.backend_metadata
+                .insert("word_language".to_string(), serde_json::json!("ara"));
+            let mut selected = crate::types::ExtractedDocument {
+                content: "880-2026-104".to_string(),
+                ocr_elements: Some(vec![word]),
+                ..Default::default()
+            };
+            let mut encoded = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::new_rgb8(10, 10)
+                .write_to(&mut encoded, image::ImageFormat::Png)
+                .expect("test image must encode");
+            let cancellation = crate::cancellation::CancellationToken::new();
+            let backend: std::sync::Arc<dyn OcrBackend> =
+                std::sync::Arc::new(CancellingFailingRecoveryBackend(cancellation.clone()));
+
+            let outcome = recover_selected_rtl_identifiers_fail_open(
+                &backend,
+                std::sync::Arc::new(encoded.into_inner()),
+                &mut selected,
+                &crate::core::config::OcrConfig::default(),
+                Some(&cancellation),
+            )
+            .await;
+
+            assert!(cancellation.is_cancelled(), "the recovery OCR call must run");
+            assert!(
+                matches!(outcome, Err(crate::XbergError::Cancelled)),
+                "a recovery error after cancellation must stay a cancellation, got {outcome:?}"
+            );
         }
 
         #[test]

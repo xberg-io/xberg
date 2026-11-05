@@ -19,21 +19,25 @@ use crate::ocr::cache::OcrCache;
 use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tesseract_elements_with_lines, tsv_row_to_element};
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::{
-    DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_to_internal_document_with_page_offset_and_stats,
+    DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_preserving_rejected_table_words,
+    parse_hocr_to_internal_document_with_page_offset_and_stats, parse_hocr_without_claimed_table_rows,
+    parse_hocr_without_proved_table_fragments,
 };
 use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
 use crate::ocr::preprocessing::should_invert_for_polarity;
+use crate::ocr::table::has_table_grid;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
-    TableWords, drop_document_elements_claimed_by_tables, extract_table_words_from_tsv, extract_words_from_tsv,
-    orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild,
-    table_to_markdown,
+    TableWords, drop_document_elements_claimed_by_tables, element_center_within_table, extract_table_words_from_tsv,
+    extract_words_from_tsv, orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask,
+    should_adopt_table_rebuild, table_retains_region_words, table_to_markdown,
 };
 #[cfg(test)]
 use crate::ocr::types::BatchItemResult;
 use crate::ocr::types::TesseractConfig;
+use crate::types::extraction::BoundingBox;
 use crate::types::internal::{ElementKind, InternalDocument};
 use crate::types::{OcrExtractionResult, OcrTable, OcrTableBoundingBox};
 use std::collections::HashMap;
@@ -42,24 +46,9 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use xberg_tesseract::{TessPageSegMode, TessPolyBlockType, TesseractAPI};
 
-/// Process-global document-orientation classifier (ONNX PP-LCNet), shared by
-/// every tesseract-backend auto-rotate call. Session initialization is lazy and
-/// internally synchronized; `detect` is thread-safe.
-#[cfg(auto_rotate)]
-fn doc_orientation_detector() -> &'static crate::doc_orientation::DocOrientationDetector {
-    static DETECTOR: std::sync::LazyLock<crate::doc_orientation::DocOrientationDetector> =
-        std::sync::LazyLock::new(|| {
-            crate::doc_orientation::DocOrientationDetector::with_acceleration(
-                crate::doc_orientation::resolve_cache_dir(),
-                None,
-            )
-        });
-    &DETECTOR
-}
-
 use crate::table_core::{
     HocrWord, MIN_TABLE_CANDIDATE_WORDS, cluster_word_indices_into_table_regions, detect_rows,
-    drop_leading_caption_row, hocr_words_are_rtl, median_word_height, merge_disjoint_numeric_columns,
+    drop_leading_caption_row, find_row_index, hocr_words_are_rtl, median_word_height, merge_disjoint_numeric_columns,
 };
 use crate::types::OcrElement;
 
@@ -908,17 +897,149 @@ fn flatten_hocr_elements_to_text(elements: &[crate::types::internal::InternalEle
 fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable]) {
     drop_document_elements_claimed_by_tables(
         document,
-        tables.iter().filter_map(|table| {
-            let bbox = table.bounding_box.as_ref()?;
-            let bbox = crate::types::extraction::BoundingBox {
-                x0: bbox.left as f64,
-                y0: bbox.top as f64,
-                x1: bbox.right as f64,
-                y1: bbox.bottom as f64,
-            };
-            Some((bbox, table.cells.as_slice()))
-        }),
+        tables
+            .iter()
+            .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
     )
+}
+
+fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {
+    let bbox = table.bounding_box.as_ref()?;
+    Some(BoundingBox {
+        x0: f64::from(bbox.left),
+        y0: f64::from(bbox.top),
+        x1: f64::from(bbox.right),
+        y1: f64::from(bbox.bottom),
+    })
+}
+
+// ~keep This proof is optional. Bound the extra retained input and the row
+// searches even when the configured extraction limits are larger.
+const MAX_FRAGMENTED_HOCR_INPUT_BYTES: usize = 512 * 1024;
+const MAX_FRAGMENTED_HOCR_WORDS: usize = 1024;
+const MAX_FRAGMENTED_HOCR_ALIGNMENTS: usize = 8;
+
+fn fragmented_hocr_budget(hocr: &str, tsv: &str, limits: &SecurityLimits) -> Option<usize> {
+    let bytes = hocr.len().saturating_add(tsv.len());
+    if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
+        return None;
+    }
+    limits.max_iterations.checked_sub(bytes.saturating_mul(4))
+}
+
+fn prove_fragmented_table_rows<'a>(
+    words: &'a mut Vec<HocrWord>,
+    bbox: BoundingBox,
+    cells: &[Vec<String>],
+    row_threshold: f64,
+    budget: usize,
+) -> Option<Vec<&'a HocrWord>> {
+    if cells.is_empty() || words.len() > MAX_FRAGMENTED_HOCR_WORDS {
+        return None;
+    }
+    words.retain(|word| {
+        word.width > 0
+            && word.height > 0
+            && f64::from(word.left) >= bbox.x0
+            && f64::from(word.top) >= bbox.y0
+            && f64::from(word.left.saturating_add(word.width)) <= bbox.x1
+            && f64::from(word.top.saturating_add(word.height)) <= bbox.y1
+    });
+    // Both row detection and nearest-row assignment can scan every word for
+    // each row. The word cap makes the multiplication safe.
+    let budget = budget.checked_sub(2 * words.len() * words.len())?;
+    let row_positions = detect_rows(words, row_threshold);
+    let alignments = row_positions.len().checked_sub(cells.len())? + 1;
+    if alignments > MAX_FRAGMENTED_HOCR_ALIGNMENTS {
+        return None;
+    }
+    let comparison_bytes = words
+        .iter()
+        .map(|word| word.text.len() + 1)
+        .chain(cells.iter().flatten().map(|cell| cell.len() + 1))
+        .fold(0usize, usize::saturating_add);
+    if comparison_bytes.saturating_mul(alignments) > budget {
+        return None;
+    }
+    let mut rows = vec![Vec::new(); row_positions.len()];
+    for word in words.iter() {
+        rows[find_row_index(&row_positions, word)?].push(word);
+    }
+    for row in &mut rows {
+        sort_ocr_line_word_refs(row);
+    }
+    // ~keep A matching window can omit a caption, but ambiguous matches cannot claim any words.
+    let mut matches = rows.windows(cells.len()).filter(|window| {
+        window.iter().zip(cells).all(|(row, cells)| {
+            !row.is_empty()
+                && row.windows(2).all(|pair| pair[0].left != pair[1].left)
+                && row
+                    .iter()
+                    .flat_map(|word| word.text.split_whitespace())
+                    .eq(cells.iter().flat_map(|cell| cell.split_whitespace()))
+        })
+    });
+    let matched = matches.next()?;
+    matches
+        .next()
+        .is_none()
+        .then(|| matched.iter().flatten().copied().collect())
+}
+
+fn reconcile_fragmented_hocr_table_rows(
+    hocr: &str,
+    document: &InternalDocument,
+    tables: &[OcrTable],
+    tsv: &str,
+    config: &TesseractConfig,
+    limits: &SecurityLimits,
+) -> Option<InternalDocument> {
+    let [table] = tables else { return None };
+    let budget = fragmented_hocr_budget(hocr, tsv, limits)?;
+    if table.cells.iter().map(Vec::len).fold(0usize, usize::saturating_add) > limits.max_table_cells {
+        return None;
+    }
+    let bbox = ocr_table_bbox(table)?;
+    if table_retains_region_words(&document.elements, &bbox, &table.cells) {
+        return None;
+    }
+    let mut words = extract_words_from_tsv(tsv, 0.0).ok()?;
+    let proved = prove_fragmented_table_rows(&mut words, bbox, &table.cells, config.table_row_threshold_ratio, budget)?;
+    let mut reconciled = parse_hocr_without_proved_table_fragments(hocr, config.page_number, proved);
+    let words = |doc: &InternalDocument| {
+        doc.elements
+            .iter()
+            .map(|e| e.text.split_whitespace().count())
+            .sum::<usize>()
+    };
+    let remaining = words(&reconciled);
+    reconciled.ocr_text_claimed_by_tables = remaining == 0;
+    (remaining < words(document)).then_some(reconciled)
+}
+
+fn reconcile_grouped_hocr_table_rows(
+    hocr: &str,
+    document: &InternalDocument,
+    tables: &[OcrTable],
+    page_number: u32,
+) -> Option<InternalDocument> {
+    let [table] = tables else {
+        return None;
+    };
+    let bbox = ocr_table_bbox(table)?;
+    let groups_table_lines = document
+        .elements
+        .iter()
+        .any(|element| element.text.trim().contains('\n') && element_center_within_table(element, &bbox));
+    if !groups_table_lines || table_retains_region_words(&document.elements, &bbox, &table.cells) {
+        return None;
+    }
+    Some(parse_hocr_without_claimed_table_rows(
+        hocr,
+        page_number,
+        &bbox,
+        &table.cells,
+    ))
 }
 
 /// Minimum confidence for accepting orientation detection results.
@@ -1186,9 +1307,9 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     }
     let pixel_count_f64 = pixel_count as f64;
     let max_pixel_channel_sum = RGB_CHANNEL_MAX * RGB_CHANNEL_COUNT as f64;
-    if channel_sum as f64 / (pixel_count_f64 * max_pixel_channel_sum) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD
-        || light_pixels as f64 / pixel_count_f64 < CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD
-    {
+    let bright_mean =
+        channel_sum as f64 / (pixel_count_f64 * max_pixel_channel_sum) >= CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD;
+    if light_pixels as f64 / pixel_count_f64 < CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD {
         return false;
     }
     if foreground_pixels == 0 {
@@ -1197,10 +1318,15 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
 
     let background_luminance = light_channel_sum as f64 / (light_pixels as f64 * max_pixel_channel_sum);
     let foreground_luminance = foreground_channel_sum as f64 / (foreground_pixels as f64 * max_pixel_channel_sum);
-    if background_luminance - foreground_luminance >= CLEAN_PAGE_MIN_FOREGROUND_CONTRAST {
+    let strong_contrast = background_luminance - foreground_luminance >= CLEAN_PAGE_MIN_FOREGROUND_CONTRAST;
+    if bright_mean && strong_contrast {
         return true;
     }
+    if !bright_mean && !strong_contrast {
+        return false;
+    }
 
+    // Dense dark glyphs can lower the page mean on a light background. Confirm text structure. ~keep
     let Some((lower_mode_max, lower_mode_pixels)) = foreground_lower_mode(&foreground_histogram) else {
         return false;
     };
@@ -1213,6 +1339,17 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             lower_mode_max,
             lower_mode_pixels,
         )
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) fn light_page_foreground_mode(histogram: &[usize; 256]) -> Option<u8> {
+    let light_threshold = (CLEAN_PAGE_LIGHT_PIXEL_THRESHOLD * RGB_CHANNEL_MAX).ceil() as usize;
+    let light: usize = histogram[light_threshold..].iter().sum();
+    let pixels: usize = histogram.iter().sum();
+    if (light as f64) < pixels as f64 * CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD {
+        return None;
+    }
+    foreground_lower_mode(histogram).map(|(threshold, _)| threshold)
 }
 
 fn foreground_lower_mode(histogram: &[usize; 256]) -> Option<(u8, usize)> {
@@ -1263,9 +1400,9 @@ fn lower_mode_has_text_structure(
     lower_mode_max: u8,
     lower_mode_pixels: usize,
 ) -> bool {
-    let Some(pixel_count) = width.checked_mul(height) else {
+    if width.checked_mul(height) != Some(rgb_data.len() / RGB_CHANNEL_COUNT) {
         return false;
-    };
+    }
     let lower_mode_mask: Vec<bool> = rgb_data
         .as_chunks::<RGB_CHANNEL_COUNT>()
         .0
@@ -1275,6 +1412,18 @@ fn lower_mode_has_text_structure(
             (channel_sum + 1) / RGB_CHANNEL_COUNT as u16 <= u16::from(lower_mode_max)
         })
         .collect();
+    lower_mode_mask_has_text_structure(&lower_mode_mask, width, height, lower_mode_pixels)
+}
+
+pub(crate) fn lower_mode_mask_has_text_structure(
+    lower_mode_mask: &[bool],
+    width: usize,
+    height: usize,
+    lower_mode_pixels: usize,
+) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
     if lower_mode_mask.len() != pixel_count {
         return false;
     }
@@ -1287,7 +1436,7 @@ fn lower_mode_has_text_structure(
             continue;
         }
         let component_pixels = structured_component_size(
-            &lower_mode_mask,
+            lower_mode_mask,
             &mut visited,
             &mut component_stack,
             start,
@@ -2042,7 +2191,7 @@ pub(super) fn perform_ocr(
         } else {
             let image = image::RgbImage::from_raw(width, height, std::mem::take(&mut image_data))
                 .expect("validated RGB buffer length must match dimensions");
-            let result = doc_orientation_detector().detect(&image);
+            let result = crate::doc_orientation::detector::tesseract_detector().detect(&image);
             image_data = image.into_raw();
             result
         };
@@ -2192,9 +2341,14 @@ pub(super) fn perform_ocr(
     };
 
     let mut hocr_document: Option<InternalDocument> = None;
+    let mut hocr_for_tables = None;
     let mut dictionary_filtered_line_count = 0usize;
     let mut retained_hocr_confidence_stats = None;
 
+    let dictionary_filter = DictionaryLineFilter {
+        is_valid_word: &|text| dictionary.is_valid_word(text),
+        max_invalid_ratio: crate::ocr::hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO,
+    };
     let (raw_content, mime_type) = match config.output_format.as_str() {
         "text" => {
             let text = api
@@ -2207,22 +2361,26 @@ pub(super) fn perform_ocr(
                 .get_hocr_text(0)
                 .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
 
-            // Per-line dictionary-invalid noise filter (#783). Built here, immediately
-            // before parsing, using `hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO` -- see
-            // that constant's doc comment for why this is not yet a configurable
-            // `OcrQualityThresholds` field.
-            let is_valid_word = |text: &str| dictionary.is_valid_word(text);
-            let dictionary_filter = DictionaryLineFilter {
-                is_valid_word: &is_valid_word,
-                max_invalid_ratio: crate::ocr::hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO,
-            };
-
             let parse_result = parse_hocr_to_internal_document_with_page_offset_and_stats(
                 &hocr,
                 Some(&dictionary_filter),
                 config.page_number,
             );
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
+            if config.enable_table_detection
+                && (dictionary_filtered_line_count > 0
+                    || parse_result
+                        .document
+                        .elements
+                        .iter()
+                        .any(|element| element.text.contains('\n'))
+                    || tsv_data_for_tables
+                        .as_deref()
+                        .and_then(|tsv| fragmented_hocr_budget(&hocr, tsv, &security_limits))
+                        .is_some())
+            {
+                hocr_for_tables = Some(hocr);
+            }
             let content = flatten_hocr_elements_to_text(&parse_result.document.elements);
             retained_hocr_confidence_stats = Some(parse_result.retained_word_confidence_stats);
             hocr_document = Some(parse_result.document);
@@ -2397,6 +2555,7 @@ pub(super) fn perform_ocr(
     }
 
     let mut tables = Vec::new();
+    let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
 
     if config.enable_table_detection {
         let tsv_data = tsv_data_for_tables.as_ref().unwrap();
@@ -2515,6 +2674,17 @@ pub(super) fn perform_ocr(
             let Some(cleaned) = cleaned else {
                 continue;
             };
+            if !has_table_grid(&cleaned) {
+                tracing::debug!(
+                    target: "xberg::ocr::tables",
+                    region_index,
+                    "OCR table region has no row or column that relates two cells; keeping it as text"
+                );
+                if dictionary_filtered_line_count > 0 && hocr_for_tables.is_some() {
+                    rejected_regions.push(region.read_boxes);
+                }
+                continue;
+            }
 
             let markdown_table = table_to_markdown(&cleaned);
 
@@ -2548,8 +2718,43 @@ pub(super) fn perform_ocr(
         }
     }
 
+    // Restore supported lines before paragraphs are flattened or claimed by accepted tables. ~keep
+    if let Some(hocr) = hocr_for_tables.as_deref().filter(|_| !rejected_regions.is_empty()) {
+        let restored =
+            parse_hocr_preserving_rejected_table_words(hocr, &dictionary_filter, config.page_number, &rejected_regions);
+        if restored.dictionary_filtered_line_count < dictionary_filtered_line_count {
+            content =
+                strip_control_characters(&flatten_hocr_elements_to_text(&restored.document.elements)).into_owned();
+            if restored.dictionary_filtered_line_count == 0 {
+                metadata.remove("dictionary_filtered_line_count");
+            } else {
+                metadata.insert(
+                    "dictionary_filtered_line_count".to_string(),
+                    serde_json::Value::Number(restored.dictionary_filtered_line_count.into()),
+                );
+            }
+            insert_retained_word_confidence_metadata(&mut metadata, &restored.retained_word_confidence_stats);
+            hocr_document = Some(restored.document);
+        }
+    }
     if let Some(document) = hocr_document.as_mut() {
-        filter_elements_covered_by_tables(document, &tables);
+        // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
+        let reconciled = hocr_for_tables
+            .as_deref()
+            .filter(|_| dictionary_filtered_line_count == 0)
+            .and_then(|hocr| {
+                tsv_data_for_tables
+                    .as_deref()
+                    .and_then(|tsv| {
+                        reconcile_fragmented_hocr_table_rows(hocr, document, &tables, tsv, config, &security_limits)
+                    })
+                    .or_else(|| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number))
+            });
+        if let Some(reconciled) = reconciled {
+            *document = reconciled;
+        } else {
+            filter_elements_covered_by_tables(document, &tables);
+        }
     }
 
     let is_markdown_output = extraction_config
@@ -3557,6 +3762,102 @@ mod tests {
         let ratio = invalid_word_ratio_from(&words, is_valid).expect("enough candidates to score");
 
         assert_eq!(ratio, 0.0, "the failed lookup must not count as invalid");
+    }
+
+    #[test]
+    fn repeated_rows_beyond_alignment_budget_leave_hocr_unclaimed() {
+        let mut words: Vec<_> = (0..64)
+            .map(|row| word_at(10, row * 20, 12, 10, if row == 63 { "end" } else { "same" }))
+            .collect();
+        let mut cells = vec![vec!["same".to_string()]; 31];
+        cells.push(vec!["end".to_string()]);
+        let bbox = BoundingBox {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 25.0,
+            y1: 1280.0,
+        };
+        assert!(prove_fragmented_table_rows(&mut words, bbox, &cells, 0.5, usize::MAX).is_none());
+    }
+
+    #[test]
+    fn split_hocr_table_rows_are_claimed_without_removing_heading() {
+        let fragments = [
+            ("Inventory", 10, 10),
+            ("Apples", 10, 40),
+            ("20", 70, 40),
+            ("Pears", 10, 70),
+            ("30", 70, 70),
+        ];
+        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
+        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            .to_owned();
+        for (text, left, top) in fragments {
+            hocr.push_str(&format!(
+                r#"<p class="ocr_par"><span class="ocr_line"><span class="ocrx_word" title="bbox {left} {top} {} {}">{text}</span></span></p>"#,
+                left + 15,
+                top + 10,
+            ));
+            tsv.push_str(&format!("5\t1\t1\t1\t1\t1\t{left}\t{top}\t15\t10\t90\t{text}\n"));
+        }
+        hocr.push_str("</div>");
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+        let mut table = OcrTable {
+            cells: vec![vec!["Apples".into(), "20".into()], vec!["Pears".into(), "30".into()]],
+            markdown: String::new(),
+            page_number: 1,
+            bounding_box: Some(OcrTableBoundingBox {
+                left: 10,
+                top: 10,
+                right: 85,
+                bottom: 80,
+            }),
+        };
+        let config = TesseractConfig::default();
+        let limits = SecurityLimits::default();
+        let reconciled = reconcile_fragmented_hocr_table_rows(
+            &hocr,
+            &document,
+            std::slice::from_ref(&table),
+            &tsv,
+            &config,
+            &limits,
+        )
+        .expect("the exact visual rows are split into hOCR fragments");
+        assert_eq!(reconciled.elements.len(), 1);
+        assert_eq!(reconciled.elements[0].text, "Inventory");
+        assert_eq!(reconciled.elements[0].bbox, document.elements[0].bbox);
+        assert!(!reconciled.ocr_text_claimed_by_tables);
+
+        for limits in [
+            SecurityLimits {
+                max_content_size: hocr.len(),
+                ..limits.clone()
+            },
+            SecurityLimits {
+                max_iterations: (hocr.len() + tsv.len()) * 4,
+                ..limits.clone()
+            },
+            SecurityLimits {
+                max_table_cells: 3,
+                ..limits.clone()
+            },
+        ] {
+            assert!(
+                reconcile_fragmented_hocr_table_rows(
+                    &hocr,
+                    &document,
+                    std::slice::from_ref(&table),
+                    &tsv,
+                    &config,
+                    &limits
+                )
+                .is_none()
+            );
+        }
+
+        table.cells[1][1].clear();
+        assert!(reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config, &limits).is_none());
     }
 
     fn word_at(left: u32, top: u32, width: u32, height: u32, text: &str) -> crate::table_core::HocrWord {
@@ -5397,6 +5698,187 @@ mod tests {
             .expect("implicit preprocessing must retain its effective configuration");
         assert!(preprocessing.deskew);
         assert_eq!(preprocessing.binarization_method, "otsu");
+    }
+
+    const REPEATED_LINE_COUNT: usize = 10;
+    const REPEATED_LINE_WIDTH: u32 = 400;
+    const REPEATED_LINE_PITCH: u32 = 132;
+    const REPEATED_LINE_SOURCE_DPI: u32 = 150;
+
+    fn repeated_line_raster(count: usize, staggered: bool) -> Option<image::RgbImage> {
+        let source = crate::utils::read_test_fixture("images/test_hello_world.png")?;
+        let source = image::load_from_memory(&source)
+            .expect("corpus PNG must decode")
+            .to_rgb8();
+        assert_eq!(source.dimensions(), (800, 200));
+        // Preserve the source glyph pixels and leave 37 white pixels for the stagger. ~keep
+        let line = image::imageops::crop_imm(&source, 219, 36, REPEATED_LINE_WIDTH, REPEATED_LINE_PITCH);
+        let height = REPEATED_LINE_PITCH * u32::try_from(count).expect("small test raster");
+        let mut raster = image::RgbImage::from_pixel(REPEATED_LINE_WIDTH, height, image::Rgb([255; 3]));
+        for index in 0..count {
+            let x = if staggered && index % 2 != 0 { 37 } else { 0 };
+            let y = i64::try_from(index).expect("small test raster") * i64::from(REPEATED_LINE_PITCH);
+            image::imageops::replace(&mut raster, &line.to_image(), x, y);
+        }
+        Some(raster)
+    }
+
+    async fn extract_repeated_line_raster(
+        raster: &image::RgbImage,
+        output_format: crate::core::config::OutputFormat,
+        tesseract_config: Option<crate::types::TesseractConfig>,
+    ) -> crate::types::ExtractedDocument {
+        use crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION;
+        use crate::core::config::{ExtractInput, ExtractionConfig, OcrConfig, PageConfig};
+        use image::ImageEncoder;
+
+        let mut bytes = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(
+                raster.as_raw(),
+                raster.width(),
+                raster.height(),
+                image::ExtendedColorType::Rgb8,
+            )
+            .expect("encode the test raster");
+        let config = ExtractionConfig {
+            output_format,
+            use_cache: false,
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend_options: Some(serde_json::json!({ (SOURCE_DPI_BACKEND_OPTION): REPEATED_LINE_SOURCE_DPI })),
+                tesseract_config,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut batch = crate::extract(ExtractInput::from_bytes(bytes, "image/png", None), &config)
+            .await
+            .expect("real Tesseract extraction");
+        assert_eq!(batch.results.len(), 1);
+        batch.results.remove(0)
+    }
+
+    fn assert_repeated_line_text(doc: &crate::types::ExtractedDocument, expected_count: usize, psm: &str) {
+        let pages = doc.pages.as_deref().expect("one image page");
+        assert_eq!(pages.len(), 1);
+        assert_eq!(
+            doc.metadata.additional.get("psm").and_then(serde_json::Value::as_str),
+            Some(psm)
+        );
+        for text in [&doc.content, &pages[0].content] {
+            let lines: Vec<&str> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+            assert_eq!(
+                lines,
+                vec!["Hello World"; expected_count],
+                "every source line must retain all letters"
+            );
+        }
+    }
+
+    async fn assert_implicit_aligned_lines(output_format: crate::core::config::OutputFormat) {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        let result = extract_repeated_line_raster(&raster, output_format, None).await;
+        assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+        assert!(result.metadata.image_preprocessing.is_some());
+    }
+
+    #[tokio::test]
+    async fn implicit_plain_ocr_retains_every_aligned_repeated_line() {
+        assert_implicit_aligned_lines(crate::core::config::OutputFormat::Plain).await;
+    }
+
+    #[tokio::test]
+    async fn implicit_markdown_ocr_retains_every_aligned_repeated_line() {
+        assert_implicit_aligned_lines(crate::core::config::OutputFormat::Markdown).await;
+    }
+
+    #[test]
+    fn dense_dark_glyphs_on_a_light_page_select_default_preprocessing() {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        assert!(
+            should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+            "the dark text components qualify despite their contribution to the page mean"
+        );
+    }
+
+    #[test]
+    fn dense_unstructured_or_shadowed_rasters_keep_raw_pixels() {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        // Reordering the same RGB pixels makes a filled foreground block. ~keep
+        let mut pixels = raster.as_raw().as_chunks::<RGB_CHANNEL_COUNT>().0.to_vec();
+        pixels.sort_unstable_by_key(|pixel| pixel.iter().map(|&channel| u16::from(channel)).sum::<u16>());
+        let graphic: Vec<u8> = pixels.into_iter().flatten().collect();
+        assert!(!should_apply_default_preprocessing(
+            &graphic,
+            raster.width(),
+            raster.height()
+        ));
+
+        let shadow: Vec<u8> = raster
+            .as_raw()
+            .iter()
+            .map(|&channel| (u16::from(channel) * 3 / 4) as u8)
+            .collect();
+        assert!(!should_apply_default_preprocessing(
+            &shadow,
+            raster.width(),
+            raster.height()
+        ));
+    }
+
+    #[tokio::test]
+    async fn single_and_staggered_lines_retain_exact_text_with_implicit_psm() {
+        for (count, staggered) in [(1, false), (REPEATED_LINE_COUNT, true)] {
+            let Some(raster) = repeated_line_raster(count, staggered) else {
+                return;
+            };
+            let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+            assert_repeated_line_text(&result, count, "11");
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_line_preprocessing_respects_explicit_psm_and_preprocessing() {
+        let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
+            return;
+        };
+        use crate::core::config::OutputFormat;
+        use crate::types::{ImagePreprocessingConfig, TesseractConfig};
+        let block_config = TesseractConfig {
+            psm: Some(6),
+            ..Default::default()
+        };
+        let block = extract_repeated_line_raster(&raster, OutputFormat::Plain, Some(block_config)).await;
+        assert_repeated_line_text(&block, REPEATED_LINE_COUNT, "6");
+
+        let preprocessing = ImagePreprocessingConfig::default();
+        let target_dpi = preprocessing.target_dpi;
+        let automatic_layout_config = TesseractConfig {
+            psm: Some(3),
+            preprocessing: Some(preprocessing),
+            ..Default::default()
+        };
+        let automatic_layout =
+            extract_repeated_line_raster(&raster, OutputFormat::Plain, Some(automatic_layout_config)).await;
+        assert_repeated_line_text(&automatic_layout, REPEATED_LINE_COUNT, "3");
+        assert_eq!(
+            automatic_layout
+                .metadata
+                .image_preprocessing
+                .expect("explicit preprocessing")
+                .target_dpi,
+            target_dpi
+        );
     }
 
     #[test]

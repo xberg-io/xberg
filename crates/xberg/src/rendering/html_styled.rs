@@ -221,6 +221,42 @@ impl Plugin for StyledHtmlRenderer {
     }
 }
 
+#[cfg(feature = "redaction")]
+impl StyledHtmlRenderer {
+    pub(crate) fn verified_plain(&self, doc: &InternalDocument) -> Option<String> {
+        if doc
+            .elements
+            .iter()
+            .any(|element| element.kind == ElementKind::FootnoteDefinition)
+            || doc
+                .annotations
+                .as_ref()
+                .is_some_and(|annotations| !annotations.is_empty())
+            || (self.config.embed_css
+                && self
+                    .resolved_css
+                    .as_bytes()
+                    .windows(b"</style".len())
+                    .any(|window| window.eq_ignore_ascii_case(b"</style")))
+        {
+            return None;
+        }
+        let plain = super::render_plain(doc);
+        let mut visible = super::html::HtmlBody::new(&plain)?;
+        for elem in doc.elements.iter().filter(|elem| is_body_element(elem)) {
+            if !matches!(
+                elem.kind,
+                ElementKind::Paragraph | ElementKind::Title | ElementKind::Heading { .. }
+            ) || !visible.append(" ")
+                || !visible.append(&elem.text)
+            {
+                return None;
+            }
+        }
+        visible.complete().then_some(plain)
+    }
+}
+
 impl InternalRenderer for StyledHtmlRenderer {
     fn render(&self, doc: &InternalDocument) -> Result<String> {
         let p = &self.config.class_prefix;

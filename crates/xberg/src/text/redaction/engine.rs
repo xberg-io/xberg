@@ -26,8 +26,13 @@
 
 use std::collections::HashSet;
 
+use super::formatted::{
+    FormattedPlan, HtmlBudget, HtmlPlan, PagePlan, SurfacePlans, content_matches, escaped_plain_markdown,
+    html_budget_error,
+};
 use crate::Result;
 use crate::core::config::redaction::{ExternalRedactionFinding, RedactionConfig, RedactionOffsetEncoding};
+use crate::extraction::derive::surfaces::{RedactionSurfaces, VerifiedMarkup};
 use crate::extractors::security::SecurityLimits;
 use crate::types::ExtractedDocument;
 use crate::types::entity::{Entity, EntityCategory};
@@ -38,7 +43,8 @@ use crate::types::revisions::{DiffLine, RevisionAnchor};
 #[cfg(feature = "tokio-runtime")]
 use super::external::compile_configured_findings_async;
 use super::external::{ExternalRedactionRequest, compile_configured_findings, compile_external_findings};
-use super::patterns::{PatternMatch, scan_text};
+use super::literal_leaf::plan::{self as literal_plan, LiteralPlan, Matchers};
+use super::patterns::{BorrowedMatch, PatternMatch, scan_text, visit_category};
 use super::strategy::{TokenCounter, apply_strategy};
 
 /// Maximum nesting depth followed into embedded sub-documents (image OCR
@@ -51,10 +57,14 @@ const MAX_NESTED_DOCUMENT_DEPTH: usize = 16;
 /// Maximum nesting depth followed into djot block trees, for the same reason.
 const MAX_BLOCK_NESTING_DEPTH: usize = 32;
 
+/// Compile within the first fitting NFA allocation cap, so small patterns do not
+/// consume the maximum search budget per input byte. ~keep
+const HTML_REGEX_SIZE_LIMITS: [usize; 5] = [256, 512, 1024, 2048, 4096];
+
 /// Run pattern redaction (and optional NER-driven redaction) over `result` and
 /// rewrite every textual field. Populates `result.redaction_report`.
 pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) -> Result<()> {
-    redact_with_security_limits(result, config, &SecurityLimits::default()).await
+    redact_with_security_limits(result, config, &SecurityLimits::default(), &()).await
 }
 
 /// Redact an owned document using a JSON array or JSON Lines payload from an external inspection engine.
@@ -118,6 +128,7 @@ pub(crate) async fn redact_external_with_findings(
         },
         true,
         &default_limits,
+        &(),
     )
     .await?;
     Ok(document)
@@ -127,10 +138,18 @@ pub(crate) async fn redact_with_security_limits(
     result: &mut ExtractedDocument,
     config: &RedactionConfig,
     limits: &SecurityLimits,
+    surfaces: &impl RedactionSurfaces,
 ) -> Result<()> {
-    redact_counted(result, config, CompiledExternalFindings::default(), true, limits)
-        .await
-        .map(|_counter| ())
+    redact_counted(
+        result,
+        config,
+        CompiledExternalFindings::default(),
+        true,
+        limits,
+        surfaces,
+    )
+    .await
+    .map(|_counter| ())
 }
 
 pub(crate) async fn redact_with_external_findings(
@@ -138,7 +157,9 @@ pub(crate) async fn redact_with_external_findings(
     config: &RedactionConfig,
     request: &ExternalRedactionRequest,
     limits: &SecurityLimits,
+    surfaces: &impl RedactionSurfaces,
 ) -> Result<()> {
+    surfaces.validate(result)?;
     config.validate()?;
     let external_terms = compile_external_findings(
         &result.content,
@@ -157,6 +178,7 @@ pub(crate) async fn redact_with_external_findings(
         },
         request.include_configured_sources,
         limits,
+        surfaces,
     )
     .await
     .map(|_counter| ())
@@ -179,6 +201,7 @@ pub async fn redact_capturing_rehydration_map(
         CompiledExternalFindings::default(),
         true,
         &SecurityLimits::default(),
+        &(),
     )
     .await?;
     Ok(counter.rehydration_map())
@@ -201,7 +224,14 @@ pub fn redact_with_entities(
 ) -> Result<()> {
     config.validate()?;
     let configured = compile_configured_findings(&result.content, config, &SecurityLimits::default())?;
-    redact_pass(result, config, entities, &configured.terms, true);
+    redact_pass(
+        result,
+        config,
+        entities,
+        &configured.terms,
+        true,
+        (&(), &SecurityLimits::default()),
+    )?;
     Ok(())
 }
 
@@ -220,7 +250,9 @@ async fn redact_counted(
     external: CompiledExternalFindings<'_>,
     include_configured_sources: bool,
     limits: &SecurityLimits,
+    surfaces: &impl RedactionSurfaces,
 ) -> Result<TokenCounter> {
+    surfaces.validate(result)?;
     config.validate()?;
     #[cfg(feature = "tokio-runtime")]
     let configured = compile_configured_findings_async(&result.content, config, limits).await?;
@@ -249,13 +281,14 @@ async fn redact_counted(
     #[cfg(not(feature = "ner"))]
     let entities: Vec<Entity> = Vec::new();
 
-    Ok(redact_pass(
+    redact_pass(
         result,
         config,
         &entities,
         &all_external_terms,
         include_configured_sources,
-    ))
+        (surfaces, limits),
+    )
 }
 
 /// Rewrite every text-bearing field on `result` and populate its audit report.
@@ -265,17 +298,32 @@ fn redact_pass(
     entities: &[Entity],
     external_terms: &[(PiiCategory, regex::Regex)],
     include_configured_sources: bool,
-) -> TokenCounter {
+    context: (&impl RedactionSurfaces, &SecurityLimits),
+) -> Result<TokenCounter> {
+    let (surfaces, limits) = context;
+    if result.metadata.output_format.as_deref() == Some("html") && !surfaces.formatted_html() {
+        return Err(crate::XbergError::validation(
+            "HTML redaction requires verified renderer output",
+        ));
+    }
+    if result.metadata.output_format.as_deref() == Some("djot")
+        && surfaces.formatted_markup() != Some(VerifiedMarkup::Djot)
+    {
+        return Err(crate::XbergError::validation(
+            "Djot redaction requires verified renderer output",
+        ));
+    }
+    validate_nested_markup(result, limits.max_iterations)?;
     let active = if include_configured_sources {
         active_categories(config)
     } else {
         HashSet::new()
     };
     let categories: Vec<PiiCategory> = active.iter().cloned().collect();
-    let custom_regexes = if include_configured_sources {
-        compile_custom(config)
+    let custom = if include_configured_sources {
+        compile_custom(config, surfaces.formatted_markup().is_some())?
     } else {
-        Vec::new()
+        CompiledCustom::default()
     };
     let ner_terms = if include_configured_sources {
         compile_ner_terms(entities, config)
@@ -286,14 +334,23 @@ fn redact_pass(
     let mut pass = RedactionPass {
         categories: &categories,
         config,
-        custom_regexes: &custom_regexes,
+        custom_regexes: &custom.regexes,
+        custom_literal_count: custom.literal_count,
+        html_pattern_caps: &custom.html_pattern_caps,
         ner_terms: &ner_terms,
         external_terms,
         include_configured_sources,
         counter: TokenCounter::new(),
         findings: Vec::new(),
+        plans: SurfacePlans::default(),
     };
 
+    pass.plans = pass.plan_surfaces(result, surfaces, limits)?;
+    if let Some(FormattedPlan::Literal(plan)) = &pass.plans.formatted {
+        pass.findings.try_reserve_exact(plan.matches.len()).map_err(|_| {
+            crate::XbergError::validation("formatted literal Markdown redaction: requested helper capacity limit")
+        })?;
+    }
     pass.redact_document(result, 0);
 
     let findings = std::mem::take(&mut pass.findings);
@@ -303,7 +360,44 @@ fn redact_pass(
         total_redacted,
     });
 
-    pass.counter
+    Ok(pass.counter)
+}
+
+pub(crate) fn validate_nested_markup(doc: &ExtractedDocument, max_iterations: usize) -> Result<()> {
+    let mut remaining = max_iterations;
+    reject_nested_markup(doc, 0, &mut remaining)
+}
+
+fn reject_nested_markup(doc: &ExtractedDocument, depth: usize, remaining: &mut usize) -> Result<()> {
+    let images = doc.images.as_deref().unwrap_or_default();
+    let children = doc.children.as_deref().unwrap_or_default();
+    *remaining = remaining
+        .checked_sub(images.len())
+        .and_then(|n| n.checked_sub(children.len()))
+        .ok_or_else(|| crate::XbergError::validation("Nested redaction exceeds the document inspection limit"))?;
+    let descendants = images
+        .iter()
+        .filter_map(|image| image.ocr_result.as_deref())
+        .chain(children.iter().map(|child| child.result.as_ref()));
+    for nested in descendants {
+        if depth >= MAX_NESTED_DOCUMENT_DEPTH {
+            return Err(crate::XbergError::validation(
+                "Nested redaction exceeds the document depth limit",
+            ));
+        }
+        if nested.metadata.output_format.as_deref() == Some("html") {
+            return Err(crate::XbergError::validation(
+                "Nested HTML redaction requires verified renderer output",
+            ));
+        }
+        if nested.metadata.output_format.as_deref() == Some("djot") {
+            return Err(crate::XbergError::validation(
+                "Nested Djot redaction requires verified renderer output",
+            ));
+        }
+        reject_nested_markup(nested, depth + 1, remaining)?;
+    }
+    Ok(())
 }
 
 /// One document-wide redaction pass.
@@ -316,14 +410,249 @@ struct RedactionPass<'a> {
     categories: &'a [PiiCategory],
     config: &'a RedactionConfig,
     custom_regexes: &'a [(String, regex::Regex)],
+    custom_literal_count: usize,
+    html_pattern_caps: &'a [usize],
     ner_terms: &'a [(PiiCategory, regex::Regex)],
     external_terms: &'a [(PiiCategory, regex::Regex)],
     include_configured_sources: bool,
     counter: TokenCounter,
     findings: Vec<RedactionFinding>,
+    plans: SurfacePlans<'a>,
 }
 
-impl RedactionPass<'_> {
+impl<'a> RedactionPass<'a> {
+    fn plan_surfaces(
+        &self,
+        doc: &ExtractedDocument,
+        surfaces: &'a impl RedactionSurfaces,
+        limits: &SecurityLimits,
+    ) -> Result<SurfacePlans<'a>> {
+        if surfaces.formatted_markdown() || surfaces.html_heading_sources().is_some() {
+            self.verify_html_heading_redaction(doc, surfaces.html_heading_sources(), limits)?;
+        }
+        if let Some(kind) = surfaces.formatted_markup() {
+            return self.plan_verified_surfaces(doc, surfaces, limits, kind);
+        }
+        let mut plans = SurfacePlans::default();
+        if let Some(source) = surfaces.formatted_literal_backup() {
+            plans.formatted = Some(FormattedPlan::Literal(literal_plan::plan(
+                source,
+                Matchers {
+                    categories: self.categories,
+                    requested: &self.config.categories,
+                    custom: self.custom_regexes,
+                    ner: self.ner_terms,
+                    external: self.external_terms,
+                    builtins: self.include_configured_sources,
+                },
+                limits,
+                self.config.strategy,
+            )?));
+        } else if surfaces.discard_formatted() {
+            plans.formatted = Some(FormattedPlan::ProcessorDiscard);
+        } else if surfaces.formatted_markdown()
+            && let Some(text) = doc.formatted_content.as_deref()
+        {
+            plans.formatted = Some(self.plan_markdown(
+                text,
+                Some(&doc.content),
+                surfaces.formatted_tag_exemptions(),
+                surfaces.formatted_owned_tags(),
+                surfaces.formatted_plain_annotation_separator(),
+                limits,
+            )?);
+        }
+        for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
+            if !surfaces.page_markdown(index) {
+                continue;
+            }
+            let plan = self.plan_page(&page.content, index, surfaces, limits)?;
+            plans.pages.insert(index, plan);
+        }
+        Ok(plans)
+    }
+
+    fn verify_html_heading_redaction(
+        &self,
+        doc: &ExtractedDocument,
+        sources: Option<&[crate::extraction::derive::surfaces::HtmlHeadingSource]>,
+        limits: &SecurityLimits,
+    ) -> Result<()> {
+        let unproved = || crate::XbergError::validation("Cannot prove complete styled HTML heading redaction");
+        let sources = sources.unwrap_or_default();
+        if sources
+            .iter()
+            .any(|source| source.unproved_markup && !self.applicable_matches(&source.text).is_empty())
+        {
+            return Err(unproved());
+        }
+
+        let Some(html) = doc.metadata.format.as_ref().and_then(|format| format.html()) else {
+            return Ok(());
+        };
+        let paired = sources.len() == html.headers.len();
+        for (index, heading) in html.headers.iter().enumerate() {
+            let text = &heading.text;
+            let source = sources
+                .get(index)
+                .filter(|source| paired && source.level == heading.level);
+            if source.is_some_and(|source| source.text == *text) {
+                continue;
+            }
+            let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(unproved)?;
+            if source.is_some_and(|source| {
+                source.styled_metadata.as_deref() == Some(text)
+                    && projection.text != source.text
+                    && !self.applicable_matches(&source.text).is_empty()
+            }) {
+                return Err(unproved());
+            }
+            let sensitive = match_ranges(&self.applicable_matches(&projection.text));
+            if !projection.covered(&sensitive, &match_ranges(&self.applicable_matches(text))) {
+                return Err(unproved());
+            }
+        }
+        Ok(())
+    }
+
+    fn applicable_matches(&self, text: &str) -> Vec<PatternMatch> {
+        self.matches_for(text)
+            .into_iter()
+            .filter(|finding| is_applicable(text, finding))
+            .collect()
+    }
+
+    fn plan_markdown(
+        &self,
+        text: &str,
+        plain: Option<&str>,
+        tag_exemptions: bool,
+        owned_tags: Option<&[std::ops::Range<usize>]>,
+        plain_annotation_separator: Option<usize>,
+        limits: &SecurityLimits,
+    ) -> Result<FormattedPlan> {
+        let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
+        let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(invalid)?;
+        let sensitive = match_ranges(&self.applicable_matches(&projection.text));
+        if let Some(matches) = content_matches(text, self.applicable_matches(text), tag_exemptions, owned_tags)
+            && projection.covered(&sensitive, &match_ranges(&matches))
+        {
+            return Ok(FormattedPlan::Preserve(matches));
+        }
+        let plain =
+            plain.ok_or_else(|| crate::XbergError::validation("Generated Markdown has no verified plain backup"))?;
+        let selected = self.applicable_matches(plain);
+        let correspondence = projection
+            .on_plain(plain, plain_annotation_separator)
+            .ok_or_else(invalid)?;
+        if !correspondence.covered(&sensitive, &match_ranges(&selected)) {
+            return Err(invalid());
+        }
+        Ok(FormattedPlan::Discard)
+    }
+
+    fn plan_verified_surfaces(
+        &self,
+        doc: &ExtractedDocument,
+        surfaces: &'a impl RedactionSurfaces,
+        limits: &SecurityLimits,
+        kind: VerifiedMarkup,
+    ) -> Result<SurfacePlans<'a>> {
+        let html = kind == VerifiedMarkup::Html;
+        let budget = HtmlBudget::new(limits);
+        let plan = |plain: &str, render_html| {
+            if plain.len() > limits.max_content_size || plain.len() > u32::MAX as usize {
+                return Err(html_budget_error());
+            }
+            HtmlPlan::new(
+                plain,
+                self.bounded_html_matches(plain, &budget)?,
+                self.config.strategy,
+                &budget,
+                render_html,
+            )
+        };
+        let mut plans = SurfacePlans {
+            formatted: Some(FormattedPlan::VerifiedMarkup {
+                plan: plan(&doc.content, html)?,
+                kind,
+            }),
+            ..SurfacePlans::default()
+        };
+        for (index, page) in doc.pages.as_deref().unwrap_or_default().iter().enumerate() {
+            let source = surfaces.page_markup_backup(index);
+            let plan = plan(source.unwrap_or(&page.content), html && source.is_some())?;
+            plans.pages.insert(index, PagePlan::Html { plan, source });
+        }
+        Ok(plans)
+    }
+
+    fn bounded_html_matches(&self, text: &str, budget: &HtmlBudget) -> Result<Vec<PatternMatch>> {
+        let mut matches = Vec::new();
+        if self.include_configured_sources {
+            for category in self.categories {
+                budget.charge(text.len().saturating_add(1))?;
+                visit_category(text, category, &mut |_| budget.charge(1), &mut |matched| {
+                    budget.record(&mut matches, matched, category)
+                })?;
+            }
+        }
+        let custom = self.custom_regexes.iter().enumerate().map(|(index, (label, regex))| {
+            (
+                PiiCategory::Custom(label.clone()),
+                regex,
+                index
+                    .checked_sub(self.custom_literal_count)
+                    .map(|index| self.html_pattern_caps[index]),
+            )
+        });
+        let detected = self
+            .ner_terms
+            .iter()
+            .chain(self.external_terms)
+            .map(|(category, regex)| (category.clone(), regex, None));
+        let requested = &self.config.categories;
+        for (category, regex, pattern_cap) in custom.chain(detected) {
+            if !requested.is_empty() && !matches!(category, PiiCategory::Custom(_)) && !requested.contains(&category) {
+                continue;
+            }
+            append_html_regex_matches(text, &category, regex, pattern_cap, budget, &mut matches)?;
+        }
+        let sort_work = (usize::BITS - matches.len().leading_zeros()) as usize;
+        budget.charge(matches.len().checked_mul(sort_work).ok_or_else(html_budget_error)?)?;
+        let mut selected = dedupe_overlaps(matches);
+        selected.retain(|finding| is_applicable(text, finding));
+        Ok(selected)
+    }
+
+    fn plan_page(
+        &self,
+        text: &str,
+        index: usize,
+        surfaces: &impl RedactionSurfaces,
+        limits: &SecurityLimits,
+    ) -> Result<PagePlan<'a>> {
+        let source = surfaces.page_backup(index);
+        if !surfaces.page_is_literal(index)
+            && let FormattedPlan::Preserve(matches) = self.plan_markdown(
+                text,
+                source,
+                surfaces.page_tag_exemptions(index),
+                surfaces.page_owned_tags(index),
+                None,
+                limits,
+            )?
+        {
+            return Ok(PagePlan::Preserve(matches));
+        }
+        let source = source
+            .ok_or_else(|| crate::XbergError::validation("Generated Markdown page has no verified plain backup"))?;
+        Ok(PagePlan::Plain {
+            source: source.to_owned(),
+            matches: self.applicable_matches(source),
+        })
+    }
+
     /// Every match in `text`, deduped and in ascending byte order.
     fn matches_for(&self, text: &str) -> Vec<PatternMatch> {
         let mut matches = if self.include_configured_sources {
@@ -366,6 +695,10 @@ impl RedactionPass<'_> {
     /// audit trail is worse than a visibly missing one (xberg-io/xberg#201).
     fn redact(&mut self, text: &str) -> String {
         let matches = self.matches_for(text);
+        self.apply_matches(text, matches)
+    }
+
+    fn apply_matches(&mut self, text: &str, matches: Vec<PatternMatch>) -> String {
         if matches.is_empty() {
             return text.to_string();
         }
@@ -378,14 +711,7 @@ impl RedactionPass<'_> {
             if !is_applicable(text, m) {
                 continue;
             }
-            let replacement = apply_strategy(self.config.strategy, &m.text, &m.category, &mut self.counter);
-            self.findings.push(RedactionFinding {
-                start: m.start as u32,
-                end: m.end as u32,
-                category: m.category.clone(),
-                strategy: self.config.strategy,
-                replacement_token: replacement.clone(),
-            });
+            let replacement = self.record_match(m);
             applied.push((m.start, m.end, replacement));
         }
 
@@ -394,6 +720,58 @@ impl RedactionPass<'_> {
             out.replace_range(*start..*end, replacement);
         }
         out
+    }
+
+    fn record_match(&mut self, matched: &PatternMatch) -> String {
+        let replacement = apply_strategy(
+            self.config.strategy,
+            &matched.text,
+            &matched.category,
+            &mut self.counter,
+        );
+        self.findings.push(RedactionFinding {
+            start: matched.start as u32,
+            end: matched.end as u32,
+            category: matched.category.clone(),
+            strategy: self.config.strategy,
+            replacement_token: replacement.clone(),
+        });
+        replacement
+    }
+
+    fn apply_html_plan(&mut self, source: &str, mut plan: HtmlPlan) -> (String, Option<String>) {
+        let mut previous_end = 0;
+        for matched in &plan.matches {
+            plan.plain.push_str(&source[previous_end..matched.start]);
+            plan.plain.push_str(&self.record_match(matched));
+            previous_end = matched.end;
+        }
+        plan.plain.push_str(&source[previous_end..]);
+        plan.finish()
+    }
+
+    fn apply_literal(&mut self, mut plan: LiteralPlan) -> String {
+        for finding in plan.matches {
+            let text = if finding.decoded { &plan.decoded } else { &plan.source };
+            let identity = &text[finding.identity];
+            let replacement = apply_strategy(self.config.strategy, identity, &finding.category, &mut self.counter);
+            self.findings.push(RedactionFinding {
+                start: finding.raw.start as u32,
+                end: finding.raw.end as u32,
+                category: finding.category,
+                strategy: self.config.strategy,
+                replacement_token: replacement.clone(),
+            });
+            // Drop preflights data and owned syntax removals together; finding spans remain original. ~keep
+            if !matches!(self.config.strategy, crate::types::redaction::RedactionStrategy::Drop) {
+                plan.replacements
+                    .push((finding.raw.start, finding.raw.end, replacement));
+            }
+        }
+        for (start, end, replacement) in plan.replacements.iter().rev() {
+            plan.source.replace_range(*start..*end, replacement);
+        }
+        plan.source
     }
 
     /// Rewrite a string field in place.
@@ -428,9 +806,41 @@ impl RedactionPass<'_> {
         }
     }
 
-    /// Rewrite every text surface of `doc`, recursing into embedded
-    /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
-    fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+    fn redact_primary_surfaces(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        let plan = match (depth == 0).then(|| self.plans.formatted.take()).flatten() {
+            Some(FormattedPlan::Literal(plan)) => {
+                doc.content = self.apply_literal(plan);
+                doc.formatted_content = None;
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor edited formatted text; its current literal data was redacted \
+                     and returned as plain text",
+                );
+                return;
+            }
+            Some(FormattedPlan::VerifiedMarkup { plan, kind }) => {
+                (doc.content, doc.formatted_content) = self.apply_html_plan(&doc.content, plan);
+                if kind == VerifiedMarkup::Djot
+                    && let Some(pages) = doc.metadata.pages.as_mut()
+                {
+                    pages.boundaries = None;
+                }
+                let message = match kind {
+                    VerifiedMarkup::Html => {
+                        "HTML was rebuilt from verified redacted plain text. Original formatting was removed. \
+                         Finding offsets refer to the original plain text"
+                    }
+                    VerifiedMarkup::Djot => {
+                        "Djot rendering was discarded. Verified redacted plain text is returned. \
+                         Finding offsets refer to the original plain text"
+                    }
+                };
+                crate::core::diagnostics::push_warning(&mut doc.processing_warnings, "output_format", message);
+                return;
+            }
+            plan => plan,
+        };
         // A nested result that its own pipeline already packaged (DOCX, PDF) holds base64 in
         // `content`. That pipeline ran with the same redaction config and redacted the
         // text before packaging it; masking a stretch of the encoding would corrupt it.
@@ -441,9 +851,40 @@ impl RedactionPass<'_> {
             doc.content = self.redact(&content);
         }
 
-        if let Some(formatted) = doc.formatted_content.take() {
-            doc.formatted_content = Some(self.redact(&formatted));
-        }
+        self.redact_formatted_surface(doc, plan);
+    }
+
+    fn redact_formatted_surface(&mut self, doc: &mut ExtractedDocument, plan: Option<FormattedPlan>) {
+        doc.formatted_content = match (plan, doc.formatted_content.take()) {
+            (Some(FormattedPlan::ProcessorDiscard), _) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "A post-processor changed the captured document text; the unproved rendering was discarded \
+                     and current redacted plain text is returned",
+                );
+                None
+            }
+            (Some(FormattedPlan::Preserve(matches)), Some(formatted)) => Some(self.apply_matches(&formatted, matches)),
+            (Some(FormattedPlan::Discard), Some(_)) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "Formatted Markdown contained a redaction crossing generated syntax; rendering was discarded \
+                     and redacted plain text is returned",
+                );
+                None
+            }
+            (_, Some(formatted)) => Some(self.redact(&formatted)),
+            (_, None) => None,
+        };
+    }
+
+    /// Rewrite every text surface of `doc`, recursing into embedded
+    /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
+    fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+        let incoming_warnings = doc.processing_warnings.len();
+        self.redact_primary_surfaces(doc, depth);
 
         self.redact_chunks(doc);
 
@@ -470,7 +911,7 @@ impl RedactionPass<'_> {
             }
         }
 
-        self.redact_secondary_text_fields(doc, depth);
+        self.redact_secondary_text_fields(doc, depth, incoming_warnings);
     }
 
     /// Rewrite chunk text, keeping chunk byte ranges consistent when the
@@ -507,9 +948,9 @@ impl RedactionPass<'_> {
     /// This is an allowlist of *fields*, but it is meant to be exhaustive over
     /// the text surfaces of [`ExtractedDocument`]; when a new text field is
     /// added there it must be added here too.
-    fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize) {
+    fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize, incoming_warnings: usize) {
         self.redact_tables(doc);
-        self.redact_pages(doc);
+        self.redact_pages(doc, depth);
         self.redact_elements(doc);
         self.redact_djot(doc);
         self.redact_document_structure(doc);
@@ -517,7 +958,7 @@ impl RedactionPass<'_> {
         self.redact_nested_documents(doc, depth);
         self.redact_references(doc);
         self.redact_metadata(doc);
-        self.redact_processing_warnings(doc);
+        self.redact_processing_warnings(doc, incoming_warnings);
 
         if let Some(structured) = doc.structured_output.as_mut() {
             self.redact_json_value(structured);
@@ -546,12 +987,33 @@ impl RedactionPass<'_> {
     }
 
     /// Rewrite per-page text, slide/sheet names, hierarchy blocks, and page tables.
-    fn redact_pages(&mut self, doc: &mut ExtractedDocument) {
+    fn redact_pages(&mut self, doc: &mut ExtractedDocument, depth: usize) {
         let Some(pages) = doc.pages.as_mut() else {
             return;
         };
-        for page in pages.iter_mut() {
-            self.redact_in_place(&mut page.content);
+        for (index, page) in pages.iter_mut().enumerate() {
+            let plan = (depth == 0).then(|| self.plans.pages.remove(&index)).flatten();
+            page.content = match plan {
+                Some(PagePlan::Preserve(matches)) => self.apply_matches(&page.content, matches),
+                Some(PagePlan::Html { source, plan }) => {
+                    let (plain, html) = self.apply_html_plan(source.unwrap_or(&page.content), plan);
+                    html.unwrap_or(plain)
+                }
+                Some(PagePlan::Plain { source, matches }) => {
+                    let redacted = self.apply_matches(&source, matches);
+                    crate::core::diagnostics::push_warning(
+                        &mut doc.processing_warnings,
+                        "output_format",
+                        format!(
+                            "Page {} Markdown could not retain syntax authority; its verified current backup was \
+                             redacted and escaped as Markdown. Finding offsets refer to the backup before escaping",
+                            page.page_number
+                        ),
+                    );
+                    escaped_plain_markdown(&redacted)
+                }
+                None => self.redact(&page.content),
+            };
             self.redact_optional(&mut page.native_content);
             self.redact_optional(&mut page.speaker_notes);
             self.redact_optional(&mut page.section_name);
@@ -677,6 +1139,9 @@ impl RedactionPass<'_> {
             for image in images.iter_mut() {
                 self.redact_optional(&mut image.caption);
                 self.redact_optional(&mut image.description);
+                for code in image.qr_codes.iter_mut().flatten() {
+                    self.redact_in_place(&mut code.payload);
+                }
                 if let Some(ocr_doc) = image.ocr_result.as_mut()
                     && depth < MAX_NESTED_DOCUMENT_DEPTH
                 {
@@ -707,6 +1172,7 @@ impl RedactionPass<'_> {
         if let Some(annotations) = doc.annotations.as_mut() {
             for annotation in annotations.iter_mut() {
                 self.redact_optional(&mut annotation.content);
+                self.redact_optional(&mut annotation.author);
             }
         }
 
@@ -933,6 +1399,7 @@ impl RedactionPass<'_> {
         }
         for header in html.headers.iter_mut() {
             self.redact_in_place(&mut header.text);
+            self.redact_optional(&mut header.id);
         }
         for link in html.links.iter_mut() {
             self.redact_in_place(&mut link.href);
@@ -969,8 +1436,9 @@ impl RedactionPass<'_> {
 
     /// Rewrite processing-warning messages: they can embed source paths or other
     /// diagnostic detail carrying a person's name (e.g. a home-directory path).
-    fn redact_processing_warnings(&mut self, doc: &mut ExtractedDocument) {
-        for warning in doc.processing_warnings.iter_mut() {
+    fn redact_processing_warnings(&mut self, doc: &mut ExtractedDocument, incoming: usize) {
+        // Static diagnostics produced by this pass carry no source data or replacement identity. ~keep
+        for warning in doc.processing_warnings.iter_mut().take(incoming) {
             let redacted = self.redact(&warning.message);
             warning.message = std::borrow::Cow::Owned(redacted);
         }
@@ -990,6 +1458,54 @@ impl RedactionPass<'_> {
             self.redact_djot_block(child, depth + 1);
         }
     }
+}
+
+fn append_html_regex_matches(
+    text: &str,
+    category: &PiiCategory,
+    regex: &regex::Regex,
+    pattern_cap: Option<usize>,
+    budget: &HtmlBudget,
+    matches: &mut Vec<PatternMatch>,
+) -> Result<()> {
+    if pattern_cap.is_none() {
+        budget.charge(text.len().saturating_add(1))?;
+    }
+    let mut search = regex.find_iter(text);
+    let mut previous_end = 0;
+    loop {
+        if let Some(cap) = pattern_cap {
+            // An arbitrary pattern can rescan the full suffix for every yield. The iterator
+            // can also repeat a search to skip an overlapping empty match. ~keep
+            let work = text
+                .len()
+                .checked_sub(previous_end)
+                .and_then(|n| n.checked_add(char::MAX.len_utf8()))
+                .and_then(|n| n.checked_mul(2 * cap))
+                .ok_or_else(html_budget_error)?;
+            budget.charge(work)?;
+        }
+        let Some(item) = search.next() else {
+            return Ok(());
+        };
+        previous_end = item.end();
+        budget.charge(1)?;
+        if !item.is_empty() {
+            budget.record(
+                matches,
+                BorrowedMatch {
+                    start: item.start(),
+                    end: item.end(),
+                    text: item.as_str(),
+                },
+                category,
+            )?;
+        }
+    }
+}
+
+fn match_ranges(matches: &[PatternMatch]) -> Vec<std::ops::Range<usize>> {
+    matches.iter().map(|finding| finding.start..finding.end).collect()
 }
 
 /// A match is applied only when its span is a valid slice of `text` that still
@@ -1032,13 +1548,20 @@ fn active_categories(config: &RedactionConfig) -> HashSet<PiiCategory> {
     }
 }
 
+#[derive(Default)]
+struct CompiledCustom {
+    regexes: Vec<(String, regex::Regex)>,
+    literal_count: usize,
+    html_pattern_caps: Vec<usize>,
+}
+
 /// Compile every user-supplied term and pattern once. Returns `(label, regex)`
 /// tuples in declaration order — terms first, then patterns.
 ///
 /// Regex compilation has already been validated by
 /// [`RedactionConfig::validate`]; this function silently skips malformed inputs
 /// so a residual stray pattern can't crash the engine.
-fn compile_custom(config: &RedactionConfig) -> Vec<(String, regex::Regex)> {
+fn compile_custom(config: &RedactionConfig, html: bool) -> Result<CompiledCustom> {
     let mut out: Vec<(String, regex::Regex)> =
         Vec::with_capacity(config.custom_terms.len() + config.custom_patterns.len());
 
@@ -1057,6 +1580,8 @@ fn compile_custom(config: &RedactionConfig) -> Vec<(String, regex::Regex)> {
         }
     }
 
+    let literal_count = out.len();
+    let mut html_pattern_caps = Vec::new();
     for pattern in &config.custom_patterns {
         if pattern.pattern.is_empty() {
             continue;
@@ -1066,12 +1591,31 @@ fn compile_custom(config: &RedactionConfig) -> Vec<(String, regex::Regex)> {
         } else {
             format!("(?i){}", pattern.pattern)
         };
-        if let Ok(regex) = regex::Regex::new(&pattern_str) {
+        if html {
+            let (regex, cap) = compile_html_pattern(&pattern_str)?;
+            html_pattern_caps.push(cap);
+            out.push((pattern.label.clone(), regex));
+        } else if let Ok(regex) = regex::Regex::new(&pattern_str) {
             out.push((pattern.label.clone(), regex));
         }
     }
 
-    out
+    Ok(CompiledCustom {
+        regexes: out,
+        literal_count,
+        html_pattern_caps,
+    })
+}
+
+fn compile_html_pattern(pattern: &str) -> Result<(regex::Regex, usize)> {
+    for cap in HTML_REGEX_SIZE_LIMITS {
+        match regex::RegexBuilder::new(pattern).size_limit(cap).build() {
+            Ok(regex) => return Ok((regex, cap)),
+            Err(regex::Error::CompiledTooBig(_)) => {}
+            Err(_) => return Err(html_budget_error()),
+        }
+    }
+    Err(html_budget_error())
 }
 
 /// Compile NER detections into literal matchers applied to every field.

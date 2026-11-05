@@ -116,7 +116,7 @@ fn comment(input: &[u8]) -> IResult<&[u8], ()> {
 ///
 /// This is used before parsing each token to handle arbitrary
 /// amounts of whitespace and comments between tokens.
-fn skip_ws(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub(crate) fn skip_ws(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let mut remaining = input;
 
     loop {

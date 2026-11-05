@@ -3,6 +3,7 @@
 use comrak::nodes::{AstNode, NodeValue};
 use comrak::{Arena, Options, format_commonmark};
 use std::borrow::Cow;
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use crate::types::annotations::PdfAnnotation;
@@ -100,6 +101,18 @@ static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     .expect("static regex compiles")
 });
 
+pub(crate) fn markdown_tag_exemptions_are_owned(doc: &InternalDocument) -> bool {
+    // Raw blocks and annotation values bypass Text escaping; parsing their tags cannot establish ownership. ~keep
+    !doc.elements
+        .iter()
+        .any(|element| matches!(element.kind, crate::types::internal::ElementKind::RawBlock))
+        && doc.annotations.as_deref().is_none_or(|annotations| {
+            annotations.iter().all(|annotation| {
+                annotation.author.as_deref().is_none_or(str::is_empty) && annotation_display_text(annotation).is_none()
+            })
+        })
+}
+
 /// Render an `InternalDocument` to GFM Markdown.
 ///
 /// Whether the output backslash-escapes CommonMark-significant leading characters
@@ -108,6 +121,14 @@ static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// [`ExtractionConfig::escape_markdown`](crate::core::config::ExtractionConfig::escape_markdown).
 /// Defaults to `true` (escaped), preserving prior behavior.
 pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
+    render_markdown_observed(doc, None).0
+}
+
+/// A second emission changes only tag nodes created from semantic annotations.
+pub(crate) fn render_markdown_observed(
+    doc: &InternalDocument,
+    mut tag_budget: Option<&mut usize>,
+) -> (String, Option<Vec<Range<usize>>>) {
     tracing::debug!(element_count = doc.elements.len(), "markdown rendering starting");
     let arena = Arena::new();
     let root = build_comrak_ast(doc, &arena);
@@ -116,43 +137,47 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
         strip_arxiv_watermark_noise(root);
     }
     keep_code_literal(root, &arena);
+    let mut nodes = tag_budget.as_deref().is_some_and(|budget| *budget > 0).then(Vec::new);
+    lower_standard_inline_html(root, &arena, &mut nodes, tag_budget.as_deref_mut());
     if !doc.escape_markdown {
         keep_text_tildes_unescaped(root, &arena);
     }
 
     if root.first_child().is_none() {
         tracing::debug!("markdown rendering: empty AST, returning empty string");
-        return finalize_annotations_appendix(doc.annotations.as_deref());
+        return (finalize_annotations_appendix(doc.annotations.as_deref()), None);
     }
 
     let mut options = comrak_options();
     options.render.width = 0;
+    let mut raw = String::new();
+    format_commonmark(root, &options, &mut raw).expect("comrak formatting should not fail");
+    let raw_len = raw.len();
+    let output = finish_markdown(raw, doc);
+    let owned = nodes
+        .zip(tag_budget)
+        .and_then(|(nodes, budget)| tag_ownership::verify(root, &options, doc, (&output, raw_len), &nodes, budget));
+    tracing::debug!(output_length = output.len(), "markdown rendering complete");
+    (output, owned)
+}
 
-    let mut output = String::new();
-    format_commonmark(root, &options, &mut output).expect("comrak formatting should not fail");
-
-    output = filter_page_marker_comments(output, doc.page_marker_format.as_deref());
-
-    output = unescape_markdown_output(output, doc.escape_markdown);
-
+fn finish_markdown(output: String, doc: &InternalDocument) -> String {
+    let output = filter_page_marker_comments(output, doc.page_marker_format.as_deref());
+    let mut output = unescape_markdown_output(output, doc.escape_markdown);
     if let Cow::Owned(s) = collapse_excess_newlines(&output) {
         output = s;
     }
-
     output = append_annotations_section(output, doc.annotations.as_deref());
-
-    let trimmed_len = output.trim_end().len();
-    if trimmed_len == 0 {
-        return String::new();
+    output.truncate(output.trim_end().len());
+    if !output.is_empty() {
+        output.push('\n');
     }
-    output.truncate(trimmed_len);
-    output.push('\n');
-    tracing::debug!(output_length = output.len(), "markdown rendering complete");
     output
 }
 
-/// Drop HTML comment lines from rendered output, except page-marker comments
-/// that match `page_marker_format` (when configured).
+mod tag_ownership;
+
+/// Retain canonical list boundaries and configured page markers while dropping other HTML comment lines.
 fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>) -> String {
     if !output.contains("<!--") {
         return output;
@@ -165,6 +190,7 @@ fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>)
             let trimmed = line.trim();
             !trimmed.starts_with("<!--")
                 || !trimmed.ends_with("-->")
+                || trimmed == "<!-- end list -->"
                 || marker_re.as_ref().is_some_and(|re| re.is_match(trimmed))
         })
         .collect::<Vec<_>>()
@@ -190,10 +216,36 @@ fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
     }
 }
 
+/// ~keep Only semantic annotations create HTML; their text children retain normal CommonMark escaping.
+fn lower_standard_inline_html<'a>(
+    root: &'a AstNode<'a>,
+    arena: &'a Arena<'a>,
+    tracked: &mut Option<Vec<&'a AstNode<'a>>>,
+    mut budget: Option<&mut usize>,
+) {
+    for node in root.descendants().collect::<Vec<_>>() {
+        let (opening, closing) = match node.data.borrow().value {
+            NodeValue::Superscript => ("<sup>", "</sup>"),
+            NodeValue::Underline => ("<u>", "</u>"),
+            _ => continue,
+        };
+        let open = arena.alloc(AstNode::from(NodeValue::HtmlInline(opening.into())));
+        let close = arena.alloc(AstNode::from(NodeValue::HtmlInline(closing.into())));
+        node.insert_before(open);
+        while let Some(child) = node.first_child() {
+            child.detach();
+            node.insert_before(child);
+        }
+        node.insert_before(close);
+        node.detach();
+        tag_ownership::track(tracked, budget.as_deref_mut(), open, close);
+    }
+}
+
 /// Apply the `escape_markdown`-dependent unescape pass to rendered output.
 fn unescape_markdown_output(mut output: String, escape_markdown: bool) -> String {
     if escape_markdown {
-        const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '(', ')', '*', '='];
+        const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '*', '='];
         let cow = unescape_backslash_sequences(&output, UNESCAPE_TARGETS);
         if let Cow::Owned(s) = cow {
             output = s;
@@ -344,6 +396,21 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
     options.render.prefer_fenced = true;
     options
 }
+
+#[cfg(test)]
+mod flat_alpha_clause_tests;
+
+#[cfg(test)]
+mod parenthesis_roundtrip_tests;
+
+#[cfg(test)]
+mod source_ordinal_limits_tests;
+
+#[cfg(test)]
+mod source_ordinal_tests;
+
+#[cfg(test)]
+mod standard_inline_html_tests;
 
 #[cfg(test)]
 mod tests {

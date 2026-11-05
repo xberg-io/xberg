@@ -1,5 +1,24 @@
 //! Shared utilities for resolving and verifying model artifacts from Hugging Face Hub.
 
+/// Hub repository that holds the PaddleOCR, table-structure and orientation models.
+///
+/// Every reader and downloader of that repository takes its coordinates from here, so a cache that
+/// one of them fills is the cache that the others read. ~keep
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr)))
+))]
+pub(crate) const PADDLE_MODELS_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
+
+/// The one immutable revision of [`PADDLE_MODELS_REPO_ID`]. It is the newest revision, because the
+/// PP-OCRv6 recognition checksums in the PaddleOCR manifest belong to it; every other file is
+/// identical between it and the older pin. ~keep
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr)))
+))]
+pub(crate) const PADDLE_MODELS_REVISION: &str = "bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8";
+
 // Every `Duration` use in this file (the two timeout constants and `model_download_timeout`)
 // sits behind the model-download feature set, so a default build has none and the bare import
 // warns as unused. Gate the import with the superset of those gates -- the `test` arm is

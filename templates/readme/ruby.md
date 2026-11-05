@@ -255,7 +255,7 @@ puts "Detected languages: #{document.detected_languages}"
 
 ### Ruby Version
 
-- **Ruby 3.2.0 or higher** (including Ruby 4.x)
+- **Ruby 3.3.0 or higher** (including Ruby 4.x)
 - Ruby 4.0+ is fully supported with no code changes required
 - Magnus bindings compile successfully on all supported Ruby versions
 

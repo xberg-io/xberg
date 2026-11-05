@@ -42,7 +42,6 @@ pub fn register_post_processor(processor: Arc<dyn PostProcessor>) -> crate::Resu
     feature = "captioning",
     feature = "qr-codes",
     feature = "ner",
-    feature = "redaction",
     feature = "quality",
     feature = "keywords-yake",
     feature = "keywords-rake"
@@ -54,6 +53,25 @@ pub(crate) fn register_post_processor_if_absent(processor: Arc<dyn PostProcessor
         return Ok(false);
     }
     get_post_processor_registry().write().register_if_absent(processor)
+}
+
+#[cfg(feature = "redaction")]
+pub(crate) fn register_builtin_redaction() -> crate::Result<bool> {
+    if !crate::core::pipeline::automatic_registration_allowed("redaction") {
+        return Ok(false);
+    }
+    crate::plugins::registry::get_post_processor_registry()
+        .write()
+        .register_builtin_redaction()
+}
+
+#[cfg(feature = "redaction")]
+pub(crate) fn register_redaction_processor() -> crate::Result<()> {
+    crate::core::pipeline::with_post_processor_enabled("redaction", || {
+        crate::plugins::registry::get_post_processor_registry()
+            .write()
+            .register_redaction_processor()
+    })
 }
 
 /// Unregister a post-processor by name.

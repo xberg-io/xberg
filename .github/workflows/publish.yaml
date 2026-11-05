@@ -505,7 +505,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-26, macos-26-intel]
+        # ~keep Runtime staging requires the reviewed Visual Studio 2022 redistributable.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-2022, macos-26, macos-26-intel]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -537,7 +538,7 @@ jobs:
         with:
           python-version: "3.13"
           package-dir: packages/python
-          cibw-build: "cp310-*"
+          cibw-build: "cp311-*"
           upload-artifact: "false"
           build-libheif: "true"
           manylinux-x86_64-image: "manylinux_2_28"
@@ -581,6 +582,11 @@ jobs:
           # target in this workflow, instead of depending on auditwheel alone.
           for w in wheelhouse/*.whl; do bash scripts/ci/vendor-native-closure.sh "$w"; done
 
+      - name: Test Windows wheel closure contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: mise run python:wheel:closure:test
+
       - name: Vendor ONNX Runtime into wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -593,7 +599,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "vendor-windows-wheel-closure failed for $($_.FullName)" }
           }
 
-      - name: Verify wheel has no DirectML import and ships ONNX Runtime (Windows)
+      - name: Verify wheel-local PE dependency closure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -1366,6 +1372,8 @@ jobs:
           submodules: false
       # PHP stays on its setup action (toolchain-management rule). ~keep
       - uses: xberg-io/actions/setup-php@v1
+        env:
+          phpts: nts
         with:
           php-version: ${{ matrix.php }}
 
@@ -1506,7 +1514,7 @@ jobs:
 
       # Tagged source retries must use the verification fixes from this workflow revision. ~keep
       - name: Checkout release verification tools
-        if: contains(matrix.platform.target, '-linux-gnu')
+        if: contains(matrix.platform.target, '-linux-gnu') || runner.os == 'Windows'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.workflow_sha }}
@@ -1516,6 +1524,19 @@ jobs:
           sparse-checkout: |
             scripts/ci/verify-php-linux-abi.sh
             scripts/ci/smoke-test-php-debian12.sh
+            scripts/ci/verify-windows-dll-closure.ps1
+            scripts/ci/vendor-windows-native-closure.ps1
+            scripts/ci/windows_wheel_closure.py
+            scripts/ci/windows_raw_staging.py
+            mise.toml
+            mise.lock
+
+      - name: Setup Python for Windows release closure
+        if: runner.os == 'Windows'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          working-directory: .release-tools
+          tools: python
 
       - name: Verify PHP Linux ABI is compatible with Debian 12
         if: contains(matrix.platform.target, '-linux-gnu')
@@ -1545,32 +1566,27 @@ jobs:
           }
           bash "$GITHUB_WORKSPACE/.release-tools/scripts/ci/smoke-test-php-debian12.sh" "${archives[0]}" "$PHP_VERSION"
 
-      # package-php-pie@v1 is an external action (xberg-io/actions); its
-      # internal file selection was not auditable from this repo, so vendor
-      # onto its OUTPUT archives (control we do have) rather than assume it
-      # bundles a co-located onnxruntime.dll from the build directory.
-      - name: Vendor ONNX Runtime into PHP package (Windows)
-        if: contains(matrix.platform.target, 'windows')
+      # The PIE action owns packaging. Repair and audit the exact files it produced. ~keep
+      - name: Stage and audit PHP Windows package closure
+        if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          EXPECTED_PHP_VERSION: ${{ matrix.php }}
         run: |
-          Get-ChildItem -Path dist/php-package -Include "php_*.zip", "php_*.tgz" -Recurse | ForEach-Object {
-            & "${{ github.workspace }}\scripts\ci\vendor-windows-native-closure.ps1" -Archive $_.FullName -DllSourceDir "$env:ORT_LIB_LOCATION" -NativeGlob "xberg.dll"
-            if ($LASTEXITCODE -ne 0) { throw "vendor-windows-native-closure failed for $($_.FullName)" }
-            # Vendoring rewrites the archive bytes, so the .sha256 sidecar
-            # package-php-pie already wrote is now stale -- regenerate it.
-            $sha256Path = "$($_.FullName).sha256"
-            if (Test-Path $sha256Path) {
-              (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower() + "  " + $_.Name | Set-Content -Path $sha256Path -NoNewline:$false
+          $archives = @(Get-ChildItem -Path dist/php-package -Include "php_*.zip", "php_*.tgz" -Recurse -File)
+          if ($archives.Count -eq 0) { throw "No Windows PHP archives to audit" }
+          $phpHost = (Get-Command php.exe -CommandType Application -ErrorAction Stop).Source
+          $closureTools = Join-Path $env:GITHUB_WORKSPACE ".release-tools/scripts/ci"
+          $ortRuntime = Get-Item -LiteralPath $env:ORT_DYLIB_PATH -ErrorAction Stop
+          foreach ($archive in $archives) {
+            & (Join-Path $closureTools "vendor-windows-native-closure.ps1") -Archive $archive.FullName -DllSourceDir $ortRuntime.DirectoryName -NativeGlob "xberg.dll" -PhpHost $phpHost -PhpVersion $env:EXPECTED_PHP_VERSION
+            if ($LASTEXITCODE -ne 0) { throw "Windows PHP closure staging failed for $($archive.FullName)" }
+            & (Join-Path $closureTools "verify-windows-dll-closure.ps1") -Artifact $archive.FullName -NativeGlob "xberg.dll" -ArtifactKind raw -RequireCrtNotices -PhpHost $phpHost -PhpVersion $env:EXPECTED_PHP_VERSION
+            if ($LASTEXITCODE -ne 0) { throw "Windows PHP closure audit failed for $($archive.FullName)" }
+            $sha256Path = "$($archive.FullName).sha256"
+            if (Test-Path -LiteralPath $sha256Path) {
+              (Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + "  " + $archive.Name | Set-Content -LiteralPath $sha256Path
             }
-          }
-
-      - name: Verify PHP package has no DirectML import and ships ONNX Runtime (Windows)
-        if: contains(matrix.platform.target, 'windows')
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path dist/php-package -Include "php_*.zip", "php_*.tgz" -Recurse | ForEach-Object {
-            & "${{ github.workspace }}\scripts\ci\verify-windows-dll-closure.ps1" -Artifact $_.FullName -NativeGlob "xberg.dll"
-            if ($LASTEXITCODE -ne 0) { throw "verify-windows-dll-closure failed for $($_.FullName)" }
           }
 
       - uses: actions/upload-artifact@v7
@@ -1660,6 +1676,30 @@ jobs:
           test -f "$ORT_DYLIB_PATH"
           echo "ORT_VENDOR_LIB=$ORT_DYLIB_PATH" >> "$GITHUB_ENV"
 
+      # Retries of older source tags must use closure tools from this workflow revision. ~keep
+      - name: Checkout Windows release closure tools
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/verify-windows-dll-closure.ps1
+            scripts/ci/vendor-windows-native-closure.ps1
+            scripts/ci/windows_wheel_closure.py
+            scripts/ci/windows_raw_staging.py
+            mise.toml
+            mise.lock
+
+      - name: Setup Python for Windows release closure
+        if: runner.os == 'Windows'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          working-directory: .release-tools
+          tools: python
+
       - name: Package CLI artifact
         env:
           BINARY_PATH: ${{ steps.build.outputs.binary-path }}
@@ -1671,24 +1711,12 @@ jobs:
           cp LICENSE THIRD_PARTY_LICENSES.md "$STAGE/"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             cp "$BINARY_PATH" "$STAGE/xberg.exe"
-            # The `Setup ONNX Runtime` step above runs with its default `system`
-            # strategy (ORT_STRATEGY=system), which links ONNX Runtime
-            # dynamically rather than statically baking it in -- so, unlike the
-            # Linux/macOS branches which either vendor a shared-object closure
-            # or need nothing extra, this zip must ship the DLL closure itself
-            # (xberg-io/xberg#1456 sibling bug: this leg shipped no DLLs at
-            # all). Mirror the Dart leg's vendoring exactly.
-            cp "${ORT_LIB_LOCATION:?}"/*.dll "$STAGE/"
-            [ -f "$STAGE/onnxruntime.dll" ] || { echo "::error::onnxruntime.dll not staged"; exit 1; }
-            # Smoke-test the staged tree exactly as a user would unzip it, the
-            # Windows counterpart of the `--version` runs on the macOS and
-            # linux-gnu branches below. The `Setup ONNX Runtime` step prepends
-            # its staged DLL directory (under the workspace) to PATH; leaving it
-            # there would let the loader satisfy the import from the build tree
-            # and pass no matter what the zip contains, so strip it first — the
-            # analogue of `env -u LD_LIBRARY_PATH` on the linux-gnu branch. This
-            # now proves the DLLs just copied into $STAGE are what satisfy the
-            # load, not an ambient workspace path.
+            CLOSURE_TOOLS="$GITHUB_WORKSPACE/.release-tools/scripts/ci"
+            ORT_RUNTIME_DLL="$(cygpath -u "${ORT_DYLIB_PATH:?}")"
+            test -f "$ORT_RUNTIME_DLL"
+            pwsh -NoProfile -File "$CLOSURE_TOOLS/vendor-windows-native-closure.ps1" -Artifact "$STAGE" -DllSourceDir "$(cygpath -w "$(dirname "$ORT_RUNTIME_DLL")")" -NativeGlob "xberg.exe"
+            # Remove workspace-provided ORT before the staged startup smoke check.
+            # The final archive audit independently checks hard and delayed imports. ~keep
             WORKSPACE_POSIX="$(pwd)"
             CLEAN_PATH=""
             while IFS= read -r path_entry; do
@@ -1712,14 +1740,8 @@ jobs:
             fi
             PATH="$CLEAN_PATH" "$STAGE/xberg.exe" --version
             echo "Windows CLI smoke test passed: $STAGE/xberg.exe --version ran without a workspace-provided onnxruntime.dll"
-            # `--version` alone does not prove the loader is happy: a hard PE
-            # import (like DirectML.dll before this fix) is resolved before
-            # main() runs either way, but a *delay-loaded* import only breaks
-            # once the code path that touches it executes, which `--version`
-            # never does. Inspect the import table directly instead of trusting
-            # the smoke test's exit code for that class of defect.
-            pwsh -NoProfile -File "$GITHUB_WORKSPACE/scripts/ci/verify-windows-dll-closure.ps1" -Artifact "$STAGE" -NativeGlob "xberg.exe"
             7z a "${STAGE}.zip" "$STAGE" >/dev/null
+            pwsh -NoProfile -File "$CLOSURE_TOOLS/verify-windows-dll-closure.ps1" -Artifact "${STAGE}.zip" -NativeGlob "xberg.exe" -ArtifactKind raw -RequireCrtNotices
           else
             cp "$BINARY_PATH" "$STAGE/xberg"
             # Intel macOS: bundle libonnxruntime.dylib next to the binary; ort
@@ -2050,6 +2072,30 @@ jobs:
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && env.GLIBC_FLOOR || '' }}
           require-static: "true"
 
+      # Retries of older source tags must use closure tools from this workflow revision. ~keep
+      - name: Checkout Windows release closure tools
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/verify-windows-dll-closure.ps1
+            scripts/ci/vendor-windows-native-closure.ps1
+            scripts/ci/windows_wheel_closure.py
+            scripts/ci/windows_raw_staging.py
+            mise.toml
+            mise.lock
+
+      - name: Setup Python for Windows release closure
+        if: runner.os == 'Windows'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          working-directory: .release-tools
+          tools: python
+
       - name: Stage C FFI distribution
         env:
           FFI_NATIVE_STATIC_LIBS: ${{ steps.build_ffi.outputs.native-static-libs-path }}
@@ -2083,24 +2129,20 @@ jobs:
           fi
           cp crates/xberg-ffi/include/xberg.h "$STAGE/include/"
           python3 scripts/ci/package-notices.py stage "$STAGE"
-          # Windows links ONNX Runtime dynamically (`Setup ONNX Runtime` above
-          # runs with its default `system` strategy); this leg had no
-          # equivalent of the glibc-Linux step below and shipped no ONNX
-          # Runtime DLL at all (xberg-io/xberg#1456 sibling bug). Mirror the
-          # Dart leg's vendoring.
           if [[ "$TARGET" == *-pc-windows-msvc ]]; then
-            cp "${ORT_LIB_LOCATION:?}"/*.dll "$STAGE/lib/"
-            [ -f "$STAGE/lib/onnxruntime.dll" ] || { echo "::error::onnxruntime.dll not staged"; exit 1; }
+            ORT_RUNTIME_DLL="$(cygpath -u "${ORT_DYLIB_PATH:?}")"
+            test -f "$ORT_RUNTIME_DLL"
+            pwsh -NoProfile -File "$GITHUB_WORKSPACE/.release-tools/scripts/ci/vendor-windows-native-closure.ps1" -Artifact "$STAGE" -DllSourceDir "$(cygpath -w "$(dirname "$ORT_RUNTIME_DLL")")" -NativeGlob "xberg_ffi.dll"
           fi
           mkdir -p dist/c-ffi
           tar -czf "dist/c-ffi/${STAGE}.tar.gz" "$STAGE"
           python3 scripts/ci/package-notices.py verify "dist/c-ffi/${STAGE}.tar.gz" "$STAGE"
 
-      - name: Verify C FFI distribution has no DirectML import and ships ONNX Runtime (Windows)
+      - name: Audit final Windows C FFI distribution
         if: contains(matrix.target, '-pc-windows-msvc')
         shell: pwsh
         run: |
-          & "${{ github.workspace }}\scripts\ci\verify-windows-dll-closure.ps1" -Artifact "dist/c-ffi/xberg-ffi-${{ matrix.platform }}.tar.gz" -NativeGlob "xberg_ffi.dll"
+          & "${{ github.workspace }}\.release-tools\scripts\ci\verify-windows-dll-closure.ps1" -Artifact "dist/c-ffi/xberg-ffi-${{ matrix.platform }}.tar.gz" -NativeGlob "xberg_ffi.dll" -ArtifactKind raw -RequireCrtNotices
           if ($LASTEXITCODE -ne 0) { throw "verify-windows-dll-closure failed" }
 
       - name: Ship + verify ONNX Runtime (glibc Linux)
@@ -2541,22 +2583,51 @@ jobs:
           nif-api-version: ${{ matrix.nif }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
-      # build-elixir-natives@v1 is an external action; vendor onto its OUTPUT
-      # tarball rather than assume it bundles a co-located onnxruntime.dll,
-      # same reasoning as the PHP PIE package step above.
-      - name: Ship + verify ONNX Runtime (Windows)
-        if: contains(matrix.target, 'windows')
+      # Retries of older source tags must use closure tools from this workflow revision. ~keep
+      - name: Checkout Windows release closure tools
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/verify-windows-dll-closure.ps1
+            scripts/ci/vendor-windows-native-closure.ps1
+            scripts/ci/windows_wheel_closure.py
+            scripts/ci/windows_raw_staging.py
+            mise.toml
+            mise.lock
+
+      - name: Setup Python for Windows release closure
+        if: runner.os == 'Windows'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          working-directory: .release-tools
+          tools: python
+
+      - name: Stage and audit Windows Elixir NIF closure
+        if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
         run: |
           $tarballs = @(Get-ChildItem -Path dist/elixir-natives -Filter "*.tar.gz" -File -ErrorAction SilentlyContinue)
           if ($tarballs.Count -eq 0) {
-            Write-Host "::notice::no artifact produced (dry-run stub); skipping ship+verify"
+            if ($env:DRY_RUN -eq 'true') {
+              Write-Host "::notice::no Windows NIF archive produced by the dry run"
+              exit 0
+            }
+            throw "No Windows NIF archive to audit"
           }
-          foreach ($t in $tarballs) {
-            & "${{ github.workspace }}\scripts\ci\vendor-windows-native-closure.ps1" -Archive $t.FullName -DllSourceDir "$env:ORT_LIB_LOCATION" -NativeGlob "libxberg_nif-*.dll"
-            if ($LASTEXITCODE -ne 0) { throw "vendor-windows-native-closure failed for $($t.FullName)" }
-            & "${{ github.workspace }}\scripts\ci\verify-windows-dll-closure.ps1" -Artifact $t.FullName -NativeGlob "libxberg_nif-*.dll"
-            if ($LASTEXITCODE -ne 0) { throw "verify-windows-dll-closure failed for $($t.FullName)" }
+          $closureTools = Join-Path $env:GITHUB_WORKSPACE ".release-tools/scripts/ci"
+          $ortRuntime = Get-Item -LiteralPath $env:ORT_DYLIB_PATH -ErrorAction Stop
+          foreach ($archive in $tarballs) {
+            & (Join-Path $closureTools "vendor-windows-native-closure.ps1") -Archive $archive.FullName -DllSourceDir $ortRuntime.DirectoryName -NativeGlob "libxberg_nif-*.dll"
+            if ($LASTEXITCODE -ne 0) { throw "Windows NIF closure staging failed for $($archive.FullName)" }
+            & (Join-Path $closureTools "verify-windows-dll-closure.ps1") -Artifact $archive.FullName -NativeGlob "libxberg_nif-*.dll" -ArtifactKind raw -RequireCrtNotices
+            if ($LASTEXITCODE -ne 0) { throw "Windows NIF closure audit failed for $($archive.FullName)" }
           }
 
       # `build-elixir-natives` returns before creating the tarball on a dry run
@@ -3036,7 +3107,7 @@ jobs:
         # workflow-wide 11.0: the bundled ONNX Runtime prebuilt requires macOS 13.4. ~keep
         env:
           IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-          MACOSX_DEPLOYMENT_TARGET: "14.0"
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
         with:
           crate-name: xberg-swift
           artifact-name: Xberg-rs
@@ -4519,10 +4590,9 @@ jobs:
 
       - uses: xberg-io/actions/publish-nuget@v1
         with:
+          nuget-user: naaman-xberg
           packages-dir: dist/nuget
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
   finalize-github-release-after-uploads:
     name: Finalize GitHub Release (after uploads)
