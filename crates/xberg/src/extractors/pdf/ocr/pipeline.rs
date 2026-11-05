@@ -3450,6 +3450,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 } else {
                     config_clone
                 };
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let allow_prose = detached_page.is_none() && images.is_none();
                 let retained_source_bytes = batch_slice
                     .as_ref()
                     .and_then(|images| images.get(idx - batch_start))
@@ -3487,7 +3489,14 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let result = if let Some((retry, raster)) = retry {
                         retry
-                            .after_ocr(&backend_clone, raster, &config_clone, result, cancel_token.as_ref())
+                            .after_ocr(
+                                &backend_clone,
+                                raster,
+                                &config_clone,
+                                result,
+                                cancel_token.as_ref(),
+                                allow_prose,
+                            )
                             .await
                     } else {
                         result
