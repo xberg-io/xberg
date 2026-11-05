@@ -187,6 +187,9 @@ fn unsupported_reduction(frame: &Frame) -> Option<String> {
 /// `tests/bounded_jpeg_peak.rs`.
 #[doc(hidden)]
 pub fn reduced_decode_bound(bytes: &[u8], denominator: u8) -> Option<u64> {
+    if !DENOMINATORS.contains(&denominator) {
+        return None;
+    }
     let frame = read_frame(bytes)?;
     reduced_peak(&frame, reduced_scale(&frame, denominator), bytes.len() as u64)
 }
@@ -195,6 +198,9 @@ pub fn reduced_decode_bound(bytes: &[u8], denominator: u8) -> Option<u64> {
 /// the allocation test in `tests/bounded_jpeg_peak.rs`.
 #[doc(hidden)]
 pub fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<(u32, u32)> {
+    if !DENOMINATORS.contains(&denominator) {
+        return Err(XbergError::validation("JPEG reduction denominator must be 2, 4, or 8"));
+    }
     let frame = read_frame(bytes).ok_or_else(|| XbergError::parsing("The JPEG has no readable frame header"))?;
     decode(bytes, &frame, reduced_scale(&frame, denominator)).map(|decoded| decoded.image.dimensions())
 }

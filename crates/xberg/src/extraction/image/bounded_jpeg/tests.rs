@@ -1,6 +1,9 @@
 #[cfg(feature = "pdf")]
 use super::load_image_for_ocr_within;
-use super::{Frame, Process, ReducedScale, load_image_for_ocr_with_scale, read_frame, reduced_peak, reduced_scale};
+use super::{
+    Frame, Process, ReducedScale, decode_reduced_jpeg, load_image_for_ocr_with_scale, read_frame, reduced_decode_bound,
+    reduced_peak, reduced_scale,
+};
 use crate::extractors::security::SecurityLimits;
 
 const WIDTH: u32 = 512;
@@ -163,4 +166,38 @@ fn should_skip_a_scale_whose_peak_exceeds_the_allocation_layout_limit() {
         assert_eq!(peak(2), None);
     }
     assert!(peak(4).is_some_and(|peak| peak <= isize::MAX as u64));
+}
+
+#[test]
+fn public_reduced_decode_helpers_reject_unsupported_denominators() {
+    let bytes = rgb();
+    for denominator in [0, 1, 3, 16, 255] {
+        assert_eq!(
+            reduced_decode_bound(&bytes, denominator),
+            None,
+            "denominator {denominator}"
+        );
+        let error = decode_reduced_jpeg(&bytes, denominator).expect_err("unsupported denominator is rejected");
+        assert!(
+            matches!(error, crate::XbergError::Validation { ref message, .. }
+                if message == "JPEG reduction denominator must be 2, 4, or 8"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn public_reduced_decode_helpers_keep_supported_scales() {
+    let bytes = rgb();
+    for denominator in [2, 4, 8] {
+        let bound = reduced_decode_bound(&bytes, denominator).expect("valid reduced bound");
+        assert!(bound > 0);
+        assert_eq!(
+            decode_reduced_jpeg(&bytes, denominator).expect("valid reduced decode"),
+            (
+                WIDTH.div_ceil(u32::from(denominator)),
+                HEIGHT.div_ceil(u32::from(denominator))
+            ),
+        );
+    }
 }
