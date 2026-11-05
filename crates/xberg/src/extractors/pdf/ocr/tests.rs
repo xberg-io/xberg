@@ -9376,7 +9376,6 @@ Name: ___
 
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[tokio::test]
-    #[serial_test::serial]
     async fn selected_page_pipeline_keeps_whole_document_scan_hints() {
         use crate::core::config::{OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds};
         use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
@@ -9396,15 +9395,7 @@ Name: ___
                 true
             }
             async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
-                // ~keep: the stub holds the global `tesseract` slot, so a parallel test running real OCR lands on it too; only calls carrying this stage's probe are recorded.
-                let probed = config
-                    .backend_options
-                    .as_ref()
-                    .and_then(|options| options.get("hint_probe"))
-                    .is_some_and(|probe| probe == "scan_hints");
-                if probed {
-                    self.configs.lock().unwrap().push(config.clone());
-                }
+                self.configs.lock().unwrap().push(config.clone());
                 Ok(ExtractedDocument {
                     content: "scanned page text".to_string(),
                     ..Default::default()
@@ -9427,11 +9418,9 @@ Name: ___
             }
         }
 
-        crate::plugins::unregister_ocr_backend("tesseract").unwrap();
         let backend = Arc::new(TesseractHintCapturingBackend {
             configs: Mutex::new(Vec::new()),
         });
-        crate::plugins::register_ocr_backend(backend.clone()).unwrap();
 
         let pipeline = OcrPipelineConfig {
             stages: vec![OcrPipelineStage {
@@ -9442,7 +9431,7 @@ Name: ___
                 paddle_ocr_config: None,
                 paddle_ocr_settings: None,
                 vlm_config: None,
-                backend_options: Some(serde_json::json!({ "hint_probe": "scan_hints" })),
+                backend_options: None,
             }],
             quality_thresholds: OcrQualityThresholds {
                 pipeline_min_quality: 0.0,
@@ -9460,31 +9449,31 @@ Name: ___
         let rendered = render_selected_pages_for_ocr(&pdf, &[0]).expect("scan page renders");
         let images = rendered.into_iter().map(|(_, image)| image).collect::<Vec<_>>();
 
-        run_ocr_pipeline(
-            Some(&pdf),
-            Some(&images),
-            #[cfg(feature = "layout-detection")]
-            None,
-            &config,
-            &pipeline,
-            None,
-            None,
-        )
-        .await
-        .expect("whole-document pipeline succeeds");
-
-        let native_text = "native page text";
-        let boundaries = [PageBoundary {
-            byte_start: 0,
-            byte_end: native_text.len(),
-            page_number: 1,
-        }];
-        extract_mixed_ocr_native(native_text, &boundaries, &[1], &pdf, &config, None)
+        crate::plugins::registry::with_test_ocr_backend(backend.clone(), async {
+            run_ocr_pipeline(
+                Some(&pdf),
+                Some(&images),
+                #[cfg(feature = "layout-detection")]
+                None,
+                &config,
+                &pipeline,
+                None,
+                None,
+            )
             .await
-            .expect("selected-page pipeline succeeds");
+            .expect("whole-document pipeline succeeds");
 
-        crate::plugins::unregister_ocr_backend("tesseract").unwrap();
-        crate::plugins::ensure_ocr_backends_initialized();
+            let native_text = "native page text";
+            let boundaries = [PageBoundary {
+                byte_start: 0,
+                byte_end: native_text.len(),
+                page_number: 1,
+            }];
+            extract_mixed_ocr_native(native_text, &boundaries, &[1], &pdf, &config, None)
+                .await
+                .expect("selected-page pipeline succeeds");
+        })
+        .await;
 
         let configs = backend.configs.lock().unwrap();
         assert_eq!(configs.len(), 2, "each route must call the backend once");

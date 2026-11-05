@@ -369,3 +369,12 @@ async fn metadata_and_container_only_placeholders_preserve_the_no_body_literal_p
         assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 4);
     }
 }
+
+#[test]
+fn pdf_body_lookalike_cannot_provide_an_annotation_separator_certificate() {
+    let mut builder = InternalDocumentBuilder::new("pdf");
+    builder.push_paragraph("Annotations:\nLink (page 1): safe", vec![], None, None);
+    let result = derive_with_surfaces(builder.build(), false, OutputFormat::Markdown, true);
+    assert!(result.content.contains("Annotations:"));
+    assert!(result.context.unwrap().formatted_plain_annotation_separator().is_none());
+}

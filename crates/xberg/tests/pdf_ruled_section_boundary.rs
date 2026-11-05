@@ -21,12 +21,16 @@ fn expected_rows(row_count: usize) -> Vec<Vec<String>> {
 }
 
 fn ruled_pdf(sections: &[(usize, usize)]) -> Vec<u8> {
+    pdf_with_ruled_content(ruled_content(sections))
+}
+
+fn pdf_with_ruled_content(content: String) -> Vec<u8> {
     let mut pdf = Document::with_version("1.7");
     let pages = pdf.new_object_id();
     let font = pdf.add_object(dictionary! {
         "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
     });
-    let stream = pdf.add_object(Stream::new(dictionary! {}, ruled_content(sections).into_bytes()));
+    let stream = pdf.add_object(Stream::new(dictionary! {}, content.into_bytes()));
     let page = pdf.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages, "Contents" => stream,
         "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
@@ -167,4 +171,140 @@ fn capture_native_sections(sections: &[(usize, usize)]) -> Vec<CapturedSection> 
             }
         })
         .collect()
+}
+
+fn stacked_rows(prefix: char) -> Vec<Vec<String>> {
+    (0..3)
+        .map(|row| (0..COLS).map(|column| format!("{prefix}{row}C{column}")).collect())
+        .collect()
+}
+
+fn stacked_pdf(gap: f32) -> Vec<u8> {
+    let mut content = format!("1 w 0 0 0 RG\nBT /F1 10 Tf 72 730 Td ({PROSE}) Tj ET\n");
+    for (top, prefix) in [(TOP as f32, 'A'), ((TOP - 3 * CELL_HEIGHT) as f32 - gap, 'B')] {
+        for row in 0..=3 {
+            let y = top - (row * CELL_HEIGHT) as f32;
+            content.push_str(&format!("60 {y} m 285 {y} l S\n"));
+        }
+        for column in 0..=COLS {
+            let x = 60 + 75 * column;
+            let bottom = top - (3 * CELL_HEIGHT) as f32;
+            content.push_str(&format!("{x} {bottom} m {x} {top} l S\n"));
+        }
+        for (row, cells) in stacked_rows(prefix).iter().enumerate() {
+            for (column, value) in cells.iter().enumerate() {
+                let x = 68 + 75 * column;
+                let y = top - ((row + 1) * CELL_HEIGHT - 11) as f32;
+                content.push_str(&format!("BT /F1 10 Tf {x} {y} Td ({value}) Tj ET\n"));
+            }
+        }
+    }
+    pdf_with_ruled_content(content)
+}
+
+fn assert_stacked_rows(gap: f32, merged: bool) {
+    let bytes = stacked_pdf(gap);
+    let mut expected = vec![stacked_rows('A'), stacked_rows('B')];
+    if merged {
+        expected = vec![expected.into_iter().flatten().collect()];
+    }
+
+    let pdf = PdfDocument::from_bytes(bytes.clone()).expect("native opens the stacked grids");
+    assert_eq!(pdf.page_count().unwrap(), 1);
+    let native = pdf
+        .extract_tables_with_config(0, TableDetectionConfig::strict())
+        .expect("native detects ruled grids");
+    let native_rows: Vec<Vec<Vec<&str>>> = native
+        .iter()
+        .map(|table| {
+            table
+                .rows
+                .iter()
+                .map(|row| row.cells.iter().map(|cell| cell.text.as_str()).collect())
+                .collect()
+        })
+        .collect();
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        output_format: OutputFormat::Markdown,
+        pdf_options: Some(PdfConfig {
+            backend: PdfBackend::Native,
+            extract_tables: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result =
+        extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("Core extracts the stacked grids");
+    let core_rows: Vec<_> = result.tables.iter().map(|table| &table.cells).collect();
+
+    assert_eq!(
+        native_rows, expected,
+        "native row order with {gap}pt gap; Core: {core_rows:?}"
+    );
+    assert_eq!(
+        core_rows,
+        expected.iter().collect::<Vec<_>>(),
+        "Core row order with {gap}pt gap"
+    );
+    assert_eq!(result.content.matches(PROSE).count(), 1);
+    let mut end = 0;
+    for cell in expected.iter().flatten().flatten() {
+        let index = result.content.find(cell).expect("cell appears in public output");
+        assert!(index >= end, "{cell} in public reading order");
+        assert_eq!(result.content.matches(cell).count(), 1, "{cell} in public output");
+        end = index + cell.len();
+    }
+    if merged {
+        assert_merged_table_geometry(&native[0], &result.tables[0], gap);
+    }
+}
+
+fn assert_merged_table_geometry(native: &xberg_native_pdf::structure::Table, core: &xberg::types::Table, gap: f32) {
+    let bounds = native.bbox.expect("native ruled table has geometry");
+    let core_bounds = core.bounding_box.as_ref().expect("Core retains table geometry");
+    assert_eq!(
+        (bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height),
+        (60.0, 500.0 - gap, 285.0, 680.0)
+    );
+    assert_eq!(
+        (core_bounds.x0, core_bounds.y0, core_bounds.x1, core_bounds.y1),
+        (60.0, 500.0 - f64::from(gap), 285.0, 680.0)
+    );
+    assert_eq!(core.page_number, 1);
+    assert_eq!(native.col_count, COLS);
+    assert!(!native.has_header);
+    for row in &native.rows {
+        assert!(!row.is_header);
+        for cell in &row.cells {
+            assert_eq!((cell.colspan, cell.rowspan), (1, 1));
+            assert!(!cell.is_header);
+            assert!(cell.mcids.is_empty());
+            assert_eq!(
+                cell.spans.iter().map(|span| span.text.as_str()).collect::<String>(),
+                cell.text
+            );
+            let cell_bounds = cell.bbox.expect("ruled cell has geometry");
+            assert_eq!((cell_bounds.width, cell_bounds.height), (75.0, 30.0));
+        }
+    }
+}
+
+#[test]
+fn stacked_ruled_grids_read_top_to_bottom_after_merging_at_three_and_a_half_points() {
+    assert_stacked_rows(3.5, true);
+}
+
+#[test]
+fn stacked_ruled_grids_read_top_to_bottom_after_merging_at_six_points() {
+    assert_stacked_rows(6.0, true);
+}
+
+#[test]
+fn stacked_ruled_grids_keep_two_tables_at_touching_and_narrow_gaps() {
+    for gap in [0.0, 1.0, 2.0] {
+        assert_stacked_rows(gap, false);
+    }
 }
