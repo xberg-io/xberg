@@ -132,10 +132,10 @@ pub(crate) struct TableWords {
 /// never sets it, and a line with no word in the range keeps its boxes. A word moves onto the band
 /// only when its own box overlaps the band, so a line that Tesseract runs across two table rows
 /// does not join them. ~keep
-fn put_line_words_on_one_band(words: &mut [HocrWord], lines: &[Option<TextLine>]) {
+pub(crate) fn put_line_words_on_one_band<K: Copy + Eq + std::hash::Hash>(words: &mut [HocrWord], lines: &[Option<K>]) {
     let median_height = u64::from(median_word_height(words));
     let is_typical = |height: u32| (median_height..=3 * median_height).contains(&(2 * u64::from(height)));
-    let mut bands: HashMap<TextLine, (u32, u32)> = HashMap::new();
+    let mut bands: HashMap<K, (u32, u32)> = HashMap::new();
     for (word, line) in words.iter().zip(lines) {
         let Some(line) = line else {
             continue;

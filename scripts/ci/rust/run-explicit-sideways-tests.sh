@@ -16,11 +16,12 @@ expected_names=()
 case "$profile" in
 warm)
   features+=",auto-rotate-tract"
-  expected=10
+  expected=11
   expected_names=(
     cached_context_changed_during_extraction_is_not_written
     cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
+    explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_retains_the_sideways_source_table
     explicit_osd_retains_the_original_source_grid_without_rotating_pixels
     helpers::tests::test_get_test_documents_dir
@@ -38,11 +39,12 @@ warm)
   fi
   ;;
 native)
-  expected=4
+  expected=5
   expected_names=(
     cached_context_changed_during_extraction_is_not_written
     cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
+    explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_without_classifier_features
   )
   filters=(--exact "${expected_names[@]}")
