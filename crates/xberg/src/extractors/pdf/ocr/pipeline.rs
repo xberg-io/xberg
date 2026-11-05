@@ -2943,11 +2943,12 @@ pub(super) async fn extract_with_ocr_for_page(
     };
     let batch_size = configured_batch_size.min(held_pages);
 
-    if batch_size < configured_batch_size {
+    if held_pages < window_pages {
         tracing::info!(
             configured = configured_batch_size,
             adapted = batch_size,
-            "Reduced OCR batch size to fit available memory"
+            held_pages,
+            "Reduced OCR page window to fit available memory"
         );
     }
 
