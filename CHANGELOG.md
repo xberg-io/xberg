@@ -179,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve supported glyphs in mixed unembedded text runs on fontless hosts.** (#2510)
+  Use bundled DejaVu Sans Bold for bold text, retain placeholders for unavailable characters, and orient CJK fallback glyphs correctly.
+
 - **(pdf): Report empty OCR reads after the raster budget reduces page DPI.** (#2504)
   Include requested and actual DPI after retries, without warning on useful low-DPI text or recovered tables.
 

@@ -237,19 +237,23 @@ fn system_fontdb() -> std::sync::Arc<fontdb::Database> {
         .clone()
 }
 
-fn bundled_latin_face(text: &str) -> Option<Arc<Vec<u8>>> {
-    use crate::fonts::{bundled::DEJAVU_SANS, encoding::is_winansi_char};
+fn bundled_latin_face(text: &str, bold: bool) -> Option<Arc<Vec<u8>>> {
+    use crate::fonts::bundled::{DEJAVU_SANS, DEJAVU_SANS_BOLD};
 
-    let face = OutlineFace::new(DEJAVU_SANS, 0)?;
-    if !text
-        .chars()
-        .all(|ch| ch.is_whitespace() || (is_winansi_char(ch) && face.glyph_index(ch).is_some()))
+    let bytes = if bold { DEJAVU_SANS_BOLD } else { DEJAVU_SANS };
+    let face = OutlineFace::new(bytes, 0)?;
+    if !text.chars().all(char::is_whitespace)
+        && !text
+            .chars()
+            .any(|ch| !ch.is_whitespace() && face.glyph_index(ch).is_some())
     {
         return None;
     }
 
-    static BYTES: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
-    Some(Arc::clone(BYTES.get_or_init(|| Arc::new(DEJAVU_SANS.to_vec()))))
+    static REGULAR: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
+    static BOLD: std::sync::OnceLock<Arc<Vec<u8>>> = std::sync::OnceLock::new();
+    let cached = if bold { &BOLD } else { &REGULAR };
+    Some(Arc::clone(cached.get_or_init(|| Arc::new(bytes.to_vec()))))
 }
 
 /// Process-wide cache mapping fontdb::ID → (font bytes, face index).
@@ -743,8 +747,11 @@ impl TextRasterizer {
                     .map(|(id, d, i)| (Some(id), d, i, false))
             };
 
-        let font_data_and_index =
-            font_data_and_index.or_else(|| bundled_latin_face(&unicode_text).map(|font| (None, font, 0, false)));
+        let using_bundled_latin = font_data_and_index.is_none();
+        let font_data_and_index = font_data_and_index.or_else(|| {
+            let bold = font_info.as_deref().is_some_and(crate::fonts::FontInfo::is_bold);
+            bundled_latin_face(&unicode_text, bold).map(|font| (None, font, 0, false))
+        });
         if let Some((font_id, font_data, index, use_cid_to_gid)) = font_data_and_index {
             if use_cid_to_gid {
                 // Direct CIDToGIDMap/CFF rendering — bypass harfrust, use `OutlineFace`
@@ -785,6 +792,7 @@ impl TextRasterizer {
                                 clip_mask,
                                 pdf_font_name,
                                 false,
+                                false,
                             );
                         }
                     }
@@ -807,6 +815,7 @@ impl TextRasterizer {
                 clip_mask,
                 pdf_font_name,
                 true,
+                using_bundled_latin,
             )?)
         } else {
             let font_name = font_info.as_ref().map(|i| i.base_font.as_str()).unwrap_or("unknown");
@@ -1104,6 +1113,7 @@ impl TextRasterizer {
         clip_mask: Option<&tiny_skia::Mask>,
         pdf_font_name: &str,
         allow_fallback: bool,
+        paint_missing_glyphs: bool,
     ) -> Result<f32> {
         let font_size = gs.font_size;
         let h_scale = gs.horizontal_scaling / 100.0;
@@ -1151,6 +1161,7 @@ impl TextRasterizer {
                             gs,
                             clip_mask,
                             pdf_font_name,
+                            false,
                             false,
                         );
                     }
@@ -1441,6 +1452,9 @@ impl TextRasterizer {
                     continue;
                 }
                 last_fallback_cluster = Some(cluster);
+                if paint_missing_glyphs && glyph_id == 0 {
+                    has_outline = false;
+                }
 
                 // Try to find character in fallback CJK fonts.
                 // get_cjk_fallback_cached() hits a process-wide OnceLock after the
@@ -1462,7 +1476,7 @@ impl TextRasterizer {
                                     let px = (x_cursor + x_offset + paint_origin_dx) * h_scale + rise_x;
                                     let py = y_cursor + y_offset + paint_origin_dy + rise_y;
                                     let cjk_transform =
-                                        combined_base.pre_translate(px, py).pre_scale(cjk_scale, -cjk_scale);
+                                        combined_base.pre_translate(px, py).pre_scale(cjk_scale, cjk_scale);
                                     guarded_fill_path(
                                         pixmap,
                                         &cjk_path,
@@ -1473,7 +1487,9 @@ impl TextRasterizer {
                                     );
                                     has_outline = true;
 
-                                    if let Some(adv) = cjk_face.glyph_hor_advance(cjk_glyph_id) {
+                                    if let Some(adv) = cjk_face.glyph_hor_advance(cjk_glyph_id)
+                                        && (!paint_missing_glyphs || font_info.is_none())
+                                    {
                                         x_advance_override = Some(adv / cjk_cached.units_per_em * font_size);
                                     }
                                 }
@@ -1483,6 +1499,19 @@ impl TextRasterizer {
                 }
 
                 if !has_outline {
+                    if paint_missing_glyphs && glyph_id == 0 {
+                        if let Some(path) = pb.finish() {
+                            let (rise_x, rise_y) = if wmode == 0 {
+                                (0.0, gs.text_rise)
+                            } else {
+                                (gs.text_rise, 0.0)
+                            };
+                            let px = (x_cursor + x_offset + paint_origin_dx) * h_scale + rise_x;
+                            let py = y_cursor + y_offset + paint_origin_dy + rise_y;
+                            let transform = combined_base.pre_translate(px, py).pre_scale(scale, scale);
+                            guarded_fill_path(pixmap, &path, paint, tiny_skia::FillRule::Winding, transform, clip_mask);
+                        }
+                    }
                     let reason = if glyph_id == 0 {
                         "not mapped by font or CJK fallback"
                     } else {
@@ -2160,6 +2189,7 @@ mod tests {
                     &gs,
                     None,
                     "synthetic",
+                    false,
                     false,
                 )
                 .unwrap();

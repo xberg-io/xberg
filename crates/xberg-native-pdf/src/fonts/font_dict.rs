@@ -5074,7 +5074,7 @@ impl FontInfo {
     /// # PDF Spec References
     ///
     /// - Table 122 (page 456): FontWeight values 100-900
-    /// - Table 123 (page 457): ForceBold flag at bit 19 (0x80000)
+    /// - Table 123 (page 457): ForceBold flag at bit 19 (0x40000)
     /// - Section 9.6.2: StemV field interpretation
     pub fn get_font_weight(&self) -> FontWeight {
         *self.weight_memo.get_or_init(|| self.compute_font_weight())
@@ -5088,7 +5088,7 @@ impl FontInfo {
         }
 
         if let Some(flags_value) = self.flags {
-            const FORCE_BOLD_BIT: i32 = 0x80000;
+            const FORCE_BOLD_BIT: i32 = 1 << 18;
             if (flags_value & FORCE_BOLD_BIT) != 0 {
                 tracing::debug!("Font '{}': ForceBold flag set (bit 19) → Bold", self.base_font);
                 return FontWeight::Bold;
@@ -7497,7 +7497,7 @@ mod tests {
             encoding: Encoding::Standard("WinAnsiEncoding".to_string()),
             to_unicode: None,
             font_weight: None,
-            flags: Some(0x80000),
+            flags: Some(0x40000),
             stem_v: None,
             ascent: 0.95,
             descent: -0.35,
@@ -7541,7 +7541,7 @@ mod tests {
             encoding: Encoding::Standard("WinAnsiEncoding".to_string()),
             to_unicode: None,
             font_weight: None,
-            flags: Some(0x40000),
+            flags: Some(0x80000),
             stem_v: None,
             ascent: 0.95,
             descent: -0.35,
@@ -7725,7 +7725,7 @@ mod tests {
             encoding: Encoding::Standard("WinAnsiEncoding".to_string()),
             to_unicode: None,
             font_weight: Some(300),
-            flags: Some(0x80000),
+            flags: Some(0x40000),
             stem_v: Some(120.0),
             ascent: 0.95,
             descent: -0.35,
@@ -7769,7 +7769,7 @@ mod tests {
             encoding: Encoding::Standard("WinAnsiEncoding".to_string()),
             to_unicode: None,
             font_weight: None,
-            flags: Some(0x80000),
+            flags: Some(0x40000),
             stem_v: Some(70.0),
             ascent: 0.95,
             descent: -0.35,

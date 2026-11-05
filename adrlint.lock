@@ -30,3 +30,8 @@ blake3 = "bafee6b0f4671c374e93eaa0610d60fefb8f4ebc0015db004b91b82e77850249"
 number = 5
 status = "accepted"
 blake3 = "d9b37e8d82cca07eaf2bbaca420280509d75e835ec0311f54c11a5b114f09c4b"
+
+[adrs."adrs/0006-bundle-regular-and-bold-latin-fallback-faces-on-all-targets.md"]
+number = 6
+status = "accepted"
+blake3 = "90bb0ace27bed9d8464fce89af486c340610bf0ccec877f1a0d301ec2c66c490"
