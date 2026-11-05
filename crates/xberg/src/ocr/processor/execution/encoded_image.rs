@@ -183,7 +183,21 @@ impl Preparation<'_> {
         );
         let policy = preprocessing.as_deref();
         self.check_reduced_policy(&decoded, policy)?;
-        let dpi = self.candidate_dpi(&decoded, policy)?;
+        let dpi = match self.candidate_dpi(&decoded, policy) {
+            Ok(dpi) => dpi,
+            Err(error) if self.config.preprocessing.is_none() => {
+                return super::unknown_dpi_downscale::recover(
+                    decoded.image,
+                    self.bytes,
+                    self.limits,
+                    policy,
+                    self.images,
+                )?
+                .map(Candidate::Ready)
+                .ok_or(error);
+            }
+            Err(error) => return Err(error),
+        };
         let native_dimensions = if decoded.scale_denominator == 1
             && let Some(preprocessing) = policy
         {

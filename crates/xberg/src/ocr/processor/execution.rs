@@ -1098,6 +1098,7 @@ mod reduced_jpeg_memory_tests;
 
 #[cfg(test)]
 mod native_resize_admission_tests;
+mod unknown_dpi_downscale;
 #[cfg(test)]
 mod unknown_dpi_memory_tests;
 
