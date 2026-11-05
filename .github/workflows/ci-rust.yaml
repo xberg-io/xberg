@@ -551,7 +551,7 @@ jobs:
 
       - uses: ./.github/actions/setup-paddle-ocr-models
         with: { models: doc-ori, cache-key-suffix: document-orientation-onnx }
-      - run: bash scripts/ci/rust/run-ocr-orientation-tests.sh
+      - uses: ./.github/actions/qualify-ocr-orientation
 
   # Isolated feature closures catch cfg dependencies hidden by `full` (#741).
   # `no-ort-target` and `formats-no-heic` cover the PDF closure used by shipping

@@ -57,6 +57,12 @@ flag "--no-default-features" help="Disable default features for a narrow local c
 """
 run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usage_no_default_features:-false}"'
 
+["rust:test:explicit-sideways"]
+description = "Qualify explicit sideways OCR with pinned offline model artifacts"
+depends = ["os:require linux darwin"]
+usage = 'arg "<profile>" help="Use warm for ten controls or native for four classifier-free controls"'
+run = 'bash scripts/ci/rust/run-explicit-sideways-tests.sh "$usage_profile"'
+
 ["rust:test:mime"]
 description = "Verify MIME declaration handling without tree-sitter"
 depends = ["os:require linux darwin"]

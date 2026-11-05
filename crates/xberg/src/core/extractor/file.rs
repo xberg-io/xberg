@@ -6,6 +6,7 @@
 //! - File validation and reading
 //! - Extraction pipeline orchestration
 
+use super::cache_context::{CacheDependency, apply_context, fingerprint};
 use crate::Result;
 use crate::XbergError;
 use crate::core::config::{ExtractionConfig, MimeDetectionPolicy};
@@ -284,6 +285,10 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
     mime_type: &str,
     config: &ExtractionConfig,
 ) -> Result<ExtractedDocument> {
+    super::cacheability::scope(extract_file_scoped(path, mime_type, config)).await
+}
+
+async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<ExtractedDocument> {
     let config = config.normalized();
     let config = config.as_ref();
 
@@ -295,7 +300,11 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
 
     let content_hash = crate::cache::blake3_hash_file(path)?;
     let config_hash = hash_extraction_config(config, mime_type);
-    let cache_key = format!("{content_hash}_{config_hash}");
+    let dependencies = [CacheDependency::for_config(config, Some(mime_type))];
+    let context = fingerprint(&dependencies, config.cancel_token.as_ref()).await?;
+    let Some(cache_key) = apply_context(Some(format!("{content_hash}_{config_hash}")), &context) else {
+        return extract_file_uncached(path, mime_type, config).await;
+    };
 
     let namespace = config.cache_namespace.as_deref();
 
@@ -307,6 +316,7 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
                 let (post_processor_generation, validator_generation) = lifecycle_registry_generations();
                 if entry.post_processor_generation == post_processor_generation
                     && entry.validator_generation == validator_generation
+                    && super::cacheability::is_cacheable()
                 {
                     tracing::debug!(cache_key = %cache_key, "Extraction cache hit");
                     return Ok(entry.result);
@@ -329,7 +339,10 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
     let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
     let lifecycle_generations_after = lifecycle_registry_generations();
 
-    if lifecycle_generations_before == lifecycle_generations_after
+    if super::cacheability::is_cacheable()
+        && lifecycle_generations_before == lifecycle_generations_after
+        && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
+        && super::cacheability::is_cacheable()
         && let Some(cache) = get_extraction_cache()
     {
         match serialize_extraction_cache_entry(&result, lifecycle_generations_after) {

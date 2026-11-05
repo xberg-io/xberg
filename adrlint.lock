@@ -40,3 +40,8 @@ blake3 = "90bb0ace27bed9d8464fce89af486c340610bf0ccec877f1a0d301ec2c66c490"
 number = 7
 status = "accepted"
 blake3 = "bb6a39507686ac3737169c52b8e1d7c4ce2c71fe142d986b9a1d83b73da9c46f"
+
+[adrs."adrs/0008-scope-cacheability-to-one-extraction-operation.md"]
+number = 8
+status = "accepted"
+blake3 = "aa22e213c162ef00a18629983627f7a93c7f7d727a1374d7a74d478bb16a87c6"
