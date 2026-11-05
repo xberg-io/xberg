@@ -179,6 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Read side-by-side panels panel by panel when their baselines are a degree off square.** A panel line drawn as several runs on a tilted baseline broke into pieces, the pieces of the two panels paired up as label/value rows, and the column cut was refused, so the page read across both panels run by run. The XY-cut line grouping now chains pieces that abut in x and step by under half an em back into one line. (GH#2323)
 - **(pdf): Recover text on tall scans when an OCR strip contains only blank space.** (#2501)
 
 - **(pdf): Keep upper rows first when stacked ruled grids merge.** (#2494)

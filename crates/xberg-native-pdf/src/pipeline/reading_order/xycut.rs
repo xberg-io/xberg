@@ -283,14 +283,83 @@ const MIN_LABEL_VALUE_ROWS: usize = 3;
 // cut is prose running across the gutter, not column content. Matches the minimum column
 // width a cut must leave on each side. ~keep
 const MIN_STRADDLING_INK_PTS: f32 = 60.0;
+// GH#2323: the largest rise, in ems of the type size, between the last run of one piece of a
+// line and the first run of the next piece for the two to be one stepped line. A page set a
+// degree or two off square rises under a quarter of an em per run; the next line of a column
+// sits a whole leading away. ~keep
+const MAX_RUN_STEP_EM: f32 = 0.5;
 
 /// Group `indices` into visual lines: anchored (not chained) on `y`, top to bottom, and
 /// further split on `x` wherever consecutive items are more than `MAX_INTRA_LINE_GAP_EM`
 /// ems apart -- so two unrelated fragments that merely share a baseline (a header printed
 /// once per column, at the same `y` but 50pt apart) are never treated as one line. A line
 /// returned by this function is therefore a genuinely CONTINUOUS run of ink, which is what
-/// both `peel_full_width_line_bands` and `partition_lines_at` need "line" to mean. ~keep
+/// both `peel_full_width_line_bands` and `partition_lines_at` need "line" to mean. The one
+/// chaining is along `x`: the pieces of a line whose baseline steps (GH#2323) are joined
+/// again by `chain_stepped_lines`. ~keep
 fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Vec<usize>> {
+    chain_stepped_lines(all_spans, group_indices_into_level_lines(all_spans, indices))
+}
+
+/// GH#2323: a line whose runs step in `y` (two panels drawn run by run on baselines a degree
+/// off square) falls into one `y` bucket per point of rise, so the level grouping cuts it into
+/// pieces, and the pieces of two side-by-side panels then pair up as label/value rows that
+/// decline the column cut. Chain the pieces back into one line: a piece joins the line whose
+/// rightmost run its leftmost run abuts in `x` (within `MAX_INTRA_LINE_GAP_EM`) and continues
+/// in `y` (within `MAX_RUN_STEP_EM`). The next line of a column starts far to the left of
+/// where this one ends, and a column neighbour sits a gutter away, so neither joins. Lines
+/// keep the order of the level grouping (top to bottom, then left to right) by their first
+/// piece. ~keep
+fn chain_stepped_lines(all_spans: &[TextSpan], lines: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
+    let leftmost = |line: &[usize]| {
+        line.iter()
+            .copied()
+            .min_by(|&a, &b| all_spans[a].bbox.left().total_cmp(&all_spans[b].bbox.left()))
+            .expect("a line holds at least one span")
+    };
+    let rightmost = |line: &[usize]| {
+        line.iter()
+            .copied()
+            .max_by(|&a, &b| all_spans[a].bbox.right().total_cmp(&all_spans[b].bbox.right()))
+            .expect("a line holds at least one span")
+    };
+    let mut by_left: Vec<usize> = (0..lines.len()).collect();
+    by_left.sort_by(|&a, &b| {
+        all_spans[leftmost(&lines[a])]
+            .bbox
+            .left()
+            .total_cmp(&all_spans[leftmost(&lines[b])].bbox.left())
+    });
+    // (first piece's position in `lines`, the chained spans, the rightmost span)
+    let mut chained: Vec<(usize, Vec<usize>, usize)> = Vec::new();
+    for position in by_left {
+        let piece = &lines[position];
+        let head = &all_spans[leftmost(piece)];
+        let joins = chained.iter_mut().find(|(_, _, tail)| {
+            let tail = &all_spans[*tail];
+            let em = tail.font_size.max(head.font_size);
+            (head.bbox.left() - tail.bbox.right()).abs() <= em * MAX_INTRA_LINE_GAP_EM
+                && (head.bbox.y - tail.bbox.y).abs() <= em * MAX_RUN_STEP_EM
+        });
+        let last = rightmost(piece);
+        match joins {
+            Some((first, line, tail)) => {
+                *first = (*first).min(position);
+                line.extend(piece);
+                if all_spans[last].bbox.right() > all_spans[*tail].bbox.right() {
+                    *tail = last;
+                }
+            }
+            None => chained.push((position, piece.clone(), last)),
+        }
+    }
+    chained.sort_by_key(|(first, _, _)| *first);
+    chained.into_iter().map(|(_, line, _)| line).collect()
+}
+
+/// The level lines of `indices`: one `y` bucket per line, split on `x` gaps; see
+/// `group_indices_into_lines` for the contract.
+fn group_indices_into_level_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Vec<usize>> {
     let mut order: Vec<usize> = indices.to_vec();
     order.sort_by(|&a, &b| {
         all_spans[b]
