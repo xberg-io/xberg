@@ -35,3 +35,8 @@ blake3 = "d9b37e8d82cca07eaf2bbaca420280509d75e835ec0311f54c11a5b114f09c4b"
 number = 6
 status = "accepted"
 blake3 = "90bb0ace27bed9d8464fce89af486c340610bf0ccec877f1a0d301ec2c66c490"
+
+[adrs."adrs/0007-qualify-windows-wheels-in-isolated-userspace-without-global-vc-runtime.md"]
+number = 7
+status = "accepted"
+blake3 = "bb6a39507686ac3737169c52b8e1d7c4ce2c71fe142d986b9a1d83b73da9c46f"

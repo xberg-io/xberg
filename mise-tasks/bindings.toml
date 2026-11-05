@@ -9,6 +9,19 @@
 description = "Test wheel-local Windows PE dependency and runtime packaging contracts"
 run = "python scripts/ci/test_windows_wheel_closure.py -v"
 
+["python:wheel:clean-host:test"]
+description = "Test fail-closed Windows container wheel qualification guards"
+run = "python scripts/ci/test_windows_wheel_clean_host.py -v"
+
+["python:wheel:clean-host"]
+description = "Qualify a wheel in disposable Windows userspace without global VC runtime"
+usage = '''
+arg "<wheel-directory>" help="Directory containing exactly one Windows wheel"
+arg "<source-sha>" help="Exact checked-out source SHA"
+arg "<output-directory>" help="New path for qualification receipts"
+'''
+run = 'pwsh -NoProfile -File scripts/ci/qualify-windows-wheel-clean-host.ps1 -WheelDirectory "$usage_wheel_directory" -SourceSha "$usage_source_sha" -OutputDirectory "$usage_output_directory"'
+
 ["python:publish:archive:prepare"]
 description = "Validate combined Python artifacts and prepare their public archive release"
 run = "python3 scripts/ci/python_archive_publication.py prepare"
