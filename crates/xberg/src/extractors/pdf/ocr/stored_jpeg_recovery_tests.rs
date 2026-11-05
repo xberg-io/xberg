@@ -54,9 +54,8 @@ async fn assert_whole_document_jpeg_backing(pdf: Vec<u8>, reused_source: bool) {
             .dimensions(),
             (32, 24)
         );
-        let recovered = recover_pipeline_document_from_image_xobjects(Some(&pdf), &config, &ocr, BACKEND)
+        let recovered = super::super::raw_collection_test_support::whole(&document, &config, &ocr, BACKEND)
             .await
-            .unwrap()
             .unwrap();
         let distinct_backings = recovered
             .images
@@ -110,19 +109,19 @@ async fn assert_whole_document_jpeg_backing(pdf: Vec<u8>, reused_source: bool) {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn whole_document_jpeg_backing_reuses_one_source_without_dropping_paints() {
+async fn raw_jpeg_collection_reuses_one_source_without_dropping_paints() {
     assert_whole_document_jpeg_backing(pdf_painting_one_jpeg_repeatedly(16), true).await;
 }
 
 #[tokio::test]
 #[serial_test::serial]
-async fn whole_document_jpeg_backing_caps_distinct_sources_in_paint_order() {
+async fn raw_jpeg_collection_caps_distinct_sources_in_paint_order() {
     assert_whole_document_jpeg_backing(embedded_image_pdf_with_copies(16), false).await;
 }
 
 #[tokio::test]
 #[serial_test::serial]
-async fn whole_document_jpeg_backing_preserves_wrapped_jpeg_legacy_recovery() {
+async fn raw_jpeg_collection_preserves_wrapped_jpeg_legacy_inputs() {
     let (_guard, calls) = register_backend();
     let pdf = embedded_jpeg_after_unsupported_image_on_second_page();
     let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf.clone()).unwrap();
@@ -130,14 +129,13 @@ async fn whole_document_jpeg_backing_preserves_wrapped_jpeg_legacy_recovery() {
     assert_eq!(handles[0].filter_chain.len(), 2);
     let plain = handles[1].raw_compressed_bytes().unwrap();
     assert_ne!(handles[0].raw_compressed_bytes().unwrap(), plain);
-    let recovered = recover_pipeline_document_from_image_xobjects(
-        Some(&pdf),
+    let recovered = super::super::raw_collection_test_support::whole(
+        &doc,
         &ExtractionConfig::default(),
         &OcrConfig::default(),
         BACKEND,
     )
     .await
-    .unwrap()
     .unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     assert_eq!(recovered.images.len(), 2);

@@ -1,14 +1,13 @@
-//! Routing-only policy observations after real native-page rotation admission fails. ~keep
+//! Routing-only policy observations after real native-page PNG admission fails. ~keep
 use super::super::{
     PageOcrHints, estimate_png_encode_page_peak_bytes, recover_pipeline_document_from_image_xobjects,
-    run_ocr_pipeline_for_page, upright_raster_for_backend, validate_png_encode_pages_individually,
+    run_ocr_pipeline_for_page, validate_png_encode_pages_individually,
 };
 use super::support::{Observed, Records, TEXT, fixture};
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig};
 use crate::extractors::security::SecurityLimits;
 use crate::plugins::{OcrBackend, OcrBackendType, PageOrientationHandling, Plugin};
 use crate::types::ExtractedDocument;
-use image::ImageEncoder;
 use std::sync::{Arc, Mutex};
 use xberg_native_pdf::rendering::{ImageFormat, RenderOptions, render_page};
 
@@ -93,7 +92,7 @@ struct Frame {
     points_per_pixel: f32,
 }
 
-fn rotated_source() -> (Vec<u8>, xberg_native_pdf::PdfDocument, Vec<u8>) {
+fn full_page_source() -> (Vec<u8>, xberg_native_pdf::PdfDocument, Vec<u8>) {
     let original = fixture(1, false);
     let mut pdf = lopdf::Document::load_mem(&original.bytes).unwrap();
     let pages = pdf.get_pages();
@@ -102,13 +101,13 @@ fn rotated_source() -> (Vec<u8>, xberg_native_pdf::PdfDocument, Vec<u8>) {
         .unwrap()
         .as_dict_mut()
         .unwrap()
-        .set("Rotate", 90);
+        .set("MediaBox", vec![0.into(), 0.into(), 32.into(), 24.into()]);
     let mut bytes = Vec::new();
     pdf.save_to(&mut bytes).unwrap();
     let native = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
     assert_eq!(native.page_count().unwrap(), 1);
-    assert_eq!(native.get_page_rotation(0).unwrap(), 90);
-    assert_eq!(native.get_page_media_box(0).unwrap(), (0.0, 0.0, 72.0, 72.0));
+    assert_eq!(native.get_page_rotation(0).unwrap(), 0);
+    assert_eq!(native.get_page_media_box(0).unwrap(), (0.0, 0.0, 32.0, 24.0));
     assert!(native.extract_text_auto(0).unwrap().trim().is_empty());
     let handles = native.page_image_handles(0).unwrap();
     assert_eq!(handles.len(), 1);
@@ -126,16 +125,45 @@ fn rotated_source() -> (Vec<u8>, xberg_native_pdf::PdfDocument, Vec<u8>) {
     (bytes, native, original.streams.into_iter().next().unwrap())
 }
 
+fn encode_budget_controls(
+    native: &xberg_native_pdf::PdfDocument,
+    raster: &image::DynamicImage,
+    original_len: usize,
+) -> usize {
+    let cap = usize::try_from(estimate_png_encode_page_peak_bytes(1, 1).unwrap()).unwrap() - 1;
+    assert!(original_len < cap);
+    let limits = SecurityLimits {
+        max_content_size: cap,
+        ..Default::default()
+    };
+    assert!(validate_png_encode_pages_individually(std::iter::once(raster), &limits).is_err());
+    let error = xberg_native_pdf::rendering::render_png_page_with_dpi_budget(native, 0, 72, 1, cap)
+        .err()
+        .expect("actual native1DPI floor cannot fit this cap");
+    assert!(
+        matches!(error, xberg_native_pdf::Error::InvalidOperation(_)),
+        "{error:?}"
+    );
+    let higher = SecurityLimits::default();
+    assert!(higher.max_content_size > cap);
+    validate_png_encode_pages_individually(std::iter::once(raster), &higher).unwrap();
+    let (image, dpi) =
+        xberg_native_pdf::rendering::render_png_page_with_dpi_budget(native, 0, 72, 72, higher.max_content_size)
+            .unwrap();
+    assert_eq!((image.width, image.height, dpi), (32, 24, 72));
+    assert!(!image.data.is_empty());
+    cap
+}
+
 fn frame() -> Frame {
-    let (pdf, native, original) = rotated_source();
+    let (pdf, native, original) = full_page_source();
     let mut options = RenderOptions::default();
     options.dpi = 400;
     options.format = ImageFormat::Png;
     let rendered = render_page(&native, 0, &options).unwrap();
-    assert_eq!((rendered.width, rendered.height), (400, 400));
+    assert_eq!((rendered.width, rendered.height), (178, 134));
     let (png, width, height) =
-        crate::pdf::render::normalize_rendered_page_for_ocr(rendered.data, rendered.width, rendered.height, 90)
-            .unwrap();
+        crate::pdf::render::normalize_rendered_page_for_ocr(rendered.data, rendered.width, rendered.height, 0).unwrap();
     let raster = image::DynamicImage::ImageRgb8(image::load_from_memory(&png).unwrap().into_rgb8());
     assert_eq!((raster.width(), raster.height()), (width, height));
     assert!(
@@ -144,53 +172,17 @@ fn frame() -> Frame {
             .unwrap()
             .pixels()
             .any(|pixel| pixel.0.iter().all(|value| *value < 200)),
-        "actual native renderer painted the real dark source image"
+        "actual renderer paints the real source image"
     );
-    let cap = usize::try_from(estimate_png_encode_page_peak_bytes(width, height).unwrap()).unwrap();
-    assert!(original.len() < cap);
-    let limits = SecurityLimits {
-        max_content_size: cap,
-        ..Default::default()
-    };
-    validate_png_encode_pages_individually(std::iter::once(&raster), &limits).unwrap();
-    let mut encoded = Vec::new();
-    image::codecs::png::PngEncoder::new(&mut encoded)
-        .write_image(raster.as_bytes(), width, height, image::ColorType::Rgb8.into())
-        .unwrap();
-    let encoded = Arc::new(encoded);
-    assert_eq!(image::load_from_memory(&encoded).unwrap().width(), width);
-    let error = upright_raster_for_backend(
-        &encoded,
-        width,
-        height,
-        90,
-        PageOrientationHandling::RequiresUpright,
-        Some(&limits),
-    )
-    .expect_err("real page encoding fits but the real rotation decode peak does not");
-    assert!(matches!(error, crate::XbergError::Validation { .. }), "{error:?}");
-    let higher = SecurityLimits::default();
-    assert!(higher.max_content_size > cap);
-    let accepted = upright_raster_for_backend(
-        &encoded,
-        width,
-        height,
-        90,
-        PageOrientationHandling::RequiresUpright,
-        Some(&higher),
-    )
-    .expect("same real source and rotation succeed under a genuinely larger cap");
-    assert!(!accepted.0.is_empty());
-    assert_eq!((accepted.1, accepted.2, accepted.3), (height, width, 90));
-    let source_dpi = 72.0 * f64::from(width) / 72.0;
+    let cap = encode_budget_controls(&native, &raster, original.len());
     Frame {
         pdf,
         native,
         original,
         raster,
         cap,
-        source_dpi,
-        points_per_pixel: 72.0 / width as f32,
+        source_dpi: 72.0 * f64::from(width) / 32.0,
+        points_per_pixel: 32.0 / width as f32,
     }
 }
 
@@ -273,12 +265,12 @@ async fn assert_preferred(detached: bool, matching: bool, unavailable: bool) {
         &config,
         &pipeline,
         None,
-        90,
+        0,
         false,
         Some(frame.points_per_pixel),
         Some(PageOcrHints {
             source_dpi: Some(frame.source_dpi),
-            known_full_page_scan: false,
+            known_full_page_scan: true,
             single_block_pages: None,
             native_page_layers: None,
             ..Default::default()
@@ -345,7 +337,7 @@ async fn matching_base_and_preferred_policy_is_a_transport_control() {
 #[tokio::test]
 #[serial_test::serial]
 async fn whole_retry_discards_content_when_the_backend_cancels_during_await() {
-    let frame = fixture(1, false);
+    let frame = super::support::complete_fixture();
     let token = crate::cancellation::CancellationToken::new();
     let calls = observer(CANCEL, Some(token.clone()));
     let _guard = Guard(vec![CANCEL]);

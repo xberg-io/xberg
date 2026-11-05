@@ -5112,6 +5112,7 @@ pub(super) fn should_adopt_xobject_retry_text(original: &str, retry: &str) -> bo
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) struct PipelineXObjectRecoveryOutcome {
     pub(super) text: String,
+    pub(super) page_failures: Vec<crate::types::OcrPageFailure>,
     pub(super) page_texts: Vec<String>,
     pub(super) images: Vec<crate::types::ExtractedImage>,
     pub(super) warnings: Vec<crate::types::ProcessingWarning>,
@@ -5125,6 +5126,7 @@ impl PipelineXObjectRecoveryOutcome {
     fn new(page_count: usize) -> Self {
         Self {
             text: String::new(),
+            page_failures: Vec::new(),
             page_texts: vec![String::new(); page_count],
             images: Vec::new(),
             warnings: Vec::new(),
@@ -5173,25 +5175,36 @@ impl<'a> XObjectRecoveryContext<'a> {
     }
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[derive(Clone, Copy)]
+pub(super) enum XObjectProjection {
+    #[cfg(test)]
+    RawPayloads,
+    CompletePage,
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) async fn collect_pipeline_xobject_pages(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
     doc: &xberg_native_pdf::PdfDocument,
     page_count: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    budget: &mut crate::extractors::security::SecurityBudget,
-    cancel_token: Option<&crate::cancellation::CancellationToken>,
+    context: XObjectRecoveryContext<'_>,
+    projection: XObjectProjection,
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
     let limits = ocr_config.security_limits.clone().unwrap_or_default();
     let mut stored_jpegs = crate::pdf::native::images::StoredJpegRecoveryBudget::new(limits.max_content_size);
     for page_idx in 0..page_count {
-        let mut context = XObjectRecoveryContext::with_budget(budget, cancel_token);
-        context.stored_jpegs = Some(&mut stored_jpegs);
-        let recovery =
-            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await;
-        if cancel_token.is_some_and(|token| token.is_cancelled()) {
-            return Err(crate::XbergError::Cancelled);
+        let mut page_context = XObjectRecoveryContext::with_budget(context.budget, context.cancel_token);
+        page_context.stored_jpegs = Some(&mut stored_jpegs);
+        if matches!(projection, XObjectProjection::CompletePage)
+            && !super::rendering::can_project_stored_jpeg_page(doc, page_idx, &limits, &mut page_context)?
+        {
+            outcome.page_failures.push(incomplete_stored_projection(page_idx));
+            continue;
         }
+        let recovery =
+            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, page_context).await;
+        context.check_cancelled()?;
         let Some(recovery) = recovery? else {
             continue;
         };
@@ -5207,6 +5220,14 @@ pub(super) async fn collect_pipeline_xobject_pages(
         ));
     }
     Ok(outcome)
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn incomplete_stored_projection(page_idx: usize) -> crate::types::OcrPageFailure {
+    crate::types::OcrPageFailure {
+        page: (page_idx + 1) as u32,
+        error: "Stored JPEG images cannot represent the complete visible page composition".into(),
+        recovered: false,
+    }
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn append_pipeline_xobject_page(
@@ -5336,8 +5357,8 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
         &doc,
         page_count,
         &recovery_ocr_config,
-        &mut budget,
-        cancel_token,
+        XObjectRecoveryContext::with_budget(&mut budget, cancel_token),
+        XObjectProjection::CompletePage,
     )
     .await?;
     if !outcome.has_content() {
@@ -6106,7 +6127,10 @@ async fn run_ocr_pipeline_stages(
                 accumulated_usage.append(&mut recovery.llm_usage);
                 let doc =
                     attach_ocr_pipeline_stage_warnings(None, &recovery.text, &unavailable_backends, &stage_failures);
-                let doc = attach_ocr_fallback_warnings(doc, &recovery.text, recovery.warnings);
+                let mut doc = attach_ocr_fallback_warnings(doc, &recovery.text, recovery.warnings);
+                if let Some(doc) = doc.as_mut() {
+                    merge_ocr_page_failures(&mut doc.ocr_page_failures, std::mem::take(&mut recovery.page_failures));
+                }
                 let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
                 return Ok((
                     recovery.text,
@@ -6774,3 +6798,7 @@ mod upright_processed_geometry_tests;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/raster_budget_tests.rs"]
 mod raster_budget_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "xobject_raw_collection_test_support.rs"]
+mod raw_collection_test_support;

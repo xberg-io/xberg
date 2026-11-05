@@ -1,4 +1,6 @@
 //! Routing-only observations; mock text never qualifies real English OCR. ~keep
+#[path = "xobject_budget_parity_tests/composition_adoption.rs"]
+mod composition_adoption;
 #[path = "xobject_budget_parity_tests/preferred_stage.rs"]
 mod preferred_stage;
 #[path = "xobject_budget_parity_tests/support.rs"]
@@ -8,19 +10,18 @@ use support::{BACKEND, Reply, TEXT, config, fixture, observer};
 
 #[tokio::test]
 #[serial_test::serial]
-async fn whole_document_and_detached_retry_preserve_original_dct_bytes_and_paint_order() {
+async fn raw_collectors_preserve_original_dct_bytes_and_paint_order() {
     let f = fixture(2, false);
     let (_guard, records) = observer(Reply::Text);
     let (cfg, ocr) = config(16_384, 16_384);
     for detached in [false, true] {
         records.lock().unwrap().clear();
         let out = if detached {
-            recover_pipeline_page_from_image_xobjects(&f.doc, 0, &cfg, &ocr, BACKEND).await
+            super::raw_collection_test_support::detached(&f.doc, &cfg, &ocr, BACKEND).await
         } else {
-            recover_pipeline_document_from_image_xobjects(Some(&f.bytes), &cfg, &ocr, BACKEND).await
+            super::raw_collection_test_support::whole(&f.doc, &cfg, &ocr, BACKEND).await
         }
-        .unwrap()
-        .expect("both real PDF retry publishers return routing payload");
+        .expect("both raw input collectors return routing payload");
         assert!(!out.text.is_empty());
         let calls = records.lock().unwrap();
         assert_eq!(calls.len(), 2);
@@ -37,7 +38,7 @@ async fn whole_document_and_detached_retry_preserve_original_dct_bytes_and_paint
 #[tokio::test]
 #[serial_test::serial]
 async fn whole_document_retry_forwards_the_smaller_outer_cap_like_detached_retry() {
-    let f = fixture(1, false);
+    let f = support::complete_fixture();
     let (_guard, records) = observer(Reply::Text);
     let outer = f.streams[0].len() + 1024;
     let (cfg, ocr) = config(outer, outer * 2);
@@ -70,7 +71,7 @@ async fn whole_document_retry_forwards_the_smaller_outer_cap_like_detached_retry
 #[tokio::test]
 #[serial_test::serial]
 async fn whole_document_retry_preserves_the_smaller_explicit_ocr_cap() {
-    let f = fixture(1, false);
+    let f = support::complete_fixture();
     let (_guard, records) = observer(Reply::Text);
     let inner = f.streams[0].len() + 1024;
     let (cfg, ocr) = config(inner * 2, inner);
@@ -90,7 +91,7 @@ async fn whole_document_retry_preserves_the_smaller_explicit_ocr_cap() {
 #[tokio::test]
 #[serial_test::serial]
 async fn over_cap_original_dct_never_reaches_either_retry_backend() {
-    let f = fixture(1, false);
+    let f = support::complete_fixture();
     let (_guard, records) = observer(Reply::Text);
     let cap = f.streams[0].len() - 1;
     assert!(cap > TEXT.len());
@@ -112,7 +113,7 @@ async fn over_cap_original_dct_never_reaches_either_retry_backend() {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn aggregate_stored_stream_cap_preserves_only_the_admitted_paint_prefix() {
+async fn raw_collectors_preserve_only_the_admitted_stored_stream_prefix() {
     let f = fixture(2, false);
     let (_guard, records) = observer(Reply::Text);
     let cap = f.streams.iter().map(Vec::len).sum::<usize>() - 1;
@@ -121,12 +122,11 @@ async fn aggregate_stored_stream_cap_preserves_only_the_admitted_paint_prefix() 
     for detached in [true, false] {
         records.lock().unwrap().clear();
         let out = if detached {
-            recover_pipeline_page_from_image_xobjects(&f.doc, 0, &cfg, &ocr, BACKEND).await
+            super::raw_collection_test_support::detached(&f.doc, &cfg, &ocr, BACKEND).await
         } else {
-            recover_pipeline_document_from_image_xobjects(Some(&f.bytes), &cfg, &ocr, BACKEND).await
+            super::raw_collection_test_support::whole(&f.doc, &cfg, &ocr, BACKEND).await
         }
-        .unwrap()
-        .expect("first original DCT remains admitted");
+        .expect("first original DCT remains admitted as raw input");
         let calls = records.lock().unwrap();
         assert_eq!(
             calls.len(),
@@ -143,7 +143,7 @@ async fn aggregate_stored_stream_cap_preserves_only_the_admitted_paint_prefix() 
 #[tokio::test]
 #[serial_test::serial]
 async fn empty_or_failed_retry_does_not_publish_successful_content() {
-    let f = fixture(1, false);
+    let f = support::complete_fixture();
     let (cfg, ocr) = config(16_384, 16_384);
     for reply in [Reply::Empty, Reply::Fail] {
         let (_guard, records) = observer(reply);
@@ -161,7 +161,7 @@ async fn empty_or_failed_retry_does_not_publish_successful_content() {
 #[tokio::test]
 #[serial_test::serial]
 async fn pre_cancelled_whole_document_retry_does_not_call_a_backend() {
-    let f = fixture(1, false);
+    let f = support::complete_fixture();
     let (_guard, records) = observer(Reply::Text);
     let (mut cfg, ocr) = config(16_384, 16_384);
     let token = crate::cancellation::CancellationToken::new();
@@ -259,7 +259,7 @@ async fn forwarded_table_cell_limits(
 #[tokio::test]
 #[serial_test::serial]
 async fn both_retry_routes_forward_the_same_non_size_limits() {
-    let f = fixture(1, false);
+    let f = support::complete_fixture();
     let (_guard, records) = observer(Reply::Text);
     let (mut cfg, mut ocr) = config(16_384, 16_384);
     cfg.security_limits.as_mut().unwrap().max_table_cells = 9;

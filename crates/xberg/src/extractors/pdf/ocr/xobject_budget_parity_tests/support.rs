@@ -222,3 +222,23 @@ pub(super) fn filtered_fixture() -> Fixture {
         streams: original.streams,
     }
 }
+
+pub(super) fn complete_fixture() -> Fixture {
+    let source = fixture(1, false);
+    let mut pdf = Document::load_mem(&source.bytes).unwrap();
+    let page = pdf.get_pages()[&1];
+    pdf.get_object_mut(page)
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("MediaBox", vec![0.into(), 0.into(), 32.into(), 24.into()]);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let doc = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
+    assert_eq!(doc.get_page_media_box(0).unwrap(), (0.0, 0.0, 32.0, 24.0));
+    Fixture {
+        bytes,
+        doc,
+        streams: source.streams,
+    }
+}

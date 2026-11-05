@@ -234,3 +234,6 @@ async fn large_english_detached() {
 
 #[path = "large/pdf_route_tests.rs"]
 mod pdf_route_tests;
+
+#[path = "large/purity.rs"]
+mod purity;
