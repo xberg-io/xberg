@@ -7,6 +7,13 @@ from fontTools import subset
 from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
 
+output = Path(sys.argv[1])
+reserved_devices = {"con", "prn", "aux", "nul"} | {
+    f"{prefix}{number}" for prefix in ("com", "lpt") for number in range(1, 10)
+}
+if output.name.split(".")[0].casefold() in reserved_devices:
+    raise ValueError("Use a Windows-safe output filename, such as unicode_nul_mapping.pdf")
+
 SENT = [
     "The committee met on Tuesday to review the plan for the new library.",
     "Members asked about the schedule and the budget for the parking area.",
@@ -98,4 +105,4 @@ x = len(out)
 out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
 out += b"".join(f"{offset:010} 00000 n \n".encode() for offset in offs)
 out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n".encode()
-Path(sys.argv[1]).write_bytes(out)
+output.write_bytes(out)

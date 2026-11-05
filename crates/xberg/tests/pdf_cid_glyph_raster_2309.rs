@@ -15,7 +15,7 @@ const SENTENCES: [&str; 4] = [
 const FIXTURES: [(&str, &[u8]); 4] = [
     (
         "nul",
-        include_bytes!("../../xberg-native-pdf/tests/fixtures/cid_glyph_raster_2309/nul.pdf"),
+        include_bytes!("../../xberg-native-pdf/tests/fixtures/cid_glyph_raster_2309/unicode_nul_mapping.pdf"),
     ),
     (
         "missing",

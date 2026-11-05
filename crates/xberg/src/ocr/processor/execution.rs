@@ -1370,6 +1370,7 @@ fn lower_mode_has_text_structure(
     )
 }
 
+#[cfg(any(test, all(feature = "pdf", not(target_arch = "wasm32"))))]
 pub(crate) fn lower_mode_mask_has_text_structure(
     lower_mode_mask: &[bool],
     width: usize,
