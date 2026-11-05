@@ -294,7 +294,7 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
     crate::core::pipeline::prepare_extraction_cache_lifecycle(config).await?;
 
     let content_hash = crate::cache::blake3_hash_file(path)?;
-    let config_hash = hash_extraction_config(config, mime_type);
+    let config_hash = extraction_config_hash(config, mime_type).await?;
     let cache_key = format!("{content_hash}_{config_hash}");
 
     let namespace = config.cache_namespace.as_deref();
@@ -697,14 +697,14 @@ mod tests {
             ..Default::default()
         };
 
-        let off = hash_extraction_config(&pages(false), "application/pdf");
-        let on = hash_extraction_config(&pages(true), "application/pdf");
+        let off = hash_extraction_config(pages(false), "application/pdf");
+        let on = hash_extraction_config(pages(true), "application/pdf");
 
         assert_ne!(
             off, on,
             "a result with the kept text must not be served for a config without it"
         );
-        assert_eq!(off, hash_extraction_config(&pages(false), "application/pdf"));
+        assert_eq!(off, hash_extraction_config(pages(false), "application/pdf"));
     }
 
     #[tokio::test]
@@ -762,11 +762,10 @@ fn normalize_llm_config_for_cache_key(llm: &mut crate::core::config::LlmConfig) 
 /// Excludes cache-control fields (use_cache, cache_namespace, cache_ttl_secs,
 /// the nested `ocr.tesseract_config.use_cache`, and every embedded `LlmConfig::cache` —
 /// see [`normalize_llm_config_for_cache_key`]) since they don't affect the extraction
-/// result. Uses a clone-and-normalize approach to ensure determinism: cache fields are
-/// zeroed, then the struct is serialized to canonical JSON via serde_json's sorted-keys
-/// representation.
-fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String {
-    let mut normalized = config.clone();
+/// result. Takes the config by value and normalizes it in place to ensure determinism: cache
+/// fields are zeroed, then the struct is serialized to canonical JSON via serde_json's
+/// sorted-keys representation.
+fn hash_extraction_config(mut normalized: ExtractionConfig, mime_type: &str) -> String {
     normalized.use_cache = true;
     normalized.cache_namespace = None;
     normalized.cache_ttl_secs = None;
@@ -880,6 +879,25 @@ fn hash_read_again_models(
             }
         }
     }
+}
+
+/// [`hash_extraction_config`] on a blocking worker: the read-again model probe stats the tessdata
+/// search chain, and an `async fn` must not touch the file system on its own thread.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn extraction_config_hash(config: &ExtractionConfig, mime_type: &str) -> Result<String> {
+    let config = config.clone();
+    let mime_type = mime_type.to_owned();
+    tokio::task::spawn_blocking(move || hash_extraction_config(config, &mime_type))
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, "extraction cache key task failed");
+            XbergError::Other("Extraction cache key task failed".to_string())
+        })
+}
+
+#[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+async fn extraction_config_hash(config: &ExtractionConfig, mime_type: &str) -> Result<String> {
+    Ok(hash_extraction_config(config.clone(), mime_type))
 }
 
 /// Get or initialize the global extraction cache.
@@ -1008,8 +1026,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            hash_extraction_config(&a, "text/x-source-code"),
-            hash_extraction_config(&b, "text/x-source-code"),
+            hash_extraction_config(a, "text/x-source-code"),
+            hash_extraction_config(b, "text/x-source-code"),
             "source_name (serde-skipped) must be part of the cache key"
         );
     }
@@ -1082,10 +1100,47 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            hash_extraction_config(&a, "image/png"),
-            hash_extraction_config(&b, "image/png"),
+            hash_extraction_config(a, "image/png"),
+            hash_extraction_config(b, "image/png"),
             "tessdata_bytes (serde-skipped) must be part of the cache key"
         );
+    }
+
+    /// The key the async path computes on a blocking worker equals the key of the sync hash.
+    #[tokio::test(flavor = "current_thread")]
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    async fn the_cache_key_off_the_async_thread_equals_the_sync_key() {
+        use crate::core::config::OcrConfig;
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        let off_thread = extraction_config_hash(&config, "image/png")
+            .await
+            .expect("the key worker finishes");
+        assert_eq!(off_thread, hash_extraction_config(config, "image/png"));
+    }
+
+    /// A text file extracted with the cache on and an OCR config: the cache key is computed, with
+    /// its model probe, and the result is the text of the file.
+    #[tokio::test(flavor = "current_thread")]
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    async fn a_cached_text_file_with_an_ocr_config_is_extracted() {
+        use crate::core::config::OcrConfig;
+
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let path = dir.path().join("note.txt");
+        std::fs::write(&path, "a plain note").expect("the note is written");
+        let config = ExtractionConfig {
+            use_cache: true,
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        let document = extract_file(&path, Some("text/plain"), &config)
+            .await
+            .expect("the note is extracted");
+        assert!(document.content.contains("a plain note"), "content: {:?}", document.content);
     }
 
     #[test]
@@ -1115,8 +1170,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&cache_on, "image/png"),
-            hash_extraction_config(&cache_off, "image/png"),
+            hash_extraction_config(cache_on, "image/png"),
+            hash_extraction_config(cache_off, "image/png"),
             "ocr.tesseract_config.use_cache is a cache-control field and must not affect the \
              extraction-cache key (#693)"
         );
@@ -1149,8 +1204,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            hash_extraction_config(&psm_auto, "image/png"),
-            hash_extraction_config(&psm_sparse, "image/png"),
+            hash_extraction_config(psm_auto, "image/png"),
+            hash_extraction_config(psm_sparse, "image/png"),
             "psm changes Tesseract's recognized output and must be part of the cache key"
         );
     }
@@ -1165,8 +1220,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            hash_extraction_config(&auto, "application/pdf"),
-            hash_extraction_config(&scanned, "application/pdf"),
+            hash_extraction_config(auto, "application/pdf"),
+            hash_extraction_config(scanned, "application/pdf"),
             "ocr_strategy selects different pages for OCR and must be part of the cache key"
         );
     }
@@ -1184,8 +1239,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            hash_extraction_config(&lenient, "application/pdf"),
-            hash_extraction_config(&strict, "application/pdf"),
+            hash_extraction_config(lenient, "application/pdf"),
+            hash_extraction_config(strict, "application/pdf"),
             "min_confidence selects different pages for OCR and must be part of the cache key"
         );
     }
@@ -1234,8 +1289,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "application/pdf"),
-            hash_extraction_config(&b, "application/pdf"),
+            hash_extraction_config(a, "application/pdf"),
+            hash_extraction_config(b, "application/pdf"),
             "ocr.vlm_config.cache is a cache-control field and must not affect the extraction-cache key"
         );
     }
@@ -1280,8 +1335,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "application/pdf"),
-            hash_extraction_config(&b, "application/pdf"),
+            hash_extraction_config(a, "application/pdf"),
+            hash_extraction_config(b, "application/pdf"),
             "ocr.pipeline.stages[].vlm_config.cache is a cache-control field and must not \
              affect the extraction-cache key"
         );
@@ -1309,8 +1364,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "structured_extraction.llm.cache is a cache-control field and must not affect the \
              extraction-cache key"
         );
@@ -1336,8 +1391,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "ner.llm.cache is a cache-control field and must not affect the extraction-cache key"
         );
     }
@@ -1362,8 +1417,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "summarization.llm.cache is a cache-control field and must not affect the extraction-cache key"
         );
     }
@@ -1388,8 +1443,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "translation.llm.cache is a cache-control field and must not affect the extraction-cache key"
         );
     }
@@ -1414,8 +1469,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "page_classification.llm.cache is a cache-control field and must not affect the \
              extraction-cache key"
         );
@@ -1445,8 +1500,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "chunk_classification.llm.cache is a cache-control field and must not affect the \
              extraction-cache key"
         );
@@ -1472,8 +1527,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_eq!(
-            hash_extraction_config(&a, "image/png"),
-            hash_extraction_config(&b, "image/png"),
+            hash_extraction_config(a, "image/png"),
+            hash_extraction_config(b, "image/png"),
             "captioning.llm.cache is a cache-control field and must not affect the extraction-cache key"
         );
     }
@@ -1493,8 +1548,8 @@ mod cache_key_tests {
         };
 
         assert_ne!(
-            hash_extraction_config(&build(CaptionAltTextMode::Preserve), "image/png"),
-            hash_extraction_config(&build(CaptionAltTextMode::Replace), "image/png"),
+            hash_extraction_config(build(CaptionAltTextMode::Preserve), "image/png"),
+            hash_extraction_config(build(CaptionAltTextMode::Replace), "image/png"),
             "captioning alt-text precedence changes rendered output and must affect the cache key"
         );
     }
@@ -1517,8 +1572,8 @@ mod cache_key_tests {
         let a = build(cache_on);
         let b = build(cache_off);
         assert_eq!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "chunking.embedding.model (EmbeddingModelType::Llm).cache is a cache-control field \
              and must not affect the extraction-cache key"
         );
@@ -1550,8 +1605,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            hash_extraction_config(&a, "text/plain"),
-            hash_extraction_config(&b, "text/plain"),
+            hash_extraction_config(a, "text/plain"),
+            hash_extraction_config(b, "text/plain"),
             "the routed model changes the LLM output and must be part of the extraction-cache key"
         );
     }
