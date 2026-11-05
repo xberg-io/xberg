@@ -211,6 +211,34 @@ class CbWrapper$extract_batch {
         self.cb = cb
     }
 }
+public func extractBatchWithInputOptionsJson<GenericIntoRustString: IntoRustString>(_ inputs_json: GenericIntoRustString, _ config: ExtractionConfig) async throws -> ExtractionResult {
+    func onComplete(cbWrapperPtr: UnsafeMutableRawPointer?, rustFnRetVal: __private__ResultPtrAndPtr) {
+        let wrapper = Unmanaged<CbWrapper$extract_batch_with_input_options_json>.fromOpaque(cbWrapperPtr!).takeRetainedValue()
+        if rustFnRetVal.is_ok {
+            wrapper.cb(.success(ExtractionResult(ptr: rustFnRetVal.ok_or_err!)))
+        } else {
+            wrapper.cb(.failure(AlefBridgeError(ptr: rustFnRetVal.ok_or_err!)))
+        }
+    }
+
+    return try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<ExtractionResult, Error>) in
+        let callback = { rustFnRetVal in
+            continuation.resume(with: rustFnRetVal)
+        }
+
+        let wrapper = CbWrapper$extract_batch_with_input_options_json(cb: callback)
+        let wrapperPtr = Unmanaged.passRetained(wrapper).toOpaque()
+
+        __swift_bridge__$extract_batch_with_input_options_json(wrapperPtr, onComplete, { let rustString = inputs_json.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {config.isOwned = false; return config.ptr;}())
+    })
+}
+class CbWrapper$extract_batch_with_input_options_json {
+    var cb: (Result<ExtractionResult, Error>) -> ()
+
+    public init(cb: @escaping (Result<ExtractionResult, Error>) -> ()) {
+        self.cb = cb
+    }
+}
 public func __alef_owned_vec_list_document_extractors() throws -> RustVec<RustString> {
     try { let val = __swift_bridge__$list_document_extractors(); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }

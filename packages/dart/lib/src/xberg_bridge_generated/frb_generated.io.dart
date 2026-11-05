@@ -1368,6 +1368,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExtractInputKind dco_decode_extract_input_kind(dynamic raw);
 
   @protected
+  ExtractInputWithOptions dco_decode_extract_input_with_options(dynamic raw);
+
+  @protected
   ExtractedDocument dco_decode_extracted_document(dynamic raw);
 
   @protected
@@ -1700,6 +1703,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ExtractInput> dco_decode_list_extract_input(dynamic raw);
+
+  @protected
+  List<ExtractInputWithOptions> dco_decode_list_extract_input_with_options(
+    dynamic raw,
+  );
 
   @protected
   List<ExtractedDocument> dco_decode_list_extracted_document(dynamic raw);
@@ -4317,6 +4325,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExtractInputKind sse_decode_extract_input_kind(SseDeserializer deserializer);
 
   @protected
+  ExtractInputWithOptions sse_decode_extract_input_with_options(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ExtractedDocument sse_decode_extracted_document(SseDeserializer deserializer);
 
   @protected
@@ -4721,6 +4734,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ExtractInput> sse_decode_list_extract_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ExtractInputWithOptions> sse_decode_list_extract_input_with_options(
     SseDeserializer deserializer,
   );
 
@@ -8192,6 +8210,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_extract_input_with_options(
+    ExtractInputWithOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_extracted_document(
     ExtractedDocument self,
     SseSerializer serializer,
@@ -8731,6 +8755,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_extract_input(
     List<ExtractInput> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_extract_input_with_options(
+    List<ExtractInputWithOptions> self,
     SseSerializer serializer,
   );
 

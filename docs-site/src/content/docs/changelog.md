@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(engine): Override layout-for-Markdown behavior per batch input.** (#2367)
+  Explicit options take precedence after file overrides; omitted options inherit the batch configuration.
+
 - **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
   Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
   Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.

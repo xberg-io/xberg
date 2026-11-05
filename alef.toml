@@ -2818,8 +2818,11 @@ features = [
   "auto-rotate-types",
   "stopwords",
 ]
-exclude_types = []
+exclude_types = ["ExtractInputWithOptions"]
 exclude_functions = [
+  # Swift's opaque vector bridge consumes its elements. The JSON entry point
+  # keeps Swift input values reusable, including repeated entries in a batch. ~keep
+  "extract_batch_with_input_options",
   "calculate_quality_score",
   "count_tokens",
   "embed_texts",

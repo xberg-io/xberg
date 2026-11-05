@@ -55,3 +55,8 @@ blake3 = "532d2a2120cfc797b323eb4d4cc8291010eba74b853345cee97c50362598127b"
 number = 10
 status = "accepted"
 blake3 = "883a47bbefced500646a92c038565525a1e80fe3765cff4f2e3560cbe7f58d0e"
+
+[adrs."adrs/0011-carry-per-input-pdf-layout-options-in-an-additive-batch-input.md"]
+number = 11
+status = "accepted"
+blake3 = "cd5f2a0adc80f8c9df66b56d71c9b194f6431119f18628b1730c34b5b92f3890"

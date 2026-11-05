@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-type PendingBatchItem = (usize, ExtractInput, String);
+type PendingBatchItem<I = ExtractInput> = (usize, I, String);
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 async fn scope_batch_input_progress<F, T>(
@@ -52,6 +52,9 @@ use crate::{Result, XbergError};
 use crate::core::extractor::extract_bytes;
 use crate::core::extractor::extract_file;
 use crate::engine::seams::ProgressEvent;
+
+mod input_ref;
+pub(super) use input_ref::BatchInputRef;
 
 const HTTP_SCHEME: &str = "http://";
 const HTTPS_SCHEME: &str = "https://";
@@ -256,8 +259,11 @@ async fn extract_uncached(input: ExtractInput, config: &ExtractionConfig) -> Res
     Ok(output)
 }
 
-fn input_cache_dependency(input: &ExtractInput, config: &ExtractionConfig) -> CacheDependency {
-    CacheDependency::for_config(&effective_input_config(input, config), input.mime_type.as_deref())
+fn input_cache_dependency<I: BatchInputRef>(input: &I, config: &ExtractionConfig) -> CacheDependency {
+    CacheDependency::for_config(
+        &effective_input_config(input, config),
+        input.input().mime_type.as_deref(),
+    )
 }
 
 /// Derive a content-hash cache key for `input`, or `None` when the input is not
@@ -270,12 +276,13 @@ fn input_cache_dependency(input: &ExtractInput, config: &ExtractionConfig) -> Ca
 /// MIME/filename hints, and the fully-resolved [`ExtractionConfig`] (base config
 /// merged with any per-input override), so a config or override change is a
 /// guaranteed cache miss.
-fn content_cache_key(input: &ExtractInput, base_config: &ExtractionConfig) -> Option<String> {
+fn content_cache_key<I: BatchInputRef>(item: &I, base_config: &ExtractionConfig) -> Option<String> {
+    let input = item.input();
     if !base_config.use_cache || input.kind != ExtractInputKind::Bytes {
         return None;
     }
     let bytes = input.bytes.as_deref()?;
-    let resolved_config = effective_input_config(input, base_config);
+    let resolved_config = effective_input_config(item, base_config);
     // A findings file is mutable external input whose contents are absent from the cache key. ~keep
     if resolved_config
         .redaction
@@ -298,7 +305,7 @@ fn content_cache_key(input: &ExtractInput, base_config: &ExtractionConfig) -> Op
     Some(hasher.finalize().to_hex().to_string())
 }
 
-fn batch_content_cache_key(inputs: &[ExtractInput], base_config: &ExtractionConfig) -> Option<String> {
+fn batch_content_cache_key<I: BatchInputRef>(inputs: &[I], base_config: &ExtractionConfig) -> Option<String> {
     if inputs.is_empty() {
         return None;
     }
@@ -315,17 +322,17 @@ fn batch_content_cache_key(inputs: &[ExtractInput], base_config: &ExtractionConf
 }
 
 /// Extract content from multiple bytes or URI inputs.
-pub(crate) async fn extract_batch(
+pub(super) async fn extract_batch<I: BatchInputRef>(
     inner: &super::EngineInner,
-    inputs: Vec<ExtractInput>,
+    inputs: Vec<I>,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
     cacheability::scope(extract_batch_scoped(inner, inputs, config)).await
 }
 
-async fn extract_batch_scoped(
+async fn extract_batch_scoped<I: BatchInputRef>(
     inner: &super::EngineInner,
-    inputs: Vec<ExtractInput>,
+    inputs: Vec<I>,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
     inner.progress.emit(ProgressEvent {
@@ -336,7 +343,7 @@ async fn extract_batch_scoped(
 
     if let Err(error) = config
         .validate()
-        .and_then(|()| validate_input_overrides(&inputs))
+        .and_then(|()| validate_input_overrides(inputs.iter().map(BatchInputRef::input)))
         .and_then(|()| ensure_not_cancelled(config))
     {
         inner.progress.emit(ProgressEvent {
@@ -403,9 +410,9 @@ async fn extract_batch_scoped(
     result
 }
 
-async fn extract_batch_uncached(
+async fn extract_batch_uncached<I: BatchInputRef>(
     inner: &super::EngineInner,
-    inputs: Vec<ExtractInput>,
+    inputs: Vec<I>,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
     #[cfg(feature = "otel")]
@@ -465,9 +472,12 @@ fn record_batch_metrics(elapsed: std::time::Duration, result: &Result<Extraction
 }
 
 #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-async fn extract_batch_sequential(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> Result<ExtractionResult> {
-    let mut seen = initial_seen_urls(&inputs);
-    let seed_hosts = initial_seed_hosts(&inputs);
+async fn extract_batch_sequential<I: BatchInputRef>(
+    inputs: Vec<I>,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
+    let mut seen = initial_seen_urls(inputs.iter().map(BatchInputRef::input));
+    let seed_hosts = initial_seed_hosts(inputs.iter().map(BatchInputRef::input));
     let mut output = ExtractionResult {
         summary: ExtractionSummary {
             inputs: inputs.len(),
@@ -477,8 +487,9 @@ async fn extract_batch_sequential(inputs: Vec<ExtractInput>, config: &Extraction
     };
 
     for (index, input) in inputs.into_iter().enumerate() {
-        let source = input_source(&input);
-        let item = Box::pin(extract_one(input, config, index));
+        let source = input_source(input.input());
+        let resolved_config = resolve_input_config(&input, config);
+        let item = Box::pin(extract_one_resolved(input.into_input(), &resolved_config, index));
 
         #[cfg(feature = "otel")]
         let item_result = item.instrument(crate::telemetry::spans::batch_item_span(index)).await;
@@ -497,14 +508,14 @@ async fn extract_batch_sequential(inputs: Vec<ExtractInput>, config: &Extraction
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-async fn extract_batch_concurrent(
+async fn extract_batch_concurrent<I: BatchInputRef>(
     inner: &super::EngineInner,
-    inputs: Vec<ExtractInput>,
+    inputs: Vec<I>,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
     let input_count = inputs.len();
-    let mut seen = initial_seen_urls(&inputs);
-    let seed_hosts = initial_seed_hosts(&inputs);
+    let mut seen = initial_seen_urls(inputs.iter().map(BatchInputRef::input));
+    let seed_hosts = initial_seed_hosts(inputs.iter().map(BatchInputRef::input));
     let mut output = ExtractionResult {
         summary: ExtractionSummary {
             inputs: input_count,
@@ -522,7 +533,7 @@ async fn extract_batch_concurrent(
     // rather than the smaller share the first worker to start would otherwise install.
     crate::core::config::concurrency::init_thread_pools(config.concurrency.as_ref());
     let base_config = Arc::new(config.clone());
-    let mut pending: VecDeque<PendingBatchItem> = VecDeque::with_capacity(input_count);
+    let mut pending: VecDeque<PendingBatchItem<I>> = VecDeque::with_capacity(input_count);
 
     let mut items: Vec<Option<BatchItemResult>> = Vec::with_capacity(input_count);
     items.resize_with(input_count, || None);
@@ -533,11 +544,11 @@ async fn extract_batch_concurrent(
     let base_crawl_fingerprint = super::crawl_handle::crawl_fingerprint(&base_config.url.crawl);
 
     for (index, input) in inputs.into_iter().enumerate() {
-        let source = input_source(&input);
+        let source = input_source(input.input());
 
         #[cfg(feature = "url-ingestion")]
         {
-            if let Some(uri) = shared_group_uri(&input) {
+            if let Some(uri) = shared_group_uri(input.input()) {
                 let resolved_config = resolve_input_config(&input, &base_config);
                 if resolved_config.url.mode == base_config.url.mode
                     && super::crawl_handle::crawl_fingerprint(&resolved_config.url.crawl) == base_crawl_fingerprint
@@ -581,7 +592,7 @@ async fn extract_batch_concurrent(
                 // so the concrete type stays in the proof. Coercing to `dyn Future` cuts
                 // the chain here. ~keep
                 let extraction: std::pin::Pin<Box<dyn Future<Output = Result<ExtractionResult>> + Send + '_>> =
-                    Box::pin(extract_one_resolved(input, &resolved_config, index));
+                    Box::pin(extract_one_resolved(input.into_input(), &resolved_config, index));
                 scope_batch_input_progress(progress, index, extraction).await
             });
 
@@ -626,17 +637,17 @@ async fn extract_batch_concurrent(
 }
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_engine_batch_execution_plan(
+fn resolve_engine_batch_execution_plan<I: BatchInputRef>(
     config: &ExtractionConfig,
-    inputs: &[ExtractInput],
+    inputs: &[I],
 ) -> crate::core::config::concurrency::BatchExecutionPlan {
     resolve_engine_batch_execution_plan_for(config, classify_layout_batch(config, inputs), inputs.len())
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_pending_batch_execution_plan(
+fn resolve_pending_batch_execution_plan<I: BatchInputRef>(
     config: &ExtractionConfig,
-    pending: &VecDeque<PendingBatchItem>,
+    pending: &VecDeque<PendingBatchItem<I>>,
 ) -> crate::core::config::concurrency::BatchExecutionPlan {
     resolve_engine_batch_execution_plan_for(
         config,
@@ -651,23 +662,24 @@ fn should_prioritize_pending_batch_items(pending_count: usize, workers: usize) -
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-async fn prioritize_pending_batch_items(
-    pending: VecDeque<PendingBatchItem>,
+async fn prioritize_pending_batch_items<I: BatchInputRef>(
+    pending: VecDeque<PendingBatchItem<I>>,
     base_config: &ExtractionConfig,
-) -> VecDeque<PendingBatchItem> {
+) -> VecDeque<PendingBatchItem<I>> {
     const MAX_CONCURRENT_SIZE_HINTS: usize = 16;
     const SIZE_HINT_BUDGET: std::time::Duration = std::time::Duration::from_millis(25);
 
     let mut costs = vec![None; pending.len()];
     let mut local_paths = Vec::new();
 
-    for (position, (_, input, _)) in pending.iter().enumerate() {
+    for (position, (_, item, _)) in pending.iter().enumerate() {
+        let input = item.input();
         match input.kind {
             ExtractInputKind::Bytes => {
                 costs[position] = input.bytes.as_ref().map(|bytes| bytes.len() as u64);
             }
             ExtractInputKind::Uri => {
-                let effective_config = effective_input_config(input, base_config);
+                let effective_config = effective_input_config(item, base_config);
                 let cancelled = effective_config
                     .cancel_token
                     .as_ref()
@@ -734,10 +746,10 @@ fn local_batch_path(input: &ExtractInput, config: &ExtractionConfig) -> Option<P
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn reorder_pending_batch_items(
-    pending: VecDeque<PendingBatchItem>,
+fn reorder_pending_batch_items<I>(
+    pending: VecDeque<PendingBatchItem<I>>,
     costs: &[Option<u64>],
-) -> VecDeque<PendingBatchItem> {
+) -> VecDeque<PendingBatchItem<I>> {
     let mut prioritized = Vec::new();
     let mut prioritized_positions = Vec::new();
     let mut scheduled = Vec::with_capacity(pending.len());
@@ -761,9 +773,9 @@ fn reorder_pending_batch_items(
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn classify_layout_batch<'a>(
+fn classify_layout_batch<'a, I: BatchInputRef + 'a>(
     config: &ExtractionConfig,
-    inputs: impl IntoIterator<Item = &'a ExtractInput>,
+    inputs: impl IntoIterator<Item = &'a I>,
 ) -> crate::core::config::concurrency::LayoutBatchWorkload {
     #[cfg(layout_detection)]
     {
@@ -775,7 +787,7 @@ fn classify_layout_batch<'a>(
         for input in inputs {
             input_count += 1;
             let effective = effective_input_config(input, config);
-            let pdf_evidence = pdf_batch_evidence(input);
+            let pdf_evidence = pdf_batch_evidence(input.input());
             let markdown_pdf = effective.layout.is_some()
                 && effective.use_layout_for_markdown
                 && pdf_evidence == PdfBatchEvidence::Likely;
@@ -1199,7 +1211,7 @@ async fn extract_one(input: ExtractInput, base_config: &ExtractionConfig, index:
 /// Validate the page settings of each input that overrides them.
 ///
 /// An override replaces the page settings of the base config as a whole, so its own values decide.
-fn validate_input_overrides(inputs: &[ExtractInput]) -> Result<()> {
+fn validate_input_overrides<'a>(inputs: impl IntoIterator<Item = &'a ExtractInput>) -> Result<()> {
     for input in inputs {
         if let Some(pages) = input.config.as_ref().and_then(|overrides| overrides.pages.as_ref()) {
             pages.validate()?;
@@ -1208,7 +1220,7 @@ fn validate_input_overrides(inputs: &[ExtractInput]) -> Result<()> {
     Ok(())
 }
 
-fn resolve_input_config(input: &ExtractInput, base_config: &ExtractionConfig) -> ExtractionConfig {
+fn resolve_input_config<I: BatchInputRef>(input: &I, base_config: &ExtractionConfig) -> ExtractionConfig {
     let mut resolved = effective_input_config(input, base_config).into_owned();
     // Install a token here, before this item's own timeout wrapper (`run_batch_item`,
     // `finalize_shared_item`) races against `extract_file`/`extract_bytes`'s inner
@@ -1219,27 +1231,34 @@ fn resolve_input_config(input: &ExtractInput, base_config: &ExtractionConfig) ->
     resolved
 }
 
-fn effective_input_config<'a>(input: &'a ExtractInput, base_config: &'a ExtractionConfig) -> Cow<'a, ExtractionConfig> {
-    match input.config.as_ref() {
+fn effective_input_config<'a, I: BatchInputRef>(
+    input: &'a I,
+    base_config: &'a ExtractionConfig,
+) -> Cow<'a, ExtractionConfig> {
+    let mut resolved = match input.input().config.as_ref() {
         Some(overrides) => Cow::Owned(base_config.with_file_overrides(overrides)),
         None => Cow::Borrowed(base_config),
+    };
+    if let Some(use_layout_for_markdown) = input.use_layout_for_markdown() {
+        resolved.to_mut().use_layout_for_markdown = use_layout_for_markdown;
     }
+    resolved
 }
 
 /// Resolve config for batch items, taking Arc<ExtractionConfig> to avoid unnecessary clones.
 /// When there are no per-item overrides, this returns Arc::clone (cheap reference increment)
 /// rather than cloning the inner ExtractionConfig.
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_input_config_arc(input: &ExtractInput, base_config: &Arc<ExtractionConfig>) -> Arc<ExtractionConfig> {
-    match input.config.as_ref() {
-        Some(overrides) => Arc::new(base_config.with_file_overrides(overrides)),
-        None => Arc::clone(base_config),
+fn resolve_input_config_arc<I: BatchInputRef>(input: &I, base_config: &Arc<ExtractionConfig>) -> Arc<ExtractionConfig> {
+    match effective_input_config(input, base_config) {
+        Cow::Owned(resolved) => Arc::new(resolved),
+        Cow::Borrowed(_) => Arc::clone(base_config),
     }
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_batch_input_config(
-    input: &ExtractInput,
+fn resolve_batch_input_config<I: BatchInputRef>(
+    input: &I,
     base_config: &Arc<ExtractionConfig>,
     thread_budget: usize,
 ) -> Arc<ExtractionConfig> {
@@ -1991,17 +2010,17 @@ fn allow_subdomains(config: &ExtractionConfig) -> bool {
     }
 }
 
-fn initial_seen_urls(inputs: &[ExtractInput]) -> HashSet<String> {
+fn initial_seen_urls<'a>(inputs: impl IntoIterator<Item = &'a ExtractInput>) -> HashSet<String> {
     inputs
-        .iter()
+        .into_iter()
         .filter_map(|input| input.uri.clone())
         .filter(|uri| uri.starts_with(HTTP_SCHEME) || uri.starts_with(HTTPS_SCHEME))
         .collect()
 }
 
-fn initial_seed_hosts(inputs: &[ExtractInput]) -> HashSet<String> {
+fn initial_seed_hosts<'a>(inputs: impl IntoIterator<Item = &'a ExtractInput>) -> HashSet<String> {
     inputs
-        .iter()
+        .into_iter()
         .filter_map(|input| input.uri.as_deref().and_then(http_host))
         .collect()
 }
@@ -2034,3 +2053,6 @@ fn error_type(error: &XbergError) -> &'static str {
 
 #[cfg(all(test, feature = "tokio-runtime"))]
 mod tests;
+
+#[cfg(test)]
+mod input_options_tests;
