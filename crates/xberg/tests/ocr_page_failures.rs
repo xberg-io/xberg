@@ -851,8 +851,8 @@ fn an_image_file_keeps_the_record_of_a_failed_stage() {
 }
 
 const CANCELLING_STAGE: &str = "ocr-page-failures-cancelling-stage";
-/// The start of the warning of a whole-document fallback whose pipeline stages all failed.
-const CANCELLED_FALLBACK_WARNING: &str = "OCR fallback failed (Parsing error: All OCR pipeline backends failed";
+const CANCELLED_FALLBACK_WARNING: &str = "OCR fallback failed (Extraction cancelled); returning native text that was \
+    below the quality threshold which triggered OCR. Extracted content may be empty or incomplete.";
 
 /// A backend that cancels the extraction on its first call and then fails.
 struct CancellingBackend {
@@ -892,8 +892,8 @@ impl OcrBackend for CancellingBackend {
 }
 
 /// The first stage of a two-stage pipeline cancels the extraction during the fallback for the
-/// whole document. Each stage then ends with the cancellation, and the pipeline reports that
-/// every stage failed. The native text of the cover page is kept, as it is for a failed run.
+/// whole document. The pipeline reports cancellation, retains the native cover text, and does
+/// not record the cancelled pages as OCR failures.
 #[test]
 #[serial_test::serial]
 fn a_cancelled_whole_document_fallback_adds_no_record() {
@@ -932,13 +932,16 @@ fn a_cancelled_whole_document_fallback_adds_no_record() {
         "the native text of the cover page is kept; content: {:?}",
         result.content
     );
-    assert!(
-        result
-            .processing_warnings
-            .iter()
-            .any(|warning| warning.message.contains(CANCELLED_FALLBACK_WARNING)),
-        "the fallback for the whole document ended with the failure of every stage; warnings: {:?}",
-        result.processing_warnings
+    let fallback_warnings: Vec<&str> = result
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "ocr" && warning.message.starts_with("OCR fallback failed ("))
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert_eq!(
+        fallback_warnings,
+        vec![CANCELLED_FALLBACK_WARNING],
+        "the whole-document fallback reports cancellation exactly once"
     );
     assert_eq!(result.ocr_page_failures, None);
 }

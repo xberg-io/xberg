@@ -48,24 +48,33 @@ const LINES: &[(f32, &str)] = &[
 ];
 
 fn page_pdf(operators: String, raster: Option<Stream>) -> Vec<u8> {
+    pages_pdf(vec![(operators, raster)])
+}
+
+fn pages_pdf(pages_content: Vec<(String, Option<Stream>)>) -> Vec<u8> {
     let mut document = Document::with_version("1.4");
     let pages = document.new_object_id();
     let font = document.add_object(dictionary! {
         "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding",
     });
-    let mut resources = dictionary! { "Font" => dictionary! { "F1" => font } };
-    if let Some(raster) = raster {
-        resources.set("XObject", dictionary! { "Scan" => document.add_object(raster) });
+    let mut children = Vec::new();
+    for (operators, raster) in pages_content {
+        let mut resources = dictionary! { "Font" => dictionary! { "F1" => font } };
+        if let Some(raster) = raster {
+            resources.set("XObject", dictionary! { "Scan" => document.add_object(raster) });
+        }
+        let content = document.add_object(Stream::new(Dictionary::new(), operators.into_bytes()));
+        let page = document.add_object(dictionary! {
+            "Type" => "Page", "Parent" => pages,
+            "MediaBox" => vec![0.into(), 0.into(), PAGE_WIDTH.into(), PAGE_HEIGHT.into()],
+            "Resources" => resources, "Contents" => content,
+        });
+        children.push(Object::Reference(page));
     }
-    let content = document.add_object(Stream::new(Dictionary::new(), operators.into_bytes()));
-    let page = document.add_object(dictionary! {
-        "Type" => "Page", "Parent" => pages,
-        "MediaBox" => vec![0.into(), 0.into(), PAGE_WIDTH.into(), PAGE_HEIGHT.into()],
-        "Resources" => resources, "Contents" => content,
-    });
+    let count = children.len() as i64;
     document.objects.insert(
         pages,
-        Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![Object::Reference(page)], "Count" => 1 }),
+        Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => children, "Count" => count }),
     );
     let root = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
     document.trailer.set("Root", root);
@@ -349,4 +358,183 @@ async fn plain_auto_recovers_trailing_picture_words_with_no_missing_rows() {
     assert_eq!(words(&automatic), expected(COMPLETE));
     assert!(automatic.metadata.ocr_used);
     assert!(automatic.tables.is_empty());
+}
+
+fn trailing_cut_scan(raster: &Stream, cut: bool, extra: Option<&str>) -> (String, Option<Stream>) {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, COMPLETE, 1.0, 0.0, 3, extra);
+    if cut {
+        let prefix = "The coastal archive opened its wooden shutters";
+        assert!(LINES[1].1.starts_with(prefix));
+        operators = operators.replace(LINES[1].1, prefix);
+    }
+    (operators, Some(raster.clone()))
+}
+
+fn assert_page_words(document: &ExtractedDocument, page: usize, expected: &[&str]) {
+    let pages = document.pages.as_ref().expect("page content");
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[page].page_number as usize, page + 1);
+    let actual = pages[page].content.split_whitespace().collect::<Vec<_>>();
+    assert_eq!(actual, expected, "page {}", page + 1);
+}
+
+fn cut_words() -> Vec<&'static str> {
+    let mut words = expected(COMPLETE);
+    let prefix = "The coastal archive opened its wooden shutters";
+    words.drain(1 + prefix.split_whitespace().count()..1 + LINES[1].1.split_whitespace().count());
+    assert_eq!(words.len(), 78);
+    words
+}
+
+#[tokio::test]
+async fn multipage_hidden_layers_recover_only_the_pages_missing_picture_words() {
+    let raster = make_raster();
+    for (first_cut, second_cut) in [(true, false), (true, true), (false, true)] {
+        let pdf = pages_pdf(vec![
+            trailing_cut_scan(&raster, first_cut, None),
+            trailing_cut_scan(&raster, second_cut, None),
+        ]);
+        let native = extract(
+            &pdf,
+            &ExtractionConfig {
+                disable_ocr: true,
+                ..default_tesseract()
+            },
+        )
+        .await;
+        for (page, cut) in [first_cut, second_cut].into_iter().enumerate() {
+            assert_page_words(&native, page, &if cut { cut_words() } else { expected(COMPLETE) });
+        }
+        assert!(!native.metadata.ocr_used);
+
+        let automatic = extract(&pdf, &default_tesseract()).await;
+        assert!(automatic.metadata.ocr_used, "cuts {first_cut}/{second_cut}");
+        assert_eq!(automatic.content.split_whitespace().count(), 162);
+        for (page, cut) in [first_cut, second_cut].into_iter().enumerate() {
+            assert_page_words(&automatic, page, &expected(COMPLETE));
+            let output = &automatic.pages.as_ref().expect("page content")[page];
+            let native_page = &native.pages.as_ref().expect("native pages")[page];
+            if cut {
+                assert_ne!(
+                    output.content,
+                    native_page.content,
+                    "page {} must recover words",
+                    page + 1
+                );
+            } else {
+                assert_eq!(output.content, native_page.content);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn complete_scans_and_native_neighbors_preserve_their_original_page_content() {
+    let raster = make_raster();
+    let mut native_operators = String::new();
+    add_text(&mut native_operators, COMPLETE, 1.0, 0.0, 0, None);
+    for native_first in [false, true] {
+        let mut pages = vec![trailing_cut_scan(&raster, true, None), (native_operators.clone(), None)];
+        if native_first {
+            pages.reverse();
+        }
+        let pdf = pages_pdf(pages);
+        let automatic = extract(&pdf, &default_tesseract()).await;
+        for page in 0..2 {
+            assert_page_words(&automatic, page, &expected(COMPLETE));
+        }
+        let native_page = if native_first { 0 } else { 1 };
+        assert!(
+            automatic.pages.as_ref().expect("pages")[native_page]
+                .ocr_confidence
+                .is_none()
+        );
+    }
+
+    let pdf = pages_pdf(vec![
+        trailing_cut_scan(&raster, false, None),
+        trailing_cut_scan(&raster, false, None),
+    ]);
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(!automatic.metadata.ocr_used);
+    for page in 0..2 {
+        assert_page_words(&automatic, page, &expected(COMPLETE));
+    }
+}
+
+#[tokio::test]
+async fn multipage_recovery_keeps_unmatched_hidden_words_on_their_own_page() {
+    let raster = make_raster();
+    let pdf = pages_pdf(vec![
+        trailing_cut_scan(&raster, true, Some("Sealed voucher X512")),
+        trailing_cut_scan(&raster, true, None),
+    ]);
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    let native_first = &native.pages.as_ref().expect("native pages")[0].content;
+    assert!(native_first.contains("X512"));
+    assert_eq!(automatic.pages.as_ref().expect("pages")[0].content, *native_first);
+    assert_page_words(&automatic, 1, &expected(COMPLETE));
+}
+
+#[tokio::test]
+async fn zero_hidden_layer_probe_iterations_preserve_both_partial_pages() {
+    let raster = make_raster();
+    let pdf = pages_pdf(vec![
+        trailing_cut_scan(&raster, true, None),
+        trailing_cut_scan(&raster, true, None),
+    ]);
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            security_limits: Some(xberg::SecurityLimits {
+                max_iterations: 0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..default_tesseract()
+    };
+    let document = extract(&pdf, &config).await;
+    assert!(!document.metadata.ocr_used);
+    for page in 0..2 {
+        assert_page_words(&document, page, &cut_words());
+    }
+}
+
+#[tokio::test]
+async fn tighter_global_or_ocr_probe_limit_recovers_only_the_first_partial_page() {
+    let raster = make_raster();
+    let pdf = pages_pdf(vec![
+        trailing_cut_scan(&raster, true, None),
+        trailing_cut_scan(&raster, true, None),
+    ]);
+    for (global_limit, ocr_limit) in [(1, 2), (2, 1)] {
+        let config = ExtractionConfig {
+            security_limits: Some(xberg::SecurityLimits {
+                max_iterations: global_limit,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                security_limits: Some(xberg::SecurityLimits {
+                    max_iterations: ocr_limit,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..default_tesseract()
+        };
+        let document = extract(&pdf, &config).await;
+        assert!(document.metadata.ocr_used, "limits {global_limit}/{ocr_limit}");
+        assert_eq!(document.content.split_whitespace().count(), 159);
+        assert_page_words(&document, 0, &expected(COMPLETE));
+        assert_page_words(&document, 1, &cut_words());
+    }
 }
