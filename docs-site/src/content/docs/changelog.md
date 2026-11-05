@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep touching glyphs together when coordinate rounding produces a tiny overlap.**
+  Avoid inserting a word boundary while retaining correction for genuine fallback-font overlap.
+
 - **(pdf): Recover text on tall scans when an OCR strip contains only blank space.** (#2501)
 
 - **(pdf): Keep upper rows first when stacked ruled grids merge.** (#2494)
