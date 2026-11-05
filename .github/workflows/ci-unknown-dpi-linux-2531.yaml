@@ -1,0 +1,77 @@
+name: Qualify unknown-DPI JPEG workspace on Linux x86_64
+
+on:
+  push:
+    branches: [codex/qualify-unknown-dpi-linux-2531]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-qualification:
+    if: github.repository == 'xberg-io/xberg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+      CARGO_TERM_COLOR: never
+      RUST_MIN_STACK: 16777216
+      OMP_THREAD_LIMIT: 1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          submodules: false
+          persist-credentials: false
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          install-llvm-cov: "false"
+      - uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
+          dest-dir: crates/xberg-ffi
+      - name: Set up the reporter's platform and English OCR model
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test "$(git rev-parse HEAD^)" = 225ec4bcb09d4c87b01e96fc8385dc43b7d279f1
+          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/ci-unknown-dpi-linux-2531.yaml
+          mkdir -p "$RUNNER_TEMP/tessdata" "$RUNNER_TEMP/unknown-dpi-2531"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/tessdata/eng.traineddata" \
+            https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata
+          printf '%s  %s\n' 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 "$RUNNER_TEMP/tessdata/eng.traineddata" | sha256sum --check
+          printf 'TESSDATA_PREFIX=%s/tessdata\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Run the exact reporter filter and verify the three tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipts="$RUNNER_TEMP/unknown-dpi-2531"
+          args=(test --locked -p xberg --features "pdf,ocr,layout-detection,bundle-tessdata-eng" --lib)
+          verify() {
+            grep -Fxq 'running 3 tests' "$1" &&
+              grep -Eq '^test result: ok\. 3 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;' "$1" &&
+              grep -Eq '^test .*::unknown_dpi_jpeg_cannot_upscale_past_its_image_workspace_limit \.\.\. ok$' "$1"
+          }
+          cargo "${args[@]}" unknown_dpi_memory_tests 2>&1 | tee "$receipts/reporter.log"
+          verify "$receipts/reporter.log"
+          cargo "${args[@]}" __absent_2531_qualification_filter__ 2>&1 | tee "$receipts/empty-control.log"
+          grep -Fxq 'running 0 tests' "$receipts/empty-control.log"
+          if verify "$receipts/empty-control.log"; then
+            echo '::error::The reporter gate accepted a run with no tests.'
+            exit 1
+          fi
+      - name: Run the standalone Sceptre ORT all-target check
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --locked -p xberg --no-default-features --features sceptre-ocr-ort --all-targets 2>&1 |
+            tee "$RUNNER_TEMP/unknown-dpi-2531/sceptre.log"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-unknown-dpi-2531
+          path: ${{ runner.temp }}/unknown-dpi-2531/*.log
+          if-no-files-found: warn
