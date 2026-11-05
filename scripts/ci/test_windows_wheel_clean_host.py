@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -89,17 +90,15 @@ class CleanHostGuards(unittest.TestCase):
             KEY_READ=4,
             OpenKey=Mock(side_effect=FileNotFoundError),
         )
-        missing = OSError("missing")
-        missing.winerror = 126
         with (
             patch.dict(sys.modules, {"winreg": registry}),
             patch.dict(clean.os.environ, {"SYSTEMROOT": str(self.root / "Windows")}),
-            patch.object(clean.ctypes, "WinDLL", create=True, side_effect=missing) as load,
+            patch.object(clean, "load_library_error", return_value=126) as load,
             patch.object(clean, "loaded_modules", return_value=modules or []),
         ):
             result = clean.baseline(self.root / "python", ["xberg/msvcp140.dll"])
         assert registry.OpenKey.call_count == 6
-        load.assert_called_once_with("msvcp140.dll")
+        load.assert_called_once_with("msvcp140.dll", 0x1000)
         return result
 
     def test_exact_inbox_clr_sidecars_are_allowed_in_system_directories(self) -> None:
@@ -316,6 +315,53 @@ class CleanHostGuards(unittest.TestCase):
         assert "inputs.platform == 'windows'" in workflow
         assert "'[\"windows-2022\"]'" in workflow
         assert '\'["ubuntu-latest","ubuntu-24.04-arm","windows-2022","macos-26","macos-26-intel"]\'' in workflow
+
+
+class NativeLoaderGuards(unittest.TestCase):
+    def test_negative_native_probe_uses_the_numeric_loader_result(self) -> None:
+        ort = Path.cwd() / "onnxruntime.dll"
+        load = Mock(return_value=None)
+
+        def windows_dll(name: str, **_kwargs: object) -> SimpleNamespace:
+            if name != "kernel32":
+                raise FileNotFoundError("ctypes did not retain the numeric loader result")
+            return SimpleNamespace(LoadLibraryExW=load)
+
+        output = io.StringIO()
+        with (
+            patch.object(clean.ctypes, "WinDLL", create=True, side_effect=windows_dll),
+            patch.object(clean.ctypes, "get_last_error", create=True, return_value=126),
+            redirect_stdout(output),
+        ):
+            exit_code = None
+            try:
+                clean.native_probe("msvcp140.dll", ort, missing=True)
+            except SystemExit as result:
+                exit_code = result.code
+        load.assert_called_once_with(str(ort), None, 0x1100)
+        assert exit_code == 23
+        assert output.getvalue().splitlines() == ["MISSING_DEPENDENCY:msvcp140.dll:126"]
+
+    def test_negative_native_probe_rejects_bad_image_format(self) -> None:
+        error = OSError("bad image format")
+        with (
+            patch.object(clean, "load_library_error", return_value=193),
+            patch.object(clean.ctypes, "WinError", create=True, return_value=error) as winerror,
+            expected_error(OSError, "bad image format"),
+        ):
+            clean.native_probe("msvcp140.dll", Path.cwd() / "onnxruntime.dll", missing=True)
+        winerror.assert_called_once_with(193)
+
+
+class VerifierSetupGuards(unittest.TestCase):
+    def test_verifier_does_not_activate_unrelated_mise_tools(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci-python-wheel-smoke.yaml").read_text()
+        verifier = workflow.split("  windows-wheel-clean-host:", 1)[1]
+        assert 'install-args: "python"' in verifier
+        assert "mise exec" not in verifier
+        assert "$pythonRoot = (mise where python).Trim()" in verifier
+        assert '& (Join-Path $pythonRoot "python.exe") scripts/ci/resolve_windows_wheel_artifact.py' in verifier
+        assert "& ./scripts/ci/qualify-windows-wheel-clean-host.ps1" in verifier
 
 
 if __name__ == "__main__":
