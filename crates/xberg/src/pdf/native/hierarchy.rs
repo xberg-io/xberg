@@ -991,6 +991,10 @@ fn normalize_script_span(
 /// # Returns
 ///
 /// Vector of `SegmentData` objects with font metrics for hierarchy detection.
+///
+/// The OCR layer merge and the tests call it: a `pdf` build without OCR has no caller, so the
+/// gate keeps it out of that build. ~keep
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn extract_segments_from_page(
     doc: &mut NativeDocument,
     page_index: usize,
