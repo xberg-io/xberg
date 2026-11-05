@@ -1092,6 +1092,7 @@ mod reduced_jpeg_dpi_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod reduced_jpeg_memory_tests;
 
+mod dpi_workspace;
 mod native_image_budget;
 
 const JPEG_PREPARATION_CANDIDATES: usize = 4;
@@ -1172,6 +1173,25 @@ fn prepare_encoded_ocr_image(
                  security_limits.max_content_size{remedy}",
                     limits.max_content_size, dpi_config.target_dpi,
                 )));
+            }
+        }
+        if is_jpeg && let (Some(preprocessing), Some(dpi)) = (preprocessing.as_deref(), dpi) {
+            let dpi_config = ocr_dpi_config(preprocessing, images);
+            if let Err(error) = dpi_workspace::check_known_dpi_resize(
+                width,
+                height,
+                dpi,
+                &dpi_config,
+                bytes.len(),
+                limits.max_content_size,
+            ) {
+                if !dpi_workspace::has_no_resize_reduction(width, height, dpi, &dpi_config, decoded.scale_denominator) {
+                    return Err(error);
+                }
+                assessed_policy = Some(Some(preprocessing.clone()));
+                maximum_pixels = (u64::from(width) * u64::from(height)).saturating_sub(1);
+                drop(decoded);
+                continue;
             }
         }
         let prepared = prepare_decided_ocr_image(

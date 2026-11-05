@@ -92,3 +92,79 @@ fn default_no_resize_otsu_keeps_live_images_within_40_mib() {
     );
     print!("{stdout}");
 }
+
+#[test]
+fn known_dpi_resize_refuses_workspace_over_limit_and_preserves_requested_target_when_affordable() {
+    let dimension = 1500;
+    let rgb = vec![245; dimension as usize * dimension as usize * 3];
+    let bytes = crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, dimension, dimension);
+    let config = super::super::TesseractConfig {
+        source_dpi: Some(150.0),
+        known_full_page_scan: true,
+        ..Default::default()
+    };
+    let images = crate::core::config::ImageExtractionConfig {
+        auto_adjust_dpi: false,
+        ..Default::default()
+    };
+    let small = super::super::prepare_encoded_ocr_image(
+        &bytes,
+        &super::super::SecurityLimits {
+            max_content_size: 40 * MIB,
+            ..Default::default()
+        },
+        &config,
+        Some(&images),
+        false,
+    );
+    let error = match small {
+        Ok(_) => panic!("FIR source, destination and intermediate RGB already exceed40MiB"),
+        Err(error) => error.to_string(),
+    };
+    assert!(error.contains("DPI resize workspace"), "{error}");
+    assert!(error.contains("max_content_size"), "{error}");
+    assert!(error.contains("target_dpi"), "{error}");
+    let affordable = super::super::prepare_encoded_ocr_image(
+        &bytes,
+        &super::super::SecurityLimits {
+            max_content_size: 96 * MIB,
+            ..Default::default()
+        },
+        &config,
+        Some(&images),
+        false,
+    )
+    .expect("same requested target fits the larger resize budget");
+    assert_eq!(
+        (affordable.width, affordable.height, affordable.source_dpi),
+        (3000, 3000, 300)
+    );
+    assert!(!affordable.image_preprocessing.expect("DPI metadata").skipped_resize);
+}
+
+#[test]
+fn unaffordable_known_downscale_uses_a_no_resize_idct_candidate() {
+    let dimension = 4096;
+    let rgb = vec![245; dimension as usize * dimension as usize * 3];
+    let bytes = crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, dimension, dimension);
+    let prepared = super::super::prepare_encoded_ocr_image(
+        &bytes,
+        &super::super::SecurityLimits {
+            max_content_size: 64 * MIB,
+            ..Default::default()
+        },
+        &super::super::TesseractConfig {
+            source_dpi: Some(600.0),
+            known_full_page_scan: true,
+            ..Default::default()
+        },
+        None,
+        false,
+    )
+    .expect("IDCT candidate meets the requested target without FIR workspace");
+    assert_eq!(
+        (prepared.width, prepared.height, prepared.source_dpi),
+        (2048, 2048, 300)
+    );
+    assert!(prepared.image_preprocessing.expect("DPI metadata").skipped_resize);
+}
