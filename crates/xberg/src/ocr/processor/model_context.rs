@@ -195,6 +195,7 @@ mod tests {
             tables: vec![],
             ocr_elements: None,
             internal_document: None,
+            raw_ocr_source_frame: None,
         };
         cache
             .set_cached_result("page", "tesseract", &before.result_key(&config), None, &result)
@@ -237,6 +238,7 @@ mod tests {
             tables: vec![],
             ocr_elements: None,
             internal_document: None,
+            raw_ocr_source_frame: None,
         };
         std::fs::write(&osd, b"revision two").unwrap();
         let published = before

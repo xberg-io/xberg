@@ -3,8 +3,8 @@ use super::utils::compute_hash;
 use crate::cache::version::cache_version_tag;
 use crate::core::config::OutputFormat;
 use crate::telemetry::conventions;
-use crate::types::OcrExtractionResult;
 use crate::types::internal::InternalDocument;
+use crate::types::{OcrExtractionResult, formats::RawOcrSourceFrame};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -27,6 +27,8 @@ struct CachedOcrResult {
     /// The `#[serde(skip)]` structured document, carried out of band.
     #[serde(default)]
     internal_document: Option<InternalDocument>,
+    #[serde(default)]
+    raw_ocr_source_frame: Option<RawOcrSourceFrame>,
     /// The document field of the same name, which its own `Serialize` impl skips.
     #[serde(default)]
     ocr_text_claimed_by_tables: bool,
@@ -42,6 +44,8 @@ struct CachedOcrResult {
 struct CachedOcrResultRef<'a> {
     result: &'a OcrExtractionResult,
     internal_document: &'a Option<InternalDocument>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_ocr_source_frame: Option<RawOcrSourceFrame>,
     ocr_text_claimed_by_tables: bool,
 }
 
@@ -50,6 +54,7 @@ impl CachedOcrResult {
     fn into_result(self) -> OcrExtractionResult {
         let mut result = self.result;
         result.internal_document = self.internal_document;
+        result.raw_ocr_source_frame = self.raw_ocr_source_frame;
         if let Some(document) = result.internal_document.as_mut() {
             document.ocr_text_claimed_by_tables = self.ocr_text_claimed_by_tables;
         }
@@ -162,6 +167,7 @@ impl OcrCache {
         let envelope = CachedOcrResultRef {
             result,
             internal_document: &result.internal_document,
+            raw_ocr_source_frame: result.raw_ocr_source_frame,
             ocr_text_claimed_by_tables: result
                 .internal_document
                 .as_ref()
@@ -344,8 +350,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -380,8 +385,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -407,8 +411,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -457,8 +460,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         let result2 = OcrExtractionResult {
@@ -466,8 +468,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -497,8 +498,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         let result2 = OcrExtractionResult {
@@ -506,8 +506,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -543,8 +542,7 @@ mod tests {
             mime_type: "text/markdown".to_string(),
             metadata: HashMap::new(),
             tables: vec![table],
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -573,8 +571,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata,
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -605,8 +602,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -662,8 +658,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -724,8 +719,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -744,6 +738,7 @@ mod tests {
             metadata: HashMap::new(),
             tables: Vec::new(),
             ocr_elements: None,
+            raw_ocr_source_frame: None,
             internal_document: Some(InternalDocument {
                 source_format: "hocr".to_string(),
                 mime_type: "text/plain".to_string(),
@@ -797,8 +792,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
@@ -881,7 +875,14 @@ mod tests {
         let cache = OcrCache::new(Some(temp_dir.path().to_path_buf())).unwrap();
 
         // The value a cache miss would produce.
-        let fresh = result_with_internal_document();
+        let mut fresh = result_with_internal_document();
+        fresh.raw_ocr_source_frame = Some(RawOcrSourceFrame { dimensions: (300, 400) });
+        assert!(
+            serde_json::to_value(&fresh)
+                .unwrap()
+                .get("raw_ocr_source_frame")
+                .is_none()
+        );
         cache
             .set_cached_result("img", "tesseract", "eng", None, &fresh)
             .unwrap();
@@ -891,6 +892,7 @@ mod tests {
             .unwrap()
             .expect("the entry must be a hit");
 
+        assert_eq!(hit.raw_ocr_source_frame.unwrap().dimensions, (300, 400));
         assert_eq!(hit.content, fresh.content);
         assert_eq!(hit.mime_type, fresh.mime_type);
         assert_eq!(hit.tables.len(), fresh.tables.len());
@@ -911,8 +913,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
         cache
             .set_cached_result("img", "tesseract", "eng", None, &result)
@@ -936,8 +937,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         // Old on-disk shape: the bare result, without the envelope.
@@ -984,8 +984,7 @@ mod tests {
             mime_type: "text/plain".to_string(),
             metadata: HashMap::new(),
             tables: Vec::new(),
-            ocr_elements: None,
-            internal_document: None,
+            ..Default::default()
         };
 
         cache
