@@ -2,6 +2,9 @@
 
 mod helpers;
 
+#[path = "ocr_explicit_sideways_2496/prose.rs"]
+mod prose;
+
 use image::RgbImage;
 use lopdf::{Document, Object, Stream, dictionary};
 use sha2::{Digest, Sha256};

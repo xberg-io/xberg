@@ -4,7 +4,10 @@ use super::*;
 use crate::ocr::processor::validation::{TessdataEnv, existing_tessdata_dir_for};
 use crate::ocr::table::tsv_parser::put_line_words_on_one_band;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+
+mod prose;
 
 const MIN_UNIT_LETTERS: usize = 2;
 const MAX_CERTIFICATE_WORDS: usize = 1024;
@@ -176,12 +179,20 @@ pub(super) fn select(
     thresholds: &OcrQualityThresholds,
     confidence: ConfidenceSemantics,
     config: &OcrConfig,
+    allow_prose: bool,
 ) -> ExtractedDocument {
     let row_threshold = config.tesseract_config.as_ref().map_or_else(
         || crate::types::TesseractConfig::default().table_row_threshold_ratio,
         |tess| tess.table_row_threshold_ratio,
     );
-    if !accepts(&original, &candidate, thresholds, confidence, row_threshold) {
+    if !accepts(
+        &original,
+        &candidate,
+        thresholds,
+        confidence,
+        row_threshold,
+        allow_prose,
+    ) {
         return original;
     }
     crate::core::diagnostics::dedup_extend_warnings(&mut candidate.processing_warnings, original.processing_warnings);
@@ -194,6 +205,7 @@ fn accepts(
     thresholds: &OcrQualityThresholds,
     confidence: ConfidenceSemantics,
     row_threshold: f64,
+    allow_prose: bool,
 ) -> bool {
     if !primary_supported(original)
         || !candidate.formulas.is_empty()
@@ -205,9 +217,17 @@ fn accepts(
     let Some(dimensions) = processed_ocr_layout_dimensions(&candidate.metadata) else {
         return false;
     };
-    let Some(text) = complete_table_text(candidate, row_threshold, |cells, elements, bbox, threshold| {
-        matches_original_frame(cells, elements, bbox, threshold, dimensions)
-    }) else {
+    let proof = if allow_prose && candidate.tables.is_empty() {
+        prose::complete_region(original, candidate, dimensions, thresholds)
+            .map(|bbox| (Cow::Borrowed(candidate.content.as_str()), bbox))
+    } else {
+        complete_table_text(candidate, row_threshold, |cells, elements, bbox, threshold| {
+            matches_original_frame(cells, elements, bbox, threshold, dimensions)
+        })
+        .map(Cow::Owned)
+        .zip(candidate.tables.first().and_then(|table| table.bounding_box))
+    };
+    let Some((text, bbox)) = proof else {
         return false;
     };
     let mean = mean_text_conf_of(&candidate.metadata.additional);
@@ -215,22 +235,20 @@ fn accepts(
     !noise.low_confidence
         && !noise.fragmented_noise
         && mean.is_some()
-        && retains_primary(original, candidate, &text, thresholds)
+        && retains_primary(original, candidate, &text, bbox, thresholds)
 }
 
 fn retains_primary(
     original: &ExtractedDocument,
     candidate: &ExtractedDocument,
     text: &str,
+    bbox: BoundingBox,
     thresholds: &OcrQualityThresholds,
 ) -> bool {
     let Some(words) = checked_words(original) else {
         return false;
     };
     let Some(candidate_words) = checked_words(candidate) else {
-        return false;
-    };
-    let Some(bbox) = candidate.tables.first().and_then(|table| table.bounding_box) else {
         return false;
     };
     let mut claimed = HashSet::new();
@@ -270,12 +288,7 @@ fn claim_occurrence(
     bbox: BoundingBox,
     claimed: &mut HashSet<usize>,
 ) -> bool {
-    let (left, top, width, height) = primary.geometry.to_aabb();
-    if f64::from(left) < bbox.x0
-        || f64::from(top) < bbox.y0
-        || f64::from(left) + f64::from(width) > bbox.x1
-        || f64::from(top) + f64::from(height) > bbox.y1
-    {
+    if !region_contains(primary, bbox) {
         return false;
     }
     let mut matches = candidate.iter().enumerate().filter(|(_, word)| {
@@ -287,6 +300,14 @@ fn claim_occurrence(
         return false;
     };
     matches.next().is_none() && claimed.insert(index)
+}
+
+fn region_contains(element: &OcrElement, bbox: BoundingBox) -> bool {
+    let (left, top, width, height) = element.geometry.to_aabb();
+    f64::from(left) >= bbox.x0
+        && f64::from(top) >= bbox.y0
+        && f64::from(left) + f64::from(width) <= bbox.x1
+        && f64::from(top) + f64::from(height) <= bbox.y1
 }
 
 fn same_occurrence(left: &OcrElement, right: &OcrElement) -> bool {
@@ -497,6 +518,7 @@ mod tests {
             &OcrQualityThresholds::default(),
             ConfidenceSemantics::Legibility { scale_max: 100.0 },
             0.5,
+            false,
         )
     }
 
@@ -589,6 +611,7 @@ mod tests {
                 &OcrQualityThresholds::default(),
                 ConfidenceSemantics::Legibility { scale_max: 100.0 },
                 &OcrConfig::default(),
+                false,
             );
             assert_eq!(selected.content, format!("Cash {missing}"));
         }
