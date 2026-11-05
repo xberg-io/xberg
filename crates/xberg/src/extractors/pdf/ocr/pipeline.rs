@@ -1024,6 +1024,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // comment on `skip_document_global_heuristic`).
     let mut ocr_page_paragraphs: ahash::AHashMap<u32, Vec<crate::pdf::structure::types::PdfParagraph>> =
         ahash::AHashMap::with_capacity(total);
+    // The raster each pipeline page was read from. Its paragraphs stay in that raster's pixels
+    // (`extract_with_ocr_for_page` assembles them before any rescale), while the single-backend
+    // route's paragraphs are in PDF points already; the layer merge scales by this. ~keep
+    let mut ocr_raster_by_page: ahash::AHashMap<u32, (u32, u32)> = ahash::AHashMap::with_capacity(total);
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
     let mut accumulated_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
@@ -1261,6 +1265,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .iter()
                         .find(|(rendered_page, _)| *rendered_page == page_idx)
                         .map_or((0, 0), |(_, image)| (image.width(), image.height()));
+                    ocr_raster_by_page.insert(page_number, raster_size_px);
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
                         tables,
@@ -1387,6 +1392,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         accumulated_formulas.push(formula);
                     }
                     let page_text = page_texts.into_iter().next().unwrap_or(text);
+                    ocr_raster_by_page.insert(page_number, (image.width(), image.height()));
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
                         tables,
@@ -2072,8 +2078,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
     if let Some(layers) = page_layers.as_ref() {
         for (page_number, text) in &mut accepted_replacements {
+            let ocr_scale = match ocr_raster_by_page.get(page_number) {
+                Some(&(width_px, height_px)) => {
+                    let (width_pt, height_pt) = page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                    (width_px > 0 && height_px > 0).then(|| (width_pt / width_px as f32, height_pt / height_px as f32))
+                }
+                None => Some((1.0, 1.0)),
+            };
             let boxes = layers.get(page_number).and_then(|_| {
-                page_merge_line_boxes(content, *page_number, ocr_page_paragraphs.get(page_number), config)
+                page_merge_line_boxes(
+                    content,
+                    *page_number,
+                    ocr_page_paragraphs.get(page_number),
+                    ocr_scale,
+                    config,
+                )
             });
             if let Some(layer) = layers.get(page_number)
                 && let Some(first) = super::document::layer_lines_to_put_first(
@@ -5562,8 +5581,10 @@ fn with_run_layers_first(
             let paragraphs = (page_number as usize)
                 .checked_sub(run.page_index_offset + 1)
                 .and_then(|local| run.raw_page_paragraphs.get(local));
+            // The run's paragraphs are in the pixels of a raster this function does not see, so
+            // their frame is unknown here and the page's merge removes nothing (rule 3). ~keep
             if let Some(content) = run.content
-                && let Some(page_boxes) = page_merge_line_boxes(content, page_number, paragraphs, config)
+                && let Some(page_boxes) = page_merge_line_boxes(content, page_number, paragraphs, None, config)
             {
                 boxes.insert(page_number, page_boxes);
             }
@@ -5597,17 +5618,21 @@ struct RunLayerSources<'a> {
 
 /// The line boxes of one replaced page's merge, in PDF points on both sides: the text layer's
 /// segments from the native segment pass, run here only for a replaced page with a readable
-/// layer, and the OCR paragraph lines. `None` without the `pdf` feature, when the document does
-/// not open, or when either side has no line: that page's merge removes nothing. ~keep
+/// layer, and the OCR paragraph lines scaled to points by `ocr_scale` (the factor per axis from
+/// the paragraphs' frame). `None` without the `pdf` feature, when the paragraphs' frame is not
+/// known (`ocr_scale` is `None`), when the document does not open, or when either side has no
+/// line: that page's merge removes nothing. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn page_merge_line_boxes(
     content: &[u8],
     page_number: u32,
     ocr_paragraphs: Option<&Vec<crate::pdf::structure::types::PdfParagraph>>,
+    ocr_scale: Option<(f32, f32)>,
     config: &ExtractionConfig,
 ) -> Option<super::document::PageLineBoxes> {
     #[cfg(feature = "pdf")]
     {
+        let ocr_scale = ocr_scale?;
         let artifacts =
             crate::pdf::native::hierarchy::ArtifactRetention::from_content_filter(config.content_filter.as_ref());
         let passwords = config
@@ -5619,11 +5644,11 @@ fn page_merge_line_boxes(
         let page_index = (page_number as usize).checked_sub(1)?;
         let segments =
             crate::pdf::native::hierarchy::extract_segments_from_page(&mut doc, page_index, artifacts).ok()?;
-        super::document::page_line_boxes(&segments, ocr_paragraphs.map_or(&[], Vec::as_slice))
+        super::document::page_line_boxes(&segments, ocr_paragraphs.map_or(&[], Vec::as_slice), ocr_scale)
     }
     #[cfg(not(feature = "pdf"))]
     {
-        let _ = (content, page_number, ocr_paragraphs, config);
+        let _ = (content, page_number, ocr_paragraphs, ocr_scale, config);
         None
     }
 }

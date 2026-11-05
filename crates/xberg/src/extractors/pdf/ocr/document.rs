@@ -327,12 +327,16 @@ fn segments_line_at(segments: &[crate::pdf::hierarchy::SegmentData]) -> Option<L
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 const SAME_LINE_BASELINE_SHARE: f32 = 0.5;
 /// The line boxes of a page's merge: one per native line, from the segments of the text layer
-/// grouped by baseline in their order, and one per OCR paragraph line. Both come in PDF points.
-/// `None` when either side has no line: the merge of that page removes nothing (rule 3). ~keep
+/// grouped by baseline in their order, and one per OCR paragraph line. The native side comes in
+/// PDF points. The OCR side comes in the frame its route left it in: `ocr_scale` is the factor
+/// per axis that takes it to points, `(1.0, 1.0)` when the route rescaled the paragraphs
+/// already. `None` when either side has no line: the merge of that page removes nothing
+/// (rule 3). ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn page_line_boxes(
     native: &[crate::pdf::hierarchy::SegmentData],
     ocr: &[crate::pdf::structure::types::PdfParagraph],
+    ocr_scale: (f32, f32),
 ) -> Option<PageLineBoxes> {
     let mut layer = Vec::new();
     let mut run: Vec<crate::pdf::hierarchy::SegmentData> = Vec::new();
@@ -347,10 +351,20 @@ pub(crate) fn page_line_boxes(
         run.push(segment.clone());
     }
     layer.extend(segments_line_at(&run));
+    let (scale_x, scale_y) = ocr_scale;
     let ocr: Vec<LineAt> = ocr
         .iter()
         .flat_map(|paragraph| paragraph.lines.iter())
         .filter_map(|line| segments_line_at(&line.segments))
+        .map(|line| LineAt {
+            bbox: LineBox {
+                left: line.bbox.left * scale_x,
+                top: line.bbox.top * scale_y,
+                right: line.bbox.right * scale_x,
+                bottom: line.bbox.bottom * scale_y,
+            },
+            ..line
+        })
         .collect();
     (!layer.is_empty() && !ocr.is_empty()).then_some(PageLineBoxes { layer, ocr })
 }
