@@ -650,7 +650,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
     config: &ExtractionConfig,
 ) -> crate::Result<Option<MixedOcrRun>> {
     if boundaries.is_empty()
-        || scanned_pages.len() != 1
+        || scanned_pages.is_empty()
         || content.len() > super::hidden_layer::preview_byte_limit(config)
     {
         return Ok(None);
@@ -736,16 +736,24 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let byte_limit = super::hidden_layer::preview_byte_limit(config);
         let probe_doc = std::sync::Arc::clone(&render_doc);
         let cancel = config.cancel_token.clone();
+        let page_limit = super::hidden_layer::preview_page_limit(config);
+        super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
-            page_indices.retain(|&index| {
-                let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
-                let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
-                tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
-                needed == Some(true)
-            });
-            Ok(page_indices)
+            let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
+            let selected = page_indices
+                .into_iter()
+                .take(page_limit)
+                .take_while(|_| !is_cancelled())
+                .filter(|&index| {
+                    let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
+                    tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
+                    needed == Some(true)
+                })
+                .collect::<Vec<_>>();
+            Ok(selected)
         })
         .await?;
+        super::super::ensure_pdf_not_cancelled(config)?;
     }
     if page_indices.is_empty() {
         return Ok(MixedOcrRun::native(native_text));
