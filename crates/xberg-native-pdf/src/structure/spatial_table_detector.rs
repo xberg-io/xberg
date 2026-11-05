@@ -9,6 +9,7 @@ use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_fo
 use std::collections::HashMap;
 
 mod fill_backgrounds;
+mod header_bands;
 mod source_headers;
 
 /// Disjoint-set (union-find) with path compression.
@@ -2773,6 +2774,10 @@ fn split_rows_by_text_positions(
     let mut result: Vec<TableRow> = Vec::new();
 
     for (row_idx, row) in table_rows.into_iter().enumerate() {
+        if row.is_header {
+            result.push(row);
+            continue;
+        }
         let cell_indices = &row_cell_span_indices[row_idx];
 
         let mut all_ys: Vec<f32> = Vec::new();
@@ -3090,11 +3095,21 @@ fn detect_tables_from_intersections(
     for (group_cells, xs, ys, num_cols) in &groups {
         #[cfg(test)]
         header_source_diagnostic::grid(group_cells, xs, ys, &v_edges, cells_are_intersections);
-        let Some((table_rows, row_cell_span_indices)) =
+        let Some((mut table_rows, mut row_cell_span_indices)) =
             assign_spans_to_intersection_grid(group_cells, xs, ys, *num_cols, spans, &v_edges, cells_are_intersections)
         else {
             continue;
         };
+        if cells_are_intersections {
+            header_bands::retain_drawn_header_bands(
+                &mut table_rows,
+                &mut row_cell_span_indices,
+                group_cells,
+                spans,
+                lines,
+                config.row_tolerance,
+            );
+        }
         #[cfg(test)]
         header_source_diagnostic::event("intersection_assigned", || {
             serde_json::json!({
@@ -3692,9 +3707,10 @@ fn finalize_intersection_tables(
             } else {
                 None
             };
+            let has_header = sub_rows.iter().any(|row| row.is_header);
             tables.push(Table {
                 rows: sub_rows,
-                has_header: false,
+                has_header,
                 col_count: num_cols,
                 bbox: sub_bbox,
             });
@@ -4662,6 +4678,47 @@ pub fn detect_tables_with_lines(
     final_tables
 }
 
+/// A declared merge owns its anchor and covered slots, never another independent anchor.
+/// Keep source indices in footprint order and consume a repeated source identity once. ~keep
+fn merged_grid_span_indices<'a>(
+    grid: &'a GridStructure,
+    merges: &[Vec<CellMergeInfo>],
+    row: usize,
+    column: usize,
+) -> std::borrow::Cow<'a, [usize]> {
+    let merge = &merges[row][column];
+    if merge.rowspan <= 1 && merge.colspan <= 1 {
+        return std::borrow::Cow::Borrowed(&grid.cells[row][column]);
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut indices = Vec::new();
+    for (r, cells) in grid
+        .cells
+        .iter()
+        .enumerate()
+        .skip(row)
+        .take(merge.rowspan.max(1) as usize)
+    {
+        for (c, source) in cells
+            .iter()
+            .enumerate()
+            .skip(column)
+            .take(merge.colspan.max(1) as usize)
+        {
+            if (r, c) != (row, column)
+                && !merges
+                    .get(r)
+                    .and_then(|row| row.get(c))
+                    .is_some_and(|cell| cell.covered)
+            {
+                continue;
+            }
+            indices.extend(source.iter().copied().filter(|index| seen.insert(*index)));
+        }
+    }
+    std::borrow::Cow::Owned(indices)
+}
+
 fn grid_to_table(
     grid: &GridStructure,
     spans: &[TextSpan],
@@ -4675,11 +4732,13 @@ fn grid_to_table(
     for (row_idx, row) in grid.cells.iter().enumerate() {
         let is_header = header_row_idx == Some(row_idx);
         let mut table_row = TableRow::new(is_header);
-        for (col_idx, cell_span_indices) in row.iter().enumerate() {
+        for (col_idx, _) in row.iter().enumerate() {
             let mi = &merge_info[row_idx][col_idx];
             if mi.covered {
                 continue;
             }
+            let source = merged_grid_span_indices(grid, &merge_info, row_idx, col_idx);
+            let cell_span_indices = source.as_ref();
             let cell_text = extract_cell_text(cell_span_indices, spans);
             let mut cell_bbox = None;
             if !cell_span_indices.is_empty() {
@@ -6424,6 +6483,290 @@ mod tests {
             );
             assert!(vertical.iter().any(|edge| edge.coord == 4.), "missing rule {missing}");
         }
+    }
+
+    fn aligned_multilabel_source() -> (Vec<TextSpan>, Vec<crate::elements::PathContent>) {
+        use crate::elements::PathContent;
+        let mut paths = vec![
+            PathContent::line(0., 0., 240., 0.),
+            PathContent::line(0., 80., 240., 80.),
+            PathContent::line(0., 0., 0., 80.),
+            PathContent::line(240., 0., 240., 80.),
+        ];
+        for x in [80., 160.] {
+            paths.push(PathContent::line(x, 0., x, 80.));
+        }
+        for y in [20., 40., 60.] {
+            paths.push(PathContent::line(80., y, 240., y));
+        }
+        let mut spans = Vec::new();
+        for row in 0..4 {
+            for column in 0..3 {
+                let text = if column == 0 {
+                    format!("Label{row}")
+                } else {
+                    format!("Value{row}col{column}")
+                };
+                spans.push(create_test_span(
+                    &text,
+                    column as f32 * 80. + 5.,
+                    65. - row as f32 * 20.,
+                    50.,
+                    10.,
+                ));
+            }
+        }
+        (spans, paths)
+    }
+
+    #[test]
+    fn source_cell_merges_retain_all_aligned_labels_and_value_rows() {
+        let (spans, paths) = aligned_multilabel_source();
+        let tables = detect_tables_with_lines(&spans, &paths, &TableDetectionConfig::strict());
+        assert_eq!(tables.len(), 1);
+        assert_eq!((tables[0].rows.len(), tables[0].col_count), (4, 3));
+        let mut expected: Vec<_> = spans.iter().map(|span| serde_json::to_string(span).unwrap()).collect();
+        let mut actual: Vec<_> = tables[0]
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .flat_map(|cell| &cell.spans)
+            .map(|span| serde_json::to_string(span).unwrap())
+            .collect();
+        expected.sort();
+        actual.sort();
+        assert_eq!(actual.len(), 12, "all twelve independently drawn source words survive");
+        assert_eq!(
+            actual, expected,
+            "source geometry, style and occurrence identity survive exactly once"
+        );
+        for (index, row) in tables[0].rows.iter().enumerate() {
+            for column in [1, 2] {
+                assert!(
+                    row.cells
+                        .iter()
+                        .any(|cell| cell.text == format!("Value{index}col{column}"))
+                );
+            }
+        }
+        let labels = tables[0]
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .find(|cell| cell.text.contains("Label0"))
+            .unwrap();
+        assert_eq!(
+            labels.rowspan, 4,
+            "one physically closed left cell spans four value rows"
+        );
+        assert_eq!(labels.text, "Label0\nLabel1\nLabel2\nLabel3");
+    }
+
+    fn two_header_band_source(multilabel: bool) -> (Vec<TextSpan>, Vec<crate::elements::PathContent>) {
+        use crate::elements::PathContent;
+        let (mut spans, mut paths) = aligned_multilabel_source();
+        paths.extend([
+            PathContent::line(0., 20., 80., 20.),
+            PathContent::line(0., 40., 80., 40.),
+        ]);
+        for span in &mut spans {
+            if span.bbox.y > 40. {
+                span.font_weight = FontWeight::Bold;
+            }
+        }
+        let mut shading = PathContent::rect(0., 40., 240., 40.);
+        shading.stroke_color = None;
+        shading.fill_color = Some(Color::new(0.85, 0.85, 0.85));
+        paths.push(shading);
+        if !multilabel {
+            spans.remove(0);
+            spans[2].text = "Requirements".into();
+        }
+        (spans, paths)
+    }
+
+    fn header_band_tables(spans: &[TextSpan], paths: &[crate::elements::PathContent]) -> Vec<Table> {
+        let tables = detect_tables_with_lines(spans, paths, &TableDetectionConfig::strict());
+        assert!(!tables.is_empty(), "actual geometry route must produce tables");
+        for row in 0..4 {
+            for column in [1, 2] {
+                let expected = format!("Value{row}col{column}");
+                assert_eq!(
+                    tables
+                        .iter()
+                        .flat_map(|table| &table.rows)
+                        .flat_map(|row| &row.cells)
+                        .filter(|cell| cell.text == expected)
+                        .count(),
+                    1,
+                    "{expected}"
+                );
+            }
+        }
+        tables
+    }
+
+    #[test]
+    fn source_header_band_keeps_one_label_across_two_drawn_bands() {
+        let (spans, paths) = two_header_band_source(false);
+        let tables = header_band_tables(&spans, &paths);
+        assert_eq!(tables.len(), 1);
+        assert_merge_source_once(&tables[0], &spans);
+        assert_eq!(tables[0].rows.len(), 4);
+        assert_eq!(tables[0].rows[0].cells[0].text, "Requirements");
+        assert_eq!(tables[0].rows[0].cells[0].rowspan, 2);
+        assert_eq!(tables[0].rows[1].cells.len(), 2);
+        assert!(
+            tables[0].rows[..2]
+                .iter()
+                .all(|row| row.is_header && row.cells.iter().all(|cell| cell.is_header))
+        );
+    }
+
+    #[test]
+    fn source_header_band_refuses_two_labels_aligned_to_separate_value_rows() {
+        let (spans, paths) = two_header_band_source(true);
+        let tables = header_band_tables(&spans, &paths);
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].rows.len(), 4);
+        assert_eq!(tables[0].rows[0].cells[0].text, "Label0");
+        assert_eq!(tables[0].rows[1].cells[0].text, "Label1");
+        assert!(
+            tables
+                .iter()
+                .flat_map(|table| &table.rows)
+                .flat_map(|row| &row.cells)
+                .all(|cell| cell.rowspan == 1)
+        );
+    }
+
+    #[test]
+    fn source_header_band_refuses_numeric_spanning_labels() {
+        let (mut spans, paths) = two_header_band_source(false);
+        spans[2].text = "2026".into();
+        let tables = header_band_tables(&spans, &paths);
+        assert!(
+            tables
+                .iter()
+                .flat_map(|table| &table.rows)
+                .flat_map(|row| &row.cells)
+                .all(|cell| cell.rowspan == 1)
+        );
+    }
+
+    #[test]
+    fn source_header_band_requires_independent_shading() {
+        let (spans, mut paths) = two_header_band_source(false);
+        paths.pop();
+        let tables = header_band_tables(&spans, &paths);
+        assert!(
+            tables
+                .iter()
+                .flat_map(|table| &table.rows)
+                .flat_map(|row| &row.cells)
+                .all(|cell| cell.rowspan == 1)
+        );
+    }
+
+    #[test]
+    fn source_header_band_requires_closed_left_geometry() {
+        let (spans, mut paths) = two_header_band_source(false);
+        paths[1] = crate::elements::PathContent::line(80., 80., 240., 80.);
+        let tables = header_band_tables(&spans, &paths);
+        assert!(
+            tables
+                .iter()
+                .flat_map(|table| &table.rows)
+                .flat_map(|row| &row.cells)
+                .all(|cell| cell.rowspan == 1)
+        );
+    }
+
+    struct MergeSourceFixture {
+        spans: Vec<TextSpan>,
+        grid: GridStructure,
+        merges: Vec<Vec<CellMergeInfo>>,
+    }
+
+    fn merge_source_fixture() -> MergeSourceFixture {
+        let spans: Vec<_> = (0..2)
+            .flat_map(|row| {
+                (0..3).map(move |column| {
+                    create_test_span(
+                        &format!("Cell{row}{column}"),
+                        column as f32 * 80.,
+                        60. - row as f32 * 20.,
+                        50.,
+                        10.,
+                    )
+                })
+            })
+            .collect();
+        let columns = detect_columns(&spans, 3., 12.);
+        let rows = detect_rows(&spans, 2.);
+        let grid = assign_spans_to_cells(&spans, &columns, &rows);
+        assert_eq!((grid.cells.len(), grid.cells[0].len()), (2, 3));
+        let merges = vec![
+            vec![
+                CellMergeInfo {
+                    colspan: 1,
+                    rowspan: 1,
+                    covered: false
+                };
+                3
+            ];
+            2
+        ];
+        MergeSourceFixture { spans, grid, merges }
+    }
+
+    fn assert_merge_source_once(table: &Table, source: &[TextSpan]) {
+        let mut actual: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .flat_map(|cell| &cell.spans)
+            .map(|span| serde_json::to_string(span).unwrap())
+            .collect();
+        let mut expected: Vec<_> = source.iter().map(|span| serde_json::to_string(span).unwrap()).collect();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn source_merge_deduplicates_the_same_source_id_in_covered_cells() {
+        let mut fixture = merge_source_fixture();
+        fixture.merges[0][0].rowspan = 2;
+        fixture.merges[1][0].covered = true;
+        let first = fixture.grid.cells[0][0][0];
+        let last = fixture.grid.cells[1][0][0];
+        fixture.grid.cells[1][0] = vec![first, last, first];
+        let table = grid_to_table(&fixture.grid, &fixture.spans, Some(fixture.merges));
+        assert_merge_source_once(&table, &fixture.spans);
+        assert_eq!(table.rows[0].cells[0].text, "Cell00\nCell10");
+    }
+
+    #[test]
+    fn source_merge_does_not_take_an_adjacent_independent_anchor() {
+        let mut fixture = merge_source_fixture();
+        fixture.merges[0][0].colspan = 2;
+        let table = grid_to_table(&fixture.grid, &fixture.spans, Some(fixture.merges));
+        assert_merge_source_once(&table, &fixture.spans);
+        assert_eq!(table.rows[0].cells[0].text, "Cell00");
+        assert_eq!(table.rows[0].cells[1].text, "Cell01");
+    }
+
+    #[test]
+    fn source_merge_bounds_an_oversized_footprint_without_taking_other_anchors() {
+        let mut fixture = merge_source_fixture();
+        fixture.merges[0][0].colspan = u32::MAX;
+        fixture.merges[0][0].rowspan = u32::MAX;
+        fixture.merges[1][0].covered = true;
+        let table = grid_to_table(&fixture.grid, &fixture.spans, Some(fixture.merges));
+        assert_merge_source_once(&table, &fixture.spans);
+        assert_eq!(table.rows[0].cells[0].text, "Cell00\nCell10");
+        assert_eq!((table.rows[0].cells[0].rowspan, table.rows[0].cells[0].colspan), (2, 3));
     }
 
     fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> TextSpan {

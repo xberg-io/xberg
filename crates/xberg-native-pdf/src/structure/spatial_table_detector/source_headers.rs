@@ -22,7 +22,7 @@ pub(super) fn shading_rectangles(paths: &[PathContent]) -> Vec<Rect> {
         .collect()
 }
 
-fn cell_is_shaded(cell: &TableCell, shading: &[Rect]) -> bool {
+pub(super) fn cell_is_shaded(cell: &TableCell, shading: &[Rect]) -> bool {
     cell.bbox.is_some_and(|cell| {
         cell.area().is_finite()
             && cell.area() > 0.0

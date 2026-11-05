@@ -4,10 +4,10 @@ mod helpers;
 
 use helpers::extract_bytes_document_blocking;
 use sha2::{Digest, Sha256};
-use xberg::{ExtractionConfig, OutputFormat, PdfConfig};
+use xberg::types::document_structure::NodeContent;
+use xberg::{ExtractedDocument, ExtractionConfig, OutputFormat, PdfConfig};
 
-#[test]
-fn source_headers_and_separate_table_records_reach_the_public_result() {
+fn source_document(output_format: OutputFormat) -> ExtractedDocument {
     let bytes = include_bytes!("../../../fixtures/repros/table-snapshot-consistency/fixture/wildomar-p17-repro.pdf");
     assert_eq!(
         hex::encode(Sha256::digest(bytes)),
@@ -17,7 +17,7 @@ fn source_headers_and_separate_table_records_reach_the_public_result() {
         disable_ocr: true,
         use_cache: false,
         enable_quality_processing: false,
-        output_format: OutputFormat::Markdown,
+        output_format,
         include_document_structure: true,
         pdf_options: Some(PdfConfig {
             extract_tables: true,
@@ -25,7 +25,12 @@ fn source_headers_and_separate_table_records_reach_the_public_result() {
         }),
         ..Default::default()
     };
-    let result = extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap();
+    extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap()
+}
+
+#[test]
+fn source_headers_and_separate_table_records_reach_the_public_result() {
+    let result = source_document(OutputFormat::Markdown);
     assert_eq!(result.tables.len(), 2, "the source page contains two physical tables");
     let upper = result
         .tables
@@ -60,4 +65,39 @@ fn source_headers_and_separate_table_records_reach_the_public_result() {
             .iter()
             .any(|row| row == &["No. 100 (150 µm)", "5 - 20", "15 - 30"])
     );
+}
+
+#[test]
+fn source_header_bands_and_merged_label_reach_the_html_and_public_grid() {
+    let result = source_document(OutputFormat::Html);
+    assert_eq!(result.tables.len(), 2);
+    assert_eq!(result.content.matches("<table").count(), 2);
+    assert!(result.content.contains("<th rowspan=\"2\">Requirements</th>"));
+    let document = result.document.as_ref().expect("requested public structure");
+    let lower = document
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            NodeContent::Table { grid } => Some(grid),
+            _ => None,
+        })
+        .find(|grid| {
+            grid.cells
+                .iter()
+                .any(|cell| cell.row == 0 && cell.col == 0 && cell.content == "Requirements")
+        })
+        .expect("source lower table grid");
+    assert_eq!((lower.rows, lower.cols), (11, 3));
+    let label = lower.cells.iter().find(|cell| cell.row == 0 && cell.col == 0).unwrap();
+    assert_eq!((label.row_span, label.col_span, label.is_header), (2, 1, true));
+    assert_eq!(lower.cells.iter().filter(|cell| cell.is_header).count(), 5);
+    assert!(
+        lower
+            .cells
+            .iter()
+            .filter(|cell| cell.is_header)
+            .all(|cell| cell.row < 2)
+    );
+    assert!(!lower.cells.iter().any(|cell| cell.row == 1 && cell.col == 0));
+    assert_eq!(lower.cells.iter().filter(|cell| cell.row >= 2).count(), 27);
 }

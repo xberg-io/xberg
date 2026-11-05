@@ -222,7 +222,7 @@ fn assert_wildomar_source_assignment(events: &[serde_json::Value]) {
     assert_first_table_assignment(&assigned);
     let fragment: Vec<_> = assigned
         .iter()
-        .filter(|table| table["source_span_ids"][0] == json!([[], [174, 175, 185], [186, 187, 188, 189, 190]]))
+        .filter(|table| table["source_span_ids"][0] == json!([[173], [174, 175, 185], [186, 187, 188, 189, 190]]))
         .collect();
     assert_eq!(fragment.len(), 1);
     assert_eq!(fragment[0]["rows"].as_array().unwrap().len(), 11);
@@ -419,5 +419,69 @@ fn assert_lower_table_source_records(table: &crate::structure::Table) {
             vec!["No. 200 (75 µm)", "0.5 -10", "10 – 20"],
             vec!["Residual Asphalt Content\n(ASTM D6307), %", "", "6.0 – 8.5"],
         ]
+    );
+}
+
+#[test]
+fn wildomar_drawn_header_bands_keep_two_rows_and_the_requirements_rowspan() {
+    let bytes =
+        include_bytes!("../../../../../fixtures/repros/table-snapshot-consistency/fixture/wildomar-p17-repro.pdf");
+    let document = PdfDocument::from_bytes(bytes.to_vec()).unwrap();
+    let (tables, events) = header_source_diagnostic::capture(|| {
+        document
+            .extract_tables_with_config(0, TableDetectionConfig::strict())
+            .unwrap()
+    });
+    assert_wildomar_source_words(&events);
+    let table = tables
+        .iter()
+        .find(|table| {
+            table
+                .rows
+                .iter()
+                .any(|row| row.cells.iter().any(|cell| cell.text.contains("No. 200")))
+        })
+        .unwrap();
+    assert_lower_table_source_inventory(table, &events);
+    assert_lower_table_source_records(table);
+    let requirements_cells = events
+        .iter()
+        .filter(|event| event["stage"] == "intersection_grid")
+        .flat_map(|event| event["payload"]["cells"].as_array().unwrap())
+        .filter(|cell| {
+            cell.as_array()
+                .unwrap()
+                .iter()
+                .zip([72., 285.72, 220.92, 362.34])
+                .all(|(coordinate, expected)| (coordinate.as_f64().unwrap() - expected).abs() < 0.1)
+        })
+        .count();
+    assert_eq!(
+        requirements_cells, 1,
+        "one independently closed source cell crosses the two header bands"
+    );
+    assert_eq!(
+        table.rows.len(),
+        11,
+        "two drawn header bands plus nine source body records"
+    );
+    assert!(table.has_header);
+    assert_eq!(table.rows[0].cells.len(), 3);
+    assert_eq!(
+        table.rows[1].cells.len(),
+        2,
+        "the spanning cell is not repeated in its covered row"
+    );
+    assert_eq!(table.rows[0].cells[0].text, "Requirements");
+    assert_eq!(table.rows[0].cells[0].rowspan, 2);
+    assert!(
+        table.rows[..2]
+            .iter()
+            .all(|row| row.is_header && row.cells.iter().all(|cell| cell.is_header))
+    );
+    assert!(
+        table.rows[2..]
+            .iter()
+            .all(|row| !row.is_header && row.cells.iter().all(|cell| !cell.is_header))
     );
 }
