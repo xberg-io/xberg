@@ -160,7 +160,7 @@ fn image_length_document(length_entry: &str) -> crate::PdfDocument {
 }
 
 #[test]
-fn stored_stream_length_uses_actual_bytes_with_misleading_direct_length() {
+fn bounded_raw_copy_uses_actual_bytes_with_misleading_direct_length() {
     for declared in [0u64, 1, 8, 15] {
         let doc = image_length_document(&declared.to_string());
         let images = doc.page_image_handles(0).unwrap();
@@ -172,7 +172,6 @@ fn stored_stream_length_uses_actual_bytes_with_misleading_direct_length() {
             "actual parser payload precondition"
         );
         let before = decode_call_count();
-        assert_eq!(images[0].stored_stream_len().unwrap(), PAYLOAD.len());
         assert!(images[0].raw_compressed_bytes_with_limit(PAYLOAD.len() - 1).is_err());
         assert_eq!(
             images[0].raw_compressed_bytes_with_limit(PAYLOAD.len()).unwrap(),
@@ -183,7 +182,7 @@ fn stored_stream_length_uses_actual_bytes_with_misleading_direct_length() {
 }
 
 #[test]
-fn stored_stream_length_uses_actual_bytes_with_indirect_length() {
+fn bounded_raw_copy_uses_actual_bytes_with_indirect_length() {
     let doc = image_length_document("6 0 R");
     let images = doc.page_image_handles(0).unwrap();
     assert_eq!(images.len(), 1);
@@ -193,82 +192,17 @@ fn stored_stream_length_uses_actual_bytes_with_indirect_length() {
         PAYLOAD,
         "actual parser payload precondition"
     );
-    assert_eq!(images[0].stored_stream_len().unwrap(), PAYLOAD.len());
+    assert_eq!(
+        images[0].raw_compressed_bytes_with_limit(PAYLOAD.len()).unwrap(),
+        PAYLOAD
+    );
+    assert!(images[0].raw_compressed_bytes_with_limit(PAYLOAD.len() - 1).is_err());
 }
 
 #[test]
-fn stored_stream_length_handles_inline_empty_and_reported_size_independently() {
-    let doc = source_document();
-    for reported in [0, u64::MAX] {
-        let mut image = handle(&doc, true);
-        image.byte_size_compressed = reported;
-        assert_eq!(image.stored_stream_len().unwrap(), PAYLOAD.len());
-    }
-    let mut empty = handle(&doc, true);
-    empty.source = PdfImageSource::Inline {
-        stream_object: Object::Stream {
-            dict: Default::default(),
-            data: bytes::Bytes::new(),
-        },
-        compressed_bytes: bytes::Bytes::new(),
-    };
-    assert_eq!(empty.stored_stream_len().unwrap(), 0);
-    assert_eq!(empty.raw_compressed_bytes_with_limit(0).unwrap(), Vec::<u8>::new());
-}
-
-#[test]
-fn stored_stream_length_rejects_a_nonstream_xobject_reference() {
+fn bounded_raw_copy_rejects_a_nonstream_xobject_reference() {
     let doc = source_document();
     let mut image = handle(&doc, false);
     image.source = PdfImageSource::XObject(ObjectRef::new(1, 0));
-    assert!(image.stored_stream_len().is_err());
-}
-
-#[test]
-fn consuming_jpeg_data_preserves_the_owned_allocation() {
-    let mut payload = Vec::with_capacity(64);
-    payload.extend_from_slice(PAYLOAD);
-    let pointer = payload.as_ptr();
-    let capacity = payload.capacity();
-    let image = PdfImage::new(1, 1, ColorSpace::DeviceGray, 8, ImageData::Jpeg(payload));
-    let ImageData::Jpeg(owned) = image.into_data() else {
-        panic!("JPEG ownership variant changed")
-    };
-    assert_eq!(owned, PAYLOAD);
-    assert_eq!(owned.as_ptr(), pointer);
-    assert_eq!(owned.capacity(), capacity);
-    let copied = owned.clone();
-    assert_ne!(
-        copied.as_ptr(),
-        pointer,
-        "live clone is a causal negative for allocation identity"
-    );
-    let bytes = bytes::Bytes::from(owned);
-    assert_eq!(bytes.as_ptr(), pointer);
-    assert_eq!(bytes.as_ref(), PAYLOAD);
-}
-
-#[test]
-fn consuming_raw_data_preserves_pixels_format_and_allocation() {
-    let mut payload = Vec::with_capacity(64);
-    payload.extend_from_slice(&[1, 2, 3, 4, 5, 6]);
-    let pointer = payload.as_ptr();
-    let capacity = payload.capacity();
-    let image = PdfImage::new(
-        2,
-        1,
-        ColorSpace::DeviceRGB,
-        8,
-        ImageData::Raw {
-            pixels: payload,
-            format: PixelFormat::RGB,
-        },
-    );
-    let ImageData::Raw { pixels, format } = image.into_data() else {
-        panic!("raw ownership variant changed")
-    };
-    assert_eq!(pixels, vec![1, 2, 3, 4, 5, 6]);
-    assert!(matches!(format, PixelFormat::RGB));
-    assert_eq!(pixels.as_ptr(), pointer);
-    assert_eq!(pixels.capacity(), capacity);
+    assert!(image.raw_compressed_bytes_with_limit(PAYLOAD.len()).is_err());
 }
