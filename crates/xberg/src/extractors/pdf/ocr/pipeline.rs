@@ -60,9 +60,10 @@ use super::rendering::{
     OCR_PNG_ENCODE_BYTES_PER_PIXEL, OCR_PNG_ENCODE_FIXED_BYTES, PreRenderedPageGeometry, XObjectRecoveryOutcome,
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
-    recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch,
-    render_selected_pages_from_document, share_rendered_page_images, single_block_for_ocr_page, valid_page_indices,
-    validate_png_encode_pages_individually, whole_page_raster_for_ocr_page,
+    recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects,
+    render_full_pdf_ocr_batch_with_dpi, render_selected_pages_with_dpi, share_rendered_page_images,
+    single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
+    whole_page_raster_for_ocr_page,
 };
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::scoring::{
@@ -1006,6 +1007,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     };
 
     let total = page_indices.len();
+    let mut raster_dpis = super::rendering::PageRasterDpis::new();
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
     // the per-page metadata is gone by the time `ocr_results` is judged.
@@ -1054,7 +1056,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
         #[cfg(feature = "layout-detection")]
-        let (page_images, render_failures) = if let Some(images) = layout_images_for_mixed {
+        let (page_images, render_failures, batch_raster_dpis) = if let Some(images) = layout_images_for_mixed {
             let mut page_images = Vec::with_capacity(batch_end - batch_start);
             let mut render_failures = Vec::new();
             for &page_idx in &page_indices[batch_start..batch_end] {
@@ -1069,9 +1071,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     )),
                 }
             }
-            (page_images, render_failures)
+            (page_images, render_failures, super::rendering::PageRasterDpis::new())
         } else {
-            render_selected_pages_from_document(
+            render_selected_pages_with_dpi(
                 &render_doc,
                 &page_rotations,
                 &page_indices[batch_start..batch_end],
@@ -1080,13 +1082,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             )
         };
         #[cfg(not(feature = "layout-detection"))]
-        let (page_images, render_failures) = render_selected_pages_from_document(
+        let (page_images, render_failures, batch_raster_dpis) = render_selected_pages_with_dpi(
             &render_doc,
             &page_rotations,
             &page_indices[batch_start..batch_end],
             security_limits,
             config.images.as_ref(),
         );
+        raster_dpis.extend(batch_raster_dpis);
         for (page_idx, error) in render_failures {
             let recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
             push_mixed_ocr_page_failure_warning(
@@ -2055,6 +2058,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         for text in ocr_results.values_mut() {
             if let std::borrow::Cow::Owned(repaired) = repair_ocr_numeric_tokens(text) {
                 *text = repaired;
+            }
+        }
+    }
+
+    if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        for &page_idx in &page_indices {
+            let page = (page_idx + 1) as u32;
+            if ocr_results.get(&page).is_none_or(|text| text.trim().is_empty())
+                && !table_only_xobject_recovery_pages.contains(&page)
+                && let Some(dpi) = raster_dpis.get(&page_idx)
+                && let Some(warning) = dpi.empty_text_warning(page_idx)
+            {
+                crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
             }
         }
     }
@@ -3048,6 +3064,8 @@ pub(super) async fn extract_with_ocr_for_page(
     // single representative page is a strict improvement over reporting none at all. ~keep
     #[cfg(feature = "pdf")]
     let mut render_warnings = Vec::new();
+    #[cfg(feature = "pdf")]
+    let mut raster_dpis = super::rendering::PageRasterDpis::new();
     let mut backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     let mut backend_additional_metadata: Option<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>> =
         None;
@@ -3185,8 +3203,8 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                let (pages, warnings) = crate::pdf::render::capture_render_warnings(|| {
-                    render_full_pdf_ocr_batch(
+                let ((pages, batch_raster_dpis), warnings) = crate::pdf::render::capture_render_warnings(|| {
+                    render_full_pdf_ocr_batch_with_dpi(
                         doc,
                         page_rotations,
                         batch_start..batch_end,
@@ -3195,6 +3213,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     )
                 })?;
                 crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
+                raster_dpis.extend(batch_raster_dpis);
                 pages
             };
             #[cfg(not(feature = "pdf"))]
@@ -4233,6 +4252,17 @@ pub(super) async fn extract_with_ocr_for_page(
             },
             page_failures,
         });
+    }
+
+    #[cfg(feature = "pdf")]
+    for (page_idx, text) in page_texts.iter().enumerate() {
+        if text.trim().is_empty()
+            && !pages_with_recovered_xobject_payload[page_idx]
+            && let Some(dpi) = raster_dpis.get(&page_idx)
+            && let Some(warning) = dpi.empty_text_warning(page_index_offset + page_idx)
+        {
+            crate::core::diagnostics::push_warning_deduped(&mut backend_page_warnings, warning);
+        }
     }
 
     let mean_text_conf = match (conf_count > 0, backend_confidence_scale) {
