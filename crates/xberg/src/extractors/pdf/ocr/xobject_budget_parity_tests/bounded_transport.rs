@@ -10,7 +10,7 @@ const JP2: &[u8] = include_bytes!(concat!(
 fn source(raw: bool) -> xberg_native_pdf::PdfDocument {
     let mut pdf = Document::load_mem(&complete_fixture().bytes).unwrap();
     let mut changed = 0;
-    for (_, object) in pdf.objects.iter_mut() {
+    for object in pdf.objects.values_mut() {
         if let Object::Stream(stream) = object
             && stream
                 .dict

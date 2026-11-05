@@ -1,10 +1,10 @@
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
-pub(super) const MODEL_SHA: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
+pub(crate) const MODEL_SHA: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
 const MODEL_SIZE: usize = 4_113_088;
 
-pub(super) struct ModelDirectory {
+pub(crate) struct ModelDirectory {
     path: PathBuf,
     _storage: Option<tempfile::TempDir>,
 }
@@ -17,7 +17,7 @@ impl std::ops::Deref for ModelDirectory {
 }
 
 impl ModelDirectory {
-    pub(super) fn verify(&self) {
+    pub(crate) fn verify(&self) {
         verify(&std::fs::read(self.join("eng.traineddata")).expect("verified local English model must exist"));
     }
 }
@@ -27,7 +27,7 @@ fn verify(bytes: &[u8]) {
     assert_eq!(hex::encode(Sha256::digest(bytes)), MODEL_SHA);
 }
 
-pub(super) fn verified_model_directory() -> ModelDirectory {
+pub(crate) fn verified_model_directory() -> ModelDirectory {
     let model = if let Some(path) = std::env::var_os("XBERG_2339_TESSDATA_DIR") {
         ModelDirectory {
             path: path.into(),

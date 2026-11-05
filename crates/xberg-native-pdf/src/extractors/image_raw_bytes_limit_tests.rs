@@ -130,7 +130,7 @@ fn image_length_document(length_entry: &str) -> crate::PdfDocument {
     let image = format!(
         "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /JPXDecode /Length {length_entry} >>\nstream\nabcdefgh\nendstream"
     );
-    let objects = vec![
+    let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1 1] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>".to_string(),

@@ -156,7 +156,7 @@ async fn complete_page_adoption_never_discards_a_jpeg_mask() {
         vec![0; 32 * 24],
     ));
     let mut changed = 0;
-    for (_, object) in pdf.objects.iter_mut() {
+    for object in pdf.objects.values_mut() {
         if let lopdf::Object::Stream(stream) = object
             && stream
                 .dict

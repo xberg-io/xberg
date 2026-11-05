@@ -2537,12 +2537,14 @@ async fn select_rtl_retry_result(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
+#[cfg(feature = "pdf")]
 #[path = "image_ocr_budget.rs"]
 mod image_ocr_budget;
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
+#[cfg(feature = "pdf")]
 pub(crate) use image_ocr_budget::reserve_retained_ocr_raster;
 
 #[cfg(all(

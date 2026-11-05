@@ -19,7 +19,7 @@ unsafe extern "C" {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct Observation {
+pub(crate) struct Observation {
     pub allocations: usize,
     pub frees: usize,
     pub live: usize,
@@ -72,7 +72,7 @@ unsafe extern "C" fn release(pointer: *mut c_void) {
     unsafe { libc::free(base.cast()) };
 }
 
-pub(super) fn install() {
+pub(crate) fn install() {
     assert_eq!(ALLOCATIONS.load(Ordering::SeqCst), 0);
     // SAFETY: Only the fresh exact single-threaded child calls this before ANY Pix
     // or native API exists. Both callbacks remain live until process exit, after
@@ -80,7 +80,7 @@ pub(super) fn install() {
     unsafe { setPixMemoryManager(allocate, release) };
 }
 
-pub(super) fn observation() -> Observation {
+pub(crate) fn observation() -> Observation {
     Observation {
         allocations: ALLOCATIONS.load(Ordering::SeqCst),
         frees: FREES.load(Ordering::SeqCst),

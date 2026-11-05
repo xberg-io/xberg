@@ -8,13 +8,8 @@ use crate::core::config::ExtractionConfig;
 )]
 #[path = "large/allocation_sizes.rs"]
 mod allocation_sizes;
-#[path = "fixture.rs"]
-mod fixture;
-#[path = "model.rs"]
-mod model;
-#[allow(unsafe_code, reason = "Isolated native test measures actual Pix buffers")]
-#[path = "../../../../ocr/processor/execution/reduced_jpeg_memory_tests/pixel_memory.rs"]
-mod pixel_memory;
+use super::{fixture, model};
+use crate::ocr::processor::test_pixel_memory as pixel_memory;
 #[path = "large/source.rs"]
 mod source;
 
@@ -116,8 +111,7 @@ async fn reject_truncated_pipeline_payload(source: &source::Source, model: &std:
     );
     let error = crate::extract(crate::ExtractInput::from_bytes(truncated, "image/jpeg", None), &config)
         .await
-        .err()
-        .expect("actual pipeline must reject truncated admitted JPEG");
+        .expect_err("actual pipeline must reject truncated admitted JPEG");
     assert!(error.to_string().contains("JPEG"), "{error}");
     println!("ADMITTED_TRUNCATED_JPEG_REJECTED={error}");
 }
@@ -148,6 +142,7 @@ fn report(
 }
 
 async fn qualify(route: &str) {
+    pixel_memory::install();
     let model = model::verified_model_directory();
     let source = source::create();
     if route == "image" {
@@ -155,7 +150,6 @@ async fn qualify(route: &str) {
     }
     assert_eq!(source::ORIGINAL_RGB, 190_423_203);
     allocation_sizes::verify_detector(source::ORIGINAL_RGB);
-    pixel_memory::install();
     let mut succeeded = false;
     for mib in [40, 64, 512] {
         let config = config(mib, &model);

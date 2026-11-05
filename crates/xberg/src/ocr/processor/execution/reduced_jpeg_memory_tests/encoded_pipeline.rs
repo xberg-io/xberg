@@ -3,10 +3,7 @@ use crate::core::config::ExtractionConfig;
 use image::ImageEncoder;
 use std::process::Command;
 
-#[path = "../../../../extractors/pdf/ocr/english_recovery_tests/fixture.rs"]
-mod fixture;
-#[path = "../../../../extractors/pdf/ocr/english_recovery_tests/model.rs"]
-mod model;
+use crate::ocr::processor::{test_recovery_fixture as fixture, test_recovery_model as model};
 
 const CHILD: &str = "XBERG_PIPELINE_PNG_MEMORY_CHILD";
 const DIMENSION: u32 = 2000;

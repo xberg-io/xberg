@@ -6,11 +6,7 @@ mod monotonicity;
 mod otsu;
 mod unsupported;
 
-#[allow(
-    unsafe_code,
-    reason = "Isolated native test measures real Leptonica pixel allocations through its C hook"
-)]
-mod pixel_memory;
+use crate::ocr::processor::test_pixel_memory as pixel_memory;
 
 use super::{SecurityLimits, TesseractConfig, prepare_encoded_ocr_image};
 use pixel_memory::Observation;

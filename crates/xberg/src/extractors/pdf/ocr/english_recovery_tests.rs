@@ -1,8 +1,5 @@
 //! Explicit model-backed fixture qualification, without native allocation hooks. ~keep
-#[path = "english_recovery_tests/fixture.rs"]
-mod fixture;
-#[path = "english_recovery_tests/model.rs"]
-mod model;
+use crate::ocr::processor::{test_recovery_fixture as fixture, test_recovery_model as model};
 #[path = "english_recovery_tests/observer.rs"]
 mod observer;
 

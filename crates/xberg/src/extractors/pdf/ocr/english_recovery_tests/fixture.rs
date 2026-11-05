@@ -10,11 +10,11 @@ const FONT: &[u8] = include_bytes!(concat!(
 ));
 const FONT_SHA: &str = "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322";
 
-pub(super) fn sha(bytes: &[u8]) -> String {
+pub(crate) fn sha(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 
-pub(super) fn has_words(text: &str) -> bool {
+pub(crate) fn has_words(text: &str) -> bool {
     let upper = text.to_ascii_uppercase();
     let tokens: Vec<_> = upper
         .split(|character: char| !character.is_ascii_alphabetic())
@@ -22,7 +22,7 @@ pub(super) fn has_words(text: &str) -> bool {
     WORDS.iter().all(|word| tokens.contains(word))
 }
 
-pub(super) fn assert_words(text: &str) {
+pub(crate) fn assert_words(text: &str) {
     assert!(
         has_words(text),
         "all four real recognized word tokens required: {text:?}"
@@ -102,13 +102,13 @@ fn raster(document: &xberg_native_pdf::PdfDocument, dpi: u32) -> xberg_native_pd
     rendered
 }
 
-pub(super) struct Fixture {
+pub(crate) struct Fixture {
     pub pdf: Vec<u8>,
     pub doc: xberg_native_pdf::PdfDocument,
     pub receipt: serde_json::Value,
 }
 
-pub(super) fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     assert!(!has_words("MEMORY RECOVERY INVOICE"));
     assert!(!has_words("MEMORYRECOVERYINVOICEREADY"));
     let source = text_pdf();
@@ -181,7 +181,7 @@ pub(super) fn fixture() -> Fixture {
     Fixture { pdf, doc, receipt }
 }
 
-pub(super) fn detached_image(document: &xberg_native_pdf::PdfDocument) -> image::DynamicImage {
+pub(crate) fn detached_image(document: &xberg_native_pdf::PdfDocument) -> image::DynamicImage {
     let rendered = raster(document, 150);
     assert_eq!(rendered.height, 200);
     image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(rendered.width, rendered.height, rendered.data).unwrap())

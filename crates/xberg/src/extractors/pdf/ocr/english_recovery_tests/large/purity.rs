@@ -30,7 +30,16 @@ fn raster_annotation() -> xberg_native_pdf::rendering::RenderedImage {
         &xberg_native_pdf::rendering::RenderOptions::with_dpi(300).as_raw(),
     )
     .unwrap();
-    assert!(rendered.data.chunks_exact(4).filter(|pixel| pixel[0] < 64).count() > 100);
+    assert!(
+        rendered
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|pixel| pixel[0] < 64)
+            .count()
+            > 100
+    );
     rendered
 }
 
@@ -39,7 +48,9 @@ fn annotated_pdf(bytes: &[u8]) -> Vec<u8> {
     let raster = raster_annotation();
     let pixels: Vec<_> = raster
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|pixel| pixel[..3].iter().copied())
         .collect();
     let image = pdf.add_object(Stream::new(
@@ -121,7 +132,7 @@ fn jpeg_masked_pdf(bytes: &[u8], dimension: u32, sample: u8) -> Vec<u8> {
         encoded,
     ));
     let mut images = 0;
-    for (_, object) in pdf.objects.iter_mut() {
+    for object in pdf.objects.values_mut() {
         if let lopdf::Object::Stream(stream) = object
             && stream
                 .dict
@@ -177,7 +188,16 @@ async fn qualify_oversized_jpeg_mask(bytes: &[u8], model: &std::path::Path) {
     )
     .unwrap();
     assert!(
-        visible.data.chunks_exact(4).all(|pixel| pixel[..3] == [255, 255, 255]),
+        !visible.data.is_empty(),
+        "the white-mask control must inspect rendered pixels"
+    );
+    assert!(
+        visible
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[..3] == [255, 255, 255]),
         "opaque-black SMask hides every base-image word"
     );
     let mut wrongly_recovered = Vec::new();
@@ -195,12 +215,12 @@ async fn qualify_oversized_jpeg_mask(bytes: &[u8], model: &std::path::Path) {
 }
 
 async fn qualify() {
+    pixel_memory::install();
     let model = model::verified_model_directory();
     let fixture = fixture::fixture();
     qualify_affordable_jpeg_mask(&fixture.pdf, &model).await;
     qualify_oversized_jpeg_mask(&fixture.pdf, &model).await;
     let annotated = annotated_pdf(&fixture.pdf);
-    pixel_memory::install();
     let complete = public_text(&annotated, &config(40, &model)).await.unwrap();
     fixture::assert_words(&complete);
     assert!(

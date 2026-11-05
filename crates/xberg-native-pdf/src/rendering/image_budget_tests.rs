@@ -37,7 +37,14 @@ fn source_jpeg_budget_failure_does_not_poison_a_reused_renderer() {
     let small = source::document(&source::jpeg(32), 32, false);
     let (image, _) = renderer.render_page_with_budget(0, &small, budget()).unwrap();
     assert_eq!((image.width, image.height), (32, 32));
-    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3] == [0, 0, 0])
+    );
 }
 
 #[test]
@@ -45,10 +52,24 @@ fn prior_unbounded_render_cannot_bypass_a_later_source_image_budget() {
     let document = source::document(&source::jpeg(LARGE), LARGE, false);
     let mut renderer = renderer();
     let (image, _) = renderer.render_page_with_budget(0, &document, None).unwrap();
-    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3] == [0, 0, 0])
+    );
     assert_refused(&mut renderer, &document);
     let (image, _) = renderer.render_page_with_budget(0, &document, None).unwrap();
-    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3] == [0, 0, 0])
+    );
 }
 
 #[test]
@@ -100,7 +121,7 @@ fn an_affordable_inset_image_retains_its_overlay_and_white_page_margin() {
     let (image, _) = renderer().render_page_with_budget(0, &document, budget()).unwrap();
     for expected in [[0, 0, 0], [255, 0, 0], [255, 255, 255]] {
         assert!(
-            image.data.chunks_exact(4).any(|pixel| pixel[..3] == expected),
+            image.data.as_chunks::<4>().0.iter().any(|pixel| pixel[..3] == expected),
             "paint {expected:?}"
         );
     }
@@ -142,7 +163,14 @@ fn referenced_jpeg_masks_cannot_bypass_the_source_budget() {
         let document = source::mask_document(&encoded, dimension, soft);
         let (unbounded, _) = renderer().render_page_with_budget(0, &document, None).unwrap();
         let expected = if soft { [0, 0, 0] } else { [255, 255, 255] };
-        assert!(unbounded.data.chunks_exact(4).any(|pixel| pixel[..3] == expected));
+        assert!(
+            unbounded
+                .data
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[..3] == expected)
+        );
         for mib in [40, 64] {
             let result = renderer().render_page_with_budget(
                 0,
@@ -170,13 +198,27 @@ fn referenced_jpeg_masks_cannot_bypass_the_source_budget() {
 fn affordable_jpeg_and_non_jpeg_masks_keep_rendering() {
     let raw = source::raw_mask_document();
     let (image, _) = renderer().render_page_with_budget(0, &raw, budget()).unwrap();
-    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3] == [0, 0, 0])
+    );
     let encoded = source::gray_jpeg(32);
     let document = source::mask_document(&encoded, 32, true);
     let mut renderer = renderer();
     assert!(renderer.render_page_with_budget(0, &document, budget()).is_ok());
     let (image, _) = renderer.render_page_with_budget(0, &document, None).unwrap();
-    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3] == [0, 0, 0])
+    );
     assert!(renderer.render_page_with_budget(0, &raw, budget()).is_ok());
 }
 
@@ -185,7 +227,18 @@ fn inline_jpeg_images_reuse_the_source_image_budget() {
     let large = source::inline_document(&source::gray_jpeg(LARGE), LARGE);
     let (image, _) = renderer().render_page_with_budget(0, &large, None).unwrap();
     assert_eq!((image.width, image.height), (32, 32));
-    assert!(image.data.chunks_exact(4).all(|pixel| pixel[..3] == [255, 255, 255]));
+    assert!(
+        !image.data.is_empty(),
+        "the white-page check must inspect rendered pixels"
+    );
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[..3] == [255, 255, 255])
+    );
     assert_refused(&mut renderer(), &large);
     let small = source::inline_document(&source::gray_jpeg(32), 32);
     assert!(renderer().render_page_with_budget(0, &small, budget()).is_ok());

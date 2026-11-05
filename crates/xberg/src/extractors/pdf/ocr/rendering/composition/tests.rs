@@ -1,6 +1,8 @@
 use super::*;
 use lopdf::{Dictionary, Document, Object, Stream, dictionary};
 
+type CompositionMutation = (&'static str, fn(&mut Document));
+
 fn page(pdf: &mut Document) -> &mut Dictionary {
     let id = pdf.get_pages()[&1];
     pdf.get_object_mut(id).unwrap().as_dict_mut().unwrap()
@@ -87,7 +89,7 @@ fn a_single_complete_upright_stored_image_is_a_certified_projection() {
 
 #[test]
 fn annotations_overlays_forms_clipping_and_unmapped_geometry_are_not_complete_jpeg_pages() {
-    let changes: [(&str, fn(&mut Document)); 9] = [
+    let changes: [CompositionMutation; 9] = [
         ("text", |pdf| content(pdf, b"q 32 0 0 32 0 0 cm /Im0 Do Q BT ET\n")),
         ("vector", |pdf| {
             content(pdf, b"q 32 0 0 32 0 0 cm /Im0 Do Q 0 0 3 3 re f\n")

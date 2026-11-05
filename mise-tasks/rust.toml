@@ -49,7 +49,7 @@ env = { CARGO_TERM_COLOR = "always" }
 run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
 
 ["rust:test:jpeg-recovery"]
-description = "Qualify five real OCR recovery controls with verified English"
+description = "Qualify nine real OCR recovery controls with verified English"
 depends = ["os:require linux darwin"]
 usage = """
 arg "<features>" help="Use the existing Rust test feature closure"
