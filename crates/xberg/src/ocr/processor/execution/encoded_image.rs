@@ -186,12 +186,13 @@ impl Preparation<'_> {
         let dpi = match self.candidate_dpi(&decoded, policy) {
             Ok(dpi) => dpi,
             Err(error) if self.config.preprocessing.is_none() => {
-                return super::unknown_dpi_downscale::recover(
+                return super::budgeted_downscale::recover(
                     decoded.image,
                     self.bytes,
                     self.limits,
                     policy,
                     self.images,
+                    super::budgeted_downscale::SourceDpi::Unknown,
                 )?
                 .map(Candidate::Ready)
                 .ok_or(error);
@@ -212,6 +213,24 @@ impl Preparation<'_> {
             return self
                 .finish_budgeted_upscale(decoded, dpi, policy, target_dpi)
                 .map(Candidate::Ready);
+        }
+        // Resizing before automatic binarization can erase glyph detail and displace a usable fallback.
+        if policy.is_none()
+            && self.config.source_dpi.is_some()
+            && let Some(dpi) = dpi
+            && !self.is_jpeg()
+            && !self.known_native_fits((width, height), None)?
+        {
+            return super::budgeted_downscale::recover(
+                decoded.image,
+                self.bytes,
+                self.limits,
+                policy,
+                self.images,
+                super::budgeted_downscale::SourceDpi::Known(dpi),
+            )?
+            .map(Candidate::Ready)
+            .ok_or_else(|| self.native_error("OCR native image workspace", false));
         }
         if self.native_needs_retry(native_dimensions, policy)? {
             self.check_unknown_dpi_upscale(&decoded, native_dimensions, dpi, policy)?;
@@ -328,7 +347,7 @@ impl Preparation<'_> {
             .and_then(|peak| peak.checked_add(extra_capacity))
             .is_none_or(|peak| peak > self.limits.max_content_size as u64)
         {
-            return Err(self.native_error("OCR preprocessing and native image workspace"));
+            return Err(self.native_error("OCR preprocessing and native image workspace", false));
         }
         if let Some(metadata) = &mut prepared.image_preprocessing {
             if metadata.skipped_resize {
@@ -370,7 +389,7 @@ impl Preparation<'_> {
             self.bytes.len(),
             self.limits.max_content_size,
         )?;
-        Err(self.native_error("OCR native image workspace after DPI resize"))
+        Err(self.native_error("OCR native image workspace after DPI resize", true))
     }
 
     fn check_reduced_policy(
@@ -446,7 +465,7 @@ impl Preparation<'_> {
             return Ok(false);
         }
         if !self.is_jpeg() {
-            return Err(self.native_error("OCR native image workspace"));
+            return Err(self.native_error("OCR native image workspace", false));
         }
         Ok(true)
     }
@@ -525,15 +544,16 @@ impl Preparation<'_> {
             dpi,
         );
         if !self.known_native_fits((prepared.width, prepared.height), prepared.preprocessing.as_ref())? {
-            return Err(self.native_error("OCR preprocessing and native image workspace"));
+            return Err(self.native_error("OCR preprocessing and native image workspace", false));
         }
         Ok(prepared)
     }
 
-    fn native_error(&self, phase: &str) -> crate::XbergError {
+    fn native_error(&self, phase: &str, has_planned_resize: bool) -> crate::XbergError {
+        let hint = if has_planned_resize { " or lower target_dpi" } else { "" };
         crate::XbergError::validation(format!(
             "{phase} exceeds security_limits.max_content_size ({} bytes). \
-             Raise security_limits.max_content_size or lower target_dpi",
+             Raise security_limits.max_content_size{hint}",
             self.limits.max_content_size,
         ))
     }

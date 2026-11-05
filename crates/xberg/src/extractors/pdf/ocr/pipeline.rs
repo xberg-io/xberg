@@ -1657,6 +1657,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
                 let original_config = ocr_config_resolved.clone();
+                let retained_bytes = retained_ocr_source_bytes(data, &upright_data, 0);
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -1667,6 +1668,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
+                    let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
+                        &backend_clone,
+                        (original_config, config_clone),
+                        retained_bytes,
+                    ) {
+                        Ok(configs) => configs,
+                        Err(error) => return (idx, correction_degrees, upright_width, upright_height, Err(error)),
+                    };
                     let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
                         &backend_clone,
                         upright_data,
@@ -1845,17 +1854,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                 };
                 #[cfg(not(target_arch = "wasm32"))]
-                let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                    backend,
-                    upright_data,
-                    &ocr_config_resolved,
-                    config_for_page.as_ref(),
-                    crate::extractors::image::SparseRetryPolicy {
-                        whole_page_raster,
-                        allow_standard_retry: false,
-                    },
-                    config.cancel_token.as_ref(),
-                )
+                let result = async {
+                    let retained_bytes = retained_ocr_source_bytes(data, &upright_data, 0);
+                    let (original, effective) = crate::extractors::image::reserve_retained_ocr_raster(
+                        backend,
+                        (ocr_config_resolved.clone(), config_for_page.into_owned()),
+                        retained_bytes,
+                    )?;
+                    crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                        backend,
+                        upright_data,
+                        &original,
+                        &effective,
+                        crate::extractors::image::SparseRetryPolicy {
+                            whole_page_raster,
+                            allow_standard_retry: false,
+                        },
+                        config.cancel_token.as_ref(),
+                    )
+                    .await
+                }
                 .await;
                 #[cfg(target_arch = "wasm32")]
                 let result = backend
@@ -3625,10 +3643,11 @@ pub(super) async fn extract_with_ocr_for_page(
                 };
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let allow_prose = detached_page.is_none() && images.is_none();
-                let retained_source_bytes = batch_slice
+                let retained_pixels = batch_slice
                     .as_ref()
                     .and_then(|images| images.get(idx - batch_start))
                     .map_or(0, |image| image.as_bytes().len());
+                let retained_source_bytes = retained_ocr_source_bytes(image_data, &upright_data, retained_pixels);
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -3822,10 +3841,11 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         async {
-                            let retained = batch_slice
+                            let retained_pixels = batch_slice
                                 .as_ref()
                                 .and_then(|images| images.get(*page_idx - batch_start))
                                 .map_or(0, |image| image.as_bytes().len());
+                            let retained = retained_ocr_source_bytes(image_data, &upright_data, retained_pixels);
                             let (original, effective) = crate::extractors::image::reserve_retained_ocr_raster(
                                 &backend,
                                 (ocr_config_owned.clone(), config_for_page.as_ref().clone()),
@@ -3921,14 +3941,20 @@ pub(super) async fn extract_with_ocr_for_page(
                     && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
                         .is_some_and(|angle| angle != 0);
                 undo_upright_raster_correction(&mut ocr_result, correction_degrees, upright_width, upright_height);
-                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
-                if normalize_recovered_table {
-                    // The detached stage's owner will place raw tables using the render raster. ~keep
-                    super::orientation_retry::scale_recovered_table_to_raster(
+                let render = (encoded_batch[offset].2, encoded_batch[offset].3);
+                let normalized_raw = (xobject_document.is_some() || lazy_pdf_render_state.is_some())
+                    && raw_workspace_geometry::normalize(
                         &mut ocr_result,
-                        (encoded_batch[offset].2, encoded_batch[offset].3),
+                        render,
+                        matches!(correction_degrees, 90 | 270),
                     );
+                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                if normalize_recovered_table && !normalized_raw {
+                    // The detached stage's owner will place raw tables using the render raster. ~keep
+                    super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
                 }
+                #[cfg(not(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32"))))]
+                let _ = normalized_raw;
             }
             // #1575: capture once, from the first page that has any -- see this function's
             // `backend_additional_metadata` declaration for why a single representative page
@@ -7064,6 +7090,20 @@ pub(super) fn upright_raster_for_backend(
     )?;
     Ok((std::sync::Arc::new(rotated), new_width, new_height, correction_degrees))
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), not(target_arch = "wasm32")))]
+fn retained_ocr_source_bytes(
+    original: &std::sync::Arc<Vec<u8>>,
+    upright: &std::sync::Arc<Vec<u8>>,
+    retained_pixels: usize,
+) -> usize {
+    // The backend already charges the upright PNG. Only a distinct original allocation is extra. ~keep
+    if std::sync::Arc::ptr_eq(original, upright) {
+        retained_pixels
+    } else {
+        retained_pixels.saturating_add(original.capacity())
+    }
+}
+
 /// Undo [`upright_raster_for_backend`]'s rotation on a backend result's pixel-space geometry,
 /// mapping bboxes from the upright raster the backend actually ran OCR on back to the raw
 /// MediaBox raster every downstream consumer (`build_mixed_ocr_page_document`,
@@ -7142,8 +7182,18 @@ fn undo_result_rotation(result: &mut crate::types::ExtractedDocument, correction
         bbox.y1 = y0.max(y1);
     };
     if let Some(doc) = result.ocr_internal_document.as_mut() {
+        let raw_resize = result.raw_ocr_source_frame.is_some();
         for element in &mut doc.elements {
             if let Some(bbox) = element.bbox.as_mut() {
+                undo_bbox(bbox);
+            }
+            if raw_resize && let Some(geometry) = element.ocr_geometry.as_mut() {
+                undo_ocr_element_geometry(geometry, undo_point);
+            }
+        }
+        if raw_resize {
+            crate::types::internal::table_grid::transform_retained_grid_bboxes(doc, &result.tables, undo_bbox);
+            for bbox in doc.tables.iter_mut().filter_map(|table| table.bounding_box.as_mut()) {
                 undo_bbox(bbox);
             }
         }
@@ -7365,9 +7415,17 @@ mod xobject_budget_parity_tests;
 #[path = "english_recovery_tests.rs"]
 mod english_recovery_tests;
 
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/retained_raster_budget_tests.rs"]
+mod retained_raster_budget_tests;
+
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/upright_processed_geometry_tests.rs"]
 mod upright_processed_geometry_tests;
+
+#[cfg(feature = "pdf")]
+#[path = "pipeline/raw_workspace_geometry.rs"]
+mod raw_workspace_geometry;
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/raster_budget_tests.rs"]

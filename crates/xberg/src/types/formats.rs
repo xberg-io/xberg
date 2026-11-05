@@ -305,6 +305,13 @@ pub struct EmailAttachment {
     pub data: Option<Bytes>,
 }
 
+/// Source raster for raw OCR performed after the native workspace downscale.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(alef, alef(skip))]
+pub(crate) struct RawOcrSourceFrame {
+    pub(crate) dimensions: (u32, u32),
+}
+
 /// OCR extraction result.
 ///
 /// Result of performing OCR on an image or scanned document,
@@ -330,6 +337,10 @@ pub struct OcrExtractionResult {
     #[allow(dead_code)]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) internal_document: Option<super::internal::InternalDocument>,
+    #[serde(skip)]
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) raw_ocr_source_frame: Option<RawOcrSourceFrame>,
 }
 
 impl OcrExtractionResult {
@@ -349,6 +360,7 @@ impl OcrExtractionResult {
             tables,
             ocr_elements,
             internal_document: None,
+            raw_ocr_source_frame: None,
         }
     }
 }

@@ -222,6 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Recover oversized PNG and TIFF rasters with unknown DPI within the image budget.** (#2530)
   Fit a reduced raster before estimating its DPI when the original cannot fit that phase.
+  Fit raw PDF page renders that pass the render budget but exceed native OCR workspace.
 
 - **(ocr): Report the actual budget limit when upscaling a JPEG with unknown DPI.** (#2531)
   Check the planned upscale without retrying at a reduced decode that cannot reuse the source DPI estimate.

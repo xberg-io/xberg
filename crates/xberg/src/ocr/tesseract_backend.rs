@@ -499,6 +499,7 @@ impl OcrBackend for TesseractBackend {
                 .collect(),
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
+            raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
             processing_warnings,
             ..Default::default()
         })
@@ -598,6 +599,7 @@ impl OcrBackend for TesseractBackend {
                 .collect(),
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
+            raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
             processing_warnings,
             ..Default::default()
         })

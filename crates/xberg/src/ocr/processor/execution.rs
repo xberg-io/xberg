@@ -1096,9 +1096,9 @@ mod reduced_jpeg_dpi_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod reduced_jpeg_memory_tests;
 
+mod budgeted_downscale;
 #[cfg(test)]
 mod native_resize_admission_tests;
-mod unknown_dpi_downscale;
 #[cfg(test)]
 mod unknown_dpi_memory_tests;
 
@@ -1146,6 +1146,7 @@ struct PreparedOcrImage {
     height: u32,
     source_dpi: i32,
     apply_pix_preprocessing: bool,
+    raw_ocr_source_frame: Option<crate::types::formats::RawOcrSourceFrame>,
     preprocessing: Option<crate::types::ImagePreprocessingConfig>,
     image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
 }
@@ -1209,6 +1210,7 @@ fn prepare_decided_ocr_image(
             // says it is; 72 remains the assumption only when nobody knows.
             source_dpi: known_source_dpi.map_or(RAW_IMAGE_SOURCE_DPI, |dpi| dpi.round() as i32),
             apply_pix_preprocessing: false,
+            raw_ocr_source_frame: None,
             preprocessing: None,
             image_preprocessing: None,
         };
@@ -1547,6 +1549,7 @@ fn prepare_preprocessed_ocr_image(
                 height: normalized_height,
                 source_dpi,
                 apply_pix_preprocessing: true,
+                raw_ocr_source_frame: None,
                 preprocessing: Some(preprocessing.clone()),
                 image_preprocessing: Some(result.metadata),
             }
@@ -1561,6 +1564,7 @@ fn prepare_preprocessed_ocr_image(
                 // one. The 300 fallback is a guess for when there is nothing better.
                 source_dpi: known_source_dpi.map_or(PREPROCESSING_FALLBACK_SOURCE_DPI, |dpi| dpi.round() as i32),
                 apply_pix_preprocessing: true,
+                raw_ocr_source_frame: None,
                 preprocessing: Some(preprocessing.clone()),
                 image_preprocessing: None,
             }
@@ -2057,6 +2061,7 @@ pub(super) fn perform_ocr(
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut height = prepared_image.height;
     let source_dpi = prepared_image.source_dpi;
+    let raw_ocr_source_frame = prepared_image.raw_ocr_source_frame;
     let preprocessing = prepared_image.preprocessing;
     let image_preprocessing = prepared_image.image_preprocessing;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
@@ -2249,7 +2254,7 @@ pub(super) fn perform_ocr(
         if raw_peak.is_some_and(|peak| peak > security_limits.max_content_size as u64) {
             return Err(OcrError::ImageProcessingFailed(format!(
                 "OCR raw image workspace exceeds security_limits.max_content_size ({} bytes). \
-                 Raise security_limits.max_content_size or lower target_dpi",
+                 Raise security_limits.max_content_size",
                 security_limits.max_content_size,
             )));
         }
@@ -2798,6 +2803,7 @@ pub(super) fn perform_ocr(
         tables,
         ocr_elements,
         internal_document: hocr_document,
+        raw_ocr_source_frame,
     })
 }
 
@@ -4991,6 +4997,7 @@ mod tests {
             tables: Vec::new(),
             ocr_elements: None,
             internal_document: None,
+            raw_ocr_source_frame: None,
         };
         cache
             .set_cached_result(&image_hash, "tesseract", &config_str, None, &marker)

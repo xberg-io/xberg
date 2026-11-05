@@ -585,6 +585,7 @@ mod tests {
             tables: vec![],
             ocr_elements: None,
             internal_document: None,
+            raw_ocr_source_frame: None,
         };
 
         let batch_result = BatchItemResult {

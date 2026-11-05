@@ -773,6 +773,7 @@ mod tests {
             }],
             ocr_elements: None,
             internal_document: None,
+            raw_ocr_source_frame: None,
         }
     }
 

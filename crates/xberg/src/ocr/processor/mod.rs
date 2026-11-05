@@ -290,6 +290,7 @@ mod tests {
                 tables: vec![],
                 ocr_elements: None,
                 internal_document: None,
+                raw_ocr_source_frame: None,
             }),
             error: None,
         };
