@@ -289,6 +289,11 @@ fn allowed_scripts(config: &OcrConfig) -> Option<Vec<Script>> {
     let mut scripts = vec![Script::Latin];
     for lang in effective_languages(config) {
         let scripts_for_lang = scripts_for_language(&lang)?;
+        // ~keep `script_of_letter` does not class Khmer letters, so they weigh nothing against a few letters
+        // of another script on the same line. Classing them would drop real Khmer lines under `eng`.
+        if scripts_for_lang.contains(&Script::Khmer) {
+            return None;
+        }
         for script in scripts_for_lang {
             if !scripts.contains(script) {
                 scripts.push(*script);
@@ -689,6 +694,38 @@ mod tests {
 
         assert_eq!(filtered, content);
         assert_eq!(outcome.dropped_script_lines, 0);
+    }
+
+    /// A Khmer line holding three Greek letters stays: a language list with Khmer has no script rule.
+    #[test]
+    fn should_keep_khmer_line_with_a_few_greek_letters_under_a_khmer_language() {
+        for language in ["khm", "km"] {
+            let config = OcrConfig {
+                language: vec!["eng".to_string(), language.to_string()],
+                ..Default::default()
+            };
+            let content = "ភាសាខ្មែរគឺជាភាសាផ្លូវការ αβγ".to_string();
+
+            let (filtered, outcome) = filter_implausible_lines(&content, &config, true);
+
+            assert_eq!(filtered, content);
+            assert_eq!(outcome.dropped_script_lines, 0);
+        }
+    }
+
+    /// A Khmer line stays under `eng`, and a Cyrillic line on the same page still goes.
+    #[test]
+    fn should_keep_khmer_line_and_drop_cyrillic_line_under_english_only_language_config() {
+        let config = OcrConfig {
+            language: vec!["eng".to_string()],
+            ..Default::default()
+        };
+        let content = "ភាសាខ្មែរគឺជាភាសាផ្លូវការ\nПривет мир".to_string();
+
+        let (filtered, outcome) = filter_implausible_lines(&content, &config, true);
+
+        assert_eq!(filtered, "ភាសាខ្មែរគឺជាភាសាផ្លូវការ");
+        assert_eq!(outcome.dropped_script_lines, 1);
     }
 
     /// GH#1676: an unrecognized language code disables rule (a) entirely rather than

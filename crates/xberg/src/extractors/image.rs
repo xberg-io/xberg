@@ -8448,6 +8448,14 @@ mod han_second_pass_tests {
         );
     }
 
+    /// The retry holds more text than the first pass, read with less confidence.
+    #[test]
+    fn a_longer_retry_with_lower_confidence_does_not_read_better() {
+        let longer = ocr_result(&HAN_SENTENCES.repeat(4), Some(25.0));
+        assert!(!han_retry_reads_better(&first_pass(40.0), &longer));
+        assert!(han_retry_reads_better(&first_pass(20.0), &longer));
+    }
+
     /// The retry is confident but holds only a fragment of the page.
     #[tokio::test]
     async fn a_truncated_retry_keeps_the_first_pass() {

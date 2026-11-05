@@ -1,8 +1,7 @@
 //! Writing systems and the OCR languages that read them.
 //!
 //! One table maps a configured language code to the scripts it is written in. The candle
-//! script-plausibility filter (GH#1676) and the Tesseract language choice (GH#2300) both read it,
-//! so the two cannot disagree about which language covers which script.
+//! script-plausibility filter (GH#1676) and the Tesseract language choice (GH#2300) both read it.
 
 /// A writing system, coarse-grained: enough to tell which OCR language reads a page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +25,8 @@ pub(crate) enum Script {
 /// Returns `None` for a code this table does not recognize. The candle filter reads that as
 /// "cannot judge script plausibility for this language list" and disables its script rule
 /// rather than risk false positives against a language it cannot map. The Tesseract language
-/// choice reads it as "this language does not cover the script".
+/// choice reads it as "this language does not cover the script". The candle filter also turns its
+/// script rule off for Khmer, whose letters [`script_of_letter`] does not class.
 pub(crate) fn scripts_for_language(lang: &str) -> Option<&'static [Script]> {
     match lang.trim().to_ascii_lowercase().as_str() {
         "en" | "eng" | "de" | "deu" | "ger" | "fr" | "fra" | "fre" | "es" | "spa" | "it" | "ita" | "pt" | "por"
