@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 mod prose;
 
-const MIN_UNIT_LETTERS: usize = 2;
+pub(super) const MIN_UNIT_LETTERS: usize = 2;
 const MAX_CERTIFICATE_WORDS: usize = 1024;
 const MAX_CERTIFICATE_TEXT_BYTES: usize = 512 * 1024;
 
@@ -274,7 +274,7 @@ fn retains_primary(
     true
 }
 
-fn protected(word: &OcrElement, thresholds: &OcrQualityThresholds, minimum_length: usize) -> bool {
+pub(super) fn protected(word: &OcrElement, thresholds: &OcrQualityThresholds, minimum_length: usize) -> bool {
     word.confidence.recognition * 100.0 >= thresholds.min_ocr_mean_confidence
         && word.text.split_whitespace().any(|token| {
             token.chars().any(|character| character.is_numeric())

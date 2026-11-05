@@ -28,6 +28,103 @@ const USE_CACHE_BACKEND_OPTION: &str = "use_cache";
 /// languages, collide. GH#1891. ~keep
 type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>);
 
+#[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) mod orientation_evidence {
+    use super::WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY;
+    use crate::types::{OcrElement, OcrElementLevel, OcrExtractionResult};
+
+    #[derive(Clone, Copy)]
+    pub(crate) enum Capture {
+        Primary,
+        TwoTableCandidate,
+    }
+
+    tokio::task_local! {
+        pub(crate) static CAPTURE: Capture;
+    }
+
+    pub(crate) const MAX_WORDS: usize = 1024;
+    pub(crate) const MAX_BYTES: usize = 128 * 1024;
+
+    pub(super) fn take(result: &mut OcrExtractionResult, limit: usize) -> Option<Vec<OcrElement>> {
+        let mut evidence = result.ocr_elements.take()?;
+        if result
+            .metadata
+            .get(WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY)
+            .is_some_and(|count| count.as_u64() != Some(0))
+            || evidence.len() > MAX_WORDS
+            || evidence.capacity() > MAX_WORDS * 2
+            || evidence
+                .iter()
+                .try_fold(0usize, |sum, item| sum.checked_add(item.text.len()))
+                .is_none_or(|bytes| bytes > MAX_BYTES.min(limit))
+        {
+            return None;
+        }
+        evidence.retain(|item| item.level == OcrElementLevel::Word);
+        (!evidence.is_empty()).then_some(evidence)
+    }
+
+    pub(super) fn captures(result: &OcrExtractionResult, mode: Capture) -> bool {
+        matches!(mode, Capture::Primary) || result.tables.len() == 2
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn read(words: Vec<OcrElement>) -> OcrExtractionResult {
+            OcrExtractionResult {
+                ocr_elements: Some(words),
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn bounded_orientation_retry_capture_moves_only_complete_owned_evidence() {
+            let word = OcrElement {
+                text: "49".into(),
+                level: OcrElementLevel::Word,
+                ..Default::default()
+            };
+            for skipped in [None, Some(0), Some(1)] {
+                let mut result = read(vec![word.clone()]);
+                let pointer = result.ocr_elements.as_ref().unwrap().as_ptr();
+                if let Some(skipped) = skipped {
+                    result
+                        .metadata
+                        .insert(WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY.into(), skipped.into());
+                }
+                let captured = take(&mut result, MAX_BYTES);
+                assert!(result.ocr_elements.is_none());
+                assert_eq!(
+                    captured.as_ref().map(Vec::as_ptr),
+                    if skipped == Some(1) { None } else { Some(pointer) }
+                );
+            }
+            assert!(take(&mut read(vec![word.clone(); MAX_WORDS + 1]), MAX_BYTES).is_none());
+            assert!(take(&mut read(vec![word]), 1).is_none());
+        }
+    }
+}
+
+fn select_byte_read_elements(
+    result: &mut crate::types::OcrExtractionResult,
+    config: &OcrConfig,
+) -> Option<Vec<crate::types::OcrElement>> {
+    #[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
+    if let Ok(mode) = orientation_evidence::CAPTURE.try_with(|mode| *mode)
+        && orientation_evidence::captures(result, mode)
+    {
+        let limit = config
+            .security_limits
+            .as_ref()
+            .map_or(usize::MAX, |limits| limits.max_content_size);
+        return orientation_evidence::take(result, limit);
+    }
+    select_output_ocr_elements(result.ocr_elements.take(), config)
+}
+
 fn select_output_ocr_elements(
     elements: Option<Vec<crate::types::OcrElement>>,
     config: &OcrConfig,
@@ -464,8 +561,8 @@ impl TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
+        let ocr_elements = select_byte_read_elements(&mut ocr_result, config);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
-        let ocr_elements = select_output_ocr_elements(ocr_result.ocr_elements.take(), config);
 
         let mut additional = AHashMap::new();
         for (key, value) in ocr_result.metadata {

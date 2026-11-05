@@ -1,0 +1,31 @@
+{
+  "font_sha256": "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322",
+  "artifacts": {
+    "two-tables-0.pdf": {
+      "sha256": "2d8f6a7014b83ebfe71f8ec8de636c044b4ba5dcb3763a9e1c49cf729c558991",
+      "bytes": 135464,
+      "pixels": [1276, 1650],
+      "clockwise_degrees": 0
+    },
+    "two-tables-90.pdf": {
+      "sha256": "2721fa7bfc555cf67280f0130ae147e565221101a8f1c785da045075cd380951",
+      "bytes": 67736,
+      "pixels": [1650, 1276],
+      "clockwise_degrees": 90
+    },
+    "two-tables-270.pdf": {
+      "sha256": "62de35a9ce2c33253bdedc18a57e8d5cc43ebd96304ad4e82ebab32bb322dff2",
+      "bytes": 67278,
+      "pixels": [1650, 1276],
+      "clockwise_degrees": 270
+    },
+    "strict-two-tables-0.pdf": {
+      "sha256": "8450a0394b3b3c441448641d7de2df5937ed6985d7eb6c9c0325aa30e862abc0",
+      "bytes": 106944
+    },
+    "strict-two-tables-90.pdf": {
+      "sha256": "57f42b3bf8ab2cc5c9c6477af74398177ec1899cbf4da76aa2b4b9ea8b103e10",
+      "bytes": 52670
+    }
+  }
+}
