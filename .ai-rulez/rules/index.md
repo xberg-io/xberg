@@ -5,5 +5,6 @@
 - [Changelog Policy](changelog-policy.md) - What belongs in Xberg's user-facing CHANGELOG and what to omit. Use when editing a changelog.
 - [Extraction Measurement Hygiene](extraction-measurement-hygiene.md) - Xberg extraction A/B and sweep hygiene: per-run cache isolation, OCR no-cache, CLI JSON nesting, timings. Use when measuring extraction output.
 - [Extraction Safety](extraction-safety.md) - Xberg extraction safety: SecurityLimits, MIME validation, fallback eligibility, partial results, error text. Use when editing extractors or core.
+- [Layout From Input](layout-from-input.md) - Derive layout decisions from the geometry and raster properties of the input.
 - [Measurement Discipline](measurement-discipline.md) - Judging Xberg quality changes: absolute counts over ratios, tail vs population, bracketing preserved binaries. Use when comparing extraction quality.
 - [Plugin Bundles](plugin-bundles.md) - The agent plugin and root skills/ are generated from plugin/.ai-rulez: what to edit, how to regenerate and verify. Use when editing plugin/ or skills/.
