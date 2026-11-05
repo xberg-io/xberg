@@ -3,11 +3,6 @@
 //! Extracts embedded images from PDF pages via xberg_native_pdf, including
 //! actual image data and metadata.
 
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-mod stored_copy;
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-use stored_copy::collect_legacy_page_fallback_images;
-
 #[cfg(test)]
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 mod decode_skip_tests;
@@ -317,17 +312,6 @@ impl StoredJpegRecoveryBudget {
         });
         true
     }
-}
-
-/// Admit stored-input copies per page while preserving legacy codec behavior.
-/// Filter-expanded JPEG, raw pixels and encoded PNG outputs have separate, unqualified bounds.
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(crate) fn page_ocr_fallback_image_bytes_with_stored_copy_limit(
-    doc: &xberg_native_pdf::PdfDocument,
-    page_idx: usize,
-    max_stored_bytes: usize,
-) -> Vec<PageFallbackImage> {
-    collect_legacy_page_fallback_images(doc, page_idx, Some(max_stored_bytes), |_| {})
 }
 
 /// Collect OCR-ready image bytes for every image XObject on `page_idx`, for use as a

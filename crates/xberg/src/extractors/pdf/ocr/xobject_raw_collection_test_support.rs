@@ -39,11 +39,7 @@ pub(super) async fn detached(
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
     let ocr = pipeline_xobject_recovery_ocr_config(config, ocr);
     let limits = ocr.security_limits.clone().unwrap_or_default();
-    let images = crate::pdf::native::images::page_ocr_fallback_image_bytes_with_stored_copy_limit(
-        doc,
-        0,
-        limits.max_content_size,
-    );
+    let images = crate::pdf::native::images::page_ocr_fallback_image_bytes_with_limits(doc, 0, &limits);
     let recovered = super::super::rendering::recover_image_xobjects(
         &backend,
         &images,

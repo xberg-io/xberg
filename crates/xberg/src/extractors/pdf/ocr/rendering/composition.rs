@@ -156,11 +156,8 @@ pub(in crate::extractors::pdf::ocr) async fn recover_page_text_from_bounded_imag
     if !can_project_stored_jpeg_page(render_doc, page_idx, &limits, &mut context)? {
         return Ok(None);
     }
-    let fallback_images = crate::pdf::native::images::page_ocr_fallback_image_bytes_with_stored_copy_limit(
-        render_doc,
-        page_idx,
-        limits.max_content_size,
-    );
+    let fallback_images =
+        crate::pdf::native::images::page_ocr_fallback_image_bytes_with_limits(render_doc, page_idx, &limits);
     context.check_cancelled()?;
     if fallback_images.is_empty() {
         return Ok(None);

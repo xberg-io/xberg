@@ -276,3 +276,6 @@ async fn both_retry_routes_forward_the_same_non_size_limits() {
         "without OCR limits, both routes start from the extraction limits"
     );
 }
+
+#[path = "xobject_budget_parity_tests/bounded_transport.rs"]
+mod bounded_transport;
