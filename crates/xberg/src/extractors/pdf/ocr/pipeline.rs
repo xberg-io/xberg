@@ -1153,7 +1153,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(feature = "layout-detection")]
                     let page_detection: Option<crate::layout::DetectionResult> =
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx).cloned();
-                    join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                    let task = crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                             return (idx, Err(crate::XbergError::Cancelled.into()));
                         }
@@ -1181,7 +1181,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         ))
                         .await;
                         (idx, result)
-                    }));
+                    });
+                    #[cfg(test)]
+                    let task = crate::plugins::registry::inherit_test_ocr_backend(task);
+                    join_set.spawn(task);
                 }
                 while let Some(join_result) = join_set.join_next().await {
                     let (page_idx, result) = join_result.map_err(|e| crate::XbergError::Plugin {
