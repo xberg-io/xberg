@@ -26,6 +26,8 @@ pub(crate) use markdown::strip_embedded_gfm_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod hidden_layer;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod native_word_coverage;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod orientation_retry;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use orientation_retry::recognition_retry_eligible;
