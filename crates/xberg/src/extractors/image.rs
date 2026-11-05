@@ -3340,6 +3340,7 @@ impl ImageExtractor {
                 known_full_page_scan: true,
                 single_block_pages: None,
                 native_page_layers: None,
+                ..Default::default()
             }),
         ))
         .await?;

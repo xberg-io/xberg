@@ -557,6 +557,7 @@ type MixedLayoutOutcome = (
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 struct MixedOcrPageSelection<'a> {
     ocr: &'a [u32],
+    raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
     single_block: &'a [u32],
     /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
     /// read them from its own native text.
@@ -624,6 +625,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
         boundaries,
         MixedOcrPageSelection {
             ocr: ocr_page_numbers,
+            raster_dpis: None,
             single_block: single_block_page_numbers,
             native_layers: None,
             hidden_layer_backend: None,
@@ -664,6 +666,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
         boundaries,
         MixedOcrPageSelection {
             ocr: scanned_pages,
+            raster_dpis: None,
             single_block: &[],
             native_layers: None,
             hidden_layer_backend: Some(backend),
@@ -793,6 +796,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // duplicate layout work while keeping selected-page layout classification. `page_idx` is the
     // document-wide 0-based index the layout pass uses. ~keep
     #[cfg(feature = "layout-detection")]
+    let mut layout_raster_dpis = crate::pdf::render::OcrRasterDpis::new();
+    #[cfg(feature = "layout-detection")]
     let (resolved_layout_inputs, layout_pass_warning, layout_pass_glyph_drop_warnings): MixedLayoutOutcome =
         if let MixedLayoutInputs::Prepared(_) = layout_inputs {
             (None, None, Vec::new())
@@ -820,17 +825,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         output:
                             super::super::layout_runner::LayoutRunOutput {
                                 data: Some((images, _, _, detections)),
+                                raster_dpis,
                                 ..
                             },
                         warning,
                         ..
                     },
                     glyph_drop_warnings,
-                )) => (
-                    Some(super::super::prepare_ocr_layout_inputs(images, detections)),
-                    warning,
-                    glyph_drop_warnings,
-                ),
+                )) => {
+                    layout_raster_dpis = raster_dpis;
+                    (
+                        Some(super::super::prepare_ocr_layout_inputs(images, detections)),
+                        warning,
+                        glyph_drop_warnings,
+                    )
+                }
                 Ok((
                     super::super::layout_runner::LayoutAttempt {
                         output: super::super::layout_runner::LayoutRunOutput { data: None, .. },
@@ -1007,7 +1016,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     };
 
     let total = page_indices.len();
-    let mut raster_dpis = super::rendering::PageRasterDpis::new();
+    let mut raster_dpis = pages.raster_dpis.as_deref().cloned().unwrap_or_default();
+    #[cfg(feature = "layout-detection")]
+    raster_dpis.extend(layout_raster_dpis);
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
     // the per-page metadata is gone by the time `ocr_results` is judged.
@@ -1142,6 +1153,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        ..Default::default()
                     };
                     // See `extract_with_ocr_for_page`'s doc comment on
                     // `points_per_pixel_override`: this call hands the stage a single
@@ -1314,6 +1326,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        ..Default::default()
                     };
                     let points_per_pixel_override = {
                         let (_, page_height_pt) = page_dimensions_pt(&render_doc, *page_idx);
@@ -2352,6 +2365,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
     let native_layers = page_ocr_hints
         .as_ref()
         .and_then(|hints| hints.native_page_layers.clone());
+    let raster_dpis = page_ocr_hints.as_ref().and_then(|hints| hints.raster_dpis.clone());
     let mut single_block_pages = page_ocr_hints
         .and_then(|hints| hints.single_block_pages)
         .map(|pages| pages.iter().copied().collect::<Vec<_>>())
@@ -2378,6 +2392,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         &boundaries,
         MixedOcrPageSelection {
             ocr: &page_numbers,
+            raster_dpis,
             single_block: &single_block_pages,
             native_layers,
             hidden_layer_backend: None,
@@ -2566,9 +2581,11 @@ pub(super) struct DetachedOcrPage<'a> {
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct PageOcrHints {
     pub(crate) source_dpi: Option<f64>,
+    #[cfg(feature = "pdf")]
+    pub(crate) raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
     /// `true` is authoritative; `false` means the detached caller has no positive scan signal,
     /// so a content-backed whole-document route still performs its normal per-page detection.
     pub(crate) known_full_page_scan: bool,
@@ -3065,7 +3082,15 @@ pub(super) async fn extract_with_ocr_for_page(
     #[cfg(feature = "pdf")]
     let mut render_warnings = Vec::new();
     #[cfg(feature = "pdf")]
-    let mut raster_dpis = super::rendering::PageRasterDpis::new();
+    let mut raster_dpis = if images.is_some() {
+        page_ocr_hints
+            .as_ref()
+            .and_then(|hints| hints.raster_dpis.as_deref())
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        super::rendering::PageRasterDpis::new()
+    };
     let mut backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     let mut backend_additional_metadata: Option<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>> =
         None;
@@ -6706,3 +6731,7 @@ mod memory_recovery_tests;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/upright_processed_geometry_tests.rs"]
 mod upright_processed_geometry_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/raster_budget_tests.rs"]
+mod raster_budget_tests;

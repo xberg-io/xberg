@@ -964,16 +964,6 @@ pub(crate) fn render_page_with_safeguards(
     render_page_with_options(doc, page_index, &options, max_png_working_bytes)
 }
 
-#[cfg(feature = "layout-detection")]
-pub(crate) fn render_pdf_ocr_page(
-    doc: &xberg_native_pdf::PdfDocument,
-    page_index: usize,
-    images_config: Option<&crate::core::config::ImageExtractionConfig>,
-    security_limits: &crate::extractors::security::SecurityLimits,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
-    render_pdf_ocr_page_with_dpi(doc, page_index, images_config, security_limits).map(|(image, _)| image)
-}
-
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct OcrRasterDpi {
@@ -981,6 +971,10 @@ pub(crate) struct OcrRasterDpi {
     actual: u32,
     budget_clamped: bool,
 }
+
+/// Native OCR render provenance by zero-indexed physical PDF page, paired with that render's image.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) type OcrRasterDpis = ahash::AHashMap<usize, OcrRasterDpi>;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 impl OcrRasterDpi {

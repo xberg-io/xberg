@@ -1,6 +1,6 @@
 use super::{EncodedPage, PageRenderFailures, RenderedPages};
 
-pub(crate) type PageRasterDpis = ahash::AHashMap<usize, crate::pdf::render::OcrRasterDpi>;
+pub(crate) type PageRasterDpis = crate::pdf::render::OcrRasterDpis;
 type PageImage = (usize, image::DynamicImage);
 pub(super) type PageWithDpi = (PageImage, crate::pdf::render::OcrRasterDpi);
 type PageRenderOutcome = (usize, crate::Result<PageWithDpi>);
