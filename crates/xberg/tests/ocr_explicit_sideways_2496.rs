@@ -181,6 +181,26 @@ fn explicit_language_block_recovers_without_classifier_features() {
 
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn explicit_language_block_recovers_the_counterclockwise_source_grid() {
+    const CASE: &str = "explicit_language_block_recovers_the_counterclockwise_source_grid";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let (_, mut config) = controls();
+    let source = PdfDocument::from_bytes(PDF.to_vec()).unwrap();
+    let images = source.page_image_handles(0).unwrap();
+    let raster = images[0].decode().unwrap().to_dynamic_image().unwrap().to_rgb8();
+    let counterclockwise = image_pdf(&image::imageops::rotate180(&raster));
+    config.ocr = Some(OcrConfig::default());
+    let actual = extract("explicit-counterclockwise", &counterclockwise, &config);
+    assert_source_table(&actual);
+    assert!(actual.ocr_elements.is_none());
+    assert!(!actual.metadata.additional.contains_key("auto_rotated"));
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn explicit_osd_retains_the_original_source_grid_without_rotating_pixels() {
     const GRID_CASE: &str = "explicit_osd_retains_the_original_source_grid_without_rotating_pixels";
     if std::env::var(CHILD).as_deref() != Ok(GRID_CASE) {

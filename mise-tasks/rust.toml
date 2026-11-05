@@ -60,7 +60,7 @@ run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usag
 ["rust:test:explicit-sideways"]
 description = "Qualify explicit sideways OCR with pinned offline model artifacts"
 depends = ["os:require linux darwin"]
-usage = 'arg "<profile>" help="Use warm for ten controls or native for four classifier-free controls"'
+usage = 'arg "<profile>" help="Use warm for eleven controls or native for five classifier-free controls"'
 run = 'bash scripts/ci/rust/run-explicit-sideways-tests.sh "$usage_profile"'
 
 ["rust:test:mime"]

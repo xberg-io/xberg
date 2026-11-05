@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::ocr::processor::validation::{TessdataEnv, existing_tessdata_dir_for};
+use crate::ocr::table::tsv_parser::put_line_words_on_one_band;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use std::collections::{HashMap, HashSet};
 
@@ -325,6 +326,7 @@ fn matches_original_frame(
     if words.len() > MAX_CERTIFICATE_WORDS {
         return false;
     }
+    let line_keys = std::cell::OnceCell::new();
     let matches = [90, 180, 270]
         .into_iter()
         .filter(|angle| {
@@ -332,10 +334,76 @@ fn matches_original_frame(
                 .iter()
                 .map(|word| project_word(word, dimensions, *angle))
                 .collect::<Option<Vec<_>>>();
-            projected.is_some_and(|words| table_matches_words(cells, &words, threshold))
+            projected.is_some_and(|mut projected| {
+                if table_matches_words(cells, &projected, threshold) {
+                    return true;
+                }
+                let Some(keys) = line_keys
+                    .get_or_init(|| iterator_line_keys(elements, &words))
+                    .as_deref()
+                else {
+                    return false;
+                };
+                put_line_words_on_one_band(&mut projected, keys);
+                table_matches_words(cells, &projected, threshold)
+            })
         })
         .count();
     matches == 1
+}
+
+// Iterator line elements are emitted in reading order from native line starts. Require their
+// text and union boxes to account for every raw word before borrowing the TSV line-band rule. ~keep
+fn iterator_line_keys(elements: &[OcrElement], words: &[HocrWord]) -> Option<Vec<Option<usize>>> {
+    let mut keys = Vec::with_capacity(words.len());
+    for (index, line) in elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Line)
+        .enumerate()
+    {
+        if line.backend_metadata.get("backend")?.as_str()? != "tesseract-iterator" {
+            return None;
+        }
+        let mut tokens = line.text.split_whitespace().peekable();
+        let start = keys.len();
+        while tokens.peek().is_some() {
+            let word = words.get(keys.len())?;
+            for token in word.text.split_whitespace() {
+                if tokens.next()? != token {
+                    return None;
+                }
+            }
+            keys.push(Some(index));
+        }
+        let members = &words[start..keys.len()];
+        if !iterator_line_box_matches(line, members) {
+            return None;
+        }
+    }
+    (keys.len() == words.len()).then_some(keys)
+}
+
+fn iterator_line_box_matches(line: &OcrElement, words: &[HocrWord]) -> bool {
+    let Some(first) = words.first() else {
+        return false;
+    };
+    let (left, top, right, bottom) = words.iter().fold(
+        (
+            first.left,
+            first.top,
+            first.left.saturating_add(first.width),
+            first.top.saturating_add(first.height),
+        ),
+        |(left, top, right, bottom), word| {
+            (
+                left.min(word.left),
+                top.min(word.top),
+                right.max(word.left.saturating_add(word.width)),
+                bottom.max(word.top.saturating_add(word.height)),
+            )
+        },
+    );
+    line.geometry.to_aabb() == (left, top, right - left, bottom - top)
 }
 
 fn project_word(word: &HocrWord, dimensions: (u32, u32), angle: u16) -> Option<HocrWord> {
@@ -448,6 +516,62 @@ mod tests {
         let mut changed = candidate.clone();
         changed.tables.push(candidate.tables[0].clone());
         assert!(!accepted(&original, &changed));
+    }
+
+    #[test]
+    fn counterclockwise_table_certifies_an_overlapping_mark_on_its_iterator_line() {
+        let word = |text: &str, left: u32, top: u32, width: u32, height: u32| {
+            OcrElement::new(
+                text,
+                crate::types::OcrBoundingGeometry::Rectangle {
+                    left: 400 - top - height,
+                    top: left,
+                    width: height,
+                    height: width,
+                },
+                crate::types::OcrConfidence {
+                    recognition: 0.95,
+                    detection: None,
+                },
+            )
+            .with_level(OcrElementLevel::Word)
+            .with_metadata("backend", "tesseract-iterator".into())
+        };
+        let words = vec![
+            (0, word("Travel", 20, 38, 48, 30)),
+            (1, word("_", 100, 71, 2, 2)),
+            (1, word("31,026", 120, 40, 60, 34)),
+            (2, word("Rates", 20, 102, 48, 34)),
+            (3, word("1,048", 120, 102, 60, 34)),
+            (4, word("Audit", 20, 164, 48, 34)),
+            (5, word("78,712", 120, 164, 60, 34)),
+        ];
+        let elements = crate::ocr::conversion::tesseract_elements_with_lines(words.clone());
+        let cells = [
+            vec!["Travel".into(), "_ 31,026".into()],
+            vec!["Rates".into(), "1,048".into()],
+            vec!["Audit".into(), "78,712".into()],
+        ];
+        let bbox = BoundingBox {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 400.0,
+            y1: 250.0,
+        };
+        assert!(matches_original_frame(&cells, &elements, bbox, 0.5, (400, 250)));
+
+        let mut unpaired = words;
+        unpaired[1].0 = 6;
+        let unpaired = crate::ocr::conversion::tesseract_elements_with_lines(unpaired);
+        assert!(!matches_original_frame(&cells, &unpaired, bbox, 0.5, (400, 250)));
+
+        let mut invalid = elements.clone();
+        invalid.remove(1);
+        assert!(!matches_original_frame(&cells, &invalid, bbox, 0.5, (400, 250)));
+
+        let mut invalid = elements;
+        invalid[1].geometry = invalid[0].geometry.clone();
+        assert!(!matches_original_frame(&cells, &invalid, bbox, 0.5, (400, 250)));
     }
 
     #[test]
