@@ -56,7 +56,7 @@ fn should_preserve_the_entire_cid_run_when_only_some_unicode_codes_are_missing()
 }
 
 #[test]
-fn should_keep_good_tounicode_text_and_ink_with_a_two_entry_font_cmap() {
+fn should_keep_good_tounicode_text_with_a_two_entry_font_cmap() {
     let document = PdfDocument::from_bytes(GOOD.to_vec()).unwrap();
     let text = document.extract_text(0).unwrap();
     let expected = [
@@ -71,7 +71,11 @@ fn should_keep_good_tounicode_text_and_ink_with_a_two_entry_font_cmap() {
         text.split_whitespace().collect::<Vec<_>>(),
         expected.split_whitespace().collect::<Vec<_>>()
     );
-    let image = raster(GOOD);
+}
+
+#[test]
+fn should_paint_all_lines_with_a_complete_embedded_unicode_map() {
+    let image = raster(include_bytes!("fixtures/cid_glyph_raster_2309/good_full.pdf"));
     assert_twenty_source_lines_have_ink(&image);
 }
 

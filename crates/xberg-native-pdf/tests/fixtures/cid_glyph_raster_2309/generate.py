@@ -43,7 +43,7 @@ tt["cmap"] = t  # a two-entry Unicode cmap
 mode = sys.argv[2] if len(sys.argv) > 2 else "nul"
 if mode == "direct":
     del tt["cmap"]
-elif mode == "custom":
+elif mode in ("custom", "good-full"):
     tt["cmap"] = full_cmap
 
 
@@ -63,7 +63,7 @@ tu = (
 )
 if mode != "missing":
     for glyph, character in sorted((g, c) for c, g in gid.items()):
-        mapped = mode in ("good", "direct") or (mode in ("partial", "custom") and character != "a")
+        mapped = mode in ("good", "good-full", "direct") or (mode in ("partial", "custom") and character != "a")
         tu += f"<{code(glyph):04X}> <{ord(character) if mapped else 0:04X}>\n"
 tu += "endbfchar endcmap end end"
 ops = ["BT /F1 12 Tf 14 TL 72 740 Td"]
