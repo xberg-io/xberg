@@ -5,6 +5,8 @@
 
 use std::borrow::Cow;
 
+use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
+
 use super::lines::{
     crosses_visual_line_break, needs_space_between, raised_numeric_prefix_has_word_gap, segments_need_space,
 };
@@ -422,6 +424,209 @@ fn paragraph_is_covered_and_carried_by_table(
     let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
 
     inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO && table_carries_every_token(text, table_token_counts)
+}
+
+pub(super) fn reconcile_certified_table_paragraphs(
+    pages: &mut [Vec<PdfParagraph>],
+    tables: &[crate::types::Table],
+    members: &ahash::AHashMap<usize, crate::pdf::native::table::source_members::CertifiedRuns>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+    image_positions: &[(u32, u32)],
+) {
+    if members.is_empty() {
+        return;
+    }
+    let mut by_page = ahash::AHashMap::<_, Vec<_>>::new();
+    for (index, table) in tables.iter().enumerate() {
+        by_page.entry(table.page_number).or_default().push((index, table));
+    }
+    for (number, tables) in by_page {
+        let [(index, table)] = tables.as_slice() else {
+            continue;
+        };
+        let (Some(runs), Some(page), Some(table_bbox)) = (
+            members.get(index),
+            number.checked_sub(1).and_then(|index| pages.get_mut(index as usize)),
+            table.bounding_box,
+        ) else {
+            continue;
+        };
+        let counts = table_coverage_token_counts(table);
+        let Some(seen) = surviving_source_members(page) else {
+            continue;
+        };
+        let singletons = single_residual_members(&seen, &runs.contained);
+        let captions: ahash::AHashSet<_> = page.iter().filter_map(|paragraph| paragraph.caption_for).collect();
+        for (index, paragraph) in page.iter_mut().enumerate() {
+            if !captions.contains(&index)
+                && let Some(repaired) =
+                    recover_mixed_table_tick(paragraph, table, table_bbox, &counts, &singletons, hyphens)
+            {
+                *paragraph = repaired;
+            }
+        }
+        if captions.is_empty() && !image_positions.iter().any(|&(page, _)| page == number) {
+            let painted = single_residual_members(&seen, &runs.painted_overhangs);
+            if let Some(index) = isolated_painted_orphan(page, &painted, hyphens) {
+                page.remove(index);
+            }
+        }
+    }
+}
+
+fn surviving_source_members(page: &[PdfParagraph]) -> Option<ahash::AHashMap<SegmentKey, usize>> {
+    use crate::pdf::native::table::source_members::{MAX_PAGE_SEGMENTS, MAX_PROOF_WORK};
+
+    let mut seen = ahash::AHashMap::<SegmentKey, usize>::new();
+    let mut bytes = 0usize;
+    for (index, segment) in page
+        .iter()
+        .flat_map(|para| &para.lines)
+        .flat_map(|line| &line.segments)
+        .enumerate()
+    {
+        bytes = bytes.checked_add(segment.text.len())?;
+        if index >= MAX_PAGE_SEGMENTS || bytes > MAX_PROOF_WORK {
+            return None;
+        }
+        *seen.entry(SegmentKey::from(segment)).or_default() += 1;
+    }
+    Some(seen)
+}
+
+fn single_residual_members<'a>(
+    seen: &ahash::AHashMap<SegmentKey, usize>,
+    runs: &'a [Vec<SegmentKey>],
+) -> ahash::AHashSet<&'a SegmentKey> {
+    runs.iter()
+        .filter(|run| run.len() > 1)
+        .filter_map(|run| {
+            let mut remaining = run.iter().filter(|key| seen.contains_key(*key));
+            let key = remaining.next()?;
+            (seen.get(key) == Some(&1) && remaining.next().is_none()).then_some(key)
+        })
+        .collect()
+}
+
+fn isolated_painted_orphan(
+    page: &[PdfParagraph],
+    candidates: &ahash::AHashSet<&SegmentKey>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) -> Option<usize> {
+    if candidates.len() != 1 || page.iter().any(|p| p.is_list_item || p.layout_region_path.is_some()) {
+        return None;
+    }
+    page.iter().position(|paragraph| {
+        let [line] = paragraph.lines.as_slice() else {
+            return false;
+        };
+        let [glyph] = line.segments.as_slice() else {
+            return false;
+        };
+        if !plain_source_paragraph(paragraph)
+            || !is_digit(glyph)
+            || !candidates.contains(&SegmentKey::from(glyph))
+            || paragraph.block_bbox != Some((glyph.x, glyph.y, glyph.x + glyph.width, glyph.y + glyph.height))
+        {
+            return false;
+        }
+        let (text, annotations) = extract_text_and_annotations(paragraph, hyphens);
+        text == glyph.text && annotations.is_empty()
+    })
+}
+
+fn is_digit(glyph: &crate::pdf::hierarchy::SegmentData) -> bool {
+    matches!(glyph.text.as_bytes(), [digit] if digit.is_ascii_digit())
+}
+
+fn recover_mixed_table_tick(
+    paragraph: &PdfParagraph,
+    table: &crate::types::Table,
+    table_bbox: BoundingBox,
+    counts: &std::collections::HashMap<String, usize>,
+    singletons: &ahash::AHashSet<&crate::pdf::native::hierarchy::script_evidence::SegmentKey>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) -> Option<PdfParagraph> {
+    let [outside, owned] = paragraph.lines.as_slice() else {
+        return None;
+    };
+    let [orphan] = owned.segments.as_slice() else {
+        return None;
+    };
+    if !plain_source_paragraph(paragraph) || !is_digit(orphan) || !singletons.contains(&SegmentKey::from(orphan)) {
+        return None;
+    }
+    let (_, annotations) = extract_text_and_annotations(paragraph, hyphens);
+    let text = paragraph_effective_text(paragraph, hyphens);
+    if !annotations.is_empty() || !paragraph_is_covered_and_carried_by_table(paragraph, &text, table, counts) {
+        return None;
+    }
+    let bounds = outside_tick_bounds(outside, table_bbox)?;
+    let mut repaired = paragraph.clone();
+    repaired.lines.pop();
+    repaired.block_bbox = Some(bounds);
+    let (text, annotations) = extract_text_and_annotations(&repaired, hyphens);
+    let (whole, fraction) = text.split_once('.')?;
+    if !annotations.is_empty()
+        || whole.is_empty()
+        || fraction.is_empty()
+        || !whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
+        || !outside
+            .segments
+            .iter()
+            .flat_map(|segment| segment.text.chars())
+            .eq(text.chars())
+    {
+        return None;
+    }
+    repaired.word_count = PdfParagraph::compute_word_count("", &repaired.lines);
+    Some(repaired)
+}
+
+fn plain_source_paragraph(paragraph: &PdfParagraph) -> bool {
+    !(!paragraph.text.is_empty()
+        || paragraph.heading_level.is_some()
+        || paragraph.is_bold
+        || paragraph.is_list_item
+        || paragraph.is_code_block
+        || paragraph.is_formula
+        || paragraph.is_page_furniture
+        || paragraph.layout_class.is_some()
+        || paragraph.layout_region_path.is_some()
+        || paragraph.caption_for.is_some()
+        || !paragraph.lines.iter().all(|line| {
+            line.native_scripts.is_empty()
+                && line.segments.iter().all(|segment| {
+                    segment.is_unrotated()
+                        && segment.assigned_role.is_none()
+                        && !segment.is_bold
+                        && !segment.is_italic
+                        && !segment.is_monospace
+                })
+        }))
+}
+
+fn outside_tick_bounds(line: &super::types::PdfLine, table: BoundingBox) -> Option<(f32, f32, f32, f32)> {
+    let first = line.segments.first()?;
+    let mut bounds = (first.x, first.y, first.x + first.width, first.y + first.height);
+    for segment in &line.segments {
+        let right = segment.x + segment.width;
+        let top = segment.y + segment.height;
+        if ![segment.x, segment.y, right, top].iter().all(|edge| edge.is_finite())
+            || segment.x >= right
+            || segment.y >= top
+            || f64::from(right) >= table.x0
+        {
+            return None;
+        }
+        bounds = (
+            bounds.0.min(segment.x),
+            bounds.1.min(segment.y),
+            bounds.2.max(right),
+            bounds.3.max(top),
+        );
+    }
+    Some(bounds)
 }
 
 /// Push paragraph elements in their established reading order, with tables interleaved.
@@ -1552,6 +1757,49 @@ mod tests {
     }
 
     #[test]
+    fn annotated_number_uses_its_gap_only_at_the_start_of_a_paragraph() {
+        let number = SegmentData {
+            x: 25.0,
+            width: 4.0,
+            height: 6.0,
+            font_size: 6.0,
+            baseline_y: 702.5,
+            is_bold: true,
+            ..plain_segment("5")
+        };
+        let body = SegmentData {
+            x: 31.0,
+            width: 95.0,
+            font_size: 10.0,
+            is_bold: true,
+            ..plain_segment("survey that followed")
+        };
+        let prefix = SegmentData {
+            text: "Earlier ".to_owned(),
+            x: 0.0,
+            width: 24.0,
+            ..number.clone()
+        };
+        for (segments, expected) in [
+            (vec![number.clone(), body.clone()], "5 survey that followed"),
+            (vec![prefix, number, body], "Earlier 5survey that followed"),
+        ] {
+            let mut paragraph = make_paragraph("", None);
+            paragraph.lines[0].segments = segments;
+            let (text, annotations) = extract_text_and_annotations(&paragraph, &Default::default());
+            assert_eq!(text, expected);
+            assert_eq!(
+                annotations,
+                [TextAnnotation {
+                    start: 0,
+                    end: expected.len() as u32,
+                    kind: AnnotationKind::Bold
+                }]
+            );
+        }
+    }
+
+    #[test]
     fn should_preserve_script_byte_offsets_with_overlapping_bold_and_italic() {
         let mut para = make_paragraph("", None);
         let mut base = plain_segment("é10");
@@ -1677,6 +1925,113 @@ mod tests {
             caption_for: None,
             block_bbox: None,
             word_count,
+        }
+    }
+
+    #[test]
+    fn late_tick_recovery_requires_a_unique_orphan_and_plain_disjoint_line() {
+        let mut paragraph = make_paragraph_at("0.6", None, 20.0);
+        paragraph.lines[0].segments[0].width = 10.0;
+        paragraph.lines[0].segments[0].y = 20.0;
+        let mut orphan = make_paragraph_at("0", None, 10.0).lines.remove(0);
+        orphan.segments[0].x = 97.0;
+        orphan.segments[0].width = 5.0;
+        orphan.segments[0].y = 10.0;
+        let orphan_key = SegmentKey::from(&orphan.segments[0]);
+        let sibling_key = SegmentKey::from(&SegmentData {
+            x: 102.0,
+            ..plain_segment(".4")
+        });
+        paragraph.lines.push(orphan);
+        paragraph.block_bbox = Some((0.0, 10.0, 102.0, 32.0));
+        let table = crate::types::Table {
+            cells: vec![vec!["0.6 0.4".into()]],
+            markdown: "| 0.6 0.4 |".into(),
+            page_number: 1,
+            bounding_box: Some(BoundingBox {
+                x0: 12.0,
+                y0: 0.0,
+                x1: 110.0,
+                y1: 40.0,
+            }),
+            ..Default::default()
+        };
+        for case in 0..7 {
+            let mut page = vec![paragraph.clone()];
+            let mut members = ahash::AHashMap::from_iter([(
+                0,
+                crate::pdf::native::table::source_members::CertifiedRuns {
+                    contained: vec![vec![orphan_key.clone(), sibling_key.clone()]],
+                    painted_overhangs: Vec::new(),
+                },
+            )]);
+            match case {
+                1 => members.clear(),
+                2 => page.push(make_paragraph_at("caption", None, 3.0)),
+                3 => page[0].lines[0].segments[0].width = 12.0,
+                4 => page[0].lines[0].segments[0].is_italic = true,
+                5 => page.push(page[0].clone()),
+                6 => page[0].is_list_item = true,
+                _ => {}
+            }
+            if case == 2 {
+                page[1].caption_for = Some(0);
+            }
+            reconcile_certified_table_paragraphs(
+                std::slice::from_mut(&mut page),
+                std::slice::from_ref(&table),
+                &members,
+                &Default::default(),
+                &[],
+            );
+            assert_eq!(page[0].lines.len(), if case == 0 { 1 } else { 2 }, "case {case}");
+            if case == 0 {
+                assert_eq!(page[0].block_bbox, Some((0.0, 20.0, 10.0, 32.0)));
+                assert_eq!(page[0].word_count, 1);
+            }
+        }
+    }
+
+    #[test]
+    fn painted_orphan_suppression_only_targets_the_exact_plain_source_paragraph() {
+        let mut orphan = make_paragraph_at("0", None, 390.0);
+        let digit = &mut orphan.lines[0].segments[0];
+        digit.x = 33.0;
+        digit.y = 390.0;
+        digit.width = 5.0;
+        let key = SegmentKey::from(&*digit);
+        orphan.block_bbox = Some((33.0, 390.0, 38.0, 402.0));
+        let hyphens = Default::default();
+        let keys = ahash::AHashSet::from_iter([&key]);
+        assert_eq!(isolated_painted_orphan(&[orphan.clone()], &keys, &hyphens), Some(0));
+        assert_eq!(
+            isolated_painted_orphan(&[orphan.clone()], &Default::default(), &hyphens),
+            None
+        );
+
+        let mut outside = orphan.clone();
+        outside.lines[0].segments[0].x = 3.0;
+        outside.block_bbox = Some((3.0, 390.0, 8.0, 402.0));
+        assert_eq!(
+            isolated_painted_orphan(&[outside, orphan.clone()], &keys, &hyphens),
+            Some(1)
+        );
+
+        for mutate in [
+            (|p: &mut PdfParagraph| p.lines[0].segments[0].is_italic = true) as fn(&mut PdfParagraph),
+            |p| p.caption_for = Some(1),
+            |p| p.is_list_item = true,
+            |p| p.block_bbox = None,
+        ] {
+            let mut changed = orphan.clone();
+            mutate(&mut changed);
+            assert_eq!(isolated_painted_orphan(&[changed], &keys, &hyphens), None);
+        }
+        let sibling = SegmentKey::from(&plain_segment("10.1"));
+        let runs = vec![vec![sibling.clone(), key.clone()]];
+        for seen in [vec![], vec![(key.clone(), 2)], vec![(key, 1), (sibling, 1)]] {
+            let seen = ahash::AHashMap::from_iter(seen);
+            assert!(single_residual_members(&seen, &runs).is_empty());
         }
     }
 

@@ -978,10 +978,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     } else {
         None
     };
-    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let orientation_retry = effective_pipeline
         .as_ref()
-        .filter(|_| config.ocr.is_none() && !mixed_route_layout_active)
+        .filter(|_| super::orientation_retry::OrientationRetry::allows(config) && !mixed_route_layout_active)
         .map(|pipeline| {
             Arc::new(super::orientation_retry::OrientationRetry::new(
                 config,
@@ -1139,7 +1139,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     let render_doc_clone = Arc::clone(&render_doc);
                     let pipeline_clone = pipeline.clone();
                     let config_clone = pipeline_stage_config.clone();
-                    #[cfg(all(auto_rotate, feature = "ocr"))]
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let orientation_retry = orientation_retry.clone();
                     let idx = *page_idx;
                     // This page's own known `/Rotate` value, already resolved by
@@ -1189,7 +1189,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
                         let source = DetachedOcrPage {
                             document: render_doc_clone.as_ref(),
-                            #[cfg(all(auto_rotate, feature = "ocr"))]
+                            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                             orientation_retry: orientation_retry.as_ref(),
                         };
                         let result = Box::pin(run_ocr_pipeline_for_page(
@@ -1212,7 +1212,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     });
                     #[cfg(test)]
                     let task = crate::plugins::registry::inherit_test_ocr_backend(task);
-                    join_set.spawn(task);
+                    join_set.spawn(crate::core::extractor::cacheability::inherit(task));
                 }
                 while let Some(join_result) = join_set.join_next().await {
                     let (page_idx, result) = join_result.map_err(|e| crate::XbergError::Plugin {
@@ -1349,7 +1349,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx);
                     let source = DetachedOcrPage {
                         document: render_doc.as_ref(),
-                        #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         orientation_retry: None,
                     };
                     let result = Box::pin(run_ocr_pipeline_for_page(
@@ -1603,7 +1603,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
                 let original_config = ocr_config_resolved.clone();
-                join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
                             idx,
@@ -1626,7 +1626,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     )
                     .await;
                     (idx, correction_degrees, upright_width, upright_height, result)
-                }));
+                });
+                join_set.spawn(crate::core::extractor::cacheability::inherit(task));
             }
             while let Some(join_result) = join_set.join_next().await {
                 let (page_idx, correction_degrees, upright_width, upright_height, result) =
@@ -2090,19 +2091,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
-    if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        for &page_idx in &page_indices {
-            let page = (page_idx + 1) as u32;
-            if ocr_results.get(&page).is_none_or(|text| text.trim().is_empty())
-                && !table_only_xobject_recovery_pages.contains(&page)
-                && let Some(dpi) = raster_dpis.get(&page_idx)
-                && let Some(warning) = dpi.empty_text_warning(page_idx)
-            {
-                crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
-            }
-        }
-    }
-
     let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2315,6 +2303,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
         {
             super::document::put_layer_first_in_document(page_doc, None, first);
+        }
+    }
+
+    if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        let retained_formula_pages: ahash::AHashSet<_> =
+            accumulated_formulas.iter().filter_map(|formula| formula.page).collect();
+        for &page_idx in &page_indices {
+            let page = (page_idx + 1) as u32;
+            if (ocr_results.get(&page).is_none_or(|text| text.trim().is_empty()) || noise_verdict_pages.contains(&page))
+                && !table_only_xobject_recovery_pages.contains(&page)
+                && !retained_formula_pages.contains(&page)
+                && structured_ocr_pages.get(&page).is_none_or(|doc| doc.tables.is_empty())
+                && let Some(dpi) = raster_dpis.get(&page_idx)
+                && let Some(warning) = dpi.empty_text_warning(page_idx)
+            {
+                crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
+            }
         }
     }
 
@@ -2661,7 +2666,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
 #[derive(Clone, Copy)]
 pub(super) struct DetachedOcrPage<'a> {
     pub(super) document: &'a xberg_native_pdf::PdfDocument,
-    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     pub(super) orientation_retry: Option<&'a std::sync::Arc<super::orientation_retry::OrientationRetry>>,
 }
 
@@ -2815,7 +2820,7 @@ pub(super) async fn extract_with_ocr_for_page(
     let resolved_ocr_config = pre_page_ocr_config(config);
     let base_ocr_config = resolved_ocr_config.as_ref();
 
-    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let can_retry_orientation;
     #[cfg(feature = "pdf")]
     let mut no_admitted_images = false;
@@ -2835,7 +2840,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 && images.is_some_and(|images| images.len() == 1)
                 && registry.is_builtin_tesseract(&backend);
         }
-        #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         {
             can_retry_orientation = !has_layout_detections && registry.is_builtin_tesseract(&backend);
         }
@@ -3174,17 +3179,18 @@ pub(super) async fn extract_with_ocr_for_page(
     // Judged per page just before the OCR text is accepted, so a drawing page contributes
     // nothing instead of contributing invented words. See `is_ocr_recognition_noise`.
     let ocr_output_thresholds = base_ocr_config.quality_thresholds.clone().unwrap_or_default();
-    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let orientation_retry = if can_retry_orientation {
         detached_page
             .and_then(|source| source.orientation_retry.cloned())
             .or_else(|| {
-                (config.ocr.is_none() && content.is_some() && images.is_none()).then(|| {
-                    Arc::new(super::orientation_retry::OrientationRetry::new(
-                        config,
-                        ocr_output_thresholds.clone(),
-                    ))
-                })
+                (super::orientation_retry::OrientationRetry::allows(config) && content.is_some() && images.is_none())
+                    .then(|| {
+                        Arc::new(super::orientation_retry::OrientationRetry::new(
+                            config,
+                            ocr_output_thresholds.clone(),
+                        ))
+                    })
             })
     } else {
         None
@@ -3342,9 +3348,10 @@ pub(super) async fn extract_with_ocr_for_page(
                 // invariant), so a cancelled page still needs an entry -- it just skips the
                 // real OCR work to get it. ~keep
                 if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                    let task = crate::engine::seams::inherit_progress(async move {
                         (idx, 0, 0, 0, Err(crate::XbergError::Cancelled))
-                    }));
+                    });
+                    join_set.spawn(crate::core::extractor::cacheability::inherit(task));
                     continue;
                 }
                 let backend_clone = std::sync::Arc::clone(&backend);
@@ -3432,16 +3439,22 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(not(feature = "pdf"))]
                 let (upright_data, upright_width, upright_height, correction_degrees) =
                     (Arc::clone(image_data), *width, *height, 0u32);
-                #[cfg(all(auto_rotate, feature = "ocr"))]
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let retry = orientation_retry
                     .as_ref()
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let config_clone = if let Some((retry, _)) = &retry {
+                    retry.primary_config(&config_clone)
+                } else {
+                    config_clone
+                };
                 let retained_source_bytes = batch_slice
                     .as_ref()
                     .and_then(|images| images.get(idx - batch_start))
                     .map_or(0, |image| image.as_bytes().len());
-                join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
                             idx,
@@ -3471,7 +3484,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         cancel_token.as_ref(),
                     )
                     .await;
-                    #[cfg(all(auto_rotate, feature = "ocr"))]
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let result = if let Some((retry, raster)) = retry {
                         retry
                             .after_ocr(&backend_clone, raster, &config_clone, result, cancel_token.as_ref())
@@ -3480,7 +3493,8 @@ pub(super) async fn extract_with_ocr_for_page(
                         result
                     };
                     (idx, correction_degrees, upright_width, upright_height, result)
-                }));
+                });
+                join_set.spawn(crate::core::extractor::cacheability::inherit(task));
             }
             while let Some(join_result) = join_set.join_next().await {
                 let (page_idx, correction_degrees, upright_width, upright_height, ocr_result) =
@@ -4438,9 +4452,14 @@ pub(super) async fn extract_with_ocr_for_page(
             .map(|table| table.page_number)
             .chain(accumulated_formulas.iter().filter_map(|formula| formula.page))
             .collect();
+        let retained_noise_pages: ahash::AHashSet<_> = recognition_noise_verdicts
+            .iter()
+            .filter(|verdict| !verdict.discarded)
+            .map(|verdict| verdict.page_index)
+            .collect();
         for (page_idx, text) in page_texts.iter().enumerate() {
             let document_page_index = page_index_offset + page_idx;
-            if text.trim().is_empty()
+            if (text.trim().is_empty() || retained_noise_pages.contains(&document_page_index))
                 && !retained_payload_pages.contains(&((document_page_index + 1) as u32))
                 && let Some(dpi) = raster_dpis.get(&page_idx)
                 && let Some(warning) = dpi.empty_text_warning(document_page_index)
@@ -6114,13 +6133,7 @@ async fn run_ocr_pipeline_stages(
 
     for stage in &available_stages {
         let mut stage_ocr = ocr_config.clone();
-        stage_ocr.backend = stage.backend.clone();
-        if let Some(ref lang) = stage.language {
-            stage_ocr.language = lang.clone();
-        }
-        if let Some(ref tc) = stage.tesseract_config {
-            stage_ocr.tesseract_config = Some(tc.clone());
-        }
+        super::stage_model_inputs::StageModelInputs::new(ocr_config, stage).apply_to(&mut stage_ocr);
         if stage.paddle_ocr_config.is_some() || stage.paddle_ocr_settings.is_some() {
             stage_ocr.paddle_ocr_config = stage.paddle_ocr_config.clone();
             stage_ocr.paddle_ocr_settings = stage.paddle_ocr_settings.clone();

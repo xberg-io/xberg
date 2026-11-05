@@ -436,7 +436,7 @@ impl OcrBackend for TesseractBackend {
             })
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let ocr_result = tokio::task::spawn_blocking(operation)
+        let ocr_result = tokio::task::spawn_blocking(crate::core::extractor::cacheability::blocking(operation))
             .await
             .map_err(|e| crate::XbergError::Plugin {
                 message: format!("Tesseract task panicked or caught foreign exception: {}", e),
@@ -535,7 +535,7 @@ impl OcrBackend for TesseractBackend {
             })
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let ocr_result = tokio::task::spawn_blocking(operation)
+        let ocr_result = tokio::task::spawn_blocking(crate::core::extractor::cacheability::blocking(operation))
             .await
             .map_err(|e| crate::XbergError::Plugin {
                 message: format!("Tesseract task panicked or caught foreign exception: {}", e),

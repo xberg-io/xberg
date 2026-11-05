@@ -3484,6 +3484,7 @@ fn build_document_structure(
     build_document_structure_with_native(
         all_page_segments,
         None,
+        &[],
         0,
         config,
         #[cfg(feature = "layout-detection")]
@@ -3493,6 +3494,7 @@ fn build_document_structure(
 
 pub(crate) fn extract_document_structure_from_native_pages(
     native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
+    table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     ruled_table_count: usize,
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
@@ -3500,6 +3502,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     build_document_structure_with_native(
         segments,
         Some(native_pages),
+        table_sources,
         ruled_table_count,
         config,
         #[cfg(feature = "layout-detection")]
@@ -3510,6 +3513,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
 fn build_document_structure_with_native(
     mut all_page_segments: Vec<Vec<SegmentData>>,
     native_pages: Option<Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>>,
+    table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     ruled_table_count: usize,
     config: SegmentStructureConfig<'_>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
@@ -3914,6 +3918,8 @@ fn build_document_structure_with_native(
     let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
     let emitted_tables = prepare_emitted_tables(&stitched_native_tables, layout_tables, overlap_preference);
 
+    let table_members =
+        crate::pdf::native::table::source_members::project(&all_page_segments, table_sources, &emitted_tables);
     let extracted_table_bboxes_by_page = table_bboxes_by_page(&emitted_tables);
     tracing::debug!(
         native_tables = tables.len(),
@@ -4107,6 +4113,14 @@ fn build_document_structure_with_native(
             }
         }
     }
+
+    super::assembly::reconcile_certified_table_paragraphs(
+        &mut all_page_paragraphs,
+        &emitted_tables,
+        &table_members,
+        &witnesses.hyphens,
+        if inject_placeholders { image_positions } else { &[] },
+    );
 
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(

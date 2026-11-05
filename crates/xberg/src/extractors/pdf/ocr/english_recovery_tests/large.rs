@@ -64,7 +64,7 @@ async fn extract(route: &str, source: &source::Source, config: &ExtractionConfig
             0,
             Some(DetachedOcrPage {
                 document: &source.document,
-                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 orientation_retry: None,
             }),
         )

@@ -3,9 +3,13 @@
 //! This module handles the core OCR execution logic, including image processing,
 //! text extraction, and result formatting.
 
+#[path = "execution/recognition_orientation.rs"]
+mod recognition_orientation;
+
 use super::api_pool::TesseractApiPool;
-use super::config::{apply_tesseract_variables, hash_config};
+use super::config::apply_tesseract_variables;
 use super::dictionary::WordDictionary;
+use super::model_context::ModelContext;
 use super::validation::{
     resolve_all_installed_languages, resolve_tessdata_path, strip_control_characters, validate_language_and_traineddata,
 };
@@ -2027,6 +2031,7 @@ pub(super) fn perform_ocr(
     config: &TesseractConfig,
     api_pool: &Arc<TesseractApiPool>,
     extraction_config: Option<&ExtractionConfig>,
+    models: &ModelContext,
 ) -> Result<OcrExtractionResult, OcrError> {
     let ci_debug_enabled = env::var_os("XBERG_CI_DEBUG").is_some();
     log_ci_debug(ci_debug_enabled, "perform_ocr:start", || {
@@ -2060,8 +2065,7 @@ pub(super) fn perform_ocr(
 
     let bytes_per_pixel: u32 = 3;
 
-    let languages: Vec<String> = config.language.split('+').map(|lang| lang.trim().to_string()).collect();
-    let tessdata_path = resolve_tessdata_path(&languages, config.tessdata_path.as_deref())?;
+    let tessdata_path = &models.directory;
 
     log_ci_debug(ci_debug_enabled, "tessdata", || {
         let path_preview = env::var_os("PATH").map(|paths| {
@@ -2071,7 +2075,7 @@ pub(super) fn perform_ocr(
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        let resolved_exists = !tessdata_path.is_empty() && std::path::Path::new(&tessdata_path).exists();
+        let resolved_exists = !tessdata_path.is_empty() && std::path::Path::new(tessdata_path).exists();
 
         format!(
             "env={:?} resolved={} exists={} path_preview={:?}",
@@ -2079,7 +2083,7 @@ pub(super) fn perform_ocr(
             if tessdata_path.is_empty() {
                 "unset"
             } else {
-                &tessdata_path
+                tessdata_path
             },
             resolved_exists,
             path_preview
@@ -2090,9 +2094,9 @@ pub(super) fn perform_ocr(
         format!("version={}", TesseractAPI::version())
     });
 
-    validate_language_and_traineddata(&config.language, &tessdata_path)?;
+    validate_language_and_traineddata(&config.language, tessdata_path)?;
 
-    let api = api_pool.checkout(&tessdata_path, &config.language, config.oem)?;
+    let api = api_pool.checkout(models, &config.language, config.oem)?;
     let dictionary = api.word_dictionary();
 
     log_ci_debug(ci_debug_enabled, "init", || {
@@ -2548,7 +2552,21 @@ pub(super) fn perform_ocr(
 
         let words = extract_table_words_from_tsv(tsv_data, config.table_min_confidence, &table_mark_symbols)?;
 
-        for (region_index, mut region) in table_regions(&words).into_iter().enumerate() {
+        let oriented = recognition_orientation::tables(
+            &api,
+            tsv_data,
+            &words,
+            config,
+            (ocr_image_width, ocr_image_height),
+            &security_limits,
+        );
+        let regions = if oriented.is_some() {
+            Vec::new()
+        } else {
+            table_regions(&words)
+        };
+        tables.extend(oriented.into_iter().flatten());
+        for (region_index, mut region) in regions.into_iter().enumerate() {
             if region.words.len() < MIN_TABLE_CANDIDATE_WORDS {
                 tracing::debug!(
                     target: "xberg::ocr::tables",
@@ -2626,7 +2644,7 @@ pub(super) fn perform_ocr(
                         retry,
                         width,
                         height,
-                        &tessdata_path,
+                        tessdata_path,
                         &security_limits,
                     )
                 });
@@ -2874,16 +2892,9 @@ fn process_image_resolved(
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
-    // #1787: the cache key must fold in the tessdata directory OCR will actually run against,
-    // not only the optional `config.tessdata_path` override — otherwise two calls that resolve
-    // to different directories through `TESSDATA_PREFIX` or another fallback in the search
-    // chain (see `resolve_tessdata_path`) hash identically and share a cache entry even though
-    // a different tessdata model produced the cached text. Resolved once, up front, so the
-    // lookup below is keyed on the same directory `perform_ocr` will use on a miss.
-    let languages: Vec<String> = config.language.split('+').map(|lang| lang.trim().to_string()).collect();
-    let resolved_tessdata_path = resolve_tessdata_path(&languages, config.tessdata_path.as_deref())?;
-
-    let config_str = hash_config(config, &resolved_tessdata_path);
+    // Share one resolved model revision between cached output and its native handle. ~keep
+    let models = ModelContext::resolve(config)?;
+    let config_str = models.result_key(config);
 
     // `output_format` is part of the cache identity: it selects the renderer and
     // therefore the `content` and `mime_type` of the result. Omitting it served a
@@ -2891,6 +2902,7 @@ fn process_image_resolved(
     if config.use_cache
         && let Some(cached_result) =
             cache.get_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref())?
+        && models.if_current(|| ()).is_some()
     {
         #[cfg(feature = "otel")]
         tracing::Span::current().record("cache.hit", true);
@@ -2905,10 +2917,12 @@ fn process_image_resolved(
         ..Default::default()
     });
 
-    let result = perform_ocr(image_bytes, config, api_pool, extraction_config.as_ref())?;
+    let result = perform_ocr(image_bytes, config, api_pool, extraction_config.as_ref(), &models)?;
 
     if config.use_cache
-        && let Err(e) = cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
+        && let Some(Err(e)) = models.if_current(|| {
+            cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
+        })
     {
         tracing::warn!(error = %e, "Failed to cache the OCR result; the next identical request will re-run OCR");
     }
@@ -4967,10 +4981,8 @@ mod tests {
         // enabled, carrying an obviously-wrong marker. If the bypass ever regresses into a
         // read, this is what would come back instead of a fresh OCR result.
         let image_hash = crate::cache::blake3_hash_bytes(&image_bytes);
-        let languages: Vec<String> = config.language.split('+').map(|lang| lang.trim().to_string()).collect();
-        let resolved_tessdata_path =
-            resolve_tessdata_path(&languages, config.tessdata_path.as_deref()).expect("tessdata must resolve");
-        let config_str = hash_config(&config, &resolved_tessdata_path);
+        let models = ModelContext::resolve(&config).expect("tessdata must resolve");
+        let config_str = models.result_key(&config);
         let marker = OcrExtractionResult {
             content: "STALE MARKER: use_cache=false must never return this".to_string(),
             mime_type: "text/plain".to_string(),

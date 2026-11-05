@@ -1,22 +1,35 @@
-//! Cached orientation recovery for low-confidence implicit PDF OCR.
+//! Bounded orientation recovery for low-confidence whole-page PDF OCR.
+
+mod recognition;
 
 use std::sync::Arc;
 
 use crate::cancellation::CancellationToken;
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
+#[cfg(auto_rotate)]
 use crate::doc_orientation::detector::tesseract_detector;
-use crate::extractors::security::{SecurityBudget, SecurityLimits};
+use crate::extractors::security::SecurityBudget;
+#[cfg(any(auto_rotate, test))]
+use crate::extractors::security::SecurityLimits;
 use crate::plugins::{ConfidenceSemantics, OcrBackend};
 use crate::table_core::{HocrWord, detect_rows, find_row_index};
 use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementConfig, OcrElementLevel};
 
-use super::document::{processed_ocr_layout_dimensions, resolved_ocr_correction_degrees};
+use super::document::processed_ocr_layout_dimensions;
+#[cfg(auto_rotate)]
+use super::document::resolved_ocr_correction_degrees;
 use super::scoring::{OcrRecognitionNoiseDecision, mean_text_conf_of, ocr_recognition_noise_decision, word_count_of};
+
+pub(crate) fn recognition_retry_eligible(config: &OcrConfig) -> bool {
+    recognition::eligible(config)
+}
 
 pub(super) struct OrientationRetry {
     thresholds: OcrQualityThresholds,
     attempts: parking_lot::Mutex<SecurityBudget>,
+    #[cfg(auto_rotate)]
     cached_model_ready: tokio::sync::OnceCell<bool>,
+    recognition_config: Option<OcrConfig>,
 }
 
 impl OrientationRetry {
@@ -24,7 +37,28 @@ impl OrientationRetry {
         Self {
             thresholds,
             attempts: parking_lot::Mutex::new(SecurityBudget::from_config(config)),
+            #[cfg(auto_rotate)]
             cached_model_ready: tokio::sync::OnceCell::new(),
+            recognition_config: config
+                .ocr
+                .as_ref()
+                .filter(|config| recognition_retry_eligible(config))
+                .cloned(),
+        }
+    }
+
+    pub(super) fn allows(config: &ExtractionConfig) -> bool {
+        config
+            .ocr
+            .as_ref()
+            .map_or(cfg!(auto_rotate), recognition_retry_eligible)
+    }
+
+    pub(super) fn primary_config(&self, config: &OcrConfig) -> OcrConfig {
+        if self.recognition_config.is_some() {
+            recognition::capture_words(config)
+        } else {
+            config.clone()
         }
     }
 
@@ -37,6 +71,7 @@ impl OrientationRetry {
         )
     }
 
+    #[cfg(auto_rotate)]
     async fn prepare_retry(
         &self,
         cancel: Option<&CancellationToken>,
@@ -72,6 +107,35 @@ impl OrientationRetry {
         cancel: Option<&CancellationToken>,
     ) -> crate::Result<ExtractedDocument> {
         let original = original?;
+        check_cancelled(cancel)?;
+        if let Some(requested) = &self.recognition_config {
+            let result = self
+                .after_recognition(backend, raster, config, original, cancel)
+                .await?;
+            check_cancelled(cancel)?;
+            return Ok(recognition::restore_elements(result, requested));
+        }
+        #[cfg(auto_rotate)]
+        {
+            let result = self.after_implicit(backend, raster, config, original, cancel).await?;
+            check_cancelled(cancel)?;
+            Ok(result)
+        }
+        #[cfg(not(auto_rotate))]
+        {
+            Ok(original)
+        }
+    }
+
+    #[cfg(auto_rotate)]
+    async fn after_implicit(
+        &self,
+        backend: &Arc<dyn OcrBackend>,
+        raster: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        original: ExtractedDocument,
+        cancel: Option<&CancellationToken>,
+    ) -> crate::Result<ExtractedDocument> {
         let confidence = backend.confidence_semantics();
         let empty = original.content.trim().is_empty();
         if !original.tables.is_empty()
@@ -94,19 +158,21 @@ impl OrientationRetry {
             return Ok(original);
         }
 
-        let mut rotated_config = config.clone();
-        rotated_config.auto_rotate = true;
-        rotated_config.element_config = Some(OcrElementConfig {
-            include_elements: true,
-            min_level: OcrElementLevel::Word,
-            ..Default::default()
-        });
-        let row_threshold = rotated_config.tesseract_config.as_ref().map_or_else(
-            || crate::types::TesseractConfig::default().table_row_threshold_ratio,
-            |config| config.table_row_threshold_ratio,
-        );
+        let (rotated_config, row_threshold) = implicit_config(config);
         let retry = backend.process_image_owned(raster, &rotated_config).await;
         check_cancelled(cancel)?;
+        self.select_implicit(retry, original, config, confidence, row_threshold)
+    }
+
+    #[cfg(auto_rotate)]
+    fn select_implicit(
+        &self,
+        retry: crate::Result<ExtractedDocument>,
+        original: ExtractedDocument,
+        config: &OcrConfig,
+        confidence: ConfidenceSemantics,
+        row_threshold: f64,
+    ) -> crate::Result<ExtractedDocument> {
         match retry {
             Ok(mut candidate) if self.accepts(&candidate, confidence, row_threshold) => {
                 let evidence = candidate.ocr_elements.take().unwrap_or_default();
@@ -122,6 +188,59 @@ impl OrientationRetry {
         }
     }
 
+    async fn prepare_recognition(
+        &self,
+        cancel: Option<&CancellationToken>,
+        probe: impl std::future::Future<Output = crate::Result<Option<String>>>,
+    ) -> crate::Result<Option<String>> {
+        check_cancelled(cancel)?;
+        if self.attempts.lock().step().is_err() {
+            return Ok(None);
+        }
+        let directory = probe.await?;
+        check_cancelled(cancel)?;
+        Ok(directory)
+    }
+
+    async fn after_recognition(
+        &self,
+        backend: &Arc<dyn OcrBackend>,
+        raster: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        original: ExtractedDocument,
+        cancel: Option<&CancellationToken>,
+    ) -> crate::Result<ExtractedDocument> {
+        let confidence = backend.confidence_semantics();
+        if !recognition::primary_supported(&original) || !self.noise(&original, confidence).low_confidence {
+            return Ok(original);
+        }
+        let probe = lookup_osd_directory(config.clone());
+        let Some(directory) = self.prepare_recognition(cancel, probe).await? else {
+            return Ok(original);
+        };
+        check_cancelled(cancel)?;
+        let mut retry_config = recognition::capture_words(config);
+        retry_config.tessdata_path = Some(directory.into());
+        retry_config.tesseract_config.get_or_insert_default().psm = Some(1);
+        let candidate = backend.process_image_owned(raster, &retry_config).await;
+        check_cancelled(cancel)?;
+        match candidate {
+            Ok(candidate) => Ok(recognition::select(
+                original,
+                candidate,
+                &self.thresholds,
+                confidence,
+                config,
+            )),
+            Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+            Err(error) => {
+                tracing::warn!(%error, "Optional recognition-orientation OCR failed; retaining primary OCR");
+                Ok(original)
+            }
+        }
+    }
+
+    #[cfg(auto_rotate)]
     fn accepts(&self, result: &ExtractedDocument, confidence: ConfidenceSemantics, row_threshold: f64) -> bool {
         if result.content.trim().is_empty()
             || !result.formulas.is_empty()
@@ -133,7 +252,7 @@ impl OrientationRetry {
         let text = if result.tables.is_empty() {
             &result.content
         } else {
-            let Some(text) = complete_table_text(result, row_threshold) else {
+            let Some(text) = complete_table_text(result, row_threshold, table_matches_iterator_rows) else {
                 return false;
             };
             table_text = text;
@@ -145,6 +264,33 @@ impl OrientationRetry {
     }
 }
 
+async fn lookup_osd_directory(config: OcrConfig) -> crate::Result<Option<String>> {
+    match tokio::task::spawn_blocking(move || recognition::existing_osd_directory(&config)).await {
+        Ok(directory) => Ok(directory),
+        Err(error) if error.is_cancelled() => Err(crate::XbergError::Cancelled),
+        Err(error) => {
+            tracing::warn!(%error, "Optional recognition-orientation model lookup failed; retaining primary OCR");
+            Ok(None)
+        }
+    }
+}
+
+#[cfg(auto_rotate)]
+fn implicit_config(config: &OcrConfig) -> (OcrConfig, f64) {
+    let mut rotated_config = config.clone();
+    rotated_config.auto_rotate = true;
+    rotated_config.element_config = Some(OcrElementConfig {
+        include_elements: true,
+        min_level: OcrElementLevel::Word,
+        ..Default::default()
+    });
+    let row_threshold = rotated_config.tesseract_config.as_ref().map_or_else(
+        || crate::types::TesseractConfig::default().table_row_threshold_ratio,
+        |config| config.table_row_threshold_ratio,
+    );
+    (rotated_config, row_threshold)
+}
+
 fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
     if cancel.is_some_and(CancellationToken::is_cancelled) {
         return Err(crate::XbergError::Cancelled);
@@ -152,13 +298,16 @@ fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
     Ok(())
 }
 
+#[cfg(auto_rotate)]
 const GLYPH_SAMPLE_EDGE: u32 = 512;
 // RGB thumbnail, luminance and foreground masks, and spare capacity for the glyph estimator's
 // flood-fill stack, component heights and letter bodies. At most 20% of pixels are visited
 // by the flood fill, so six usize slots per sample cover all three vectors and reallocations. ~keep
+#[cfg(auto_rotate)]
 const GLYPH_PROBE_WORKSPACE: usize =
     GLYPH_SAMPLE_EDGE as usize * GLYPH_SAMPLE_EDGE as usize * (5 + 6 * size_of::<usize>());
 
+#[cfg(auto_rotate)]
 fn raster_has_glyphs(raster: &[u8], limits: &SecurityLimits) -> bool {
     let Ok(rgb) = crate::extraction::image_decode::decode_standard_rgb8_with_additional_live_bytes_and_security_limits(
         raster,
@@ -179,7 +328,11 @@ fn raster_has_glyphs(raster: &[u8], limits: &SecurityLimits) -> bool {
         .is_some()
 }
 
-fn complete_table_text(result: &ExtractedDocument, row_threshold: f64) -> Option<String> {
+fn complete_table_text(
+    result: &ExtractedDocument,
+    row_threshold: f64,
+    matches: impl Fn(&[Vec<String>], &[OcrElement], BoundingBox, f64) -> bool,
+) -> Option<String> {
     const MIN_ROWS: usize = 3;
     const MIN_COLUMNS: usize = 2;
     let [table] = result.tables.as_slice() else {
@@ -210,7 +363,7 @@ fn complete_table_text(result: &ExtractedDocument, row_threshold: f64) -> Option
         return None;
     }
     let evidence = result.ocr_elements.as_deref()?;
-    if !table_matches_iterator_rows(&table.cells, evidence, bbox, row_threshold) {
+    if !matches(&table.cells, evidence, bbox, row_threshold) {
         return None;
     }
     Some(words.collect::<Vec<_>>().join(" "))
@@ -234,6 +387,7 @@ fn iterator_word(element: &OcrElement, bbox: BoundingBox) -> Option<HocrWord> {
         })
 }
 
+#[cfg(auto_rotate)]
 fn table_matches_iterator_rows(
     cells: &[Vec<String>],
     elements: &[OcrElement],
@@ -249,12 +403,16 @@ fn table_matches_iterator_rows(
     else {
         return false;
     };
-    let row_positions = detect_rows(&words, row_threshold);
+    table_matches_words(cells, &words, row_threshold)
+}
+
+fn table_matches_words(cells: &[Vec<String>], words: &[HocrWord], row_threshold: f64) -> bool {
+    let row_positions = detect_rows(words, row_threshold);
     if row_positions.len() != cells.len() {
         return false;
     }
     let mut rows = vec![Vec::new(); row_positions.len()];
-    for word in &words {
+    for word in words {
         let Some(row) = find_row_index(&row_positions, word) else {
             return false;
         };
@@ -270,6 +428,7 @@ fn table_matches_iterator_rows(
     })
 }
 
+#[cfg(auto_rotate)]
 pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, raster: (u32, u32)) {
     let Some((width, height)) = processed_ocr_layout_dimensions(&result.metadata) else {
         return;
@@ -293,6 +452,7 @@ mod tests {
     use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
 
     #[tokio::test]
+    #[cfg(auto_rotate)]
     async fn cancelled_retry_does_not_probe() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         let cancel = CancellationToken::new();
@@ -307,6 +467,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(auto_rotate)]
     async fn exhausted_retry_does_not_probe() {
         let limits = SecurityLimits {
             max_iterations: 0,
@@ -329,6 +490,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(auto_rotate)]
     async fn cold_retry_does_not_probe() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         retry
@@ -344,6 +506,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(auto_rotate)]
     async fn cancellation_during_the_probe_prevents_retry() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         retry
@@ -360,7 +523,60 @@ mod tests {
         assert!(matches!(result, Err(crate::XbergError::Cancelled)));
     }
 
+    #[tokio::test]
+    async fn recognition_cancellation_and_exhaustion_precede_the_cache_probe() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        assert!(matches!(
+            retry
+                .prepare_recognition(Some(&cancel), async { panic!("cancelled OSD probe") })
+                .await,
+            Err(crate::XbergError::Cancelled)
+        ));
+        let exhausted = OrientationRetry::new(
+            &ExtractionConfig {
+                security_limits: Some(SecurityLimits {
+                    max_iterations: 0,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            OcrQualityThresholds::default(),
+        );
+        assert!(
+            exhausted
+                .prepare_recognition(None, async { panic!("exhausted OSD probe") })
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_osd_and_cancellation_after_cache_lookup_prevent_recognition() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        assert!(
+            retry
+                .prepare_recognition(None, async { Ok(None) })
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let cancel = CancellationToken::new();
+        assert!(matches!(
+            retry
+                .prepare_recognition(Some(&cancel), async {
+                    cancel.cancel();
+                    Ok(Some("existing models".into()))
+                })
+                .await,
+            Err(crate::XbergError::Cancelled)
+        ));
+    }
+
     #[test]
+    #[cfg(auto_rotate)]
     fn empty_read_requires_glyphs_not_blank_or_ruled_paper() {
         let limits = SecurityLimits::default();
         let mut raster = image::RgbImage::from_pixel(120, 120, image::Rgb([255; 3]));
@@ -393,6 +609,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(auto_rotate)]
     fn empty_raster_probe_accounts_for_workspace_beyond_decoded_rgb() {
         let mut raster = image::RgbImage::from_pixel(120, 120, image::Rgb([255; 3]));
         for left in (12..100).step_by(12) {
@@ -418,6 +635,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(auto_rotate)]
     fn recovery_requires_proved_rotation_and_rejects_unverified_tables() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };
@@ -476,7 +694,7 @@ mod tests {
         evidence
     }
 
-    fn table_candidate() -> ExtractedDocument {
+    pub(super) fn table_candidate() -> ExtractedDocument {
         let mut candidate = ExtractedDocument {
             content: "Cash 100 31,290 Rent 107 77,078 Fuel 114 71,433".into(),
             tables: vec![crate::types::Table {
@@ -513,6 +731,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(auto_rotate)]
     fn recovery_requires_exact_ordered_iterator_tokens_for_flat_or_markdown_tables() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };
@@ -543,6 +762,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(auto_rotate)]
     fn recovery_rejects_sparse_duplicate_and_off_page_tables() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };

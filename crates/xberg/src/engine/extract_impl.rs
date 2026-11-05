@@ -5,6 +5,8 @@
 //! `crate::extract_batch` delegate here via a process-global default
 //! [`crate::engine::Engine`].
 
+use crate::core::extractor::cache_context::{CacheDependency, apply_context, fingerprint};
+use crate::core::extractor::cacheability;
 use std::borrow::Cow;
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
@@ -90,6 +92,14 @@ pub(crate) async fn extract(
     input: ExtractInput,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
+    cacheability::scope(extract_scoped(inner, input, config)).await
+}
+
+async fn extract_scoped(
+    inner: &super::EngineInner,
+    input: ExtractInput,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
     inner.progress.emit(ProgressEvent {
         stage: PROGRESS_STAGE_START.to_string(),
         message: None,
@@ -110,9 +120,17 @@ pub(crate) async fn extract(
     }
 
     let cache_key = inner.cache_enabled.then(|| content_cache_key(&input, config)).flatten();
+    let dependencies = cache_key
+        .as_ref()
+        .map(|_| input_cache_dependency(&input, config))
+        .into_iter()
+        .collect::<Vec<_>>();
+    let context = fingerprint(&dependencies, config.cancel_token.as_ref()).await?;
+    let cache_key = apply_context(cache_key, &context);
     if let Some(key) = cache_key.as_deref()
         && let Some(cached_bytes) = inner.cache.get(key).await
         && let Ok(cached_result) = serde_json::from_slice::<ExtractionResult>(&cached_bytes)
+        && cacheability::is_cacheable()
     {
         inner.progress.emit(ProgressEvent {
             stage: PROGRESS_STAGE_CACHE_HIT.to_string(),
@@ -144,7 +162,10 @@ pub(crate) async fn extract(
     match &result {
         Ok(output) => {
             if output.errors.is_empty()
+                && cacheability::is_cacheable()
                 && let Some(key) = cache_key
+                && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
+                && cacheability::is_cacheable()
                 && let Ok(serialized) = serde_json::to_vec(output)
             {
                 inner.cache.put(&key, serialized, None).await;
@@ -235,6 +256,10 @@ async fn extract_uncached(input: ExtractInput, config: &ExtractionConfig) -> Res
     Ok(output)
 }
 
+fn input_cache_dependency(input: &ExtractInput, config: &ExtractionConfig) -> CacheDependency {
+    CacheDependency::for_config(&effective_input_config(input, config), input.mime_type.as_deref())
+}
+
 /// Derive a content-hash cache key for `input`, or `None` when the input is not
 /// eligible for caching.
 ///
@@ -295,6 +320,14 @@ pub(crate) async fn extract_batch(
     inputs: Vec<ExtractInput>,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
+    cacheability::scope(extract_batch_scoped(inner, inputs, config)).await
+}
+
+async fn extract_batch_scoped(
+    inner: &super::EngineInner,
+    inputs: Vec<ExtractInput>,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
     inner.progress.emit(ProgressEvent {
         stage: BATCH_PROGRESS_STAGE_START.to_string(),
         message: None,
@@ -318,9 +351,20 @@ pub(crate) async fn extract_batch(
         .cache_enabled
         .then(|| batch_content_cache_key(&inputs, config))
         .flatten();
+    let dependencies = if cache_key.is_some() {
+        inputs
+            .iter()
+            .map(|input| input_cache_dependency(input, config))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let context = fingerprint(&dependencies, config.cancel_token.as_ref()).await?;
+    let cache_key = apply_context(cache_key, &context);
     if let Some(key) = cache_key.as_deref()
         && let Some(cached_bytes) = inner.cache.get(key).await
         && let Ok(cached_result) = serde_json::from_slice::<ExtractionResult>(&cached_bytes)
+        && cacheability::is_cacheable()
     {
         inner.progress.emit(ProgressEvent {
             stage: BATCH_PROGRESS_STAGE_CACHE_HIT.to_string(),
@@ -334,7 +378,10 @@ pub(crate) async fn extract_batch(
     match &result {
         Ok(output) => {
             if output.errors.is_empty()
+                && cacheability::is_cacheable()
                 && let Some(key) = cache_key
+                && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
+                && cacheability::is_cacheable()
                 && let Ok(serialized) = serde_json::to_vec(output)
             {
                 inner.cache.put(&key, serialized, None).await;
@@ -850,7 +897,10 @@ where
         let Some(item) = pending.pop_front() else {
             break;
         };
-        tasks.spawn(task(item));
+        let future = task(item);
+        #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
+        let future = crate::plugins::registry::inherit_test_ocr_backend(future);
+        tasks.spawn(cacheability::inherit(future));
     }
 
     let mut completed = Vec::with_capacity(tasks.len() + pending.len());
@@ -858,7 +908,10 @@ where
         let item = task_result.map_err(|error| XbergError::Other(format!("batch task failed to join: {error}")))?;
         completed.push(item);
         if let Some(next) = pending.pop_front() {
-            tasks.spawn(task(next));
+            let future = task(next);
+            #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
+            let future = crate::plugins::registry::inherit_test_ocr_backend(future);
+            tasks.spawn(cacheability::inherit(future));
         }
     }
     Ok(completed)

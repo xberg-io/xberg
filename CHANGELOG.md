@@ -184,15 +184,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(cli): The macOS CLI ships a libheif built for its own macOS floor.**
   The CLI bundled the runner's Homebrew libheif and codecs, which need macOS 15 on Apple Silicon and 14 on Intel; it now builds them from source for macOS 11, as the wheels already do.
+- **(ocr): Recover language-only explicit sideways PDF scans with cached Tesseract orientation data.** (#2496)
+  Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
+  Recover counterclockwise table rows when native line membership proves the source geometry.
+  Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
+
+- **(pdf): Preserve complete painted exhibit tables when cells contain decorative text fills.** (#2376)
+  Verify source cell contents and suppress only an exactly proven residual duplicate digit.
 
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
 
+- **(pdf): Keep certified side-by-side panel lines in source order in plain output.** (#2537)
+  Preserve complete rows and page boundaries in documents that mix panels with ordinary text.
+
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
 
+- **(pdf): Preserve figure tick labels beside native tables.** (#2443)
+  Keep the original label when the adjoining residual digit is already carried by a proven table cell.
+
 - **(pdf): Keep separate figure labels out of empty inferred table row spans.** (#2332)
   Require an existing source anchor before borrowing words from covered rows.
+
+- **(ocr): Report the actual budget limit when upscaling a JPEG with unknown DPI.** (#2531)
+  Check the planned upscale without retrying at a reduced decode that cannot reuse the source DPI estimate.
+
+- **(ocr): Warn when a budget-clamped PDF render returns suspected noise.** (#2532)
+  Keep the diagnostic quiet when the selected read retains a table or formula.
 
 - **(paddle): Preserve reading order after automatically correcting rotated PDF pages.** (#2519)
   Compose the page hint with the applied pixel correction so upright labels are not reversed.
