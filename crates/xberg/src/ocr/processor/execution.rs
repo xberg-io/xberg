@@ -4598,8 +4598,8 @@ mod tests {
         bytes
     }
 
-    /// A page read with two language lists in turn, as the text-layer language route reads a
-    /// page with and without the language of its layer (GH#2300), builds each engine once: the
+    /// Pages read with two language lists in turn, as the Han second pass reads a noisy page
+    /// again with `chi_sim` added (GH#2300), build each engine once: the
     /// idle engine of the other list waits in the pool for its next call.
     #[test]
     fn alternating_language_lists_build_each_engine_once() {

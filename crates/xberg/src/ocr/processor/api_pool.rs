@@ -483,7 +483,7 @@ mod tests {
         assert!(idle <= 8);
     }
 
-    /// Two keys in turn, as a page read with and without its text-layer language (GH#2300): each
+    /// Two keys in turn, as pages read again with `chi_sim` added (GH#2300): each
     /// key is built once, and the idle resource of the other key waits for its next call.
     #[test]
     fn a_key_switch_keeps_the_idle_resource_of_the_other_key() {
