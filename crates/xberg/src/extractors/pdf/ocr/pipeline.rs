@@ -5558,8 +5558,10 @@ fn with_run_layers_first(
             &mut text,
             &mut page_texts,
             doc.as_mut(),
-            &layers,
-            &ahash::AHashMap::default(),
+            super::document::PageLayers {
+                lines: &layers,
+                boxes: &ahash::AHashMap::default(),
+            },
             verdicts,
             page_index_offset,
             config,
