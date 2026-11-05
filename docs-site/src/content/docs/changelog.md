@@ -207,6 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep separate figure labels out of empty inferred table row spans.** (#2332)
   Require an existing source anchor before borrowing words from covered rows.
 
+- **(pdf): Keep readable native text when automatic OCR cannot see unpainted Type0 glyphs.** (#2533)
+  Require actual page-local render loss and a plain OCR read that omits most native word occurrences.
+
 - **(ocr): Report the actual budget limit when upscaling a JPEG with unknown DPI.** (#2531)
   Check the planned upscale without retrying at a reduced decode that cannot reuse the source DPI estimate.
 

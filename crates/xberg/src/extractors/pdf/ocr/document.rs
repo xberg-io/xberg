@@ -394,6 +394,38 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
         })
 }
 
+/// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
+    use super::super::unmapped_glyphs::{LOST_GLYPH_MARKER, strip_native_fragment};
+
+    if !native.contains(LOST_GLYPH_MARKER) {
+        return false;
+    }
+    let mut cleaned = native.to_owned();
+    strip_native_fragment(&mut cleaned);
+    if !super::scoring::native_layer_is_clean(&cleaned, thresholds) {
+        return false;
+    }
+
+    let meaningful = |word: &String| word.chars().count() >= thresholds.min_meaningful_word_len;
+    let mut available = ahash::AHashMap::<String, usize>::new();
+    for word in whole_words(read).filter(meaningful) {
+        *available.entry(word).or_default() += 1;
+    }
+    let mut retained = 0usize;
+    let mut total = 0usize;
+    for word in whole_words(&cleaned).filter(meaningful) {
+        total += 1;
+        if let Some(count) = available.get_mut(&word).filter(|count| **count > 0) {
+            *count -= 1;
+            retained += 1;
+        }
+    }
+    total >= thresholds.min_meaningful_words.max(1)
+        && (retained as f64) < total as f64 * MIN_LAYER_WORD_SHARE_READ_BY_OCR
+}
+
 /// Native source rows restored before OCR when complete native-page preservation is unproved. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) struct LayerFirst {

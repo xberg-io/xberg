@@ -350,7 +350,7 @@ pub fn render_page(
     page_num: usize,
     options: &RenderOptions,
 ) -> Result<RenderedImage> {
-    render_page_impl(doc, page_num, options, None).map(|(image, _)| image)
+    render_page_impl(doc, page_num, options, None).map(|(image, _, _)| image)
 }
 
 /// Internal Core bridge for admitting the per-page canvas, sidecar planes and PNG allowance.
@@ -373,6 +373,19 @@ pub fn render_png_page_with_dpi_budget(
     minimum_dpi: u32,
     max_working_bytes: usize,
 ) -> Result<(RenderedImage, u32)> {
+    render_png_page_with_ink_evidence(doc, page_num, dpi, minimum_dpi, max_working_bytes)
+        .map(|(image, dpi, _)| (image, dpi))
+}
+
+/// Internal Core bridge returning whether a Type0 glyph lost ink during this render.
+#[doc(hidden)]
+pub fn render_png_page_with_ink_evidence(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> Result<(RenderedImage, u32, bool)> {
     let budget = page_renderer::PngRenderBudget {
         max_working_bytes,
         minimum_dpi,
@@ -386,7 +399,7 @@ fn render_page_impl(
     page_num: usize,
     options: &RenderOptions,
     png_budget: Option<page_renderer::PngRenderBudget>,
-) -> Result<(RenderedImage, u32)> {
+) -> Result<(RenderedImage, u32, bool)> {
     // The rasterizer decodes text through the same font paths as extraction, so
     // it needs the document in scope for those recoveries to be counted rather
     // than lost (GH#1547). ~keep
@@ -396,7 +409,7 @@ fn render_page_impl(
     if let Err(error) = &result {
         crate::error::trace_failure("render_page", error);
     }
-    result
+    result.map(|(image, dpi)| (image, dpi, renderer.type0_ink_loss()))
 }
 
 /// Render a rectangular region of a page. `crop_rect_pt` is in PDF

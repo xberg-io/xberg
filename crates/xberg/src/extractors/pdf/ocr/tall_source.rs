@@ -78,12 +78,12 @@ pub(super) async fn try_replace(
     ocr: &OcrConfig,
     (document, page): (&PdfDocument, usize),
     (_, png, width, height): &super::rendering::EncodedPage,
-) -> crate::Result<()> {
+) -> crate::Result<bool> {
     if !original.tables.is_empty() || !original.formulas.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
     let Some(quality) = RecognitionQuality::from_result(original) else {
-        return Ok(());
+        return Ok(false);
     };
     let defaults = crate::extractors::security::SecurityLimits::default();
     let limits = config.security_limits.as_ref().unwrap_or(&defaults);
@@ -108,8 +108,9 @@ pub(super) async fn try_replace(
         && should_replace(&original.content, quality, &recovered)
     {
         apply_recovery(original, recovered, page, strips);
+        return Ok(true);
     }
-    Ok(())
+    Ok(false)
 }
 
 fn should_replace(original_text: &str, quality: RecognitionQuality, recovered: &TextAccumulator) -> bool {

@@ -280,7 +280,8 @@ async fn decode_budget_failure_without_source_still_reports_the_error() {
     let (_guard, calls) = register_backend();
     let error = run_case(None, None, 0)
         .await
-        .expect_err("no source means there is no safe recovery")
+        .err()
+        .expect("no source means there is no safe recovery")
         .error
         .to_string();
     assert!(error.contains("All OCR pipeline backends failed"), "{error}");
