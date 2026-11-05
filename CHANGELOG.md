@@ -221,6 +221,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep mapped Khmer text when automatic English OCR produces only noise.** (#2536)
   Preserve the native text and record why the direct single-page OCR result was declined.
 
+- **(pdf): Keep a visibly painted title when automatic OCR noise is discarded.** (#2312)
+  The direct Tesseract fallback keeps a verified native title and the original discard warning.
+
 - **(pdf): Preserve one copy of native text when OCR reads the same words.** (#2534)
   Require an exact match between native words and the Tesseract iterator, including their positions.
 

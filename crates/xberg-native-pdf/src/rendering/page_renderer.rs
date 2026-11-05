@@ -215,6 +215,7 @@ impl RenderedImage {
 pub struct PageRenderer {
     options: RenderOptions,
     source_image_budget: Option<image_budget::ImageBudget>,
+    pub(super) text_contrast_probe: Option<super::text_contrast_probe::TextContrastProbe>,
     path_rasterizer: PathRasterizer,
     text_rasterizer: TextRasterizer,
     /// Font cache (name -> FontInfo) for current context
@@ -457,6 +458,7 @@ impl PageRenderer {
         Self {
             options,
             source_image_budget: None,
+            text_contrast_probe: None,
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
             fonts: HashMap::new(),
@@ -2119,6 +2121,10 @@ impl PageRenderer {
                             let text_coverage = spot_snap.as_ref().and_then(|_| {
                                 self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
                             });
+                            let contrast_samples = self
+                                .text_contrast_probe
+                                .as_mut()
+                                .and_then(|probe| probe.capture(pixmap, text, base_transform));
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
                                 text,
@@ -2150,6 +2156,9 @@ impl PageRenderer {
                                     fill_side: true,
                                 },
                             )?;
+                            if let Some((probe, samples)) = self.text_contrast_probe.as_mut().zip(contrast_samples) {
+                                probe.observe(pixmap, samples);
+                            }
                             adv
                         } else {
                             self.text_rasterizer.measure_text(text, gs, &self.fonts)

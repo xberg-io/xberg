@@ -2700,17 +2700,8 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
 /// rotation override (`0`), so every pre-existing caller keeps today's behavior: content-based
 /// per-page auto-detection when `content` is available and index-aligned to `images`, or no
 /// rotation correction at all otherwise.
-#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
-// ~keep Test-only entry point; only the `feature = "ocr"` test modules call it, so it is dead
-// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
-#[allow(dead_code)]
-pub(crate) async fn extract_with_ocr(
-    content: Option<&[u8]>,
-    images: Option<&[image::DynamicImage]>,
-    #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
-    config: &ExtractionConfig,
-    path: Option<&std::path::Path>,
-) -> crate::Result<(
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type WholeDirectOcrOutput = (
     String,
     Option<f64>,
     Vec<crate::types::Table>,
@@ -2722,7 +2713,19 @@ pub(crate) async fn extract_with_ocr(
     Vec<crate::types::Formula>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-)> {
+);
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+// ~keep Test-only entry point; only the `feature = "ocr"` test modules call it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
+pub(crate) async fn extract_with_ocr(
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
+    #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+) -> crate::Result<WholeDirectOcrOutput> {
     extract_with_ocr_with_page_hints(
         content,
         images,
@@ -2736,7 +2739,8 @@ pub(crate) async fn extract_with_ocr(
     .map_err(crate::XbergError::from)
 }
 
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+#[allow(dead_code)]
 pub(crate) async fn extract_with_ocr_with_page_hints(
     content: Option<&[u8]>,
     images: Option<&[image::DynamicImage]>,
@@ -2744,19 +2748,29 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
     config: &ExtractionConfig,
     path: Option<&std::path::Path>,
     page_ocr_hints: Option<PageOcrHints>,
-) -> OcrRunResult<(
-    String,
-    Option<f64>,
-    Vec<crate::types::Table>,
-    Vec<crate::types::OcrElement>,
-    Option<crate::types::internal::InternalDocument>,
-    Vec<crate::types::LlmUsage>,
-    Vec<String>,
-    Option<Vec<crate::types::ExtractedImage>>,
-    Vec<crate::types::Formula>,
-    ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
-    ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-)> {
+) -> OcrRunResult<WholeDirectOcrOutput> {
+    extract_with_ocr_with_page_hints_and_evidence(
+        content,
+        images,
+        #[cfg(feature = "layout-detection")]
+        layout_detections,
+        config,
+        path,
+        page_ocr_hints,
+    )
+    .await
+    .map(|(output, _)| output)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
+    #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<PageOcrHints>,
+) -> OcrRunResult<(WholeDirectOcrOutput, bool)> {
     let run_layers = page_ocr_hints
         .as_ref()
         .and_then(|hints| hints.native_page_layers.clone());
@@ -2774,7 +2788,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         preprocessing,
         ocr_confidence,
         recognition_noise_verdicts,
-        _read_evidence,
+        read_evidence,
     ) = Box::pin(extract_with_ocr_for_page(
         content,
         images,
@@ -2805,17 +2819,20 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
     );
     super::super::ensure_pdf_not_cancelled(config)?;
     Ok((
-        text,
-        mean_conf,
-        tables,
-        elements,
-        doc,
-        usage,
-        page_texts,
-        rasters,
-        formulas,
-        preprocessing,
-        ocr_confidence,
+        (
+            text,
+            mean_conf,
+            tables,
+            elements,
+            doc,
+            usage,
+            page_texts,
+            rasters,
+            formulas,
+            preprocessing,
+            ocr_confidence,
+        ),
+        read_evidence.discarded_visible_native_page,
     ))
 }
 
@@ -2883,6 +2900,7 @@ fn attach_page_segmentation_modes(
 pub(super) struct OcrReadEvidence {
     no_admitted_images: bool,
     original_tesseract_raster: bool,
+    discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     complete_native_words: bool,
 }
@@ -4947,6 +4965,26 @@ pub(super) async fn extract_with_ocr_for_page(
         )];
     }
 
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let discarded_visible_native_page = matches!(recognition_noise_verdicts.as_slice(), [verdict] if verdict.page_index == 0 && verdict.discarded)
+        && page_index_offset == 0
+        && matches!(page_texts.as_slice(), [text] if text.trim().is_empty())
+        && result.trim().is_empty()
+        && ocr_doc.is_none()
+        && !has_layout_detections
+        && !capture_rasters
+        && collected_tables.is_empty()
+        && all_ocr_elements.is_empty()
+        && accumulated_formulas.is_empty()
+        && accumulated_llm_usage.is_empty()
+        && page_failures.is_empty()
+        && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && super::document::native_preservation_is_automatic(config, 1)
+        && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+        && certify_discarded_native_layer(lazy_pdf_render_state, page_ocr_hints.as_ref(), config).await?;
+    #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+    let discarded_visible_native_page = false;
+
     #[cfg(feature = "pdf")]
     let ocr_doc = {
         let mut warnings = image_fallback_warnings;
@@ -5007,6 +5045,7 @@ pub(super) async fn extract_with_ocr_for_page(
         recognition_noise_verdicts,
         OcrReadEvidence {
             no_admitted_images,
+            discarded_visible_native_page,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             complete_native_words,
             original_tesseract_raster: {
@@ -5026,6 +5065,39 @@ pub(super) async fn extract_with_ocr_for_page(
         },
     ))
 }
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+async fn certify_discarded_native_layer(
+    render: Option<(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    hints: Option<&PageOcrHints>,
+    config: &ExtractionConfig,
+) -> crate::Result<bool> {
+    let Some((doc, 1, _)) = render else { return Ok(false) };
+    let Some(layers) = hints.and_then(|hints| hints.native_page_layers.clone()) else {
+        return Ok(false);
+    };
+    let byte_limit = super::hidden_layer::preview_byte_limit(config);
+    super::super::ensure_pdf_not_cancelled(config)?;
+    let audit = super::super::spawn_pdf_blocking(move || {
+        crate::pdf::native::guard_native_panic(
+            || {
+                Ok(layers
+                    .get(&1)
+                    .is_some_and(|layer| super::hidden_layer::has_visible_native_line(&doc, layer, byte_limit)))
+            },
+            |panic| crate::XbergError::parsing(format!("PDF native line audit panicked: {panic}")),
+        )
+    })
+    .await;
+    super::super::ensure_pdf_not_cancelled(config)?;
+    Ok(match audit {
+        Ok(certified) => certified,
+        Err(error) => {
+            tracing::debug!(%error, "could not certify native text after OCR discard");
+            false
+        }
+    })
+}
+
 /// Build an [`crate::types::ExtractedImage`] for a full-page OCR raster.
 ///
 /// `image_index` is set to 0; the caller must reindex after merging into

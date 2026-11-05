@@ -4194,6 +4194,42 @@ impl<'doc> PdfImageHandle<'doc> {
         Some((object_ref, data))
     }
 
+    /// Reserve the temporary filter buffers before the renderer reaches its JPEG pixel admission.
+    pub(crate) fn contrast_jpeg_filter_reservation(&self) -> Option<usize> {
+        if let Some((_, data)) = self.plain_stored_jpeg_for_ocr_recovery() {
+            // Stream input plus the unencrypted, filter-input and DCT passthrough copies.
+            return data.len().checked_mul(4);
+        }
+
+        let PdfImageSource::XObject(object_ref) = self.source else {
+            return None;
+        };
+        if self.doc.is_encrypted()
+            || self.filter_chain.as_slice() != [PdfFilter::ASCII85Decode, PdfFilter::DCTDecode]
+            || self.bits_per_component != 8
+        {
+            return None;
+        }
+        let crate::object::Object::Stream { dict, data } = self.doc.load_object(object_ref).ok()? else {
+            return None;
+        };
+        let color = dict.get("ColorSpace").and_then(crate::object::Object::as_name)?;
+        let filters = dict.get("Filter")?.as_array()?;
+        if !matches!(filters.as_slice(), [ascii, dct]
+            if ascii.as_name() == Some("ASCII85Decode") && dct.as_name() == Some("DCTDecode"))
+            || !matches!(color, "DeviceGray" | "DeviceRGB")
+            || self.color_space_resources.contains_key(color)
+            || ["Decode", "DecodeParms", "ImageMask", "Mask", "SMask", "SMaskInData"]
+                .iter()
+                .any(|key| dict.contains_key(*key))
+        {
+            return None;
+        }
+        // A 'z' can emit four bytes per input byte. Cover both allocations during
+        // Vec growth, the stream/filter copies and the DCT passthrough allocation.
+        data.len().checked_mul(16)
+    }
+
     /// Return stored stream bytes subject to an inclusive allocation limit.
     ///
     /// A zero limit permits only an empty stream. Filters and pixel decoders are

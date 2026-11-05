@@ -45,6 +45,7 @@ pub(crate) mod separation_renderer;
 /// without going through a rendered pixmap. Internal storage types
 /// (`CmykSidecar`) remain `pub(crate)`.
 pub mod sidecar;
+mod text_contrast_probe;
 mod text_rasterizer;
 
 pub use page_renderer::{ImageFormat, PageRenderer, RenderOptions, RenderedImage};
@@ -391,6 +392,45 @@ pub fn render_png_page_with_ink_evidence(
         minimum_dpi,
     };
     render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(budget))
+}
+
+/// Check for actual pixel contrast in each glyph region of an audited literal text show.
+#[doc(hidden)]
+pub fn exact_text_show_has_contrast(
+    doc: &crate::document::PdfDocument,
+    literal: &[u8],
+    glyphs: &[crate::geometry::Rect],
+    max_working_bytes: usize,
+) -> Result<bool> {
+    use text_contrast_probe::{MAX_PROBE_BYTES, MAX_PROBE_PAGE_PIXELS, TextContrastProbe};
+
+    // At 72 DPI the media box dimensions in points bound the verification raster in pixels.
+    const PROBE_DPI: u32 = 72;
+    let page = doc.get_page_info(0)?;
+    let area = page.media_box.width.ceil() * page.media_box.height.ceil();
+    let images = doc.page_image_handles(0)?;
+    let [image] = images.as_slice() else { return Ok(false) };
+    let Some(max_working_bytes) = image
+        .contrast_jpeg_filter_reservation()
+        .and_then(|reserved| max_working_bytes.checked_sub(reserved))
+        .and_then(|remaining| remaining.checked_sub(MAX_PROBE_BYTES))
+    else {
+        return Ok(false);
+    };
+    let Some(probe) = TextContrastProbe::new(literal, glyphs) else {
+        return Ok(false);
+    };
+    if !(0.0..=MAX_PROBE_PAGE_PIXELS).contains(&area) {
+        return Ok(false);
+    }
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(PROBE_DPI));
+    renderer.text_contrast_probe = Some(probe);
+    let budget = page_renderer::PngRenderBudget {
+        max_working_bytes,
+        minimum_dpi: PROBE_DPI,
+    };
+    renderer.render_page_with_budget(0, doc, Some(budget))?;
+    Ok(renderer.text_contrast_probe.is_some_and(|probe| probe.visible()))
 }
 
 #[tracing::instrument(name = "pdf.render_page", skip_all, fields(page = page_num, dpi = options.dpi))]

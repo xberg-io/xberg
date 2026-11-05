@@ -112,8 +112,8 @@ pub(crate) use pipeline::{
 pub(crate) use pipeline::extract_with_ocr;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use pipeline::{
-    OcrRunResult, PageOcrHints, apply_numeric_repair_to_whole_document_ocr, extract_with_ocr_with_page_hints,
-    numeric_repair_enabled, run_ocr_pipeline,
+    OcrRunResult, PageOcrHints, apply_numeric_repair_to_whole_document_ocr,
+    extract_with_ocr_with_page_hints_and_evidence, numeric_repair_enabled, run_ocr_pipeline,
 };
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -146,3 +146,7 @@ mod combined_rotation_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 mod batch_metadata_tests;
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+#[allow(unused_imports)]
+pub(crate) use pipeline::extract_with_ocr_with_page_hints;
