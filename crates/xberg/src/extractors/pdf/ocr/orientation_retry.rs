@@ -787,4 +787,52 @@ mod tests {
         let bbox = candidate.tables[0].bounding_box.unwrap();
         assert_eq!((bbox.x0, bbox.y0, bbox.x1, bbox.y1), (10.0, 10.0, 90.0, 40.0));
     }
+
+    #[test]
+    #[cfg(auto_rotate)]
+    fn table_retry_keeps_the_original_when_reported_word_count_disagrees() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };
+        let mut candidate = table_candidate();
+        assert!(retry.accepts(&candidate, confidence, 0.5));
+        candidate.metadata.additional.insert("word_count".into(), 8.into());
+        let original = ExtractedDocument {
+            content: "primary OCR text".into(),
+            ..Default::default()
+        };
+        let selected = retry
+            .select_implicit(Ok(candidate), original, &OcrConfig::default(), confidence, 0.5)
+            .unwrap();
+        assert_eq!(selected.content, "primary OCR text");
+        assert!(selected.tables.is_empty());
+    }
+
+    #[test]
+    #[cfg(auto_rotate)]
+    fn accepted_table_retry_exposes_only_requested_confident_elements() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };
+        let mut candidate = table_candidate();
+        let elements = candidate.ocr_elements.as_mut().unwrap();
+        assert_eq!(elements.len(), 9);
+        elements[0].confidence.recognition = 0.95;
+        let expected = elements[0].text.clone();
+        let config = OcrConfig {
+            element_config: Some(OcrElementConfig {
+                include_elements: true,
+                min_level: OcrElementLevel::Word,
+                min_confidence: 0.9,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let selected = retry
+            .select_implicit(Ok(candidate), ExtractedDocument::default(), &config, confidence, 0.5)
+            .unwrap();
+        assert_eq!(selected.tables.len(), 1);
+        let elements = selected.ocr_elements.unwrap();
+        assert_eq!(elements.len(), 1);
+        assert_eq!(elements[0].level, OcrElementLevel::Word);
+        assert_eq!(elements[0].text, expected);
+    }
 }
