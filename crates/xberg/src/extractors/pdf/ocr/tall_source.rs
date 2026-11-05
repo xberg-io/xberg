@@ -24,6 +24,7 @@ const MIN_BLANK_ROWS: u32 = 20;
 const MIN_LIGHT_SAMPLE: u8 = 210;
 const MAX_LINE_ROWS: u32 = 80;
 const MAX_COLUMN_GAP: usize = 48;
+const MAX_BILEVEL_CERTIFIED_LINES: usize = 256;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024;
 // Reserve input encoding, decoded pixels and preprocessing work for one tile.
 const TILE_BYTES_PER_PIXEL: usize = 24;
@@ -36,6 +37,13 @@ struct Source {
     dpi: f64,
     samples: Vec<u8>,
     retained_bytes: usize,
+    bilevel: bool,
+}
+
+struct StripPlan {
+    source: Source,
+    rows: Vec<Range<u32>>,
+    ink_rows: Vec<Range<u32>>,
 }
 
 struct Attempt<'a> {
@@ -104,8 +112,9 @@ pub(super) async fn try_replace(
             .min(MAX_STRIPS),
         cancel: config.cancel_token.as_ref(),
     };
+    let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     if let Some((recovered, strips)) = recover(attempt, backend, ocr).await?
-        && should_replace(&original.content, quality, &recovered)
+        && should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds)
     {
         apply_recovery(original, recovered, page, strips);
         return Ok(true);
@@ -113,14 +122,42 @@ pub(super) async fn try_replace(
     Ok(false)
 }
 
+#[cfg(test)]
 fn should_replace(original_text: &str, quality: RecognitionQuality, recovered: &TextAccumulator) -> bool {
+    should_replace_with_source_evidence(original_text, quality, recovered, &Default::default())
+}
+
+fn should_replace_with_source_evidence(
+    original_text: &str,
+    quality: RecognitionQuality,
+    recovered: &TextAccumulator,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+) -> bool {
     recovered.psm == Some(quality.psm)
         && recovered.words > quality.words
         && recovered.text.split_whitespace().count() > original_text.split_whitespace().count()
         && recovered.confidence_sum > quality.mean_confidence * f64::from(recovered.words)
-        && recovered.worst_dictionary_invalid <= quality.dictionary_invalid
+        && (recovered.worst_dictionary_invalid <= quality.dictionary_invalid
+            || recovered_bilevel_lines_are_clean(original_text, &quality, recovered, thresholds))
         && u64::from(recovered.low_confidence_words) * u64::from(quality.words)
             <= u64::from(quality.low_confidence_words) * u64::from(recovered.words)
+}
+
+fn recovered_bilevel_lines_are_clean(
+    original_text: &str,
+    quality: &RecognitionQuality,
+    recovered: &TextAccumulator,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+) -> bool {
+    const MIN_STRIP_MEAN_CONFIDENCE: f64 = 85.0;
+    const MAX_STRIP_DICTIONARY_INVALID: f64 = 0.05;
+    recovered.complete_bilevel_rows
+        && quality.mean_confidence < thresholds.min_ocr_mean_confidence
+        && super::scoring::is_ocr_recognition_noise(original_text, thresholds)
+        && !super::scoring::is_ocr_recognition_noise(&recovered.text, thresholds)
+        && recovered.lowest_strip_confidence >= MIN_STRIP_MEAN_CONFIDENCE.max(thresholds.min_ocr_mean_confidence)
+        && recovered.worst_dictionary_invalid <= MAX_STRIP_DICTIONARY_INVALID
+        && recovered.worst_dictionary_invalid <= thresholds.max_ocr_output_dict_invalid_word_ratio
 }
 
 fn apply_recovery(original: &mut ExtractedDocument, recovered: TextAccumulator, page: usize, strips: usize) {
@@ -186,7 +223,7 @@ async fn recover(
     if cancelled() {
         return Err(crate::XbergError::Cancelled);
     }
-    let Some((source, strips)) = prepare(&attempt, cancelled) else {
+    let Some(StripPlan { source, rows, ink_rows }) = prepare(&attempt, cancelled) else {
         return if cancelled() {
             Err(crate::XbergError::Cancelled)
         } else {
@@ -194,7 +231,11 @@ async fn recover(
         };
     };
     let mut config = ocr_config_with_page_rotation_hint(config, 0, Some(source.dpi), true, false, false).into_owned();
-    config.element_config = None;
+    config.element_config = (!ink_rows.is_empty()).then_some(crate::types::OcrElementConfig {
+        include_elements: true,
+        min_level: crate::types::OcrElementLevel::Line,
+        ..Default::default()
+    });
     if let Some(tesseract) = config.tesseract_config.as_mut() {
         tesseract.preprocessing = Some(crate::types::ImagePreprocessingConfig {
             target_dpi: source.dpi.round() as i32,
@@ -204,13 +245,17 @@ async fn recover(
     if let Some(options) = config.backend_options.as_mut() {
         options["use_cache"] = serde_json::Value::Bool(false);
     }
-    let mut output = TextAccumulator::default();
-    let strip_count = strips.len();
-    for rows in strips {
+    let mut output = TextAccumulator {
+        complete_bilevel_rows: !ink_rows.is_empty(),
+        lowest_strip_confidence: 100.0,
+        ..Default::default()
+    };
+    let strip_count = rows.len();
+    for rows in rows {
         if cancelled() {
             return Err(crate::XbergError::Cancelled);
         }
-        let Some(png) = source.encode_rows(rows) else {
+        let Some(png) = source.encode_rows(rows.clone()) else {
             return Ok(None);
         };
         let result = backend.process_image_owned(Arc::new(png), &config).await;
@@ -220,11 +265,72 @@ async fn recover(
         let Ok(result) = result else {
             return Ok(None);
         };
+        output.complete_bilevel_rows &= certified_strip_lines(&result, source.width, &rows, &ink_rows);
         if !output.add(result) {
             return Ok(None);
         }
     }
     Ok(Some((output, strip_count)))
+}
+
+fn certified_strip_lines(result: &ExtractedDocument, width: u32, strip: &Range<u32>, ink: &[Range<u32>]) -> bool {
+    use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
+    use crate::types::{OcrBoundingGeometry, OcrElementLevel};
+
+    let metadata = &result.metadata.additional;
+    let height = strip.end - strip.start;
+    if metadata
+        .get(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY)
+        .and_then(serde_json::Value::as_u64)
+        != Some(u64::from(width))
+        || metadata
+            .get(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY)
+            .and_then(serde_json::Value::as_u64)
+            != Some(u64::from(height))
+    {
+        return false;
+    }
+    let Some(elements) = &result.ocr_elements else {
+        return false;
+    };
+    let mut returned = result.content.lines().filter(|line| !line.trim().is_empty());
+    let mut expected = ink
+        .iter()
+        .filter(|band| strip.start <= band.start && band.end <= strip.end)
+        .peekable();
+    if expected.peek().is_none() {
+        return false;
+    }
+    for line in elements.iter().filter(|element| element.level == OcrElementLevel::Line) {
+        let (Some(band), Some(text)) = (expected.next(), returned.next()) else {
+            return false;
+        };
+        let OcrBoundingGeometry::Rectangle {
+            left,
+            top,
+            width: line_width,
+            height: line_height,
+        } = line.geometry
+        else {
+            return false;
+        };
+        let (Some(right), Some(bottom)) = (left.checked_add(line_width), top.checked_add(line_height)) else {
+            return false;
+        };
+        if line_width == 0
+            || line_height == 0
+            || right > width
+            || bottom > height
+            || !line.text.split_whitespace().eq(text.split_whitespace())
+        {
+            return false;
+        }
+        let overlaps = |other: &Range<u32>| top + strip.start < other.end && bottom + strip.start > other.start;
+        if !overlaps(band) || ink.iter().any(|other| other != band && overlaps(other)) {
+            return false;
+        }
+    }
+    expected.next().is_none() && returned.next().is_none()
 }
 
 async fn wait_for_cancel(cancel: Option<&CancellationToken>) {
@@ -236,7 +342,7 @@ async fn wait_for_cancel(cancel: Option<&CancellationToken>) {
     }
 }
 
-fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<(Source, Vec<Range<u32>>)> {
+fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripPlan> {
     if attempt.max_strips < 2 {
         return None;
     }
@@ -251,7 +357,17 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<(Sourc
         .checked_sub(FIXED_WORK_BYTES)?;
     let source = certify(attempt.document, attempt.page, width, available)?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
-    let bands = source.blank_bands(&cancelled)?;
+    let mut bands = source.blank_bands(&cancelled, if source.bilevel { 1 } else { MIN_BLANK_ROWS })?;
+    let ink_rows = if source.bilevel
+        && bands.len() <= MAX_BILEVEL_CERTIFIED_LINES + 1
+        && bands.first().is_some_and(|band| band.start == 0)
+        && bands.last().is_some_and(|band| band.end == source.height)
+    {
+        bands.windows(2).map(|pair| pair[0].end..pair[1].start).collect()
+    } else {
+        Vec::new()
+    };
+    bands.retain(|band| band.end - band.start >= MIN_BLANK_ROWS);
     let mut plan = plan_strips(
         source.width,
         source.height,
@@ -272,7 +388,11 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<(Sourc
             .iter()
             .any(|band| band.start <= rows.start && rows.end <= band.end)
     });
-    (plan.rows.len() >= 2).then_some((source, plan.rows))
+    (plan.rows.len() >= 2).then_some(StripPlan {
+        source,
+        rows: plan.rows,
+        ink_rows,
+    })
 }
 
 fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usize) -> Option<Source> {
@@ -295,8 +415,9 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
     let Object::Stream { dict, data } = doc.resolve_object(xobjects.as_dict()?.get(&name)?).ok()? else {
         return None;
     };
+    let depth = dict.get("BitsPerComponent")?.as_integer()?;
     if dict.get("Subtype")?.as_name()? != "Image"
-        || dict.get("BitsPerComponent")?.as_integer()? != 8
+        || !matches!(depth, 1 | 8)
         || dict.get("ColorSpace")?.as_name()? != "DeviceGray"
         || dict.get("Filter")?.as_name()? != "FlateDecode"
         || [
@@ -330,18 +451,45 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
     if !(150.0..=300.0).contains(&dpi) || (dpi - dpi_y).abs() > 0.01 {
         return None;
     }
-    let retained_bytes = data.len().checked_add(pixels)?.checked_add(1)?;
-    if retained_bytes > byte_limit {
-        return None;
-    }
-    let samples = decode_exact_gray(&data, pixels)?;
+    let (samples, retained_bytes) = decode_source_gray(&data, width as usize, height as usize, depth, byte_limit)?;
     Some(Source {
         width,
         height,
         dpi,
         samples,
         retained_bytes,
+        bilevel: depth == 1,
     })
+}
+
+fn decode_source_gray(
+    compressed: &[u8],
+    width: usize,
+    height: usize,
+    depth: i64,
+    byte_limit: usize,
+) -> Option<(Vec<u8>, usize)> {
+    let pixels = width.checked_mul(height)?;
+    let retained_bytes = compressed.len().checked_add(pixels)?.checked_add(1)?;
+    if retained_bytes > byte_limit {
+        return None;
+    }
+    if depth == 8 {
+        return Some((decode_exact_gray(compressed, pixels)?, retained_bytes));
+    }
+    let stride = width.div_ceil(8);
+    let packed_size = stride.checked_mul(height)?;
+    if depth != 1 || stride == 0 || retained_bytes.checked_add(packed_size)? > byte_limit {
+        return None;
+    }
+    let packed = decode_exact_gray(compressed, packed_size)?;
+    let mut samples = Vec::new();
+    samples.try_reserve_exact(pixels).ok()?;
+    // PDF starts each packed row on a byte boundary, with the first sample in the high bit. ~keep
+    for row in packed.chunks_exact(stride) {
+        samples.extend((0..width).map(|x| if row[x / 8] & (0x80 >> (x % 8)) == 0 { 0 } else { 255 }));
+    }
+    Some((samples, retained_bytes))
 }
 
 fn decode_exact_gray(compressed: &[u8], pixels: usize) -> Option<Vec<u8>> {
@@ -398,7 +546,7 @@ impl Source {
         Some(bytes)
     }
 
-    fn blank_bands(&self, cancelled: impl Fn() -> bool) -> Option<Vec<Range<u32>>> {
+    fn blank_bands(&self, cancelled: impl Fn() -> bool, min_rows: u32) -> Option<Vec<Range<u32>>> {
         let mut bands = Vec::new();
         let mut start = None;
         let mut line = LineFootprint::new(self.width as usize);
@@ -413,7 +561,7 @@ impl Source {
             } else {
                 line.add(row)?;
                 if let Some(first) = start.take()
-                    && y - first >= MIN_BLANK_ROWS
+                    && y - first >= min_rows
                 {
                     bands.push(first..y);
                 }
@@ -421,7 +569,7 @@ impl Source {
         }
         line.finish()?;
         if let Some(first) = start
-            && self.height - first >= MIN_BLANK_ROWS
+            && self.height - first >= min_rows
         {
             bands.push(first..self.height);
         }
@@ -520,6 +668,8 @@ struct TextAccumulator {
     confidence_sum: f64,
     dictionary_invalid_sum: f64,
     worst_dictionary_invalid: f64,
+    lowest_strip_confidence: f64,
+    complete_bilevel_rows: bool,
 }
 
 impl TextAccumulator {
@@ -572,6 +722,7 @@ impl TextAccumulator {
         // Use the worst strip for acceptance. The reported ratio weights by retained word count,
         // because the backend does not expose the dictionary-specific denominator. ~keep
         self.worst_dictionary_invalid = self.worst_dictionary_invalid.max(quality.dictionary_invalid);
+        self.lowest_strip_confidence = self.lowest_strip_confidence.min(quality.mean_confidence);
         self.dictionary_invalid_sum += quality.dictionary_invalid * f64::from(quality.words);
         true
     }
@@ -697,6 +848,60 @@ mod tests {
     }
 
     #[test]
+    fn bilevel_source_ignores_padding_and_budgets_packed_and_expanded_rows() {
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder
+            .write_all(&[0b1010_0101, 0b0111_1111, 0b0101_1010, 0b1000_0000])
+            .unwrap();
+        let compressed = encoder.finish().unwrap();
+        let retained = compressed.len() + 18 + 1;
+        let peak = retained + 4;
+        let expected = vec![255, 0, 255, 0, 0, 255, 0, 255, 0, 0, 255, 0, 255, 255, 0, 255, 0, 255];
+        assert_eq!(
+            decode_source_gray(&compressed, 9, 2, 1, peak),
+            Some((expected, retained))
+        );
+        assert_eq!(decode_source_gray(&compressed, 9, 2, 1, peak - 1), None);
+        assert_eq!(decode_source_gray(&compressed, 9, 1, 1, peak), None);
+    }
+
+    #[test]
+    fn bilevel_line_proof_rejects_a_split_that_hides_a_missing_source_line() {
+        use crate::ocr_metadata_keys::{
+            OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        };
+        use crate::types::{OcrBoundingGeometry, OcrElement, OcrElementLevel};
+        let line = |text: &str, top| OcrElement {
+            text: text.to_owned(),
+            level: OcrElementLevel::Line,
+            geometry: OcrBoundingGeometry::Rectangle {
+                left: 20,
+                top,
+                width: 100,
+                height: 5,
+            },
+            ..Default::default()
+        };
+        let mut result = ExtractedDocument {
+            content: "one\ntwo".to_owned(),
+            ocr_elements: Some(vec![line("one", 11), line("two", 30)]),
+            ..Default::default()
+        };
+        result
+            .metadata
+            .additional
+            .insert(Cow::Borrowed(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY), 200.into());
+        result
+            .metadata
+            .additional
+            .insert(Cow::Borrowed(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY), 60.into());
+        let ink = [110..117, 130..137];
+        assert!(certified_strip_lines(&result, 200, &(100..160), &ink));
+        result.ocr_elements.as_mut().unwrap()[1] = line("two", 12);
+        assert!(!certified_strip_lines(&result, 200, &(100..160), &ink));
+    }
+
+    #[test]
     fn two_columns_and_staggered_line_starts_refuse_ordering() {
         let mut line = LineFootprint::new(200);
         let mut row = vec![255; 200];
@@ -726,11 +931,13 @@ mod tests {
             max_strips: MAX_STRIPS,
             cancel: None,
         };
-        let (source, strips) = prepare(&attempt, || false).expect("admitted bounded strips");
+        let StripPlan {
+            source, rows: strips, ..
+        } = prepare(&attempt, || false).expect("admitted bounded strips");
         assert_eq!(source.height, 9000);
         assert_eq!(strips.first().unwrap().start, 0);
         assert_eq!(strips.last().unwrap().end, 8812);
-        let bands = source.blank_bands(|| false).unwrap();
+        let bands = source.blank_bands(|| false, MIN_BLANK_ROWS).unwrap();
         assert!(bands.iter().any(|band| band.start <= 8812 && band.end == source.height));
         let peak = 1100 * 7765 * 4
             + 128_000

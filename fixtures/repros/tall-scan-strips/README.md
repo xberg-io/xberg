@@ -10,3 +10,12 @@ Regenerate with Pillow 13.0.0 and Arial Regular.
 ```sh
 uv run --no-project --with pillow==13.0.0 python generate.py . /path/to/Arial.ttf
 ```
+
+The bilevel fixture has the same 40 source lines in a 1275 × 12000 raster.
+Each packed DeviceGray row ends with five padding bits.
+Regenerate it with the bundled DejaVu Sans font:
+
+```sh
+uv run --no-project --with pillow==13.0.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --bilevel-only
+```
