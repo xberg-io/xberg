@@ -110,7 +110,7 @@ pub(crate) use pipeline::{
     numeric_repair_enabled, run_ocr_pipeline,
 };
 
-#[cfg(feature = "ocr")]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use pipeline::estimate_png_encode_page_peak_bytes;
 
 #[cfg(all(test, feature = "ocr"))]
