@@ -86,7 +86,11 @@ async fn qualify(detached: bool) {
                 Some(points_per_pixel),
                 Some(hints),
                 0,
-                Some(&fixture.doc),
+                Some(super::DetachedOcrPage {
+                    document: &fixture.doc,
+                    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                    orientation_retry: None,
+                }),
             )
             .await
             .expect("actual detached production pipeline, no supplied text");

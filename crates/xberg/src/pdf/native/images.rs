@@ -1,12 +1,12 @@
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-mod stored_copy;
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-use stored_copy::collect_legacy_page_fallback_images;
-
 //! Image extraction using the xberg_native_pdf backend.
 //!
 //! Extracts embedded images from PDF pages via xberg_native_pdf, including
 //! actual image data and metadata.
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+mod stored_copy;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use stored_copy::collect_legacy_page_fallback_images;
 
 #[cfg(test)]
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]

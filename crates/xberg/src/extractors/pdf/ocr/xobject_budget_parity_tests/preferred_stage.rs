@@ -283,7 +283,11 @@ async fn assert_preferred(detached: bool, matching: bool, unavailable: bool) {
             native_page_layers: None,
         }),
         0,
-        Some(&frame.native),
+        Some(super::super::DetachedOcrPage {
+            document: &frame.native,
+            #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+            orientation_retry: None,
+        }),
     )
     .await
     .expect("actual preparation failures reach existing final original-image retry");
