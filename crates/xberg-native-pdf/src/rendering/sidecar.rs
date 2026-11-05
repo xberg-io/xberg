@@ -261,6 +261,10 @@ impl CmykSidecar {
         }
     }
 
+    pub(crate) fn image_buffer_bytes(&self) -> u64 {
+        self.cmyk.capacity() as u64 + self.spots.capacity() as u64
+    }
+
     /// Pixmap dimensions in `(width, height)` order.
     pub(crate) fn dims(&self) -> (u32, u32) {
         self.dims

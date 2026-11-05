@@ -45,5 +45,6 @@ run_group() {
 run_group 'english_recovery_tests::small_english_' 2
 run_group 'encoded_pipeline::builtin_pipeline_png_' 3
 run_group 'english_recovery_tests::large::large_english_' 2
-[ "$passed" -eq 7 ] || exit 1
-echo "JPEG recovery model tests expected 7, passed $passed"
+run_group 'english_recovery_tests::large::pdf_route_tests::large_english_pdf' 1
+[ "$passed" -eq 8 ] || exit 1
+echo "JPEG recovery model tests expected 8, passed $passed"

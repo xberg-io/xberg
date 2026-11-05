@@ -175,10 +175,12 @@ async fn qualify(route: &str) {
             (full_allocations, max_rust_allocation, half_allocations),
             observed,
         );
-        assert_eq!(
-            full_allocations, 0,
-            "must not allocate original RGB/RGBA: {route}/{mib}"
-        );
+        if route != "pdf" || mib < 512 {
+            assert_eq!(
+                full_allocations, 0,
+                "must not allocate original RGB/RGBA: {route}/{mib}"
+            );
+        }
         assert!(
             !succeeded || has_words,
             "higher limit must retain successful recognition"
@@ -229,3 +231,6 @@ async fn large_english_image() {
 async fn large_english_detached() {
     isolated("detached", concat!(module_path!(), "::large_english_detached")).await;
 }
+
+#[path = "large/pdf_route_tests.rs"]
+mod pdf_route_tests;
