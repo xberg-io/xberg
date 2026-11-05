@@ -414,12 +414,16 @@ async fn multipage_hidden_layers_recover_only_the_pages_missing_picture_words() 
         for (page, cut) in [first_cut, second_cut].into_iter().enumerate() {
             assert_page_words(&automatic, page, &expected(COMPLETE));
             let output = &automatic.pages.as_ref().expect("page content")[page];
-            assert_eq!(output.ocr_confidence.is_some(), cut, "page {}", page + 1);
-            if !cut {
-                assert_eq!(
+            let native_page = &native.pages.as_ref().expect("native pages")[page];
+            if cut {
+                assert_ne!(
                     output.content,
-                    native.pages.as_ref().expect("native pages")[page].content
+                    native_page.content,
+                    "page {} must recover words",
+                    page + 1
                 );
+            } else {
+                assert_eq!(output.content, native_page.content);
             }
         }
     }
@@ -502,5 +506,35 @@ async fn zero_hidden_layer_probe_iterations_preserve_both_partial_pages() {
     assert!(!document.metadata.ocr_used);
     for page in 0..2 {
         assert_page_words(&document, page, &cut_words());
+    }
+}
+
+#[tokio::test]
+async fn tighter_global_or_ocr_probe_limit_recovers_only_the_first_partial_page() {
+    let raster = make_raster();
+    let pdf = pages_pdf(vec![
+        trailing_cut_scan(&raster, true, None),
+        trailing_cut_scan(&raster, true, None),
+    ]);
+    for (global_limit, ocr_limit) in [(1, 2), (2, 1)] {
+        let config = ExtractionConfig {
+            security_limits: Some(xberg::SecurityLimits {
+                max_iterations: global_limit,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                security_limits: Some(xberg::SecurityLimits {
+                    max_iterations: ocr_limit,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..default_tesseract()
+        };
+        let document = extract(&pdf, &config).await;
+        assert!(document.metadata.ocr_used, "limits {global_limit}/{ocr_limit}");
+        assert_eq!(document.content.split_whitespace().count(), 159);
+        assert_page_words(&document, 0, &expected(COMPLETE));
+        assert_page_words(&document, 1, &cut_words());
     }
 }
