@@ -3068,6 +3068,10 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut all_page_paragraphs: Vec<Option<Vec<crate::pdf::structure::types::PdfParagraph>>> = vec![None; total_pages];
     // The factor from each page's OCR raster to points, recorded beside its paragraphs for the
     // layer merge. ~keep
+    #[cfg_attr(
+        all(feature = "layout-detection", not(feature = "ocr"), not(feature = "ocr-wasm")),
+        allow(unused_mut)
+    )]
     let mut page_ocr_scales: Vec<Option<(f32, f32)>> = vec![None; total_pages];
     let mut public_ocr_pages = ahash::AHashMap::new();
     // Written only by the two OCR-paragraph assembly blocks below (`layout-detection`
@@ -5282,7 +5286,12 @@ impl<'a> XObjectRecoveryContext<'a> {
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[derive(Clone, Copy)]
 pub(super) enum XObjectProjection {
-    #[cfg(all(test, feature = "pdf", feature = "ocr"))]
+    #[cfg(all(
+        test,
+        feature = "pdf",
+        feature = "tokio-runtime",
+        any(feature = "ocr", feature = "ocr-pipeline")
+    ))]
     RawPayloads,
     CompletePage,
 }
@@ -5840,7 +5849,10 @@ pub(super) struct RunPageParagraphs {
 /// The factor per axis from the raster a page of a whole-document run was read from to PDF
 /// points, the same conversion the mixed route applies to its pipeline pages. `None` when the
 /// run rendered no PDF page or the raster is empty. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(not(feature = "layout-detection"), feature = "ocr", feature = "ocr-wasm")
+))]
 fn run_page_ocr_scale(
     #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
     page_idx: usize,
@@ -7091,7 +7103,12 @@ mod upright_processed_geometry_tests;
 #[path = "pipeline/raster_budget_tests.rs"]
 mod raster_budget_tests;
 
-#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "tokio-runtime",
+    any(feature = "ocr", feature = "ocr-pipeline")
+))]
 #[path = "xobject_raw_collection_test_support.rs"]
 mod raw_collection_test_support;
 
