@@ -2431,6 +2431,7 @@ fn automatic_unmapped_text_hints(metadata: &crate::pdf::metadata::PdfExtractionM
         known_full_page_scan: false,
         single_block_pages: Some(std::sync::Arc::new(pages.iter().copied().collect())),
         native_page_layers: None,
+        second_khmer_read: false,
     })
 }
 
@@ -2458,6 +2459,7 @@ fn whole_document_ocr_hints(
                 known_full_page_scan: false,
                 single_block_pages: None,
                 native_page_layers: None,
+                second_khmer_read: false,
             })
             .native_page_layers = layers;
     }

@@ -179,6 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep the Khmer text of PDF pages that go to OCR in a document whose text layer is Khmer.** Such a page used to read with the configured languages only, so its Khmer text came out as Latin noise or was dropped. When the Khmer model is installed, the page now gets a second read with `khm` added, and the Khmer words that beat the first read are put beside the words they were read over. No word or number of the first read is removed. An explicit `force_ocr` or `force_ocr_pages` request keeps the configured languages, and a missing Khmer model is never downloaded for this read. Each such page is read twice, so it takes longer to read. (GH#2509)
 - **(pdf): Recover text on tall scans when an OCR strip contains only blank space.** (#2501)
 
 - **(pdf): Keep upper rows first when stacked ruled grids merge.** (#2494)

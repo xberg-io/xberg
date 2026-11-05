@@ -24,6 +24,8 @@ packages=(
   # rather than downloaded inside the timed extraction. ~keep
   tesseract-ocr-kor
   tesseract-ocr-jpn-vert
+  # The Khmer pack lets the GH#2509 test read a Khmer page; without it the test skips. ~keep
+  tesseract-ocr-khm
   libtesseract-dev
   libleptonica-dev
   fonts-liberation

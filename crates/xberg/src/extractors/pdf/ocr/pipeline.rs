@@ -938,6 +938,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 
     let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
     let ocr_config_owned = ensure_elements_enabled(&ocr_config_resolved);
+    // Only the pages this route chose to OCR on its own get the second Khmer read; an explicit
+    // `force_ocr` or `force_ocr_pages` request keeps the configured languages (GH#2509). ~keep
+    #[cfg(not(target_arch = "wasm32"))]
+    let second_khmer_read = !probing_hidden_layer
+        && !config.force_ocr
+        && config.force_ocr_pages.is_none()
+        && super::khmer_layer::wants_khmer_read(&ocr_config_owned, native_text);
+    #[cfg(target_arch = "wasm32")]
+    let second_khmer_read = false;
     // When any effective pipeline is configured or synthesized, each page must run through
     // the shared pipeline runner so its fallback decision stays page-local. This includes the
     // implicit Tesseract-to-Paddle pipeline as well as `vlm_fallback` and an explicit pipeline;
@@ -1139,6 +1148,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        second_khmer_read,
                     };
                     // See `extract_with_ocr_for_page`'s doc comment on
                     // `points_per_pixel_override`: this call hands the stage a single
@@ -1311,6 +1321,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        second_khmer_read,
                     };
                     let points_per_pixel_override = {
                         let (_, page_height_pt) = page_dimensions_pt(&render_doc, *page_idx);
@@ -1582,16 +1593,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    let result = super::khmer_layer::read_page_with_khmer_layer(
                         &backend_clone,
                         upright_data,
-                        &original_config,
-                        &config_clone,
+                        (&original_config, &config_clone),
                         crate::extractors::image::SparseRetryPolicy {
                             whole_page_raster,
                             allow_standard_retry: false,
                         },
                         cancel_token.as_ref(),
+                        second_khmer_read,
                     )
                     .await;
                     (idx, correction_degrees, upright_width, upright_height, result)
@@ -1758,16 +1769,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                 };
                 #[cfg(not(target_arch = "wasm32"))]
-                let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                let result = super::khmer_layer::read_page_with_khmer_layer(
                     backend,
                     upright_data,
-                    &ocr_config_resolved,
-                    config_for_page.as_ref(),
+                    (&ocr_config_resolved, config_for_page.as_ref()),
                     crate::extractors::image::SparseRetryPolicy {
                         whole_page_raster,
                         allow_standard_retry: false,
                     },
                     config.cancel_token.as_ref(),
+                    second_khmer_read,
                 )
                 .await;
                 #[cfg(target_arch = "wasm32")]
@@ -2562,6 +2573,9 @@ pub(crate) struct PageOcrHints {
     /// has chosen its output, a page whose OCR text is judged recognition noise gets its layer
     /// first.
     pub(crate) native_page_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    /// `true` for a document whose text layer is Khmer: each OCR page gets a second read with
+    /// `khm` added, and the Khmer words that beat its first read go beside it.
+    pub(crate) second_khmer_read: bool,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3303,6 +3317,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 )
                 .into_owned();
                 let original_config = ocr_config_owned.clone();
+                let second_khmer_read = page_ocr_hints.as_ref().is_some_and(|hints| hints.second_khmer_read);
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
                 #[cfg(feature = "pdf")]
@@ -3332,16 +3347,16 @@ pub(super) async fn extract_with_ocr_for_page(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
-                    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                    let result = super::khmer_layer::read_page_with_khmer_layer(
                         &backend_clone,
                         upright_data,
-                        &original_config,
-                        &config_clone,
+                        (&original_config, &config_clone),
                         crate::extractors::image::SparseRetryPolicy {
                             whole_page_raster,
                             allow_standard_retry: false,
                         },
                         cancel_token.as_ref(),
+                        second_khmer_read,
                     )
                     .await;
                     #[cfg(all(auto_rotate, feature = "ocr"))]
@@ -3498,16 +3513,16 @@ pub(super) async fn extract_with_ocr_for_page(
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                        super::khmer_layer::read_page_with_khmer_layer(
                             &backend,
                             upright_data,
-                            &ocr_config_owned,
-                            config_for_page.as_ref(),
+                            (&ocr_config_owned, config_for_page.as_ref()),
                             crate::extractors::image::SparseRetryPolicy {
                                 whole_page_raster,
                                 allow_standard_retry: false,
                             },
                             config.cancel_token.as_ref(),
+                            page_ocr_hints.as_ref().is_some_and(|hints| hints.second_khmer_read),
                         )
                         .await
                     }

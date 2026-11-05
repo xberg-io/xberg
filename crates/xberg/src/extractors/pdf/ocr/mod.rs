@@ -25,6 +25,8 @@ mod markdown;
 pub(crate) use markdown::strip_embedded_gfm_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod hidden_layer;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), not(target_arch = "wasm32")))]
+mod khmer_layer;
 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
 mod orientation_retry;
 mod pipeline;

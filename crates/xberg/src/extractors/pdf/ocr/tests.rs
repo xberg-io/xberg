@@ -8240,6 +8240,7 @@ Name: ___
             known_full_page_scan: false,
             single_block_pages: Some(std::sync::Arc::new(std::collections::HashSet::from([1]))),
             native_page_layers: None,
+            second_khmer_read: false,
         };
         let config = ExtractionConfig {
             use_cache: false,
