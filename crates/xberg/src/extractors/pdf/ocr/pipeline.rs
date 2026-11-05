@@ -2829,6 +2829,8 @@ pub(crate) struct PageOcrHints {
     pub(crate) single_native_type0_page: Option<std::sync::Arc<str>>,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) native_coverage_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) khmer_retention: Option<super::super::khmer_retention::KhmerRetention>,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -4880,6 +4882,43 @@ pub(super) async fn extract_with_ocr_for_page(
             crate::pdf::render::record_render_warning(warning);
         }
         return Err(type0_ocr_rejection());
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if let Some(retention) = page_ocr_hints
+        .as_ref()
+        .filter(|hints| hints.native_page_layers.is_none())
+        .and_then(|hints| hints.khmer_retention.as_ref())
+        && can_retry_orientation
+        && base_ocr_config.effective_tesseract_language() == ["eng"]
+        && detached_page.is_none()
+        && images.is_none()
+        && page_index_offset == 0
+        && super::document::native_preservation_is_automatic(config, 1)
+        && collected_tables.is_empty()
+        && accumulated_formulas.is_empty()
+        && accumulated_llm_usage.is_empty()
+        && all_ocr_elements.is_empty()
+        && !capture_rasters
+        && let [page_text] = page_texts.as_slice()
+        && !page_text.trim().is_empty()
+        && !page_text.chars().any(super::super::khmer_retention::is_khmer)
+        && let [verdict] = recognition_noise_verdicts.as_slice()
+        && verdict.page_index == 0
+        && verdict.low_confidence
+        && !verdict.discarded
+        && result.split_whitespace().eq(page_text.split_whitespace())
+        && ocr_doc
+            .as_ref()
+            .is_none_or(|doc| super::document::plain_ocr_page_can_yield_to_native(doc, page_text))
+    {
+        retention.confirm();
+        recognition_noise_warnings = vec![super::scoring::ocr_noise_warning(
+            verdict,
+            &ocr_output_thresholds,
+            backend_confidence_semantics,
+            true,
+        )];
     }
 
     #[cfg(feature = "pdf")]
