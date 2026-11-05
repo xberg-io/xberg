@@ -24,7 +24,7 @@ mod bounded_jpeg;
 pub(crate) use bounded_jpeg::load_image_for_ocr_within;
 #[cfg(feature = "ocr")]
 pub(crate) use bounded_jpeg::{
-    DecodedOcrImage, ReducedScale, admit_oversized_jpeg, load_image_for_ocr, load_image_for_ocr_with_processing,
+    DecodedOcrImage, ReducedScale, admit_jpeg_for_processing, load_image_for_ocr, load_image_for_ocr_with_processing,
 };
 #[cfg(feature = "ocr")]
 #[doc(hidden)]
@@ -766,22 +766,20 @@ pub(crate) fn decode_image_with_security_limits(
     decode_standard_image_with_security_limits(image_bytes, limits)
 }
 
-/// Extract metadata from image bytes.
-///
-/// Extracts dimensions, format, and EXIF data from the image.
-/// Standard formats are header-probed without allocating their pixel buffers; JPEG 2000
-/// dimensions come from JP2/J2K headers, and HEIF-family dimensions come from the primary
-/// image handle when the `heic` feature is enabled. EXIF is read from the original bytes.
-#[cfg(test)]
-pub(crate) fn extract_image_metadata(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
-    let limits = SecurityLimits::default();
-    extract_image_metadata_with_security_limits(bytes, &limits)
-}
-
 pub(crate) fn extract_image_metadata_with_security_limits(
     bytes: &[u8],
     limits: &SecurityLimits,
 ) -> Result<ExtractedImageMetadata> {
+    extract_image_metadata_for_processing(bytes, limits, |_, _| true)
+}
+
+pub(crate) fn extract_image_metadata_for_processing(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
+) -> Result<ExtractedImageMetadata> {
+    #[cfg(not(feature = "ocr"))]
+    let _ = &fits;
     let budget = ImageDecodeBudget::from_security_limits(limits);
     if (is_jp2(bytes) || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0x4F))
         && let Ok(metadata) = decode_jp2_metadata(bytes)
@@ -829,10 +827,10 @@ pub(crate) fn extract_image_metadata_with_security_limits(
         }
     }
 
-    // OCR decodes an oversized JPEG at a reduced size, so the metadata probe admits it the same way,
-    // from the frame header alone. ~keep
+    // Decoder or downstream image workspace can require JPEG reduction. Admit that
+    // metadata from the header; the actual OCR decode still validates pixels. ~keep
     #[cfg(feature = "ocr")]
-    if let Some((width, height)) = admit_oversized_jpeg(bytes, limits)? {
+    if let Some((width, height)) = admit_jpeg_for_processing(bytes, limits, fits)? {
         return Ok(ExtractedImageMetadata {
             width,
             height,

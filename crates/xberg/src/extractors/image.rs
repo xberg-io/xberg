@@ -3692,6 +3692,33 @@ fn push_image_placeholder(builder: &mut InternalDocumentBuilder) {
     });
 }
 
+fn metadata_for_ocr_route(
+    content: &[u8],
+    limits: &crate::extractors::security::SecurityLimits,
+    config: &ExtractionConfig,
+) -> Result<crate::extraction::image::ExtractedImageMetadata> {
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    if !config.disable_ocr
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            (ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled || ocr.pipeline.is_some())
+                && ocr.effective_pipeline().is_some()
+        })
+    {
+        return crate::extraction::image::extract_image_metadata_for_processing(content, limits, |width, height| {
+            pipeline_encode_fits(width, height, limits)
+        });
+    }
+    #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
+    let _ = config;
+    extract_image_metadata_with_security_limits(content, limits)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn pipeline_encode_fits(width: u32, height: u32, limits: &crate::extractors::security::SecurityLimits) -> bool {
+    crate::extractors::pdf::ocr::estimate_png_encode_page_peak_bytes(width, height)
+        .is_ok_and(|peak| peak <= limits.max_content_size as u64)
+}
+
 /// Decode the image the OCR pipeline encodes once per stage, with its original size and the reduction
 /// denominator. Each stage holds the PNG encode working set on top of the raster, so a JPEG whose
 /// encode does not fit `max_content_size` is decoded at the finest reduced scale whose encode fits.
@@ -3702,11 +3729,7 @@ fn decode_pipeline_image(
 ) -> Result<(image::RgbImage, u32, u32, u8)> {
     #[cfg(feature = "ocr")]
     {
-        let maximum = u64::try_from(security_limits.max_content_size).unwrap_or(u64::MAX);
-        let encode_fits = |width, height| {
-            crate::extractors::pdf::ocr::estimate_png_encode_page_peak_bytes(width, height)
-                .is_ok_and(|peak| peak <= maximum)
-        };
+        let encode_fits = |width, height| pipeline_encode_fits(width, height, security_limits);
         let decoded = crate::extraction::image::load_image_for_ocr_within(content, security_limits, encode_fits)?;
         Ok((
             decoded.image,
@@ -3922,7 +3945,7 @@ impl InternalDocumentExtractor for ImageExtractor {
         enforce_image_page_limit(content, mime_type, config)?;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-        let extraction_metadata = extract_image_metadata_with_security_limits(content, security_limits)?;
+        let extraction_metadata = metadata_for_ocr_route(content, security_limits, config)?;
         // Computed against the original bytes (before any HEIC->PNG rebinding
         // below) so it reflects the same input `extract_image_metadata` saw. ~keep
         let exif_warning = crate::extraction::exif::extract_exif_warning(content);

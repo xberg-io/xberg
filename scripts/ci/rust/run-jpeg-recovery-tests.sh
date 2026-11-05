@@ -42,7 +42,8 @@ run_group() {
   passed=$((passed + expected))
 }
 
-run_group 'english_recovery_tests::' 2
+run_group 'english_recovery_tests::small_english_' 2
 run_group 'encoded_pipeline::builtin_pipeline_png_' 3
-[ "$passed" -eq 5 ] || exit 1
-echo "JPEG recovery model tests expected 5, passed $passed"
+run_group 'english_recovery_tests::large::large_english_' 2
+[ "$passed" -eq 7 ] || exit 1
+echo "JPEG recovery model tests expected 7, passed $passed"

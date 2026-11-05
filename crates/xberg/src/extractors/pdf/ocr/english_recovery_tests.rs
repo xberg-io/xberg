@@ -154,3 +154,6 @@ async fn small_english_image_only_pdf_returns_real_text_at_both_caps() {
 async fn small_english_detached_page_returns_real_text_at_both_caps() {
     isolated(true, "small_english_detached_page_returns_real_text_at_both_caps").await;
 }
+
+#[path = "english_recovery_tests/large.rs"]
+mod large;

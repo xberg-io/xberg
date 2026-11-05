@@ -136,15 +136,23 @@ fn load_reduced_or_full(
     })
 }
 
-/// The original dimensions of a JPEG whose full RGB raster does not fit the limit but whose
-/// reduced decode does, read from the frame header without decoding; `None` for any other
-/// input, which the full decoder then takes. An oversized JPEG that no reduced decode can take
-/// gets the same error as the OCR path.
-pub(crate) fn admit_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<(u32, u32)>> {
-    Ok(
-        admit_reduced_decode(bytes, limits, |_| true, |_| false, |_| false, true)?
-            .map(|(frame, _)| (frame.width, frame.height)),
-    )
+/// Original JPEG dimensions when only a reduced decode meets the decoder and downstream
+/// processing bounds. Read from the frame header; the actual OCR decode validates the payload.
+/// Other inputs retain the ordinary full decoder and its validation.
+pub(crate) fn admit_jpeg_for_processing(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
+) -> Result<Option<(u32, u32)>> {
+    Ok(admit_reduced_decode(
+        bytes,
+        limits,
+        |scale| fits(scale.width, scale.height),
+        |_| false,
+        |_| false,
+        false,
+    )?
+    .map(|(frame, _)| (frame.width, frame.height)))
 }
 
 /// Choose the reduced decode of a JPEG whose full RGB raster does not fit the limit, or whose original
