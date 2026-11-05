@@ -57,6 +57,7 @@ struct NativeTableMetadata {
     grid: Option<crate::types::TableGrid>,
     scripts: Option<crate::pdf::native::table::scripts::TableScripts>,
     complete_leading_header: bool,
+    source_members: Option<crate::pdf::native::table::source_members::TableSources>,
 }
 
 impl NativeTableMetadata {
@@ -729,6 +730,7 @@ pub(crate) fn extract_all_from_native_document(
                                 grid: entry.grid,
                                 scripts: entry.scripts,
                                 complete_leading_header: entry.complete_leading_header,
+                                source_members: entry.source_members,
                             },
                         )
                     })
@@ -968,6 +970,10 @@ pub(crate) fn extract_all_from_native_document(
 
         match crate::pdf::structure::pipeline::extract_document_structure_from_native_pages(
             native_pages,
+            &native_table_grids
+                .iter()
+                .filter_map(|metadata| metadata.source_members.as_ref())
+                .collect::<Vec<_>>(),
             native_table_grids.iter().take_while(|metadata| metadata.ruled).count(),
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,
