@@ -14,6 +14,20 @@ pub(super) fn known_phase_peak(
     height: u32,
     encoded_bytes: usize,
     preprocessing: Option<&ImagePreprocessingConfig>,
+) -> crate::Result<Option<u64>> {
+    if preprocessing.is_some_and(|options| !no_binarization_contrast(options)) {
+        return Ok(None);
+    }
+    calculate_phase_peak(width, height, encoded_bytes, preprocessing)
+        .map(Some)
+        .ok_or_else(|| crate::XbergError::validation("JPEG native image workspace calculation overflowed"))
+}
+
+fn calculate_phase_peak(
+    width: u32,
+    height: u32,
+    encoded_bytes: usize,
+    preprocessing: Option<&ImagePreprocessingConfig>,
 ) -> Option<u64> {
     let rgba = pix_bytes(width, height, 32)?;
     // SetImage(raw) creates a 32-bpp Pix and SetImage(Pix) copies it. ~keep
@@ -69,7 +83,7 @@ mod tests {
     #[test]
     fn raw_phase_uses_word_aligned_native_rows_and_retains_the_encoded_input() {
         assert_eq!(
-            known_phase_peak(1, 3, 7, None),
+            known_phase_peak(1, 3, 7, None).expect("addressable dimensions"),
             Some(2 * (12 + PIX_HEADER_BYTES) + 9 + 14),
         );
     }
@@ -79,7 +93,9 @@ mod tests {
         let (width, height) = (512, 256);
         let rgb = vec![0; width as usize * height as usize * 3];
         let bytes = crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, width, height);
-        let peak = known_phase_peak(u32::from(width), u32::from(height), bytes.len(), None).unwrap();
+        let peak = known_phase_peak(u32::from(width), u32::from(height), bytes.len(), None)
+            .unwrap()
+            .unwrap();
         for (budget, expected_width) in [(peak, u32::from(width)), (peak - 1, u32::from(width) / 2)] {
             let prepared = super::super::prepare_encoded_ocr_image(
                 &bytes,
@@ -98,6 +114,45 @@ mod tests {
     }
 
     #[test]
+    fn implicit_bright_scan_keeps_its_distinct_preprocessing_policy() {
+        let dimension = 4096;
+        let rgb = vec![245; dimension as usize * dimension as usize * 3];
+        let bytes = crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, dimension, dimension);
+        let config = super::super::TesseractConfig {
+            source_dpi: Some(600.0),
+            known_full_page_scan: true,
+            ..Default::default()
+        };
+        let prepared = super::super::prepare_encoded_ocr_image(
+            &bytes,
+            &super::super::SecurityLimits {
+                max_content_size: 40 * 1024 * 1024,
+                ..Default::default()
+            },
+            &config,
+            None,
+            false,
+        )
+        .expect("implicit bright-page preprocessing must not inherit raw-ingestion selection");
+        assert_eq!(
+            (prepared.width, prepared.height, prepared.source_dpi),
+            (2048, 2048, 300)
+        );
+        assert!(prepared.apply_pix_preprocessing);
+        assert!(prepared.image_preprocessing.expect("DPI metadata").skipped_resize);
+    }
+
+    #[test]
+    fn unsupported_policy_and_arithmetic_overflow_are_distinct() {
+        assert!(
+            known_phase_peak(1, 1, 0, Some(&ImagePreprocessingConfig::default()))
+                .expect("unsupported policy")
+                .is_none()
+        );
+        assert!(known_phase_peak(u32::MAX, u32::MAX, 0, None).is_err());
+    }
+
+    #[test]
     fn contrast_phase_exceeds_40_mib_but_fits_96_mib_at_the_required_dimensions() {
         let options = ImagePreprocessingConfig {
             contrast_enhance: true,
@@ -106,7 +161,9 @@ mod tests {
             normalize_shaded_rows: false,
             ..Default::default()
         };
-        let peak = known_phase_peak(2048, 2048, 655360, Some(&options)).expect("known contrast phase");
+        let peak = known_phase_peak(2048, 2048, 655360, Some(&options))
+            .expect("addressable phase")
+            .expect("known contrast phase");
         assert!(peak > 40 * 1024 * 1024);
         assert!(peak <= 96 * 1024 * 1024);
     }

@@ -1119,7 +1119,7 @@ fn prepare_encoded_ocr_image(
             pixels <= maximum_pixels
                 && assessed_policy.as_ref().is_none_or(|policy| {
                     native_image_budget::known_phase_peak(width, height, bytes.len(), policy.as_ref())
-                        .is_none_or(|peak| peak <= limits.max_content_size as u64)
+                        .is_ok_and(|peak| peak.is_none_or(|peak| peak <= limits.max_content_size as u64))
                 })
         };
         let decoded = crate::extraction::image::load_image_for_ocr_with_processing(bytes, limits, fits, |scale| {
@@ -1146,7 +1146,7 @@ fn prepare_encoded_ocr_image(
             config.known_full_page_scan,
         );
         if is_jpeg
-            && native_image_budget::known_phase_peak(width, height, bytes.len(), preprocessing.as_deref())
+            && native_image_budget::known_phase_peak(width, height, bytes.len(), preprocessing.as_deref())?
                 .is_some_and(|peak| peak > limits.max_content_size as u64)
         {
             assessed_policy = Some(preprocessing.as_deref().cloned());
@@ -1189,7 +1189,7 @@ fn prepare_encoded_ocr_image(
                 prepared.height,
                 bytes.len(),
                 prepared.preprocessing.as_ref(),
-            )
+            )?
             .is_some_and(|peak| peak > limits.max_content_size as u64)
         {
             return Err(crate::XbergError::validation(format!(

@@ -106,6 +106,7 @@ fn measure_contrast() {
             bytes.len(),
             config().preprocessing.as_ref(),
         )
+        .expect("addressable contrast phase")
         .expect("known contrast policy")
             > BUDGET as u64,
         "full-resolution contrast must require reduced decoding even though its RGB fits",
