@@ -1236,7 +1236,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // (`std::slice::from_ref` above), so its own per-page paragraph vec has
                     // at most one entry -- this page's own, still bare/unclassified because
                     // `skip_document_global_heuristic = true` was passed above.
-                    if let Some(paragraphs) = page_raw_paragraphs.pop().filter(|p| !p.is_empty()) {
+                    if let Some(paragraphs) = page_raw_paragraphs
+                        .pop()
+                        .map(|page| page.paragraphs)
+                        .filter(|paragraphs| !paragraphs.is_empty())
+                    {
                         ocr_page_paragraphs.insert(page_number, paragraphs);
                     }
                     let page_dims = page_images
@@ -1376,7 +1380,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
-                    if let Some(paragraphs) = page_raw_paragraphs.pop().filter(|p| !p.is_empty()) {
+                    if let Some(paragraphs) = page_raw_paragraphs
+                        .pop()
+                        .map(|page| page.paragraphs)
+                        .filter(|paragraphs| !paragraphs.is_empty())
+                    {
                         ocr_page_paragraphs.insert(page_number, paragraphs);
                     }
                     for mut formula in formulas {
@@ -2687,7 +2695,7 @@ pub(super) async fn extract_with_ocr_for_page(
     Vec<String>,
     Option<Vec<crate::types::ExtractedImage>>,
     Vec<crate::types::Formula>,
-    Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+    Vec<RunPageParagraphs>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
@@ -2990,6 +2998,9 @@ pub(super) async fn extract_with_ocr_for_page(
     // paragraphs of a rejected page must be dropped along with its text.
     let mut rejected_pages = vec![false; total_pages];
     let mut all_page_paragraphs: Vec<Option<Vec<crate::pdf::structure::types::PdfParagraph>>> = vec![None; total_pages];
+    // The factor from each page's OCR raster to points, recorded beside its paragraphs for the
+    // layer merge. ~keep
+    let mut page_ocr_scales: Vec<Option<(f32, f32)>> = vec![None; total_pages];
     let mut public_ocr_pages = ahash::AHashMap::new();
     // Written only by the two OCR-paragraph assembly blocks below (`layout-detection`
     // *with* `ocr`/`ocr-wasm`, or `not(layout-detection)`); still read unconditionally by
@@ -4076,6 +4087,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     );
 
                     all_page_paragraphs[page_idx] = Some(paragraphs);
+                    page_ocr_scales[page_idx] = run_page_ocr_scale(
+                        #[cfg(feature = "pdf")]
+                        lazy_pdf_render_state.as_ref(),
+                        page_idx,
+                        (ocr_render_width, ocr_render_height),
+                    );
                     pages_text_claimed_by_tables[page_idx] = ocr_doc.ocr_text_claimed_by_tables;
                 }
 
@@ -4160,6 +4177,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     }
                 }
                 all_page_paragraphs[page_idx] = Some(paragraphs);
+                page_ocr_scales[page_idx] = run_page_ocr_scale(
+                    #[cfg(feature = "pdf")]
+                    lazy_pdf_render_state.as_ref(),
+                    page_idx,
+                    (ocr_render_width, ocr_render_height),
+                );
                 pages_text_claimed_by_tables[page_idx] = ocr_doc.ocr_text_claimed_by_tables;
             }
 
@@ -4438,6 +4461,11 @@ pub(super) async fn extract_with_ocr_for_page(
                     }
                 }
             };
+            let pages = pages
+                .into_iter()
+                .zip(page_ocr_scales)
+                .map(|(paragraphs, ocr_scale)| RunPageParagraphs { paragraphs, ocr_scale })
+                .collect();
             (doc, pages)
         } else {
             (None, Vec::new())
@@ -4448,9 +4476,9 @@ pub(super) async fn extract_with_ocr_for_page(
     // to the mixed route's document-global paragraph reconstruction pass.
     for page in public_ocr_pages.keys() {
         if let Some(index) = (*page as usize).checked_sub(page_index_offset + 1)
-            && let Some(paragraphs) = raw_page_paragraphs.get_mut(index)
+            && let Some(page) = raw_page_paragraphs.get_mut(index)
         {
-            paragraphs.clear();
+            page.paragraphs.clear();
         }
     }
     let ocr_doc = if public_ocr_pages.is_empty() {
@@ -5518,7 +5546,7 @@ type OcrPipelineOutput = (
     Vec<String>,
     Option<Vec<crate::types::ExtractedImage>>,
     Vec<crate::types::Formula>,
-    Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+    Vec<RunPageParagraphs>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
@@ -5578,13 +5606,15 @@ fn with_run_layers_first(
     if let Some(layers) = layers {
         let mut boxes = ahash::AHashMap::new();
         for page_number in layers.keys().copied() {
-            let paragraphs = (page_number as usize)
+            let page = (page_number as usize)
                 .checked_sub(run.page_index_offset + 1)
                 .and_then(|local| run.raw_page_paragraphs.get(local));
-            // The run's paragraphs are in the pixels of a raster this function does not see, so
-            // their frame is unknown here and the page's merge removes nothing (rule 3). ~keep
+            // Each page's paragraphs are in the pixels of the raster it was read from, and the
+            // page carries the factor to points; without one its merge removes nothing (rule 3). ~keep
             if let Some(content) = run.content
-                && let Some(page_boxes) = page_merge_line_boxes(content, page_number, paragraphs, None, config)
+                && let Some(page) = page
+                && let Some(page_boxes) =
+                    page_merge_line_boxes(content, page_number, Some(&page.paragraphs), page.ocr_scale, config)
             {
                 boxes.insert(page_number, page_boxes);
             }
@@ -5613,7 +5643,41 @@ struct RunLayerSources<'a> {
     verdicts: &'a [OcrPageNoiseVerdict],
     page_index_offset: usize,
     content: Option<&'a [u8]>,
-    raw_page_paragraphs: &'a [Vec<crate::pdf::structure::types::PdfParagraph>],
+    raw_page_paragraphs: &'a [RunPageParagraphs],
+}
+
+/// The OCR paragraphs of one page of a whole-document run, in the pixels of the raster the page
+/// was read from, and the factor per axis that takes that raster to PDF points (the page's
+/// MediaBox over the raster). The factor is `None` when the run rendered no PDF page (an image
+/// run): the layer merge of that page then removes nothing (rule 3). ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Debug, Default)]
+pub(super) struct RunPageParagraphs {
+    pub(super) paragraphs: Vec<crate::pdf::structure::types::PdfParagraph>,
+    pub(super) ocr_scale: Option<(f32, f32)>,
+}
+
+/// The factor per axis from the raster a page of a whole-document run was read from to PDF
+/// points, the same conversion the mixed route applies to its pipeline pages. `None` when the
+/// run rendered no PDF page or the raster is empty. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn run_page_ocr_scale(
+    #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    page_idx: usize,
+    raster_px: (u32, u32),
+) -> Option<(f32, f32)> {
+    #[cfg(feature = "pdf")]
+    {
+        let (pdf, _, _) = lazy_pdf_render_state?;
+        let (width_px, height_px) = raster_px;
+        let (width_pt, height_pt) = page_dimensions_pt(pdf, page_idx);
+        (width_px > 0 && height_px > 0).then(|| (width_pt / width_px as f32, height_pt / height_px as f32))
+    }
+    #[cfg(not(feature = "pdf"))]
+    {
+        let _ = (page_idx, raster_px);
+        None
+    }
 }
 
 /// The line boxes of one replaced page's merge, in PDF points on both sides: the text layer's
@@ -5769,7 +5833,7 @@ async fn run_ocr_pipeline_stages(
         Vec<String>,
         Option<Vec<crate::types::ExtractedImage>>,
         Vec<crate::types::Formula>,
-        Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+        Vec<RunPageParagraphs>,
         ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
         ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
         Vec<OcrPageNoiseVerdict>,

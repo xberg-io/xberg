@@ -1619,6 +1619,56 @@ async fn should_put_a_confirmed_layer_first_on_the_accepted_stage_of_a_pipeline_
     );
 }
 
+/// An OCR backend that returns fixed text and its structured document with one line element per
+/// line, with its box in the pixels of the image it reads, as the built-in backends do. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+struct StructuredBackend {
+    name: &'static str,
+    text: String,
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[async_trait::async_trait]
+impl crate::plugins::OcrBackend for StructuredBackend {
+    fn backend_type(&self) -> crate::plugins::OcrBackendType {
+        crate::plugins::OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(
+        &self,
+        image: &[u8],
+        _: &crate::core::config::OcrConfig,
+    ) -> crate::Result<crate::types::ExtractedDocument> {
+        let (width, height) = image::load_from_memory(image)
+            .map(|image| (f64::from(image.width()), f64::from(image.height())))
+            .unwrap_or((612.0, 792.0));
+        Ok(crate::types::ExtractedDocument {
+            content: self.text.clone(),
+            ocr_internal_document: Some(ocr_line_document(&self.text, width, height)),
+            ..Default::default()
+        })
+    }
+    fn confidence_semantics(&self) -> crate::plugins::ConfidenceSemantics {
+        crate::plugins::ConfidenceSemantics::Legibility { scale_max: 100.0 }
+    }
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+impl crate::plugins::Plugin for StructuredBackend {
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_string()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
 /// Page route (#2439): OCR misreads one word on every line of a correct layer. The structured page
 /// that the other output formats render holds each layer line once, and not the OCR copy beside
 /// it, on both the single-backend route and the pipeline route. The page's text layer has
@@ -1632,55 +1682,10 @@ async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_replaced_page(
     use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
     use std::sync::Arc;
 
-    /// An OCR backend that returns fixed text and its structured document, as the built-in
-    /// backends do. ~keep
-    struct StructuredBackend {
-        text: String,
-    }
-    #[async_trait::async_trait]
-    impl crate::plugins::OcrBackend for StructuredBackend {
-        fn backend_type(&self) -> crate::plugins::OcrBackendType {
-            crate::plugins::OcrBackendType::Custom
-        }
-        fn supports_language(&self, _: &str) -> bool {
-            true
-        }
-        async fn process_image(
-            &self,
-            image: &[u8],
-            _: &crate::core::config::OcrConfig,
-        ) -> crate::Result<crate::types::ExtractedDocument> {
-            let (width, height) = image::load_from_memory(image)
-                .map(|image| (f64::from(image.width()), f64::from(image.height())))
-                .unwrap_or((612.0, 792.0));
-            Ok(crate::types::ExtractedDocument {
-                content: self.text.clone(),
-                ocr_internal_document: Some(ocr_line_document(&self.text, width, height)),
-                ..Default::default()
-            })
-        }
-        fn confidence_semantics(&self) -> crate::plugins::ConfidenceSemantics {
-            crate::plugins::ConfidenceSemantics::Legibility { scale_max: 100.0 }
-        }
-    }
-    impl crate::plugins::Plugin for StructuredBackend {
-        fn name(&self) -> &str {
-            BACKEND
-        }
-        fn version(&self) -> String {
-            "1.0.0".to_string()
-        }
-        fn initialize(&self) -> crate::Result<()> {
-            Ok(())
-        }
-        fn shutdown(&self) -> crate::Result<()> {
-            Ok(())
-        }
-    }
-
     const BACKEND: &str = "layer-test-structured-copies-backend";
     let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
     crate::plugins::register_ocr_backend(Arc::new(StructuredBackend {
+        name: BACKEND,
         text: misread.join("\n"),
     }))
     .unwrap();
@@ -1761,6 +1766,76 @@ async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_replaced_page(
     }
 }
 
+/// Whole-document route (#2439): the run renders the page itself, so the OCR line boxes are in the
+/// pixels of its raster while the text layer's are in points. The run carries each page's factor
+/// to points into the merge: the structured document and the flat text hold each layer line once
+/// and not the OCR copy beside it. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_whole_document_run() {
+    use super::pipeline::{PageOcrHints, extract_with_ocr_with_page_hints};
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-structured-copies-whole-document-backend";
+    let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
+    crate::plugins::register_ocr_backend(Arc::new(StructuredBackend {
+        name: BACKEND,
+        text: misread.join("\n"),
+    }))
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let pdf = lines_pdf(&HARBOUR_LAYER);
+    let hints = PageOcrHints {
+        source_dpi: None,
+        known_full_page_scan: false,
+        single_block_pages: None,
+        native_page_layers: Some(Arc::new(ahash::AHashMap::from([(1, HARBOUR_LAYER.join("\n"))]))),
+    };
+    let output = extract_with_ocr_with_page_hints(
+        Some(&pdf),
+        None,
+        #[cfg(feature = "layout-detection")]
+        None,
+        &config,
+        None,
+        Some(hints),
+    )
+    .await;
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    let output = output.expect("the whole-document run must return a result");
+
+    let document = output.4.expect("the whole-document run returns a structured document");
+    assert!(
+        !document.elements.is_empty(),
+        "the structured document holds the OCR lines, or this test proves nothing"
+    );
+    let structured: Vec<&str> = document.elements.iter().map(|element| element.text.as_str()).collect();
+    for (route, text) in [("structured document", structured.join("\n")), ("flat text", output.0)] {
+        for line in HARBOUR_LAYER {
+            assert_eq!(
+                text.matches(line).count(),
+                1,
+                "{route}: layer line {line:?} once: {text:?}"
+            );
+        }
+        for copy in &misread {
+            assert!(
+                !text.contains(copy.as_str()),
+                "{route}: the OCR copy {copy:?} goes: {text:?}"
+            );
+        }
+    }
+}
+
 /// The flat text of a page (#2439): a dropped OCR copy leaves no blank line behind, at the start of
 /// the OCR text, between two paragraphs or at its end. ~keep
 #[test]
@@ -1786,9 +1861,9 @@ fn should_leave_no_blank_line_where_an_ocr_copy_was() {
     assert_eq!(text_with_layer_first("Copy line", &first), "Layer line");
 }
 
-/// The structured page (#2439): a paragraph that loses an OCR copy keeps its other lines, and its
-/// inline annotations go, because their byte ranges no longer match its text. A paragraph that
-/// holds no copy keeps its annotations. ~keep
+/// The structured page (#2439): a paragraph that loses an OCR copy keeps its other lines and the
+/// annotations of the retained text, shifted by the removed range; an annotation inside the copy
+/// goes. A paragraph that holds no copy keeps its annotations. ~keep
 #[test]
 fn should_shift_the_annotations_of_a_paragraph_that_loses_an_ocr_copy() {
     use super::document::{LayerFirst, put_layer_first_in_document};
