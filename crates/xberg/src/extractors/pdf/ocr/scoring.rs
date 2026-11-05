@@ -1147,57 +1147,7 @@ pub(super) fn accept_or_reject_ocr_page(
         discarded,
         "OCR output triggered recognition-noise diagnostics"
     );
-    // Name only the signals that actually fired. Leading with the fragmentation numbers
-    // unconditionally would report a ratio *below* its own threshold as the reason whenever
-    // the dictionary signal is what rejected the page.
-    let mut reasons: Vec<String> = Vec::new();
-    if recognition_noise.low_confidence {
-        let scale_max = match confidence_semantics {
-            crate::plugins::ConfidenceSemantics::Legibility { scale_max } => scale_max,
-            _ => 100.0,
-        };
-        reasons.push(format!(
-            "mean confidence {:.0}% of scale is below threshold {:.0}%",
-            (confidence.unwrap_or_default() / scale_max) * 100.0,
-            thresholds.min_ocr_mean_confidence
-        ));
-    }
-    if recognition_noise.fragmented_noise {
-        reasons.push(format!(
-            "{:.0}% of {} words are 1-2 characters, threshold {:.0}%",
-            stats.fragmented_word_ratio * 100.0,
-            stats.word_count,
-            thresholds.max_ocr_output_fragmented_word_ratio * 100.0
-        ));
-    }
-    if let Some(ratio) = dict_invalid_word_ratio
-        && dictionary_noise
-    {
-        reasons.push(format!(
-            "{:.0}% of dictionary-checkable words are dictionary-invalid, threshold {:.0}%",
-            ratio * 100.0,
-            thresholds.max_ocr_output_dict_invalid_word_ratio * 100.0
-        ));
-    }
-    warnings.push(crate::types::ProcessingWarning {
-        source: std::borrow::Cow::Borrowed("ocr"),
-        message: std::borrow::Cow::Owned(if discarded {
-            format!(
-                "Page {} produced suspected OCR recognition noise ({}); its text was discarded \
-                 because discard_suspected_ocr_noise is enabled.",
-                page_index + 1,
-                reasons.join("; ")
-            )
-        } else {
-            format!(
-                "Page {} produced suspected OCR recognition noise ({}); its text was retained. \
-                 Set discard_suspected_ocr_noise to true to discard suspected noise.",
-                page_index + 1,
-                reasons.join("; ")
-            )
-        }),
-    });
-    let verdict = Some(OcrPageNoiseVerdict {
+    let verdict = OcrPageNoiseVerdict {
         page_index,
         low_confidence: recognition_noise.low_confidence,
         fragmented_noise: recognition_noise.fragmented_noise,
@@ -1207,7 +1157,9 @@ pub(super) fn accept_or_reject_ocr_page(
         mean_confidence: confidence,
         dict_invalid_word_ratio,
         discarded,
-    });
+    };
+    warnings.push(ocr_noise_warning(&verdict, thresholds, confidence_semantics, false));
+    let verdict = Some(verdict);
     if discarded {
         OcrPageAcceptance {
             content: String::new(),
@@ -1222,6 +1174,63 @@ pub(super) fn accept_or_reject_ocr_page(
         }
     }
 }
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn ocr_noise_warning(
+    verdict: &OcrPageNoiseVerdict,
+    thresholds: &OcrQualityThresholds,
+    confidence_semantics: crate::plugins::ConfidenceSemantics,
+    retained_native_khmer: bool,
+) -> crate::types::ProcessingWarning {
+    // Name only the signals that actually fired. Leading with the fragmentation numbers
+    // unconditionally would report a ratio *below* its own threshold as the reason whenever
+    // the dictionary signal is what rejected the page.
+    let mut reasons: Vec<String> = Vec::new();
+    if verdict.low_confidence {
+        let scale_max = match confidence_semantics {
+            crate::plugins::ConfidenceSemantics::Legibility { scale_max } => scale_max,
+            _ => 100.0,
+        };
+        reasons.push(format!(
+            "mean confidence {:.0}% of scale is below threshold {:.0}%",
+            (verdict.mean_confidence.unwrap_or_default() / scale_max) * 100.0,
+            thresholds.min_ocr_mean_confidence
+        ));
+    }
+    if verdict.fragmented_noise {
+        reasons.push(format!(
+            "{:.0}% of {} words are 1-2 characters, threshold {:.0}%",
+            verdict.fragmented_word_ratio * 100.0,
+            verdict.word_count,
+            thresholds.max_ocr_output_fragmented_word_ratio * 100.0
+        ));
+    }
+    if let Some(ratio) = verdict.dict_invalid_word_ratio
+        && verdict.dictionary_noise
+    {
+        reasons.push(format!(
+            "{:.0}% of dictionary-checkable words are dictionary-invalid, threshold {:.0}%",
+            ratio * 100.0,
+            thresholds.max_ocr_output_dict_invalid_word_ratio * 100.0
+        ));
+    }
+    let disposition = if retained_native_khmer {
+        "English OCR recognized no Khmer, so the existing Khmer text was retained."
+    } else if verdict.discarded {
+        "its text was discarded because discard_suspected_ocr_noise is enabled."
+    } else {
+        "its text was retained. Set discard_suspected_ocr_noise to true to discard suspected noise."
+    };
+    crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: format!(
+            "Page {} produced suspected OCR recognition noise ({}); {disposition}",
+            verdict.page_index + 1,
+            reasons.join("; ")
+        )
+        .into(),
+    }
+}
+
 /// The text that quality scoring actually judges: the prose content with Markdown scaffolding
 /// stripped (#1341), falling back to the raw trimmed text when normalization leaves nothing
 /// (e.g. a table-only fragment).

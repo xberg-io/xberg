@@ -1,5 +1,5 @@
-name: Qualify OCR orientation
-description: Run implicit and explicit OCR recovery controls with verified cached model artifacts
+name: Qualify PDF OCR recovery
+description: Run orientation and native-text recovery controls with verified model artifacts
 runs:
   using: composite
   steps:
@@ -26,3 +26,7 @@ runs:
         fi
         mise run rust:test:explicit-sideways warm
         mise run rust:test:explicit-sideways native
+
+    - name: Qualify native Khmer retention after English OCR
+      shell: bash
+      run: mise run rust:test:khmer-native-retention

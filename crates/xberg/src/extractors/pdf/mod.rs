@@ -4,6 +4,8 @@
 //! using xberg_native_pdf (pure Rust). Supports both native text extraction and OCR fallback.
 
 mod extraction;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod khmer_retention;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -3251,13 +3253,25 @@ impl PdfExtractor {
                     // silently suppress page OCR on scanned PDFs, leaving `pages[].content`
                     // empty (#1576). `RunFallbackOnPages` below has never read this field;
                     // this now matches it. ~keep
+                    let hints = whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let khmer_retention =
+                        khmer_retention::KhmerRetention::for_automatic_page(config, &pdf_metadata, &native_text);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let hints = {
+                        let mut hints = hints;
+                        if let Some(retention) = &khmer_retention {
+                            hints.get_or_insert_with(Default::default).khmer_retention = Some(retention.clone());
+                        }
+                        hints
+                    };
                     match run_ocr_with_layout_pages(
                         content,
                         config,
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
-                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
+                            hints,
                         },
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_images.take(),
@@ -3289,17 +3303,32 @@ impl PdfExtractor {
                             for warning in layout_glyph_drop_warnings {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                             }
-                            ocr_layout_gate_audit = gate_audit;
-                            ocr_tables = ocr_tbls;
-                            ocr_elements = ocr_elems;
-                            ocr_internal_doc = ocr_doc;
-                            ocr_llm_usage = llm_usage;
-                            ocr_page_texts = Some(ocr_pts);
-                            ocr_page_rasters = ocr_rstrs;
-                            ocr_formulas = formulas;
-                            ocr_preprocessing_by_page = preprocessing;
-                            ocr_confidence_by_page = page_ocr_confidence;
-                            (ocr_text, ExtractionMethod::Ocr)
+                            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                            let preserve_known_khmer = khmer_retention
+                                .as_ref()
+                                .is_some_and(khmer_retention::KhmerRetention::confirmed);
+                            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                            let preserve_known_khmer = false;
+                            if preserve_known_khmer {
+                                let (warnings, failures) = ocr_doc
+                                    .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
+                                    .unwrap_or_default();
+                                crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, warnings);
+                                ocr_page_failures.extend(failures);
+                                (native_text, ExtractionMethod::Native)
+                            } else {
+                                ocr_layout_gate_audit = gate_audit;
+                                ocr_tables = ocr_tbls;
+                                ocr_elements = ocr_elems;
+                                ocr_internal_doc = ocr_doc;
+                                ocr_llm_usage = llm_usage;
+                                ocr_page_texts = Some(ocr_pts);
+                                ocr_page_rasters = ocr_rstrs;
+                                ocr_formulas = formulas;
+                                ocr_preprocessing_by_page = preprocessing;
+                                ocr_confidence_by_page = page_ocr_confidence;
+                                (ocr_text, ExtractionMethod::Ocr)
+                            }
                         }
                         Err(failed_run) => {
                             tracing::warn!(
