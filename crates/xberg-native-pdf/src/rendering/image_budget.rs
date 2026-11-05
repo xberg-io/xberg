@@ -34,13 +34,32 @@ impl ImageBudget {
         let ImageData::Jpeg(bytes) = image.data() else {
             return Ok(());
         };
-        let failure = match jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas) {
+        self.admit_required(jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4))
+    }
+
+    pub(super) fn admit_referenced_mask(
+        &mut self,
+        image: &PdfImage,
+        parent: &PdfImage,
+        dynamic: &image::DynamicImage,
+        paint: &image::RgbaImage,
+        retained_canvas: u64,
+    ) -> Result<()> {
+        let ImageData::Jpeg(bytes) = image.data() else {
+            return Ok(());
+        };
+        let retained = parent_image_bytes(parent, dynamic, paint, retained_canvas);
+        self.admit_required(retained.and_then(|retained| jpeg_image_bytes(image, bytes, bytes.capacity(), retained, 1)))
+    }
+
+    fn admit_required(&mut self, required: std::result::Result<u64, String>) -> Result<()> {
+        let failure = match required {
             Ok(required) if required <= self.limit as u64 => return Ok(()),
             Ok(required) => Failure::Exceeded {
                 required,
                 limit: self.limit,
             },
-            Err(error) => Failure::Unqualified(error),
+            Err(reason) => Failure::Unqualified(reason),
         };
         self.failure.get_or_insert_with(|| failure.clone());
         Err(failure.error())
@@ -56,6 +75,7 @@ fn jpeg_image_bytes(
     bytes: &[u8],
     encoded_capacity: usize,
     retained_canvas: u64,
+    paint_components: u64,
 ) -> std::result::Result<u64, String> {
     let mut decoder = jpeg_decoder::Decoder::new(bytes);
     decoder.read_info().map_err(|error| error.to_string())?;
@@ -70,7 +90,7 @@ fn jpeg_image_bytes(
         return Err("CMYK image dictionary disagrees with the JPEG frame components".into());
     }
     // CMYK conversion holds the decoded CMYK and RGB vectors. Other JPEGs retain
-    // their actual decoded raster while to_rgba8 allocates the paint raster. The
+    // their actual decoded raster while to_rgba8 or to_luma8 allocates the paint raster. The
     // canvas and separation planes stay live throughout the image paint. Encoded
     // bytes retain their capacity and JPEG metadata can copy at most the input. ~keep
     let converted = if info.pixel_format == jpeg_decoder::PixelFormat::CMYK32 {
@@ -85,9 +105,32 @@ fn jpeg_image_bytes(
     };
     decoded
         .checked_add(converted)
-        .and_then(|sum| sum.checked_add(rgba_pixels.checked_mul(4)?))
+        .and_then(|sum| sum.checked_add(rgba_pixels.checked_mul(paint_components)?))
         .and_then(|sum| sum.checked_add(encoded_capacity as u64))
         .and_then(|sum| sum.checked_add(bytes.len() as u64))
         .and_then(|sum| sum.checked_add(retained_canvas))
         .ok_or_else(|| "JPEG source image workspace arithmetic overflow".into())
+}
+
+fn parent_image_bytes(
+    parent: &PdfImage,
+    dynamic: &image::DynamicImage,
+    paint: &image::RgbaImage,
+    retained_canvas: u64,
+) -> std::result::Result<u64, String> {
+    // These are the Vec capacities still live across referenced-mask decoding.
+    // The mask's own dynamic raster and luma conversion are admitted separately. ~keep
+    let dynamic_capacity = match dynamic {
+        image::DynamicImage::ImageLuma8(image) => image.as_raw().capacity(),
+        image::DynamicImage::ImageLumaA8(image) => image.as_raw().capacity(),
+        image::DynamicImage::ImageRgb8(image) => image.as_raw().capacity(),
+        image::DynamicImage::ImageRgba8(image) => image.as_raw().capacity(),
+        _ => return Err("referenced JPEG mask with unqualified parent raster type".into()),
+    };
+    parent
+        .retained_image_buffer_bytes()
+        .and_then(|bytes| bytes.checked_add(dynamic_capacity as u64))
+        .and_then(|bytes| bytes.checked_add(paint.as_raw().capacity() as u64))
+        .and_then(|bytes| bytes.checked_add(retained_canvas))
+        .ok_or_else(|| "referenced JPEG mask parent workspace arithmetic overflow".into())
 }

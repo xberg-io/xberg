@@ -102,9 +102,70 @@ async fn public_text(bytes: &[u8], config: &crate::core::config::ExtractionConfi
     Ok(result.results.into_iter().next().unwrap().content)
 }
 
+fn jpeg_masked_pdf(bytes: &[u8]) -> Vec<u8> {
+    let mut pdf = Document::load_mem(bytes).unwrap();
+    let mut encoded = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new(&mut encoded)
+        .encode(&[255; 32 * 32], 32, 32, image::ExtendedColorType::L8)
+        .unwrap();
+    let mask = pdf.add_object(Stream::new(
+        dictionary! {
+            "Type"=>"XObject","Subtype"=>"Image","Width"=>32,"Height"=>32,
+            "ColorSpace"=>"DeviceGray","BitsPerComponent"=>8,"Filter"=>"DCTDecode"
+        },
+        encoded,
+    ));
+    let mut images = 0;
+    for (_, object) in pdf.objects.iter_mut() {
+        if let lopdf::Object::Stream(stream) = object
+            && stream
+                .dict
+                .get(b"Subtype")
+                .is_ok_and(|value| value.as_name().is_ok_and(|name| name == b"Image"))
+            && !stream.dict.has(b"SMask")
+            && stream
+                .dict
+                .get(b"ColorSpace")
+                .is_ok_and(|value| value.as_name().is_ok_and(|name| name == b"DeviceRGB"))
+        {
+            stream.dict.set("SMask", mask);
+            images += 1;
+        }
+    }
+    assert_eq!(images, 1);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+async fn qualify_affordable_jpeg_mask(bytes: &[u8], model: &std::path::Path) {
+    let masked = jpeg_masked_pdf(bytes);
+    let mut default = crate::core::config::ExtractionConfig {
+        force_ocr: true,
+        use_cache: false,
+        ocr: Some(crate::core::config::OcrConfig {
+            tessdata_path: Some(model.to_path_buf()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let text = public_text(&masked, &default)
+        .await
+        .expect("default OCR with affordable JPEG SMask");
+    fixture::assert_words(&text);
+    default.security_limits = Some(crate::extractors::security::SecurityLimits {
+        max_content_size: 512 * 1024 * 1024,
+        ..Default::default()
+    });
+    let large_cap = public_text(&masked, &default).await.expect("512MiB JPEG SMask");
+    assert_eq!(large_cap, text, "budget preserves exact default OCR text");
+    println!("AFFORDABLE_JPEG_SMASK_DEFAULT_TEXT={text:?}");
+}
+
 async fn qualify() {
     let model = model::verified_model_directory();
     let fixture = fixture::fixture();
+    qualify_affordable_jpeg_mask(&fixture.pdf, &model).await;
     let annotated = annotated_pdf(&fixture.pdf);
     pixel_memory::install();
     let complete = public_text(&annotated, &config(40, &model)).await.unwrap();

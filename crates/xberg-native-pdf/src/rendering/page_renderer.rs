@@ -3703,6 +3703,16 @@ impl PageRenderer {
                 if let Ok(mask_stream) = doc.load_object(ref_obj) {
                     match extract_image_from_xobject(Some(doc), &mask_stream, Some(ref_obj), Some(&color_space_map)) {
                         Ok(mask_image) => {
+                            if let Some(budget) = self.source_image_budget.as_mut() {
+                                let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
+                                budget.admit_referenced_mask(
+                                    &mask_image,
+                                    &pdf_image,
+                                    &dynamic_image,
+                                    &rgba_image,
+                                    sidecar.saturating_add(pixmap.data().len() as u64),
+                                )?;
+                            }
                             if let Ok(mask_dyn) = mask_image.to_dynamic_image() {
                                 let mask_gray = mask_dyn.to_luma8();
                                 let is_image_mask = mask_stream
@@ -3921,6 +3931,16 @@ impl PageRenderer {
                 if let Ok(smask_image) =
                     extract_image_from_xobject(Some(doc), &resolved_smask, smask_obj_ref, Some(&color_space_map))
                 {
+                    if let Some(budget) = self.source_image_budget.as_mut() {
+                        let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
+                        budget.admit_referenced_mask(
+                            &smask_image,
+                            &pdf_image,
+                            &dynamic_image,
+                            &rgba_image,
+                            sidecar.saturating_add(pixmap.data().len() as u64),
+                        )?;
+                    }
                     if let Ok(smask_dyn) = smask_image.to_dynamic_image() {
                         let smask_gray = smask_dyn.to_luma8();
 

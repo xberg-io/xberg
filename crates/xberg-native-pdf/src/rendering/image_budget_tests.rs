@@ -129,3 +129,98 @@ fn encoded_unsupported_precision_is_not_admitted_as_an_eight_bit_dictionary() {
     assert!(budget.admit_jpeg(&image, 0).is_err());
     assert!(budget.error().is_some());
 }
+
+#[test]
+fn referenced_jpeg_masks_cannot_bypass_the_source_budget() {
+    let dimension = 9000;
+    let encoded = source::gray_jpeg(dimension);
+    let decoded = image::load_from_memory(&encoded).unwrap();
+    assert_eq!(decoded.as_bytes().len(), 81_000_000);
+    drop(decoded);
+    let mut bypasses = Vec::new();
+    for soft in [true, false] {
+        let document = source::mask_document(&encoded, dimension, soft);
+        let (unbounded, _) = renderer().render_page_with_budget(0, &document, None).unwrap();
+        let expected = if soft { [0, 0, 0] } else { [255, 255, 255] };
+        assert!(unbounded.data.chunks_exact(4).any(|pixel| pixel[..3] == expected));
+        for mib in [40, 64] {
+            let result = renderer().render_page_with_budget(
+                0,
+                &document,
+                Some(PngRenderBudget {
+                    max_working_bytes: mib * 1024 * 1024,
+                    minimum_dpi: 72,
+                }),
+            );
+            if let Err(error) = &result {
+                assert!(error.to_string().contains("image working budget"), "{error}");
+            }
+            if result.is_ok() {
+                bypasses.push((soft, mib));
+            }
+        }
+    }
+    assert!(
+        bypasses.is_empty(),
+        "81MB JPEG mask decodes bypassed (soft,MiB): {bypasses:?}"
+    );
+}
+
+#[test]
+fn affordable_jpeg_and_non_jpeg_masks_keep_rendering() {
+    let raw = source::raw_mask_document();
+    let (image, _) = renderer().render_page_with_budget(0, &raw, budget()).unwrap();
+    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    let encoded = source::gray_jpeg(32);
+    let document = source::mask_document(&encoded, 32, true);
+    let mut renderer = renderer();
+    assert!(renderer.render_page_with_budget(0, &document, budget()).is_ok());
+    let (image, _) = renderer.render_page_with_budget(0, &document, None).unwrap();
+    assert!(image.data.chunks_exact(4).any(|pixel| pixel[..3] == [0, 0, 0]));
+    assert!(renderer.render_page_with_budget(0, &raw, budget()).is_ok());
+}
+
+#[test]
+fn inline_jpeg_images_reuse_the_source_image_budget() {
+    let large = source::inline_document(&source::gray_jpeg(LARGE), LARGE);
+    let (image, _) = renderer().render_page_with_budget(0, &large, None).unwrap();
+    assert_eq!((image.width, image.height), (32, 32));
+    assert!(image.data.chunks_exact(4).all(|pixel| pixel[..3] == [255, 255, 255]));
+    assert_refused(&mut renderer(), &large);
+    let small = source::inline_document(&source::gray_jpeg(32), 32);
+    assert!(renderer().render_page_with_budget(0, &small, budget()).is_ok());
+}
+
+#[test]
+fn jpeg_mask_budget_counts_live_parent_buffers_and_luma_conversion() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let encoded = source::gray_jpeg(32);
+    let parent = PdfImage::new(32, 32, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(source::jpeg(32)));
+    let dynamic = parent.to_dynamic_image().unwrap();
+    let paint = dynamic.to_rgba8();
+    let mask = PdfImage::new(32, 32, ColorSpace::DeviceGray, 8, ImageData::Jpeg(encoded.clone()));
+    let ImageData::Jpeg(mask_bytes) = mask.data() else {
+        panic!("encoded mask");
+    };
+    let parent_bytes = parent.retained_image_buffer_bytes().unwrap() as usize;
+    let dynamic_bytes = dynamic.as_rgb8().unwrap().as_raw().capacity();
+    let canvas = 32 * 32 * 4;
+    let required = parent_bytes
+        + dynamic_bytes
+        + paint.as_raw().capacity()
+        + canvas
+        + 32 * 32 * 2
+        + mask_bytes.capacity()
+        + mask_bytes.len();
+    let mut budget = image_budget::ImageBudget::new(required);
+    budget
+        .admit_referenced_mask(&mask, &parent, &dynamic, &paint, canvas as u64)
+        .unwrap();
+    let mut budget = image_budget::ImageBudget::new(required - 1);
+    assert!(
+        budget
+            .admit_referenced_mask(&mask, &parent, &dynamic, &paint, canvas as u64)
+            .is_err()
+    );
+    assert!(budget.error().is_some());
+}
