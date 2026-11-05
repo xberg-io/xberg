@@ -192,9 +192,9 @@ pub mod ocr;
 pub(crate) mod ocr_metadata_keys;
 
 // Same union as the candle `ocr_result` module that reads the language table, plus the
-// `ocr-pipeline` feature that chooses a Tesseract language from a script. ~keep
+// Tesseract image route (`ocr`, not wasm) whose Han second pass reads it. ~keep
 #[cfg(any(
-    feature = "ocr-pipeline",
+    all(not(target_arch = "wasm32"), feature = "ocr"),
     feature = "candle-trocr",
     feature = "candle-paddleocr-vl",
     all(

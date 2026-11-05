@@ -31,8 +31,6 @@ mod pipeline;
 mod plausibility;
 mod rendering;
 mod scoring;
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-mod script_language;
 #[cfg(all(
     feature = "ocr",
     feature = "pdf",
@@ -54,8 +52,6 @@ pub(super) use pipeline::probe_incomplete_hidden_layers;
 pub(crate) use plausibility::scan_text_plausibility;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use scoring::{OcrGateOutcome, apply_flagged_pages, evaluate_ocr_skip_gate, evaluate_per_page_ocr};
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(crate) use script_language::config_with_text_layer_language;
 
 // ~keep The standalone-image extractor builds the same `PageContent.ocr_confidence` summary
 // from its own single OCR run (#1568), so these three leave `ocr` rather than staying

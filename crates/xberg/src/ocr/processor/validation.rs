@@ -162,14 +162,6 @@ pub(crate) fn existing_tessdata_dir_for(
 /// The Tesseract data set that holds the orientation and script model.
 pub(crate) const OSD_LANGUAGE: &str = "osd";
 
-/// `true` when a directory of the tessdata search chain holds every configured language of `ocr`
-/// and `language`. Nothing is downloaded: a list that is not on disk keeps the configured
-/// languages, so a caller that never asked for the language keeps its offline behaviour.
-#[cfg(feature = "pdf")]
-pub(crate) fn read_again_languages_are_on_disk(ocr: &crate::core::config::OcrConfig, language: &str) -> bool {
-    read_again_languages_dir_in(ocr, &[language], &TessdataEnv::from_process()).is_some()
-}
-
 /// The directory of the tessdata search chain that holds every configured language of `ocr` and
 /// every one of `added`, or `None` when no directory does.
 fn read_again_languages_dir_in(
@@ -182,23 +174,21 @@ fn read_again_languages_dir_in(
     existing_tessdata_dir_for(&languages, ocr.tessdata_path.as_deref(), tessdata_env)
 }
 
-/// The language lists a page can be read again with, each added to the configured languages:
-/// Khmer, Chinese, and both, which the Chinese second pass of a page that already reads Khmer uses.
-const READ_AGAIN_LANGUAGES: [&[&str]; 3] = [&["khm"], &["chi_sim"], &["khm", "chi_sim"]];
+/// The language a noisy Han page is read again with, added to the configured languages.
+const READ_AGAIN_LANGUAGE: &str = "chi_sim";
 
 /// The directory each model that decides a read-again resolves to for `ocr`, or `None` when no
-/// directory of the search chain holds it: each read-again list with the whole configured list,
-/// then the script model. The extraction result depends on both the answer and the directory, so
-/// the document cache key holds them.
+/// directory of the search chain holds it: the read-again language with the whole configured
+/// list, then the script model. The extraction result depends on both the answer and the
+/// directory, so the document cache key holds them.
 pub(crate) fn read_again_model_dirs(
     ocr: &crate::core::config::OcrConfig,
     tessdata_env: &TessdataEnv,
-) -> [Option<String>; 4] {
-    let [khmer, chinese, both] =
-        READ_AGAIN_LANGUAGES.map(|added| read_again_languages_dir_in(ocr, added, tessdata_env));
+) -> [Option<String>; 2] {
+    let chinese = read_again_languages_dir_in(ocr, &[READ_AGAIN_LANGUAGE], tessdata_env);
     let script_model =
         existing_tessdata_dir_for(&[OSD_LANGUAGE.to_string()], ocr.tessdata_path.as_deref(), tessdata_env);
-    [khmer, chinese, both, script_model]
+    [chinese, script_model]
 }
 
 /// Candidate tessdata directories in the resolver's priority order:

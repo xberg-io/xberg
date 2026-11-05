@@ -1,7 +1,7 @@
 //! Writing systems and the OCR languages that read them.
 //!
 //! One table maps a configured language code to the scripts it is written in. The candle
-//! script-plausibility filter (GH#1676) and the Tesseract language choice (GH#2300) both read it.
+//! script-plausibility filter (GH#1676) and the Han second pass of Tesseract OCR (GH#2300) both read it.
 
 /// A writing system, coarse-grained: enough to tell which OCR language reads a page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,8 +24,8 @@ pub(crate) enum Script {
 ///
 /// Returns `None` for a code this table does not recognize. The candle filter reads that as
 /// "cannot judge script plausibility for this language list" and disables its script rule
-/// rather than risk false positives against a language it cannot map. The Tesseract language
-/// choice reads it as "this language does not cover the script". The candle filter also turns its
+/// rather than risk false positives against a language it cannot map. The Han second pass
+/// reads it as "this language does not cover the script". The candle filter also turns its
 /// script rule off for Khmer, whose letters [`script_of_letter`] does not class.
 pub(crate) fn scripts_for_language(lang: &str) -> Option<&'static [Script]> {
     match lang.trim().to_ascii_lowercase().as_str() {
@@ -76,29 +76,10 @@ pub(crate) fn script_of_letter(ch: char) -> Option<Script> {
     }
 }
 
-/// The Tesseract language that reads a script, for a script no configured language covers.
-///
-/// Only Khmer and Han have an entry: the two scripts of GH#2300, whose pages come back as Latin
-/// letters when they are read with `eng`. Every other script returns `None`, so a document
-/// that only holds a few Greek or Cyrillic letters (maths, names) does not read its Latin pages
-/// with a second alphabet that has look-alike letters. A script is added here with its own
-/// measurement on the harness corpora, not by extending the table. ~keep
-#[cfg(all(feature = "pdf", feature = "ocr-pipeline"))]
-pub(crate) fn tesseract_language_for_script(script: Script) -> Option<&'static str> {
-    match script {
-        Script::Khmer => Some("khm"),
-        Script::Han => Some("chi_sim"),
-        _ => None,
-    }
-}
-
-// ~keep The image route (`ocr`) and the PDF text-layer route (`pdf` with `ocr-pipeline`) call the
-// three language-list helpers below. A candle-only build has `ocr-pipeline` and neither route.
+// ~keep The image route (`ocr`, not wasm) calls the three language-list helpers below. A candle-only
+// build has `ocr-pipeline` and not that route.
 /// `true` when one of `languages` reads `script`.
-#[cfg(any(
-    all(not(target_arch = "wasm32"), feature = "ocr"),
-    all(feature = "pdf", feature = "ocr-pipeline")
-))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
 pub(crate) fn languages_cover_script<S: AsRef<str>>(languages: &[S], script: Script) -> bool {
     languages
         .iter()
@@ -106,10 +87,7 @@ pub(crate) fn languages_cover_script<S: AsRef<str>>(languages: &[S], script: Scr
 }
 
 /// `true` when the language list is the `all` wildcard, which already reads every script.
-#[cfg(any(
-    all(not(target_arch = "wasm32"), feature = "ocr"),
-    all(feature = "pdf", feature = "ocr-pipeline")
-))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
 pub(crate) fn languages_are_wildcard<S: AsRef<str>>(languages: &[S]) -> bool {
     languages
         .iter()
@@ -118,10 +96,7 @@ pub(crate) fn languages_are_wildcard<S: AsRef<str>>(languages: &[S]) -> bool {
 
 /// Add `language` to whichever language field Tesseract reads, leaving the other field and the
 /// precedence between the two as they are.
-#[cfg(any(
-    all(not(target_arch = "wasm32"), feature = "ocr"),
-    all(feature = "pdf", feature = "ocr-pipeline")
-))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "ocr"))]
 pub(crate) fn push_language(ocr: &mut crate::core::config::OcrConfig, language: &str) {
     let default = [crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()];
     if ocr.language != default {
@@ -137,13 +112,7 @@ pub(crate) fn push_language(ocr: &mut crate::core::config::OcrConfig, language: 
     ocr.language.push(language.to_string());
 }
 
-#[cfg(all(
-    test,
-    any(
-        all(not(target_arch = "wasm32"), feature = "ocr"),
-        all(feature = "pdf", feature = "ocr-pipeline")
-    )
-))]
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr"))]
 mod tests {
     use super::*;
 
@@ -159,31 +128,6 @@ mod tests {
     fn an_unrecognized_language_covers_nothing() {
         assert!(!languages_cover_script(&["xyz"], Script::Khmer));
         assert!(scripts_for_language("xyz").is_none());
-    }
-
-    #[cfg(feature = "pdf")]
-    #[test]
-    fn khmer_and_han_have_an_ocr_language_that_covers_them() {
-        for script in [Script::Khmer, Script::Han] {
-            let lang = tesseract_language_for_script(script).expect("a language for the script");
-            assert!(languages_cover_script(&[lang], script), "{lang} must cover {script:?}");
-        }
-    }
-
-    /// Greek and Cyrillic letters have Latin look-alikes: adding their language to a Latin
-    /// document turns Latin letters into look-alikes (measured on the harness corpora).
-    #[cfg(feature = "pdf")]
-    #[test]
-    fn a_script_with_latin_look_alikes_adds_no_language() {
-        for script in [
-            Script::Latin,
-            Script::Greek,
-            Script::Cyrillic,
-            Script::Thai,
-            Script::Hangul,
-        ] {
-            assert_eq!(tesseract_language_for_script(script), None, "{script:?}");
-        }
     }
 
     #[test]
