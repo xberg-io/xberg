@@ -2633,12 +2633,16 @@ async fn read_again_as_han_where(
     if languages_are_wildcard(&languages) || languages_cover_script(&languages, Script::Han) {
         return Ok(HanSecondPass::Kept);
     }
+    let min_mean_confidence = config.quality_thresholds.as_ref().map_or_else(
+        || crate::core::config::OcrQualityThresholds::default().min_ocr_mean_confidence,
+        |thresholds| thresholds.min_ocr_mean_confidence,
+    );
     let noisy = first_pass
         .metadata
         .additional
         .get("mean_text_conf")
         .and_then(serde_json::Value::as_f64)
-        .is_some_and(|mean| mean < crate::core::config::OcrQualityThresholds::default().min_ocr_mean_confidence);
+        .is_some_and(|mean| mean < min_mean_confidence);
     if !noisy {
         return Ok(HanSecondPass::Kept);
     }
@@ -8365,6 +8369,17 @@ mod han_second_pass_tests {
         page_is_han: bool,
         cancel_at: CancelAt,
     ) -> (crate::Result<HanSecondPass>, Arc<CountingBackend>, usize) {
+        run_cancelled_in(&OcrConfig::default(), first, answer, page_is_han, cancel_at).await
+    }
+
+    /// [`run_cancelled`] under `config`.
+    async fn run_cancelled_in(
+        config: &OcrConfig,
+        first: ExtractedDocument,
+        answer: Answer,
+        page_is_han: bool,
+        cancel_at: CancelAt,
+    ) -> (crate::Result<HanSecondPass>, Arc<CountingBackend>, usize) {
         let token = CancellationToken::new();
         if cancel_at == CancelAt::Before {
             token.cancel();
@@ -8377,7 +8392,7 @@ mod han_second_pass_tests {
         let outcome = read_again_as_han_where(
             &backend,
             &Arc::new(vec![1]),
-            &OcrConfig::default(),
+            config,
             &first,
             Some(&token),
             move |_| {
@@ -8418,6 +8433,53 @@ mod han_second_pass_tests {
         assert!(matches!(outcome, HanSecondPass::Kept));
         assert_eq!(detections, 0, "a confident page is never checked for its script");
         assert_eq!(backend.calls.load(Ordering::SeqCst), 0);
+    }
+
+    /// An OCR config whose quality thresholds set the mean confidence a page needs to count as read.
+    fn min_mean_confidence(value: f64) -> OcrConfig {
+        OcrConfig {
+            quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
+                min_ocr_mean_confidence: value,
+                ..Default::default()
+            }),
+            ..OcrConfig::default()
+        }
+    }
+
+    /// [`run`] under a config with the given minimum mean confidence.
+    async fn run_under(
+        min_confidence: f64,
+        mean_confidence: f64,
+        page_is_han: bool,
+    ) -> (HanSecondPass, Arc<CountingBackend>, usize) {
+        let retry = Answer::Reads(Box::new(ocr_result(HAN_SENTENCES, Some(88.0))));
+        let (outcome, backend, detections) = run_cancelled_in(
+            &min_mean_confidence(min_confidence),
+            first_pass(mean_confidence),
+            retry,
+            page_is_han,
+            CancelAt::Never,
+        )
+        .await;
+        (outcome.expect("the second pass does not error"), backend, detections)
+    }
+
+    /// The configured threshold is below the default: a page the default calls noisy is kept.
+    #[tokio::test]
+    async fn a_lowered_minimum_confidence_keeps_a_page_the_default_calls_noisy() {
+        let (outcome, backend, detections) = run_under(10.0, 40.0, true).await;
+        assert!(matches!(outcome, HanSecondPass::Kept), "a mean of 40 is confident under a minimum of 10");
+        assert_eq!(detections, 0, "a confident page is never checked for its script");
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 0);
+    }
+
+    /// The configured threshold is above the default: a page the default calls confident is read again.
+    #[tokio::test]
+    async fn a_raised_minimum_confidence_reads_again_a_page_the_default_calls_confident() {
+        let (outcome, backend, detections) = run_under(95.0, 80.0, true).await;
+        assert!(matches!(outcome, HanSecondPass::Read { .. }), "a mean of 80 is noisy under a minimum of 95");
+        assert_eq!(detections, 1);
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
