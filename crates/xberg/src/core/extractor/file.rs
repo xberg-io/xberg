@@ -1110,6 +1110,7 @@ mod cache_key_tests {
     #[tokio::test(flavor = "current_thread")]
     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
     async fn the_cache_key_off_the_async_thread_equals_the_sync_key() {
+        use super::extraction_config_hash;
         use crate::core::config::OcrConfig;
 
         let config = ExtractionConfig {
@@ -1127,6 +1128,7 @@ mod cache_key_tests {
     #[tokio::test(flavor = "current_thread")]
     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
     async fn a_cached_text_file_with_an_ocr_config_is_extracted() {
+        use super::extract_file;
         use crate::core::config::OcrConfig;
 
         let dir = tempfile::tempdir().expect("a temp dir");
