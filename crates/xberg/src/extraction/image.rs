@@ -23,7 +23,9 @@ mod bounded_jpeg;
 #[cfg(all(feature = "ocr", feature = "pdf"))]
 pub(crate) use bounded_jpeg::load_image_for_ocr_within;
 #[cfg(feature = "ocr")]
-pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr, load_image_for_ocr_with_processing};
+pub(crate) use bounded_jpeg::{
+    DecodedOcrImage, ReducedScale, admit_oversized_jpeg, load_image_for_ocr, load_image_for_ocr_with_processing,
+};
 #[cfg(feature = "ocr")]
 #[doc(hidden)]
 pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
