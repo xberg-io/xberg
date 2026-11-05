@@ -1,10 +1,15 @@
-import sys
+import argparse
 import zlib
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-target, font_path = map(Path, sys.argv[1:])
+parser = argparse.ArgumentParser()
+parser.add_argument("target", type=Path)
+parser.add_argument("font", type=Path)
+parser.add_argument("--bilevel-only", action="store_true")
+args = parser.parse_args()
+target, font_path = args.target, args.font
 phrase = "Source scan keeps all words from this repeated line safely today"
 tags = [
     "apple",
@@ -56,28 +61,31 @@ def _stream(data: bytes, fields: str = "") -> bytes:
     return f"<< /Length {len(data)} {fields} >>\nstream\n".encode() + data + b"\nendstream"
 
 
-def _raster(height: int) -> bytes:
+def _raster(height: int, bilevel: bool) -> bytes:
     width = 1275
     image = Image.new("L", (width, height), 255)
     font = ImageFont.truetype(str(font_path), 18)
     draw = ImageDraw.Draw(image)
     for line in range(40):
         draw.text((95, 180 + line * ((height - 350) // 40)), lines[line], fill=0, font=font)
+    if bilevel:
+        image = image.convert("1")
     compressed = zlib.compress(image.tobytes())
+    depth = 1 if bilevel else 8
     return _stream(
         compressed,
-        f"/Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode",
+        f"/Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceGray /BitsPerComponent {depth} /Filter /FlateDecode",
     )
 
 
-def _pdf(name: str, height: int, *, mixed: bool = False) -> None:
+def _pdf(name: str, height: int, *, mixed: bool = False, bilevel: bool = False) -> None:
     pts = height * 0.48
     entries = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 {pts:g}] /Resources << /XObject << /Scan 5 0 R >> >> /Contents 4 0 R >>".encode(),
         _stream(f"q 612 0 0 {pts:g} 0 0 cm /Scan Do Q".encode()),
-        _raster(height),
+        _raster(height, bilevel),
     ]
     if mixed:
         entries[1] = b"<< /Type /Pages /Kids [6 0 R 3 0 R] /Count 2 >>"
@@ -105,6 +113,9 @@ def _pdf(name: str, height: int, *, mixed: bool = False) -> None:
     target.joinpath(name).write_bytes(data)
 
 
-_pdf("strict-tall.pdf", 9000)
-_pdf("strict-short.pdf", 3600)
-_pdf("strict-mixed.pdf", 9000, mixed=True)
+if args.bilevel_only:
+    _pdf("bilevel-tall.pdf", 12000, bilevel=True)
+else:
+    _pdf("strict-tall.pdf", 9000)
+    _pdf("strict-short.pdf", 3600)
+    _pdf("strict-mixed.pdf", 9000, mixed=True)

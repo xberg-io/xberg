@@ -8,6 +8,7 @@
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod, extract as extract_public};
 
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
+const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
 const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-mixed.pdf");
 const SHORT: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-short.pdf");
 const ORACLE: &str = include_str!("../../../fixtures/repros/tall-scan-strips/expected.txt");
@@ -81,6 +82,35 @@ fn tall_scan_recovers_every_source_line_once_in_order() {
         document.metadata.additional.get("ocr_page_segmentation_modes"),
         Some(&serde_json::json!([{ "page_number": 1, "psm": 11 }]))
     );
+}
+
+#[test]
+fn bilevel_tall_scan_recovers_every_source_line_once_in_order() {
+    let document = extract(BILEVEL, &extraction_config());
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Ocr));
+    assert!(strip_warning(&document));
+    let pages = document.pages.as_ref().unwrap();
+    let [page] = pages.as_slice() else {
+        panic!("expected one page, got {}", pages.len());
+    };
+    assert_eq!(page.page_number, 1);
+    assert_eq!(page.ocr_confidence.as_ref().unwrap().word_count, 440);
+    let expected = words(ORACLE);
+    for actual in [words(&document.content), words(&page.content)] {
+        assert_eq!(actual.len(), expected.len());
+        let (rows, remainder) = actual.as_chunks::<11>();
+        assert!(remainder.is_empty());
+        assert_eq!(rows.len(), 40);
+        for (row, expected_row) in rows.iter().zip(expected.chunks(11)) {
+            assert_eq!(&row[..10], &expected_row[..10]);
+        }
+        let exact_tags = rows
+            .iter()
+            .zip(expected.chunks(11))
+            .filter(|(row, expected_row)| row[10] == expected_row[10])
+            .count();
+        assert!(exact_tags >= 36, "only {exact_tags} of 40 distinct row tags recognized");
+    }
 }
 
 #[test]
