@@ -913,13 +913,28 @@ fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {
     })
 }
 
+// ~keep This proof is optional. Bound the extra retained input and the row
+// searches even when the configured extraction limits are larger.
+const MAX_FRAGMENTED_HOCR_INPUT_BYTES: usize = 512 * 1024;
+const MAX_FRAGMENTED_HOCR_WORDS: usize = 1024;
+const MAX_FRAGMENTED_HOCR_ALIGNMENTS: usize = 8;
+
+fn fragmented_hocr_budget(hocr: &str, tsv: &str, limits: &SecurityLimits) -> Option<usize> {
+    let bytes = hocr.len().saturating_add(tsv.len());
+    if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
+        return None;
+    }
+    limits.max_iterations.checked_sub(bytes.saturating_mul(4))
+}
+
 fn prove_fragmented_table_rows<'a>(
     words: &'a mut Vec<HocrWord>,
     bbox: BoundingBox,
     cells: &[Vec<String>],
     row_threshold: f64,
+    budget: usize,
 ) -> Option<Vec<&'a HocrWord>> {
-    if cells.is_empty() {
+    if cells.is_empty() || words.len() > MAX_FRAGMENTED_HOCR_WORDS {
         return None;
     }
     words.retain(|word| {
@@ -930,7 +945,22 @@ fn prove_fragmented_table_rows<'a>(
             && f64::from(word.left.saturating_add(word.width)) <= bbox.x1
             && f64::from(word.top.saturating_add(word.height)) <= bbox.y1
     });
+    // Both row detection and nearest-row assignment can scan every word for
+    // each row. The word cap makes the multiplication safe.
+    let budget = budget.checked_sub(2 * words.len() * words.len())?;
     let row_positions = detect_rows(words, row_threshold);
+    let alignments = row_positions.len().checked_sub(cells.len())? + 1;
+    if alignments > MAX_FRAGMENTED_HOCR_ALIGNMENTS {
+        return None;
+    }
+    let comparison_bytes = words
+        .iter()
+        .map(|word| word.text.len() + 1)
+        .chain(cells.iter().flatten().map(|cell| cell.len() + 1))
+        .fold(0usize, usize::saturating_add);
+    if comparison_bytes.saturating_mul(alignments) > budget {
+        return None;
+    }
     let mut rows = vec![Vec::new(); row_positions.len()];
     for word in words.iter() {
         rows[find_row_index(&row_positions, word)?].push(word);
@@ -962,14 +992,19 @@ fn reconcile_fragmented_hocr_table_rows(
     tables: &[OcrTable],
     tsv: &str,
     config: &TesseractConfig,
+    limits: &SecurityLimits,
 ) -> Option<InternalDocument> {
     let [table] = tables else { return None };
+    let budget = fragmented_hocr_budget(hocr, tsv, limits)?;
+    if table.cells.iter().map(Vec::len).fold(0usize, usize::saturating_add) > limits.max_table_cells {
+        return None;
+    }
     let bbox = ocr_table_bbox(table)?;
     if table_retains_region_words(&document.elements, &bbox, &table.cells) {
         return None;
     }
     let mut words = extract_words_from_tsv(tsv, 0.0).ok()?;
-    let proved = prove_fragmented_table_rows(&mut words, bbox, &table.cells, config.table_row_threshold_ratio)?;
+    let proved = prove_fragmented_table_rows(&mut words, bbox, &table.cells, config.table_row_threshold_ratio, budget)?;
     let mut reconciled = parse_hocr_without_proved_table_fragments(hocr, config.page_number, proved);
     let words = |doc: &InternalDocument| {
         doc.elements
@@ -2252,7 +2287,18 @@ pub(super) fn perform_ocr(
                 config.page_number,
             );
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
-            if config.enable_table_detection {
+            if config.enable_table_detection
+                && (dictionary_filtered_line_count > 0
+                    || parse_result
+                        .document
+                        .elements
+                        .iter()
+                        .any(|element| element.text.contains('\n'))
+                    || tsv_data_for_tables
+                        .as_deref()
+                        .and_then(|tsv| fragmented_hocr_budget(&hocr, tsv, &security_limits))
+                        .is_some())
+            {
                 hocr_for_tables = Some(hocr);
             }
             let content = flatten_hocr_elements_to_text(&parse_result.document.elements);
@@ -2619,7 +2665,9 @@ pub(super) fn perform_ocr(
             .and_then(|hocr| {
                 tsv_data_for_tables
                     .as_deref()
-                    .and_then(|tsv| reconcile_fragmented_hocr_table_rows(hocr, document, &tables, tsv, config))
+                    .and_then(|tsv| {
+                        reconcile_fragmented_hocr_table_rows(hocr, document, &tables, tsv, config, &security_limits)
+                    })
                     .or_else(|| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number))
             });
         if let Some(reconciled) = reconciled {
@@ -3637,6 +3685,22 @@ mod tests {
     }
 
     #[test]
+    fn repeated_rows_beyond_alignment_budget_leave_hocr_unclaimed() {
+        let mut words: Vec<_> = (0..64)
+            .map(|row| word_at(10, row * 20, 12, 10, if row == 63 { "end" } else { "same" }))
+            .collect();
+        let mut cells = vec![vec!["same".to_string()]; 31];
+        cells.push(vec!["end".to_string()]);
+        let bbox = BoundingBox {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 25.0,
+            y1: 1280.0,
+        };
+        assert!(prove_fragmented_table_rows(&mut words, bbox, &cells, 0.5, usize::MAX).is_none());
+    }
+
+    #[test]
     fn split_hocr_table_rows_are_claimed_without_removing_heading() {
         let fragments = [
             ("Inventory", 10, 10),
@@ -3670,16 +3734,50 @@ mod tests {
             }),
         };
         let config = TesseractConfig::default();
-        let reconciled =
-            reconcile_fragmented_hocr_table_rows(&hocr, &document, std::slice::from_ref(&table), &tsv, &config)
-                .expect("the exact visual rows are split into hOCR fragments");
+        let limits = SecurityLimits::default();
+        let reconciled = reconcile_fragmented_hocr_table_rows(
+            &hocr,
+            &document,
+            std::slice::from_ref(&table),
+            &tsv,
+            &config,
+            &limits,
+        )
+        .expect("the exact visual rows are split into hOCR fragments");
         assert_eq!(reconciled.elements.len(), 1);
         assert_eq!(reconciled.elements[0].text, "Inventory");
         assert_eq!(reconciled.elements[0].bbox, document.elements[0].bbox);
         assert!(!reconciled.ocr_text_claimed_by_tables);
 
+        for limits in [
+            SecurityLimits {
+                max_content_size: hocr.len(),
+                ..limits.clone()
+            },
+            SecurityLimits {
+                max_iterations: (hocr.len() + tsv.len()) * 4,
+                ..limits.clone()
+            },
+            SecurityLimits {
+                max_table_cells: 3,
+                ..limits.clone()
+            },
+        ] {
+            assert!(
+                reconcile_fragmented_hocr_table_rows(
+                    &hocr,
+                    &document,
+                    std::slice::from_ref(&table),
+                    &tsv,
+                    &config,
+                    &limits
+                )
+                .is_none()
+            );
+        }
+
         table.cells[1][1].clear();
-        assert!(reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config).is_none());
+        assert!(reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config, &limits).is_none());
     }
 
     fn word_at(left: u32, top: u32, width: u32, height: u32, text: &str) -> crate::table_core::HocrWord {
