@@ -1717,6 +1717,49 @@ mod tests {
     }
 
     #[test]
+    fn annotated_number_uses_its_gap_only_at_the_start_of_a_paragraph() {
+        let number = SegmentData {
+            x: 25.0,
+            width: 4.0,
+            height: 6.0,
+            font_size: 6.0,
+            baseline_y: 702.5,
+            is_bold: true,
+            ..plain_segment("5")
+        };
+        let body = SegmentData {
+            x: 31.0,
+            width: 95.0,
+            font_size: 10.0,
+            is_bold: true,
+            ..plain_segment("survey that followed")
+        };
+        let prefix = SegmentData {
+            text: "Earlier ".to_owned(),
+            x: 0.0,
+            width: 24.0,
+            ..number.clone()
+        };
+        for (segments, expected) in [
+            (vec![number.clone(), body.clone()], "5 survey that followed"),
+            (vec![prefix, number, body], "Earlier 5survey that followed"),
+        ] {
+            let mut paragraph = make_paragraph("", None);
+            paragraph.lines[0].segments = segments;
+            let (text, annotations) = extract_text_and_annotations(&paragraph, &Default::default());
+            assert_eq!(text, expected);
+            assert_eq!(
+                annotations,
+                [TextAnnotation {
+                    start: 0,
+                    end: expected.len() as u32,
+                    kind: AnnotationKind::Bold
+                }]
+            );
+        }
+    }
+
+    #[test]
     fn should_preserve_script_byte_offsets_with_overlapping_bold_and_italic() {
         let mut para = make_paragraph("", None);
         let mut base = plain_segment("é10");
