@@ -2113,10 +2113,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         for page_number in &noise_verdict_pages {
             if let Some(layer) = layers.get(page_number)
                 && let Some(text) = accepted_replacements.get_mut(page_number)
-                && let Some(missing) = super::document::layer_lines_absent_from_ocr(layer, text)
+                && let Some(mut missing) = super::document::layer_lines_absent_from_ocr(layer, text)
             {
-                *text = format!("{missing}\n\n{text}");
-                page_layers_before_noise.insert(*page_number, missing);
+                let lost = super::super::unmapped_glyphs::strip_native_fragment(&mut missing);
+                if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
+                    crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
+                }
+                if !missing.is_empty() {
+                    *text = format!("{missing}\n\n{text}");
+                    page_layers_before_noise.insert(*page_number, missing);
+                }
             }
         }
     }
@@ -5645,7 +5651,7 @@ fn with_run_layers_first(
     config: &ExtractionConfig,
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
-        super::document::put_layers_first_in_run(
+        let lost = super::document::put_layers_first_in_run(
             &mut text,
             &mut page_texts,
             doc.as_mut(),
@@ -5658,6 +5664,10 @@ fn with_run_layers_first(
                 .filter(|pages| pages.insert_page_markers)
                 .map(|pages| pages.marker_format.as_str()),
         );
+        if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
+            let doc = doc.get_or_insert_with(|| super::document::flat_ocr_page_document(&text));
+            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
+        }
     }
     (text, page_texts, doc)
 }

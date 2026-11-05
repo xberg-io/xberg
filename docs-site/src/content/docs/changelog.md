@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve word boundaries when Type0 fonts lack Unicode mappings.** (#2328)
+  Route unmapped glyphs through OCR decisions, warn when native characters are unavailable, and retain OCR-owned text.
+
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
   Retain words beside large graphics while preserving the dense-text recovery introduced in #2475.
 

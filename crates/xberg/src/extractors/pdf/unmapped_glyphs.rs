@@ -99,6 +99,7 @@ fn without_markers(text: &str) -> String {
 }
 
 /// Clean a selected native fragment before it is combined with independently owned OCR text.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn strip_native_fragment(text: &mut String) -> usize {
     strip_text(text, None, &[])
 }

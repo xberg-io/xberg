@@ -217,7 +217,8 @@ pub(super) fn insert_layer_into_document(
 }
 /// For a whole-document OCR run: put the text layer first on every page whose OCR text got the
 /// recognition-noise verdict, in the flat text, the page texts and the structured document. The
-/// run has already scored and chosen its stage on the OCR text alone. ~keep
+/// run has already scored and chosen its stage on the OCR text alone. Returns the number of
+/// missing native glyphs in fragments actually retained beside the chosen OCR result. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn put_layers_first_in_run(
     text: &mut String,
@@ -227,7 +228,7 @@ pub(super) fn put_layers_first_in_run(
     verdicts: &[super::scoring::OcrPageNoiseVerdict],
     page_index_offset: usize,
     marker_format: Option<&str>,
-) {
+) -> usize {
     // The flat text is the page texts joined with a page marker or a blank line, as the run
     // assembled it. It is rebuilt from the pages, never searched for a page text: identical
     // pages would match the wrong one.
@@ -253,6 +254,7 @@ pub(super) fn put_layers_first_in_run(
         .collect();
     pages.sort_unstable();
     pages.dedup();
+    let mut lost_glyphs = 0usize;
     for page in pages {
         let Some(layer) = layers.get(&page) else { continue };
         let Some(local) = (page as usize).checked_sub(page_index_offset + 1) else {
@@ -261,9 +263,13 @@ pub(super) fn put_layers_first_in_run(
         let Some(page_text) = page_texts.get_mut(local) else {
             continue;
         };
-        let Some(missing) = layer_lines_absent_from_ocr(layer, page_text) else {
+        let Some(mut missing) = layer_lines_absent_from_ocr(layer, page_text) else {
             continue;
         };
+        lost_glyphs = lost_glyphs.saturating_add(super::super::unmapped_glyphs::strip_native_fragment(&mut missing));
+        if missing.is_empty() {
+            continue;
+        }
         let with_layer = format!("{missing}\n\n{page_text}");
         *page_text = with_layer;
         if let Some(doc) = doc.as_deref_mut() {
@@ -273,6 +279,7 @@ pub(super) fn put_layers_first_in_run(
     if flat_is_page_join {
         *text = join(page_texts);
     }
+    lost_glyphs
 }
 /// Attach a page's OCR tables and OCR elements to its structured document.
 ///
