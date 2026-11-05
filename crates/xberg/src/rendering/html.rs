@@ -16,6 +16,10 @@ use super::markdown::comrak_options;
 
 /// Render an `InternalDocument` to HTML5.
 pub(crate) fn render_html(doc: &InternalDocument) -> String {
+    render_html_checked(doc, None).0
+}
+
+pub(crate) fn render_html_checked(doc: &InternalDocument, plain: Option<&str>) -> (String, bool) {
     let arena = Arena::new();
     let root = build_html_comrak_ast(doc, &arena);
     #[cfg(debug_assertions)]
@@ -34,7 +38,93 @@ pub(crate) fn render_html(doc: &InternalDocument) -> String {
         output.push_str(&render_annotations_html(annotations));
     }
 
-    output
+    let verified =
+        plain.is_some_and(|plain| doc.annotations.as_ref().is_none_or(Vec::is_empty) && html_body_matches(root, plain));
+    (output, verified)
+}
+
+fn html_body_matches<'a>(root: &'a AstNode<'a>, plain: &str) -> bool {
+    let Some(mut text) = HtmlBody::new(plain) else {
+        return false;
+    };
+    for node in root.descendants() {
+        let value = &node.data.borrow().value;
+        let piece = match value {
+            NodeValue::Document
+            | NodeValue::Emph
+            | NodeValue::Strong
+            | NodeValue::Underline
+            | NodeValue::Strikethrough
+            | NodeValue::Subscript
+            | NodeValue::Superscript
+            | NodeValue::Highlight
+            | NodeValue::Link(_) => "",
+            NodeValue::Paragraph | NodeValue::Heading(_) | NodeValue::SoftBreak | NodeValue::LineBreak => " ",
+            NodeValue::Text(text) => text.as_ref(),
+            NodeValue::Code(code) => code.literal.as_str(),
+            _ => return false,
+        };
+        if !text.append(piece) {
+            return false;
+        }
+    }
+    text.complete()
+}
+
+pub(super) struct HtmlBody<'a> {
+    plain: &'a str,
+    started: bool,
+    separator: bool,
+    remaining: usize,
+}
+
+fn html_space(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0c')
+}
+
+impl<'a> HtmlBody<'a> {
+    pub(super) fn new(plain: &'a str) -> Option<Self> {
+        let remaining = crate::extractors::security::SecurityLimits::default()
+            .max_iterations
+            .checked_sub(plain.len())?;
+        Some(Self {
+            plain: plain.trim_matches(html_space),
+            started: false,
+            separator: false,
+            remaining,
+        })
+    }
+
+    pub(super) fn append(&mut self, text: &str) -> bool {
+        let Some(remaining) = self.remaining.checked_sub(text.len().saturating_add(1)) else {
+            return false;
+        };
+        self.remaining = remaining;
+        for ch in text.chars() {
+            if html_space(ch) {
+                self.separator |= self.started;
+                continue;
+            }
+            if self.separator {
+                let trimmed = self.plain.trim_start_matches(html_space);
+                if trimmed.len() == self.plain.len() {
+                    return false;
+                }
+                self.plain = trimmed;
+            }
+            let Some(rest) = self.plain.strip_prefix(ch).filter(|_| ch != '\0') else {
+                return false;
+            };
+            self.plain = rest;
+            self.started = true;
+            self.separator = false;
+        }
+        true
+    }
+
+    pub(super) fn complete(&self) -> bool {
+        self.plain.is_empty()
+    }
 }
 
 fn format_html_node<'a>(

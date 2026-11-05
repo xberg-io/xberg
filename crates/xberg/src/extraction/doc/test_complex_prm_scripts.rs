@@ -81,7 +81,7 @@ async fn should_apply_complex_prm_group_indexes_by_piece_gh2275() {
                 builder::superscript(start + 2, start + 3),
                 builder::subscript(start + 8, start + 9),
             ],
-            &format!("{prefix}10^9^/l; H~2~O"),
+            &format!("{prefix}10<sup>9</sup>/l; H~2~O"),
         )
         .await;
     }
@@ -113,7 +113,7 @@ async fn should_keep_complex_prms_distinct_for_reused_physical_bytes_gh2275() {
             bytes,
             "999",
             vec![builder::superscript(0, 1), builder::subscript(1, 2)],
-            "^9^~9~9",
+            "<sup>9</sup>~9~9",
         )
         .await;
     }
@@ -123,7 +123,7 @@ async fn should_keep_complex_prms_distinct_for_reused_physical_bytes_gh2275() {
 async fn should_preserve_chpx_for_unrelated_complex_prm_properties_gh2275() {
     for compressed in [false, true] {
         let bytes = with_groups(scripted_nine(compressed, 1), &[BOLD]);
-        assert_body_scripts(bytes, "109/l", vec![builder::superscript(2, 3)], "10^9^/l").await;
+        assert_body_scripts(bytes, "109/l", vec![builder::superscript(2, 3)], "10<sup>9</sup>/l").await;
     }
 }
 

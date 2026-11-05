@@ -385,6 +385,16 @@ impl RendererRegistry {
     /// # Returns
     ///
     /// The rendered output string, or an error if the renderer is not found or rendering fails.
+    pub(crate) fn renders_html(&self, name: &str) -> bool {
+        name == "html" && self.renderers.get(name).is_some_and(|entry| entry.internal.is_some())
+    }
+
+    pub(crate) fn renders_markdown(&self, name: &str) -> bool {
+        self.renderers
+            .get(name)
+            .is_some_and(|entry| entry.internal.is_some() && matches!(name, "markdown" | "docx" | "pdf"))
+    }
+
     pub(crate) fn render(&self, name: &str, doc: &InternalDocument) -> Result<String> {
         self.renderers
             .get(name)
@@ -751,5 +761,20 @@ mod tests {
         assert!(!holds_encoded_package(Some("pdf"), "UEsDBBQAAAAIAAAAIQ"));
         assert!(!holds_encoded_package(Some("docx"), "JVBERi0xLjcKJcK1wrY"));
         assert!(holds_encoded_package(Some("pdf"), "JVBERi0xLjcKJcK1wrY"));
+    }
+    #[test]
+    fn foreign_renderer_replacement_cannot_claim_builtin_markdown_kind() {
+        let mut registry = RendererRegistry::new();
+        assert!(registry.renders_markdown("markdown"));
+        registry
+            .register(Arc::new(MockRenderer {
+                format_name: "markdown".into(),
+            }))
+            .unwrap();
+        assert!(!registry.renders_markdown("markdown"));
+        assert_eq!(
+            registry.render("markdown", &InternalDocument::new("test")).unwrap(),
+            "mock-rendered-0-elements"
+        );
     }
 }

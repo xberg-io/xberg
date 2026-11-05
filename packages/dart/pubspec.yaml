@@ -4,7 +4,7 @@ version: 1.4.0
 repository: https://github.com/xberg-io/xberg
 homepage: https://xberg.io
 environment:
-  sdk: ">=3.11.0 <4.0.0"
+  sdk: ">=3.13.0 <4.0.0"
 executables:
   download_libs:
 dependencies:

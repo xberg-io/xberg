@@ -332,6 +332,42 @@ fn regression_pages_match_their_markdown_snapshots() {
     assert!(failures.is_empty(), "{}", report(&header, &failures, &regenerate));
 }
 
+fn assert_regression_page_has_script(file_name: &str, expected: &str) {
+    if switch(SKIP_VAR) {
+        assert!(std::env::var_os("CI").is_none(), "{SKIP_VAR}=1 must not be set in CI");
+        eprintln!("Skipping regression page: {SKIP_VAR}=1 (local opt-out)");
+        return;
+    }
+    let page = get_test_documents_dir().join("pdf/regression_pages").join(file_name);
+    let (_, content) = extract_all(&[page]).pop().expect("one extracted page");
+    let content = content.unwrap_or_else(|error| panic!("{file_name}: {error}. {FETCH_HINT}"));
+    assert_eq!(
+        content.matches(expected).count(),
+        1,
+        "{file_name}: expected one inline {expected:?} in Markdown:\n{content}"
+    );
+}
+
+#[test]
+fn regression_page_keeps_negative_exponent_with_its_prose_base() {
+    assert_regression_page_has_script("plos-journal.pcbi.1012696-p8.pdf", "5.0 × 10<sup>−4</sup>.");
+}
+
+#[test]
+fn regression_page_keeps_squared_suffix_with_its_row_label() {
+    assert_regression_page_has_script("plos-journal.pone.0311664-p14.pdf", "R<sup>2</sup> 0.355");
+}
+
+#[test]
+fn regression_page_keeps_raised_footnote_number_separate_from_ers_definition() {
+    assert_regression_page_has_script("fr-2025-04604-nofa-p5.pdf", "\n\n4 The ERS document");
+}
+
+#[test]
+fn regression_page_keeps_raised_footnote_number_separate_from_cms_definition() {
+    assert_regression_page_has_script("fr-2026-08190-hcbs-p18.pdf", "\n\n56 Available at");
+}
+
 /// Negative controls: each broken corpus must fail and name its problem.
 mod input_checks {
     use super::*;

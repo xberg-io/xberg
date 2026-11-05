@@ -60,6 +60,8 @@ const SPARSE_FONT_TIER_TOLERANCE: f32 = 0.5;
 // unique document title; reserve H1 for a title and emit these sections as H2. ~keep
 const SPARSE_REPEATED_TIER_HEADING_LEVEL: u8 = 2;
 
+mod script_evidence;
+
 type HeadingMap = Vec<(f32, Option<u8>)>;
 
 /// Lowercased `(left, right)` word pairs the document itself writes as a single
@@ -1743,7 +1745,7 @@ const PARAGRAPH_GAP_HEIGHT_FACTOR: f32 = 1.5;
 /// happens to be. The two rules are OR-ed, so no break the band rule already
 /// finds is lost.
 const PARAGRAPH_BREAK_LEADING_MULTIPLE: f32 = 1.5;
-const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
+pub(super) const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
 /// How many already-accumulated segments back to look for a sub/superscript's base.
 ///
 /// ~keep GH#1617: two is enough on the reproducer (`dB` then `L`); four covers a row with a couple
@@ -2896,6 +2898,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
         let is_monospace = segments.iter().all(|s| s.is_monospace);
         super::types::PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y,
             dominant_font_size,
@@ -3458,24 +3461,55 @@ const TABLE_MODEL_LOADERS: TableModelLoaders = TableModelLoaders {
     slanet: crate::layout::take_or_create_slanet,
 };
 
-#[cfg(feature = "layout-detection")]
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn extract_document_structure_from_segments(
     all_page_segments: Vec<Vec<SegmentData>>,
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
-    build_document_structure(all_page_segments, config, TABLE_MODEL_LOADERS)
+    build_document_structure(
+        all_page_segments,
+        config,
+        #[cfg(feature = "layout-detection")]
+        TABLE_MODEL_LOADERS,
+    )
 }
 
-#[cfg(not(feature = "layout-detection"))]
-pub(crate) fn extract_document_structure_from_segments(
-    all_page_segments: Vec<Vec<SegmentData>>,
-    config: SegmentStructureConfig<'_>,
-) -> Result<crate::types::internal::InternalDocument> {
-    build_document_structure(all_page_segments, config)
-}
-
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 fn build_document_structure(
+    all_page_segments: Vec<Vec<SegmentData>>,
+    config: SegmentStructureConfig<'_>,
+    #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
+) -> Result<crate::types::internal::InternalDocument> {
+    build_document_structure_with_native(
+        all_page_segments,
+        None,
+        0,
+        config,
+        #[cfg(feature = "layout-detection")]
+        loaders,
+    )
+}
+
+pub(crate) fn extract_document_structure_from_native_pages(
+    native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
+    ruled_table_count: usize,
+    config: SegmentStructureConfig<'_>,
+) -> Result<crate::types::internal::InternalDocument> {
+    let segments = native_pages.iter().map(|page| page.segments.clone()).collect();
+    build_document_structure_with_native(
+        segments,
+        Some(native_pages),
+        ruled_table_count,
+        config,
+        #[cfg(feature = "layout-detection")]
+        TABLE_MODEL_LOADERS,
+    )
+}
+
+fn build_document_structure_with_native(
     mut all_page_segments: Vec<Vec<SegmentData>>,
+    native_pages: Option<Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>>,
+    ruled_table_count: usize,
     config: SegmentStructureConfig<'_>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
 ) -> Result<crate::types::internal::InternalDocument> {
@@ -3876,7 +3910,7 @@ fn build_document_structure(
     let overlap_preference = table_overlap_preference;
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
-    let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments);
+    let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
     let emitted_tables = prepare_emitted_tables(&stitched_native_tables, layout_tables, overlap_preference);
 
     let extracted_table_bboxes_by_page = table_bboxes_by_page(&emitted_tables);
@@ -4058,6 +4092,11 @@ fn build_document_structure(
     // Native semantic roles are finalized in source order before the
     // independent layout geometry projection controls final reading order.
     reorder_pages_by_layout_region(&mut all_page_paragraphs);
+    if let Some(native_pages) = native_pages {
+        for (paragraphs, page) in all_page_paragraphs.iter_mut().zip(native_pages) {
+            script_evidence::associate_surviving_suffixes(paragraphs, &page);
+        }
+    }
 
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(
@@ -4373,12 +4412,17 @@ const TABLE_STITCH_TRAILING_ROW_GAP_MULTIPLIER: f32 = 1.8;
 fn stitch_fragmented_tables(
     tables: Vec<crate::types::Table>,
     all_page_segments: &[Vec<SegmentData>],
+    // Extraction appends heuristic fragments after the ruled tables. ~keep
+    ruled_table_count: usize,
 ) -> Vec<crate::types::Table> {
-    let mut by_page: ahash::AHashMap<u32, Vec<crate::types::Table>> = ahash::AHashMap::new();
+    let mut by_page: ahash::AHashMap<u32, Vec<(crate::types::Table, bool)>> = ahash::AHashMap::new();
     let mut unbboxed = Vec::new();
-    for table in tables {
+    for (index, table) in tables.into_iter().enumerate() {
         if table.bounding_box.is_some() {
-            by_page.entry(table.page_number).or_default().push(table);
+            by_page
+                .entry(table.page_number)
+                .or_default()
+                .push((table, index < ruled_table_count));
         } else {
             unbboxed.push(table);
         }
@@ -4421,12 +4465,12 @@ fn assign_deterministic_table_ids(tables: &mut [crate::types::Table]) {
 
 /// Stitch one page's table fragments. See [`stitch_fragmented_tables`].
 fn stitch_page_tables(
-    mut fragments: Vec<crate::types::Table>,
+    mut fragments: Vec<(crate::types::Table, bool)>,
     all_page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     fragments.sort_by(|a, b| {
-        let a_top = a.bounding_box.map_or(f64::MIN, |bbox| bbox.y1);
-        let b_top = b.bounding_box.map_or(f64::MIN, |bbox| bbox.y1);
+        let a_top = a.0.bounding_box.map_or(f64::MIN, |bbox| bbox.y1);
+        let b_top = b.0.bounding_box.map_or(f64::MIN, |bbox| bbox.y1);
         b_top.total_cmp(&a_top)
     });
 
@@ -4442,10 +4486,13 @@ fn stitch_page_tables(
         }
 
         if chain_end - index >= 2 {
-            let chain = fragments[index..chain_end].to_vec();
+            let chain = fragments[index..chain_end]
+                .iter()
+                .map(|(table, _)| table.clone())
+                .collect();
             output.push(merge_table_chain(chain, all_page_segments));
         } else {
-            output.push(fragments[index].clone());
+            output.push(fragments[index].0.clone());
         }
         index = chain_end;
     }
@@ -4455,13 +4502,21 @@ fn stitch_page_tables(
 /// Whether `next` is the vertically-adjacent continuation of `prev` within one
 /// stitch chain: same page, same column count, near-zero row gap, and matching
 /// left/right edges.
-fn fragments_are_stitchable(prev: &crate::types::Table, next: &crate::types::Table) -> bool {
+fn fragments_are_stitchable(
+    (prev, prev_ruled): &(crate::types::Table, bool),
+    (next, next_ruled): &(crate::types::Table, bool),
+) -> bool {
     if prev.page_number != next.page_number {
         return false;
     }
     let (Some(a), Some(b)) = (prev.bounding_box, next.bounding_box) else {
         return false;
     };
+
+    // Touching ruled regions have a shared boundary. Wrapping them collapses their physical rows. ~keep
+    if *prev_ruled && *next_ruled && a.y0.total_cmp(&b.y1).is_eq() {
+        return false;
+    }
 
     let prev_cols = prev.cells.first().map_or(0, Vec::len);
     let next_cols = next.cells.first().map_or(0, Vec::len);

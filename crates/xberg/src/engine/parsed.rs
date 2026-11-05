@@ -57,9 +57,9 @@ impl ParsedDocument {
 
     /// Build a memo with caller-selected image decoding and PNG encoding limits.
     ///
-    /// The limits are captured for this operation and its render cache. Only
-    /// `max_content_size` applies to images; PDF rendering keeps its existing
-    /// behavior and does not enforce these page or memory limits.
+    /// The limits are captured for this operation and its render cache.
+    /// `max_content_size` applies to image processing and the per-page PDF raster
+    /// working-set charge described by [the structured rasterizer](crate::engine::structured::rasterize).
     ///
     /// # Errors
     ///

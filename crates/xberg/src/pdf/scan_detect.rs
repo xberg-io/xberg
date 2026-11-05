@@ -178,7 +178,7 @@ fn image_coverage(doc: &PdfDocument, page_index: usize) -> Option<f32> {
 
 /// Below this raster coverage a page is never a scan for OCR, whatever its text layer holds.
 // GH#1835: the OCR scan-density policy below is consumed by `extractors::pdf::ocr::rendering`
-// (`any(ocr, ocr-pipeline)`) and by `image::dpi::pdf_ocr_render_dpi`, whose module is gated
+// (`any(ocr, ocr-pipeline)`) and by `image::dpi::planned_pdf_ocr_render_dpi`, whose module is gated
 // `any(ocr-pipeline, layout-detection)`. Gating these on `pdf` alone, as the whole file is,
 // left them with no caller on a `pdf`-only build and broke `-D warnings` there. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]

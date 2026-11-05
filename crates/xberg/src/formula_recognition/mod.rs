@@ -89,9 +89,11 @@ pub struct FormulaModelPaths {
     pub tokenizer: std::path::PathBuf,
 }
 
-/// Default cache directory. The layout model manager uses the same root.
+/// Prefer the deployment cache override, retaining the Hugging Face cache fallback.
 fn default_cache_dir() -> std::path::PathBuf {
-    hf_hub::resolve_cache_dir().join("formula-recognition")
+    std::env::var("XBERG_CACHE_DIR")
+        .map_or_else(|_| hf_hub::resolve_cache_dir(), std::path::PathBuf::from)
+        .join("formula-recognition")
 }
 
 /// The manifest for `cache manifest` / MCP model listings.
@@ -653,6 +655,49 @@ fn post_process(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_cache_honors_xberg_root_and_hf_fallbacks() {
+        const EXPECTED: &str = "XBERG_FORMULA_CACHE_TEST_EXPECTED";
+        if let Some(expected) = std::env::var_os(EXPECTED) {
+            assert_eq!(default_cache_dir(), std::path::PathBuf::from(expected));
+            return;
+        }
+
+        let root = tempfile::tempdir().unwrap();
+        let xberg = root.path().join("xberg");
+        let hub = root.path().join("hub");
+        let home = root.path().join("hf-home");
+        for mode in ["xberg", "hub", "home"] {
+            let expected = match mode {
+                "xberg" => xberg.clone(),
+                "hub" => hub.clone(),
+                _ => home.join("hub"),
+            }
+            .join("formula-recognition");
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+            child
+                .args([
+                    "--exact",
+                    "formula_recognition::tests::default_cache_honors_xberg_root_and_hf_fallbacks",
+                    "--nocapture",
+                ])
+                .env(EXPECTED, &expected)
+                .env("HF_HOME", &home)
+                .env_remove("XBERG_CACHE_DIR")
+                .env_remove("HF_HUB_CACHE")
+                .env_remove("HUGGINGFACE_HUB_CACHE");
+            if mode != "home" {
+                child.env("HF_HUB_CACHE", &hub);
+            }
+            if mode == "xberg" {
+                child.env("XBERG_CACHE_DIR", &xberg);
+            }
+            let output = child.output().unwrap();
+            assert!(output.status.success(), "mode={mode}: {output:?}");
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed; 0 ignored;"));
+        }
+    }
 
     #[test]
     fn pad_up_rounds_to_divisor() {

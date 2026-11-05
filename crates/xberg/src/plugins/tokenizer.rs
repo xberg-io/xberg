@@ -84,6 +84,13 @@ use std::sync::Arc;
 pub trait TokenizerBackend: Plugin {
     /// Count the tokens in `text` according to this backend's tokenizer.
     fn count_tokens(&self, text: &str) -> usize;
+
+    /// Count tokens for the registration probe while preserving backend failures.
+    ///
+    /// Existing infallible implementations use `count_tokens` by default.
+    fn try_count_tokens(&self, text: &str) -> Result<usize> {
+        Ok(self.count_tokens(text))
+    }
 }
 
 /// Register a tokenizer backend with the global registry.
@@ -98,6 +105,7 @@ pub trait TokenizerBackend: Plugin {
 /// - [`crate::XbergError::Validation`] if the name is empty, contains
 ///   whitespace, or the backend reports zero tokens for non-empty text.
 /// - [`crate::XbergError::Plugin`] if a backend with that name is already registered.
+/// - A plugin error retaining the cause if the token-count probe fails.
 /// - Any error from the backend's `initialize()` method.
 #[cfg_attr(alef, alef(skip))]
 pub fn register_tokenizer_backend(backend: Arc<dyn TokenizerBackend>) -> Result<()> {

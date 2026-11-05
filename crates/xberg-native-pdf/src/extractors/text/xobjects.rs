@@ -6,6 +6,7 @@
 //! items unchanged. ~keep
 
 use super::*;
+use crate::cache::MutexExt;
 
 impl<'doc> TextExtractor<'doc> {
     /// Resolve XObject name to ObjectRef using cached mapping.
@@ -139,6 +140,7 @@ impl<'doc> TextExtractor<'doc> {
 
     pub(super) fn process_xobject(&mut self, name: &str) -> Result<()> {
         if self.xobject_depth >= Self::MAX_XOBJECT_DEPTH {
+            self.xobject_subtree_depth = None;
             return Ok(());
         }
         if self.xobject_decode_count >= Self::MAX_XOBJECT_DECODES {
@@ -170,9 +172,10 @@ impl<'doc> TextExtractor<'doc> {
         let ctm_key = Self::quantize_ctm(current_ctm);
         let xobj_key = (xobject_ref, ctm_key);
 
-        // Skip already-processed (XObject, CTM) pairs — each unique combination
-        // is processed at most once per page for text extraction. ~keep
+        // A containing form skipped this text because of an earlier paint on this
+        // page, so its partial result must not enter the shared cache. ~keep
         if self.processed_xobjects.contains(&xobj_key) {
+            self.page_bound_forms += 1;
             return Ok(());
         }
 
@@ -196,21 +199,36 @@ impl<'doc> TextExtractor<'doc> {
 
         // Span result cache: reuse extracted spans from self-contained Form XObjects.
         //
-        // The cache key is (ObjectRef, ctm_key) where ctm_key encodes the caller's
-        // CTM as 6 millipoint-rounded i64 values. This allows the same Form XObject
-        // to have independent cached results for each unique CTM it is painted with,
-        // fixing the issue where cross-page reuse of a single Form XObject with
-        // different per-page CTM translations returned stale page-0 coordinates on
-        // all subsequent pages.
-        //
-        // `ctm_key` was already computed above for the `processed_xobjects` guard. ~keep
-        let spans_cache_key = (xobject_ref, ctm_key);
+        // Spans are cached after the figure/wrapper clip, whose policy depends on
+        // page area. Use the same unrounded area for identity and clipping. ~keep
+        let page_idx = match self.mcid_scope_stack.first() {
+            Some(crate::structure::McidScope::Page(p)) => *p as usize,
+            _ => 0,
+        };
+        let page_area = doc
+            .get_page_media_box(page_idx)
+            .ok()
+            .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
+            .filter(|area| *area > 0.0);
+        let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
         let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
-        if self.extract_spans && !has_filters {
-            let cached_spans = { doc.xobject_spans_cache.lock().unwrap().get(&spans_cache_key).cloned() };
-            if let Some(cached_spans) = cached_spans {
-                if let Some(spans) = cached_spans {
-                    self.spans.extend(spans.iter().cloned());
+        // Cached spans carry no hold identity. A placed scope or a character
+        // verdict pass must walk the form to preserve its groups. ~keep
+        let span_cache_open = self.extract_spans && !has_filters && !self.verdict_run && !self.inside_placed_pdf;
+        if span_cache_open {
+            let cached_spans = doc
+                .xobject_spans_cache
+                .lock_or_recover()
+                .get(&spans_cache_key)
+                .filter(|cached| {
+                    cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
+                        && cached.matches_inherited_fonts(&self.fonts)
+                })
+                .map(|cached| (cached.required_depth, cached.spans.clone()));
+            if let Some((required_depth, spans)) = cached_spans {
+                self.xobject_subtree_depth = self.xobject_subtree_depth.map(|depth| depth.max(required_depth));
+                if let Some(spans) = spans {
+                    self.spans.extend(spans);
                 }
                 return Ok(());
             }
@@ -382,9 +400,38 @@ impl<'doc> TextExtractor<'doc> {
                 self.mcid_scope_stack
                     .push(crate::structure::McidScope::Form(xobject_ref));
 
+                let has_placed_tag = Self::has_placed_tag(&stream_data);
+                let enclosing_hold = self.placed_hold;
+                // The page pre-scan cannot count text behind a Do operator. ~keep
+                let inherits_unheld_placed_scope =
+                    !has_placed_tag && self.inside_placed_pdf && !self.placed_pdf_keep && enclosing_hold == 0;
+                let page_bound_before = self.page_bound_forms;
+                if has_placed_tag || inherits_unheld_placed_scope {
+                    self.page_bound_forms += 1;
+                }
+                let enclosing_hold_scope = self.placed_hold_scope_start;
+                // An outer page scope must not keep a parent's hold active after
+                // the parent's own placed scope ends. ~keep
+                let inside_held_scope = self
+                    .marked_content_stack
+                    .get(enclosing_hold_scope..)
+                    .is_some_and(|stack| stack.iter().any(|context| context.is_placed_pdf));
+                if inherits_unheld_placed_scope || (has_placed_tag && (enclosing_hold == 0 || !inside_held_scope)) {
+                    self.placed_hold_groups += 1;
+                    self.placed_hold = self.placed_hold_groups;
+                    self.placed_hold_scope_start = self.marked_content_stack.len();
+                }
+
+                let parent_subtree_depth = self.xobject_subtree_depth.replace(0);
                 self.xobject_depth += 1;
                 let parse_result = self.run_content_stream(&stream_data);
                 self.xobject_depth -= 1;
+                let required_depth = self.xobject_subtree_depth.map(|depth| depth + 1);
+                self.xobject_subtree_depth = parent_subtree_depth
+                    .zip(required_depth)
+                    .map(|(parent, child)| parent.max(child));
+                self.placed_hold = enclosing_hold;
+                self.placed_hold_scope_start = enclosing_hold_scope;
                 // Pop the Form XObject scope pushed before the
                 // content-stream walk. Cleared regardless of parse
                 // success so the parent stream's scope is correctly
@@ -462,29 +509,25 @@ impl<'doc> TextExtractor<'doc> {
                                 // the form is figure-sized, so the galley-dedup win
                                 // stays while page-wrapper bodies are preserved. ~keep
                                 let clip_area = (max_x - min_x) * (max_y - min_y);
-                                let page_idx = match self.mcid_scope_stack.first() {
-                                    Some(crate::structure::McidScope::Page(p)) => *p as usize,
-                                    _ => 0,
-                                };
-                                let page_area = self
-                                    .document
-                                    .and_then(|d| d.get_page_media_box(page_idx).ok())
-                                    .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
-                                    .filter(|a| *a > 0.0);
                                 // ≥60% of page area ⇒ content-frame wrapper, not a
                                 // figure (figures measured ≤27%; wrappers ≥82%). ~keep
                                 let is_page_wrapper = page_area.is_some_and(|pa| clip_area >= 0.6 * pa);
                                 if !is_page_wrapper {
                                     if spans_stray {
-                                        let added = self.spans.split_off(spans_before);
-                                        let kept: Vec<TextSpan> = added.into_iter().filter(|s| inside(s)).collect();
-                                        self.spans.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.spans,
+                                            &mut self.span_holds,
+                                            spans_before,
+                                            inside,
+                                        );
                                     }
                                     if chars_stray {
-                                        let added = self.chars.split_off(chars_before);
-                                        let kept: Vec<TextChar> =
-                                            added.into_iter().filter(|c| inside_bbox(&c.bbox)).collect();
-                                        self.chars.extend(kept);
+                                        super::marked_content::retain_held_from(
+                                            &mut self.chars,
+                                            &mut self.char_holds,
+                                            chars_before,
+                                            |character| inside_bbox(&character.bbox),
+                                        );
                                     }
                                 }
                             }
@@ -494,25 +537,27 @@ impl<'doc> TextExtractor<'doc> {
 
                 // Cache span results for self-contained Form XObjects.
                 //
-                // The cache key `spans_cache_key` already encodes (ObjectRef, ctm_key),
-                // so each unique (XObject, CTM) pair gets its own entry. There is no
-                // longer any need to restrict caching to identity-CTM invocations —
-                // different CTMs produce different cache entries and therefore cannot
-                // pollute each other.
+                // The key separates caller CTMs and page-area clipping contexts,
+                // so cached results retain the destination page's clipping policy.
                 //
-                // We still require `has_own_resources` so that font lookups are
-                // self-contained; XObjects that inherit page-level fonts would
-                // produce spans whose glyph mappings depend on caller context. ~keep
-                if has_own_resources && self.extract_spans && !has_filters {
+                // Require own resources and the matching caller fonts. A Form
+                // can use inherited glyph mappings even with its own Font dictionary. ~keep
+                // A placed tag or skipped descendant makes the result page-dependent;
+                // an incomplete depth-limited run cannot be shared either. ~keep
+                if let Some(required_depth) = required_depth
+                    && let Some(caller_fonts) = &saved_fonts
+                    && span_cache_open
+                    && self.page_bound_forms == page_bound_before
+                {
                     let new_spans = if self.spans.len() > spans_before {
                         Some(self.spans[spans_before..].to_vec())
                     } else {
                         None
                     };
-                    doc.xobject_spans_cache
-                        .lock()
-                        .unwrap()
-                        .insert(spans_cache_key, new_spans);
+                    doc.xobject_spans_cache.lock_or_recover().insert(
+                        spans_cache_key,
+                        crate::document::CachedFormSpans::new(required_depth, new_spans, caller_fonts, &self.fonts),
+                    );
                 }
 
                 // Restore graphics state (implicit Q per ISO 32000-1 §8.10.1) ~keep

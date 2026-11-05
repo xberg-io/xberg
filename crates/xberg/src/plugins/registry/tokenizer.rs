@@ -18,7 +18,7 @@ use std::sync::Arc;
 /// tokenizer backends are always supplied by the caller at runtime.
 ///
 /// Unlike the embedding registry there is no cached shape metadata: a tokenizer
-/// backend is a pure `&str -> usize` counter, validated once at registration
+/// backend is a token counter, validated once at registration
 /// with a probe (see [`Self::register`]).
 #[cfg_attr(alef, alef(skip))]
 pub struct TokenizerBackendRegistry {
@@ -36,7 +36,7 @@ impl TokenizerBackendRegistry {
     /// Register a tokenizer backend.
     ///
     /// Runs the backend's `initialize()` first (so lazy-loading implementations
-    /// can load their vocabulary), then probes `count_tokens("a")`: a backend
+    /// can load their vocabulary), then probes `try_count_tokens("a")`: a backend
     /// that reports zero tokens for non-empty text would defeat chunk sizing —
     /// every span would appear to fit any budget — so it is rejected.
     ///
@@ -45,6 +45,7 @@ impl TokenizerBackendRegistry {
     /// - [`XbergError::Validation`] if the name is empty, contains whitespace,
     ///   or the probe reports zero tokens for non-empty text.
     /// - [`XbergError::Plugin`] if a backend with the same name is already registered.
+    /// - A plugin error retaining the cause if the token-count probe fails.
     /// - Any error from the backend's `initialize()` method.
     #[tracing::instrument(skip(self, backend), fields(backend_name))]
     pub fn register(&mut self, backend: Arc<dyn TokenizerBackend>) -> Result<()> {
@@ -62,7 +63,20 @@ impl TokenizerBackendRegistry {
 
         backend.initialize()?;
 
-        if backend.count_tokens("a") == 0 {
+        let probe_count = backend.try_count_tokens("a").map_err(|error| {
+            if let Err(shutdown_error) = backend.shutdown() {
+                tracing::warn!(
+                    backend = %name,
+                    error = %shutdown_error,
+                    "Tokenizer backend shutdown failed after a count probe failure (retaining the probe error)",
+                );
+            }
+            XbergError::Plugin {
+                message: format!("Tokenizer backend '{name}' count_tokens registration probe failed: {error}"),
+                plugin_name: name.clone(),
+            }
+        })?;
+        if probe_count == 0 {
             let _ = backend.shutdown();
             return Err(XbergError::Validation {
                 message: format!("Tokenizer backend '{name}' must report a non-zero token count for non-empty text"),
@@ -298,6 +312,66 @@ mod tests {
 
         let mut registry = TokenizerBackendRegistry::new();
         assert!(registry.register(Arc::new(FailingInit)).is_err());
+        assert!(registry.list().is_empty());
+    }
+
+    struct FailingProbe {
+        shutdown_calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl Plugin for FailingProbe {
+        fn name(&self) -> &str {
+            "failing-count-probe"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> Result<()> {
+            self.shutdown_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(XbergError::Other("shutdown-sentinel2374".to_string()))
+        }
+    }
+
+    impl TokenizerBackend for FailingProbe {
+        fn count_tokens(&self, _text: &str) -> usize {
+            1
+        }
+        fn try_count_tokens(&self, _text: &str) -> Result<usize> {
+            Err(XbergError::Other("probe-sentinel2374".to_string()))
+        }
+    }
+
+    #[test]
+    fn failed_count_probe_retains_cause_shuts_down_and_never_registers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let shutdown_calls = Arc::new(AtomicUsize::new(0));
+        let mut registry = TokenizerBackendRegistry::new();
+        let error = registry
+            .register(Arc::new(FailingProbe {
+                shutdown_calls: shutdown_calls.clone(),
+            }))
+            .expect_err("a failed tokenizer probe must reject registration");
+        let message = error.to_string();
+        assert!(matches!(error, XbergError::Plugin { .. }));
+        assert!(message.contains("probe-sentinel2374"), "lost original cause: {message}");
+        assert!(
+            message.contains("failing-count-probe"),
+            "lost backend context: {message}"
+        );
+        assert!(message.contains("count_tokens"), "lost method context: {message}");
+        assert!(
+            !message.contains("non-zero token count"),
+            "wrong contract error: {message}"
+        );
+        assert!(
+            !message.contains("shutdown-sentinel2374"),
+            "cleanup replaced the cause: {message}"
+        );
+        assert_eq!(shutdown_calls.load(Ordering::SeqCst), 1);
+        assert!(registry.lookup("failing-count-probe").is_none());
         assert!(registry.list().is_empty());
     }
 }

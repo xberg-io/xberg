@@ -1,3 +1,3 @@
 module github.com/xberg-io/xberg/packages/go
 
-go 1.26
+go 1.27

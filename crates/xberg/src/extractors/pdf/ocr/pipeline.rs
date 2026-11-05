@@ -560,6 +560,7 @@ struct MixedOcrPageSelection<'a> {
     /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
     /// read them from its own native text.
     native_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    hidden_layer_backend: Option<std::sync::Arc<dyn crate::plugins::OcrBackend>>,
 }
 
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
@@ -624,6 +625,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
             ocr: ocr_page_numbers,
             single_block: single_block_page_numbers,
             native_layers: None,
+            hidden_layer_backend: None,
         },
         content,
         config,
@@ -637,6 +639,50 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     )
     .await
     .map_err(crate::XbergError::from)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    scanned_pages: &[u32],
+    content: &[u8],
+    config: &ExtractionConfig,
+) -> crate::Result<Option<MixedOcrRun>> {
+    if boundaries.is_empty()
+        || scanned_pages.is_empty()
+        || content.len() > super::hidden_layer::preview_byte_limit(config)
+    {
+        return Ok(None);
+    }
+    let Some(backend) = super::hidden_layer::stock_backend(config) else {
+        return Ok(None);
+    };
+    let result = Box::pin(extract_mixed_ocr_native_with_layout_inputs(
+        native_text,
+        boundaries,
+        MixedOcrPageSelection {
+            ocr: scanned_pages,
+            single_block: &[],
+            native_layers: None,
+            hidden_layer_backend: Some(backend),
+        },
+        content,
+        config,
+        AllPagesFailedPolicy::PreserveNative,
+        #[cfg(feature = "layout-detection")]
+        MixedLayoutInputs::Resolve(None),
+    ))
+    .await;
+    super::super::ensure_pdf_not_cancelled(config)?;
+    match result {
+        Ok(run) if !run.output.1.is_empty() => Ok(Some(run)),
+        Ok(_) => Ok(None),
+        Err(failure) => {
+            tracing::debug!(error = %failure.error, "Hidden PDF text layer probe preserved native text");
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -684,6 +730,31 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .collect::<std::collections::HashSet<u32>>(),
     );
     page_indices = valid_page_indices(&page_indices, page_count);
+    let probing_hidden_layer = pages.hidden_layer_backend.is_some();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if probing_hidden_layer {
+        let byte_limit = super::hidden_layer::preview_byte_limit(config);
+        let probe_doc = std::sync::Arc::clone(&render_doc);
+        let cancel = config.cancel_token.clone();
+        let page_limit = super::hidden_layer::preview_page_limit(config);
+        super::super::ensure_pdf_not_cancelled(config)?;
+        page_indices = super::super::spawn_pdf_blocking(move || {
+            let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
+            let selected = page_indices
+                .into_iter()
+                .take(page_limit)
+                .take_while(|_| !is_cancelled())
+                .filter(|&index| {
+                    let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
+                    tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
+                    needed == Some(true)
+                })
+                .collect::<Vec<_>>();
+            Ok(selected)
+        })
+        .await?;
+        super::super::ensure_pdf_not_cancelled(config)?;
+    }
     if page_indices.is_empty() {
         return Ok(MixedOcrRun::native(native_text));
     }
@@ -700,7 +771,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         .unwrap_or_default();
     let page_layers = match pages.native_layers {
         Some(layers) => Some(layers),
-        None if all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
+        None if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
             let layers = super::document::clean_native_page_layers(
                 native_text,
                 boundaries,
@@ -811,6 +882,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     use std::sync::Arc;
 
     let mut ocr_config_resolved = super::resolve_ocr_config(config).into_owned();
+    if probing_hidden_layer {
+        ocr_config_resolved.tesseract_config = Some(crate::types::TesseractConfig {
+            output_format: "text".to_owned(),
+            enable_table_detection: false,
+            ..Default::default()
+        });
+    }
     if ocr_config_resolved.acceleration.is_none() {
         ocr_config_resolved.acceleration = config.acceleration.clone();
     }
@@ -873,7 +951,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // already-tested code path instead of duplicating pixel-space layout assembly here. This
     // only fires when a real detection is available for this call, so `--layout` producing
     // nothing (gate skipped every page, or no `config.layout`) leaves the fast path untouched.
-    let effective_pipeline = if let Some(pipeline) = ocr_config_owned.effective_pipeline() {
+    let effective_pipeline = if probing_hidden_layer {
+        None
+    } else if let Some(pipeline) = ocr_config_owned.effective_pipeline() {
         Some(pipeline)
     } else if mixed_route_layout_active {
         #[cfg(feature = "layout-detection")]
@@ -887,6 +967,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     } else {
         None
     };
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let orientation_retry = effective_pipeline
+        .as_ref()
+        .filter(|_| config.ocr.is_none() && !mixed_route_layout_active)
+        .map(|pipeline| {
+            Arc::new(super::orientation_retry::OrientationRetry::new(
+                config,
+                pipeline.quality_thresholds.clone(),
+            ))
+        });
+
     // Each invocation below owns exactly one page. Page markers belong to the outer document
     // assembly; leaving them enabled here both stamps every detached page as page 1 and lets a
     // marker make an empty primary stage look good enough to suppress its fallback (#1931). ~keep
@@ -904,7 +995,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // `vlm_fallback = Always` config (or an explicit `pipeline`) that never touches
     // this top-level backend still failed if it happened to be unregistered
     // (review follow-up to #1341).
-    let backend = if effective_pipeline.is_none() {
+    let backend = if let Some(backend) = pages.hidden_layer_backend {
+        Some(backend)
+    } else if effective_pipeline.is_none() {
         let registry = crate::plugins::registry::get_ocr_backend_registry();
         let registry = registry.read();
         Some(registry.get(&ocr_config_owned.backend)?)
@@ -1027,6 +1120,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     let render_doc_clone = Arc::clone(&render_doc);
                     let pipeline_clone = pipeline.clone();
                     let config_clone = pipeline_stage_config.clone();
+                    #[cfg(all(auto_rotate, feature = "ocr"))]
+                    let orientation_retry = orientation_retry.clone();
                     let idx = *page_idx;
                     // This page's own known `/Rotate` value, already resolved by
                     // `open_pdf_for_page_ocr` above -- the sibling single-backend route
@@ -1066,12 +1161,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(feature = "layout-detection")]
                     let page_detection: Option<crate::layout::DetectionResult> =
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx).cloned();
-                    join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                    let task = crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                             return (idx, Err(crate::XbergError::Cancelled.into()));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
+                        let source = DetachedOcrPage {
+                            document: render_doc_clone.as_ref(),
+                            #[cfg(all(auto_rotate, feature = "ocr"))]
+                            orientation_retry: orientation_retry.as_ref(),
+                        };
                         let result = Box::pin(run_ocr_pipeline_for_page(
                             None,
                             Some(std::slice::from_ref(image_arc.as_ref())),
@@ -1085,11 +1185,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             points_per_pixel_override,
                             Some(page_ocr_hints),
                             idx,
-                            Some(render_doc_clone.as_ref()),
+                            Some(source),
                         ))
                         .await;
                         (idx, result)
-                    }));
+                    });
+                    #[cfg(test)]
+                    let task = crate::plugins::registry::inherit_test_ocr_backend(task);
+                    join_set.spawn(task);
                 }
                 while let Some(join_result) = join_set.join_next().await {
                     let (page_idx, result) = join_result.map_err(|e| crate::XbergError::Plugin {
@@ -1218,6 +1321,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(feature = "layout-detection")]
                     let page_detection: Option<&crate::layout::DetectionResult> =
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx);
+                    let source = DetachedOcrPage {
+                        document: render_doc.as_ref(),
+                        #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                        orientation_retry: None,
+                    };
                     let result = Box::pin(run_ocr_pipeline_for_page(
                         None,
                         Some(std::slice::from_ref(image.as_ref())),
@@ -1231,7 +1339,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         points_per_pixel_override,
                         Some(page_ocr_hints),
                         *page_idx,
-                        Some(render_doc.as_ref()),
+                        Some(source),
                     ))
                     .await;
                     let result = match result.map_err(crate::XbergError::from) {
@@ -1353,6 +1461,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             source: None,
         })?;
         let orientation_handling = backend.page_orientation_handling();
+        #[cfg(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let try_tall_source = !mixed_route_layout_active
+            && super::tall_source::supports(config, &ocr_config_resolved)
+            && crate::plugins::registry::get_ocr_backend_registry()
+                .read()
+                .is_builtin_tesseract(backend);
         let batch_slice = &page_images;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
@@ -1484,6 +1603,31 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "pdf",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                let result = {
+                    let mut result = result;
+                    if try_tall_source
+                        && correction_degrees == 0
+                        && let Ok(extraction_result) = &mut result
+                        && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
+                    {
+                        super::tall_source::try_replace(
+                            extraction_result,
+                            backend,
+                            config,
+                            &ocr_config_resolved,
+                            (&render_doc, page_idx),
+                            raster,
+                        )
+                        .await?;
+                    }
+                    result
+                };
                 crate::engine::seams::emit_ocr_page(page_idx + 1, page_rotations.len(), backend.name());
                 let mut extraction_result = match result {
                     Ok(extraction_result) => extraction_result,
@@ -1716,7 +1860,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         // A page whose OCR came back blank or failed is retried on its embedded image XObjects,
         // as the whole-document route does (#1355, #1444). The pipeline branch above gets the
         // same retry inside each stage, from the document it hands the runner (#1912).
-        for (page_idx, png, _, _) in &encoded {
+        for (page_idx, png, _, _) in encoded.iter().filter(|_| !probing_hidden_layer) {
             let page_number = (page_idx + 1) as u32;
             let failure = failed_pages.remove(page_idx);
             let page_text = ocr_results.get(&page_number).map_or("", String::as_str);
@@ -1728,7 +1872,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     *page_idx,
                     page_rotations.len(),
                     &ocr_config_owned,
-                    &mut xobject_recovery_budget,
+                    XObjectRecoveryContext {
+                        budget: &mut xobject_recovery_budget,
+                        blank_raster_warnings: trigger.draw_failed.then_some(&mut accumulated_warnings),
+                        no_admitted_images: None,
+                        stored_jpegs: None,
+                        cancel_token: config.cancel_token.as_ref(),
+                    },
                 )
                 .await?
             } else {
@@ -1911,6 +2061,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 
     let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if probing_hidden_layer {
+        for boundary in boundaries {
+            let page = boundary.page_number;
+            if let Some(text) = accepted_replacements.get(&page)
+                && (noise_verdict_pages.contains(&page)
+                    || !native_text
+                        .get(boundary.byte_start..boundary.byte_end)
+                        .is_some_and(|native| super::hidden_layer::adds_text_preserving_native(native, text)))
+            {
+                accepted_replacements.remove(&page);
+            }
+        }
+    }
+
     // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
     // got the noise verdict, now gets its readable text layer first. A page it keeps native
     // stays as it was. ~keep
@@ -2199,6 +2364,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
             ocr: &page_numbers,
             single_block: &single_block_pages,
             native_layers,
+            hidden_layer_backend: None,
         },
         content,
         config,
@@ -2335,6 +2501,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         preprocessing,
         ocr_confidence,
         recognition_noise_verdicts,
+        _no_admitted_images,
     ) = Box::pin(extract_with_ocr_for_page(
         content,
         images,
@@ -2372,6 +2539,14 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         preprocessing,
         ocr_confidence,
     ))
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Clone, Copy)]
+pub(super) struct DetachedOcrPage<'a> {
+    pub(super) document: &'a xberg_native_pdf::PdfDocument,
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    pub(super) orientation_retry: Option<&'a std::sync::Arc<super::orientation_retry::OrientationRetry>>,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -2456,9 +2631,12 @@ fn attach_page_segmentation_modes(
 /// indices when a caller supplies a detached page image. It affects externally visible page
 /// identity only; internal vectors remain indexed from zero.
 ///
-/// `xobject_document` -- the open document a detached page image came from. Only the
+/// `detached_page` -- the open document a detached page image came from. Only the
 /// embedded-image retry reads it, at `page_index_offset`, so a caller that hands in a
 /// detached page without `content` still gets the retry of a blank or failed page (#1912).
+///
+/// The final return flag records when the primary's existing detached-page XObject recovery
+/// admitted no alternate image bytes. It remains false when the recovery was not checked.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 // Each parameter is independently documented above and forwarded verbatim by every caller
 // (see `run_ocr_pipeline_for_page`); bundling them into a params struct would only move the
@@ -2477,7 +2655,7 @@ pub(super) async fn extract_with_ocr_for_page(
     points_per_pixel_override: Option<f32>,
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
-    xobject_document: Option<&xberg_native_pdf::PdfDocument>,
+    detached_page: Option<DetachedOcrPage<'_>>,
 ) -> OcrRunResult<(
     String,
     Option<f64>,
@@ -2492,12 +2670,14 @@ pub(super) async fn extract_with_ocr_for_page(
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
+    bool,
 )> {
     use crate::plugins::registry::get_ocr_backend_registry;
     use image::ImageEncoder;
     use image::codecs::png::PngEncoder;
     use std::io::Cursor;
 
+    let xobject_document = detached_page.map(|source| source.document);
     #[cfg(feature = "layout-detection")]
     let has_layout_detections = layout_detections.is_some();
     #[cfg(not(feature = "layout-detection"))]
@@ -2514,18 +2694,70 @@ pub(super) async fn extract_with_ocr_for_page(
     #[cfg(all(feature = "layout-detection", not(feature = "ocr"), not(feature = "ocr-wasm")))]
     let _ = points_per_pixel_override;
 
-    let resolved_ocr_config = pre_page_ocr_config(config);
+    let resolved_ocr_config = super::resolve_ocr_config(config);
     let base_ocr_config = resolved_ocr_config.as_ref();
 
+    let accel_ocr_config;
+    let base_ocr_config = if (base_ocr_config.acceleration.is_none() && config.acceleration.is_some())
+        || (base_ocr_config.security_limits.is_none() && config.security_limits.is_some())
+    {
+        accel_ocr_config = {
+            let mut c = base_ocr_config.clone();
+            if c.acceleration.is_none() {
+                c.acceleration = config.acceleration.clone();
+            }
+            // GH#1554: mirrors `acceleration` above so the scanned-page OCR route inherits the
+            // caller's configured decode limits instead of always falling back to
+            // `SecurityLimits::default()`. ~keep
+            if c.security_limits.is_none() {
+                c.security_limits = config.security_limits.clone();
+            }
+            c
+        };
+        &accel_ocr_config
+    } else {
+        base_ocr_config
+    };
+
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let can_retry_orientation;
+    #[cfg(feature = "pdf")]
+    let mut no_admitted_images = false;
+    #[cfg(not(feature = "pdf"))]
+    let no_admitted_images = false;
+    #[cfg(all(feature = "pdf", not(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))))]
+    let can_prove_no_admitted_images = false;
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    let can_prove_no_admitted_images;
     let backend = {
         let registry = get_ocr_backend_registry();
         let registry = registry.read();
-        registry.get(&base_ocr_config.backend)?
+        let backend = registry.get(&base_ocr_config.backend)?;
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        {
+            can_prove_no_admitted_images = detached_page.is_some()
+                && images.is_some_and(|images| images.len() == 1)
+                && registry.is_builtin_tesseract(&backend);
+        }
+        #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+        {
+            can_retry_orientation = !has_layout_detections && registry.is_builtin_tesseract(&backend);
+        }
+        backend
     };
     // Only `ConfidenceSemantics::Legibility` backends report a `mean_text_conf` whose scale
     // means legibility; anything else (`Uncalibrated`, `None`) must never be turned into a
     // normalized confidence, or a page-rejection gate downstream would compare it against an
     // absolute floor it was never calibrated against (see `resolve_confidence_semantics`).
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let try_tall_source = !has_layout_detections
+        && super::tall_source::supports(config, base_ocr_config)
+        && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
     let backend_confidence_semantics = backend.confidence_semantics();
     // Owned up front: the per-page summaries below outlive the borrow-heavy OCR loop, and
     // the backend that actually produced a page is part of what `ocr_confidence` reports. ~keep
@@ -2634,6 +2866,7 @@ pub(super) async fn extract_with_ocr_for_page(
             ahash::AHashMap::new(),
             // Same reasoning: this route never calls `accept_or_reject_ocr_page` per page.
             Vec::new(),
+            false,
         ));
     }
     let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
@@ -2813,6 +3046,8 @@ pub(super) async fn extract_with_ocr_for_page(
     // mirroring that sibling route. Metadata is captured once, from the first page whose
     // backend result carries any -- psm/language are constant for the whole OCR run, and a
     // single representative page is a strict improvement over reporting none at all. ~keep
+    #[cfg(feature = "pdf")]
+    let mut render_warnings = Vec::new();
     let mut backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     let mut backend_additional_metadata: Option<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>> =
         None;
@@ -2825,6 +3060,21 @@ pub(super) async fn extract_with_ocr_for_page(
     // Judged per page just before the OCR text is accepted, so a drawing page contributes
     // nothing instead of contributing invented words. See `is_ocr_recognition_noise`.
     let ocr_output_thresholds = base_ocr_config.quality_thresholds.clone().unwrap_or_default();
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let orientation_retry = if can_retry_orientation {
+        detached_page
+            .and_then(|source| source.orientation_retry.cloned())
+            .or_else(|| {
+                (config.ocr.is_none() && content.is_some() && images.is_none()).then(|| {
+                    Arc::new(super::orientation_retry::OrientationRetry::new(
+                        config,
+                        ocr_output_thresholds.clone(),
+                    ))
+                })
+            })
+    } else {
+        None
+    };
     let mut recognition_noise_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     // Numeric evidence behind each fired `recognition_noise_warnings` entry, so a caller
     // above the accept/reject decision can observe the signal without recomputing stats
@@ -2935,13 +3185,17 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                render_full_pdf_ocr_batch(
-                    doc,
-                    page_rotations,
-                    batch_start..batch_end,
-                    security_limits,
-                    config.images.as_ref(),
-                )?
+                let (pages, warnings) = crate::pdf::render::capture_render_warnings(|| {
+                    render_full_pdf_ocr_batch(
+                        doc,
+                        page_rotations,
+                        batch_start..batch_end,
+                        security_limits,
+                        config.images.as_ref(),
+                    )
+                })?;
+                crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
+                pages
             };
             #[cfg(not(feature = "pdf"))]
             let encoded: Vec<(usize, Arc<Vec<u8>>, u32, u32)> = Vec::new();
@@ -3063,6 +3317,11 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(not(feature = "pdf"))]
                 let (upright_data, upright_width, upright_height, correction_degrees) =
                     (Arc::clone(image_data), *width, *height, 0u32);
+                #[cfg(all(auto_rotate, feature = "ocr"))]
+                let retry = orientation_retry
+                    .as_ref()
+                    .filter(|_| whole_page_raster)
+                    .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -3085,6 +3344,14 @@ pub(super) async fn extract_with_ocr_for_page(
                         cancel_token.as_ref(),
                     )
                     .await;
+                    #[cfg(all(auto_rotate, feature = "ocr"))]
+                    let result = if let Some((retry, raster)) = retry {
+                        retry
+                            .after_ocr(&backend_clone, raster, &config_clone, result, cancel_token.as_ref())
+                            .await
+                    } else {
+                        result
+                    };
                     (idx, correction_degrees, upright_width, upright_height, result)
                 }));
             }
@@ -3094,6 +3361,34 @@ pub(super) async fn extract_with_ocr_for_page(
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "pdf",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                let ocr_result = {
+                    let mut ocr_result = ocr_result;
+                    if try_tall_source
+                        && correction_degrees == 0
+                        && let Ok(document) = &mut ocr_result
+                        && let Some(source) = lazy_pdf_render_state
+                            .as_ref()
+                            .map(|(pdf, _, _)| (pdf, page_idx))
+                            .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
+                    {
+                        super::tall_source::try_replace(
+                            document,
+                            &backend,
+                            config,
+                            base_ocr_config,
+                            source,
+                            &encoded_batch[page_idx - batch_start],
+                        )
+                        .await?;
+                    }
+                    ocr_result
+                };
                 crate::engine::seams::emit_ocr_page(
                     page_index_offset + page_idx + 1,
                     progress_total_pages,
@@ -3204,7 +3499,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                            backend,
+                            &backend,
                             upright_data,
                             &ocr_config_owned,
                             config_for_page.as_ref(),
@@ -3260,12 +3555,6 @@ pub(super) async fn extract_with_ocr_for_page(
             if let Some(metadata) = ocr_result.metadata.image_preprocessing.clone() {
                 preprocessing_by_page.insert(document_page_number, metadata);
             }
-            // #1575: capture once, from the first page that has any -- see this function's
-            // `backend_additional_metadata` declaration for why a single representative page
-            // is the right granularity here.
-            if backend_additional_metadata.is_none() && !ocr_result.metadata.additional.is_empty() {
-                backend_additional_metadata = Some(ocr_result.metadata.additional.clone());
-            }
             crate::core::diagnostics::dedup_extend_warnings(
                 &mut backend_page_warnings,
                 std::mem::take(&mut ocr_result.processing_warnings),
@@ -3273,7 +3562,28 @@ pub(super) async fn extract_with_ocr_for_page(
             #[cfg(feature = "pdf")]
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
+                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                let normalize_recovered_table = xobject_document.is_some()
+                    && orientation_retry.is_some()
+                    && !base_ocr_config.auto_rotate
+                    && !ocr_result.tables.is_empty()
+                    && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
+                        .is_some_and(|angle| angle != 0);
                 undo_upright_raster_correction(&mut ocr_result, correction_degrees, upright_width, upright_height);
+                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                if normalize_recovered_table {
+                    // The detached stage's owner will place raw tables using the render raster. ~keep
+                    super::orientation_retry::scale_recovered_table_to_raster(
+                        &mut ocr_result,
+                        (encoded_batch[offset].2, encoded_batch[offset].3),
+                    );
+                }
+            }
+            // #1575: capture once, from the first page that has any -- see this function's
+            // `backend_additional_metadata` declaration for why a single representative page
+            // is the right granularity here.
+            if backend_additional_metadata.is_none() && !ocr_result.metadata.additional.is_empty() {
+                backend_additional_metadata = Some(ocr_result.metadata.additional.clone());
             }
             #[cfg(feature = "layout-detection")]
             let _height = encoded_batch[offset].3;
@@ -3445,7 +3755,13 @@ pub(super) async fn extract_with_ocr_for_page(
                         document_page_idx,
                         progress_total_pages,
                         &ocr_config_owned,
-                        &mut xobject_recovery_budget,
+                        XObjectRecoveryContext {
+                            budget: &mut xobject_recovery_budget,
+                            blank_raster_warnings: xobject_trigger.draw_failed.then_some(&mut image_fallback_warnings),
+                            no_admitted_images: can_prove_no_admitted_images.then_some(&mut no_admitted_images),
+                            stored_jpegs: None,
+                            cancel_token: config.cancel_token.as_ref(),
+                        },
                     )
                     .await?
                 {
@@ -4185,6 +4501,11 @@ pub(super) async fn extract_with_ocr_for_page(
         page_segmentation_modes,
     );
 
+    #[cfg(feature = "pdf")]
+    for warning in render_warnings {
+        crate::pdf::render::record_render_warning(warning);
+    }
+
     Ok((
         result,
         mean_text_conf,
@@ -4199,6 +4520,7 @@ pub(super) async fn extract_with_ocr_for_page(
         preprocessing_by_page,
         ocr_confidence_by_page,
         recognition_noise_verdicts,
+        no_admitted_images,
     ))
 }
 /// Build an [`crate::types::ExtractedImage`] for a full-page OCR raster.
@@ -4379,7 +4701,7 @@ pub(super) fn ocr_page_working_set_bytes(
 /// [`validate_png_encode_batch_peak`]'s own per-page accounting: the source raster, the RGB
 /// conversion buffer, and the PNG output buffer.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(crate) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> crate::Result<u64> {
+pub(super) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> crate::Result<u64> {
     let source = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
     let conversion = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
     let output = crate::extraction::image_decode::decoded_byte_count(width, height, OCR_PNG_ENCODE_BYTES_PER_PIXEL)?
@@ -4753,6 +5075,37 @@ impl PipelineXObjectRecoveryOutcome {
             || !self.formulas.is_empty()
     }
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) struct XObjectRecoveryContext<'a> {
+    pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
+    pub(super) blank_raster_warnings: Option<&'a mut Vec<crate::types::ProcessingWarning>>,
+    pub(super) no_admitted_images: Option<&'a mut bool>,
+    pub(super) stored_jpegs: Option<&'a mut crate::pdf::native::images::StoredJpegRecoveryBudget>,
+    pub(super) cancel_token: Option<&'a crate::cancellation::CancellationToken>,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+impl<'a> XObjectRecoveryContext<'a> {
+    pub(super) fn with_budget(
+        budget: &'a mut crate::extractors::security::SecurityBudget,
+        cancel_token: Option<&'a crate::cancellation::CancellationToken>,
+    ) -> Self {
+        Self {
+            budget,
+            blank_raster_warnings: None,
+            no_admitted_images: None,
+            stored_jpegs: None,
+            cancel_token,
+        }
+    }
+
+    pub(super) fn check_cancelled(&self) -> crate::Result<()> {
+        if self.cancel_token.is_some_and(|token| token.is_cancelled()) {
+            return Err(crate::XbergError::Cancelled);
+        }
+        Ok(())
+    }
+}
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) async fn collect_pipeline_xobject_pages(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
@@ -4760,17 +5113,32 @@ pub(super) async fn collect_pipeline_xobject_pages(
     page_count: usize,
     ocr_config: &crate::core::config::OcrConfig,
     budget: &mut crate::extractors::security::SecurityBudget,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> crate::Result<PipelineXObjectRecoveryOutcome> {
     let mut outcome = PipelineXObjectRecoveryOutcome::new(page_count);
+    let limits = ocr_config.security_limits.clone().unwrap_or_default();
+    let mut stored_jpegs = crate::pdf::native::images::StoredJpegRecoveryBudget::new(limits.max_content_size);
     for page_idx in 0..page_count {
-        let Some(recovery) = super::rendering::recover_page_text_from_stored_copy_limited_xobjects(
-            backend, doc, page_idx, page_count, ocr_config, budget,
-        )
-        .await?
-        else {
+        let mut context = XObjectRecoveryContext::with_budget(budget, cancel_token);
+        context.stored_jpegs = Some(&mut stored_jpegs);
+        let recovery =
+            recover_page_text_from_image_xobjects(backend, doc, page_idx, page_count, ocr_config, context).await;
+        if cancel_token.is_some_and(|token| token.is_cancelled()) {
+            return Err(crate::XbergError::Cancelled);
+        }
+        let Some(recovery) = recovery? else {
             continue;
         };
         append_pipeline_xobject_page(&mut outcome, recovery, page_idx, page_idx, false);
+    }
+    if stored_jpegs.skipped_payload() {
+        outcome.warnings.push(crate::core::diagnostics::warning(
+            "ocr",
+            concat!(
+                "Some embedded JPEG images were skipped during OCR recovery because ",
+                "the retained encoded payload limit was reached."
+            ),
+        ));
     }
     Ok(outcome)
 }
@@ -4841,30 +5209,15 @@ fn join_pipeline_xobject_text_at_offset(
     Ok(text)
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn pipeline_xobject_content_limit(config: &ExtractionConfig, ocr_config: &crate::core::config::OcrConfig) -> usize {
-    match (config.security_limits.as_ref(), ocr_config.security_limits.as_ref()) {
-        (Some(outer), Some(ocr)) => outer.max_content_size.min(ocr.max_content_size),
-        (Some(outer), None) => outer.max_content_size,
-        (None, Some(ocr)) => ocr.max_content_size,
-        (None, None) => crate::extractors::security::SecurityLimits::default().max_content_size,
-    }
-}
-/// The OCR config both image-XObject retries hand the backend. The limits follow the OCR precedence (the OCR
-/// config's own limits, then the extraction limits, then the defaults); the byte cap is the smaller of the two.
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn pipeline_xobject_recovery_ocr_config(
+fn xobject_recovery_content_cap(
     config: &ExtractionConfig,
     ocr_config: &crate::core::config::OcrConfig,
-) -> crate::core::config::OcrConfig {
-    let mut limits = ocr_config
-        .security_limits
-        .clone()
-        .or_else(|| config.security_limits.clone())
-        .unwrap_or_default();
-    limits.max_content_size = pipeline_xobject_content_limit(config, ocr_config);
-    let mut recovery_ocr_config = ocr_config.clone();
-    recovery_ocr_config.security_limits = Some(limits);
-    recovery_ocr_config
+) -> Option<usize> {
+    [config.security_limits.as_ref(), ocr_config.security_limits.as_ref()]
+        .into_iter()
+        .flatten()
+        .map(|limits| limits.max_content_size)
+        .min()
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) async fn recover_pipeline_document_from_image_xobjects(
@@ -4873,12 +5226,13 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
     ocr_config: &crate::core::config::OcrConfig,
     backend_name: &str,
 ) -> crate::Result<Option<PipelineXObjectRecoveryOutcome>> {
-    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
-    }
     let Some(content) = content else {
         return Ok(None);
     };
+    let cancel_token = config.cancel_token.as_ref();
+    if cancel_token.is_some_and(|token| token.is_cancelled()) {
+        return Err(crate::XbergError::Cancelled);
+    }
     let backend = {
         let registry = crate::plugins::registry::get_ocr_backend_registry();
         let registry = registry.read();
@@ -4891,13 +5245,27 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
         return Ok(None);
     };
 
-    let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
-    let recovery_ocr_config = pipeline_xobject_recovery_ocr_config(config, ocr_config);
-    let outcome = collect_pipeline_xobject_pages(&backend, &doc, page_count, &recovery_ocr_config, &mut budget).await;
-    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
+    let mut recovery_ocr_config = std::borrow::Cow::Borrowed(ocr_config);
+    if let (Some(outer_limits), Some(cap)) = (
+        config.security_limits.as_ref(),
+        xobject_recovery_content_cap(config, ocr_config),
+    ) {
+        recovery_ocr_config
+            .to_mut()
+            .security_limits
+            .get_or_insert_with(|| outer_limits.clone())
+            .max_content_size = cap;
     }
-    let mut outcome = outcome?;
+    let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
+    let mut outcome = collect_pipeline_xobject_pages(
+        &backend,
+        &doc,
+        page_count,
+        &recovery_ocr_config,
+        &mut budget,
+        cancel_token,
+    )
+    .await?;
     if !outcome.has_content() {
         return Ok(None);
     }
@@ -4930,14 +5298,19 @@ async fn recover_pipeline_page_from_image_xobjects(
         return Ok(None);
     }
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
-    let recovery_ocr_config = pipeline_xobject_recovery_ocr_config(config, ocr_config);
+    let mut limits = config.security_limits.clone().unwrap_or_default();
+    if let Some(cap) = xobject_recovery_content_cap(config, ocr_config) {
+        limits.max_content_size = cap;
+    }
+    let mut recovery_ocr_config = ocr_config.clone();
+    recovery_ocr_config.security_limits = Some(limits);
     let recovery = recover_page_text_from_bounded_image_xobjects(
         &backend,
         doc,
         page_idx,
         page_count,
         &recovery_ocr_config,
-        &mut budget,
+        XObjectRecoveryContext::with_budget(&mut budget, config.cancel_token.as_ref()),
     )
     .await?;
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
@@ -5070,7 +5443,7 @@ pub(super) async fn run_ocr_pipeline_for_page(
     points_per_pixel_override: Option<f32>,
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
-    xobject_document: Option<&xberg_native_pdf::PdfDocument>,
+    detached_page: Option<DetachedOcrPage<'_>>,
 ) -> OcrRunResult<OcrPipelineOutput> {
     let mut stage_page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
     let result = Box::pin(run_ocr_pipeline_stages(
@@ -5085,7 +5458,7 @@ pub(super) async fn run_ocr_pipeline_for_page(
             points_per_pixel_override,
             page_ocr_hints,
             page_index_offset,
-            xobject_document,
+            detached_page,
         },
         config,
         pipeline,
@@ -5213,28 +5586,39 @@ struct PipelineStageInputs<'a> {
     points_per_pixel_override: Option<f32>,
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
-    xobject_document: Option<&'a xberg_native_pdf::PdfDocument>,
+    detached_page: Option<DetachedOcrPage<'a>>,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config::OcrConfig> {
-    let mut resolved = super::resolve_ocr_config(config);
-    if (resolved.acceleration.is_none() && config.acceleration.is_some())
-        || (resolved.security_limits.is_none() && config.security_limits.is_some())
+fn can_skip_blank_automatic_paddle_raster(images: Option<&[image::DynamicImage]>) -> bool {
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     {
-        let ocr = resolved.to_mut();
-        if ocr.acceleration.is_none() {
-            ocr.acceleration = config.acceleration.clone();
+        let Some([image]) = images else {
+            return false;
+        };
+        if !crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .has_builtin_paddle()
+        {
+            return false;
         }
-        // GH#1554: mirrors `acceleration` above so the scanned-page OCR route inherits the
-        // caller's configured decode limits instead of always falling back to
-        // `SecurityLimits::default()`. ~keep
-        if ocr.security_limits.is_none() {
-            ocr.security_limits = config.security_limits.clone();
-        }
+        // Sampled ink can miss faint or sparse text. Check the retained raster exactly. ~keep
+        let bytes = image.as_bytes();
+        let channels = match image.color() {
+            image::ColorType::Rgb8 => 3,
+            image::ColorType::Rgba8 if bytes.get(3) == Some(&255) => 4,
+            _ => return false,
+        };
+        let mut pixels = bytes.chunks_exact(channels);
+        pixels.next().is_some_and(|first| pixels.all(|pixel| pixel == first))
     }
-    resolved
+    #[cfg(not(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+    {
+        let _ = images;
+        false
+    }
 }
+
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
 /// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -5315,8 +5699,13 @@ async fn run_ocr_pipeline_stages(
     // authentication) so the failure is surfaced to the caller instead of being
     // silently replaced by a lower-quality earlier result (issue #1339).
     let mut stage_failures: Vec<(String, String)> = Vec::new();
-    #[cfg(feature = "pdf")]
-    let mut preferred_recovery_config = None;
+
+    let automatic_paddle = inputs.detached_page.is_some()
+        && ocr_config.pipeline.is_none()
+        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        && ocr_config.backend == "tesseract"
+        && matches!(available_stages.as_slice(), [first, second]
+            if first.backend == "tesseract" && second.backend == "paddleocr");
 
     for stage in &available_stages {
         let mut stage_ocr = ocr_config.clone();
@@ -5339,10 +5728,6 @@ async fn run_ocr_pipeline_stages(
             ocr: Some(stage_ocr),
             ..config.clone()
         };
-        #[cfg(feature = "pdf")]
-        if preferred_recovery_config.is_none() {
-            preferred_recovery_config = Some(pre_page_ocr_config(&stage_config).into_owned());
-        }
 
         tracing::debug!(
             backend = %stage.backend,
@@ -5362,7 +5747,7 @@ async fn run_ocr_pipeline_stages(
             inputs.points_per_pixel_override,
             inputs.page_ocr_hints.clone(),
             inputs.page_index_offset,
-            inputs.xobject_document,
+            inputs.detached_page,
         ))
         .await;
 
@@ -5381,6 +5766,7 @@ async fn run_ocr_pipeline_stages(
                 stage_preprocessing,
                 stage_ocr_confidence,
                 stage_recognition_noise_verdicts,
+                no_admitted_images,
             )) => {
                 let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
                 let score = pipeline_stage_score(text_score, mean_conf);
@@ -5418,7 +5804,20 @@ async fn run_ocr_pipeline_stages(
                     merge_ocr_page_failures(stage_page_failures, stage_doc.ocr_page_failures.clone());
                 }
 
-                if score >= pipeline.quality_thresholds.pipeline_min_quality {
+                let skip_automatic_paddle = automatic_paddle
+                    && no_admitted_images
+                    && text.trim().is_empty()
+                    && stage_page_texts.iter().all(|text| text.trim().is_empty())
+                    && stage_tables.is_empty()
+                    && stage_ocr_elements.is_empty()
+                    && stage_formulas.is_empty()
+                    && stage_doc.as_ref().is_none_or(|doc| doc.ocr_page_failures.is_empty())
+                    && can_skip_blank_automatic_paddle_raster(inputs.images);
+                if skip_automatic_paddle && config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
+
+                if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,
                         &stage_recognition_noise_verdicts,
@@ -5584,22 +5983,22 @@ async fn run_ocr_pipeline_stages(
             // giving up -- for a scanned PDF whose rasterizer output is blank, those
             // images are the only place the text ever was.
             #[cfg(feature = "pdf")]
-            let xobject_recovery = if let Some(recovery_ocr_config) = preferred_recovery_config.as_ref() {
+            let xobject_recovery = if let Some(first_stage) = available_stages.first() {
                 if inputs.content.is_some() {
                     Box::pin(recover_pipeline_document_from_image_xobjects(
                         inputs.content,
                         config,
-                        recovery_ocr_config,
-                        &recovery_ocr_config.backend,
+                        ocr_config,
+                        &first_stage.backend,
                     ))
                     .await?
-                } else if let Some(doc) = inputs.xobject_document {
+                } else if let Some(source) = inputs.detached_page {
                     Box::pin(recover_pipeline_page_from_image_xobjects(
-                        doc,
+                        source.document,
                         inputs.page_index_offset,
                         config,
-                        recovery_ocr_config,
-                        &recovery_ocr_config.backend,
+                        ocr_config,
+                        &first_stage.backend,
                     ))
                     .await?
                 } else {
@@ -5978,8 +6377,9 @@ pub(super) fn upright_raster_for_backend(
 /// MediaBox raster every downstream consumer (`build_mixed_ocr_page_document`,
 /// `rescale_ocr_bboxes_to_page_points`, the #530 regression test) expects.
 ///
-/// A no-op when `correction_degrees == 0` (the overwhelmingly common case: no correction was
-/// applied at all). Reuses [`undo_auto_rotate_point`] — the same per-point inverse
+/// The backend's own rotation is inverted first, in its processed frame. The upright inverse then
+/// uses that restored frame; neither operation changes the original preprocessing/orientation record.
+/// With no rotation at either stage this is a no-op. Reuses [`undo_auto_rotate_point`] — the same inverse
 /// [`undo_auto_rotate_document_bboxes`] uses for a backend's own internal auto-rotation — since
 /// the geometry problem is identical: a point in a rotated raster mapped back to the unrotated
 /// one it will be rescaled against.
@@ -6003,13 +6403,44 @@ pub(super) fn undo_upright_raster_correction(
     upright_width: u32,
     upright_height: u32,
 ) {
+    undo_backend_raster_correction(result, upright_width, upright_height);
     if correction_degrees == 0 {
         return;
     }
-    let correction_degrees = correction_degrees as u16;
-    let (processed_width, processed_height) = (f64::from(upright_width), f64::from(upright_height));
-    let undo_point =
-        |x: f64, y: f64| undo_auto_rotate_point(x, y, correction_degrees, processed_width, processed_height);
+    let dimensions =
+        super::document::processed_ocr_layout_dimensions(&result.metadata).unwrap_or((upright_width, upright_height));
+    undo_result_rotation(result, correction_degrees as u16, dimensions);
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn undo_backend_raster_correction(
+    result: &mut crate::types::ExtractedDocument,
+    input_width: u32,
+    input_height: u32,
+) {
+    let Some(correction) = super::document::resolved_ocr_correction_degrees(&result.metadata) else {
+        return;
+    };
+    if correction == 0 {
+        return;
+    }
+    let rotated_input = if matches!(correction, 90 | 270) {
+        (input_height, input_width)
+    } else {
+        (input_width, input_height)
+    };
+    let dimensions = super::document::processed_ocr_layout_dimensions(&result.metadata).unwrap_or(rotated_input);
+    undo_result_rotation(result, correction, dimensions);
+    result.metadata.additional.insert(
+        crate::ocr_metadata_keys::OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY.into(),
+        true.into(),
+    );
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn undo_result_rotation(result: &mut crate::types::ExtractedDocument, correction: u16, dimensions: (u32, u32)) {
+    rotate_processed_ocr_frame(result, correction, dimensions);
+    let undo_point = |x, y| undo_auto_rotate_point(x, y, correction, f64::from(dimensions.0), f64::from(dimensions.1));
     let undo_bbox = |bbox: &mut crate::types::extraction::BoundingBox| {
         let (x0, y0) = undo_point(bbox.x0, bbox.y0);
         let (x1, y1) = undo_point(bbox.x1, bbox.y1);
@@ -6041,6 +6472,20 @@ pub(super) fn undo_upright_raster_correction(
         }
     }
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn rotate_processed_ocr_frame(result: &mut crate::types::ExtractedDocument, correction: u16, dimensions: (u32, u32)) {
+    if matches!(correction, 90 | 270) && super::document::processed_ocr_layout_dimensions(&result.metadata).is_some() {
+        result.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(),
+            dimensions.1.into(),
+        );
+        result.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(),
+            dimensions.0.into(),
+        );
+    }
+}
+
 /// Undo an upright-raster (or auto-rotate) correction on one `OcrElement`'s geometry, the
 /// word/line/block-level boxes reported by [`crate::types::OcrElement`]. Missed entirely by
 /// [`undo_upright_raster_correction`] before this fix (#657 follow-up): that function only
@@ -6220,10 +6665,6 @@ mod recognized_table_grid_tests;
 #[path = "memory_recovery_tests.rs"]
 mod memory_recovery_tests;
 
-#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "ocr"))]
-#[path = "xobject_budget_parity_tests.rs"]
-mod xobject_budget_parity_tests;
-
-#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "ocr"))]
-#[path = "english_recovery_tests.rs"]
-mod english_recovery_tests;
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/upright_processed_geometry_tests.rs"]
+mod upright_processed_geometry_tests;

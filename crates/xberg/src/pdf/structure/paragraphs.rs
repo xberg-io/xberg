@@ -322,6 +322,7 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
     }];
 
     let line = super::types::PdfLine {
+        native_scripts: Vec::new(),
         segments,
         baseline_y: 0.0,
         dominant_font_size: font_size,
@@ -372,6 +373,7 @@ mod tests {
         }];
 
         let lines = vec![super::super::types::PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y: 700.0,
             dominant_font_size: font_size,
@@ -694,6 +696,7 @@ mod tests {
             assigned_role: None,
         }];
         let lines = vec![super::super::types::PdfLine {
+            native_scripts: Vec::new(),
             segments,
             baseline_y,
             dominant_font_size: 12.0,

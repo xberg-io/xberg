@@ -6,7 +6,7 @@
 # for. 0.83.0 additionally fixes the php/napi/pyo3 mirror defaults, the elixir bytes
 # hop and the typescript/wasm mock-url builder that this repo's e2e legs were red on.
 # ~keep
-alef_version = "0.115.9"
+alef_version = "0.123.0"
 # Alef 0.115.5 emits a redundant PathBuf conversion closure in the Dart bridge. ~keep
 # This supported allow-list applies only to generated Rust bindings. ~keep
 extra_clippy_allows = ["redundant_closure"]
@@ -628,6 +628,8 @@ traineddata = "traineddata"
 
 [workspace.poly.per-file-ignores]
 "packages/python/xberg/__init__.py" = ["F811"]
+# Preserve enum str()/format() output; StrEnum changes it to the wire value. ~keep
+"packages/python/xberg/options.py" = ["UP042"]
 # Alef config and its generated derivatives. All three grow with the size of the surface alef
 # manages and with the quality-debt baseline below -- alef.toml is where that baseline is
 # written, so paying it down makes this file shorter, never longer. A line count on declarative
@@ -1367,9 +1369,10 @@ error_constructor = "xberg::XbergError::Other({msg})"
 version_from = "Cargo.toml"
 workspace_root = "."
 crate_attributes = ["allow(deprecated)"]
+# ~keep Load the canonical Result alias before Alef recursively reads public APIs (xberg-io/alef#813).
 sources = [
-  "crates/xberg/src/lib.rs",
   "crates/xberg/src/error.rs",
+  "crates/xberg/src/lib.rs",
   "crates/xberg/src/types/extraction.rs",
   "crates/xberg/src/types/metadata.rs",
   "crates/xberg/src/types/page.rs",
@@ -2469,6 +2472,8 @@ exclude_functions = [
 pubspec_name = "xberg"
 lib_name = "xberg"
 style = "frb"
+# FRB omits this unreferenced mirror, so no Dart type exists for the u64 guard. ~keep
+exclude_types = ["ChunkClassificationEnrichmentConfig"]
 # Wrapper defaults must not re-enable the ORT feature on mobile. Desktop core
 # capabilities remain selected by the explicit desktop dependency override below. ~keep
 excluded_default_features = [
@@ -2743,9 +2748,12 @@ default_features = false
 [crates.swift]
 module_name = "Xberg"
 package_name = "Xberg"
-# The bundled ONNX Runtime (ort-sys prebuilt) requires macOS 13.4. The scaffold writes only the
-# major version into `.macOS(.vN)`, so 14 is the lowest floor that covers it. ~keep
-min_macos_version = "14.0"
+# Match the macOS 26 deployment floor of the published and source Swift packages. ~keep
+min_macos_version = "26.0"
+# TesseractConfig keeps Rust-side compatibility codecs for `language` (a string or a list) and
+# `thresholding_method` (the old bool); the strict Swift decoder cannot mirror them, so its
+# Swift DTO ignores unknown keys instead of rejecting them. ~keep
+lenient_serde_types = ["TesseractConfig"]
 # Mobile uses tract; preset types stay default while native inference flags remain opt-in.
 # The desktop FFI dependency below retains the full native inference surface. ~keep
 excluded_default_features = ["heic", "layout-detection", "reranker", "late-interaction"]
@@ -5529,7 +5537,7 @@ name = "PHP"
 package_name = "xberg-io/xberg"
 badge_url = "https://img.shields.io/packagist/v/xberg-io/xberg?label=PHP&color=007ec6"
 docs_url = "https://xberg.io/"
-description = "Extract text, tables, images, metadata, and code intelligence from 107 file formats and 371 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. PHP bindings with modern PHP 8.2+ support and type-safe API."
+description = "Extract text, tables, images, metadata, and code intelligence from 107 file formats and 371 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. PHP bindings with modern PHP 8.3+ support and type-safe API."
 package_manager = ["composer"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr", "sceptre"]
@@ -5735,6 +5743,7 @@ clear_fn = "clear_reranker_backends"
 
 [[crates.trait_bridges]]
 trait_name = "TokenizerBackend"
+ffi_skip_methods = ["try_count_tokens"]
 exclude_languages = ["php:callbacks"]
 super_trait = "xberg::plugins::Plugin"
 registry_getter = "xberg::plugins::registry::get_tokenizer_backend_registry"
@@ -5753,3 +5762,6 @@ id = "adrlint"
 git = "https://github.com/Goldziher/adrlint.git"
 revision = "v0"
 hooks = ["adrlint-lint", "adrlint-format-check", "adrlint-lock-check"]
+
+[extensions.python_host_aliases.crates.xberg.traits.TokenizerBackend]
+try_count_tokens = { fallback = "count_tokens", python_only = true }

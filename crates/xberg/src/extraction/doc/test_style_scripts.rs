@@ -198,7 +198,7 @@ async fn should_inherit_paragraph_style_scripts_without_direct_chpx_gh2275() {
         let styles = [paragraph_style(NO_BASE, SUPERSCRIPT), paragraph_style(0, &[])];
         let bytes = style_doc(&[(text, &[])], compressed, &styles, &[(0, length, 1)], None);
         let plain = text.trim_end_matches('\r');
-        assert_style_output(bytes, plain, &format!("^{plain}^")).await;
+        assert_style_output(bytes, plain, &format!("<sup>{plain}</sup>")).await;
     }
 }
 
@@ -216,7 +216,7 @@ async fn should_inherit_selected_character_style_scripts_gh2275() {
         &[(0, 4, 0)],
         None,
     );
-    assert_style_output(bytes, "109", "10^9^").await;
+    assert_style_output(bytes, "109", "10<sup>9</sup>").await;
 }
 
 #[tokio::test]
@@ -229,7 +229,7 @@ async fn should_distinguish_absent_chpx_from_explicit_normal_over_a_style_gh2275
         &[(0, 3, 0)],
         None,
     );
-    assert_style_output(bytes, "92", "^9^2").await;
+    assert_style_output(bytes, "92", "<sup>9</sup>2").await;
 }
 
 #[tokio::test]
@@ -320,7 +320,10 @@ async fn should_preserve_inherited_style_scripts_in_footnote_stories_gh2275() {
     .unwrap();
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     assert_eq!(output.results.len(), 1);
-    assert_eq!(output.results[0].content.trim_end(), "Main\n\n[^1]:\n    ^109^");
+    assert_eq!(
+        output.results[0].content.trim_end(),
+        "Main\n\n[^1]:\n    <sup>109</sup>"
+    );
 }
 
 #[test]

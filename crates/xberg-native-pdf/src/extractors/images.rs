@@ -292,11 +292,6 @@ impl PdfImage {
         &self.data
     }
 
-    /// Consume the image and transfer its encoded bytes or raw pixels without copying.
-    pub fn into_data(self) -> ImageData {
-        self.data
-    }
-
     /// Get the bounding box if available.
     pub fn bbox(&self) -> Option<&Rect> {
         self.bbox.as_ref()
@@ -774,6 +769,7 @@ pub fn parse_color_space(obj: &crate::object::Object) -> Result<ColorSpace> {
         Object::Array(arr) if !arr.is_empty() => {
             if let Some(name) = arr[0].as_name() {
                 match name {
+                    "DeviceGray" if arr.len() == 1 => Ok(ColorSpace::DeviceGray),
                     "Indexed" => Ok(ColorSpace::Indexed),
                     "CalGray" => Ok(ColorSpace::CalGray),
                     "CalRGB" => Ok(ColorSpace::CalRGB),
@@ -4136,17 +4132,49 @@ impl<'doc> PdfImageHandle<'doc> {
         }
     }
 
-    /// Inspect actual stored length before creating an additional recovery payload copy.
+    /// Share the stored payload for a plain JPEG that the legacy image extractor passes through.
     ///
-    /// Loading an uncached object may materialize parser-owned storage outside this admission bound.
-    pub fn stored_stream_len(&self) -> Result<usize> {
-        match &self.source {
-            PdfImageSource::XObject(obj_ref) => match self.doc.load_object(*obj_ref)? {
-                crate::object::Object::Stream { data, .. } => Ok(data.len()),
-                _ => Err(crate::error::Error::Image("XObject is not a stream".to_string())),
-            },
-            PdfImageSource::Inline { compressed_bytes, .. } => Ok(compressed_bytes.len()),
+    /// The returned identity is local to this PDF. Other streams still need the normal decoder.
+    #[doc(hidden)]
+    pub fn plain_stored_jpeg_for_ocr_recovery(&self) -> Option<(ObjectRef, bytes::Bytes)> {
+        use crate::object::Object;
+
+        let PdfImageSource::XObject(object_ref) = self.source else {
+            return None;
+        };
+        if self.doc.is_encrypted()
+            || self.filter_chain.as_slice() != [PdfFilter::DCTDecode]
+            || self.bits_per_component != 8
+        {
+            return None;
         }
+
+        let Object::Stream { dict, data } = self.doc.load_object(object_ref).ok()? else {
+            return None;
+        };
+        let color = dict.get("ColorSpace").and_then(Object::as_name)?;
+        if !matches!(color, "DeviceGray" | "DeviceRGB") || self.color_space_resources.contains_key(color) {
+            return None;
+        }
+        let filter_name = match dict.get("Filter") {
+            Some(Object::Array(filters)) if filters.len() == 1 => filters[0].as_name(),
+            Some(filter) => filter.as_name(),
+            None => None,
+        };
+        if filter_name != Some("DCTDecode")
+            || ["Decode", "DecodeParms", "ImageMask", "Mask", "SMask", "SMaskInData"]
+                .iter()
+                .any(|key| dict.contains_key(*key))
+        {
+            return None;
+        }
+        crate::decoders::check_output_cap(
+            "DCTDecode",
+            data.len(),
+            crate::decoders::default_max_decompressed_size(),
+        )
+        .ok()?;
+        Some((object_ref, data))
     }
 
     /// Return stored stream bytes subject to an inclusive allocation limit.

@@ -1063,6 +1063,11 @@ impl PdfDocument {
     /// text strings as the PDF provides them via Tj/TJ operators, following the
     /// PDF specification ISO 32000-1:2008.
     ///
+    /// Whole merged spans are kept when their bounding boxes overlap the normalized
+    /// page MediaBox expanded by 2 points; partial overlaps are kept without clipping.
+    /// This membership test runs in unrotated PDF coordinates before page rotation.
+    /// [`Self::extract_chars`] retains off-page characters for low-level inspection.
+    ///
     /// # Benefits over extract_chars
     /// - Avoids overlapping character issues
     /// - Preserves PDF's text positioning intent
