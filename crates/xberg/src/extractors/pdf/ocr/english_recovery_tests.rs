@@ -1,6 +1,8 @@
 //! Explicit model-backed fixture qualification, without native allocation hooks. ~keep
 #[path = "english_recovery_tests/fixture.rs"]
 mod fixture;
+#[path = "english_recovery_tests/model.rs"]
+mod model;
 #[path = "english_recovery_tests/observer.rs"]
 mod observer;
 
@@ -8,19 +10,9 @@ use super::{PageOcrHints, run_ocr_pipeline_for_page};
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig};
 use crate::extractors::security::SecurityLimits;
 use fixture::{assert_words, sha};
-use std::path::PathBuf;
+use model::{MODEL_SHA, verified_model_directory};
 
 const CHILD: &str = "XBERG_2339_ENGLISH_CHILD";
-const MODEL_ENV: &str = "XBERG_2339_TESSDATA_DIR";
-const MODEL_SHA: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
-
-fn verified_model_directory() -> PathBuf {
-    let directory = PathBuf::from(std::env::var_os(MODEL_ENV).expect("explicit verified local tessdata required"));
-    let bytes = std::fs::read(directory.join("eng.traineddata")).expect("no model download or missing-model skip");
-    assert_eq!(bytes.len(), 4_113_088);
-    assert_eq!(sha(&bytes), MODEL_SHA);
-    directory
-}
 
 fn config(cap: usize, directory: &std::path::Path) -> (ExtractionConfig, OcrPipelineConfig) {
     let pipeline: OcrPipelineConfig = serde_json::from_value(serde_json::json!({
@@ -120,7 +112,7 @@ async fn qualify(detached: bool) {
                 "fixture":fixture.receipt,"text":text,"calls":*records.lock().unwrap()})
         );
     }
-    assert_eq!(verified_model_directory(), model);
+    model.verify();
     assert_eq!(sha(&fixture.pdf), fixture.receipt["image_pdf_sha256"].as_str().unwrap());
 }
 
@@ -130,9 +122,11 @@ async fn isolated(detached: bool, name: &str) {
         return;
     }
     let selector = format!("extractors::pdf::ocr::pipeline::english_recovery_tests::{name}");
+    let cache = tempfile::tempdir().expect("owned isolated OCR cache");
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", &selector, "--ignored", "--nocapture", "--test-threads=1"])
         .env(CHILD, name)
+        .env("XBERG_CACHE_DIR", cache.path())
         .output()
         .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -149,13 +143,13 @@ async fn isolated(detached: bool, name: &str) {
 }
 
 #[tokio::test]
-#[ignore = "manual real OCR; requires explicit verified XBERG_2339_TESSDATA_DIR"]
+#[ignore = "model-backed OCR; covered by rust:test:jpeg-recovery"]
 async fn small_english_image_only_pdf_returns_real_text_at_both_caps() {
     isolated(false, "small_english_image_only_pdf_returns_real_text_at_both_caps").await;
 }
 
 #[tokio::test]
-#[ignore = "manual real OCR; requires explicit verified XBERG_2339_TESSDATA_DIR"]
+#[ignore = "model-backed OCR; covered by rust:test:jpeg-recovery"]
 async fn small_english_detached_page_returns_real_text_at_both_caps() {
     isolated(true, "small_english_detached_page_returns_real_text_at_both_caps").await;
 }

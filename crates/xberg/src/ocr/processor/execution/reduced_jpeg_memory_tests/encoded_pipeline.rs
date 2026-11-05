@@ -1,23 +1,18 @@
 use super::{MIB, pixel_memory};
 use crate::core::config::ExtractionConfig;
 use image::ImageEncoder;
-use sha2::{Digest, Sha256};
 use std::process::Command;
 
 #[path = "../../../../extractors/pdf/ocr/english_recovery_tests/fixture.rs"]
 mod fixture;
+#[path = "../../../../extractors/pdf/ocr/english_recovery_tests/model.rs"]
+mod model;
 
 const CHILD: &str = "XBERG_PIPELINE_PNG_MEMORY_CHILD";
 const DIMENSION: u32 = 2000;
-const MODEL_SHA: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
 
-fn config(extraction_mib: usize, ocr_mib: usize) -> ExtractionConfig {
-    let path = std::path::PathBuf::from(
-        std::env::var_os("XBERG_2339_TESSDATA_DIR").expect("explicit verified local model required"),
-    );
-    let model = std::fs::read(path.join("eng.traineddata")).expect("model must already exist; no downloads");
-    assert_eq!(model.len(), 4_113_088);
-    assert_eq!(hex::encode(Sha256::digest(&model)), MODEL_SHA);
+fn config(extraction_mib: usize, ocr_mib: usize) -> (ExtractionConfig, model::ModelDirectory) {
+    let model = model::verified_model_directory();
     let mut config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false, "force_ocr": true,
         "ocr": {
@@ -44,8 +39,8 @@ fn config(extraction_mib: usize, ocr_mib: usize) -> ExtractionConfig {
         max_content_size: ocr_mib * MIB,
         ..Default::default()
     });
-    ocr.tessdata_path = Some(path);
-    config
+    ocr.tessdata_path = Some(model.to_path_buf());
+    (config, model)
 }
 
 fn png() -> Vec<u8> {
@@ -65,7 +60,7 @@ fn png() -> Vec<u8> {
 }
 
 async fn measure(extraction_mib: usize, ocr_mib: usize, affordable: bool) {
-    let config = config(extraction_mib, ocr_mib);
+    let (config, _model) = config(extraction_mib, ocr_mib);
     let png = png();
     let encoded_len = png.len();
     {
@@ -150,19 +145,19 @@ async fn isolated(name: &str, extraction_mib: usize, ocr_mib: usize, affordable:
 }
 
 #[tokio::test]
-#[ignore = "real OCR; requires verified local XBERG_2339_TESSDATA_DIR"]
+#[ignore = "model-backed OCR; covered by rust:test:jpeg-recovery"]
 async fn builtin_pipeline_png_respects_extraction_limit() {
     isolated("builtin_pipeline_png_respects_extraction_limit", 40, 64, false).await;
 }
 
 #[tokio::test]
-#[ignore = "real OCR; requires verified local XBERG_2339_TESSDATA_DIR"]
+#[ignore = "model-backed OCR; covered by rust:test:jpeg-recovery"]
 async fn builtin_pipeline_png_respects_ocr_limit() {
     isolated("builtin_pipeline_png_respects_ocr_limit", 64, 40, false).await;
 }
 
 #[tokio::test]
-#[ignore = "real OCR; requires verified local XBERG_2339_TESSDATA_DIR"]
+#[ignore = "model-backed OCR; covered by rust:test:jpeg-recovery"]
 async fn builtin_pipeline_png_with_affordable_limits_recognizes_actual_text() {
     isolated(
         "builtin_pipeline_png_with_affordable_limits_recognizes_actual_text",

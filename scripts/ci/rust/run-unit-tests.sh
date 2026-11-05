@@ -176,6 +176,9 @@ if ! {
     RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg --features "$xberg_test_features" --all-targets --verbose || exit
   fi
 
+  # Reuse the warm library before cleanup; every model test must be collected and executed. ~keep
+  bash "$SCRIPT_DIR/run-jpeg-recovery-tests.sh" "$xberg_test_features" || exit
+
   # This leg links hundreds of integration-test binaries and benches. Keeping those completed
   # package outputs beside the different all-features workspace closure exhausted 109 GiB of
   # free space on ubuntu-latest. Remove only xberg's outputs; dependencies stay warm, and the
