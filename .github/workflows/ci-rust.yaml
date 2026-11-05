@@ -21,6 +21,7 @@ on:
       - "scripts/ci/rust/**"
       - "scripts/ci/install-system-deps/**"
       - ".github/actions/install-system-deps/**"
+      - ".github/actions/setup-paddle-ocr-models/**"
       # The gitlink selects which corpus fixtures the include_bytes! tests compile against, so a
       # pin bump changes what this workflow actually verifies. ~keep
       - "test_documents"
@@ -484,7 +485,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     env:
-      TRACT_FEATURES: "ocr,auto-rotate-tract,layout-tract,sceptre-ocr-tract,paddle-ocr-tract"
+      TRACT_FEATURES: "ocr,pdf,auto-rotate-tract,layout-tract,sceptre-ocr-tract,paddle-ocr-tract,bundle-tessdata-eng"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -499,6 +500,7 @@ jobs:
         with:
           include: |
             images/**
+            pdf/ocr_test*.pdf
 
       - name: Setup Rust
         uses: xberg-io/actions/setup-rust@v1
@@ -546,6 +548,10 @@ jobs:
             exit 1
           fi
         shell: bash
+
+      - uses: ./.github/actions/setup-paddle-ocr-models
+        with: { models: doc-ori, cache-key-suffix: document-orientation-onnx }
+      - run: bash scripts/ci/rust/run-ocr-orientation-tests.sh
 
   # Isolated feature closures catch cfg dependencies hidden by `full` (#741).
   # `no-ort-target` and `formats-no-heic` cover the PDF closure used by shipping

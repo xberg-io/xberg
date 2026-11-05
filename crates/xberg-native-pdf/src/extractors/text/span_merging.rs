@@ -116,7 +116,13 @@ impl<'doc> TextExtractor<'doc> {
                 .get(&current.font_name)
                 .map(|f| f.has_explicit_widths())
                 .unwrap_or(true);
-            let space_gap = corrected_space_gap(gap, reliable_widths, current.bbox.width, current.text.is_empty());
+            let space_gap = corrected_space_gap(
+                gap,
+                reliable_widths,
+                current.bbox.width,
+                current.text.is_empty(),
+                current_end_x.abs().max(span.bbox.x.abs()),
+            );
 
             // Column-boundary gap, font-size-aware. The same 6pt gap is
             // a column gutter at 11pt body text but normal word kerning

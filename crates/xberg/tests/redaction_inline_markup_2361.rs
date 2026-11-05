@@ -175,6 +175,26 @@ async fn pdf_preserves_single_split_plain_fallback_2361() {
     assert_private_output(&text, expected, &["Call", "today"]);
 }
 
+fn isolated_cache_case(case: &str) -> bool {
+    const CHILD_CASE: &str = "XBERG_REDACTION_CACHE_TEST_CHILD";
+    if std::env::var(CHILD_CASE).as_deref() == Ok(case) {
+        return true;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args(["--exact", case, "--nocapture", "--color", "never"])
+        .env(CHILD_CASE, case)
+        .output()
+        .expect("run the cache case in its own process");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+        "{case} child exited {}\n{stdout}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    false
+}
+
 struct CacheObserver(std::sync::Arc<std::sync::atomic::AtomicUsize>);
 
 impl xberg::plugins::Plugin for CacheObserver {
@@ -214,8 +234,10 @@ async fn cached_file(path: &std::path::Path, config: &ExtractionConfig) -> Extra
 }
 
 #[tokio::test]
-#[serial_test::serial]
 async fn cached_file_keeps_redaction_coverage_and_invalidates_changed_terms_2361() {
+    if !isolated_cache_case("cached_file_keeps_redaction_coverage_and_invalidates_changed_terms_2361") {
+        return;
+    }
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("private.html");
     std::fs::write(&path, MIXED).unwrap();
@@ -412,8 +434,10 @@ async fn builtin_custom_html_keeps_requested_syntax_and_complete_redaction_2361(
 }
 
 #[tokio::test]
-#[serial_test::serial]
 async fn html_cache_hits_keep_verified_redaction_and_changed_term_invalidation_2361() {
+    if !isolated_cache_case("html_cache_hits_keep_verified_redaction_and_changed_term_invalidation_2361") {
+        return;
+    }
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("private.html");
     std::fs::write(&path, MIXED).unwrap();

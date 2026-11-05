@@ -79,6 +79,20 @@ pub(super) fn preview_byte_limit(config: &ExtractionConfig) -> usize {
         .map_or(limit, |ocr_limits| limit.min(ocr_limits.max_content_size))
 }
 
+pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
+    let default_limits = crate::extractors::security::SecurityLimits::default();
+    let limit = config
+        .security_limits
+        .as_ref()
+        .unwrap_or(&default_limits)
+        .max_iterations;
+    config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.security_limits.as_ref())
+        .map_or(limit, |ocr_limits| limit.min(ocr_limits.max_iterations))
+}
+
 pub(super) fn needs_ocr(
     doc: &PdfDocument,
     page: usize,

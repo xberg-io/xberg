@@ -427,6 +427,9 @@ impl<'a> RedactionPass<'a> {
         surfaces: &'a impl RedactionSurfaces,
         limits: &SecurityLimits,
     ) -> Result<SurfacePlans<'a>> {
+        if surfaces.formatted_markdown() || surfaces.html_heading_sources().is_some() {
+            self.verify_html_heading_redaction(doc, surfaces.html_heading_sources(), limits)?;
+        }
         if let Some(kind) = surfaces.formatted_markup() {
             return self.plan_verified_surfaces(doc, surfaces, limits, kind);
         }
@@ -455,6 +458,7 @@ impl<'a> RedactionPass<'a> {
                 Some(&doc.content),
                 surfaces.formatted_tag_exemptions(),
                 surfaces.formatted_owned_tags(),
+                surfaces.formatted_plain_annotation_separator(),
                 limits,
             )?);
         }
@@ -466,6 +470,49 @@ impl<'a> RedactionPass<'a> {
             plans.pages.insert(index, plan);
         }
         Ok(plans)
+    }
+
+    fn verify_html_heading_redaction(
+        &self,
+        doc: &ExtractedDocument,
+        sources: Option<&[crate::extraction::derive::surfaces::HtmlHeadingSource]>,
+        limits: &SecurityLimits,
+    ) -> Result<()> {
+        let unproved = || crate::XbergError::validation("Cannot prove complete styled HTML heading redaction");
+        let sources = sources.unwrap_or_default();
+        if sources
+            .iter()
+            .any(|source| source.unproved_markup && !self.applicable_matches(&source.text).is_empty())
+        {
+            return Err(unproved());
+        }
+
+        let Some(html) = doc.metadata.format.as_ref().and_then(|format| format.html()) else {
+            return Ok(());
+        };
+        let paired = sources.len() == html.headers.len();
+        for (index, heading) in html.headers.iter().enumerate() {
+            let text = &heading.text;
+            let source = sources
+                .get(index)
+                .filter(|source| paired && source.level == heading.level);
+            if source.is_some_and(|source| source.text == *text) {
+                continue;
+            }
+            let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(unproved)?;
+            if source.is_some_and(|source| {
+                source.styled_metadata.as_deref() == Some(text)
+                    && projection.text != source.text
+                    && !self.applicable_matches(&source.text).is_empty()
+            }) {
+                return Err(unproved());
+            }
+            let sensitive = match_ranges(&self.applicable_matches(&projection.text));
+            if !projection.covered(&sensitive, &match_ranges(&self.applicable_matches(text))) {
+                return Err(unproved());
+            }
+        }
+        Ok(())
     }
 
     fn applicable_matches(&self, text: &str) -> Vec<PatternMatch> {
@@ -481,6 +528,7 @@ impl<'a> RedactionPass<'a> {
         plain: Option<&str>,
         tag_exemptions: bool,
         owned_tags: Option<&[std::ops::Range<usize>]>,
+        plain_annotation_separator: Option<usize>,
         limits: &SecurityLimits,
     ) -> Result<FormattedPlan> {
         let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
@@ -494,7 +542,9 @@ impl<'a> RedactionPass<'a> {
         let plain =
             plain.ok_or_else(|| crate::XbergError::validation("Generated Markdown has no verified plain backup"))?;
         let selected = self.applicable_matches(plain);
-        let correspondence = projection.on_plain(plain).ok_or_else(invalid)?;
+        let correspondence = projection
+            .on_plain(plain, plain_annotation_separator)
+            .ok_or_else(invalid)?;
         if !correspondence.covered(&sensitive, &match_ranges(&selected)) {
             return Err(invalid());
         }
@@ -589,6 +639,7 @@ impl<'a> RedactionPass<'a> {
                 source,
                 surfaces.page_tag_exemptions(index),
                 surfaces.page_owned_tags(index),
+                None,
                 limits,
             )?
         {

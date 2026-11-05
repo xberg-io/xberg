@@ -1,4 +1,6 @@
-use super::{DerivationObserver, MarkupPageBody, ProcessingDocument, RedactionSurfaces, VerifiedMarkup};
+use super::{
+    DerivationObserver, HtmlHeadingSource, MarkupPageBody, ProcessingDocument, RedactionSurfaces, VerifiedMarkup,
+};
 use crate::types::ExtractedDocument;
 use sha2::{Digest, Sha256};
 use std::ops::{Deref, DerefMut, Range};
@@ -62,6 +64,8 @@ pub(crate) struct SurfaceCapture {
     pages: Vec<PageSurface>,
     tag_exemptions: bool,
     remaining_tag_proof: usize,
+    plain_annotation_separator: Option<usize>,
+    html_heading_sources: Option<Vec<HtmlHeadingSource>>,
     owned_tags: Option<Vec<Range<usize>>>,
 }
 
@@ -95,6 +99,9 @@ impl DerivationObserver for SurfaceCapture {
 
     fn formatted_tag_ranges(&mut self, ranges: Option<Vec<Range<usize>>>) {
         self.owned_tags = ranges;
+    }
+    fn formatted_plain_annotation_separator(&mut self, offset: Option<usize>) {
+        self.plain_annotation_separator = offset;
     }
     fn page_tag_ranges(&mut self, ranges: Option<Vec<Range<usize>>>) {
         if let Some(page) = self.pages.last_mut() {
@@ -220,6 +227,12 @@ impl RedactionSurfaces for SurfaceContext {
     fn discard_formatted(&self) -> bool {
         self.formatted_invalidated
     }
+    fn html_heading_sources(&self) -> Option<&[HtmlHeadingSource]> {
+        self.capture.html_heading_sources.as_deref()
+    }
+    fn formatted_plain_annotation_separator(&self) -> Option<usize> {
+        self.capture.plain_annotation_separator
+    }
     fn formatted_owned_tags(&self) -> Option<&[Range<usize>]> {
         self.capture.owned_tags.as_deref()
     }
@@ -275,8 +288,12 @@ pub(crate) struct DerivedResult {
 
 impl DerivedResult {
     pub(crate) fn new(document: ExtractedDocument, capture: Option<SurfaceCapture>) -> Self {
-        let capture = capture
-            .filter(|capture| capture.formatted.is_some() || capture.markup.is_some() || !capture.pages.is_empty());
+        let capture = capture.filter(|capture| {
+            capture.formatted.is_some()
+                || capture.markup.is_some()
+                || !capture.pages.is_empty()
+                || capture.html_heading_sources.is_some()
+        });
         let identity = capture.as_ref().map(|_| Arc::new(()));
         let context = capture
             .zip(identity.as_ref())
@@ -449,11 +466,46 @@ fn markup_output_changed(kind: VerifiedMarkup) -> crate::XbergError {
 #[cfg(all(test, feature = "tokio-runtime"))]
 mod tests;
 
+#[cfg(test)]
 pub(crate) fn derive_with_surfaces(
     doc: crate::types::internal::InternalDocument,
     include_document_structure: bool,
     output_format: crate::core::config::OutputFormat,
     capture: bool,
+) -> DerivedResult {
+    derive_observed(doc, include_document_structure, output_format, capture, (false, false))
+}
+
+pub(crate) fn derive_with_configured_surfaces(
+    doc: crate::types::internal::InternalDocument,
+    include_document_structure: bool,
+    config: &crate::ExtractionConfig,
+    capture: bool,
+) -> DerivedResult {
+    #[cfg(feature = "html")]
+    let delimiters = config.html_options.as_ref().map_or((false, false), |options| {
+        (
+            !matches!(options.sup_symbol.as_str(), "" | "^"),
+            !matches!(options.sub_symbol.as_str(), "" | "~"),
+        )
+    });
+    #[cfg(not(feature = "html"))]
+    let delimiters = (false, false);
+    derive_observed(
+        doc,
+        include_document_structure,
+        config.output_format.clone(),
+        capture,
+        delimiters,
+    )
+}
+
+fn derive_observed(
+    doc: crate::types::internal::InternalDocument,
+    include_document_structure: bool,
+    output_format: crate::core::config::OutputFormat,
+    capture: bool,
+    unsupported_delimiters: (bool, bool),
 ) -> DerivedResult {
     if !capture {
         return DerivedResult::new(
@@ -463,10 +515,60 @@ pub(crate) fn derive_with_surfaces(
     }
     let mut observer = SurfaceCapture {
         remaining_tag_proof: crate::extractors::security::SecurityLimits::default().max_iterations,
+        html_heading_sources: html_heading_sources(&doc, unsupported_delimiters),
         ..Default::default()
     };
     let document = super::super::derive(doc, include_document_structure, output_format, true, &mut observer);
     DerivedResult::new(document, Some(observer))
+}
+
+fn html_heading_sources(
+    doc: &crate::types::internal::InternalDocument,
+    (unsupported_superscript, unsupported_subscript): (bool, bool),
+) -> Option<Vec<HtmlHeadingSource>> {
+    use crate::types::{document_structure::AnnotationKind, internal::ElementKind};
+
+    if doc.source_format != "html" {
+        return None;
+    }
+    let headings = doc.elements.iter().filter_map(|element| match element.kind {
+        ElementKind::Heading { level } => Some((level, element)),
+        _ => None,
+    });
+    let headers = doc.metadata.format.as_ref().and_then(|format| format.html());
+    let same_order = headers.is_some_and(|html| {
+        headings.clone().count() == html.headers.len()
+            && headings
+                .clone()
+                .zip(&html.headers)
+                .all(|((level, _), header)| level == header.level)
+    });
+    let pre_rendered_markdown =
+        doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("markdown");
+    let unpaired_metadata = !same_order && headers.is_some_and(|html| !html.headers.is_empty());
+    let sources = headings
+        .enumerate()
+        .map(|(index, (level, element))| {
+            let styled_metadata = headers
+                .filter(|_| same_order)
+                .map(|html| &html.headers[index].text)
+                .filter(|text| **text != element.text)
+                .cloned();
+            let unsupported_markdown_delimiter = pre_rendered_markdown
+                && element.annotations.iter().any(|annotation| {
+                    (unsupported_superscript && matches!(annotation.kind, AnnotationKind::Superscript))
+                        || (unsupported_subscript && matches!(annotation.kind, AnnotationKind::Subscript))
+                });
+            HtmlHeadingSource {
+                level,
+                text: element.text.clone(),
+                styled_metadata,
+                unproved_markup: unsupported_markdown_delimiter
+                    || (unpaired_metadata && !element.annotations.is_empty()),
+            }
+        })
+        .collect();
+    Some(sources)
 }
 
 mod processor;

@@ -338,8 +338,7 @@ fn ocr_render_refuses_native_budget_overrun_at_safeguard_floor() {
         ..Default::default()
     };
     let error = render_full_pdf_ocr_batch(&doc, &rotations, 0..1, &limits, None)
-        .err()
-        .expect("the 72 DPI floor must exceed the native limit");
+        .expect_err("the 72 DPI floor must exceed the native limit");
     assert!(
         error
             .to_string()

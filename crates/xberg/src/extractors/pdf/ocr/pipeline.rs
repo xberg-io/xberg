@@ -650,7 +650,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
     config: &ExtractionConfig,
 ) -> crate::Result<Option<MixedOcrRun>> {
     if boundaries.is_empty()
-        || scanned_pages.len() != 1
+        || scanned_pages.is_empty()
         || content.len() > super::hidden_layer::preview_byte_limit(config)
     {
         return Ok(None);
@@ -736,16 +736,24 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let byte_limit = super::hidden_layer::preview_byte_limit(config);
         let probe_doc = std::sync::Arc::clone(&render_doc);
         let cancel = config.cancel_token.clone();
+        let page_limit = super::hidden_layer::preview_page_limit(config);
+        super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
-            page_indices.retain(|&index| {
-                let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
-                let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
-                tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
-                needed == Some(true)
-            });
-            Ok(page_indices)
+            let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
+            let selected = page_indices
+                .into_iter()
+                .take(page_limit)
+                .take_while(|_| !is_cancelled())
+                .filter(|&index| {
+                    let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
+                    tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
+                    needed == Some(true)
+                })
+                .collect::<Vec<_>>();
+            Ok(selected)
         })
         .await?;
+        super::super::ensure_pdf_not_cancelled(config)?;
     }
     if page_indices.is_empty() {
         return Ok(MixedOcrRun::native(native_text));
@@ -1158,7 +1166,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(feature = "layout-detection")]
                     let page_detection: Option<crate::layout::DetectionResult> =
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx).cloned();
-                    join_set.spawn(crate::engine::seams::inherit_progress(async move {
+                    let task = crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                             return (idx, Err(crate::XbergError::Cancelled.into()));
                         }
@@ -1186,7 +1194,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         ))
                         .await;
                         (idx, result)
-                    }));
+                    });
+                    #[cfg(test)]
+                    let task = crate::plugins::registry::inherit_test_ocr_backend(task);
+                    join_set.spawn(task);
                 }
                 while let Some(join_result) = join_set.join_next().await {
                     let (page_idx, result) = join_result.map_err(|e| crate::XbergError::Plugin {

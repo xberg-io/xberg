@@ -659,8 +659,12 @@ fn parse_metadata_entries(text: &str) -> Vec<(String, String)> {
 /// tree, so `render_plain` yields nothing. Its already-extracted text lives in
 /// `pre_rendered_content` and must be returned verbatim rather than dropped. Only the
 /// empty rendering falls back, so a document that does have elements always wins.
-fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'static, str>, bool) {
-    let mut content = crate::rendering::render_plain(doc);
+fn derive_content_and_mime_type(
+    doc: &mut InternalDocument,
+    output_format: &crate::core::config::OutputFormat,
+    observer: &mut impl surfaces::DerivationObserver,
+) -> (String, Cow<'static, str>, bool) {
+    let (mut content, annotation_separator) = crate::rendering::render_plain_with_annotation_separator(doc);
     let plain_from_ir = !content.is_empty();
     if content.is_empty()
         && let Some(pre_rendered) = doc.pre_rendered_content.as_ref()
@@ -674,6 +678,12 @@ fn derive_content_and_mime_type(doc: &mut InternalDocument) -> (String, Cow<'sta
         Cow::Borrowed(source_format_to_mime_type(&doc.source_format))
     };
 
+    if doc.source_format == "pdf"
+        && matches!(output_format, crate::core::config::OutputFormat::Markdown)
+        && !(doc.pre_rendered_content.is_some() && doc.metadata.output_format.as_deref() == Some("markdown"))
+    {
+        observer.formatted_plain_annotation_separator(annotation_separator);
+    }
     (content, mime_type, plain_from_ir)
 }
 
@@ -861,7 +871,7 @@ pub fn derive_extraction_result(
     derive(doc, include_document_structure, output_format, true, &mut ())
 }
 
-#[cfg(feature = "redaction")]
+#[cfg(all(test, feature = "redaction"))]
 pub(crate) use surfaces::derive_with_surfaces;
 
 /// Derive the document that the registry hands to a registered public renderer.
@@ -890,7 +900,7 @@ fn derive(
     );
     resolve_relationships(&mut doc);
 
-    let (content, mime_type, plain_from_ir) = derive_content_and_mime_type(&mut doc);
+    let (content, mime_type, plain_from_ir) = derive_content_and_mime_type(&mut doc, &output_format, observer);
     let formatted_content =
         compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir, &content);
 

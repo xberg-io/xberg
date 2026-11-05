@@ -267,6 +267,41 @@ async fn observed_formatted_edit_returns_redacted_current_literal_with_plain_fal
 }
 
 #[tokio::test]
+async fn formatting_only_processor_cannot_bypass_heading_metadata_verification() {
+    use crate::types::FormatMetadata;
+    use crate::types::metadata::{HeaderMetadata, HtmlMetadata};
+
+    let registry = registry();
+    let priority = registry.read().builtin_redaction().unwrap().priority();
+    let log = Arc::new(Mutex::new(Vec::new()));
+    registry
+        .write()
+        .register(probe("formatting-only", priority + 1, true, Action::Rewrite, &log))
+        .unwrap();
+    let mut builder = InternalDocumentBuilder::new("html");
+    builder.push_heading(2, "secret", None, None);
+    let mut source = builder.build();
+    source.metadata.format = Some(FormatMetadata::Html(Box::new(HtmlMetadata {
+        headers: vec![HeaderMetadata {
+            level: 2,
+            text: "sec**ret**".to_string(),
+            id: None,
+            depth: 0,
+            html_offset: 0,
+        }],
+        ..Default::default()
+    })));
+    let mut result = crate::extraction::derive::derive_with_surfaces(source, false, OutputFormat::Markdown, true);
+
+    let outcome = execute(&registry, &mut result).await;
+    assert_eq!(log.lock().len(), 1);
+    assert!(
+        outcome.is_err(),
+        "formatting-only edits must not bypass heading verification"
+    );
+}
+
+#[tokio::test]
 async fn direct_public_processor_calls_keep_ordinary_data_semantics() {
     let mut result = ExtractedDocument::default();
     result.content = "<sup>literal</sup>".into();

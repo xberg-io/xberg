@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::cancellation::CancellationToken;
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
 use crate::doc_orientation::detector::tesseract_detector;
-use crate::extractors::security::SecurityBudget;
+use crate::extractors::security::{SecurityBudget, SecurityLimits};
 use crate::plugins::{ConfidenceSemantics, OcrBackend};
 use crate::table_core::{HocrWord, detect_rows, find_row_index};
 use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementConfig, OcrElementLevel};
@@ -37,8 +37,30 @@ impl OrientationRetry {
         )
     }
 
-    fn has_text_only(result: &ExtractedDocument) -> bool {
-        !result.content.trim().is_empty() && result.tables.is_empty() && result.formulas.is_empty()
+    async fn prepare_retry(
+        &self,
+        cancel: Option<&CancellationToken>,
+        probe: impl std::future::Future<Output = bool>,
+    ) -> crate::Result<bool> {
+        check_cancelled(cancel)?;
+        if self.attempts.lock().step().is_err() {
+            return Ok(false);
+        }
+        let ready = self
+            .cached_model_ready
+            .get_or_init(|| async {
+                tokio::task::spawn_blocking(|| tesseract_detector().prepare_cached())
+                    .await
+                    .unwrap_or(false)
+            })
+            .await;
+        check_cancelled(cancel)?;
+        if !ready {
+            return Ok(false);
+        }
+        let has_evidence = probe.await;
+        check_cancelled(cancel)?;
+        Ok(has_evidence)
     }
 
     pub(super) async fn after_ocr(
@@ -51,29 +73,25 @@ impl OrientationRetry {
     ) -> crate::Result<ExtractedDocument> {
         let original = original?;
         let confidence = backend.confidence_semantics();
-        if !Self::has_text_only(&original)
-            || !self.noise(&original, confidence).low_confidence
-            || self.attempts.lock().step().is_err()
+        let empty = original.content.trim().is_empty();
+        if !original.tables.is_empty()
+            || !original.formulas.is_empty()
+            || (!empty && !self.noise(&original, confidence).low_confidence)
         {
             return Ok(original);
         }
-        let cancelled = || cancel.is_some_and(CancellationToken::is_cancelled);
-        if cancelled() {
-            return Err(crate::XbergError::Cancelled);
-        }
-        let ready = self
-            .cached_model_ready
-            .get_or_init(|| async {
-                tokio::task::spawn_blocking(|| tesseract_detector().prepare_cached())
-                    .await
-                    .unwrap_or(false)
-            })
-            .await;
-        if !ready {
+        let probe = async {
+            if !empty {
+                return true;
+            }
+            let raster = Arc::clone(&raster);
+            let limits = config.security_limits.clone().unwrap_or_default();
+            tokio::task::spawn_blocking(move || raster_has_glyphs(&raster, &limits))
+                .await
+                .unwrap_or(false)
+        };
+        if !self.prepare_retry(cancel, probe).await? {
             return Ok(original);
-        }
-        if cancelled() {
-            return Err(crate::XbergError::Cancelled);
         }
 
         let mut rotated_config = config.clone();
@@ -88,9 +106,7 @@ impl OrientationRetry {
             |config| config.table_row_threshold_ratio,
         );
         let retry = backend.process_image_owned(raster, &rotated_config).await;
-        if cancelled() {
-            return Err(crate::XbergError::Cancelled);
-        }
+        check_cancelled(cancel)?;
         match retry {
             Ok(mut candidate) if self.accepts(&candidate, confidence, row_threshold) => {
                 let evidence = candidate.ocr_elements.take().unwrap_or_default();
@@ -127,6 +143,40 @@ impl OrientationRetry {
         let noise = ocr_recognition_noise_decision(text, &self.thresholds, confidence, mean_confidence);
         !noise.low_confidence && !noise.fragmented_noise && mean_confidence.is_some()
     }
+}
+
+fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
+    if cancel.is_some_and(CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
+const GLYPH_SAMPLE_EDGE: u32 = 512;
+// RGB thumbnail, luminance and foreground masks, and spare capacity for the glyph estimator's
+// flood-fill stack, component heights and letter bodies. At most 20% of pixels are visited
+// by the flood fill, so six usize slots per sample cover all three vectors and reallocations. ~keep
+const GLYPH_PROBE_WORKSPACE: usize =
+    GLYPH_SAMPLE_EDGE as usize * GLYPH_SAMPLE_EDGE as usize * (5 + 6 * size_of::<usize>());
+
+fn raster_has_glyphs(raster: &[u8], limits: &SecurityLimits) -> bool {
+    let Ok(rgb) = crate::extraction::image_decode::decode_standard_rgb8_with_additional_live_bytes_and_security_limits(
+        raster,
+        limits,
+        GLYPH_PROBE_WORKSPACE as u64,
+    ) else {
+        return false;
+    };
+    let (width, height) = rgb.dimensions();
+    let longest = width.max(height);
+    let sample = if longest > GLYPH_SAMPLE_EDGE {
+        let shrink = |length| ((u64::from(length) * u64::from(GLYPH_SAMPLE_EDGE)) / u64::from(longest)).max(1) as u32;
+        image::imageops::thumbnail(&rgb, shrink(width), shrink(height))
+    } else {
+        rgb
+    };
+    crate::image::text_height::median_glyph_height(sample.as_raw(), sample.width() as usize, sample.height() as usize)
+        .is_some()
 }
 
 fn complete_table_text(result: &ExtractedDocument, row_threshold: f64) -> Option<String> {
@@ -241,6 +291,131 @@ pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, ra
 mod tests {
     use super::*;
     use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
+
+    #[tokio::test]
+    async fn cancelled_retry_does_not_probe() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        assert!(matches!(
+            retry
+                .prepare_retry(Some(&cancel), async { panic!("cancelled retry probed") })
+                .await,
+            Err(crate::XbergError::Cancelled)
+        ));
+        assert!(retry.cached_model_ready.get().is_none());
+    }
+
+    #[tokio::test]
+    async fn exhausted_retry_does_not_probe() {
+        let limits = SecurityLimits {
+            max_iterations: 0,
+            ..Default::default()
+        };
+        let exhausted = OrientationRetry::new(
+            &ExtractionConfig {
+                security_limits: Some(limits),
+                ..Default::default()
+            },
+            OcrQualityThresholds::default(),
+        );
+        assert!(
+            !exhausted
+                .prepare_retry(None, async { panic!("exhausted retry probed") })
+                .await
+                .unwrap()
+        );
+        assert!(exhausted.cached_model_ready.get().is_none());
+    }
+
+    #[tokio::test]
+    async fn cold_retry_does_not_probe() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        retry
+            .cached_model_ready
+            .set(false)
+            .expect("model cache starts uninitialized");
+        assert!(
+            !retry
+                .prepare_retry(None, async { panic!("cold retry probed") })
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_the_probe_prevents_retry() {
+        let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        retry
+            .cached_model_ready
+            .set(true)
+            .expect("model cache starts uninitialized");
+        let cancel = CancellationToken::new();
+        let result = retry
+            .prepare_retry(Some(&cancel), async {
+                cancel.cancel();
+                true
+            })
+            .await;
+        assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+    }
+
+    #[test]
+    fn empty_read_requires_glyphs_not_blank_or_ruled_paper() {
+        let limits = SecurityLimits::default();
+        let mut raster = image::RgbImage::from_pixel(120, 120, image::Rgb([255; 3]));
+        let has_glyphs = |raster: &image::RgbImage| {
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            raster
+                .write_to(&mut bytes, image::ImageFormat::Png)
+                .expect("PNG encodes");
+            raster_has_glyphs(bytes.get_ref(), &limits)
+        };
+        assert!(!has_glyphs(&raster));
+
+        for line in (12..120).step_by(12) {
+            for x in 8..112 {
+                raster.put_pixel(x, line, image::Rgb([0; 3]));
+                raster.put_pixel(x, line + 1, image::Rgb([0; 3]));
+            }
+        }
+        assert!(!has_glyphs(&raster));
+        assert!(!has_glyphs(&image::imageops::rotate90(&raster)));
+
+        for left in (12..100).step_by(12) {
+            for y in 5..10 {
+                for x in left..left + 3 {
+                    raster.put_pixel(x, y, image::Rgb([0; 3]));
+                }
+            }
+        }
+        assert!(has_glyphs(&raster));
+    }
+
+    #[test]
+    fn empty_raster_probe_accounts_for_workspace_beyond_decoded_rgb() {
+        let mut raster = image::RgbImage::from_pixel(120, 120, image::Rgb([255; 3]));
+        for left in (12..100).step_by(12) {
+            for y in 5..10 {
+                for x in left..left + 3 {
+                    raster.put_pixel(x, y, image::Rgb([0; 3]));
+                }
+            }
+        }
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        raster
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .expect("PNG encodes");
+        let bytes = encoded.into_inner();
+        let required = bytes.len() + raster.as_raw().len() + GLYPH_PROBE_WORKSPACE;
+        let mut limits = SecurityLimits {
+            max_content_size: required,
+            ..Default::default()
+        };
+        assert!(raster_has_glyphs(&bytes, &limits));
+        limits.max_content_size -= 1;
+        assert!(!raster_has_glyphs(&bytes, &limits));
+    }
 
     #[test]
     fn recovery_requires_proved_rotation_and_rejects_unverified_tables() {

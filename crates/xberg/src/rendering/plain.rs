@@ -17,6 +17,10 @@ use super::common::{
 
 /// Render an `InternalDocument` to plain text.
 pub(crate) fn render_plain(doc: &InternalDocument) -> String {
+    render_plain_with_annotation_separator(doc).0
+}
+
+pub(crate) fn render_plain_with_annotation_separator(doc: &InternalDocument) -> (String, Option<usize>) {
     let mut out = String::with_capacity(doc.elements.len() * 80);
     let mut last_heading_depth = None;
     let footnotes = FootnoteCollector::new(doc);
@@ -50,17 +54,19 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
     }
     append_definitions_plain(doc, ElementKind::FootnoteDefinition, Some(&footnotes), &mut out);
     append_definitions_plain(doc, ElementKind::CommentDefinition, None, &mut out);
+    let mut annotation_separator = None;
     if let Some(annotations) = doc.annotations.as_deref() {
         let block = render_annotations_plain(annotations);
         if !block.is_empty() {
             if !out.trim_end().is_empty() {
                 out.push_str("\n\n");
             }
+            annotation_separator = Some(out.len() + ANNOTATIONS_TITLE.len());
             out.push_str(&block);
         }
     }
     out.truncate(out.trim_end().len());
-    out
+    (out, annotation_separator)
 }
 
 fn render_element_plain(
@@ -290,6 +296,8 @@ fn append_definitions_plain(
     }
 }
 
+const ANNOTATIONS_TITLE: &str = "Annotations";
+
 /// Render the document-level PDF annotations (issue #63) as a plain-text
 /// section: an "Annotations:" header followed by one line per annotation.
 ///
@@ -299,7 +307,8 @@ fn render_annotations_plain(annotations: &[PdfAnnotation]) -> String {
         return String::new();
     }
 
-    let mut out = String::from("Annotations:\n");
+    let mut out = String::from(ANNOTATIONS_TITLE);
+    out.push_str(":\n");
     for annotation in annotations {
         out.push_str(annotation_type_label(annotation.annotation_type));
         out.push_str(" (page ");
