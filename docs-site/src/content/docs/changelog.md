@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Retain independently shaded source table headers and ruled cell boundaries.** (#2332)
+  Keep nested text backgrounds from creating extra columns while preserving separate table records.
+
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
   Retain words beside large graphics while preserving the dense-text recovery introduced in #2475.
 
