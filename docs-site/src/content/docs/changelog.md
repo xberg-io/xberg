@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep separate figure labels out of empty inferred table row spans.** (#2332)
+  Require an existing source anchor before borrowing words from covered rows.
+
 - **(paddle): Preserve reading order after automatically correcting rotated PDF pages.** (#2519)
   Compose the page hint with the applied pixel correction so upright labels are not reversed.
 
