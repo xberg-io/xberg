@@ -291,3 +291,24 @@ fn should_bound_the_public_explicit_layout_future_size_gh2255() {
         "explicit-layout future uses {future_bytes} bytes versus ordinary extraction {ordinary_bytes}; keep native work boxed"
     );
 }
+
+#[tokio::test]
+async fn region_text_opt_in_preserves_legacy_result_for_an_unselected_native_page() {
+    let engine = Engine::new_default();
+    let mut config = config();
+    config.pdf_options.get_or_insert_with(Default::default).reading_order = true;
+    let ordinary = engine
+        .extract_with_layout_pages(input(), &config, vec![])
+        .await
+        .unwrap();
+    let opted_in = engine
+        .extract_with_layout_region_text(input(), &config, vec![])
+        .await
+        .unwrap();
+    assert_eq!(ordinary.results.len(), 1);
+    assert_eq!(
+        serde_json::to_value(ordinary).unwrap(),
+        serde_json::to_value(opted_in.extraction).unwrap()
+    );
+    assert!(opted_in.regions.is_empty());
+}

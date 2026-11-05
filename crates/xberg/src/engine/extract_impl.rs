@@ -209,7 +209,11 @@ pub(crate) async fn extract_with_layout_pages(
                 "explicit layout-page selection accepts one PDF bytes input; read URI input first".to_string(),
             ));
         }
-        let resolved = resolve_explicit_layout_page_config(&input, config)?;
+        let mut resolved = resolve_explicit_layout_page_config(&input, config)?;
+        if pages.region_text.is_some() {
+            resolved.pages.get_or_insert_with(Default::default).extract_pages = true;
+            resolved.pdf_options.get_or_insert_with(Default::default).reading_order = true;
+        }
         extract_bytes_input_with_layout_pages(input, &resolved, 0, Some(pages)).await
     }
     .await;
