@@ -22,3 +22,21 @@ sync with the generated snippet tree automatically — no per-language import li
 ## Batch-extract with an unsupported MIME type
 
 <ApiSnippetGroup topic="batch/extract_batch_bytes_unsupported_mime" />
+
+## Choose PDF layout for each input
+
+Each input can override the batch's `use_layout_for_markdown` setting. An
+omitted option inherits the batch setting. Swift takes the inputs as a JSON
+array:
+
+```swift
+import Xberg
+
+let inputs = """
+[
+  {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+  {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+]
+"""
+let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+```

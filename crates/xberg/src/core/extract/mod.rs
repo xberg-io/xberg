@@ -85,6 +85,33 @@ pub async fn extract_batch_with_input_options(
 ///
 /// Uses the same fields and semantics as [`ExtractInputWithOptions`]. This is
 /// useful for callers that pass input values through a text-based boundary.
+/// Swift exposes this as a top-level async function.
+///
+/// # Examples
+///
+/// ```swift
+/// import Xberg
+///
+/// let inputs = """
+/// [
+///   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+///   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+/// ]
+/// """
+/// let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+/// ```
+///
+/// ```csharp
+/// using Xberg;
+///
+/// var inputs = """
+/// [
+///   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+///   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+/// ]
+/// """;
+/// var result = await XbergConverter.ExtractBatchWithInputOptionsJsonAsync(inputs, new ExtractionConfig());
+/// ```
 pub async fn extract_batch_with_input_options_json(
     inputs_json: &str,
     config: &ExtractionConfig,

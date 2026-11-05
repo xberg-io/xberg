@@ -2956,6 +2956,9 @@ features = [
   "url-ingestion",
 ]
 exclude_functions = [
+  # The generated vector wrapper allocates unmanaged input memory before
+  # validating the config. Expose the safe JSON entry point in C# instead. ~keep
+  "extract_batch_with_input_options",
   "calculate_quality_score",
   "count_tokens",
   "embed_texts",

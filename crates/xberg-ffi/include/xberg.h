@@ -30883,8 +30883,32 @@ XBERGAlefHandle xberg_extract_batch_with_input_options_cancellable(
  *
  * Uses the same fields and semantics as `ExtractInputWithOptions`. This is
  * useful for callers that pass input values through a text-based boundary.
+ * Swift exposes this as a top-level async function.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
+ * \code
+ * import Xberg
+ *
+ * let inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """
+ * let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+ *
+ * using Xberg;
+ *
+ * var inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """;
+ * var result = await
+ * XbergConverter.ExtractBatchWithInputOptionsJsonAsync(inputs, new
+ * ExtractionConfig());
+ * \endcode
  */
 XBERGAlefHandle
 xberg_extract_batch_with_input_options_json(const char *inputs_json,
@@ -30902,8 +30926,32 @@ xberg_extract_batch_with_input_options_json(const char *inputs_json,
  *
  * Uses the same fields and semantics as `ExtractInputWithOptions`. This is
  * useful for callers that pass input values through a text-based boundary.
+ * Swift exposes this as a top-level async function.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
+ * \code
+ * import Xberg
+ *
+ * let inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """
+ * let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+ *
+ * using Xberg;
+ *
+ * var inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """;
+ * var result = await
+ * XbergConverter.ExtractBatchWithInputOptionsJsonAsync(inputs, new
+ * ExtractionConfig());
+ * \endcode
  */
 XBERGAlefHandle xberg_extract_batch_with_input_options_json_cancellable(
     const char *inputs_json, XBERGAlefHandle config,
