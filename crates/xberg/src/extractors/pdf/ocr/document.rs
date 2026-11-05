@@ -575,18 +575,19 @@ fn remove_copy_lines(element: &mut crate::types::internal::InternalElement, copi
         let end = offset + line.len();
         if let Some(at) = copies.iter().position(|copy| *copy == line_key(line)) {
             copies.swap_remove(at);
-            // The last line has no break of its own: it takes the break before it. ~keep
-            let start = if end == element.text.len() && offset > 0 {
-                offset - 1
-            } else {
-                offset
-            };
-            ranges.push((start, end));
+            ranges.push((offset, end));
         }
         offset = end;
     }
+    let last_line_went = ranges.last().is_some_and(|(_, end)| *end == element.text.len());
     for (start, end) in ranges.iter().rev() {
         remove_text_range_and_shift(&mut element.text, &mut element.annotations, *start, *end);
+    }
+    // The last line has no break of its own: when it goes, the break of the line before it goes
+    // too, after the ranges, so that two removed lines in a row never overlap. ~keep
+    if last_line_went && element.text.ends_with('\n') {
+        let len = element.text.len();
+        remove_text_range_and_shift(&mut element.text, &mut element.annotations, len - 1, len);
     }
     !ranges.is_empty()
 }

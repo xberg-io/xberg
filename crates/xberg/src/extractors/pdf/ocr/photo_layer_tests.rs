@@ -1968,6 +1968,49 @@ fn should_shift_the_annotations_of_a_paragraph_that_loses_an_ocr_copy() {
     );
 }
 
+/// The structured page (#2439): a paragraph whose last two lines are both OCR copies loses both
+/// and keeps its first line with its annotation; the last line has no break of its own, and the
+/// break it shares with the line before it goes once. A paragraph of copies only goes whole. ~keep
+#[test]
+fn should_drop_two_ocr_copies_that_end_a_paragraph() {
+    use super::document::{LayerFirst, put_layer_first_in_document};
+    use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let note = |start: u32, end: u32| TextAnnotation {
+        start,
+        end,
+        kind: AnnotationKind::Bold,
+    };
+    let mut doc = InternalDocument::new("pdf");
+    // "Kept line" is bytes 0..9, "Copy one" 10..18 and "Copy two" 19..27. ~keep
+    let mut element = InternalElement::text(ElementKind::Paragraph, "Kept line\nCopy one\nCopy two", 0);
+    element.annotations.extend([note(0, 4), note(19, 27)]);
+    doc.push_element(element);
+    doc.push_element(InternalElement::text(
+        ElementKind::Paragraph,
+        "Copy one\nCopy two",
+        0,
+    ));
+    let first = LayerFirst {
+        lines: "Layer one\nLayer two".to_string(),
+        ocr_copies: vec![
+            "copy one".to_string(),
+            "copy two".to_string(),
+            "copy one".to_string(),
+            "copy two".to_string(),
+        ],
+    };
+    put_layer_first_in_document(&mut doc, None, &first);
+    let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+    assert_eq!(texts, ["Layer one", "Layer two", "Kept line"]);
+    assert_eq!(
+        doc.elements[2].annotations,
+        [note(0, 4)],
+        "the kept line's annotation stays, the last copy's goes"
+    );
+}
+
 /// The element of one OCR line (hOCR `Line`) that is a copy goes whole, with its relationship; the
 /// line elements around it keep their annotations untouched. ~keep
 #[test]
