@@ -232,6 +232,8 @@ async fn run_case_with_image_capture(
         page_index_offset,
         source.map(|document| DetachedOcrPage {
             document,
+            #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+            stored_scan: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             orientation_retry: None,
         }),
@@ -471,6 +473,8 @@ async fn run_case_with_explicit_caps(
         0,
         Some(DetachedOcrPage {
             document: doc,
+            #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+            stored_scan: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             orientation_retry: None,
         }),
