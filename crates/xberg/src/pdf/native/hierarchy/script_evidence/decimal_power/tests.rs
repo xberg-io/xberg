@@ -254,12 +254,12 @@ fn existing_script_owners_retain_their_exact_source_keys_after_decimal_splits() 
             .collect();
         assert_eq!(preserved.len(), 1, "preserve each legacy owner without re-inferring it");
         assert_eq!(
-            serde_json::to_value(&preserved[0].base_source).unwrap(),
-            serde_json::to_value(&old.base_source).unwrap()
+            serde_json::to_value(preserved[0].base_source.as_ref()).unwrap(),
+            serde_json::to_value(old.base_source.as_ref()).unwrap()
         );
         assert_eq!(
-            serde_json::to_value(&preserved[0].script_source).unwrap(),
-            serde_json::to_value(&old.script_source).unwrap()
+            serde_json::to_value(preserved[0].script_source.as_ref()).unwrap(),
+            serde_json::to_value(old.script_source.as_ref()).unwrap()
         );
         assert!(
             after
