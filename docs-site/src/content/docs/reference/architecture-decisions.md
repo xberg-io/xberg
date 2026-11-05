@@ -19,3 +19,4 @@ same change as a new record.
 | [0004](https://github.com/xberg-io/xberg/blob/main/adrs/0004-rust-only-engine-seams-for-the-enterprise-boundary.md) | Rust-only engine seams for the enterprise boundary | accepted | 2026-06-29 |
 | [0005](https://github.com/xberg-io/xberg/blob/main/adrs/0005-engine-neutral-inference-seam-over-ort-and-tract.md) | Engine-neutral inference seam over ORT and tract | accepted | 2026-07-19 |
 | [0006](https://github.com/xberg-io/xberg/blob/main/adrs/0006-bundle-regular-and-bold-latin-fallback-faces-on-all-targets.md) | Bundle regular and bold Latin fallback faces on all targets | accepted | 2026-11-05 |
+| [0007](https://github.com/xberg-io/xberg/blob/main/adrs/0007-qualify-windows-wheels-in-isolated-userspace-without-global-vc-runtime.md) | Qualify Windows wheels in isolated userspace without global VC runtime | accepted | 2026-11-05 |

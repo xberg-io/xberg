@@ -12,6 +12,14 @@ name: CI Python Wheel Smoke
 # Run it on demand as part of release verification.
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Wheel build platforms to qualify
+        type: choice
+        default: all
+        options:
+          - all
+          - windows
 
 concurrency:
   group: ci-python-wheel-smoke-${{ github.ref }}
@@ -33,7 +41,7 @@ jobs:
       fail-fast: false
       matrix:
         # ~keep Runtime staging requires the reviewed Visual Studio 2022 redistributable.
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-2022, macos-26, macos-26-intel]
+        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2022"]' || '["ubuntu-latest","ubuntu-24.04-arm","windows-2022","macos-26","macos-26-intel"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -154,3 +162,41 @@ jobs:
           "$venv_python" -m pip install --no-cache-dir --quiet "$wheel"
           "$venv_python" scripts/ci/smoke_test_python_wheel.py \
             scripts/ci/fixtures/musl-python-smoke.pdf "XBERG MUSL SMOKE 490"
+
+      - name: Upload Windows wheel for isolated qualification
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: clean-host-windows-wheel-${{ github.sha }}
+          path: wheelhouse/*win_amd64.whl
+          if-no-files-found: error
+
+  windows-wheel-clean-host:
+    name: Qualify Windows wheel without global VC runtime
+    needs: python-wheel-smoke
+    if: ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' }}
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          submodules: false
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: "python"
+      - uses: actions/download-artifact@v8
+        with:
+          name: clean-host-windows-wheel-${{ github.sha }}
+          path: wheelhouse
+      - name: Check qualification guards
+        run: mise run python:wheel:clean-host:test
+      - name: Qualify isolated Windows userspace
+        run: mise run python:wheel:clean-host wheelhouse "${{ github.sha }}" clean-host-receipts
+      - name: Collect clean-userspace evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-clean-host-evidence-${{ github.sha }}
+          path: clean-host-receipts/**/*.json
+          if-no-files-found: error
