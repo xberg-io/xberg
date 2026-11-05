@@ -148,6 +148,7 @@ def baseline(python_root: Path, msvcp: list[str]) -> dict:
                 pass
     names = sorted({PurePosixPath(name).name for name in msvcp})
     inbox_clr_files = []
+    unexpected_runtime_paths = []
     for directory in (
         Path(os.environ["SYSTEMROOT"]) / "System32",
         Path(os.environ["SYSTEMROOT"]) / "SysWOW64",
@@ -158,11 +159,18 @@ def baseline(python_root: Path, msvcp: list[str]) -> dict:
             if name.startswith(("msvcp140", "vcruntime140", "concrt140", "vcomp140")):
                 if directory == python_root and name.startswith("vcruntime"):
                     continue
-                # ~keep The pinned Server Core image ships this CLR sidecar; loader checks still apply.
-                if directory != python_root and path.parent == directory and name == "msvcp140_clr0400.dll":
+                # ~keep The pinned Server Core image ships these CLR sidecars; loader checks still apply.
+                if (
+                    directory != python_root
+                    and path.parent == directory
+                    and name in ("msvcp140_clr0400.dll", "vcruntime140_clr0400.dll")
+                ):
                     inbox_clr_files.append(f"{directory.name}/{path.name}")
                     continue
-                raise ValueError(f"baseline contains VC runtime: {path}")
+                unexpected_runtime_paths.append(str(path))
+    if unexpected_runtime_paths:
+        paths = "\n".join(sorted(unexpected_runtime_paths))
+        raise ValueError(f"baseline contains VC runtime files:\n{paths}")
     for name in names:
         try:
             ctypes.WinDLL(name)
