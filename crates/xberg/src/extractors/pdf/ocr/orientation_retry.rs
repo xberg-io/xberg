@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::cancellation::CancellationToken;
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
 use crate::doc_orientation::detector::tesseract_detector;
-use crate::extractors::security::SecurityBudget;
+use crate::extractors::security::{SecurityBudget, SecurityLimits};
 use crate::plugins::{ConfidenceSemantics, OcrBackend};
 use crate::table_core::{HocrWord, detect_rows, find_row_index};
 use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementConfig, OcrElementLevel};
@@ -37,8 +37,26 @@ impl OrientationRetry {
         )
     }
 
-    fn has_text_only(result: &ExtractedDocument) -> bool {
-        !result.content.trim().is_empty() && result.tables.is_empty() && result.formulas.is_empty()
+    async fn needs_retry(
+        &self,
+        result: &ExtractedDocument,
+        confidence: ConfidenceSemantics,
+        raster: &Arc<Vec<u8>>,
+        config: &OcrConfig,
+    ) -> bool {
+        if !result.tables.is_empty() || !result.formulas.is_empty() {
+            return false;
+        }
+        if !result.content.trim().is_empty() {
+            return self.noise(result, confidence).low_confidence;
+        }
+
+        // An empty read is ambiguous. Require glyph-like ink before retrying it. ~keep
+        let raster = Arc::clone(raster);
+        let limits = config.security_limits.clone().unwrap_or_default();
+        tokio::task::spawn_blocking(move || raster_has_glyphs(&raster, &limits))
+            .await
+            .unwrap_or(false)
     }
 
     pub(super) async fn after_ocr(
@@ -51,10 +69,7 @@ impl OrientationRetry {
     ) -> crate::Result<ExtractedDocument> {
         let original = original?;
         let confidence = backend.confidence_semantics();
-        if !Self::has_text_only(&original)
-            || !self.noise(&original, confidence).low_confidence
-            || self.attempts.lock().step().is_err()
-        {
+        if !self.needs_retry(&original, confidence, &raster, config).await || self.attempts.lock().step().is_err() {
             return Ok(original);
         }
         let cancelled = || cancel.is_some_and(CancellationToken::is_cancelled);
@@ -127,6 +142,13 @@ impl OrientationRetry {
         let noise = ocr_recognition_noise_decision(text, &self.thresholds, confidence, mean_confidence);
         !noise.low_confidence && !noise.fragmented_noise && mean_confidence.is_some()
     }
+}
+
+fn raster_has_glyphs(raster: &[u8], limits: &SecurityLimits) -> bool {
+    let Ok(rgb) = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(raster, limits) else {
+        return false;
+    };
+    crate::image::text_height::median_glyph_height(rgb.as_raw(), rgb.width() as usize, rgb.height() as usize).is_some()
 }
 
 fn complete_table_text(result: &ExtractedDocument, row_threshold: f64) -> Option<String> {
@@ -241,6 +263,38 @@ pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, ra
 mod tests {
     use super::*;
     use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
+
+    #[test]
+    fn empty_read_requires_glyphs_not_blank_or_ruled_paper() {
+        let limits = SecurityLimits::default();
+        let mut raster = image::RgbImage::from_pixel(120, 120, image::Rgb([255; 3]));
+        let has_glyphs = |raster: &image::RgbImage| {
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            raster
+                .write_to(&mut bytes, image::ImageFormat::Png)
+                .expect("PNG encodes");
+            raster_has_glyphs(bytes.get_ref(), &limits)
+        };
+        assert!(!has_glyphs(&raster));
+
+        for line in (12..120).step_by(12) {
+            for x in 8..112 {
+                raster.put_pixel(x, line, image::Rgb([0; 3]));
+                raster.put_pixel(x, line + 1, image::Rgb([0; 3]));
+            }
+        }
+        assert!(!has_glyphs(&raster));
+        assert!(!has_glyphs(&image::imageops::rotate90(&raster)));
+
+        for left in (12..100).step_by(12) {
+            for y in 5..10 {
+                for x in left..left + 3 {
+                    raster.put_pixel(x, y, image::Rgb([0; 3]));
+                }
+            }
+        }
+        assert!(has_glyphs(&raster));
+    }
 
     #[test]
     fn recovery_requires_proved_rotation_and_rejects_unverified_tables() {
