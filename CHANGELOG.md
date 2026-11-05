@@ -309,6 +309,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Recover OCR rows from tall one-bit grayscale scans.** (#2502)
   Decode bounded packed rows and verify the recovered lines against the source raster bands.
+  Recover tall RGB scans with a verified full-page draw and three identical channel values at each pixel.
 
 - **(pdf): Keep upper rows first when stacked ruled grids merge.** (#2494)
 

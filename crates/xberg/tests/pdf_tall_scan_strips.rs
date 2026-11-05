@@ -9,6 +9,7 @@ use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod,
 
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
 const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
+const NEUTRAL_RGB: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/neutral-rgb-tall.pdf");
 const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-mixed.pdf");
 const SHORT: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-short.pdf");
 const ORACLE: &str = include_str!("../../../fixtures/repros/tall-scan-strips/expected.txt");
@@ -116,6 +117,11 @@ fn bilevel_tall_scan_recovers_every_source_line_once_in_order() {
 #[test]
 fn in_cap_scan_keeps_original_ocr_route_and_text() {
     assert_image_text(&extract(SHORT, &extraction_config()), false);
+}
+
+#[test]
+fn neutral_rgb_tall_scan_recovers_every_source_line_once_in_order() {
+    assert_image_text(&extract(NEUTRAL_RGB, &extraction_config()), true);
 }
 
 #[test]

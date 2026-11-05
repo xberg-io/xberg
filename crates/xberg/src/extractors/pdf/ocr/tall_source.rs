@@ -17,6 +17,9 @@ use xberg_native_pdf::content::parser::visit_complete_content_stream;
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
 
+mod samples;
+use samples::{GrayPacking, decode_source_gray};
+
 const MAX_TILE_SIDE: u32 = 4096;
 const MAX_SOURCE_PIXELS: usize = 24_000_000;
 const MAX_STRIPS: usize = 16;
@@ -403,6 +406,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
     if dict.contains_key("DecodeParms") {
         return None;
     }
+    let unfiltered_paint = !dict.contains_key("Filter");
     let filters = stream_filters(dict.get("Filter"))?;
     let paint = decode_probe_stream(&data, filters, 4096, byte_limit)?;
     let name = image_name(&paint, frame)?;
@@ -416,9 +420,13 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
         return None;
     };
     let depth = dict.get("BitsPerComponent")?.as_integer()?;
+    let packing = match (dict.get("ColorSpace")?.as_name()?, depth) {
+        ("DeviceGray", 8) => GrayPacking::Byte,
+        ("DeviceGray", 1) => GrayPacking::Bilevel,
+        ("DeviceRGB", 8) if unfiltered_paint => GrayPacking::NeutralRgb,
+        _ => return None,
+    };
     if dict.get("Subtype")?.as_name()? != "Image"
-        || !matches!(depth, 1 | 8)
-        || dict.get("ColorSpace")?.as_name()? != "DeviceGray"
         || dict.get("Filter")?.as_name()? != "FlateDecode"
         || [
             "Mask",
@@ -451,66 +459,15 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
     if !(150.0..=300.0).contains(&dpi) || (dpi - dpi_y).abs() > 0.01 {
         return None;
     }
-    let (samples, retained_bytes) = decode_source_gray(&data, width as usize, height as usize, depth, byte_limit)?;
+    let (samples, retained_bytes) = decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?;
     Some(Source {
         width,
         height,
         dpi,
         samples,
         retained_bytes,
-        bilevel: depth == 1,
+        bilevel: packing == GrayPacking::Bilevel,
     })
-}
-
-fn decode_source_gray(
-    compressed: &[u8],
-    width: usize,
-    height: usize,
-    depth: i64,
-    byte_limit: usize,
-) -> Option<(Vec<u8>, usize)> {
-    let pixels = width.checked_mul(height)?;
-    let retained_bytes = compressed.len().checked_add(pixels)?.checked_add(1)?;
-    if retained_bytes > byte_limit {
-        return None;
-    }
-    if depth == 8 {
-        return Some((decode_exact_gray(compressed, pixels)?, retained_bytes));
-    }
-    let stride = width.div_ceil(8);
-    let packed_size = stride.checked_mul(height)?;
-    if depth != 1 || stride == 0 || retained_bytes.checked_add(packed_size)? > byte_limit {
-        return None;
-    }
-    let packed = decode_exact_gray(compressed, packed_size)?;
-    let mut samples = Vec::new();
-    samples.try_reserve_exact(pixels).ok()?;
-    // PDF starts each packed row on a byte boundary, with the first sample in the high bit. ~keep
-    for row in packed.chunks_exact(stride) {
-        samples.extend((0..width).map(|x| if row[x / 8] & (0x80 >> (x % 8)) == 0 { 0 } else { 255 }));
-    }
-    Some((samples, retained_bytes))
-}
-
-fn decode_exact_gray(compressed: &[u8], pixels: usize) -> Option<Vec<u8>> {
-    use flate2::{Decompress, FlushDecompress, Status};
-
-    let capacity = pixels.checked_add(1)?;
-    let mut samples = Vec::new();
-    samples.try_reserve_exact(capacity).ok()?;
-    samples.resize(capacity, 0);
-    let mut decoder = Decompress::new(true);
-    let status = decoder
-        .decompress(compressed, &mut samples, FlushDecompress::Finish)
-        .ok()?;
-    if status != Status::StreamEnd
-        || decoder.total_out() != pixels as u64
-        || decoder.total_in() != compressed.len() as u64
-    {
-        return None;
-    }
-    samples.truncate(pixels);
-    Some(samples)
 }
 
 pub(super) fn image_name(paint: &[u8], frame: Rect) -> Option<String> {
@@ -730,6 +687,7 @@ impl TextAccumulator {
 
 #[cfg(test)]
 mod tests {
+    use super::samples::decode_exact_gray;
     use super::*;
     use std::io::Write;
 
@@ -858,11 +816,39 @@ mod tests {
         let peak = retained + 4;
         let expected = vec![255, 0, 255, 0, 0, 255, 0, 255, 0, 0, 255, 0, 255, 255, 0, 255, 0, 255];
         assert_eq!(
-            decode_source_gray(&compressed, 9, 2, 1, peak),
+            decode_source_gray(&compressed, 9, 2, GrayPacking::Bilevel, peak),
             Some((expected, retained))
         );
-        assert_eq!(decode_source_gray(&compressed, 9, 2, 1, peak - 1), None);
-        assert_eq!(decode_source_gray(&compressed, 9, 1, 1, peak), None);
+        assert_eq!(
+            decode_source_gray(&compressed, 9, 2, GrayPacking::Bilevel, peak - 1),
+            None
+        );
+        assert_eq!(decode_source_gray(&compressed, 9, 1, GrayPacking::Bilevel, peak), None);
+    }
+
+    #[test]
+    fn neutral_rgb_source_requires_equal_channels_and_simultaneous_buffers() {
+        let compress = |samples: &[u8]| {
+            let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+            encoder.write_all(samples).unwrap();
+            encoder.finish().unwrap()
+        };
+        let neutral = compress(&[10, 10, 10, 205, 205, 205]);
+        let coloured = compress(&[10, 10, 10, 205, 206, 205]);
+        let retained = neutral.len() + 2 + 1;
+        let peak = retained + 6;
+        assert_eq!(
+            decode_source_gray(&neutral, 2, 1, GrayPacking::NeutralRgb, peak),
+            Some((vec![10, 205], retained))
+        );
+        assert_eq!(
+            decode_source_gray(&neutral, 2, 1, GrayPacking::NeutralRgb, peak - 1),
+            None
+        );
+        assert_eq!(
+            decode_source_gray(&coloured, 2, 1, GrayPacking::NeutralRgb, usize::MAX),
+            None
+        );
     }
 
     #[test]

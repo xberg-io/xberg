@@ -19,3 +19,6 @@ Regenerate it with the bundled DejaVu Sans font:
 uv run --no-project --with pillow==13.0.0 python generate.py . \
   ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --bilevel-only
 ```
+
+The neutral RGB variant stores the same 12,000-pixel grayscale raster in
+three identical channels. Use the same font and `--neutral-rgb-only`.
