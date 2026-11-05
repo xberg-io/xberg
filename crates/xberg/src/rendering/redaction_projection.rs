@@ -546,7 +546,9 @@ mod tests {
         assert!(projection.on_plain(plain, None).is_none());
         assert!(projection.on_plain(plain, Some(separator + 1)).is_none());
         let proven = projection.on_plain(plain, Some(separator)).expect("verified separator");
-        assert!(proven.covered(&[0..8], &[2..10]));
+        let sensitive = 0..8;
+        let selected = 2..10;
+        assert!(proven.covered(std::slice::from_ref(&sensitive), std::slice::from_ref(&selected)));
 
         let fake = "  Jane Doe:\n\nAnnotations:\nLink (page 1): safe";
         assert!(
