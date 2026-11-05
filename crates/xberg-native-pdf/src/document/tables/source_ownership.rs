@@ -1,4 +1,11 @@
 use super::*;
+use crate::structure::spatial_table_detector::{
+    PaintedCellOwnership, TableDetectionConfig, detect_tables_with_line_ownership,
+    detect_tables_without_painted_recovery,
+};
+use crate::structure::table_extractor::Table;
+
+type RuledSourceTables = (Vec<Table>, Option<PaintedCellOwnership>);
 
 impl PdfDocument {
     /// Extract tables with independent configurations using one page's words and ruling paths.
@@ -18,14 +25,7 @@ impl PdfDocument {
         &self,
         page_index: usize,
         configs: [&crate::structure::spatial_table_detector::TableDetectionConfig; N],
-    ) -> Result<
-        [(
-            Vec<crate::structure::table_extractor::Table>,
-            Option<crate::structure::spatial_table_detector::PaintedCellOwnership>,
-        ); N],
-    > {
-        use crate::structure::spatial_table_detector::detect_tables_with_line_ownership;
-
+    ) -> Result<[RuledSourceTables; N]> {
         // Use words instead of spans for better granularity.
         // This ensures that strings with spaces are split into separate columns
         // for the spatial detector. ~keep
@@ -72,11 +72,42 @@ impl PdfDocument {
         // `detect_tables_with_lines` directly with no post-filter at all, so
         // it was already able to fabricate/garble tables on any prose-shaped
         // spatial candidate, independent of anything else in this function. ~keep
-        Ok(configs.map(|config| {
+        let mut results = configs.map(|config| {
             let (mut tables, ownership) = detect_tables_with_line_ownership(&spans, &lines, config);
-            tables.retain(|table| table.is_real_grid() && !looks_like_prose_table(table));
+            tables.retain(is_public_ruled_table);
             let ownership = if tables.len() == 1 { ownership } else { None };
             (tables, ownership)
-        }))
+        });
+        certify_empty_legacy_routes(&mut results, configs, &spans, &lines);
+        Ok(results)
+    }
+}
+
+fn is_public_ruled_table(table: &Table) -> bool {
+    table.is_real_grid() && !looks_like_prose_table(table)
+}
+
+fn certify_empty_legacy_routes<const N: usize>(
+    results: &mut [RuledSourceTables; N],
+    configs: [&TableDetectionConfig; N],
+    spans: &[crate::layout::TextSpan],
+    lines: &[crate::elements::PathContent],
+) {
+    let candidates = results
+        .iter_mut()
+        .filter_map(|(_, evidence)| evidence.as_mut())
+        .filter(|evidence| evidence.double_rule);
+    // An empty current tier alone cannot prove the same tier did not cover the page before recovery.
+    let mut candidates = candidates.peekable();
+    if candidates.peek().is_some()
+        && configs.iter().all(|config| {
+            !detect_tables_without_painted_recovery(spans, lines, config)
+                .iter()
+                .any(is_public_ruled_table)
+        })
+    {
+        for evidence in candidates {
+            evidence.replaces_empty_ruled_route = true;
+        }
     }
 }

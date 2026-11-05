@@ -2,6 +2,10 @@ use super::{PaintedCellOwnership, Table, TableDetectionConfig, TextSpan};
 use crate::elements::{PathContent, PathOperation};
 use crate::geometry::Rect;
 
+mod record_bands;
+
+pub(super) use record_bands::preserve as preserve_record_bands;
+
 const MAX_PATHS: usize = 1_024;
 const MAX_WORDS: usize = 4_096;
 const MAX_WORK: usize = 131_072;
@@ -51,6 +55,9 @@ impl Prepared<'_> {
         words.iter().any(Option::is_some).then_some(PaintedCellOwnership {
             columns: self.columns,
             words,
+            recovered_bounds: None,
+            double_rule: false,
+            replaces_empty_ruled_route: false,
         })
     }
 }

@@ -158,7 +158,8 @@ fn candidate_must_keep_the_original_occurrence_and_visible_cell_value() {
     let (spans, paths) = painted_rows(true);
     let config = TableDetectionConfig::strict();
     let mut prepared = prepare(&spans, &paths, &config).expect("certified source tiling");
-    let mut tables = super::super::detect_with_unmodified_paths(&spans, &prepared.paths, &config);
+    let mut recovery = super::super::RecoveredIntersection::default();
+    let mut tables = super::super::detect_with_unmodified_paths(&spans, &prepared.paths, &config, Some(&mut recovery));
     assert!(prepared.accepts(&tables));
 
     let original = tables[0].rows[0].cells[2].spans[1].clone();
@@ -215,4 +216,140 @@ fn numeric_paint_overhang_requires_the_exact_cell_and_stays_within_its_row_allow
         assert!(certified_overhang(&cell, paint, &changed, 2.0).is_none());
     }
     assert!(certified_overhang(&cell, Rect::new(15.0, 380.0, 41.0, 21.0), &word, 2.0).is_none());
+}
+
+fn alternating_record_bands() -> (Vec<TextSpan>, Vec<PathContent>) {
+    use crate::layout::Color;
+    let mut spans = Vec::new();
+    let mut paths = Vec::new();
+    let mut top = 170.0;
+    for band in 0..5 {
+        let is_record = band % 2 == 0;
+        let (height, color) = if is_record {
+            (24., Color::new(0.8, 0.93, 1.))
+        } else {
+            (10., Color::white())
+        };
+        for (x, width) in [(10., 40.), (50., 8.), (58., 50.), (108., 8.), (116., 40.)] {
+            paths.push(painted_cell(x, top - height, width, height, color));
+        }
+        if is_record {
+            for (x, y, text) in [
+                (12., top - 8., "Source name"),
+                (60., top - 8., "Background"),
+                (60., top - 21., "continued"),
+                (118., top - 8., "Ownership"),
+            ] {
+                spans.push(TextSpan {
+                    text: text.to_string(),
+                    bbox: Rect::new(x, y, 22., 8.5),
+                    font_size: 8.5,
+                    ..Default::default()
+                });
+            }
+        }
+        top -= height;
+    }
+    (spans, paths)
+}
+
+fn assigned_alternating_bands(
+    spans: &[TextSpan],
+    paths: &[PathContent],
+) -> (Vec<super::super::TableRow>, Vec<Vec<Vec<usize>>>) {
+    let config = TableDetectionConfig::default();
+    let (groups, edges, intersections) = super::super::build_grid_from_lines(paths, &config);
+    let [(cells, xs, ys, columns)] = groups.as_slice() else {
+        panic!("one exact physical source grid");
+    };
+    assert!(intersections);
+    super::super::assign_spans_to_intersection_grid(cells, xs, ys, *columns, spans, &edges, true).unwrap()
+}
+
+#[test]
+fn painted_spacers_keep_repeated_source_names_and_wrapped_cells_in_separate_records() {
+    let (spans, paths) = alternating_record_bands();
+    let (rows, owners) = assigned_alternating_bands(&spans, &paths);
+    let table = preserve_record_bands(&rows, &owners, &spans, &paths, &TableDetectionConfig::default()).unwrap();
+    assert_eq!(table.col_count, 5);
+    assert_eq!(table.rows.len(), 3);
+    for (index, row) in table.rows.iter().enumerate() {
+        assert_eq!(row.cells[0].text, "Source name");
+        assert_eq!(row.cells[2].text, "Background\ncontinued");
+        assert_eq!(row.cells[4].text, "Ownership");
+        assert_eq!(row.cells[2].spans[0].bbox, spans[index * 4 + 1].bbox);
+        assert_eq!(row.cells[2].spans[1].bbox, spans[index * 4 + 2].bbox);
+        let bounds = row.cells[2].bbox.unwrap();
+        assert!(row.cells[2].spans.iter().all(|span| contains(bounds, span.bbox)));
+    }
+}
+
+#[test]
+fn painted_record_bands_do_not_admit_a_grid_with_too_many_empty_tracks() {
+    let (mut spans, paths) = alternating_record_bands();
+    assert_eq!(spans.pop().unwrap().text, "Ownership");
+    let mut sparse = paths.clone();
+    let (bands, remainder) = paths.as_chunks::<5>();
+    assert!(remainder.is_empty());
+    for band in bands {
+        let last = &band[4];
+        for offset in [0.0, 10.0] {
+            sparse.push(painted_cell(
+                last.bbox.right() + offset,
+                last.bbox.y,
+                10.0,
+                last.bbox.height,
+                last.fill_color.unwrap(),
+            ));
+        }
+    }
+    let (rows, owners) = assigned_alternating_bands(&spans, &sparse);
+    assert!(rows.iter().all(|row| row.cells.len() == 7));
+    assert!(preserve_record_bands(&rows, &owners, &spans, &sparse, &TableDetectionConfig::default()).is_none());
+}
+
+#[test]
+fn independent_rule_or_text_in_the_separator_preserves_existing_section_detection() {
+    let (spans, paths) = alternating_record_bands();
+    let (rows, owners) = assigned_alternating_bands(&spans, &paths);
+    let accepts = |words: &[TextSpan], paint: &[PathContent]| {
+        preserve_record_bands(&rows, &owners, words, paint, &TableDetectionConfig::default()).is_some()
+    };
+    assert!(accepts(&spans, &paths));
+
+    let mut divider = paths.clone();
+    divider.push(PathContent::line(10., 142., 156., 142.));
+    assert!(!accepts(&spans, &divider));
+
+    let mut filled_divider = paths.clone();
+    filled_divider.push(painted_cell(10., 142., 146., 0.5, crate::layout::Color::black()));
+    assert!(!accepts(&spans, &filled_divider));
+
+    let mut caption = spans.clone();
+    caption.push(TextSpan {
+        text: "Separate table".into(),
+        bbox: Rect::new(12., 140., 35., 4.),
+        ..Default::default()
+    });
+    assert!(!accepts(&caption, &paths));
+
+    let mut straddling = spans.clone();
+    straddling[0].bbox.width = 42.;
+    assert!(!accepts(&straddling, &paths));
+}
+
+#[test]
+fn an_outer_glyph_overhang_cannot_capture_unowned_heading_text() {
+    let (mut spans, paths) = alternating_record_bands();
+    let (rows, owners) = assigned_alternating_bands(&spans, &paths);
+    let config = TableDetectionConfig::default();
+    assert!(preserve_record_bands(&rows, &owners, &spans, &paths, &config).is_some());
+
+    spans.push(TextSpan {
+        text: "Independent heading".into(),
+        bbox: Rect::new(12., 170.25, 35., 8.),
+        font_size: 8.,
+        ..Default::default()
+    });
+    assert!(preserve_record_bands(&rows, &owners, &spans, &paths, &config).is_none());
 }

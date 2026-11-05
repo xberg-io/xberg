@@ -191,6 +191,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Preserve complete painted exhibit tables when cells contain decorative text fills.** (#2376)
   Verify source cell contents and suppress only an exactly proven residual duplicate digit.
 
+- **(pdf): Recover painted fee and company tables without dropping adjacent content.** (#2376)
+  Preserve independent tables and remove duplicate row text only when its original source is proven.
+
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
 

@@ -321,7 +321,7 @@ fn reference_projection() -> (Vec<SegmentData>, AHashSet<SegmentKey>) {
         "1508aa9a0e12e8aad8bbc594a99ded16ce7517518e2689fc6002e59263c3c005"
     );
     let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
-    let (tables, _) = crate::pdf::native::table::extract_ruled_tables(&doc).unwrap();
+    let tables = crate::pdf::native::table::extract_ruled_tables(&doc).unwrap().tables;
     assert_eq!(
         tables.len(),
         1,
@@ -417,4 +417,56 @@ fn a_cell_run_outside_the_emitted_table_cannot_authorize_source_removal() {
             .unwrap_or_default();
         assert!(keys.is_empty(), "source run crosses emitted table edge {left}");
     }
+}
+
+#[test]
+fn recovered_line_certifies_complete_split_words_and_rejects_changed_boundaries() {
+    let mut cell = native_cell();
+    cell.spans = [("Technology", 20., 45.), (" Limited", 70., 30.)]
+        .into_iter()
+        .map(|(text, x, width)| TextSpan {
+            text: text.into(),
+            bbox: Rect::new(x, 100., width, FONT),
+            font_size: FONT,
+            ..Default::default()
+        })
+        .collect();
+    cell.bbox = Some(Rect::new(10., 90., 100., 30.));
+    let text = "Technology Limited";
+    let lines = recovered_cell_lines(&cell, text).expect("exact original words in the emitted line");
+    let (_, mut source, mut table) = fixture();
+    table.cells = vec![vec![text.into()]];
+    table.markdown = format!("| {text} |");
+    table.bounding_box = Some(BoundingBox {
+        x0: 10.,
+        y0: 90.,
+        x1: 110.,
+        y1: 120.,
+    });
+    source.bbox = table_bounds(table.bounding_box).unwrap();
+    source.cells = table.cells.clone();
+    source.markdown = table.markdown.clone();
+    source.members.clear();
+    source.recovered_lines = lines;
+    let exact = vec![glyph("T", 20., 100., 5.), glyph("echnology Limited", 25., 100., 75.)];
+    let projected = |spans: Vec<SegmentData>| {
+        project(&[spans], &[&source], std::slice::from_ref(&table))
+            .remove(&0)
+            .unwrap_or_default()
+            .recovered_lines
+    };
+    assert_eq!(
+        projected(exact.clone()),
+        exact.iter().map(SegmentKey::from).collect::<Vec<_>>()
+    );
+
+    let mut different_words = exact.clone();
+    different_words[1].text = "echnologyLimited".into();
+    assert!(projected(different_words).is_empty());
+    let mut crossing = exact.clone();
+    crossing.push(glyph("Outside", 99., 100., 10.));
+    assert!(projected(crossing).is_empty());
+    let mut tagged = exact;
+    tagged[0].assigned_role = Some(2);
+    assert!(projected(tagged).is_empty());
 }
