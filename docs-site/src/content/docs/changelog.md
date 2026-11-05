@@ -181,11 +181,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Paint identity CID TrueType glyphs when Unicode decoding loses characters.** (#2309)
+  Preserve embedded outlines despite sparse Unicode font maps, in automatic and forced OCR.
+
 - **(pdf): Preserve word boundaries when Type0 fonts lack Unicode mappings.** (#2328)
   Route unmapped glyphs through OCR decisions, warn when native characters are unavailable, and retain OCR-owned text.
 
+- **(pdf): Retain independently shaded source table headers and ruled cell boundaries.** (#2332)
+  Keep nested text backgrounds from creating extra columns while preserving separate table records.
+
+
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
   Retain words beside large graphics while preserving the dense-text recovery introduced in #2475.
+
+- **(pdf): Retain confirmed readable native lines that automatic OCR misses.** (#2439)
+  Retain uncertified OCR alternatives and their formatting beside restored native rows.
+  Preserve original native page order when every OCR occurrence is certified and its final payload is plain.
 
 - **(pdf): Restore caller font bindings before resuming text after a Form.** (#2516)
   Keep caller words when a Form shadows the selected font resource name, on cold and warm reads.

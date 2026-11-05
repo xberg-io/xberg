@@ -766,8 +766,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // Pages whose OCR text got the recognition-noise verdict and was not discarded. The caller
     // decides each page on its OCR text alone and puts the layer first only on a replaced page.
     let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
-    // The readable text layers that a page keeps first when its OCR text is judged recognition
-    // noise. A forced page is replaced by definition and keeps none. ~keep
+    // The readable text layers that a replaced page keeps first when its OCR text is judged
+    // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
+    // none. ~keep
     let ocr_output_thresholds = config
         .ocr
         .as_ref()
@@ -1044,6 +1045,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // comment on `skip_document_global_heuristic`).
     let mut ocr_page_paragraphs: ahash::AHashMap<u32, Vec<crate::pdf::structure::types::PdfParagraph>> =
         ahash::AHashMap::with_capacity(total);
+    // The raster each pipeline page was read from. Its paragraphs stay in that raster's pixels
+    // (`extract_with_ocr_for_page` assembles them before any rescale), while the single-backend
+    // route's paragraphs are in PDF points already; the layer merge scales by this. ~keep
+    let mut ocr_raster_by_page: ahash::AHashMap<u32, (u32, u32)> = ahash::AHashMap::with_capacity(total);
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
     let mut accumulated_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
@@ -1257,7 +1262,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // (`std::slice::from_ref` above), so its own per-page paragraph vec has
                     // at most one entry -- this page's own, still bare/unclassified because
                     // `skip_document_global_heuristic = true` was passed above.
-                    if let Some(paragraphs) = page_raw_paragraphs.pop().filter(|p| !p.is_empty()) {
+                    if let Some(paragraphs) = page_raw_paragraphs
+                        .pop()
+                        .map(|page| page.paragraphs)
+                        .filter(|paragraphs| !paragraphs.is_empty())
+                    {
                         ocr_page_paragraphs.insert(page_number, paragraphs);
                     }
                     let page_dims = page_images
@@ -1286,6 +1295,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .iter()
                         .find(|(rendered_page, _)| *rendered_page == page_idx)
                         .map_or((0, 0), |(_, image)| (image.width(), image.height()));
+                    ocr_raster_by_page.insert(page_number, raster_size_px);
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
                         tables,
@@ -1397,7 +1407,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
-                    if let Some(paragraphs) = page_raw_paragraphs.pop().filter(|p| !p.is_empty()) {
+                    if let Some(paragraphs) = page_raw_paragraphs
+                        .pop()
+                        .map(|page| page.paragraphs)
+                        .filter(|paragraphs| !paragraphs.is_empty())
+                    {
                         ocr_page_paragraphs.insert(page_number, paragraphs);
                     }
                     for mut formula in formulas {
@@ -1413,6 +1427,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         accumulated_formulas.push(formula);
                     }
                     let page_text = page_texts.into_iter().next().unwrap_or(text);
+                    ocr_raster_by_page.insert(page_number, (image.width(), image.height()));
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
                         tables,
@@ -2106,26 +2121,68 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     }
 
     // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
-    // got the noise verdict, now gets its readable text layer first. A page it keeps native
-    // stays as it was. ~keep
-    let mut page_layers_before_noise: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+    // got the noise verdict or confirms the layer, now gets the layer lines that its OCR text
+    // lacks first. A page it keeps native stays as it was. ~keep
+    let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
+    let mut complete_native_pages = std::collections::HashSet::new();
+    let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
+    #[cfg(feature = "layout-detection")]
+    let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
     if let Some(layers) = page_layers.as_ref() {
-        for page_number in &noise_verdict_pages {
-            if let Some(layer) = layers.get(page_number)
-                && let Some(text) = accepted_replacements.get_mut(page_number)
-                && let Some(mut missing) = super::document::layer_lines_absent_from_ocr(layer, text)
+        let mut geometry = MergeGeometrySession::new(content, config);
+        for (page_number, text) in &mut accepted_replacements {
+            if geometry.cancelled() {
+                break;
+            }
+            let ocr_scale = match ocr_raster_by_page.get(page_number) {
+                Some(&(width_px, height_px)) => {
+                    let (width_pt, height_pt) = page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                    (width_px > 0 && height_px > 0).then(|| (width_pt / width_px as f32, height_pt / height_px as f32))
+                }
+                None => Some((1.0, 1.0)),
+            };
+            let boxes = layers.get(page_number).and_then(|layer| {
+                if noise_verdict_pages.contains(page_number)
+                    || !super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds)
+                {
+                    return None;
+                }
+                geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
+            });
+            if native_preservation_enabled
+                && super::document::native_preservation_is_automatic(config, *page_number)
+                && !noise_verdict_pages.contains(page_number)
+                && structured_ocr_pages
+                    .get(page_number)
+                    .is_some_and(super::document::ocr_page_has_only_plain_payload)
+                && layers.get(page_number).is_some_and(|layer| {
+                    super::document::native_page_covers_ocr(layer, text, &ocr_output_thresholds, boxes.as_ref())
+                })
             {
-                let lost = super::super::unmapped_glyphs::strip_native_fragment(&mut missing);
+                complete_native_pages.insert(*page_number);
+            }
+            if let Some(layer) = layers.get(page_number)
+                && let Some(mut first) = super::document::layer_lines_to_put_first(
+                    layer,
+                    text,
+                    noise_verdict_pages.contains(page_number),
+                    &ocr_output_thresholds,
+                    boxes.as_ref(),
+                )
+            {
+                let lost = super::super::unmapped_glyphs::strip_native_fragment(&mut first.lines);
                 if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
                     crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
                 }
-                if !missing.is_empty() {
-                    *text = format!("{missing}\n\n{text}");
-                    page_layers_before_noise.insert(*page_number, missing);
+                if first.lines.is_empty() {
+                    continue;
                 }
+                *text = super::document::text_with_layer_first(text, &first);
+                page_layers_first.insert(*page_number, first);
             }
         }
     }
+    super::super::ensure_pdf_not_cancelled(config)?;
     structured_ocr_pages
         .retain(|page, _| accepted_replacements.contains_key(page) || table_only_xobject_recovery_pages.contains(page));
     retain_ocr_formulas_for_accepted_pages(&mut accumulated_formulas, &accepted_replacements);
@@ -2235,12 +2292,29 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     if numeric_repair_enabled(config) {
         apply_numeric_repair_to_structured_ocr_pages(&mut structured_ocr_pages);
     }
+    // Reject only certified automatic replacements, preserving the original native page objects.
+    // Recheck the final OCR structure because the document-global pass can add rich payload. ~keep
+    for page in complete_native_pages {
+        let plain = structured_ocr_pages
+            .get(&page)
+            .zip(ocr_results.get(&page))
+            .is_some_and(|(doc, text)| super::document::plain_ocr_page_can_yield_to_native(doc, text));
+        let has_formula = accumulated_formulas
+            .iter()
+            .any(|formula| formula.page.is_none_or(|owner| owner == page));
+        if plain && !has_formula && super::document::native_preservation_is_automatic(config, page) {
+            accepted_replacements.remove(&page);
+            structured_ocr_pages.remove(&page);
+            ocr_confidence_by_page.remove(&page);
+            preprocessing_by_page.remove(&page);
+        }
+    }
     // The structured page keeps the layer first as well, after the passes above rebuilt it. ~keep
-    for (page_number, layer) in &page_layers_before_noise {
+    for (page_number, first) in &page_layers_first {
         if accepted_replacements.contains_key(page_number)
             && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
         {
-            super::document::insert_layer_into_document(page_doc, None, layer);
+            super::document::put_layer_first_in_document(page_doc, None, first);
         }
     }
 
@@ -2534,7 +2608,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
         page_texts,
         rasters,
         formulas,
-        _raw_page_paragraphs,
+        raw_page_paragraphs,
         preprocessing,
         ocr_confidence,
         recognition_noise_verdicts,
@@ -2556,13 +2630,18 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
     .await?;
     let (text, page_texts, doc) = with_run_layers_first(
         run_layers,
-        &recognition_noise_verdicts,
-        0,
+        RunLayerSources {
+            verdicts: &recognition_noise_verdicts,
+            page_index_offset: 0,
+            content,
+            raw_page_paragraphs: &raw_page_paragraphs,
+        },
         text,
         page_texts,
         doc,
         config,
     );
+    super::super::ensure_pdf_not_cancelled(config)?;
     Ok((
         text,
         mean_conf,
@@ -2705,7 +2784,7 @@ pub(super) async fn extract_with_ocr_for_page(
     Vec<String>,
     Option<Vec<crate::types::ExtractedImage>>,
     Vec<crate::types::Formula>,
-    Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+    Vec<RunPageParagraphs>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
@@ -2987,6 +3066,9 @@ pub(super) async fn extract_with_ocr_for_page(
     // paragraphs of a rejected page must be dropped along with its text.
     let mut rejected_pages = vec![false; total_pages];
     let mut all_page_paragraphs: Vec<Option<Vec<crate::pdf::structure::types::PdfParagraph>>> = vec![None; total_pages];
+    // The factor from each page's OCR raster to points, recorded beside its paragraphs for the
+    // layer merge. ~keep
+    let mut page_ocr_scales: Vec<Option<(f32, f32)>> = vec![None; total_pages];
     let mut public_ocr_pages = ahash::AHashMap::new();
     // Written only by the two OCR-paragraph assembly blocks below (`layout-detection`
     // *with* `ocr`/`ocr-wasm`, or `not(layout-detection)`); still read unconditionally by
@@ -4108,6 +4190,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     );
 
                     all_page_paragraphs[page_idx] = Some(paragraphs);
+                    page_ocr_scales[page_idx] = run_page_ocr_scale(
+                        #[cfg(feature = "pdf")]
+                        lazy_pdf_render_state.as_ref(),
+                        page_idx,
+                        (ocr_render_width, ocr_render_height),
+                    );
                     pages_text_claimed_by_tables[page_idx] = ocr_doc.ocr_text_claimed_by_tables;
                 }
 
@@ -4192,6 +4280,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     }
                 }
                 all_page_paragraphs[page_idx] = Some(paragraphs);
+                page_ocr_scales[page_idx] = run_page_ocr_scale(
+                    #[cfg(feature = "pdf")]
+                    lazy_pdf_render_state.as_ref(),
+                    page_idx,
+                    (ocr_render_width, ocr_render_height),
+                );
                 pages_text_claimed_by_tables[page_idx] = ocr_doc.ocr_text_claimed_by_tables;
             }
 
@@ -4489,6 +4583,11 @@ pub(super) async fn extract_with_ocr_for_page(
                     }
                 }
             };
+            let pages = pages
+                .into_iter()
+                .zip(page_ocr_scales)
+                .map(|(paragraphs, ocr_scale)| RunPageParagraphs { paragraphs, ocr_scale })
+                .collect();
             (doc, pages)
         } else {
             (None, Vec::new())
@@ -4499,9 +4598,9 @@ pub(super) async fn extract_with_ocr_for_page(
     // to the mixed route's document-global paragraph reconstruction pass.
     for page in public_ocr_pages.keys() {
         if let Some(index) = (*page as usize).checked_sub(page_index_offset + 1)
-            && let Some(paragraphs) = raw_page_paragraphs.get_mut(index)
+            && let Some(page) = raw_page_paragraphs.get_mut(index)
         {
-            paragraphs.clear();
+            page.paragraphs.clear();
         }
     }
     let ocr_doc = if public_ocr_pages.is_empty() {
@@ -5183,7 +5282,7 @@ impl<'a> XObjectRecoveryContext<'a> {
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[derive(Clone, Copy)]
 pub(super) enum XObjectProjection {
-    #[cfg(test)]
+    #[cfg(all(test, feature = "pdf", feature = "ocr"))]
     RawPayloads,
     CompletePage,
 }
@@ -5593,7 +5692,7 @@ type OcrPipelineOutput = (
     Vec<String>,
     Option<Vec<crate::types::ExtractedImage>>,
     Vec<crate::types::Formula>,
-    Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+    Vec<RunPageParagraphs>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
@@ -5638,31 +5737,31 @@ pub(super) fn attach_unread_page_failures(
     doc
 }
 
-/// Put the layer first on each noise page of the returned stage of a whole-document run, after
-/// the stage was scored and chosen on its OCR text alone. A run without layers is unchanged.
+/// Put the layer first on each page of the returned stage of a whole-document run whose OCR text
+/// got the noise verdict or confirms the layer, after the stage was scored and chosen on its OCR
+/// text alone. A run without layers is unchanged.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn with_run_layers_first(
     layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
-    verdicts: &[OcrPageNoiseVerdict],
-    page_index_offset: usize,
+    run: RunLayerSources<'_>,
     mut text: String,
     mut page_texts: Vec<String>,
     mut doc: Option<crate::types::internal::InternalDocument>,
     config: &ExtractionConfig,
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
+        let boxes = run_merge_geometry(&layers, &run, &page_texts, config);
         let lost = super::document::put_layers_first_in_run(
             &mut text,
             &mut page_texts,
             doc.as_mut(),
-            &layers,
-            verdicts,
-            page_index_offset,
-            config
-                .pages
-                .as_ref()
-                .filter(|pages| pages.insert_page_markers)
-                .map(|pages| pages.marker_format.as_str()),
+            super::document::PageLayers {
+                lines: &layers,
+                boxes: &boxes,
+            },
+            run.verdicts,
+            run.page_index_offset,
+            config,
         );
         if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
             let doc = doc.get_or_insert_with(|| super::document::flat_ocr_page_document(&text));
@@ -5670,6 +5769,179 @@ fn with_run_layers_first(
         }
     }
     (text, page_texts, doc)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn run_merge_geometry(
+    layers: &ahash::AHashMap<u32, String>,
+    run: &RunLayerSources<'_>,
+    page_texts: &[String],
+    config: &ExtractionConfig,
+) -> ahash::AHashMap<u32, super::document::PageLineBoxes> {
+    let mut boxes = ahash::AHashMap::new();
+    let mut geometry = run.content.map(|content| MergeGeometrySession::new(content, config));
+    let thresholds = config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.quality_thresholds.clone())
+        .unwrap_or_default();
+    for (&page_number, layer) in layers {
+        if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+            break;
+        }
+        if run
+            .verdicts
+            .iter()
+            .any(|verdict| verdict.page_index as u32 + 1 == page_number)
+        {
+            continue;
+        }
+        let Some((page, read)) = (page_number as usize)
+            .checked_sub(run.page_index_offset + 1)
+            .and_then(|index| run.raw_page_paragraphs.get(index).zip(page_texts.get(index)))
+        else {
+            continue;
+        };
+        if !super::document::ocr_confirms_layer(layer, read, &thresholds) {
+            continue;
+        }
+        // Per-page OCR frames are optional; unknown frames cannot authorize removal. ~keep
+        if let Some(geometry) = geometry.as_mut()
+            && let Some(page_boxes) = geometry.page_boxes(page_number, Some(&page.paragraphs), page.ocr_scale)
+        {
+            boxes.insert(page_number, page_boxes);
+        }
+    }
+    boxes
+}
+
+/// What a whole-document run gives the layer merge beside its text: the noise verdicts, the
+/// document bytes for the native segment pass, and the OCR paragraphs of each page by local
+/// index. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct RunLayerSources<'a> {
+    verdicts: &'a [OcrPageNoiseVerdict],
+    page_index_offset: usize,
+    content: Option<&'a [u8]>,
+    raw_page_paragraphs: &'a [RunPageParagraphs],
+}
+
+/// The OCR paragraphs of one page of a whole-document run, in the pixels of the raster the page
+/// was read from, and the factor per axis that takes that raster to PDF points (the page's
+/// MediaBox over the raster). The factor is `None` when the run rendered no PDF page (an image
+/// run): the layer merge of that page then removes nothing (rule 3). ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Debug, Default)]
+pub(super) struct RunPageParagraphs {
+    pub(super) paragraphs: Vec<crate::pdf::structure::types::PdfParagraph>,
+    pub(super) ocr_scale: Option<(f32, f32)>,
+}
+
+/// The factor per axis from the raster a page of a whole-document run was read from to PDF
+/// points, the same conversion the mixed route applies to its pipeline pages. `None` when the
+/// run rendered no PDF page or the raster is empty. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn run_page_ocr_scale(
+    #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    page_idx: usize,
+    raster_px: (u32, u32),
+) -> Option<(f32, f32)> {
+    #[cfg(feature = "pdf")]
+    {
+        let (pdf, _, _) = lazy_pdf_render_state?;
+        let (width_px, height_px) = raster_px;
+        let (width_pt, height_pt) = page_dimensions_pt(pdf, page_idx);
+        (width_px > 0 && height_px > 0).then(|| (width_pt / width_px as f32, height_pt / height_px as f32))
+    }
+    #[cfg(not(feature = "pdf"))]
+    {
+        let _ = (page_idx, raster_px);
+        None
+    }
+}
+
+/// One lazy authenticated native document per merge, including a cached failure. Geometry is
+/// optional evidence: unavailable pages keep both payloads and never authorize OCR deletion. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct MergeGeometrySession<'a> {
+    content: &'a [u8],
+    config: &'a ExtractionConfig,
+    #[cfg(feature = "pdf")]
+    document: Option<Option<crate::pdf::native::NativeDocument>>,
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn open_merge_geometry_document(
+    content: &[u8],
+    config: &ExtractionConfig,
+) -> Option<crate::pdf::native::NativeDocument> {
+    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        return None;
+    }
+    let passwords = config
+        .pdf_options
+        .as_ref()
+        .and_then(|options| options.passwords.as_deref())
+        .unwrap_or(&[]);
+    #[cfg(test)]
+    geometry_session_tests::record_open();
+    crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords).ok()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl<'a> MergeGeometrySession<'a> {
+    fn new(content: &'a [u8], config: &'a ExtractionConfig) -> Self {
+        Self {
+            content,
+            config,
+            #[cfg(feature = "pdf")]
+            document: None,
+        }
+    }
+
+    fn cancelled(&self) -> bool {
+        self.config
+            .cancel_token
+            .as_ref()
+            .is_some_and(|token| token.is_cancelled())
+    }
+
+    fn page_boxes(
+        &mut self,
+        page_number: u32,
+        paragraphs: Option<&Vec<crate::pdf::structure::types::PdfParagraph>>,
+        scale: Option<(f32, f32)>,
+    ) -> Option<super::document::PageLineBoxes> {
+        if self.cancelled() {
+            return None;
+        }
+        let scale = scale?;
+        let paragraphs =
+            paragraphs.filter(|paragraphs| paragraphs.iter().any(|paragraph| !paragraph.lines.is_empty()))?;
+        let page_index = (page_number as usize).checked_sub(1)?;
+        #[cfg(feature = "pdf")]
+        {
+            let config = self.config;
+            let content = self.content;
+            let document = self
+                .document
+                .get_or_insert_with(|| open_merge_geometry_document(content, config))
+                .as_mut()?;
+            if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+                return None;
+            }
+            let artifacts =
+                crate::pdf::native::hierarchy::ArtifactRetention::from_content_filter(config.content_filter.as_ref());
+            let segments =
+                crate::pdf::native::hierarchy::extract_segments_from_page(document, page_index, artifacts).ok()?;
+            super::document::page_line_boxes(&segments, paragraphs, scale)
+        }
+        #[cfg(not(feature = "pdf"))]
+        {
+            let _ = (self.content, paragraphs, scale, page_index);
+            None
+        }
+    }
 }
 
 /// What a pipeline run gives to each of its stages without a change: the parameters of
@@ -5807,7 +6079,7 @@ async fn run_ocr_pipeline_stages(
         Vec<String>,
         Option<Vec<crate::types::ExtractedImage>>,
         Vec<crate::types::Formula>,
-        Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
+        Vec<RunPageParagraphs>,
         ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
         ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
         Vec<OcrPageNoiseVerdict>,
@@ -5945,13 +6217,18 @@ async fn run_ocr_pipeline_stages(
                 if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,
-                        &stage_recognition_noise_verdicts,
-                        inputs.page_index_offset,
+                        RunLayerSources {
+                            verdicts: &stage_recognition_noise_verdicts,
+                            page_index_offset: inputs.page_index_offset,
+                            content: inputs.content,
+                            raw_page_paragraphs: &stage_raw_paragraphs,
+                        },
                         text,
                         stage_page_texts,
                         stage_doc,
                         config,
                     );
+                    super::super::ensure_pdf_not_cancelled(config)?;
                     // ~keep Attach prior-stage diagnostics before this accepted-stage early
                     // return; otherwise successful fallback silently erases why it ran.
                     let stage_doc =
@@ -6044,13 +6321,18 @@ async fn run_ocr_pipeline_stages(
         )) => {
             let (text, page_texts, doc) = with_run_layers_first(
                 run_layers,
-                &noise_verdicts,
-                inputs.page_index_offset,
+                RunLayerSources {
+                    verdicts: &noise_verdicts,
+                    page_index_offset: inputs.page_index_offset,
+                    content: inputs.content,
+                    raw_page_paragraphs: &raw_page_paragraphs,
+                },
                 text,
                 page_texts,
                 doc,
                 config,
             );
+            super::super::ensure_pdf_not_cancelled(config)?;
             let threshold = pipeline.quality_thresholds.pipeline_min_quality;
             tracing::warn!(
                 score,
@@ -6812,3 +7094,7 @@ mod raster_budget_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr"))]
 #[path = "xobject_raw_collection_test_support.rs"]
 mod raw_collection_test_support;
+
+#[cfg(all(test, feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[path = "pipeline/geometry_session_tests.rs"]
+mod geometry_session_tests;
