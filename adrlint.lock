@@ -50,3 +50,8 @@ blake3 = "aa22e213c162ef00a18629983627f7a93c7f7d727a1374d7a74d478bb16a87c6"
 number = 9
 status = "accepted"
 blake3 = "532d2a2120cfc797b323eb4d4cc8291010eba74b853345cee97c50362598127b"
+
+[adrs."adrs/0010-reuse-immutable-windows-wheels-for-isolated-qualification.md"]
+number = 10
+status = "accepted"
+blake3 = "883a47bbefced500646a92c038565525a1e80fe3765cff4f2e3560cbe7f58d0e"
