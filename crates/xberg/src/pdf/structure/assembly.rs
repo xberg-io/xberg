@@ -424,6 +424,171 @@ fn paragraph_is_covered_and_carried_by_table(
     inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO && table_carries_every_token(text, table_token_counts)
 }
 
+pub(super) fn recover_mixed_table_tick_paragraphs(
+    pages: &mut [Vec<PdfParagraph>],
+    tables: &[crate::types::Table],
+    members: &ahash::AHashMap<usize, crate::pdf::native::table::source_members::CertifiedRuns>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) {
+    if members.is_empty() {
+        return;
+    }
+    let mut by_page = ahash::AHashMap::<_, Vec<_>>::new();
+    for (index, table) in tables.iter().enumerate() {
+        by_page.entry(table.page_number).or_default().push((index, table));
+    }
+    for (number, tables) in by_page {
+        let [(index, table)] = tables.as_slice() else {
+            continue;
+        };
+        let (Some(runs), Some(page), Some(table_bbox)) = (
+            members.get(index),
+            number.checked_sub(1).and_then(|index| pages.get_mut(index as usize)),
+            table.bounding_box,
+        ) else {
+            continue;
+        };
+        let counts = table_coverage_token_counts(table);
+        let Some(singletons) = single_residual_members(page, runs) else {
+            continue;
+        };
+        let captions: ahash::AHashSet<_> = page.iter().filter_map(|paragraph| paragraph.caption_for).collect();
+        for (index, paragraph) in page.iter_mut().enumerate() {
+            if !captions.contains(&index)
+                && let Some(repaired) =
+                    recover_mixed_table_tick(paragraph, table, table_bbox, &counts, &singletons, hyphens)
+            {
+                *paragraph = repaired;
+            }
+        }
+    }
+}
+
+fn single_residual_members<'a>(
+    page: &[PdfParagraph],
+    runs: &'a crate::pdf::native::table::source_members::CertifiedRuns,
+) -> Option<ahash::AHashSet<&'a crate::pdf::native::hierarchy::script_evidence::SegmentKey>> {
+    use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
+    use crate::pdf::native::table::source_members::{MAX_PAGE_SEGMENTS, MAX_PROOF_WORK};
+
+    let mut seen = ahash::AHashMap::<SegmentKey, usize>::new();
+    let mut bytes = 0usize;
+    for (index, segment) in page
+        .iter()
+        .flat_map(|para| &para.lines)
+        .flat_map(|line| &line.segments)
+        .enumerate()
+    {
+        bytes = bytes.checked_add(segment.text.len())?;
+        if index >= MAX_PAGE_SEGMENTS || bytes > MAX_PROOF_WORK {
+            return None;
+        }
+        *seen.entry(SegmentKey::from(segment)).or_default() += 1;
+    }
+    Some(
+        runs.iter()
+            .filter(|run| run.len() > 1)
+            .filter_map(|run| {
+                let mut remaining = run.iter().filter(|key| seen.contains_key(*key));
+                let key = remaining.next()?;
+                (seen.get(key) == Some(&1) && remaining.next().is_none()).then_some(key)
+            })
+            .collect(),
+    )
+}
+
+fn recover_mixed_table_tick(
+    paragraph: &PdfParagraph,
+    table: &crate::types::Table,
+    table_bbox: BoundingBox,
+    counts: &std::collections::HashMap<String, usize>,
+    singletons: &ahash::AHashSet<&crate::pdf::native::hierarchy::script_evidence::SegmentKey>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) -> Option<PdfParagraph> {
+    use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
+
+    let [outside, owned] = paragraph.lines.as_slice() else {
+        return None;
+    };
+    let [orphan] = owned.segments.as_slice() else {
+        return None;
+    };
+    if !paragraph.text.is_empty()
+        || paragraph.heading_level.is_some()
+        || paragraph.is_bold
+        || paragraph.is_list_item
+        || paragraph.is_code_block
+        || paragraph.is_formula
+        || paragraph.is_page_furniture
+        || paragraph.layout_class.is_some()
+        || paragraph.layout_region_path.is_some()
+        || paragraph.caption_for.is_some()
+        || !orphan.text.as_bytes().first().is_some_and(u8::is_ascii_digit)
+        || orphan.text.len() != 1
+        || !singletons.contains(&SegmentKey::from(orphan))
+        || !paragraph.lines.iter().all(|line| {
+            line.native_scripts.is_empty()
+                && line.segments.iter().all(|segment| {
+                    segment.is_unrotated()
+                        && segment.assigned_role.is_none()
+                        && !segment.is_bold
+                        && !segment.is_italic
+                        && !segment.is_monospace
+                })
+        })
+    {
+        return None;
+    }
+    let (_, annotations) = extract_text_and_annotations(paragraph, hyphens);
+    let text = paragraph_effective_text(paragraph, hyphens);
+    if !annotations.is_empty() || !paragraph_is_covered_and_carried_by_table(paragraph, &text, table, counts) {
+        return None;
+    }
+    let bounds = outside_tick_bounds(outside, table_bbox)?;
+    let mut repaired = paragraph.clone();
+    repaired.lines.pop();
+    repaired.block_bbox = Some(bounds);
+    let (text, annotations) = extract_text_and_annotations(&repaired, hyphens);
+    let (whole, fraction) = text.split_once('.')?;
+    if !annotations.is_empty()
+        || whole.is_empty()
+        || fraction.is_empty()
+        || !whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
+        || !outside
+            .segments
+            .iter()
+            .flat_map(|segment| segment.text.chars())
+            .eq(text.chars())
+    {
+        return None;
+    }
+    repaired.word_count = PdfParagraph::compute_word_count("", &repaired.lines);
+    Some(repaired)
+}
+
+fn outside_tick_bounds(line: &super::types::PdfLine, table: BoundingBox) -> Option<(f32, f32, f32, f32)> {
+    let first = line.segments.first()?;
+    let mut bounds = (first.x, first.y, first.x + first.width, first.y + first.height);
+    for segment in &line.segments {
+        let right = segment.x + segment.width;
+        let top = segment.y + segment.height;
+        if ![segment.x, segment.y, right, top].iter().all(|edge| edge.is_finite())
+            || segment.x >= right
+            || segment.y >= top
+            || f64::from(right) >= table.x0
+        {
+            return None;
+        }
+        bounds = (
+            bounds.0.min(segment.x),
+            bounds.1.min(segment.y),
+            bounds.2.max(right),
+            bounds.3.max(top),
+        );
+    }
+    Some(bounds)
+}
+
 /// Push paragraph elements in their established reading order, with tables interleaved.
 ///
 /// Returns the element and structural-transition positions for every non-caption
@@ -1677,6 +1842,66 @@ mod tests {
             caption_for: None,
             block_bbox: None,
             word_count,
+        }
+    }
+
+    #[test]
+    fn late_tick_recovery_requires_a_unique_orphan_and_plain_disjoint_line() {
+        use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
+
+        let mut paragraph = make_paragraph_at("0.6", None, 20.0);
+        paragraph.lines[0].segments[0].width = 10.0;
+        paragraph.lines[0].segments[0].y = 20.0;
+        let mut orphan = make_paragraph_at("0", None, 10.0).lines.remove(0);
+        orphan.segments[0].x = 97.0;
+        orphan.segments[0].width = 5.0;
+        orphan.segments[0].y = 10.0;
+        let orphan_key = SegmentKey::from(&orphan.segments[0]);
+        let sibling_key = SegmentKey::from(&SegmentData {
+            x: 102.0,
+            ..plain_segment(".4")
+        });
+        paragraph.lines.push(orphan);
+        paragraph.block_bbox = Some((0.0, 10.0, 102.0, 32.0));
+        let table = crate::types::Table {
+            cells: vec![vec!["0.6 0.4".into()]],
+            markdown: "| 0.6 0.4 |".into(),
+            page_number: 1,
+            bounding_box: Some(BoundingBox {
+                x0: 12.0,
+                y0: 0.0,
+                x1: 110.0,
+                y1: 40.0,
+            }),
+            ..Default::default()
+        };
+        let evidence = ahash::AHashMap::from_iter([(0, vec![vec![orphan_key, sibling_key]])]);
+        for case in 0..7 {
+            let mut page = vec![paragraph.clone()];
+            let mut members = evidence.clone();
+            match case {
+                1 => members.clear(),
+                2 => page.push(make_paragraph_at("caption", None, 3.0)),
+                3 => page[0].lines[0].segments[0].width = 12.0,
+                4 => page[0].lines[0].segments[0].is_italic = true,
+                5 => page.push(page[0].clone()),
+                6 => page[0].is_list_item = true,
+                _ => {}
+            }
+            if case == 2 {
+                page[1].caption_for = Some(0);
+            }
+            recover_mixed_table_tick_paragraphs(
+                std::slice::from_mut(&mut page),
+                std::slice::from_ref(&table),
+                &members,
+                &Default::default(),
+            );
+            assert_eq!(page[0].lines.len(), if case == 0 { 1 } else { 2 }, "case {case}");
+            if case == 0 {
+                assert_eq!(page[0].block_bbox, Some((0.0, 20.0, 10.0, 32.0)));
+                assert_eq!(page[0].word_count, 1);
+            }
         }
     }
 

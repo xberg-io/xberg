@@ -191,6 +191,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
 
+- **(pdf): Preserve figure tick labels beside native tables.** (#2443)
+  Keep the original label when the adjoining residual digit is already carried by a proven table cell.
+
 - **(pdf): Keep separate figure labels out of empty inferred table row spans.** (#2332)
   Require an existing source anchor before borrowing words from covered rows.
 

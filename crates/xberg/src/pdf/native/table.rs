@@ -21,6 +21,7 @@ use std::collections::HashSet;
 
 pub(crate) mod scripts;
 mod source_columns;
+pub(crate) mod source_members;
 
 #[derive(Debug)]
 pub(crate) struct NativeTable {
@@ -28,6 +29,7 @@ pub(crate) struct NativeTable {
     pub grid: Option<crate::types::TableGrid>,
     pub scripts: Option<scripts::TableScripts>,
     pub complete_leading_header: bool,
+    pub source_members: Option<source_members::TableSources>,
 }
 
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
@@ -183,6 +185,7 @@ fn append_page_tables(
         return;
     }
     let source_spans = scripts::page_spans(doc, page_idx, warnings);
+    let capture_members = extracted.len() <= source_members::MAX_CAPTURE_TABLES;
     for extracted_table in extracted {
         if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
             continue;
@@ -197,16 +200,20 @@ fn append_page_tables(
             x1: (rect.x + rect.width) as f64,
             y1: (rect.y + rect.height) as f64,
         });
+        let table = Table {
+            cells,
+            markdown,
+            page_number: (page_idx + 1) as u32,
+            bounding_box,
+            ..Default::default()
+        };
         tables.push(NativeTable {
-            scripts: scripts::capture(&extracted_table, &cells, &source_spans),
+            scripts: scripts::capture(&extracted_table, &table.cells, &source_spans),
             complete_leading_header: complete_leading_header(&extracted_table),
-            table: Table {
-                cells,
-                markdown,
-                page_number: (page_idx + 1) as u32,
-                bounding_box,
-                ..Default::default()
-            },
+            source_members: capture_members
+                .then(|| source_members::capture(&extracted_table, &table))
+                .flatten(),
+            table,
             grid,
         });
     }
