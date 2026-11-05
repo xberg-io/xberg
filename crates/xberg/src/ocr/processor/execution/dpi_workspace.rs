@@ -22,10 +22,10 @@ pub(super) fn check_known_dpi_resize(
     let (target_width, target_height) =
         crate::image::preprocessing::normalized_image_dimensions(width, height, config, Some(source_dpi));
     let peak = resize_peak(width, height, target_width, target_height, encoded_bytes)
-        .ok_or_else(|| crate::XbergError::validation("JPEG DPI resize workspace calculation overflowed"))?;
+        .ok_or_else(|| crate::XbergError::validation("OCR image DPI resize workspace calculation overflowed"))?;
     if peak > limit as u64 {
         return Err(crate::XbergError::validation(format!(
-            "JPEG DPI resize workspace for {width}x{height} to {target_width}x{target_height} exceeds \
+            "OCR image DPI resize workspace for {width}x{height} to {target_width}x{target_height} exceeds \
              security_limits.max_content_size ({limit} bytes). Raise security_limits.max_content_size or lower target_dpi",
         )));
     }

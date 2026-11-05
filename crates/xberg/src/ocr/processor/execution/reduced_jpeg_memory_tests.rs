@@ -1,4 +1,6 @@
 mod contrast;
+#[cfg(feature = "pdf")]
+mod encoded_pipeline;
 mod monotonicity;
 mod otsu;
 

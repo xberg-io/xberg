@@ -1181,8 +1181,7 @@ fn prepare_encoded_ocr_image(
             config.preprocessing.as_ref(),
             config.known_full_page_scan,
         );
-        if is_jpeg
-            && decoded.scale_denominator == 1
+        if decoded.scale_denominator == 1
             && dpi.is_none()
             && let Some(preprocessing) = preprocessing.as_deref()
         {
@@ -1194,7 +1193,7 @@ fn prepare_encoded_ocr_image(
                 .and_then(|retained| limits.max_content_size.checked_sub(retained))
                 .ok_or_else(|| {
                     crate::XbergError::validation(
-                        "JPEG DPI estimation workspace exceeds security_limits.max_content_size",
+                        "OCR image DPI estimation workspace exceeds security_limits.max_content_size",
                     )
                 })?;
             dpi = Some(crate::image::preprocessing::bounded_unknown_raster_dpi(
@@ -1220,15 +1219,21 @@ fn prepare_encoded_ocr_image(
         } else {
             (width, height)
         };
-        if is_jpeg
-            && native_image_budget::known_phase_peak(
-                native_dimensions.0,
-                native_dimensions.1,
-                bytes.len(),
-                preprocessing.as_deref(),
-            )?
-            .is_some_and(|peak| peak > limits.max_content_size as u64)
+        if native_image_budget::known_phase_peak(
+            native_dimensions.0,
+            native_dimensions.1,
+            bytes.len(),
+            preprocessing.as_deref(),
+        )?
+        .is_some_and(|peak| peak > limits.max_content_size as u64)
         {
+            if !is_jpeg {
+                return Err(crate::XbergError::validation(format!(
+                    "OCR native image workspace exceeds security_limits.max_content_size ({} bytes). \
+                     Raise security_limits.max_content_size or lower target_dpi",
+                    limits.max_content_size,
+                )));
+            }
             assessed_policy = Some(preprocessing.as_deref().cloned());
             maximum_pixels = (u64::from(width) * u64::from(height)).saturating_sub(1);
             // Release the old raster before asking the decoder for a smaller one. ~keep
@@ -1254,7 +1259,7 @@ fn prepare_encoded_ocr_image(
                 )));
             }
         }
-        if is_jpeg && let (Some(preprocessing), Some(dpi)) = (preprocessing.as_deref(), dpi) {
+        if let (Some(preprocessing), Some(dpi)) = (preprocessing.as_deref(), dpi) {
             let dpi_config = ocr_dpi_config(preprocessing, images);
             if let Err(error) = dpi_workspace::check_known_dpi_resize(
                 width,
@@ -1264,7 +1269,15 @@ fn prepare_encoded_ocr_image(
                 bytes.len(),
                 limits.max_content_size,
             ) {
-                if !dpi_workspace::has_no_resize_reduction(width, height, dpi, &dpi_config, decoded.scale_denominator) {
+                if !is_jpeg
+                    || !dpi_workspace::has_no_resize_reduction(
+                        width,
+                        height,
+                        dpi,
+                        &dpi_config,
+                        decoded.scale_denominator,
+                    )
+                {
                     return Err(error);
                 }
                 assessed_policy = Some(Some(preprocessing.clone()));
@@ -1282,17 +1295,16 @@ fn prepare_encoded_ocr_image(
             ci_debug_enabled,
             dpi,
         );
-        if is_jpeg
-            && native_image_budget::known_phase_peak(
-                prepared.width,
-                prepared.height,
-                bytes.len(),
-                prepared.preprocessing.as_ref(),
-            )?
-            .is_some_and(|peak| peak > limits.max_content_size as u64)
+        if native_image_budget::known_phase_peak(
+            prepared.width,
+            prepared.height,
+            bytes.len(),
+            prepared.preprocessing.as_ref(),
+        )?
+        .is_some_and(|peak| peak > limits.max_content_size as u64)
         {
             return Err(crate::XbergError::validation(format!(
-                "JPEG preprocessing and native image workspace exceeds security_limits.max_content_size ({} bytes). \
+                "OCR preprocessing and native image workspace exceeds security_limits.max_content_size ({} bytes). \
                  Raise security_limits.max_content_size or lower target_dpi",
                 limits.max_content_size,
             )));
@@ -2409,6 +2421,15 @@ pub(super) fn perform_ocr(
         api.set_image_2(pix.as_ptr())
             .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set preprocessed image: {error}")))?;
     } else {
+        let raw_peak = native_image_budget::known_phase_peak(width, height, image_bytes.len(), None)
+            .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
+        if raw_peak.is_some_and(|peak| peak > security_limits.max_content_size as u64) {
+            return Err(OcrError::ImageProcessingFailed(format!(
+                "OCR raw image workspace exceeds security_limits.max_content_size ({} bytes). \
+                 Raise security_limits.max_content_size or lower target_dpi",
+                security_limits.max_content_size,
+            )));
+        }
         let bytes_per_line = width * bytes_per_pixel;
         api.set_image(
             &image_data,

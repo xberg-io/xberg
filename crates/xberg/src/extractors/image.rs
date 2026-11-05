@@ -2537,6 +2537,18 @@ async fn select_rtl_retry_result(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
+#[path = "image_ocr_budget.rs"]
+mod image_ocr_budget;
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
+pub(crate) use image_ocr_budget::reserve_retained_ocr_raster;
+
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
 /// Which sparse-output retries [`process_whole_image_ocr_with_sparse_retry`] may attempt.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SparseRetryPolicy {

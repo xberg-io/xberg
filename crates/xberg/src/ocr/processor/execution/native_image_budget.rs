@@ -22,7 +22,7 @@ pub(super) fn known_phase_peak(
     }
     calculate_phase_peak(width, height, encoded_bytes, preprocessing)
         .map(Some)
-        .ok_or_else(|| crate::XbergError::validation("JPEG native image workspace calculation overflowed"))
+        .ok_or_else(|| crate::XbergError::validation("OCR native image workspace calculation overflowed"))
 }
 
 fn calculate_phase_peak(

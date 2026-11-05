@@ -2896,13 +2896,14 @@ pub(super) async fn extract_with_ocr_for_page(
 
     let mut ocr_config_owned = ocr_config_for_page_extraction(ocr_config);
     ocr_config_owned.acceleration = config.acceleration.clone();
-    // GH#1554: mirrors `acceleration` above so the full-document scanned-page OCR route
-    // inherits the caller's configured decode limits instead of always falling back to
-    // `SecurityLimits::default()`. Conditional (GH#1651) so a limit set directly on
-    // `OcrConfig` is not replaced by `None` when `ExtractionConfig` carries none. ~keep
-    if let Some(limits) = config.security_limits.clone() {
-        ocr_config_owned.security_limits = Some(limits);
-    }
+    // Preserve OCR-specific settings while satisfying both configured byte caps (GH#1651). ~keep
+    let mut limits = ocr_config_owned
+        .security_limits
+        .clone()
+        .or_else(|| config.security_limits.clone())
+        .unwrap_or_default();
+    limits.max_content_size = pipeline_xobject_content_limit(config, &ocr_config_owned);
+    ocr_config_owned.security_limits = Some(limits);
     let total_pages = if let Some(imgs) = images {
         imgs.len()
     } else {
@@ -3300,6 +3301,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     .as_ref()
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
+                let retained_source_bytes = batch_slice
+                    .as_ref()
+                    .and_then(|images| images.get(idx - batch_start))
+                    .map_or(0, |image| image.as_bytes().len());
                 join_set.spawn(crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -3310,6 +3315,14 @@ pub(super) async fn extract_with_ocr_for_page(
                             Err(crate::XbergError::Cancelled),
                         );
                     }
+                    let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
+                        &backend_clone,
+                        (original_config, config_clone),
+                        retained_source_bytes,
+                    ) {
+                        Ok(configs) => configs,
+                        Err(error) => return (idx, correction_degrees, upright_width, upright_height, Err(error)),
+                    };
                     let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
                         &backend_clone,
                         upright_data,
@@ -3476,17 +3489,29 @@ pub(super) async fn extract_with_ocr_for_page(
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
-                            &backend,
-                            upright_data,
-                            &ocr_config_owned,
-                            config_for_page.as_ref(),
-                            crate::extractors::image::SparseRetryPolicy {
-                                whole_page_raster,
-                                allow_standard_retry: false,
-                            },
-                            config.cancel_token.as_ref(),
-                        )
+                        async {
+                            let retained = batch_slice
+                                .as_ref()
+                                .and_then(|images| images.get(*page_idx - batch_start))
+                                .map_or(0, |image| image.as_bytes().len());
+                            let (original, effective) = crate::extractors::image::reserve_retained_ocr_raster(
+                                &backend,
+                                (ocr_config_owned.clone(), config_for_page.as_ref().clone()),
+                                retained,
+                            )?;
+                            crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                                &backend,
+                                upright_data,
+                                &original,
+                                &effective,
+                                crate::extractors::image::SparseRetryPolicy {
+                                    whole_page_raster,
+                                    allow_standard_retry: false,
+                                },
+                                config.cancel_token.as_ref(),
+                            )
+                            .await
+                        }
                         .await
                     }
                     #[cfg(target_arch = "wasm32")]
@@ -5186,7 +5211,7 @@ fn join_pipeline_xobject_text_at_offset(
     }
     Ok(text)
 }
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn pipeline_xobject_content_limit(config: &ExtractionConfig, ocr_config: &crate::core::config::OcrConfig) -> usize {
     match (config.security_limits.as_ref(), ocr_config.security_limits.as_ref()) {
         (Some(outer), Some(ocr)) => outer.max_content_size.min(ocr.max_content_size),

@@ -179,10 +179,10 @@ pub(crate) fn bounded_unknown_raster_dpi(
 ) -> Result<f64> {
     if f64::from(target_dpi) > PDF_POINTS_PER_INCH {
         let peak = super::text_height::glyph_workspace_bound(width, height)
-            .ok_or_else(|| XbergError::validation("JPEG DPI estimation workspace calculation overflowed"))?;
+            .ok_or_else(|| XbergError::validation("OCR image DPI estimation workspace calculation overflowed"))?;
         if peak > available_workspace {
             return Err(XbergError::validation(
-                "JPEG DPI estimation workspace exceeds security_limits.max_content_size. \
+                "OCR image DPI estimation workspace exceeds security_limits.max_content_size. \
                  Raise security_limits.max_content_size",
             ));
         }
