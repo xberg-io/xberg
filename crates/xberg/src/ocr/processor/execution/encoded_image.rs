@@ -76,10 +76,27 @@ impl Preparation<'_> {
     fn decode(&self, assessment: &Assessment) -> crate::Result<DecodedOcrImage> {
         let planned = self.config.preprocessing.clone().unwrap_or_default();
         let dpi_config = ocr_dpi_config(&planned, self.images);
-        load_image_for_ocr_with_processing(
+        let rejected_policy = std::cell::Cell::new(false);
+        let result = load_image_for_ocr_with_processing(
             self.bytes,
             self.limits,
-            |scale| self.scale_fits(scale, assessment),
+            |scale| {
+                if scale.denominator != 1
+                    && assessment.policy.as_ref().is_some_and(|policy| {
+                        native_image_budget::known_phase_peak(
+                            scale.width,
+                            scale.height,
+                            self.bytes.len(),
+                            policy.as_ref(),
+                        )
+                        .is_ok_and(|peak| peak.is_none())
+                    })
+                {
+                    rejected_policy.set(true);
+                    return false;
+                }
+                self.scale_fits(scale, assessment)
+            },
             |scale| {
                 self.source_dpi(scale.original_width, scale.original_height)
                     .is_some_and(|dpi| {
@@ -92,7 +109,11 @@ impl Preparation<'_> {
                     })
             },
             |scale| self.prefer_reduced(scale, assessment),
-        )
+        );
+        if result.is_err() && rejected_policy.get() {
+            return Err(self.unsupported_reduced_policy());
+        }
+        result
     }
 
     fn scale_fits(&self, scale: ReducedScale, assessment: &Assessment) -> bool {
@@ -161,6 +182,7 @@ impl Preparation<'_> {
             self.config.known_full_page_scan,
         );
         let policy = preprocessing.as_deref();
+        self.check_reduced_policy(&decoded, policy)?;
         let dpi = self.candidate_dpi(&decoded, policy)?;
         let native_dimensions = if decoded.scale_denominator == 1
             && let Some(preprocessing) = policy
@@ -178,6 +200,34 @@ impl Preparation<'_> {
             return Ok(retry_candidate(decoded, policy));
         }
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
+    }
+
+    fn check_reduced_policy(
+        &self,
+        decoded: &DecodedOcrImage,
+        preprocessing: Option<&ImagePreprocessingConfig>,
+    ) -> crate::Result<()> {
+        if decoded.scale_denominator != 1
+            && native_image_budget::known_phase_peak(
+                decoded.image.width(),
+                decoded.image.height(),
+                self.bytes.len(),
+                preprocessing,
+            )?
+            .is_none()
+        {
+            return Err(self.unsupported_reduced_policy());
+        }
+        Ok(())
+    }
+
+    fn unsupported_reduced_policy(&self) -> crate::XbergError {
+        crate::XbergError::validation(format!(
+            "The requested preprocessing policy has no bounded native image workspace for reduced JPEG recovery \
+             within security_limits.max_content_size ({} bytes). Use a supported preprocessing policy \
+             or raise security_limits.max_content_size to process the original image",
+            self.limits.max_content_size,
+        ))
     }
 
     fn candidate_dpi(

@@ -4,6 +4,7 @@ mod contrast;
 mod encoded_pipeline;
 mod monotonicity;
 mod otsu;
+mod unsupported;
 
 #[allow(
     unsafe_code,

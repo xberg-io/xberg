@@ -9,8 +9,9 @@ const PIX_HEADER_BYTES: u64 = (10 * 4 + 3 * size_of::<usize>() as u64).next_mult
 const BACKGROUND_REDUCTION: u32 = 4;
 const MORPH_BORDER: u32 = 32;
 
-/// Known image-buffer phases in the pinned Tesseract/Leptonica ingestion path.
-/// Other preprocessing policies retain their existing behavior pending a workspace model.
+/// Known live image-buffer phases in the pinned Tesseract/Leptonica ingestion path.
+/// This excludes recognizer/model allocations and aggregate process RSS. Unmodelled
+/// policies retain full-resolution behavior but cannot qualify a reduced JPEG candidate.
 pub(super) fn known_phase_peak(
     width: u32,
     height: u32,
