@@ -1836,6 +1836,70 @@ async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_whole_document
     }
 }
 
+/// A whole-document run on images renders no PDF page, so no side has line boxes: the layer lines
+/// the OCR text lacks go first and every OCR line stays, misreads included (rule 3 of the merge:
+/// a duplicate line is the accepted cost, a lost distinct line is not). ~keep
+#[tokio::test]
+async fn should_keep_every_ocr_line_of_an_image_run_that_renders_no_pdf() {
+    use super::pipeline::{PageOcrHints, extract_with_ocr_with_page_hints};
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    use std::sync::Arc;
+
+    const BACKEND: &str = "layer-test-image-run-keeps-ocr-lines-backend";
+    let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
+    crate::plugins::register_ocr_backend(Arc::new(StructuredBackend {
+        name: BACKEND,
+        text: misread.join("\n"),
+    }))
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let images = [image::DynamicImage::new_rgb8(16, 16)];
+    let hints = PageOcrHints {
+        source_dpi: None,
+        known_full_page_scan: false,
+        single_block_pages: None,
+        native_page_layers: Some(Arc::new(ahash::AHashMap::from([(1, HARBOUR_LAYER.join("\n"))]))),
+    };
+    let output = extract_with_ocr_with_page_hints(
+        None,
+        Some(&images),
+        #[cfg(feature = "layout-detection")]
+        None,
+        &config,
+        None,
+        Some(hints),
+    )
+    .await;
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    let output = output.expect("the image run must return a result");
+
+    let document = output.4.expect("the image run returns a structured document");
+    let structured: Vec<&str> = document.elements.iter().map(|element| element.text.as_str()).collect();
+    for (route, text) in [("structured document", structured.join("\n")), ("flat text", output.0)] {
+        for line in HARBOUR_LAYER {
+            assert_eq!(
+                text.matches(line).count(),
+                1,
+                "{route}: layer line {line:?} once: {text:?}"
+            );
+        }
+        for copy in &misread {
+            assert_eq!(
+                text.matches(copy.as_str()).count(),
+                1,
+                "{route}: without boxes the OCR line {copy:?} stays: {text:?}"
+            );
+        }
+    }
+}
+
 /// The flat text of a page (#2439): a dropped OCR copy leaves no blank line behind, at the start of
 /// the OCR text, between two paragraphs or at its end. ~keep
 #[test]

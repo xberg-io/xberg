@@ -541,12 +541,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): A correct text layer keeps all its words when automatic OCR reads the page.**
   When automatic OCR replaces a page whose text layer passes the per-page quality check, and the OCR text holds at
   least half of the layer's words, the page content keeps the layer lines that the OCR text lacks, first. Before,
-  a page that the language check sent to OCR lost the lines that OCR dropped. When OCR misreads one word of a
-  layer line, the page holds the layer line once, and not the OCR copy beside it. The OCR text must hold half of all
-  the layer's words as well as half of its words with a letter, so a few words cannot confirm a layer of other
-  numbers. A layer of numbers needs at least three distinct numbers. In the structured output, a title, heading,
-  table or image that holds an OCR copy keeps it. A text layer that decodes to the wrong letters still gets the OCR
-  text alone, and forced OCR behaves as before. (GH#2439)
+  a page that the language check sent to OCR lost the lines that OCR dropped. When OCR misreads a word of a
+  layer line, the page holds the layer line once, and not the OCR copy beside it. An OCR line counts as the copy
+  only when its position on the page is the layer line's: the two line boxes share at least half of their height
+  and half of their width. Text alone never removes a line, so a distinct OCR line that repeats a label or a
+  number stays. When the OCR backend or the page gives no positions, every OCR line stays. In the structured
+  output, a paragraph that loses a copy keeps the annotations of its other lines at their shifted offsets, and a
+  title, heading, table or image that holds an OCR copy keeps it. The matching work on a page grows with its
+  number of lines, not with their square. The OCR text must hold half of all the layer's words as well as half of
+  its words with a letter, so a few words cannot confirm a layer of other numbers. A layer of numbers needs at
+  least three distinct numbers. A text layer that decodes to the wrong letters still gets the OCR text alone, and
+  forced OCR behaves as before. (GH#2439)
 
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**
   When the OCR text of a page gets the recognition-noise warning and the text layer is readable text, the page content holds the layer first and the OCR text after it. A title in the layer is no longer lost. Pages with a clean OCR result, forced OCR and `discard_suspected_ocr_noise` behave as before. (GH#2311)
