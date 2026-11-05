@@ -47,6 +47,17 @@ jobs:
         with:
           submodules: false
 
+      - name: Set up locked Python for Windows closure preflight
+        if: runner.os == 'Windows'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: "python"
+
+      - name: Test Windows wheel closure contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: mise run python:wheel:closure:test
+
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
@@ -110,11 +121,6 @@ jobs:
         shell: bash
         run: |
           for w in wheelhouse/*.whl; do bash scripts/ci/vendor-native-closure.sh "$w"; done
-
-      - name: Test Windows wheel closure contracts
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: mise run python:wheel:closure:test
 
       - name: Vendor ONNX Runtime into wheel (Windows)
         if: runner.os == 'Windows'
