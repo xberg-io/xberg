@@ -1,56 +1,6 @@
+mod common;
+
 use xberg_native_pdf::PdfDocument;
-
-fn assemble_single_page_pdf(stream: &str) -> Vec<u8> {
-    let mut pdf: Vec<u8> = Vec::new();
-
-    macro_rules! push {
-        ($s:expr) => {
-            pdf.extend_from_slice($s.as_bytes())
-        };
-    }
-
-    push!("%PDF-1.4\n");
-
-    let off1 = pdf.len();
-    push!("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-
-    let off2 = pdf.len();
-    push!("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-
-    let off3 = pdf.len();
-    push!(
-        "3 0 obj\n\
-         << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\
-         \n   /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\n\
-         endobj\n"
-    );
-
-    let off4 = pdf.len();
-    let stream_bytes = stream.as_bytes();
-    push!(format!("4 0 obj\n<< /Length {} >>\nstream\n", stream_bytes.len()));
-    pdf.extend_from_slice(stream_bytes);
-    push!("\nendstream\nendobj\n");
-
-    let off5 = pdf.len();
-    push!("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
-
-    let xref_off = pdf.len();
-    push!(format!(
-        "xref\n0 6\n\
-         0000000000 65535 f \r\n\
-         {:010} 00000 n \r\n\
-         {:010} 00000 n \r\n\
-         {:010} 00000 n \r\n\
-         {:010} 00000 n \r\n\
-         {:010} 00000 n \r\n",
-        off1, off2, off3, off4, off5
-    ));
-    push!(format!(
-        "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n"
-    ));
-
-    pdf
-}
 
 #[test]
 fn adjacent_source_glyphs_do_not_gain_a_word_boundary_from_rounding() {
@@ -64,7 +14,11 @@ fn adjacent_source_glyphs_do_not_gain_a_word_boundary_from_rounding() {
     ] {
         stream.push_str(&format!("BT /F1 10 Tf 1 0 0 1 {x} {y} Tm ({character}) Tj ET\n"));
     }
-    let document = PdfDocument::from_bytes(assemble_single_page_pdf(&stream)).expect("parse adjacent source glyphs");
+    let document = PdfDocument::from_bytes(common::build_minimal_pdf_raw(
+        stream.as_bytes(),
+        b"/Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]",
+    ))
+    .expect("parse adjacent source glyphs");
     let chars = document.extract_chars(0).expect("decode source advances");
     let previous = chars
         .iter()
