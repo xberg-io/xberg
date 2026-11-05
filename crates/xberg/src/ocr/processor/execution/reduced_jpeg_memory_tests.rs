@@ -1,3 +1,4 @@
+mod adaptive;
 mod contrast;
 #[cfg(feature = "pdf")]
 mod encoded_pipeline;

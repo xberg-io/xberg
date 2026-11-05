@@ -3,7 +3,7 @@ use crate::ocr::shaded_rows::normalize_shaded_rows;
 use crate::types::ImagePreprocessingConfig;
 use xberg_tesseract::Pix;
 
-const ADAPTIVE_TILE_SIZE: i32 = 32;
+pub(crate) const ADAPTIVE_TILE_SIZE: i32 = 32;
 const CONTRAST_GAMMA: f32 = 0.5;
 const CONTRAST_INPUT_MIN: i32 = 40;
 const CONTRAST_INPUT_MAX: i32 = 220;

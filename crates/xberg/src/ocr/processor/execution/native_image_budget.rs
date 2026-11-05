@@ -17,7 +17,7 @@ pub(super) fn known_phase_peak(
     encoded_bytes: usize,
     preprocessing: Option<&ImagePreprocessingConfig>,
 ) -> crate::Result<Option<u64>> {
-    if preprocessing.is_some_and(|options| !no_binarization_contrast(options) && !plain_otsu(options)) {
+    if preprocessing.is_some_and(|options| !no_binarization_contrast(options) && !plain_binarization(options)) {
         return Ok(None);
     }
     calculate_phase_peak(width, height, encoded_bytes, preprocessing)
@@ -49,7 +49,7 @@ fn calculate_phase_peak(
                 .checked_mul(8)?;
             sharpening.checked_add(maps)?.max(raw_native)
         }
-        Some(options) if plain_otsu(options) => binarized::plain_otsu_peak(width, height, options.deskew)?,
+        Some(options) if plain_binarization(options) => binarized::plain_binarization_peak(width, height, options)?,
         Some(_) => return None,
     };
     let rgb = u64::from(width)
@@ -62,9 +62,11 @@ fn calculate_phase_peak(
         .checked_add((encoded_bytes as u64).checked_mul(2)?)
 }
 
-fn plain_otsu(options: &ImagePreprocessingConfig) -> bool {
-    options.binarization_method.eq_ignore_ascii_case("otsu")
-        && !options.auto_rotate
+fn plain_binarization(options: &ImagePreprocessingConfig) -> bool {
+    matches!(
+        options.binarization_method.to_ascii_lowercase().as_str(),
+        "otsu" | "adaptive"
+    ) && !options.auto_rotate
         && !options.denoise
         && !options.contrast_enhance
         && !options.normalize_shaded_rows
