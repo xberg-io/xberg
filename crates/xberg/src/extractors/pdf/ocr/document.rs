@@ -227,8 +227,8 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
 pub(crate) struct LayerFirst {
     /// The layer lines with a word that the OCR text lacks, one per line. ~keep
     pub(crate) lines: String,
-    /// The OCR lines that misread one of `lines`, as their whole words joined by a space. The page
-    /// holds the layer line, so the merge drops the OCR copy. ~keep
+    /// The OCR lines whose place on the page one of `lines` owns, as their whole words joined by
+    /// a space. The page holds the layer line, so the merge drops the OCR copy. ~keep
     pub(crate) ocr_copies: Vec<String>,
 }
 /// A line as its whole words joined by a space: the same key for a line of plain text and for the
@@ -237,54 +237,136 @@ pub(crate) struct LayerFirst {
 fn line_key(line: &str) -> String {
     whole_words(line).collect::<Vec<_>>().join(" ")
 }
-/// Whether an OCR line is one layer line with one word misread: it shares a word with the layer
-/// line, and each side has at most one word the other lacks. ~keep
+/// The box of one line on its page. Both sides of a merge give their boxes in one coordinate
+/// space, with `top` below `bottom` on the axis of reading order; the unit does not matter. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn misreads_one_word(layer_line: &str, ocr_line: &str) -> bool {
-    let layer_words: std::collections::HashSet<String> = whole_words(layer_line).collect();
-    let ocr_words: std::collections::HashSet<String> = whole_words(ocr_line).collect();
-    let shared = layer_words.intersection(&ocr_words).count();
-    shared >= 1 && layer_words.len() - shared <= 1 && ocr_words.len() - shared <= 1
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LineBox {
+    pub(crate) left: f32,
+    pub(crate) top: f32,
+    pub(crate) right: f32,
+    pub(crate) bottom: f32,
 }
-/// The OCR lines that misread one of the missing layer lines. An OCR line that reads another line
-/// of the layer exactly is never a copy. Each OCR line pairs with one layer line: the first
-/// candidate in reading order, since every candidate of a missing line shares all its words but
-/// one. ~keep
+/// The share of the shorter height and of the shorter width that two line boxes must share before
+/// one owns the place of the other. Half: a line box is at most half off its own line. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn ocr_lines_misreading(missing: &str, layer: &str, ocr_text: &str) -> Vec<String> {
+const MIN_OWNED_OVERLAP_SHARE: f32 = 0.5;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl LineBox {
+    /// Whether this box owns the place of `other`: the two share a line band (at least half of the
+    /// shorter height) and a horizontal run (at least half of the shorter width). ~keep
+    pub(crate) fn owns(&self, other: &LineBox) -> bool {
+        let shared_height = (self.bottom.min(other.bottom) - self.top.max(other.top)).max(0.0);
+        let shared_width = (self.right.min(other.right) - self.left.max(other.left)).max(0.0);
+        let shorter_height = (self.bottom - self.top).min(other.bottom - other.top);
+        let shorter_width = (self.right - self.left).min(other.right - other.left);
+        shorter_height > 0.0
+            && shorter_width > 0.0
+            && shared_height >= MIN_OWNED_OVERLAP_SHARE * shorter_height
+            && shared_width >= MIN_OWNED_OVERLAP_SHARE * shorter_width
+    }
+}
+/// One line of a page with its box, keyed by its whole words. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LineAt {
+    /// The line as its whole words joined by a space (see `line_key`). ~keep
+    pub(crate) key: String,
+    pub(crate) bbox: LineBox,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl LineAt {
+    pub(crate) fn new(line: &str, bbox: LineBox) -> Self {
+        Self {
+            key: line_key(line),
+            bbox,
+        }
+    }
+}
+/// The line boxes of both sides of one page's merge, in one coordinate space. A page without
+/// boxes on either side has no `PageLineBoxes`, and its merge removes nothing. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct PageLineBoxes {
+    pub(crate) layer: Vec<LineAt>,
+    pub(crate) ocr: Vec<LineAt>,
+}
+/// The OCR lines of a page ordered by the vertical centre of their box: the row index that bounds
+/// the matching work to one band per layer line. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) struct OcrRowIndex {
+    /// `(centre, index into the page's OCR lines)`, ascending by centre. ~keep
+    rows: Vec<(f32, usize)>,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl OcrRowIndex {
+    pub(crate) fn new(ocr: &[LineAt]) -> Self {
+        let mut rows: Vec<(f32, usize)> = ocr
+            .iter()
+            .enumerate()
+            .map(|(at, line)| ((line.bbox.top + line.bbox.bottom) / 2.0, at))
+            .collect();
+        rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+        Self { rows }
+    }
+    /// The band of a layer line's box: the indices of the OCR lines whose centre lies within one
+    /// height of the box. A line box taller than twice the layer line can own nothing. ~keep
+    pub(crate) fn band(&self, bbox: &LineBox) -> impl Iterator<Item = usize> + '_ {
+        let height = bbox.bottom - bbox.top;
+        let from = self.rows.partition_point(|(centre, _)| *centre < bbox.top - height);
+        let to = self.rows.partition_point(|(centre, _)| *centre <= bbox.bottom + height);
+        self.rows[from..to.max(from)].iter().map(|(_, at)| *at)
+    }
+}
+/// The OCR lines whose place a missing layer line owns, as line keys. Each missing line takes the
+/// first unused layer box with its key, and the first unused OCR line of its band whose box it
+/// owns; an OCR line that reads another line of the layer exactly is never a copy. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_lines_owned_by(missing: &str, layer: &str, boxes: &PageLineBoxes) -> Vec<String> {
     let layer_keys: std::collections::HashSet<String> = layer.lines().map(line_key).collect();
-    let mut candidates: Vec<&str> = ocr_text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !layer_keys.contains(&line_key(line)))
-        .collect();
+    let index = OcrRowIndex::new(&boxes.ocr);
+    let mut layer_used = vec![false; boxes.layer.len()];
+    let mut ocr_used = vec![false; boxes.ocr.len()];
     let mut copies = Vec::new();
-    for layer_line in missing.lines() {
-        if let Some(at) = candidates.iter().position(|line| misreads_one_word(layer_line, line)) {
-            copies.push(line_key(candidates.remove(at)));
+    for line in missing.lines() {
+        let key = line_key(line);
+        let Some(at) = (0..boxes.layer.len()).find(|at| !layer_used[*at] && boxes.layer[*at].key == key) else {
+            continue;
+        };
+        layer_used[at] = true;
+        let owner = &boxes.layer[at].bbox;
+        let owned = index.band(owner).find(|at| {
+            let ocr = &boxes.ocr[*at];
+            !ocr_used[*at] && !layer_keys.contains(&ocr.key) && owner.owns(&ocr.bbox)
+        });
+        if let Some(at) = owned {
+            ocr_used[at] = true;
+            copies.push(boxes.ocr[at].key.clone());
         }
     }
     copies
 }
 /// The layer lines that go before the OCR text of a replaced page. With the noise verdict, the
 /// lines with a word the OCR text lacks. Without it, the same lines when the OCR text confirms the
-/// layer, and the OCR lines that misread them go: the page holds each line once, with the layer's
-/// words. `None` keeps the OCR text as it is. A wrong-letter layer is never confirmed. ~keep
+/// layer, and the OCR lines whose place on the page those lines own go (see
+/// [`ocr_lines_owned_by`]): the page holds each line once, with the layer's words. Without
+/// `boxes` nothing goes: a duplicate line is the accepted cost, a lost distinct line is not.
+/// `None` keeps the OCR text as it is. A wrong-letter layer is never confirmed. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn layer_lines_to_put_first(
     layer: &str,
     ocr_text: &str,
     noise_verdict: bool,
     thresholds: &OcrQualityThresholds,
+    boxes: Option<&PageLineBoxes>,
 ) -> Option<LayerFirst> {
     if !noise_verdict && !ocr_confirms_layer(layer, ocr_text, thresholds) {
         return None;
     }
     let lines = layer_lines_absent_from_ocr(layer, ocr_text)?;
-    let ocr_copies = if noise_verdict {
-        Vec::new()
-    } else {
-        ocr_lines_misreading(&lines, layer, ocr_text)
+    let ocr_copies = match boxes {
+        Some(boxes) if !noise_verdict => ocr_lines_owned_by(&lines, layer, boxes),
+        _ => Vec::new(),
     };
     Some(LayerFirst { lines, ocr_copies })
 }
@@ -343,11 +425,68 @@ pub(super) fn insert_layer_into_document(
     }
     doc.elements.splice(at..at, layer_elements);
 }
+/// Remove the bytes `start..end` of a text and shift its annotations: one after the range moves
+/// back by its length, one inside it goes, one across it keeps its part outside. The model is
+/// `trim_text_and_annotations` of the builder, which does the same for a trimmed prefix. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn remove_text_range_and_shift(
+    text: &mut String,
+    annotations: &mut Vec<crate::types::document_structure::TextAnnotation>,
+    start: usize,
+    end: usize,
+) {
+    let removed = (end - start) as u32;
+    let (start_u32, end_u32) = (start as u32, end as u32);
+    annotations.retain_mut(|annotation| {
+        if annotation.end <= start_u32 {
+            return true;
+        }
+        if annotation.start >= end_u32 {
+            annotation.start -= removed;
+            annotation.end -= removed;
+            return true;
+        }
+        annotation.start = annotation.start.min(start_u32);
+        annotation.end = if annotation.end > end_u32 {
+            annotation.end - removed
+        } else {
+            start_u32
+        };
+        annotation.start < annotation.end
+    });
+    text.replace_range(start..end, "");
+}
+/// Remove the lines of an element that are OCR copies, each with its line break, and shift the
+/// annotations of the lines that stay. Each copy key is spent on the first line it matches.
+/// Returns whether a line went. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn remove_copy_lines(element: &mut crate::types::internal::InternalElement, copies: &mut Vec<String>) -> bool {
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    let mut offset = 0usize;
+    for line in element.text.split_inclusive('\n') {
+        let end = offset + line.len();
+        if let Some(at) = copies.iter().position(|copy| *copy == line_key(line)) {
+            copies.swap_remove(at);
+            // The last line has no break of its own: it takes the break before it. ~keep
+            let start = if end == element.text.len() && offset > 0 {
+                offset - 1
+            } else {
+                offset
+            };
+            ranges.push((start, end));
+        }
+        offset = end;
+    }
+    for (start, end) in ranges.iter().rev() {
+        remove_text_range_and_shift(&mut element.text, &mut element.annotations, *start, *end);
+    }
+    !ranges.is_empty()
+}
 /// Put the layer first on a structured OCR document, and drop the OCR lines that the layer lines
 /// replace from its paragraphs and OCR text blocks. A paragraph or block that holds only such
-/// lines goes, with its relationships; one that holds others keeps them, and its inline
-/// annotations go because their byte ranges moved. A title, heading, table, image or other element
-/// keeps its text and its kind: its copy stays beside the layer line. ~keep
+/// lines goes, with its relationships; one that holds others keeps them, and the annotations of
+/// the retained text are shifted by the removed lines. A title, heading, table, image or other
+/// element keeps its text and its kind: its copy stays beside the layer line. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn put_layer_first_in_document(
     doc: &mut crate::types::internal::InternalDocument,
@@ -366,24 +505,8 @@ pub(super) fn put_layer_first_in_document(
     doc.elements.retain_mut(|element| {
         let mut keep = true;
         let plain_text = matches!(element.kind, ElementKind::Paragraph | ElementKind::OcrText { .. });
-        if plain_text && (page.is_none() || element.page == page) {
-            let lines: Vec<&str> = element.text.lines().collect();
-            let remaining: Vec<&str> = lines
-                .iter()
-                .copied()
-                .filter(|line| match copies.iter().position(|copy| *copy == line_key(line)) {
-                    Some(at) => {
-                        copies.swap_remove(at);
-                        false
-                    }
-                    None => true,
-                })
-                .collect();
-            if remaining.len() < lines.len() {
-                keep = remaining.iter().any(|line| !line.trim().is_empty());
-                element.text = remaining.join("\n");
-                element.annotations.clear();
-            }
+        if plain_text && (page.is_none() || element.page == page) && remove_copy_lines(element, &mut copies) {
+            keep = !element.text.trim().is_empty();
         }
         new_index.push(keep.then(|| {
             kept += 1;
@@ -447,6 +570,7 @@ pub(super) fn put_layers_first_in_run(
     page_texts: &mut [String],
     mut doc: Option<&mut crate::types::internal::InternalDocument>,
     layers: &ahash::AHashMap<u32, String>,
+    boxes: &ahash::AHashMap<u32, PageLineBoxes>,
     verdicts: &[super::scoring::OcrPageNoiseVerdict],
     page_index_offset: usize,
     config: &ExtractionConfig,
@@ -477,7 +601,8 @@ pub(super) fn put_layers_first_in_run(
         else {
             continue;
         };
-        let Some(first) = layer_lines_to_put_first(layer, page_text, noise_verdict, &thresholds) else {
+        let Some(first) = layer_lines_to_put_first(layer, page_text, noise_verdict, &thresholds, boxes.get(&page))
+        else {
             continue;
         };
         *page_text = text_with_layer_first(page_text, &first);

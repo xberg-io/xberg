@@ -154,6 +154,7 @@ fn should_put_the_layer_first_on_the_noise_page_of_a_whole_document_run_only() {
         &mut page_texts,
         Some(&mut doc),
         &layers,
+        &ahash::AHashMap::default(),
         &[verdict(1, false), verdict(2, true)],
         0,
         &ExtractionConfig::default(),
@@ -565,6 +566,7 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         &mut page_texts,
         Some(&mut doc),
         &layers,
+        &ahash::AHashMap::default(),
         &[verdict(0), verdict(1)],
         0,
         &ExtractionConfig::default(),
@@ -589,6 +591,7 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         &mut marked_pages,
         None,
         &layers,
+        &ahash::AHashMap::default(),
         &[verdict(1)],
         0,
         &marked_config,
@@ -727,6 +730,7 @@ fn should_not_put_a_layer_on_a_page_the_noise_gate_discarded() {
         &mut page_texts,
         None,
         &layers,
+        &ahash::AHashMap::default(),
         &[verdict(0, true), verdict(1, false)],
         0,
         &ExtractionConfig::default(),
@@ -1028,6 +1032,7 @@ fn should_put_a_confirmed_layer_first_on_a_page_of_a_whole_document_run() {
         &mut page_texts,
         None,
         &layers,
+        &ahash::AHashMap::default(),
         &[],
         0,
         &ExtractionConfig::default(),
@@ -1065,6 +1070,7 @@ fn should_not_put_a_confirmed_layer_on_a_page_the_noise_gate_discarded() {
         &mut page_texts,
         None,
         &layers,
+        &ahash::AHashMap::default(),
         &[discarded],
         0,
         &ExtractionConfig::default(),
@@ -1084,6 +1090,40 @@ fn misread_longest_word(line: &str) -> String {
     line.replacen(&longest, &format!("{longest}x"), 1)
 }
 
+/// The box of a line on row `row` of a page: 12 units per row, 10 high, the page's width. ~keep
+fn row_box(row: usize) -> super::document::LineBox {
+    let top = row as f32 * 12.0;
+    super::document::LineBox {
+        left: 0.0,
+        top,
+        right: 500.0,
+        bottom: top + 10.0,
+    }
+}
+
+/// The non-empty lines of a text, each on the row of `rows` with its index. ~keep
+fn lines_at_rows(text: &str, rows: &[usize]) -> Vec<super::document::LineAt> {
+    let lines: Vec<&str> = text.lines().filter(|line| !line.trim().is_empty()).collect();
+    assert_eq!(lines.len(), rows.len(), "one row per non-empty line");
+    lines
+        .iter()
+        .zip(rows)
+        .map(|(line, row)| super::document::LineAt::new(line, row_box(*row)))
+        .collect()
+}
+
+/// The boxes of a page whose layer lines sit on rows 0.. in order, and whose OCR lines are given. ~keep
+fn page_boxes(layer: &[&str], ocr: &[super::document::LineAt]) -> super::document::PageLineBoxes {
+    super::document::PageLineBoxes {
+        layer: layer
+            .iter()
+            .enumerate()
+            .map(|(row, line)| super::document::LineAt::new(line, row_box(row)))
+            .collect(),
+        ocr: ocr.to_vec(),
+    }
+}
+
 /// A whole-document run (#2439): OCR misreads one word on every line of a correct layer. The page
 /// holds each line once, with the layer's words, and not the OCR copy beside it. An OCR line that
 /// the layer lacks stays, and so does an exact read. The structured document drops the copies
@@ -1097,14 +1137,16 @@ fn should_keep_each_line_once_when_ocr_misreads_one_word_per_line() {
     let layer = HARBOUR_LAYER.join("\n");
     let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
     let layers = ahash::AHashMap::from([(1, layer.clone())]);
-    let run = |ocr_text: &str, doc: Option<&mut crate::types::internal::InternalDocument>| {
+    let run = |ocr_text: &str, ocr_rows: &[usize], doc: Option<&mut crate::types::internal::InternalDocument>| {
         let mut page_texts = vec![ocr_text.to_string()];
         let mut text = ocr_text.to_string();
+        let boxes = ahash::AHashMap::from([(1, page_boxes(&HARBOUR_LAYER, &lines_at_rows(ocr_text, ocr_rows)))]);
         put_layers_first_in_run(
             &mut text,
             &mut page_texts,
             doc,
             &layers,
+            &boxes,
             &[],
             0,
             &ExtractionConfig::default(),
@@ -1114,7 +1156,7 @@ fn should_keep_each_line_once_when_ocr_misreads_one_word_per_line() {
     };
 
     assert_eq!(
-        run(&misread.join("\n"), None),
+        run(&misread.join("\n"), &[0, 1, 2, 3, 4, 5], None),
         layer,
         "every line once, with the layer's words"
     );
@@ -1144,7 +1186,8 @@ fn should_keep_each_line_once_when_ocr_misreads_one_word_per_line() {
         target: RelationshipTarget::Index(0),
         kind: RelationshipKind::InternalLink,
     });
-    let text = run(&mixed, Some(&mut doc));
+    // The OCR-only stamp has a row of its own, below every layer line. ~keep
+    let text = run(&mixed, &[0, 1, 2, 3, 9], Some(&mut doc));
     let lines: Vec<&str> = text.lines().filter(|line| !line.is_empty()).collect();
     let mut sorted = lines.clone();
     sorted.sort_unstable();
@@ -1211,6 +1254,7 @@ fn should_confirm_a_number_only_layer_against_the_ocr_text() {
         &mut page_texts,
         None,
         &layers,
+        &ahash::AHashMap::default(),
         &[],
         0,
         &ExtractionConfig::default(),
@@ -1257,7 +1301,10 @@ fn should_not_drop_an_exact_ocr_line_as_the_copy_of_its_near_twin_in_the_layer()
     let twin = misread_longest_word(HARBOUR_LAYER[0]);
     let layer = format!("{}\n{twin}", HARBOUR_LAYER.join("\n"));
     let ocr_text = HARBOUR_LAYER[..4].join("\n");
-    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds)
+    // The twin sits on the first line's row: it owns the exact OCR line's place. ~keep
+    let mut boxes = page_boxes(&HARBOUR_LAYER, &lines_at_rows(&ocr_text, &[0, 1, 2, 3]));
+    boxes.layer.push(super::document::LineAt::new(&twin, row_box(0)));
+    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds, Some(&boxes))
         .expect("the OCR text confirms the layer, and the twin and two more lines are absent from it");
     assert!(
         first.lines.lines().any(|line| line == twin),
@@ -1687,22 +1734,26 @@ fn should_leave_no_blank_line_where_an_ocr_copy_was() {
 /// inline annotations go, because their byte ranges no longer match its text. A paragraph that
 /// holds no copy keeps its annotations. ~keep
 #[test]
-fn should_clear_the_annotations_of_a_paragraph_that_loses_an_ocr_copy() {
+fn should_shift_the_annotations_of_a_paragraph_that_loses_an_ocr_copy() {
     use super::document::{LayerFirst, put_layer_first_in_document};
     use crate::types::document_structure::{AnnotationKind, TextAnnotation};
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
-    let bold = TextAnnotation {
-        start: 0,
-        end: 4,
+    let note = |start: u32, end: u32| TextAnnotation {
+        start,
+        end,
         kind: AnnotationKind::Bold,
     };
     let mut doc = InternalDocument::new("pdf");
-    for text in ["Copy line\nKept line", "Other paragraph"] {
-        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
-        element.annotations.push(bold.clone());
-        doc.push_element(element);
-    }
+    // "Copy line\n" is bytes 0..10; "Kept" is 10..14 and "line" 15..19. ~keep
+    let mut element = InternalElement::text(ElementKind::Paragraph, "Copy line\nKept line", 0);
+    element
+        .annotations
+        .extend([note(0, 4), note(10, 14), note(15, 19), note(5, 14)]);
+    doc.push_element(element);
+    let mut other = InternalElement::text(ElementKind::Paragraph, "Other paragraph", 0);
+    other.annotations.push(note(0, 5));
+    doc.push_element(other);
     let first = LayerFirst {
         lines: "Layer line".to_string(),
         ocr_copies: vec!["copy line".to_string()],
@@ -1710,8 +1761,73 @@ fn should_clear_the_annotations_of_a_paragraph_that_loses_an_ocr_copy() {
     put_layer_first_in_document(&mut doc, None, &first);
     let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
     assert_eq!(texts, ["Layer line", "Kept line", "Other paragraph"]);
-    assert!(doc.elements[1].annotations.is_empty(), "the moved annotations go");
-    assert_eq!(doc.elements[2].annotations, [bold], "an untouched paragraph keeps them");
+    assert_eq!(
+        doc.elements[1].annotations,
+        [note(0, 4), note(5, 9), note(0, 4)],
+        "the copy's annotation goes, the kept line's shift, one across keeps its kept part"
+    );
+    assert_eq!(
+        doc.elements[2].annotations,
+        [note(0, 5)],
+        "an untouched paragraph keeps them"
+    );
+}
+
+/// The element of one OCR line (hOCR `Line`) that is a copy goes whole, with its relationship; the
+/// line elements around it keep their annotations untouched. ~keep
+#[test]
+fn should_remove_a_one_line_element_that_is_an_ocr_copy_whole() {
+    use super::document::{LayerFirst, put_layer_first_in_document};
+    use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+    use crate::types::internal::{
+        ElementKind, InternalDocument, InternalElement, Relationship, RelationshipKind, RelationshipTarget,
+    };
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    let note = TextAnnotation {
+        start: 0,
+        end: 4,
+        kind: AnnotationKind::Bold,
+    };
+    let mut doc = InternalDocument::new("pdf");
+    for text in ["Kept line", "Copy line", "Last line"] {
+        let mut element = InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Line,
+            },
+            text,
+            0,
+        );
+        element.annotations.push(note.clone());
+        doc.push_element(element);
+    }
+    doc.relationships.push(Relationship {
+        source: 1,
+        target: RelationshipTarget::Index(2),
+        kind: RelationshipKind::InternalLink,
+    });
+    doc.relationships.push(Relationship {
+        source: 0,
+        target: RelationshipTarget::Index(2),
+        kind: RelationshipKind::InternalLink,
+    });
+    let first = LayerFirst {
+        lines: "Layer line".to_string(),
+        ocr_copies: vec!["copy line".to_string()],
+    };
+    put_layer_first_in_document(&mut doc, None, &first);
+    let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+    assert_eq!(texts, ["Layer line", "Kept line", "Last line"]);
+    assert!(
+        doc.elements[1..]
+            .iter()
+            .all(|element| element.annotations == [note.clone()])
+    );
+    assert_eq!(doc.relationships.len(), 1, "the copy's relationship goes");
+    assert_eq!(
+        (doc.relationships[0].source, &doc.relationships[0].target),
+        (1, &RelationshipTarget::Index(2))
+    );
 }
 
 /// A whole-document run (#2439): two OCR lines misread the same layer line. The first in reading
@@ -1729,7 +1845,9 @@ fn should_take_the_first_of_two_ocr_misreads_of_one_layer_line_as_its_copy() {
         HARBOUR_LAYER[..3].join("\n"),
         HARBOUR_LAYER[3..5].join("\n")
     );
-    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds)
+    // The early misread sits on the layer line's row; the late one on a row of its own. ~keep
+    let boxes = page_boxes(&HARBOUR_LAYER, &lines_at_rows(&ocr_text, &[0, 1, 2, 5, 3, 4, 6]));
+    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds, Some(&boxes))
         .expect("the OCR text confirms the layer and lacks its last line");
     let text = text_with_layer_first(&ocr_text, &first);
     assert!(!text.contains(early.as_str()), "the first misread goes: {text:?}");
@@ -1820,4 +1938,197 @@ fn should_keep_a_title_heading_image_or_table_that_holds_an_ocr_copy() {
     }
     assert_eq!(doc.elements[5].text, "Read line", "the OCR text block loses the copy");
     assert_eq!(format!("{:?}", doc.tables), tables_before, "the table data stays");
+}
+
+// ---- Ownership rule (rulings/2439.md): an OCR line goes only when a layer line owns its place. ----
+
+/// Eight lines of invented minutes: the layer of the ownership tests. ~keep
+const MINUTES: [&str; 8] = [
+    "Harbour committee minutes",
+    "Members present at the meeting",
+    "Repairs to the north pier",
+    "Total 100",
+    "Treasurer report accepted",
+    "Library hours extended",
+    "Public notice posted",
+    "Next meeting in spring",
+];
+
+/// The merge of one confirmed page whose OCR lines sit on `ocr_rows`, as the page text. ~keep
+fn merge_at_rows(layer: &[&str], ocr: &str, ocr_rows: &[usize]) -> String {
+    use super::document::put_layers_first_in_run;
+    let mut page_texts = vec![ocr.to_string()];
+    let mut text = ocr.to_string();
+    let layers = ahash::AHashMap::from([(1u32, layer.join("\n"))]);
+    let boxes = ahash::AHashMap::from([(1u32, page_boxes(layer, &lines_at_rows(ocr, ocr_rows)))]);
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        None,
+        &layers,
+        &boxes,
+        &[],
+        0,
+        &crate::core::config::ExtractionConfig::default(),
+    );
+    page_texts.remove(0)
+}
+
+fn count_line(page: &str, needle: &str) -> usize {
+    page.lines().filter(|line| line.trim() == needle).count()
+}
+
+/// Row A: a distinct OCR-only "Total 900" on its own row before the misread "Total 1OO" that sits
+/// on the layer line's row. The OCR-only line stays; the misread goes. ~keep
+#[test]
+fn should_keep_an_ocr_only_line_that_shares_a_label_with_a_misread_layer_line() {
+    let mut ocr: Vec<&str> = MINUTES.to_vec();
+    ocr[3] = "Total 1OO";
+    ocr.insert(2, "Total 900");
+    let page = merge_at_rows(&MINUTES, &ocr.join("\n"), &[0, 1, 9, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(
+        (count_line(&page, "Total 900"), count_line(&page, "Total 1OO")),
+        (1, 0),
+        "{page:?}"
+    );
+    assert_eq!(count_line(&page, "Total 100"), 1, "{page:?}");
+}
+
+/// Row B: an OCR-only line with the words of a layer line reordered, on its own row. It stays; the
+/// misread on the layer line's row goes; the layer line comes back. ~keep
+#[test]
+fn should_keep_an_ocr_only_line_that_reorders_the_words_of_a_misread_layer_line() {
+    let mut ocr: Vec<&str> = MINUTES.to_vec();
+    ocr[2] = "Repairs to the north pler";
+    ocr.insert(0, "the north pier to repairs");
+    let page = merge_at_rows(&MINUTES, &ocr.join("\n"), &[9, 0, 1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(count_line(&page, "the north pier to repairs"), 1, "{page:?}");
+    assert_eq!(count_line(&page, "Repairs to the north pler"), 0, "{page:?}");
+    assert_eq!(count_line(&page, "Repairs to the north pier"), 1, "{page:?}");
+}
+
+/// Row C: the layer holds "Total 100" twice, each misread on its own row. Both come back, no
+/// misread stays: each layer line spends one box. ~keep
+#[test]
+fn should_remove_both_misreads_of_a_layer_line_that_occurs_twice() {
+    let mut layer: Vec<&str> = MINUTES.to_vec();
+    layer.push("Total 100");
+    let mut ocr = layer.clone();
+    ocr[3] = "Total 1OO";
+    ocr[8] = "Total 1O0";
+    let page = merge_at_rows(&layer, &ocr.join("\n"), &[0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    let misreads = count_line(&page, "Total 1OO") + count_line(&page, "Total 1O0");
+    assert_eq!((count_line(&page, "Total 100"), misreads), (2, 0), "{page:?}");
+}
+
+/// Row D: the layer holds "Total 100" and "Total 900"; OCR reads 900 exactly. Both totals once. ~keep
+#[test]
+fn should_keep_an_exactly_read_second_total_beside_a_misread_first() {
+    let mut layer: Vec<&str> = MINUTES.to_vec();
+    layer.insert(4, "Total 900");
+    let mut ocr = layer.clone();
+    ocr[3] = "Total 1OO";
+    let page = merge_at_rows(&layer, &ocr.join("\n"), &[0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    let counts = (
+        count_line(&page, "Total 100"),
+        count_line(&page, "Total 900"),
+        count_line(&page, "Total 1OO"),
+    );
+    assert_eq!(counts, (1, 1, 0), "{page:?}");
+}
+
+/// Row E: as row A with the OCR-only line after the misread. The rule does not depend on order. ~keep
+#[test]
+fn should_keep_an_ocr_only_line_after_the_misread_too() {
+    let mut ocr: Vec<&str> = MINUTES.to_vec();
+    ocr[3] = "Total 1OO";
+    ocr.insert(6, "Total 900");
+    let page = merge_at_rows(&MINUTES, &ocr.join("\n"), &[0, 1, 2, 3, 4, 5, 9, 6, 7]);
+    assert_eq!(
+        (count_line(&page, "Total 900"), count_line(&page, "Total 1OO")),
+        (1, 0),
+        "{page:?}"
+    );
+}
+
+/// A misread on a far row is not owned: it stays beside the layer line (a duplicate, never a lost
+/// line). A page without boxes removes nothing either. ~keep
+#[test]
+fn should_remove_nothing_without_ownership_or_without_boxes() {
+    use super::document::layer_lines_to_put_first;
+    let mut ocr: Vec<&str> = MINUTES.to_vec();
+    ocr[3] = "Total 1OO";
+    let page = merge_at_rows(&MINUTES, &ocr.join("\n"), &[0, 1, 2, 9, 4, 5, 6, 7]);
+    assert_eq!(
+        (count_line(&page, "Total 100"), count_line(&page, "Total 1OO")),
+        (1, 1),
+        "{page:?}"
+    );
+    let thresholds = OcrQualityThresholds::default();
+    let first = layer_lines_to_put_first(&MINUTES.join("\n"), &ocr.join("\n"), false, &thresholds, None)
+        .expect("the OCR text confirms the layer and lacks one line");
+    assert_eq!(first.lines, "Total 100");
+    assert!(first.ocr_copies.is_empty(), "no boxes, no copy: {:?}", first.ocr_copies);
+}
+
+/// Ownership needs half of the shorter height and half of the shorter width. ~keep
+#[test]
+fn should_own_a_box_on_half_of_its_height_and_width() {
+    use super::document::LineBox;
+    let owner = LineBox {
+        left: 0.0,
+        top: 0.0,
+        right: 100.0,
+        bottom: 10.0,
+    };
+    let at = |left: f32, top: f32| LineBox {
+        left,
+        top,
+        right: left + 100.0,
+        bottom: top + 10.0,
+    };
+    assert!(owner.owns(&at(0.0, 5.0)), "half the height shared");
+    assert!(!owner.owns(&at(0.0, 5.5)), "less than half the height");
+    assert!(owner.owns(&at(50.0, 0.0)), "half the width shared");
+    assert!(!owner.owns(&at(51.0, 0.0)), "less than half the width: another column");
+}
+
+/// The row index bounds the matching work: with N layer lines and N OCR lines on N rows, each
+/// layer line meets its band only, and the merge of 2000 lines takes a small part of a second
+/// (67 s at the PR head). The band of a line on row 500 holds its row and its neighbours. ~keep
+#[test]
+fn should_bound_the_matching_work_to_the_band_of_each_layer_line() {
+    use super::document::{OcrRowIndex, layer_lines_to_put_first};
+    let thresholds = OcrQualityThresholds::default();
+    let mut ms_by_n = Vec::new();
+    for n in [250usize, 2000] {
+        let layer: Vec<String> = (1..=n)
+            .map(|k| format!("Harbour record {k} repairs accepted tonight"))
+            .collect();
+        let ocr: Vec<String> = (1..=n)
+            .map(|k| format!("Harbour record {k} repalrs accepled tonight"))
+            .collect();
+        let rows: Vec<usize> = (0..n).collect();
+        let layer_refs: Vec<&str> = layer.iter().map(String::as_str).collect();
+        let ocr_text = ocr.join("\n");
+        let boxes = page_boxes(&layer_refs, &lines_at_rows(&ocr_text, &rows));
+        let index = OcrRowIndex::new(&boxes.ocr);
+        let band: Vec<usize> = index.band(&row_box(n / 2)).collect();
+        assert!(
+            band.len() <= 3 && band.contains(&(n / 2)),
+            "the band holds the row and its neighbours: {band:?}"
+        );
+        let start = std::time::Instant::now();
+        let first = layer_lines_to_put_first(&layer.join("\n"), &ocr_text, false, &thresholds, Some(&boxes))
+            .expect("every layer line is missing");
+        let ms = start.elapsed().as_millis();
+        println!(
+            "SCALING n={n} missing={} copies={} ms={ms}",
+            first.lines.lines().count(),
+            first.ocr_copies.len()
+        );
+        assert_eq!(first.ocr_copies.len(), n, "every misread sits on its layer line's row");
+        ms_by_n.push(ms);
+    }
+    assert!(ms_by_n[1] < 2000, "2000 lines in under two seconds: {ms_by_n:?} ms");
 }

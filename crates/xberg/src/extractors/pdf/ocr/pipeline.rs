@@ -2073,11 +2073,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     if let Some(layers) = page_layers.as_ref() {
         for (page_number, text) in &mut accepted_replacements {
             if let Some(layer) = layers.get(page_number)
+                // No line boxes reach the page route yet: nothing is removed, the layer goes first. ~keep
                 && let Some(first) = super::document::layer_lines_to_put_first(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
+                    None,
                 )
             {
                 *text = super::document::text_with_layer_first(text, &first);
@@ -5550,11 +5552,14 @@ fn with_run_layers_first(
     config: &ExtractionConfig,
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
+        // The run carries no line boxes yet, so no OCR copy is removed: the layer lines go first and
+        // every OCR line stays (a duplicate is the accepted cost, a lost line is not). ~keep
         super::document::put_layers_first_in_run(
             &mut text,
             &mut page_texts,
             doc.as_mut(),
             &layers,
+            &ahash::AHashMap::default(),
             verdicts,
             page_index_offset,
             config,
