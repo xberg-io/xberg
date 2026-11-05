@@ -5,6 +5,18 @@ use ahash::{AHashMap, AHashSet};
 pub(crate) struct CertifiedRuns {
     pub(crate) contained: Vec<Vec<SegmentKey>>,
     pub(crate) painted_overhangs: Vec<Vec<SegmentKey>>,
+    pub(crate) recovered_lines: Vec<SegmentKey>,
+    pub(crate) recovered_tracks: Vec<(f32, f32)>,
+    pub(crate) replaces_empty_ruled_route: bool,
+}
+
+impl CertifiedRuns {
+    fn attach_recovered_source(&mut self, source: &TableSources) {
+        if !source.recovered_tracks.is_empty() {
+            self.recovered_tracks.clone_from(&source.recovered_tracks);
+        }
+        self.replaces_empty_ruled_route |= source.replaces_empty_ruled_route;
+    }
 }
 
 const MAX_PAGE_TABLES: usize = super::MAX_CAPTURE_TABLES;
@@ -60,7 +72,7 @@ impl<'a> SourceIndex<'a> {
         })
     }
 
-    fn run(&self, run: &Run, work: &mut Work) -> Option<Option<Vec<SegmentKey>>> {
+    fn run(&self, run: &Run, work: &mut Work, whole_line: bool) -> Option<Option<Vec<SegmentKey>>> {
         work.charge(run.text.len().checked_add(1)?)?;
         let start = self
             .segments
@@ -73,18 +85,21 @@ impl<'a> SourceIndex<'a> {
             if !run.bounds.intersects(bounds) {
                 continue;
             }
-            if !run.bounds.contains(bounds) || !run.matches(segment) || selected.len() >= MAX_RUN_SEGMENTS {
+            if !run.bounds.contains(bounds) || !run.matches(segment, whole_line) || selected.len() >= MAX_RUN_SEGMENTS {
                 return Some(None);
             }
             work.charge(segment.text.len())?;
             selected.push(*segment);
         }
-        Some(exact_run(run, selected))
+        Some(exact_run(run, selected, whole_line))
     }
 }
 
-fn exact_run(run: &Run, mut selected: Vec<&SegmentData>) -> Option<Vec<SegmentKey>> {
+fn exact_run(run: &Run, mut selected: Vec<&SegmentData>, whole_line: bool) -> Option<Vec<SegmentKey>> {
     selected.sort_by(|left, right| left.x.total_cmp(&right.x));
+    if whole_line && selected.windows(2).any(|pair| pair[0].x >= pair[1].x) {
+        return None;
+    }
     let mut bounds = segment_bounds(selected.first()?)?;
     let mut text = String::new();
     let mut keys = Vec::new();
@@ -99,6 +114,11 @@ fn exact_run(run: &Run, mut selected: Vec<&SegmentData>) -> Option<Vec<SegmentKe
         keys.push(key);
     }
     // ~keep Synthetic heights are rounded; require the exact computed edge union instead of equal stored heights.
+    let text = if whole_line {
+        super::normalized_spaces(&text)
+    } else {
+        text
+    };
     (bounds.exact(run.bounds) && text == run.text).then_some(keys)
 }
 
@@ -115,7 +135,7 @@ fn cell(
     let mut groups = Vec::new();
     let mut unique = AHashSet::new();
     for run in runs {
-        let Some(members) = index.run(run, work)? else {
+        let Some(members) = index.run(run, work, false)? else {
             return Some(None);
         };
         if !members.iter().all(|key| unique.insert(key.clone())) {
@@ -172,9 +192,24 @@ fn page(
                 owned.entry(owner).or_default().contained.extend(groups);
             }
         }
+        let mut projected_recovered_lines = false;
+        for line in &source.recovered_lines {
+            if within_table(line, bounds)
+                && let Some(keys) = index.run(line, &mut work, true)?
+            {
+                if !keys.iter().all(|key| all_keys.insert(key.clone())) {
+                    return None;
+                }
+                owned.entry(owner).or_default().recovered_lines.extend(keys);
+                projected_recovered_lines = true;
+            }
+        }
+        if projected_recovered_lines {
+            owned.entry(owner).or_default().attach_recovered_source(source);
+        }
         for run in &source.paint_overhangs {
             if within_table(run, bounds)
-                && let Some(keys) = index.run(run, &mut work)?
+                && let Some(keys) = index.run(run, &mut work, false)?
             {
                 if !keys.iter().all(|key| all_keys.insert(key.clone())) {
                     return None;

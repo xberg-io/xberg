@@ -13,6 +13,7 @@ use std::collections::HashMap;
 mod fill_backgrounds;
 mod filled_cells;
 mod header_bands;
+mod painted_double_rule_grid;
 mod source_headers;
 
 /// Disjoint-set (union-find) with path compression.
@@ -3087,10 +3088,26 @@ fn strip_form_numbering_artifacts(table_rows: &mut Vec<TableRow>) {
 /// section-divider splitting — keeps operating on unmodified page-space
 /// tables exactly as before; only the caller-visible row/column labelling of
 /// the final tables changes for a confidently-rotated table. ~keep
+#[cfg(test)]
 fn detect_tables_from_intersections(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
+) -> Vec<Table> {
+    detect_intersections(spans, lines, config, Some(&mut RecoveredIntersection::default()))
+}
+
+#[derive(Default)]
+struct RecoveredIntersection {
+    bounds: Option<Rect>,
+    double_rule: bool,
+}
+
+fn detect_intersections(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    config: &TableDetectionConfig,
+    mut recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
     let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, config);
 
@@ -3119,7 +3136,27 @@ fn detect_tables_from_intersections(
                 "rows": header_source_diagnostic::rows(&table_rows), "source_span_ids": row_cell_span_indices,
             })
         });
-        let sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        if cells_are_intersections
+            && groups.len() == 1
+            && let Some(evidence) = recovery.as_deref_mut()
+            && let Some(table) =
+                filled_cells::preserve_record_bands(&table_rows, &row_cell_span_indices, spans, lines, config)
+        {
+            evidence.bounds = table.bbox;
+            return vec![table];
+        }
+        let mut sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        if cells_are_intersections
+            && let Some(evidence) = recovery.as_deref_mut()
+            && !sub_tables.iter().any(Table::is_real_grid)
+            && let Some(recovered) = painted_double_rule_grid::recover(group_cells, xs, ys, spans, lines, config)
+        {
+            if groups.len() == 1 {
+                evidence.bounds = recovered.bbox;
+                evidence.double_rule = true;
+            }
+            sub_tables = vec![recovered];
+        }
         #[cfg(test)]
         header_source_diagnostic::event("intersection_finalized", || {
             header_source_diagnostic::tables(&sub_tables)
@@ -4590,14 +4627,27 @@ fn tables_from_leftover_rules(
         .collect()
 }
 
-/// Exact numeric source words that a complete painted tiling owns across a row edge.
+/// Source evidence from an accepted painted tiling.
 #[doc(hidden)]
 pub struct PaintedCellOwnership {
     columns: usize,
     words: Vec<Option<Rect>>,
+    recovered_bounds: Option<Rect>,
+    pub(crate) double_rule: bool,
+    pub(crate) replaces_empty_ruled_route: bool,
 }
 
 impl PaintedCellOwnership {
+    /// Whether this exact table came from the source-conserving painted row recovery.
+    pub fn certifies_recovered_rows(&self, bounds: Rect) -> bool {
+        self.recovered_bounds == Some(bounds)
+    }
+
+    /// Whether the accepted double-rule grid filled an empty legacy ruled route.
+    pub fn certifies_new_ruled_table(&self, bounds: Rect) -> bool {
+        self.replaces_empty_ruled_route && self.certifies_recovered_rows(bounds)
+    }
+
     /// Check a single-cell word against the original accepted paint ownership.
     pub fn certifies_word(&self, row: usize, column: usize, bounds: Rect) -> bool {
         column < self.columns
@@ -4623,6 +4673,23 @@ pub(crate) fn detect_tables_with_line_ownership(
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
 ) -> (Vec<Table>, Option<PaintedCellOwnership>) {
+    detect_with_recovery(spans, lines, config, true)
+}
+
+pub(crate) fn detect_tables_without_painted_recovery(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    config: &TableDetectionConfig,
+) -> Vec<Table> {
+    detect_with_recovery(spans, lines, config, false).0
+}
+
+fn detect_with_recovery(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    config: &TableDetectionConfig,
+    recover: bool,
+) -> (Vec<Table>, Option<PaintedCellOwnership>) {
     if !config.enabled || spans.is_empty() {
         return (Vec::new(), None);
     }
@@ -4633,25 +4700,39 @@ pub(crate) fn detect_tables_with_line_ownership(
         return (detect_tables_from_spans_column_aware(spans, config), None);
     }
     if let Some(mut prepared) = filled_cells::prepare(spans, lines, config) {
-        let candidate = detect_with_unmodified_paths(spans, &prepared.paths, config);
+        let mut evidence = RecoveredIntersection::default();
+        let candidate = detect_with_unmodified_paths(spans, &prepared.paths, config, recover.then_some(&mut evidence));
         if prepared.accepts(&candidate) {
             let ownership = prepared.overhang_ownership(&candidate[0]);
             return (candidate, ownership);
         }
     }
-    (detect_with_unmodified_paths(spans, lines, config), None)
+    let mut evidence = RecoveredIntersection::default();
+    let tables = detect_with_unmodified_paths(spans, lines, config, recover.then_some(&mut evidence));
+    let ownership = match tables.as_slice() {
+        [table] if evidence.bounds.is_some() && table.bbox == evidence.bounds => Some(PaintedCellOwnership {
+            columns: table.col_count,
+            words: Vec::new(),
+            recovered_bounds: evidence.bounds,
+            double_rule: evidence.double_rule,
+            replaces_empty_ruled_route: false,
+        }),
+        _ => None,
+    };
+    (tables, ownership)
 }
 
 fn detect_with_unmodified_paths(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
+    recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
     if matches!(
         (config.horizontal_strategy, config.vertical_strategy),
         (TableStrategy::Lines, TableStrategy::Lines)
     ) {
-        let mut tables = detect_tables_from_intersections(spans, lines, config);
+        let mut tables = detect_intersections(spans, lines, config, recovery);
         if tables.is_empty() {
             for cluster in group_lines_into_clusters(lines, config) {
                 tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
@@ -4664,7 +4745,7 @@ fn detect_with_unmodified_paths(
     }
     // Both / hybrid strategy: try intersection-based first, then cluster, then H-rule bounded,
     // then text fallback. ~keep
-    let mut final_tables = detect_tables_from_intersections(spans, lines, config);
+    let mut final_tables = detect_intersections(spans, lines, config, recovery);
     if final_tables.is_empty() {
         let clusters = group_lines_into_clusters(lines, config);
         for cluster in clusters {
