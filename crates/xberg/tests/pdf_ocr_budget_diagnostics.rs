@@ -2,12 +2,12 @@
 
 mod helpers;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use lopdf::{Document, Object, Stream, dictionary};
 use xberg::ExtractedDocument;
-use xberg::core::config::{ExtractionConfig, OcrConfig};
+use xberg::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
 use xberg::extractors::security::SecurityLimits;
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 
@@ -20,6 +20,8 @@ struct FixedBackend {
     name: &'static str,
     text: &'static str,
     embedded_only: bool,
+    table: bool,
+    observed_widths: Option<Arc<Mutex<Vec<u32>>>>,
 }
 
 impl Plugin for FixedBackend {
@@ -42,8 +44,21 @@ impl OcrBackend for FixedBackend {
     async fn process_image(&self, bytes: &[u8], _config: &OcrConfig) -> xberg::Result<ExtractedDocument> {
         let mut result = ExtractedDocument::default();
         let embedded = bytes.get(16..20).is_some_and(|width| width == 30u32.to_be_bytes());
+        if let Some(widths) = &self.observed_widths {
+            widths
+                .lock()
+                .unwrap()
+                .push(u32::from_be_bytes(bytes[16..20].try_into().unwrap()));
+        }
         if !self.embedded_only || embedded {
             result.content = self.text.to_owned();
+            if self.table {
+                result.tables.push(xberg::types::Table {
+                    cells: vec![vec!["Item".to_owned(), "Amount".to_owned()]],
+                    markdown: "| Item | Amount |\n| --- | --- |\n".to_owned(),
+                    ..Default::default()
+                });
+            }
         }
         Ok(result)
     }
@@ -124,12 +139,16 @@ fn extract_case(text: &'static str, mixed: bool, budget: usize, pipeline: bool, 
         name: BACKEND,
         text: if pipeline { "" } else { text },
         embedded_only: embedded,
+        table: false,
+        observed_widths: None,
     }))
     .unwrap();
     register_ocr_backend(Arc::new(FixedBackend {
         name: "budget-diagnostic-second",
         text,
         embedded_only: false,
+        table: false,
+        observed_widths: None,
     }))
     .unwrap();
     let result = helpers::extract_bytes_document_blocking(&blank_pdf(embedded), "application/pdf", &config);
@@ -200,4 +219,75 @@ fn successful_embedded_retry_and_later_pipeline_stage_remove_empty_diagnostic() 
             );
         }
     }
+}
+
+fn extract_recorded_retry(text: &'static str, table: bool) -> (ExtractedDocument, Vec<u32>) {
+    let widths = Arc::new(Mutex::new(Vec::new()));
+    register_ocr_backend(Arc::new(FixedBackend {
+        name: BACKEND,
+        text,
+        embedded_only: true,
+        table,
+        observed_widths: Some(widths.clone()),
+    }))
+    .unwrap();
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_owned(),
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                min_words_for_ocr_output_check: 5,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        force_ocr: true,
+        ocr_embedded_images: Some(false),
+        security_limits: Some(SecurityLimits {
+            max_content_size: 1024 * 1024,
+            ..Default::default()
+        }),
+        use_cache: false,
+        ..Default::default()
+    };
+    let result = helpers::extract_bytes_document_blocking(&blank_pdf(true), "application/pdf", &config);
+    unregister_ocr_backend(BACKEND).unwrap();
+    let observed = widths.lock().unwrap().clone();
+    (result.unwrap(), observed)
+}
+
+#[test]
+#[serial_test::serial]
+fn discarded_embedded_retry_text_still_reports_final_empty_budget_read() {
+    let (result, widths) = extract_recorded_retry("x y z x y z x y z x y z", false);
+    assert_eq!(widths, [250, 30], "both real page and embedded-image renders reach OCR");
+    assert!(
+        result.content.trim().is_empty(),
+        "noise was discarded: {:?}",
+        result.content
+    );
+    let warnings: Vec<_> = result
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "ocr_raster_budget")
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert_eq!(warnings, [EMPTY_WARNING]);
+}
+
+#[test]
+#[serial_test::serial]
+fn retained_table_only_retry_has_no_empty_budget_diagnostic() {
+    let (result, widths) = extract_recorded_retry("", true);
+    assert_eq!(widths, [250, 30]);
+    assert_eq!(result.tables.len(), 1, "the final result retains the table");
+    assert_eq!(result.tables[0].cells, [vec!["Item", "Amount"]]);
+    assert_eq!(
+        result
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "ocr_raster_budget")
+            .count(),
+        0
+    );
 }

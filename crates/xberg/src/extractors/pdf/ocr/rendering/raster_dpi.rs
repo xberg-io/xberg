@@ -1,6 +1,9 @@
 use super::{EncodedPage, PageRenderFailures, RenderedPages};
 
 pub(crate) type PageRasterDpis = ahash::AHashMap<usize, crate::pdf::render::OcrRasterDpi>;
+type PageImage = (usize, image::DynamicImage);
+pub(super) type PageWithDpi = (PageImage, crate::pdf::render::OcrRasterDpi);
+type PageRenderOutcome = (usize, crate::Result<PageWithDpi>);
 
 pub(super) fn partition_raster_dpis(
     rendered: Vec<(EncodedPage, crate::pdf::render::OcrRasterDpi)>,
@@ -14,10 +17,7 @@ pub(super) fn partition_raster_dpis(
     (pages, dpis)
 }
 pub(super) fn partition_page_render_outcomes(
-    outcomes: Vec<(
-        usize,
-        crate::Result<((usize, image::DynamicImage), crate::pdf::render::OcrRasterDpi)>,
-    )>,
+    outcomes: Vec<PageRenderOutcome>,
 ) -> (RenderedPages, PageRenderFailures, PageRasterDpis) {
     let mut pages = Vec::with_capacity(outcomes.len());
     let mut failures = Vec::new();

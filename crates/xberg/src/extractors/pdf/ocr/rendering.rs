@@ -902,7 +902,7 @@ fn render_one_selected_page(
     idx: usize,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
-) -> crate::Result<((usize, image::DynamicImage), crate::pdf::render::OcrRasterDpi)> {
+) -> crate::Result<raster_dpi::PageWithDpi> {
     #[cfg(test)]
     record_render_thread();
     let (rendered, dpi) = crate::pdf::render::render_pdf_ocr_page_with_dpi(doc, idx, images_config, security_limits)

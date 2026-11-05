@@ -4254,17 +4254,6 @@ pub(super) async fn extract_with_ocr_for_page(
         });
     }
 
-    #[cfg(feature = "pdf")]
-    for (page_idx, text) in page_texts.iter().enumerate() {
-        if text.trim().is_empty()
-            && !pages_with_recovered_xobject_payload[page_idx]
-            && let Some(dpi) = raster_dpis.get(&page_idx)
-            && let Some(warning) = dpi.empty_text_warning(page_index_offset + page_idx)
-        {
-            crate::core::diagnostics::push_warning_deduped(&mut backend_page_warnings, warning);
-        }
-    }
-
     let mean_text_conf = match (conf_count > 0, backend_confidence_scale) {
         (true, Some(scale_max)) => Some((conf_sum / conf_count as f64) / scale_max),
         _ => None,
@@ -4309,6 +4298,25 @@ pub(super) async fn extract_with_ocr_for_page(
         &rejected_pages,
         page_index_offset,
     );
+
+    #[cfg(feature = "pdf")]
+    {
+        let retained_payload_pages: ahash::AHashSet<u32> = collected_tables
+            .iter()
+            .map(|table| table.page_number)
+            .chain(accumulated_formulas.iter().filter_map(|formula| formula.page))
+            .collect();
+        for (page_idx, text) in page_texts.iter().enumerate() {
+            let document_page_index = page_index_offset + page_idx;
+            if text.trim().is_empty()
+                && !retained_payload_pages.contains(&((document_page_index + 1) as u32))
+                && let Some(dpi) = raster_dpis.get(&page_idx)
+                && let Some(warning) = dpi.empty_text_warning(document_page_index)
+            {
+                crate::core::diagnostics::push_warning_deduped(&mut backend_page_warnings, warning);
+            }
+        }
+    }
 
     // A page that adopted the retry text is refilled from the retry lines no recovered table
     // carries, and is claimed by its tables when they carry every line (#2014).
