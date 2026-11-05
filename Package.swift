@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // Root-level Package.swift — alef-generated for published distributions.
 //
 // This manifest uses `.binaryTarget` for pre-built XCFramework/artifact bundles.

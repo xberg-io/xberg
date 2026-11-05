@@ -182,7 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(swift): Lower the Swift package's macOS floor from 26 to 14.**
-  The bundled ONNX Runtime needs macOS 13.4, and nothing in xberg needs a later release; the manifests use `swift-tools-version: 6.0`.
+  The bundled ONNX Runtime needs macOS 13.4, and nothing in xberg needs a later release; the manifests keep `swift-tools-version: 6.2`, which the static-library artifact bundle needs.
 
 - **(cli): The macOS CLI ships a libheif built for its own macOS floor.**
   The CLI bundled the runner's Homebrew libheif and codecs, which need macOS 15 on Apple Silicon and 14 on Intel; it now builds them from source for macOS 11, as the wheels already do.
