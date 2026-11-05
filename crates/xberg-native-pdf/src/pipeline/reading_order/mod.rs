@@ -17,6 +17,7 @@ pub mod simple;
 pub mod structure_tree;
 pub mod tategaki;
 pub mod xycut;
+mod xycut_legend;
 
 pub use article_thread::ArticleThreadStrategy;
 pub use detectors::{
