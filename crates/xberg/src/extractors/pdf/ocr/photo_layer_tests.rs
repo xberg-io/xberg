@@ -1524,3 +1524,300 @@ async fn should_put_a_confirmed_layer_first_on_the_accepted_stage_of_a_pipeline_
         "a layer that fails the quality check of the run's config is not confirmed"
     );
 }
+
+/// Page route (#2439): OCR misreads one word on every line of a correct layer. The structured page
+/// that the other output formats render holds each layer line once, and not the OCR copy beside
+/// it, on both the single-backend route and the pipeline route. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_drop_the_ocr_copies_from_the_structured_page_of_a_replaced_page() {
+    use super::pipeline::extract_mixed_ocr_native;
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
+    use std::sync::Arc;
+
+    /// An OCR backend that returns fixed text and its structured document, as the built-in
+    /// backends do. ~keep
+    struct StructuredBackend {
+        text: String,
+    }
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for StructuredBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _: &[u8],
+            _: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            Ok(crate::types::ExtractedDocument {
+                content: self.text.clone(),
+                ocr_internal_document: Some(super::document::flat_ocr_page_document(&self.text)),
+                ..Default::default()
+            })
+        }
+        fn confidence_semantics(&self) -> crate::plugins::ConfidenceSemantics {
+            crate::plugins::ConfidenceSemantics::Legibility { scale_max: 100.0 }
+        }
+    }
+    impl crate::plugins::Plugin for StructuredBackend {
+        fn name(&self) -> &str {
+            BACKEND
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    const BACKEND: &str = "layer-test-structured-copies-backend";
+    let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
+    crate::plugins::register_ocr_backend(Arc::new(StructuredBackend {
+        text: misread.join("\n"),
+    }))
+    .unwrap();
+    let single_backend = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let pipeline = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: BACKEND.to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    paddle_ocr_settings: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: crate::core::config::OcrQualityThresholds {
+                    pipeline_min_quality: 0.0,
+                    ..Default::default()
+                },
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let layer = HARBOUR_LAYER.join("\n");
+    let boundary = [crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: layer.len(),
+        page_number: 1,
+    }];
+    let mut results = Vec::new();
+    for (route, config) in [("single backend", &single_backend), ("pipeline", &pipeline)] {
+        let output = extract_mixed_ocr_native(&layer, &boundary, &[1], &pdf, config, None)
+            .await
+            .unwrap();
+        results.push((route, output.1, output.2));
+    }
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+
+    for (route, replaced, structured) in results {
+        assert!(
+            replaced.contains_key(&1),
+            "{route}: the OCR text must replace the page, or this test proves nothing"
+        );
+        let page = structured
+            .get(&1)
+            .unwrap_or_else(|| panic!("{route}: the replaced page has a structured document"));
+        let text: Vec<&str> = page.elements.iter().map(|element| element.text.as_str()).collect();
+        let text = text.join("\n");
+        for line in HARBOUR_LAYER {
+            assert_eq!(
+                text.matches(line).count(),
+                1,
+                "{route}: layer line {line:?} once: {text:?}"
+            );
+        }
+        for copy in &misread {
+            assert!(
+                !text.contains(copy.as_str()),
+                "{route}: the OCR copy {copy:?} goes: {text:?}"
+            );
+        }
+    }
+}
+
+/// The flat text of a page (#2439): a dropped OCR copy leaves no blank line behind, at the start of
+/// the OCR text, between two paragraphs or at its end. ~keep
+#[test]
+fn should_leave_no_blank_line_where_an_ocr_copy_was() {
+    use super::document::{LayerFirst, text_with_layer_first};
+
+    let first = LayerFirst {
+        lines: "Layer line".to_string(),
+        ocr_copies: vec!["copy line".to_string()],
+    };
+    assert_eq!(
+        text_with_layer_first("First part\n\nCopy line\n\nLast part", &first),
+        "Layer line\n\nFirst part\n\nLast part"
+    );
+    assert_eq!(
+        text_with_layer_first("Copy line\n\nLast part", &first),
+        "Layer line\n\nLast part"
+    );
+    assert_eq!(
+        text_with_layer_first("First part\n\nCopy line", &first),
+        "Layer line\n\nFirst part"
+    );
+    assert_eq!(text_with_layer_first("Copy line", &first), "Layer line");
+}
+
+/// The structured page (#2439): a paragraph that loses an OCR copy keeps its other lines, and its
+/// inline annotations go, because their byte ranges no longer match its text. A paragraph that
+/// holds no copy keeps its annotations. ~keep
+#[test]
+fn should_clear_the_annotations_of_a_paragraph_that_loses_an_ocr_copy() {
+    use super::document::{LayerFirst, put_layer_first_in_document};
+    use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let bold = TextAnnotation {
+        start: 0,
+        end: 4,
+        kind: AnnotationKind::Bold,
+    };
+    let mut doc = InternalDocument::new("pdf");
+    for text in ["Copy line\nKept line", "Other paragraph"] {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+        element.annotations.push(bold.clone());
+        doc.push_element(element);
+    }
+    let first = LayerFirst {
+        lines: "Layer line".to_string(),
+        ocr_copies: vec!["copy line".to_string()],
+    };
+    put_layer_first_in_document(&mut doc, None, &first);
+    let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+    assert_eq!(texts, ["Layer line", "Kept line", "Other paragraph"]);
+    assert!(doc.elements[1].annotations.is_empty(), "the moved annotations go");
+    assert_eq!(doc.elements[2].annotations, [bold], "an untouched paragraph keeps them");
+}
+
+/// A whole-document run (#2439): two OCR lines misread the same layer line. The first in reading
+/// order is the copy and goes; the second stays, so no OCR line is taken for a copy twice. ~keep
+#[test]
+fn should_take_the_first_of_two_ocr_misreads_of_one_layer_line_as_its_copy() {
+    use super::document::{layer_lines_to_put_first, text_with_layer_first};
+
+    let thresholds = OcrQualityThresholds::default();
+    let layer = HARBOUR_LAYER.join("\n");
+    let early = misread_longest_word(HARBOUR_LAYER[5]);
+    let late = HARBOUR_LAYER[5].replacen("library", "librarv", 1);
+    let ocr_text = format!(
+        "{}\n{early}\n{}\n{late}",
+        HARBOUR_LAYER[..3].join("\n"),
+        HARBOUR_LAYER[3..5].join("\n")
+    );
+    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds)
+        .expect("the OCR text confirms the layer and lacks its last line");
+    let text = text_with_layer_first(&ocr_text, &first);
+    assert!(!text.contains(early.as_str()), "the first misread goes: {text:?}");
+    assert!(text.contains(late.as_str()), "the second misread stays: {text:?}");
+    assert_eq!(
+        text.matches(HARBOUR_LAYER[5]).count(),
+        1,
+        "the layer line once: {text:?}"
+    );
+}
+
+/// A layer with one word with a letter among numbers that the OCR text reads differently (#2439):
+/// one shared word does not confirm it, because the OCR text must hold half of all its words. The
+/// same layer is confirmed when the OCR text holds half of its numbers too. ~keep
+#[test]
+fn should_not_confirm_a_layer_of_numbers_on_its_one_lettered_word() {
+    use super::document::ocr_confirms_layer;
+
+    let thresholds = OcrQualityThresholds::default();
+    let layer = format!("Total\n{}", LEDGER_LAYER.join("\n"));
+    let other_numbers: Vec<String> = LEDGER_LAYER
+        .iter()
+        .map(|line| line.split(' ').map(|n| format!("{n}9")).collect::<Vec<_>>().join(" "))
+        .collect();
+    let misread = format!("Total\n{}", other_numbers.join("\n"));
+    assert!(
+        !ocr_confirms_layer(&layer, &misread, &thresholds),
+        "one lettered word of a layer of numbers does not confirm it"
+    );
+    let half = format!("Total\n{}", LEDGER_LAYER[..3].join("\n"));
+    assert!(
+        ocr_confirms_layer(&layer, &half, &thresholds),
+        "the OCR text holds the word and half the numbers: confirmed"
+    );
+}
+
+/// The structured page (#2439): a title, a heading, an image and a table of several rows that hold
+/// an OCR copy of a layer line keep their text and their kind, and the table data stays. A plain
+/// OCR text block that holds a copy loses it. ~keep
+#[test]
+fn should_keep_a_title_heading_image_or_table_that_holds_an_ocr_copy() {
+    use super::document::{LayerFirst, put_layer_first_in_document};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let copy = "Copy line";
+    let rows = format!("Region Total\n{copy}\nNorth 1204\nSouth 3381");
+    let mut doc = InternalDocument::new("pdf");
+    doc.tables.push(crate::types::Table {
+        cells: vec![
+            vec!["Region".into(), "Total".into()],
+            vec!["Copy".into(), "line".into()],
+            vec!["North".into(), "1204".into()],
+        ],
+        ..Default::default()
+    });
+    let kinds = [
+        (ElementKind::Title, copy.to_string()),
+        (ElementKind::Heading { level: 2 }, copy.to_string()),
+        (ElementKind::Image { image_index: 0 }, copy.to_string()),
+        (ElementKind::Table { table_index: 0 }, rows.clone()),
+    ];
+    for (kind, text) in kinds.iter().cloned() {
+        doc.push_element(InternalElement::text(kind, text, 0));
+    }
+    doc.push_element(InternalElement::text(
+        ElementKind::OcrText {
+            level: crate::types::ocr_elements::OcrElementLevel::Block,
+        },
+        format!("{copy}\nRead line"),
+        0,
+    ));
+    let tables_before = format!("{:?}", doc.tables);
+    let first = LayerFirst {
+        lines: "Layer line".to_string(),
+        ocr_copies: vec!["copy line".to_string(); 5],
+    };
+    put_layer_first_in_document(&mut doc, None, &first);
+    assert_eq!(
+        doc.elements.len(),
+        6,
+        "the layer element and every element: {:?}",
+        doc.elements
+    );
+    assert_eq!(doc.elements[0].text, "Layer line");
+    for (element, (kind, text)) in doc.elements[1..5].iter().zip(kinds.iter()) {
+        assert_eq!(&element.kind, kind);
+        assert_eq!(&element.text, text, "a {kind:?} keeps its text");
+    }
+    assert_eq!(doc.elements[5].text, "Read line", "the OCR text block loses the copy");
+    assert_eq!(format!("{:?}", doc.tables), tables_before, "the table data stays");
+}

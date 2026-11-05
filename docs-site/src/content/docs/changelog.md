@@ -531,8 +531,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   When automatic OCR replaces a page whose text layer passes the per-page quality check, and the OCR text holds at
   least half of the layer's words, the page content keeps the layer lines that the OCR text lacks, first. Before,
   a page that the language check sent to OCR lost the lines that OCR dropped. When OCR misreads one word of a
-  layer line, the page holds the layer line once, and not the OCR copy beside it. A layer of numbers is confirmed
-  when the OCR text holds half of its numbers. A text layer that decodes to the wrong letters still gets the OCR
+  layer line, the page holds the layer line once, and not the OCR copy beside it. The OCR text must hold half of all
+  the layer's words as well as half of its words with a letter, so a few words cannot confirm a layer of other
+  numbers. A layer of numbers needs at least three distinct numbers. In the structured output, a title, heading,
+  table or image that holds an OCR copy keeps it. A text layer that decodes to the wrong letters still gets the OCR
   text alone, and forced OCR behaves as before. (GH#2439)
 
 - **(pdf): A photo page keeps its text layer when OCR reads only noise.**

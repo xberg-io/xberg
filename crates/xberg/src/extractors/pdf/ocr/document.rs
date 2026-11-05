@@ -196,10 +196,12 @@ const MIN_LAYER_WORD_SHARE_READ_BY_OCR: f64 = 0.5;
 /// numbers cannot. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 const MIN_NUMBER_ONLY_LAYER_WORDS: usize = 3;
-/// Whether the OCR text of a page confirms its text layer: the OCR text holds at least half of the
-/// layer's words with a letter (of its numbers, when no word has a letter), and the layer passes
-/// the per-page quality check. A confirmed layer has the right letters, whatever check sent the
-/// page to OCR. The quality check runs last, and only for a layer that the words confirm. ~keep
+/// Whether the OCR text of a page confirms its text layer: the OCR text holds at least half of all
+/// the layer's words, and at least half of its words with a letter, and the layer passes the
+/// per-page quality check. The share of all words keeps a few lettered words from confirming a
+/// layer of other numbers; the share of lettered words keeps the right numbers of a wrong-letter
+/// layer from confirming it. A layer with no word with a letter needs three distinct numbers. The
+/// quality check runs last, and only for a layer that the words confirm. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQualityThresholds) -> bool {
     let all_words: std::collections::HashSet<String> = whole_words(layer).collect();
@@ -208,17 +210,16 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
         .filter(|word| word.chars().any(char::is_alphabetic))
         .cloned()
         .collect();
-    let (layer_words, least) = if lettered.is_empty() {
-        (all_words, MIN_NUMBER_ONLY_LAYER_WORDS)
-    } else {
-        (lettered, 1)
-    };
-    if layer_words.len() < least {
+    if lettered.is_empty() && all_words.len() < MIN_NUMBER_ONLY_LAYER_WORDS {
         return false;
     }
     let ocr_words: std::collections::HashSet<String> = whole_words(ocr_text).collect();
-    let read = layer_words.iter().filter(|word| ocr_words.contains(*word)).count();
-    read as f64 >= MIN_LAYER_WORD_SHARE_READ_BY_OCR * layer_words.len() as f64
+    let holds_half = |words: &std::collections::HashSet<String>| {
+        let read = words.iter().filter(|word| ocr_words.contains(*word)).count();
+        read as f64 >= MIN_LAYER_WORD_SHARE_READ_BY_OCR * words.len() as f64
+    };
+    holds_half(&all_words)
+        && holds_half(&lettered)
         && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
 }
 /// The layer lines that go before the OCR text of a replaced page, and the OCR lines they replace. ~keep
@@ -239,14 +240,16 @@ fn line_key(line: &str) -> String {
 /// Whether an OCR line is one layer line with one word misread: it shares a word with the layer
 /// line, and each side has at most one word the other lacks. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn misreads_one_word(layer_line: &str, ocr_line: &str) -> Option<usize> {
+fn misreads_one_word(layer_line: &str, ocr_line: &str) -> bool {
     let layer_words: std::collections::HashSet<String> = whole_words(layer_line).collect();
     let ocr_words: std::collections::HashSet<String> = whole_words(ocr_line).collect();
     let shared = layer_words.intersection(&ocr_words).count();
-    (shared >= 1 && layer_words.len() - shared <= 1 && ocr_words.len() - shared <= 1).then_some(shared)
+    shared >= 1 && layer_words.len() - shared <= 1 && ocr_words.len() - shared <= 1
 }
 /// The OCR lines that misread one of the missing layer lines. An OCR line that reads another line
-/// of the layer exactly is never a copy. Each OCR line pairs with one layer line. ~keep
+/// of the layer exactly is never a copy. Each OCR line pairs with one layer line: the first
+/// candidate in reading order, since every candidate of a missing line shares all its words but
+/// one. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn ocr_lines_misreading(missing: &str, layer: &str, ocr_text: &str) -> Vec<String> {
     let layer_keys: std::collections::HashSet<String> = layer.lines().map(line_key).collect();
@@ -257,13 +260,8 @@ fn ocr_lines_misreading(missing: &str, layer: &str, ocr_text: &str) -> Vec<Strin
         .collect();
     let mut copies = Vec::new();
     for layer_line in missing.lines() {
-        let best = candidates
-            .iter()
-            .enumerate()
-            .filter_map(|(at, line)| misreads_one_word(layer_line, line).map(|shared| (shared, at)))
-            .max_by_key(|(shared, _)| *shared);
-        if let Some((_, at)) = best {
-            copies.push(line_key(candidates.swap_remove(at)));
+        if let Some(at) = candidates.iter().position(|line| misreads_one_word(layer_line, line)) {
+            copies.push(line_key(candidates.remove(at)));
         }
     }
     copies
@@ -346,15 +344,17 @@ pub(super) fn insert_layer_into_document(
     doc.elements.splice(at..at, layer_elements);
 }
 /// Put the layer first on a structured OCR document, and drop the OCR lines that the layer lines
-/// replace. An element that holds only such lines goes, with its relationships; an element that
-/// holds others keeps them, and its inline annotations go because their byte ranges moved. ~keep
+/// replace from its paragraphs and OCR text blocks. A paragraph or block that holds only such
+/// lines goes, with its relationships; one that holds others keeps them, and its inline
+/// annotations go because their byte ranges moved. A title, heading, table, image or other element
+/// keeps its text and its kind: its copy stays beside the layer line. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn put_layer_first_in_document(
     doc: &mut crate::types::internal::InternalDocument,
     page: Option<u32>,
     first: &LayerFirst,
 ) {
-    use crate::types::internal::RelationshipTarget;
+    use crate::types::internal::{ElementKind, RelationshipTarget};
 
     insert_layer_into_document(doc, page, &first.lines);
     if first.ocr_copies.is_empty() {
@@ -365,7 +365,8 @@ pub(super) fn put_layer_first_in_document(
     let mut kept = 0u32;
     doc.elements.retain_mut(|element| {
         let mut keep = true;
-        if page.is_none() || element.page == page {
+        let plain_text = matches!(element.kind, ElementKind::Paragraph | ElementKind::OcrText { .. });
+        if plain_text && (page.is_none() || element.page == page) {
             let lines: Vec<&str> = element.text.lines().collect();
             let remaining: Vec<&str> = lines
                 .iter()
