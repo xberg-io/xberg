@@ -184,6 +184,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(swift): Lower the Swift package's macOS floor from 26 to 14.**
   The bundled ONNX Runtime needs macOS 13.4, and nothing in xberg needs a later release; the manifests use `swift-tools-version: 6.0`.
 
+- **(cli): The macOS CLI ships a libheif built for its own macOS floor.**
+  The CLI bundled the runner's Homebrew libheif and codecs, which need macOS 15 on Apple Silicon and 14 on Intel; it now builds them from source for macOS 11, as the wheels already do.
+
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
 

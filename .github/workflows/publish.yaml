@@ -1644,6 +1644,16 @@ jobs:
         with:
           ort-version: "1.24.2"
 
+      # Build the libheif closure from source at the macOS floor (#1243), as the
+      # wheel, Node and NuGet jobs do. Homebrew's bottles on the runner target the
+      # runner's macOS, so the vendored CLI closure would need that macOS. ~keep
+      - name: Build libheif stack for the macOS floor
+        if: contains(matrix.target, 'apple-darwin')
+        shell: bash
+        run: |
+          bash scripts/ci/build-macos-heif-deps.sh
+          echo "PKG_CONFIG_PATH=/tmp/xberg-heif/lib/pkgconfig" >>"$GITHUB_ENV"
+
       - uses: xberg-io/actions/build-rust-cli@v1
         id: build
         with:
@@ -1769,6 +1779,17 @@ jobs:
             if [[ "$TARGET" == *-apple-darwin ]]; then
               bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/xberg"
               "$STAGE/xberg" --version
+              # The CLI loads its vendored closure at start, so a library built for a
+              # newer macOS raises the floor of the whole CLI. ONNX Runtime is loaded
+              # only when an ONNX feature runs, so it is left out of this check. ~keep
+              source scripts/lib/macho.sh
+              for lib in "$STAGE"/xberg "$STAGE"/*.dylib; do
+                [[ "$(basename "$lib")" == libonnxruntime*.dylib ]] && continue
+                minos="$(minos_of "$lib")"
+                if [[ "$(printf '%s\n%s\n' "$minos" "$MACOSX_DEPLOYMENT_TARGET" | sort -V | tail -1)" != "$MACOSX_DEPLOYMENT_TARGET" ]]; then
+                  echo "::error::$(basename "$lib") needs macOS $minos, newer than the CLI floor $MACOSX_DEPLOYMENT_TARGET"; exit 1
+                fi
+              done
             fi
             # Linux CLI builds enable the formats feature, which dynamically
             # links libheif. Ship its complete non-system dependency closure.
