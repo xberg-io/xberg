@@ -24,6 +24,17 @@ pub(crate) fn tesseract_api_capacity() -> usize {
     crate::core::config::concurrency::recognition_concurrency()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tesseract engines this thread built, so a test can count the builds a run of calls costs.
+    static ENGINE_INITIALIZATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn engine_initialization_count() -> usize {
+    ENGINE_INITIALIZATIONS.get()
+}
+
 #[derive(Clone, PartialEq, Eq)]
 struct ApiKey {
     tessdata_path: String,
@@ -36,6 +47,12 @@ struct PoolState<K, V> {
     idle: Vec<(K, V)>,
 }
 
+/// A keyed pool that holds at most `capacity` resources checked out at once.
+///
+/// An idle resource of another key stays in the pool until the pool holds twice `capacity`
+/// resources, checked out and idle together; then the resource released longest ago goes. A run
+/// that reads every page with two language lists in turn (GH#2300) builds each list's engine
+/// once, as a run with one list does, instead of rebuilding one on every call. ~keep
 struct ResourcePool<K, V> {
     capacity: usize,
     state: Mutex<PoolState<K, V>>,
@@ -62,14 +79,14 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         loop {
             if let Some(index) = state.idle.iter().position(|(idle_key, _)| idle_key == &key) {
-                let value = state.idle.swap_remove(index).1;
+                let value = state.idle.remove(index).1;
                 state.checked_out += 1;
                 return Ok(ResourceLease::new(Arc::clone(self), key, value));
             }
 
-            let total = state.checked_out + state.idle.len();
-            if total < self.capacity || !state.idle.is_empty() {
-                let stale = state.idle.pop();
+            if state.checked_out < self.capacity {
+                let full = state.checked_out + state.idle.len() >= self.kept_resources();
+                let stale = full.then(|| state.idle.remove(0));
                 state.checked_out += 1;
                 drop(state);
                 drop(stale);
@@ -95,6 +112,12 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
         }
         drop(state);
         self.available.notify_one();
+    }
+
+    /// Resources the pool holds at most, checked out and idle together: `capacity` for the
+    /// resources in use and `capacity` more kept idle for the other keys of the run.
+    fn kept_resources(&self) -> usize {
+        self.capacity * 2
     }
 
     #[cfg(test)]
@@ -279,6 +302,8 @@ impl TesseractApiPool {
             api.clear().map_err(|error| {
                 OcrError::ProcessingFailed(format!("Failed to clear newly initialized Tesseract API: {error}"))
             })?;
+            #[cfg(test)]
+            ENGINE_INITIALIZATIONS.set(ENGINE_INITIALIZATIONS.get() + 1);
             Ok(PooledTesseractApi {
                 primary: api,
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
@@ -364,7 +389,11 @@ mod tests {
         drop(reused);
         let automatic = pool.checkout::<(), _>(key(3), || Ok(3)).unwrap();
         assert_eq!(*automatic, 3);
-        assert_eq!(pool.counts(), (1, 0));
+        assert_eq!(
+            pool.counts(),
+            (1, 1),
+            "the other mode's handle stays idle beside the session"
+        );
     }
 
     #[cfg(feature = "bundle-tessdata-eng")]
@@ -414,18 +443,23 @@ mod tests {
         assert_eq!(pool.resources.counts(), (0, 0));
     }
 
+    /// Twelve keys on four sessions: at most four resources are checked out at once, and the
+    /// pool holds at most four more idle, so the total never passes eight.
     #[test]
-    fn total_checked_out_and_idle_never_exceeds_capacity() {
+    fn checked_out_never_exceeds_capacity_and_the_total_never_exceeds_twice_it() {
         let pool = ResourcePool::new(4);
-        let peak = Arc::new(AtomicUsize::new(0));
+        let peak_checked_out = Arc::new(AtomicUsize::new(0));
+        let peak_total = Arc::new(AtomicUsize::new(0));
         let mut threads = Vec::new();
         for key in 0..12 {
             let pool = Arc::clone(&pool);
-            let peak = Arc::clone(&peak);
+            let peak_checked_out = Arc::clone(&peak_checked_out);
+            let peak_total = Arc::clone(&peak_total);
             threads.push(thread::spawn(move || {
                 let lease = pool.checkout::<(), _>(key, || Ok(key)).unwrap();
                 let (checked_out, idle) = pool.counts();
-                peak.fetch_max(checked_out + idle, Ordering::SeqCst);
+                peak_checked_out.fetch_max(checked_out, Ordering::SeqCst);
+                peak_total.fetch_max(checked_out + idle, Ordering::SeqCst);
                 thread::yield_now();
                 drop(lease);
             }));
@@ -433,20 +467,75 @@ mod tests {
         for thread in threads {
             thread.join().unwrap();
         }
-        assert!(peak.load(Ordering::SeqCst) <= 4);
+        assert!(peak_checked_out.load(Ordering::SeqCst) <= 4);
+        assert!(peak_total.load(Ordering::SeqCst) <= 8);
         let (checked_out, idle) = pool.counts();
         assert_eq!(checked_out, 0);
-        assert!(idle <= 4);
+        assert!(idle <= 8);
     }
 
+    /// Two keys in turn, as a page read with and without its text-layer language (GH#2300): each
+    /// key is built once, and the idle resource of the other key waits for its next call.
     #[test]
-    fn key_switch_evicts_an_idle_mismatch() {
+    fn a_key_switch_keeps_the_idle_resource_of_the_other_key() {
         let pool = ResourcePool::new(1);
         drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
         let german = pool.checkout::<(), _>("deu", || Ok(2)).unwrap();
         assert_eq!(*german, 2);
-        let (checked_out, idle) = pool.counts();
-        assert_eq!((checked_out, idle), (1, 0));
+        assert_eq!(
+            pool.counts(),
+            (1, 1),
+            "the idle English resource stays beside the German session"
+        );
+        drop(german);
+        let english = pool
+            .checkout::<(), _>("eng", || panic!("the English resource was rebuilt"))
+            .unwrap();
+        assert_eq!(*english, 1);
+        assert_eq!(pool.counts(), (1, 1));
+    }
+
+    /// The pool keeps `capacity` idle resources beside the checked-out ones; past that the
+    /// resource released longest ago goes.
+    #[test]
+    fn the_idle_resource_released_longest_ago_goes_when_the_pool_is_full() {
+        let pool = ResourcePool::new(1);
+        drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
+        drop(pool.checkout::<(), _>("deu", || Ok(2)).unwrap());
+        assert_eq!(pool.counts(), (0, 2));
+        let french = pool.checkout::<(), _>("fra", || Ok(3)).unwrap();
+        assert_eq!(*french, 3);
+        assert_eq!(pool.counts(), (1, 1), "one idle resource goes for the third key");
+        drop(french);
+        let german = pool
+            .checkout::<(), _>("deu", || panic!("the German resource was the newer idle one"))
+            .unwrap();
+        assert_eq!(*german, 2);
+        drop(german);
+        let english = pool.checkout::<(), _>("eng", || Ok(4)).unwrap();
+        assert_eq!(*english, 4, "the English resource was the one released longest ago");
+    }
+
+    /// A key hit in the middle of the idle list keeps the release order of the others, so the
+    /// eviction still takes the resource released longest ago.
+    #[test]
+    fn a_key_hit_keeps_the_release_order_of_the_other_idle_resources() {
+        let pool = ResourcePool::new(2);
+        for (key, value) in [("eng", 1), ("deu", 2), ("fra", 3)] {
+            drop(pool.checkout::<(), _>(key, || Ok(value)).unwrap());
+        }
+        let english = pool.checkout::<(), _>("eng", || Ok(9)).unwrap();
+        assert_eq!(*english, 1, "the English resource is the idle one");
+        drop(english);
+        let italian = pool.checkout::<(), _>("ita", || Ok(4)).unwrap();
+        let spanish = pool.checkout::<(), _>("spa", || Ok(5)).unwrap();
+        assert_eq!(pool.counts(), (2, 2), "the fifth key evicts one idle resource");
+        drop(italian);
+        drop(spanish);
+        let french = pool
+            .checkout::<(), _>("fra", || panic!("the French resource went instead of the German one"))
+            .unwrap();
+        assert_eq!(*french, 3);
     }
 
     #[test]
@@ -585,7 +674,11 @@ mod tests {
             assert_eq!(engine, Some(&expected));
         }
         assert_eq!(loads.get(), 5);
-        assert_eq!(pool.counts(), (0, 1));
+        assert_eq!(
+            pool.counts(),
+            (0, 2),
+            "the pool keeps two idle sessions at capacity one"
+        );
     }
 
     #[test]
@@ -616,6 +709,16 @@ mod tests {
             0,
             "idle primary must retain its dictionary"
         );
+        // A second idle session fills the pool, so the next key evicts the oldest idle one.
+        drop(
+            pool.checkout::<(), _>(dictionary_key("models-c", "ita+eng", 1), || {
+                Ok(super::super::dictionary::SecondaryDictionaries::<Engine>::new(
+                    "models-c", "ita+eng", 1,
+                ))
+            })
+            .unwrap(),
+        );
+        assert_eq!(dropped.load(Ordering::SeqCst), 0, "a second key evicts nothing yet");
         let replacement = pool
             .checkout::<(), _>(dictionary_key("models-b", "ita+eng", 1), || {
                 assert_eq!(
@@ -628,7 +731,7 @@ mod tests {
                 ))
             })
             .unwrap();
-        assert_eq!(pool.counts(), (1, 0));
+        assert_eq!(pool.counts(), (1, 1));
         drop(replacement);
         assert_eq!(dropped.load(Ordering::SeqCst), 1);
     }

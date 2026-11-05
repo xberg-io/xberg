@@ -4598,6 +4598,31 @@ mod tests {
         bytes
     }
 
+    /// A page read with two language lists in turn, as the text-layer language route reads a
+    /// page with and without the language of its layer (GH#2300), builds each engine once: the
+    /// idle engine of the other list waits in the pool for its next call.
+    #[test]
+    fn alternating_language_lists_build_each_engine_once() {
+        let pool = TesseractApiPool::with_capacity(1);
+        let cache_dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        let image = tiny_test_png_bytes();
+        let before = super::super::api_pool::engine_initialization_count();
+        for language in ["eng", "eng+chi_sim", "eng", "eng+chi_sim"] {
+            let config = TesseractConfig {
+                language: language.to_string(),
+                use_cache: false,
+                ..TesseractConfig::default()
+            };
+            process_image_with_cache(&image, &config, &cache, &pool, None).expect("OCR must succeed");
+        }
+        assert_eq!(
+            super::super::api_pool::engine_initialization_count() - before,
+            2,
+            "each language list builds its engine once"
+        );
+    }
+
     fn corpus_image(name: &str) -> Vec<u8> {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../test_documents/images")
