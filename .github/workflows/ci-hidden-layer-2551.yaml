@@ -1,0 +1,114 @@
+name: Qualify hidden-layer OCR fixture on Linux x86_64
+
+on:
+  push:
+    branches: [codex/qualify-hidden-layer-fixture-2551]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hidden-layer-fixture-2551-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-qualification:
+    if: github.repository == 'xberg-io/xberg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+      CARGO_TERM_COLOR: never
+      RUST_MIN_STACK: 16777216
+      OMP_THREAD_LIMIT: 1
+      DOTPRODUCT: avx2
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
+          submodules: false
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          install-llvm-cov: "false"
+      - uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+      - name: Match the reporter's CPU and model profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          lscpu
+          grep -qm1 -w avx2 /proc/cpuinfo
+          test_path=crates/xberg/tests/pdf_partial_hidden_ocr_layer.rs
+          mkdir -p "$RUNNER_TEMP/tessdata"
+          git show HEAD~2:"$test_path" > "$RUNNER_TEMP/original-fixture.rs"
+          cmp "$RUNNER_TEMP/original-fixture.rs" <(git show 8845804a369d538ed32c69d464d122e7f3d759e0:"$test_path")
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/tessdata/eng.traineddata" \
+            https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata
+          printf '%s  %s\n' 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 "$RUNNER_TEMP/tessdata/eng.traineddata" | sha256sum --check
+          printf 'TESSDATA_PREFIX=%s/tessdata\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Run original, portable fixture, and production rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_path=crates/xberg/tests/pdf_partial_hidden_ocr_layer.rs
+          pipeline=crates/xberg/src/extractors/pdf/ocr/pipeline.rs
+          work="$RUNNER_TEMP/hidden-layer-receipts"
+          mkdir -p "$work"
+          cp "$test_path" "$work/candidate.rs"
+          cp "$pipeline" "$work/pipeline.rs"
+          trap 'cp "$work/candidate.rs" "$test_path"; cp "$work/pipeline.rs" "$pipeline"' EXIT
+          args=(test --locked -p xberg --features "pdf,ocr,layout-detection,bundle-tessdata-eng" --test pdf_partial_hidden_ocr_layer)
+          cp "$RUNNER_TEMP/original-fixture.rs" "$test_path"
+          baseline=0
+          cargo "${args[@]}" -- --test-threads=1 > "$work/baseline.log" 2>&1 || baseline=$?
+          cp "$work/candidate.rs" "$test_path"
+          candidate=0
+          cargo "${args[@]}" -- --test-threads=1 > "$work/candidate.log" 2>&1 || candidate=$?
+          python3 - "$pipeline" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          active = "if boundaries.is_empty()\n        || scanned_pages.is_empty()"
+          original = "if boundaries.is_empty()\n        || scanned_pages.len() != 1"
+          assert source.count(active) == 1
+          path.write_text(source.replace(active, original))
+          PY
+          mutant=0
+          cargo "${args[@]}" -- --exact multipage_hidden_layers_recover_only_the_pages_missing_picture_words --test-threads=1 > "$work/mutant.log" 2>&1 || mutant=$?
+          for stage in baseline candidate mutant; do
+            echo "::group::$stage"
+            cat "$work/$stage.log"
+            echo "::endgroup::"
+          done
+          if ! grep -Fxq 'running 12 tests' "$work/baseline.log" ||
+            ! grep -Eq '^test result: (ok|FAILED)\. [0-9]+ passed; [0-9]+ failed; 0 ignored; 0 measured; 0 filtered out;' "$work/baseline.log"; then
+            echo "::error::Original fixture did not execute all 12 tests (exit $baseline)"
+            exit 1
+          fi
+          if [ "$baseline" -eq 101 ] &&
+            grep -Fq 'test result: FAILED. 5 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out;' "$work/baseline.log" &&
+            grep -Eq 'aftemoon|lantems|retumed' "$work/baseline.log"; then
+            echo "::notice::Original fixture reproduced the reported count and OCR misread"
+          else
+            echo "::warning::Original fixture outcome differs from the reporter; see baseline.log (exit $baseline)"
+          fi
+          test "$candidate" -eq 0
+          grep -Fq 'test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;' "$work/candidate.log"
+          test "$mutant" -eq 101
+          grep -Fq 'test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out;' "$work/mutant.log"
+          grep -Fxq 'cuts true/false' "$work/mutant.log"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: hidden-layer-linux-x86_64
+          path: ${{ runner.temp }}/hidden-layer-receipts/*.log
+          if-no-files-found: error
