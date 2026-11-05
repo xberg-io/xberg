@@ -21,3 +21,4 @@ same change as a new record.
 | [0006](https://github.com/xberg-io/xberg/blob/main/adrs/0006-bundle-regular-and-bold-latin-fallback-faces-on-all-targets.md) | Bundle regular and bold Latin fallback faces on all targets | accepted | 2026-11-05 |
 | [0007](https://github.com/xberg-io/xberg/blob/main/adrs/0007-qualify-windows-wheels-in-isolated-userspace-without-global-vc-runtime.md) | Qualify Windows wheels in isolated userspace without global VC runtime | accepted | 2026-11-05 |
 | [0008](https://github.com/xberg-io/xberg/blob/main/adrs/0008-scope-cacheability-to-one-extraction-operation.md) | Scope cacheability to one extraction operation | accepted | 2026-11-05 |
+| [0009](https://github.com/xberg-io/xberg/blob/main/adrs/0009-preserve-certified-painted-pdf-cells-when-text-has-decorative-paint.md) | Preserve certified painted PDF cells when text has decorative paint | accepted | 2026-11-05 |

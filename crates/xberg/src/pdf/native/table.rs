@@ -152,11 +152,25 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTa
         let page_number = (page_idx + 1) as u32;
         match doc
             .doc
-            .extract_tables_with_configs(page_idx, [&strict_config, &bordered_config])
+            .extract_tables_with_source_ownership(page_idx, [&strict_config, &bordered_config])
         {
-            Ok([strict_tables, bordered_tables]) => {
-                append_page_tables(doc, page_idx, strict_tables, &mut strict, &mut strict_warnings);
-                append_page_tables(doc, page_idx, bordered_tables, &mut bordered, &mut bordered_warnings);
+            Ok([(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)]) => {
+                append_page_tables(
+                    doc,
+                    page_idx,
+                    strict_tables,
+                    strict_ownership.as_ref(),
+                    &mut strict,
+                    &mut strict_warnings,
+                );
+                append_page_tables(
+                    doc,
+                    page_idx,
+                    bordered_tables,
+                    bordered_ownership.as_ref(),
+                    &mut bordered,
+                    &mut bordered_warnings,
+                );
             }
             Err(error) => {
                 tracing::warn!(
@@ -178,6 +192,7 @@ fn append_page_tables(
     doc: &NativeDocument,
     page_idx: usize,
     extracted: Vec<xberg_native_pdf::structure::table_extractor::Table>,
+    ownership: Option<&xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
     tables: &mut Vec<NativeTable>,
     warnings: &mut Vec<ProcessingWarning>,
 ) {
@@ -211,7 +226,7 @@ fn append_page_tables(
             scripts: scripts::capture(&extracted_table, &table.cells, &source_spans),
             complete_leading_header: complete_leading_header(&extracted_table),
             source_members: capture_members
-                .then(|| source_members::capture(&extracted_table, &table))
+                .then(|| source_members::capture(&extracted_table, &table, ownership))
                 .flatten(),
             table,
             grid,

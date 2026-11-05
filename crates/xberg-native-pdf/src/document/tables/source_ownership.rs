@@ -1,0 +1,82 @@
+use super::*;
+
+impl PdfDocument {
+    /// Extract tables with independent configurations using one page's words and ruling paths.
+    /// Results follow the order of the supplied configurations.
+    pub fn extract_tables_with_configs<const N: usize>(
+        &self,
+        page_index: usize,
+        configs: [&crate::structure::spatial_table_detector::TableDetectionConfig; N],
+    ) -> Result<[Vec<crate::structure::table_extractor::Table>; N]> {
+        self.extract_tables_with_source_ownership(page_index, configs)
+            .map(|tables| tables.map(|(tables, _)| tables))
+    }
+
+    /// Extract Native tables and retain certificates from accepted painted tilings.
+    #[doc(hidden)]
+    pub fn extract_tables_with_source_ownership<const N: usize>(
+        &self,
+        page_index: usize,
+        configs: [&crate::structure::spatial_table_detector::TableDetectionConfig; N],
+    ) -> Result<
+        [(
+            Vec<crate::structure::table_extractor::Table>,
+            Option<crate::structure::spatial_table_detector::PaintedCellOwnership>,
+        ); N],
+    > {
+        use crate::structure::spatial_table_detector::detect_tables_with_line_ownership;
+
+        // Use words instead of spans for better granularity.
+        // This ensures that strings with spaces are split into separate columns
+        // for the spatial detector. ~keep
+        let spans = self.extract_table_word_spans(page_index)?;
+        #[cfg(test)]
+        crate::structure::spatial_table_detector::header_source_diagnostic::event("table_word_spans", || {
+            serde_json::json!(
+                spans
+                    .iter()
+                    .enumerate()
+                    .map(|(id, span)| serde_json::json!({"id": id, "span": span}))
+                    .collect::<Vec<_>>()
+            )
+        });
+        // GH#1656: a page-sized background rectangle passes is_table_primitive
+        // (its <1000pt bound doesn't exclude A4/Letter) and then unions every
+        // other primitive on the page into one cluster. Drop it here, where the
+        // real MediaBox is available; a failed MediaBox lookup leaves every
+        // primitive alone rather than filtering on garbage. ~keep
+        let media_box = self.get_page_media_box(page_index).ok();
+        let lines: Vec<_> = self
+            .extract_paths(page_index)?
+            .into_iter()
+            .filter(|p| {
+                #[cfg(test)]
+                crate::structure::spatial_table_detector::header_source_diagnostic::event("raw_path", || {
+                    serde_json::json!(p)
+                });
+                p.is_table_primitive()
+            })
+            .filter(|p| match media_box {
+                Some(mb) => !p.is_page_frame_rectangle(mb),
+                None => true,
+            })
+            .collect();
+
+        #[cfg(test)]
+        crate::structure::spatial_table_detector::header_source_diagnostic::event("filtered_paths", || {
+            serde_json::json!(lines)
+        });
+
+        // Same prose-rejection filter `extract_page_tables` applies to the
+        // extract_text/to_markdown/to_html path — this public API called
+        // `detect_tables_with_lines` directly with no post-filter at all, so
+        // it was already able to fabricate/garble tables on any prose-shaped
+        // spatial candidate, independent of anything else in this function. ~keep
+        Ok(configs.map(|config| {
+            let (mut tables, ownership) = detect_tables_with_line_ownership(&spans, &lines, config);
+            tables.retain(|table| table.is_real_grid() && !looks_like_prose_table(table));
+            let ownership = if tables.len() == 1 { ownership } else { None };
+            (tables, ownership)
+        }))
+    }
+}

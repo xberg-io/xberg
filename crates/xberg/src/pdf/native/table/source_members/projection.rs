@@ -1,7 +1,11 @@
 use super::{BoundingBox, Edges, Run, SegmentData, SegmentKey, Table, TableSources, table_bounds};
 use ahash::{AHashMap, AHashSet};
 
-pub(crate) type CertifiedRuns = Vec<Vec<SegmentKey>>;
+#[derive(Default)]
+pub(crate) struct CertifiedRuns {
+    pub(crate) contained: Vec<Vec<SegmentKey>>,
+    pub(crate) painted_overhangs: Vec<Vec<SegmentKey>>,
+}
 
 const MAX_PAGE_TABLES: usize = super::MAX_CAPTURE_TABLES;
 pub(crate) const MAX_PAGE_SEGMENTS: usize = 16_384;
@@ -98,15 +102,14 @@ fn exact_run(run: &Run, mut selected: Vec<&SegmentData>) -> Option<Vec<SegmentKe
     (bounds.exact(run.bounds) && text == run.text).then_some(keys)
 }
 
-fn cell(index: &SourceIndex<'_>, runs: &[Run], table: BoundingBox, work: &mut Work) -> Option<Option<CertifiedRuns>> {
+fn cell(
+    index: &SourceIndex<'_>,
+    runs: &[Run],
+    table: BoundingBox,
+    work: &mut Work,
+) -> Option<Option<Vec<Vec<SegmentKey>>>> {
     work.charge(runs.len())?;
-    if !runs.iter().all(|run| {
-        let bounds = run.bounds;
-        table.x0 <= f64::from(bounds.left)
-            && table.y0 <= f64::from(bounds.bottom)
-            && table.x1 >= f64::from(bounds.right)
-            && table.y1 >= f64::from(bounds.top)
-    }) {
+    if !runs.iter().all(|run| within_table(run, table)) {
         return Some(None);
     }
     let mut groups = Vec::new();
@@ -121,6 +124,14 @@ fn cell(index: &SourceIndex<'_>, runs: &[Run], table: BoundingBox, work: &mut Wo
         groups.push(members);
     }
     Some(Some(groups))
+}
+
+fn within_table(run: &Run, table: BoundingBox) -> bool {
+    let bounds = run.bounds;
+    table.x0 <= f64::from(bounds.left)
+        && table.y0 <= f64::from(bounds.bottom)
+        && table.x1 >= f64::from(bounds.right)
+        && table.y1 >= f64::from(bounds.top)
 }
 
 fn matches(source: &TableSources, table: &Table, work: &mut Work) -> Option<bool> {
@@ -158,7 +169,17 @@ fn page(
                 if !groups.iter().flatten().all(|key| all_keys.insert(key.clone())) {
                     return None;
                 }
-                owned.entry(owner).or_default().extend(groups);
+                owned.entry(owner).or_default().contained.extend(groups);
+            }
+        }
+        for run in &source.paint_overhangs {
+            if within_table(run, bounds)
+                && let Some(keys) = index.run(run, &mut work)?
+            {
+                if !keys.iter().all(|key| all_keys.insert(key.clone())) {
+                    return None;
+                }
+                owned.entry(owner).or_default().painted_overhangs.push(keys);
             }
         }
     }
