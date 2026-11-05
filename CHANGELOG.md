@@ -179,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Retain source words in merged table cells and two drawn header bands.** (#2332)
+  Preserve the source-backed header rowspan in HTML and the public table grid.
+
 - **(pdf): Paint identity CID TrueType glyphs when Unicode decoding loses characters.** (#2309)
   Preserve embedded outlines despite sparse Unicode font maps, in automatic and forced OCR.
 
