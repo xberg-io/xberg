@@ -299,6 +299,12 @@ async fn run_layout_for_pdf_pages_async_with_pages(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
 ) -> Result<(LayoutAttempt<LayoutRunOutput>, Vec<crate::types::ProcessingWarning>)> {
+    #[cfg(test)]
+    if let Some(selection) = pages
+        && let Ok(detection) = TEST_SELECTED_PAGE_DETECTIONS.try_with(Clone::clone)
+    {
+        return Ok(test_selected_page_layout(selection, detection));
+    }
     #[cfg(feature = "tokio-runtime")]
     {
         let owned_content = content.to_vec();
@@ -337,6 +343,49 @@ async fn run_layout_for_pdf_pages_async_with_pages(
         .map_err(|error| XbergError::Other(format!("layout runner task failed: {error}")))?;
         result.map(|attempt| (attempt, glyph_drop_warnings))
     }
+}
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection"))]
+tokio::task_local! {
+    pub(super) static TEST_SELECTED_PAGE_DETECTIONS: crate::layout::DetectionResult;
+}
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection"))]
+fn test_selected_page_layout(
+    selection: &crate::core::layout_pages::LayoutPageSelection,
+    detection: crate::layout::DetectionResult,
+) -> (LayoutAttempt<LayoutRunOutput>, Vec<crate::types::ProcessingWarning>) {
+    assert!(selection.contains_index(0), "the actual test PDF page must be selected");
+    let page = RenderedLayoutPage {
+        page_index: 0,
+        page_width_pts: 612.,
+        page_height_pts: 792.,
+        rotation: 0,
+        image: Some(image::RgbImage::new(detection.page_width, detection.page_height)),
+        raster_dpi: None,
+        run_inference: true,
+        render_failure: None,
+        inference_crop: None,
+    };
+    let page = assemble_layout_page(page, Some(detection));
+    let output = LayoutRunOutput {
+        data: Some((
+            vec![page.image],
+            vec![page.result],
+            vec![page.hints],
+            vec![page.detection],
+        )),
+        gate_decisions: Some(explicit_page_decisions(selection, 1)),
+        raster_dpis: Default::default(),
+    };
+    (
+        LayoutAttempt {
+            output,
+            acceleration_override: None,
+            warning: None,
+        },
+        Vec::new(),
+    )
 }
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]

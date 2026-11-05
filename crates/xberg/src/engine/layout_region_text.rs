@@ -29,6 +29,11 @@ pub struct LayoutRegionText {
 
 pub(crate) type RegionTextCollector = Arc<Mutex<Vec<PageRegionRanges>>>;
 
+pub(crate) struct RegionTextLayout {
+    pub(crate) selection: crate::core::layout_pages::LayoutPageSelection,
+    pub(crate) detector_classes: Vec<Vec<crate::layout::LayoutClass>>,
+}
+
 #[derive(Debug)]
 pub(crate) struct PageRegionRanges {
     pub(crate) page_number: u32,

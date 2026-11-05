@@ -46,6 +46,7 @@ pub(super) fn assemble(
     spans: &[TextSpan],
     order: &[usize],
     hints: &[LayoutHint],
+    classes: &[crate::layout::LayoutClass],
     area: f64,
 ) -> (String, Option<PageRegionRanges>) {
     use crate::pdf::native::text::{assemble_upright_layout_text, assemble_upright_layout_text_observed};
@@ -61,7 +62,7 @@ pub(super) fn assemble(
             let range = offsets.get(run.start)?.0..offsets.get(run.end - 1)?.1;
             let range = whole_word_range(&text, range)?;
             let hint = &hints[owner];
-            Some((region(hint, area), range))
+            Some((region(hint, classes[owner], area), range))
         })
         .collect();
     let pending = (!regions.is_empty()).then(|| PageRegionRanges {
@@ -139,10 +140,10 @@ fn whole_word_range(text: &str, range: Range<usize>) -> Option<Range<usize>> {
     (start < end).then_some(start..end)
 }
 
-fn region(hint: &LayoutHint, area: f64) -> LayoutRegion {
+fn region(hint: &LayoutHint, class: crate::layout::LayoutClass, area: f64) -> LayoutRegion {
     let [left, bottom, right, top] = [hint.left, hint.bottom, hint.right, hint.top].map(f64::from);
     LayoutRegion {
-        class_name: hint.class_name.label().to_owned(),
+        class_name: class.as_str().to_owned(),
         confidence: f64::from(hint.confidence),
         bounding_box: BoundingBox {
             x0: left,

@@ -616,7 +616,9 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
         &crate::core::config::acceleration::AccelerationConfig,
     >,
-    #[cfg(feature = "layout-detection")] layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
+    #[cfg(feature = "layout-detection")] region_text_layout: Option<
+        &crate::engine::layout_region_text::RegionTextLayout,
+    >,
 ) -> Result<PdfExtractionPhaseResult> {
     let _span = tracing::debug_span!("extract_xberg_native_pdf").entered();
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
@@ -670,7 +672,7 @@ pub(crate) fn extract_all_from_native_document(
             hints,
             config.pages.as_ref(),
             margins,
-            layout_pages,
+            region_text_layout,
         ) {
             Ok((reordered, reordered_boundaries, reordered_per_page)) => {
                 native_text = reordered;
@@ -1133,7 +1135,7 @@ fn apply_reading_order_reordering(
     layout_hints_per_page: &[Vec<crate::pdf::structure::types::LayoutHint>],
     page_config: Option<&crate::core::config::PageConfig>,
     margins: crate::pdf::native::text::PageMarginFractions,
-    layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
+    region_text_layout: Option<&crate::engine::layout_region_text::RegionTextLayout>,
 ) -> Result<(String, Vec<crate::types::PageBoundary>, Vec<String>)> {
     use crate::extractors::pdf::{reading_order, rotation::page_has_rotated_spans};
     use crate::pdf::native::text::{assemble_upright_layout_text, extract_spans_from_page, rotation_span};
@@ -1176,12 +1178,16 @@ fn apply_reading_order_reordering(
 
         let text = if page_has_rotated_spans(&spans) {
             reading_order::assemble_reading_order_text(&spans, &span_order)
-        } else if layout_pages.is_some_and(|pages| pages.region_text.is_some() && pages.contains_index(page_idx))
+        } else if let Some(layout) = region_text_layout.filter(|layout| layout.selection.contains_index(page_idx))
+            && let Some(classes) = layout
+                .detector_classes
+                .get(page_idx)
+                .filter(|classes| classes.len() == hints.len())
             && let Some(page_number) = u32::try_from(page_idx).ok().and_then(|index| index.checked_add(1))
             && let Some(area) = layout_region_text::page_area(&doc.doc, page_idx, hints)
         {
             let (text, pending) =
-                layout_region_text::assemble(page_number, &native_spans, &spans, &span_order, hints, area);
+                layout_region_text::assemble(page_number, &native_spans, &spans, &span_order, hints, classes, area);
             region_evidence.extend(pending);
             text
         } else {
@@ -1194,7 +1200,7 @@ fn apply_reading_order_reordering(
         return Ok((native_text.to_string(), Vec::new(), Vec::new()));
     }
 
-    if let Some(collector) = layout_pages.and_then(|pages| pages.region_text.as_ref()) {
+    if let Some(collector) = region_text_layout.and_then(|layout| layout.selection.region_text.as_ref()) {
         collector.lock().extend(region_evidence);
     }
     let (content, boundaries) = join_pages_with_boundaries(&reordered_pages, page_config);
@@ -1794,8 +1800,15 @@ mod tests {
         let mut selection = crate::core::layout_pages::LayoutPageSelection::new(vec![2]);
         let collector = crate::engine::layout_region_text::RegionTextCollector::default();
         selection.region_text = Some(collector.clone());
+        let layout = crate::engine::layout_region_text::RegionTextLayout {
+            selection,
+            detector_classes: vec![
+                Vec::new(),
+                vec![crate::layout::LayoutClass::Text, crate::layout::LayoutClass::Table],
+            ],
+        };
         let (content, boundaries, pages) =
-            super::apply_reading_order_reordering(&mut doc, "", &hints, None, margins, Some(&selection))
+            super::apply_reading_order_reordering(&mut doc, "", &hints, None, margins, Some(&layout))
                 .expect("layout order must assemble both pages");
         assert_eq!(legacy.0, content);
         assert_eq!(legacy.2, pages);

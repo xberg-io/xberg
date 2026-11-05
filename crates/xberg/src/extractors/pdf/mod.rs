@@ -328,7 +328,9 @@ fn extract_native_blocking(
     #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
         crate::core::config::acceleration::AccelerationConfig,
     >,
-    #[cfg(feature = "layout-detection")] layout_pages: Option<crate::core::layout_pages::LayoutPageSelection>,
+    #[cfg(feature = "layout-detection")] region_text_layout: Option<
+        crate::engine::layout_region_text::RegionTextLayout,
+    >,
 ) -> Result<NativeBlockingOutput> {
     ensure_pdf_not_cancelled(&config)?;
     let passwords = config
@@ -376,7 +378,7 @@ fn extract_native_blocking(
         #[cfg(feature = "layout-detection")]
         layout_acceleration_override.as_ref(),
         #[cfg(feature = "layout-detection")]
-        layout_pages.as_ref(),
+        region_text_layout.as_ref(),
     )?;
     ensure_pdf_not_cancelled(&config)?;
 
@@ -2743,9 +2745,18 @@ impl PdfExtractor {
         let blocking_content = content.to_vec();
         let blocking_config = config.clone();
         #[cfg(feature = "layout-detection")]
-        let region_text_pages = layout_pages
+        let region_text_layout = layout_pages
             .filter(|pages| pages.region_text.is_some() && crate::engine::layout_region_text::capture_allowed(config))
-            .cloned();
+            .zip(markdown_layout_detections.as_deref())
+            .map(
+                |(selection, detections)| crate::engine::layout_region_text::RegionTextLayout {
+                    selection: selection.clone(),
+                    detector_classes: detections
+                        .iter()
+                        .map(|page| page.detections.iter().map(|detection| detection.class_name).collect())
+                        .collect(),
+                },
+            );
         let native_output = spawn_pdf_blocking(move || {
             extract_native_blocking(
                 blocking_content,
@@ -2759,7 +2770,7 @@ impl PdfExtractor {
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_acceleration_override,
                 #[cfg(feature = "layout-detection")]
-                region_text_pages,
+                region_text_layout,
             )
         })
         .await?;
