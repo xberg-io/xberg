@@ -124,6 +124,7 @@ impl Engine {
     /// This enables page extraction and native layout reading order, and bypasses both caches.
     /// Unsupported pages, unproved regions and redaction requests yield no region text.
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    #[cfg_attr(alef, alef(skip))]
     pub async fn extract_with_layout_region_text(
         &self,
         input: ExtractInput,

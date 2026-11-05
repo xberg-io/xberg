@@ -8,6 +8,7 @@ use crate::core::config::{ExtractionConfig, ExtractionResult};
 use crate::types::{ExtractionMethod, LayoutRegion};
 
 /// An extraction with source-proven text for selected layout regions.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, serde::Serialize)]
 pub struct LayoutRegionTextExtraction {
     /// The ordinary extraction result.
@@ -17,6 +18,7 @@ pub struct LayoutRegionTextExtraction {
 }
 
 /// Text owned by a detected native PDF layout region.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, serde::Serialize)]
 pub struct LayoutRegionText {
     /// One-based page number within the extracted PDF.

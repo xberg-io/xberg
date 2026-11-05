@@ -589,6 +589,15 @@ fn map_native_text_error(error: crate::pdf::error::PdfError) -> crate::XbergErro
     }
 }
 
+#[cfg(feature = "layout-detection")]
+pub(super) struct NativeLayoutInput<'a> {
+    pub(super) hints: Option<&'a [Vec<crate::pdf::structure::types::LayoutHint>]>,
+    pub(super) images: Option<&'a [image::RgbImage]>,
+    pub(super) results: Option<&'a [crate::pdf::structure::types::PageLayoutResult]>,
+    pub(super) acceleration: Option<&'a crate::core::config::acceleration::AccelerationConfig>,
+    pub(super) region_text: Option<&'a crate::engine::layout_region_text::RegionTextLayout>,
+}
+
 /// Extract text, metadata, tables, and annotations from a PDF document using the xberg_native_pdf backend.
 ///
 /// Accepts an authenticated `NativeDocument`, then delegates to each native extraction module.
@@ -608,18 +617,12 @@ pub(crate) fn extract_all_from_native_document(
     mut doc: crate::pdf::native::NativeDocument,
     config: &ExtractionConfig,
     outline_entries: &[crate::pdf::bookmarks::PdfOutlineEntry],
-    layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
-    #[cfg(feature = "layout-detection")] layout_images: Option<&[image::RgbImage]>,
-    #[cfg(not(feature = "layout-detection"))] _layout_images: Option<()>,
-    #[cfg(feature = "layout-detection")] layout_results: Option<&[crate::pdf::structure::types::PageLayoutResult]>,
-    #[cfg(not(feature = "layout-detection"))] _layout_results: Option<()>,
-    #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
-        &crate::core::config::acceleration::AccelerationConfig,
-    >,
-    #[cfg(feature = "layout-detection")] region_text_layout: Option<
-        &crate::engine::layout_region_text::RegionTextLayout,
-    >,
+    #[cfg(feature = "layout-detection")] layout: NativeLayoutInput<'_>,
 ) -> Result<PdfExtractionPhaseResult> {
+    #[cfg(feature = "layout-detection")]
+    let layout_hints = layout.hints;
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_hints = None::<&[Vec<crate::pdf::structure::types::LayoutHint>]>;
     let _span = tracing::debug_span!("extract_xberg_native_pdf").entered();
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
     let artifacts =
@@ -672,7 +675,7 @@ pub(crate) fn extract_all_from_native_document(
             hints,
             config.pages.as_ref(),
             margins,
-            region_text_layout,
+            layout.region_text,
         ) {
             Ok((reordered, reordered_boundaries, reordered_per_page)) => {
                 native_text = reordered;
@@ -1006,9 +1009,9 @@ pub(crate) fn extract_all_from_native_document(
                 allow_single_column,
                 cancel_token: config.cancel_token.as_ref(),
                 #[cfg(feature = "layout-detection")]
-                layout_images,
+                layout_images: layout.images,
                 #[cfg(feature = "layout-detection")]
-                layout_results,
+                layout_results: layout.results,
                 #[cfg(feature = "layout-detection")]
                 table_model: config.layout.as_ref().map(|l| l.table_model).unwrap_or_default(),
                 #[cfg(feature = "layout-detection")]
@@ -1018,7 +1021,7 @@ pub(crate) fn extract_all_from_native_document(
                     .map(|l| l.table_overlap_preference)
                     .unwrap_or_default(),
                 #[cfg(feature = "layout-detection")]
-                acceleration: effective_layout_acceleration(config, layout_acceleration_override),
+                acceleration: effective_layout_acceleration(config, layout.acceleration),
                 #[cfg(feature = "layout-detection")]
                 session_thread_budget: crate::core::config::concurrency::resolve_thread_budget(
                     config.concurrency.as_ref(),

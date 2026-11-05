@@ -364,21 +364,13 @@ fn extract_native_blocking(
         &config,
         &outline_entries,
         #[cfg(feature = "layout-detection")]
-        layout_hints.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_images.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_results.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_acceleration_override.as_ref(),
-        #[cfg(feature = "layout-detection")]
-        region_text_layout.as_ref(),
+        extraction::NativeLayoutInput {
+            hints: layout_hints.as_deref(),
+            images: layout_images.as_deref(),
+            results: layout_results.as_deref(),
+            acceleration: layout_acceleration_override.as_ref(),
+            region_text: region_text_layout.as_ref(),
+        },
     )?;
     ensure_pdf_not_cancelled(&config)?;
 
