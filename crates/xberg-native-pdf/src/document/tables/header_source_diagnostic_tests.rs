@@ -222,11 +222,10 @@ fn assert_wildomar_source_assignment(events: &[serde_json::Value]) {
     assert_first_table_assignment(&assigned);
     let fragment: Vec<_> = assigned
         .iter()
-        .filter(|table| table["source_span_ids"][0] == json!([[174, 185], [], [186, 187, 188]]))
+        .filter(|table| table["source_span_ids"][0] == json!([[], [174, 175, 185], [186, 187, 188, 189, 190]]))
         .collect();
     assert_eq!(fragment.len(), 1);
-    assert_eq!(fragment[0]["rows"].as_array().unwrap().len(), 6);
-    assert_eq!(fragment[0]["source_span_ids"][1], json!([[175], [], [189, 190]]));
+    assert_eq!(fragment[0]["rows"].as_array().unwrap().len(), 11);
     let ids: Vec<_> = assigned
         .iter()
         .flat_map(|table| table["source_span_ids"].as_array().unwrap())
@@ -335,5 +334,90 @@ fn wildomar_complete_bold_header_keeps_source_roles_without_changing_cells() {
         table.rows[1..]
             .iter()
             .all(|row| !row.is_header && row.cells.iter().all(|cell| !cell.is_header))
+    );
+}
+
+#[test]
+fn wildomar_multiline_header_backgrounds_do_not_create_phantom_columns() {
+    let bytes =
+        include_bytes!("../../../../../fixtures/repros/table-snapshot-consistency/fixture/wildomar-p17-repro.pdf");
+    let document = PdfDocument::from_bytes(bytes.to_vec()).unwrap();
+    let (tables, events) = header_source_diagnostic::capture(|| {
+        document
+            .extract_tables_with_config(0, TableDetectionConfig::strict())
+            .unwrap()
+    });
+    assert_wildomar_source_words(&events);
+    let matches: Vec<_> = tables
+        .iter()
+        .filter(|table| {
+            table
+                .rows
+                .iter()
+                .any(|row| row.cells.iter().any(|cell| cell.text.contains("No. 200")))
+        })
+        .collect();
+    assert_eq!(matches.len(), 1, "one source-backed body table");
+    assert_eq!(
+        matches[0].col_count, 3,
+        "the source draws three columns, not text-padding columns"
+    );
+    assert_lower_table_source_inventory(matches[0], &events);
+    assert_lower_table_source_records(matches[0]);
+}
+
+fn assert_lower_table_source_inventory(table: &crate::structure::Table, events: &[serde_json::Value]) {
+    let source = event_payload(events, "table_word_spans").as_array().unwrap();
+    assert_eq!(source[173]["span"]["text"], "Requirements");
+    assert_eq!(source[277]["span"]["text"], " %");
+    let mut expected: Vec<_> = source[173..278]
+        .iter()
+        .map(|word| serde_json::to_string(&word["span"]).unwrap())
+        .collect();
+    let mut actual: Vec<_> = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flat_map(|cell| &cell.spans)
+        .map(|span| serde_json::to_value(span).unwrap())
+        .map(|span| serde_json::to_string(&span).unwrap())
+        .collect();
+    expected.sort();
+    actual.sort();
+    assert_eq!(
+        expected.len(),
+        105,
+        "all words in the independently identified source table"
+    );
+    assert_eq!(
+        actual, expected,
+        "every original word, geometry and style occurs exactly once"
+    );
+}
+
+fn assert_lower_table_source_records(table: &crate::structure::Table) {
+    let records: Vec<Vec<_>> = table
+        .rows
+        .iter()
+        .filter(|row| {
+            row.cells.first().is_some_and(|cell| {
+                cell.text.starts_with("No.") || cell.text.starts_with("3/8") || cell.text.starts_with("Residual")
+            })
+        })
+        .map(|row| row.cells.iter().map(|cell| cell.text.as_str()).collect())
+        .collect();
+    assert_eq!(
+        records,
+        [
+            vec!["3/8” (9.5 mm)", "100", ""],
+            vec!["No. 4 (4.74 mm)", "90 - 100", "100"],
+            vec!["No. 8 (2.36 mm)", "60 - 90", "90 - 100"],
+            vec!["No. 16 (1.18 mm)", "35 - 60", "65 - 90"],
+            vec!["No. 30 (600 µm)", "23 - 45", "40 - 60"],
+            vec!["No. 50 (300 µm)", "12 - 30", "25 - 42"],
+            vec!["No. 100 (150 µm)", "5 - 20", "15 - 30"],
+            vec!["No. 200 (75 µm)", "0.5 -10", "10 – 20"],
+            vec!["Residual Asphalt Content\n(ASTM D6307), %", "", "6.0 – 8.5"],
+        ]
     );
 }

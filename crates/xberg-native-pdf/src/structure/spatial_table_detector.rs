@@ -8,6 +8,7 @@ use crate::layout::text_block::TextSpan;
 use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_for_cell};
 use std::collections::HashMap;
 
+mod fill_backgrounds;
 mod source_headers;
 
 /// Disjoint-set (union-find) with path compression.
@@ -2193,7 +2194,7 @@ fn extract_edges(lines: &[crate::elements::PathContent]) -> (Vec<Edge>, Vec<Edge
                             })
                     })
             });
-        if inside_ruled_band {
+        if inside_ruled_band || fill_backgrounds::nested_inside_ruled_fill(path, &rectangles, &ruled_h, &ruled_v) {
             continue;
         }
         h_edges.push(Edge {
@@ -6329,6 +6330,100 @@ mod tests {
         let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1));
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
+    }
+
+    fn nested_fill_source() -> (
+        Vec<crate::elements::PathContent>,
+        crate::elements::PathContent,
+        crate::elements::PathContent,
+    ) {
+        use crate::elements::PathContent;
+        let rules = vec![
+            PathContent::line(0., 0., 80., 0.),
+            PathContent::line(0., 40., 80., 40.),
+            PathContent::line(0., 0., 0., 40.),
+            PathContent::line(80., 0., 80., 40.),
+        ];
+        let mut outer = PathContent::rect(0., 0., 80., 40.);
+        outer.stroke_color = None;
+        outer.fill_color = Some(Color::black());
+        let mut inner = PathContent::rect(4., 10., 72., 20.);
+        inner.stroke_color = None;
+        inner.fill_color = Some(Color::black());
+        (rules, outer, inner)
+    }
+
+    #[test]
+    fn nested_fill_multiline_padding_does_not_create_rules_in_a_closed_cell() {
+        let (mut rules, outer, inner) = nested_fill_source();
+        rules.extend([outer, inner]);
+        let (horizontal, vertical) = extract_edges(&rules);
+        assert!(
+            horizontal.iter().all(|edge| [0., 40.].contains(&edge.coord)),
+            "{horizontal:?}"
+        );
+        assert!(
+            vertical.iter().all(|edge| [0., 80.].contains(&edge.coord)),
+            "{vertical:?}"
+        );
+        assert!(!horizontal.is_empty() && !vertical.is_empty());
+    }
+
+    #[test]
+    fn nested_fill_stroked_inset_keeps_its_own_boundaries() {
+        let (mut rules, outer, mut inner) = nested_fill_source();
+        inner.stroke_color = Some(Color::black());
+        rules.extend([outer, inner]);
+        let (horizontal, vertical) = extract_edges(&rules);
+        assert!(horizontal.iter().any(|edge| edge.coord == 10.));
+        assert!(vertical.iter().any(|edge| edge.coord == 4.));
+    }
+
+    #[test]
+    fn nested_fill_without_independent_rules_keeps_both_rectangles() {
+        let (_, outer, inner) = nested_fill_source();
+        let (horizontal, vertical) = extract_edges(&[outer, inner]);
+        assert!(horizontal.iter().any(|edge| edge.coord == 10.));
+        assert!(vertical.iter().any(|edge| edge.coord == 4.));
+    }
+
+    #[test]
+    fn nested_fill_different_color_keeps_its_own_boundaries() {
+        let (mut rules, outer, mut inner) = nested_fill_source();
+        inner.fill_color = Some(Color::new(0.5, 0.5, 0.5));
+        rules.extend([outer, inner]);
+        let (horizontal, vertical) = extract_edges(&rules);
+        assert!(horizontal.iter().any(|edge| edge.coord == 10.));
+        assert!(vertical.iter().any(|edge| edge.coord == 4.));
+    }
+
+    #[test]
+    fn nested_fill_partial_overlap_keeps_its_own_boundaries() {
+        use crate::elements::PathContent;
+        let (mut rules, outer, inner) = nested_fill_source();
+        let mut overlap = PathContent::rect(4., 30., 72., 20.);
+        overlap.stroke_color = inner.stroke_color;
+        overlap.fill_color = inner.fill_color;
+        rules.extend([outer, overlap]);
+        let (horizontal, vertical) = extract_edges(&rules);
+        assert!(horizontal.iter().any(|edge| edge.coord == 30.));
+        assert!(vertical.iter().any(|edge| edge.coord == 4.));
+    }
+
+    #[test]
+    fn nested_fill_missing_any_outer_rule_keeps_inner_boundaries() {
+        for missing in 0..4 {
+            let (mut rules, outer, inner) = nested_fill_source();
+            assert_eq!(rules.len(), 4);
+            rules.remove(missing);
+            rules.extend([outer, inner]);
+            let (horizontal, vertical) = extract_edges(&rules);
+            assert!(
+                horizontal.iter().any(|edge| edge.coord == 10.),
+                "missing rule {missing}"
+            );
+            assert!(vertical.iter().any(|edge| edge.coord == 4.), "missing rule {missing}");
+        }
     }
 
     fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> TextSpan {
