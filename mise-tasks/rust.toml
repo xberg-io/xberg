@@ -48,6 +48,15 @@ depends = ["os:require linux darwin"]
 env = { CARGO_TERM_COLOR = "always" }
 run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
 
+["rust:test:jpeg-recovery"]
+description = "Qualify nine real OCR recovery controls with verified English"
+depends = ["os:require linux darwin"]
+usage = """
+arg "<features>" help="Use the existing Rust test feature closure"
+flag "--no-default-features" help="Disable default features for a narrow local closure"
+"""
+run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usage_no_default_features:-false}"'
+
 ["rust:test:mime"]
 description = "Verify MIME declaration handling without tree-sitter"
 depends = ["os:require linux darwin"]

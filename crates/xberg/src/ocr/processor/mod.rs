@@ -11,6 +11,19 @@ mod dictionary;
 mod execution;
 #[cfg(test)]
 mod secondary_dictionary_benchmark_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[allow(
+    unsafe_code,
+    reason = "Isolated native tests measure real Leptonica pixel allocations"
+)]
+#[path = "execution/reduced_jpeg_memory_tests/pixel_memory.rs"]
+pub(crate) mod test_pixel_memory;
+#[cfg(all(test, feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "../../extractors/pdf/ocr/english_recovery_tests/fixture.rs"]
+pub(crate) mod test_recovery_fixture;
+#[cfg(all(test, feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "../../extractors/pdf/ocr/english_recovery_tests/model.rs"]
+pub(crate) mod test_recovery_model;
 pub(crate) mod validation;
 
 pub(crate) use api_pool::tesseract_api_capacity;

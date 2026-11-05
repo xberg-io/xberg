@@ -39,6 +39,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
+#[path = "image_budget.rs"]
+mod image_budget;
+
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
 ///
@@ -211,6 +214,7 @@ impl RenderedImage {
 /// Page renderer that converts PDF pages to raster images.
 pub struct PageRenderer {
     options: RenderOptions,
+    source_image_budget: Option<image_budget::ImageBudget>,
     path_rasterizer: PathRasterizer,
     text_rasterizer: TextRasterizer,
     /// Font cache (name -> FontInfo) for current context
@@ -452,6 +456,7 @@ impl PageRenderer {
     pub fn new(options: RenderOptions) -> Self {
         Self {
             options,
+            source_image_budget: None,
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
             fonts: HashMap::new(),
@@ -578,6 +583,9 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        self.source_image_budget = png_budget
+            .as_ref()
+            .map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
         self.fonts.clear();
         self.color_spaces.clear();
         // The qcms transform cache is per-page: dropping every entry
@@ -708,10 +716,12 @@ impl PageRenderer {
         };
 
         self.execute_operators(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
+        self.check_source_image_budget()?;
 
         if self.options.render_annotations {
             self.render_annotations(&mut pixmap, transform, doc, page_num)?;
         }
+        self.check_source_image_budget()?;
 
         let data = match self.options.format {
             ImageFormat::Png => encode_png(&pixmap)?,
@@ -728,6 +738,17 @@ impl PageRenderer {
             },
             dpi,
         ))
+    }
+
+    fn check_source_image_budget(&self) -> Result<()> {
+        match self
+            .source_image_budget
+            .as_ref()
+            .and_then(image_budget::ImageBudget::error)
+        {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {
@@ -3668,6 +3689,10 @@ impl PageRenderer {
 
         let color_space_map = self.color_spaces.clone();
         let pdf_image = extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?;
+        if let Some(budget) = self.source_image_budget.as_mut() {
+            let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
+            budget.admit_jpeg(&pdf_image, sidecar.saturating_add(pixmap.data().len() as u64))?;
+        }
         let dynamic_image = pdf_image.to_dynamic_image()?;
         let mut rgba_image = dynamic_image.to_rgba8();
 
@@ -3678,6 +3703,16 @@ impl PageRenderer {
                 if let Ok(mask_stream) = doc.load_object(ref_obj) {
                     match extract_image_from_xobject(Some(doc), &mask_stream, Some(ref_obj), Some(&color_space_map)) {
                         Ok(mask_image) => {
+                            if let Some(budget) = self.source_image_budget.as_mut() {
+                                let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
+                                budget.admit_referenced_mask(
+                                    &mask_image,
+                                    &pdf_image,
+                                    &dynamic_image,
+                                    &rgba_image,
+                                    sidecar.saturating_add(pixmap.data().len() as u64),
+                                )?;
+                            }
                             if let Ok(mask_dyn) = mask_image.to_dynamic_image() {
                                 let mask_gray = mask_dyn.to_luma8();
                                 let is_image_mask = mask_stream
@@ -3896,6 +3931,16 @@ impl PageRenderer {
                 if let Ok(smask_image) =
                     extract_image_from_xobject(Some(doc), &resolved_smask, smask_obj_ref, Some(&color_space_map))
                 {
+                    if let Some(budget) = self.source_image_budget.as_mut() {
+                        let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
+                        budget.admit_referenced_mask(
+                            &smask_image,
+                            &pdf_image,
+                            &dynamic_image,
+                            &rgba_image,
+                            sidecar.saturating_add(pixmap.data().len() as u64),
+                        )?;
+                    }
                     if let Ok(smask_dyn) = smask_image.to_dynamic_image() {
                         let smask_gray = smask_dyn.to_luma8();
 
@@ -10674,3 +10719,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "image_budget_tests.rs"]
+mod image_budget_tests;

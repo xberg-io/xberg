@@ -249,6 +249,7 @@ ocr = [
     "dep:nom-exif",
     "dep:hayro-jpeg2000",
     "dep:hayro-jbig2",
+    "dep:jpeg-decoder",
     "dep:ureq",
     "html",
 ]
@@ -1383,6 +1384,11 @@ indexmap = "2.14.2"
 infer = "0.22.0"
 itertools = { workspace = true, optional = true }
 jotdown = "0.10"
+# Reduced OCR decodes scale in the IDCT; same version as xberg-native-pdf. Without `rayon` the decoder
+# queues coefficient rows to worker threads without a bound; the rayon worker finishes each row first. ~keep
+# Exact pin: the reduced-decode memory bound follows this version's internals, and
+# `tests/bounded_jpeg_peak.rs` measures it. Re-run that test before a bump. ~keep
+jpeg-decoder = { version = "=0.3.2", default-features = false, features = ["rayon"], optional = true }
 jsonschema = { version = "0.60", optional = true, default-features = false }
 libc = { workspace = true }
 # lofty: pure-Rust audio tag reader (ID3v1/v2, MP4 atoms, Vorbis comments, FLAC, etc.)
@@ -1779,6 +1785,8 @@ dotenvy = "0.15"
 filetime = "0.2"
 futures = { workspace = true }
 image = { workspace = true, default-features = false, features = ["png"] }
+# Test-only: encodes progressive and chroma-subsampled JPEG fixtures. ~keep
+jpeg-encoder = "0.7.1"
 # Test retrieval features prove runtime compilation stays offline under Cargo feature unification. ~keep
 jsonschema = { version = "0.60", default-features = false, features = ["resolve-file", "resolve-http", "tls-ring"] }
 qrcode = { version = "0.14", default-features = false, features = ["image"] }
@@ -1798,6 +1806,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = "1"
 wiremock = "0.6"
 zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2"] }
+
+[[test]]
+name = "bounded_jpeg_peak"
+required-features = ["ocr"]
 
 [[test]]
 name = "captioning_smoke"

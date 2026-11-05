@@ -292,6 +292,23 @@ impl PdfImage {
         &self.data
     }
 
+    pub(crate) fn retained_image_buffer_bytes(&self) -> Option<u64> {
+        let data = match &self.data {
+            ImageData::Jpeg(bytes) => bytes.capacity(),
+            ImageData::Raw { pixels, .. } => pixels.capacity(),
+        };
+        [
+            data,
+            self.raw_indexed_samples.as_ref().map_or(0, Vec::capacity),
+            self.color_key_samples.as_ref().map_or(0, Vec::capacity),
+            self.soft_mask_in_data
+                .as_ref()
+                .map_or(0, |mask| mask.samples.capacity()),
+        ]
+        .into_iter()
+        .try_fold(0u64, |total, capacity| total.checked_add(capacity as u64))
+    }
+
     /// Get the bounding box if available.
     pub fn bbox(&self) -> Option<&Rect> {
         self.bbox.as_ref()

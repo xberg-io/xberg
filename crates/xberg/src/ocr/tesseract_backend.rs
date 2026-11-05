@@ -1753,7 +1753,7 @@ mod tests {
     }
 
     /// GH#1894: the PDF OCR route's own scan-detection signal must reach the internal config so
-    /// `prepare_ocr_image` can bypass the pixel-brightness heuristic for a page it already knows
+    /// `ocr_preprocessing_decision` can bypass the pixel-brightness heuristic for a page it already knows
     /// is a whole-page scan.
     ///
     /// Negative control (delete the `backend_options` line, leaving `..Default::default()`):

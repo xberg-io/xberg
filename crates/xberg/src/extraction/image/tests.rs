@@ -5,9 +5,21 @@
 #[path = "tests/tagged_tiff_source_dpi_tests.rs"]
 mod tagged_tiff_source_dpi_tests;
 
+#[cfg(feature = "ocr")]
+#[path = "tests/bounded_ocr_jpeg_tests.rs"]
+mod bounded_ocr_jpeg_tests;
+
+#[cfg(feature = "ocr")]
+#[path = "tests/bounded_ocr_jpeg_guard_tests.rs"]
+mod bounded_ocr_jpeg_guard_tests;
+
 use super::*;
 use image::{ImageBuffer, ImageFormat, Rgb, RgbImage};
 use std::io::Cursor;
+
+fn extract_image_metadata(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
+    extract_image_metadata_with_security_limits(bytes, &SecurityLimits::default())
+}
 
 fn create_test_image(width: u32, height: u32, format: ImageFormat) -> Vec<u8> {
     let img: RgbImage = ImageBuffer::from_fn(width, height, |x, y| {
@@ -99,6 +111,16 @@ fn metadata_rejects_corrupt_pixels_within_security_budget() {
     let error = extract_image_metadata_with_security_limits(&bytes, &limits)
         .expect_err("metadata extraction must validate bounded pixel data, not only the header");
 
+    assert!(matches!(error, XbergError::Parsing { .. }));
+}
+
+#[cfg(feature = "ocr")]
+#[test]
+fn ordinary_jpeg_metadata_still_rejects_a_truncated_scan() {
+    let bytes = jpeg_fixture::baseline_rgb_jpeg(&vec![180; 32 * 32 * 3], 32, 32);
+    let scan = bytes.windows(2).position(|pair| pair == [0xff, 0xda]).unwrap();
+    let error = extract_image_metadata_with_security_limits(&bytes[..scan], &SecurityLimits::default())
+        .expect_err("ordinary metadata must validate full JPEG pixels");
     assert!(matches!(error, XbergError::Parsing { .. }));
 }
 

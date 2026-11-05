@@ -8808,6 +8808,7 @@ dependencies = [
  "infer",
  "itertools 0.15.0",
  "jotdown",
+ "jpeg-decoder",
  "jsonschema",
  "libc",
  "liter-llm",

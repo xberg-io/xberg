@@ -2537,6 +2537,20 @@ async fn select_rtl_retry_result(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
+#[cfg(feature = "pdf")]
+#[path = "image_ocr_budget.rs"]
+mod image_ocr_budget;
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
+#[cfg(feature = "pdf")]
+pub(crate) use image_ocr_budget::reserve_retained_ocr_raster;
+
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
 /// Which sparse-output retries [`process_whole_image_ocr_with_sparse_retry`] may attempt.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SparseRetryPolicy {
@@ -3293,16 +3307,17 @@ impl ImageExtractor {
     ) -> Result<InternalDocument> {
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-        let image = crate::extraction::image::decode_image_to_rgb8_with_security_limits(content, security_limits)?;
+        let (image, original_width, original_height, scale) = decode_pipeline_image(content, security_limits)?;
         let source_dpi = crate::extraction::image::resolve_known_source_dpi(
             config
                 .ocr
                 .as_ref()
                 .and_then(crate::extraction::image::explicit_source_dpi_from_ocr_config),
             content,
-            image.width(),
-            image.height(),
-        );
+            original_width,
+            original_height,
+        )
+        .map(|dpi| dpi / f64::from(scale));
         let rgb_bytes = u64::try_from(image.as_raw().len()).map_err(|_| {
             crate::extraction::image_decode::image_dimension_error(image.width(), image.height(), u64::MAX, u64::MAX)
         })?;
@@ -3679,6 +3694,60 @@ fn push_image_placeholder(builder: &mut InternalDocumentBuilder) {
     });
 }
 
+fn metadata_for_ocr_route(
+    content: &[u8],
+    limits: &crate::extractors::security::SecurityLimits,
+    config: &ExtractionConfig,
+) -> Result<crate::extraction::image::ExtractedImageMetadata> {
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    if !config.disable_ocr
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            (ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled || ocr.pipeline.is_some())
+                && ocr.effective_pipeline().is_some()
+        })
+    {
+        return crate::extraction::image::extract_image_metadata_for_processing(content, limits, |width, height| {
+            pipeline_encode_fits(width, height, limits)
+        });
+    }
+    #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
+    let _ = config;
+    extract_image_metadata_with_security_limits(content, limits)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn pipeline_encode_fits(width: u32, height: u32, limits: &crate::extractors::security::SecurityLimits) -> bool {
+    crate::extractors::pdf::ocr::estimate_png_encode_page_peak_bytes(width, height)
+        .is_ok_and(|peak| peak <= limits.max_content_size as u64)
+}
+
+/// Decode the image the OCR pipeline encodes once per stage, with its original size and the reduction
+/// denominator. Each stage holds the PNG encode working set on top of the raster, so a JPEG whose
+/// encode does not fit `max_content_size` is decoded at the finest reduced scale whose encode fits.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn decode_pipeline_image(
+    content: &[u8],
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> Result<(image::RgbImage, u32, u32, u8)> {
+    #[cfg(feature = "ocr")]
+    {
+        let encode_fits = |width, height| pipeline_encode_fits(width, height, security_limits);
+        let decoded = crate::extraction::image::load_image_for_ocr_within(content, security_limits, encode_fits)?;
+        Ok((
+            decoded.image,
+            decoded.original_width,
+            decoded.original_height,
+            decoded.scale_denominator,
+        ))
+    }
+    #[cfg(not(feature = "ocr"))]
+    {
+        let image = crate::extraction::image::decode_image_to_rgb8_with_security_limits(content, security_limits)?;
+        let (width, height) = image.dimensions();
+        Ok((image, width, height, 1))
+    }
+}
+
 /// Keep the standalone source-image envelope while adopting the OCR contribution.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn build_image_ocr_document(document: Option<InternalDocument>, transcript: &str) -> InternalDocument {
@@ -3878,7 +3947,7 @@ impl InternalDocumentExtractor for ImageExtractor {
         enforce_image_page_limit(content, mime_type, config)?;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-        let extraction_metadata = extract_image_metadata_with_security_limits(content, security_limits)?;
+        let extraction_metadata = metadata_for_ocr_route(content, security_limits, config)?;
         // Computed against the original bytes (before any HEIC->PNG rebinding
         // below) so it reflects the same input `extract_image_metadata` saw. ~keep
         let exif_warning = crate::extraction::exif::extract_exif_warning(content);
@@ -4065,6 +4134,10 @@ mod image_table_grid_metadata_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "image_pipeline_reduced_tests.rs"]
+mod image_pipeline_reduced_tests;
 
 #[cfg(all(test, not(target_arch = "wasm32"), feature = "ocr-pipeline"))]
 #[path = "image_sparse_retry_cancellation_tests.rs"]

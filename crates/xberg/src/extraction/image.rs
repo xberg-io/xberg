@@ -17,6 +17,19 @@ use std::collections::HashMap;
 #[cfg(feature = "ocr")]
 use std::io::Cursor;
 
+#[cfg(feature = "ocr")]
+mod bounded_jpeg;
+
+#[cfg(all(feature = "ocr", feature = "pdf"))]
+pub(crate) use bounded_jpeg::load_image_for_ocr_within;
+#[cfg(feature = "ocr")]
+pub(crate) use bounded_jpeg::{
+    DecodedOcrImage, ReducedScale, admit_jpeg_for_processing, load_image_for_ocr, load_image_for_ocr_with_processing,
+};
+#[cfg(feature = "ocr")]
+#[doc(hidden)]
+pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
+
 /// JP2 file signature: 12-byte box starting with length 0x0000000C and type "jP  "
 const JP2_MAGIC: &[u8] = &[0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20];
 
@@ -454,17 +467,6 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
         .ok_or_else(|| XbergError::parsing("Failed to construct grayscale image from JBIG2 data".to_string()))
 }
 
-/// Load image bytes for OCR, with JPEG 2000 and JBIG2 fallback support.
-///
-/// The standard `image` crate does not support JPEG 2000 or JBIG2 formats.
-/// This function detects these formats by magic bytes and uses `hayro-jpeg2000`
-/// / `hayro-jbig2` for decoding, falling back to the standard `image` crate
-/// for all other formats.
-#[cfg(feature = "ocr")]
-pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) -> Result<image::DynamicImage> {
-    decode_image_to_rgb8_with_security_limits(image_bytes, limits).map(image::DynamicImage::ImageRgb8)
-}
-
 /// Meters-per-inch, used to convert a PNG `pHYs` pixels-per-metre density into DPI.
 #[cfg(feature = "ocr-pipeline")]
 const PNG_METERS_PER_INCH: f64 = 0.0254;
@@ -764,22 +766,20 @@ pub(crate) fn decode_image_with_security_limits(
     decode_standard_image_with_security_limits(image_bytes, limits)
 }
 
-/// Extract metadata from image bytes.
-///
-/// Extracts dimensions, format, and EXIF data from the image.
-/// Standard formats are header-probed without allocating their pixel buffers; JPEG 2000
-/// dimensions come from JP2/J2K headers, and HEIF-family dimensions come from the primary
-/// image handle when the `heic` feature is enabled. EXIF is read from the original bytes.
-#[cfg(test)]
-pub(crate) fn extract_image_metadata(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
-    let limits = SecurityLimits::default();
-    extract_image_metadata_with_security_limits(bytes, &limits)
-}
-
 pub(crate) fn extract_image_metadata_with_security_limits(
     bytes: &[u8],
     limits: &SecurityLimits,
 ) -> Result<ExtractedImageMetadata> {
+    extract_image_metadata_for_processing(bytes, limits, |_, _| true)
+}
+
+pub(crate) fn extract_image_metadata_for_processing(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
+) -> Result<ExtractedImageMetadata> {
+    #[cfg(not(feature = "ocr"))]
+    let _ = &fits;
     let budget = ImageDecodeBudget::from_security_limits(limits);
     if (is_jp2(bytes) || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0x4F))
         && let Ok(metadata) = decode_jp2_metadata(bytes)
@@ -827,6 +827,17 @@ pub(crate) fn extract_image_metadata_with_security_limits(
         }
     }
 
+    // Decoder or downstream image workspace can require JPEG reduction. Admit that
+    // metadata from the header; the actual OCR decode still validates pixels. ~keep
+    #[cfg(feature = "ocr")]
+    if let Some((width, height)) = admit_jpeg_for_processing(bytes, limits, fits)? {
+        return Ok(ExtractedImageMetadata {
+            width,
+            height,
+            format: "JPEG".to_string(),
+            exif_data: extract_exif_data(bytes),
+        });
+    }
     let decoded = decode_standard_image_with_security_limits(bytes, limits)?;
     let format = image::guess_format(bytes)
         .map_err(|error| XbergError::parsing(format!("Failed to read image format: {error}")))?;
@@ -974,3 +985,7 @@ mod tests;
 #[cfg(all(test, feature = "ocr"))]
 #[path = "image/jp2_decode_tests.rs"]
 mod jp2_decode_tests;
+
+#[cfg(all(test, feature = "ocr"))]
+#[path = "image/jpeg_fixture.rs"]
+pub(crate) mod jpeg_fixture;

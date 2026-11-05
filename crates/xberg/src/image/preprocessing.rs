@@ -112,30 +112,13 @@ pub(crate) fn normalize_image_dpi_owned(
     }
 
     let current_dpi = current_dpi.unwrap_or_else(|| unknown_raster_dpi(&rgb_data, width, height, config.target_dpi));
-    let original_dpi = (current_dpi, current_dpi);
-    let (target_dpi, auto_adjusted, calculated_dpi) = calculate_target_dpi(
-        width as u32,
-        height as u32,
-        current_dpi,
-        config,
-        MAX_NORMALIZE_MEMORY_MB,
-    );
-
-    let scale_factor = f64::from(target_dpi) / current_dpi;
-    let plan = DpiPlan {
-        original_dpi,
-        target_dpi,
-        scale_factor,
-        auto_adjusted,
-        calculated_dpi,
-    };
-
-    if !needs_resize(width as u32, height as u32, scale_factor, config) {
+    let plan = DpiPlan::new(width as u32, height as u32, config, current_dpi);
+    if !plan.requires_resize(width as u32, height as u32, config) {
         return Ok(create_skip_result(rgb_data, width, height, config, &plan));
     }
 
     let (new_width, new_height, final_scale, dimension_clamped) =
-        calculate_new_dimensions(width as u32, height as u32, scale_factor, config);
+        calculate_new_dimensions(width as u32, height as u32, plan.scale_factor, config);
 
     // The resize path records the clamped scale where the skip path records the unclamped one.
     let plan = DpiPlan {
@@ -163,13 +146,22 @@ pub(crate) fn normalized_image_dimensions(
     current_dpi: Option<f64>,
 ) -> (u32, u32) {
     let current_dpi = current_dpi.unwrap_or(PDF_POINTS_PER_INCH);
-    let (target_dpi, _, _) = calculate_target_dpi(width, height, current_dpi, config, MAX_NORMALIZE_MEMORY_MB);
-    let scale_factor = f64::from(target_dpi) / current_dpi;
-    if !needs_resize(width, height, scale_factor, config) {
+    let plan = DpiPlan::new(width, height, config, current_dpi);
+    if !plan.requires_resize(width, height, config) {
         return (width, height);
     }
-    let (new_width, new_height, _, _) = calculate_new_dimensions(width, height, scale_factor, config);
+    let (new_width, new_height, _, _) = calculate_new_dimensions(width, height, plan.scale_factor, config);
     (new_width, new_height)
+}
+
+#[cfg(feature = "ocr")]
+pub(crate) fn normalization_requires_resize(
+    width: u32,
+    height: u32,
+    config: &ExtractionConfig,
+    current_dpi: f64,
+) -> bool {
+    DpiPlan::new(width, height, config, current_dpi).requires_resize(width, height, config)
 }
 
 /// The resolution to assume for a raster whose own is unknown, chosen so that its glyphs reach
@@ -177,6 +169,27 @@ pub(crate) fn normalized_image_dimensions(
 ///
 /// Never more than the historical 72 DPI assumption would have scaled (so small text keeps its
 /// full upscale) and never a shrink. Falls back to 72 when no glyph height can be measured.
+#[cfg(feature = "ocr")]
+pub(crate) fn bounded_unknown_raster_dpi(
+    rgb_data: &[u8],
+    width: usize,
+    height: usize,
+    target_dpi: i32,
+    available_workspace: u64,
+) -> Result<f64> {
+    if f64::from(target_dpi) > PDF_POINTS_PER_INCH {
+        let peak = super::text_height::glyph_workspace_bound(width, height)
+            .ok_or_else(|| XbergError::validation("OCR image DPI estimation workspace calculation overflowed"))?;
+        if peak > available_workspace {
+            return Err(XbergError::validation(
+                "OCR image DPI estimation workspace exceeds security_limits.max_content_size. \
+                 Raise security_limits.max_content_size",
+            ));
+        }
+    }
+    Ok(unknown_raster_dpi(rgb_data, width, height, target_dpi))
+}
+
 fn unknown_raster_dpi(rgb_data: &[u8], width: usize, height: usize, target_dpi: i32) -> f64 {
     let max_scale = f64::from(target_dpi) / PDF_POINTS_PER_INCH;
     if max_scale <= 1.0 {
@@ -196,6 +209,24 @@ struct DpiPlan {
     scale_factor: f64,
     auto_adjusted: bool,
     calculated_dpi: Option<i32>,
+}
+
+impl DpiPlan {
+    fn new(width: u32, height: u32, config: &ExtractionConfig, current_dpi: f64) -> Self {
+        let (target_dpi, auto_adjusted, calculated_dpi) =
+            calculate_target_dpi(width, height, current_dpi, config, MAX_NORMALIZE_MEMORY_MB);
+        Self {
+            original_dpi: (current_dpi, current_dpi),
+            target_dpi,
+            scale_factor: f64::from(target_dpi) / current_dpi,
+            auto_adjusted,
+            calculated_dpi,
+        }
+    }
+
+    fn requires_resize(&self, width: u32, height: u32, config: &ExtractionConfig) -> bool {
+        needs_resize(width, height, self.scale_factor, config)
+    }
 }
 
 /// Calculate target DPI based on configuration
@@ -416,6 +447,18 @@ mod tests {
             }
         }
         rgb
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn bounded_unknown_dpi_keeps_the_same_glyph_result_at_the_workspace_boundary() {
+        let rgb = raster_of_glyphs(400, 200, 26, 15);
+        let peak = super::super::text_height::glyph_workspace_bound(400, 200).unwrap();
+        let expected = unknown_raster_dpi(&rgb, 400, 200, 300);
+        assert_eq!(bounded_unknown_raster_dpi(&rgb, 400, 200, 300, peak).unwrap(), expected);
+        let error = bounded_unknown_raster_dpi(&rgb, 400, 200, 300, peak - 1).unwrap_err();
+        assert!(error.to_string().contains("DPI estimation workspace"));
+        assert_eq!(bounded_unknown_raster_dpi(&rgb, 400, 200, 72, 0).unwrap(), 72.0);
     }
 
     fn normalize_unknown(glyph_height: usize, config: &ExtractionConfig) -> NormalizeResult {
