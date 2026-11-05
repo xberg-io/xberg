@@ -223,7 +223,7 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
         && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn unique_literal_embedding(native: &str, read: &str) -> bool {
+pub(super) fn unique_literal_embedding(native: &str, read: &str) -> bool {
     let native: Vec<_> = native.split_whitespace().collect();
     let read: Vec<_> = read.split_whitespace().collect();
     if read.is_empty() {
@@ -352,20 +352,31 @@ fn unannotated_ocr_text(element: &crate::types::internal::InternalElement) -> bo
 /// internal here: the caller excludes explicit OCR-element/raster requests before using this. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn plain_ocr_page_can_yield_to_native(doc: &crate::types::internal::InternalDocument, read: &str) -> bool {
-    ocr_page_has_only_plain_payload(doc)
-        && doc
-            .elements
-            .iter()
-            .flat_map(|element| element.text.split_whitespace())
-            .eq(read.split_whitespace())
+    ocr_page_has_only_plain_payload(doc) && ocr_elements_follow_text(doc, read)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn ocr_elements_follow_text(doc: &crate::types::internal::InternalDocument, read: &str) -> bool {
+    doc.elements
+        .iter()
+        .flat_map(|element| element.text.split_whitespace())
+        .eq(read.split_whitespace())
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn ocr_page_has_only_plain_payload(doc: &crate::types::internal::InternalDocument) -> bool {
+    ocr_page_has_only_plain_payload_with(doc, |_, _| false)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn ocr_page_has_only_plain_payload_with(
+    doc: &crate::types::internal::InternalDocument,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
     let mut metadata = doc.metadata.clone();
-    metadata
-        .additional
-        .remove(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY);
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
     no_ocr_rich_assets(doc)
         && metadata.is_empty()
         && !doc.elements.is_empty()

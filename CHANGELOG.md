@@ -209,6 +209,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep readable native text when automatic OCR cannot see unpainted Type0 glyphs.** (#2533)
   Require actual page-local render loss and a plain OCR read that omits most native word occurrences.
 
+- **(pdf): Preserve one copy of native text when OCR reads the same words.** (#2534)
+  Require an exact match between native words and the Tesseract iterator, including their positions.
+
 - **(ocr): Keep PNG and TIFF retries within the image budget when upscaling known-DPI rasters.** (#2530)
   Use the finest safe unclamped DPI when the requested upscale exceeds native workspace.
 

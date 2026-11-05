@@ -1030,6 +1030,18 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_words_covered_pages = ahash::AHashSet::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let native_coverage_layers = page_layers.as_ref().filter(|_| {
+        all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
+            && !probing_hidden_layer
+            && !mixed_route_layout_active
+            && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+            && config.ocr.as_ref().is_some_and(|ocr| {
+                ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+            })
+    });
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
     // the per-page metadata is gone by the time `ocr_results` is judged.
@@ -1168,6 +1180,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        native_coverage_layers: native_coverage_layers
+                            .filter(|_| {
+                                super::document::native_preservation_is_automatic(config, (*page_idx + 1) as u32)
+                            })
+                            .cloned(),
                         ..Default::default()
                     };
                     // See `extract_with_ocr_for_page`'s doc comment on
@@ -1258,17 +1276,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         preprocessing,
                         page_ocr_confidences,
                         noise_verdicts,
-                        original_tesseract_raster,
+                        read_evidence,
                     ) = result;
                     accumulated_llm_usage.extend(usage);
                     ocr_confidence_by_page.extend(page_ocr_confidences);
                     let page_number = (page_idx + 1) as u32;
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    if original_tesseract_raster {
+                    if read_evidence.original_tesseract_raster {
                         original_tesseract_raster_pages.insert(page_number);
+                        if read_evidence.complete_native_words {
+                            native_words_covered_pages.insert(page_number);
+                        }
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-                    let _ = original_tesseract_raster;
+                    let _ = read_evidence;
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
@@ -1353,6 +1374,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        native_coverage_layers: native_coverage_layers
+                            .filter(|_| {
+                                super::document::native_preservation_is_automatic(config, (*page_idx + 1) as u32)
+                            })
+                            .cloned(),
                         ..Default::default()
                     };
                     let points_per_pixel_override = {
@@ -1414,17 +1441,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         preprocessing,
                         page_ocr_confidences,
                         noise_verdicts,
-                        original_tesseract_raster,
+                        read_evidence,
                     ) = result;
                     accumulated_llm_usage.extend(usage);
                     ocr_confidence_by_page.extend(page_ocr_confidences);
                     let page_number = (*page_idx + 1) as u32;
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    if original_tesseract_raster {
+                    if read_evidence.original_tesseract_raster {
                         original_tesseract_raster_pages.insert(page_number);
+                        if read_evidence.complete_native_words {
+                            native_words_covered_pages.insert(page_number);
+                        }
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-                    let _ = original_tesseract_raster;
+                    let _ = read_evidence;
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
@@ -1958,6 +1988,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if should_adopt_xobject_retry_text(page_text, &text) {
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     alternative_raster_pages.insert(page_number);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    native_words_covered_pages.remove(&page_number);
                     // The render's paragraphs, confidence and word count describe the blank
                     // render, not the recovered text.
                     let recovered_paragraphs =
@@ -2192,6 +2224,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if first.lines.is_empty() {
                     continue;
                 }
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if native_words_covered_pages.contains(page_number)
+                    && !noise_verdict_pages.contains(page_number)
+                    && structured_ocr_pages
+                        .get(page_number)
+                        .is_some_and(super::native_word_coverage::has_only_certified_tesseract_text)
+                    && super::document::unique_literal_embedding(layer, text)
+                {
+                    complete_native_pages.insert(*page_number);
+                }
                 *text = super::document::text_with_layer_first(text, &first);
                 page_layers_first.insert(*page_number, first);
             }
@@ -2351,7 +2393,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let plain = structured_ocr_pages
             .get(&page)
             .zip(ocr_results.get(&page))
-            .is_some_and(|(doc, text)| super::document::plain_ocr_page_can_yield_to_native(doc, text));
+            .is_some_and(|(doc, text)| {
+                if super::document::plain_ocr_page_can_yield_to_native(doc, text) {
+                    return true;
+                }
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if native_words_covered_pages.contains(&page) {
+                    return super::native_word_coverage::has_only_certified_tesseract_text(doc)
+                        && super::document::ocr_elements_follow_text(doc, text);
+                }
+                false
+            });
         let has_formula = accumulated_formulas
             .iter()
             .any(|formula| formula.page.is_none_or(|owner| owner == page));
@@ -2775,6 +2827,8 @@ pub(crate) struct PageOcrHints {
     /// Original marker-bearing text of the only physical page in a whole automatic fallback.
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) single_native_type0_page: Option<std::sync::Arc<str>>,
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) native_coverage_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -2805,10 +2859,12 @@ fn attach_page_segmentation_modes(
     }
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub(super) struct OcrReadEvidence {
     no_admitted_images: bool,
     original_tesseract_raster: bool,
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    complete_native_words: bool,
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -3249,6 +3305,8 @@ pub(super) async fn extract_with_ocr_for_page(
     // A retry can recover only structured payload (most importantly a table), leaving the flat
     // page text empty. That still prevents a wholesale failure and keeps the structured page. ~keep
     let mut pages_with_recovered_xobject_payload = vec![false; total_pages];
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let mut complete_native_words = false;
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let tall_source_used = false;
     #[cfg(all(
@@ -3822,6 +3880,22 @@ pub(super) async fn extract_with_ocr_for_page(
             let document_page_idx = page_index_offset + page_idx;
             let document_page_number = (document_page_idx + 1) as u32;
             let mut ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            if can_retry_orientation
+                && batch_upright_correction[offset].0 == 0
+                && let Some(source) = detached_page
+                && let Some(layer) = page_ocr_hints
+                    .as_ref()
+                    .and_then(|hints| hints.native_coverage_layers.as_ref())
+                    .and_then(|layers| layers.get(&document_page_number))
+            {
+                complete_native_words = super::native_word_coverage::covers_complete_native_page(
+                    source.document,
+                    document_page_idx,
+                    layer,
+                    &ocr_result,
+                );
+            }
             crate::extraction::derive::adopt_public_ocr_document(
                 &mut ocr_result,
                 config.security_limits.as_ref().unwrap_or(&Default::default()),
@@ -4868,6 +4942,8 @@ pub(super) async fn extract_with_ocr_for_page(
         recognition_noise_verdicts,
         OcrReadEvidence {
             no_admitted_images,
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            complete_native_words,
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {
@@ -5768,7 +5844,7 @@ pub(crate) async fn run_ocr_pipeline(
         preprocessing,
         ocr_confidence,
         _noise_verdicts,
-        _original_tesseract_raster,
+        _read_evidence,
     ) = Box::pin(run_ocr_pipeline_for_page(
         content,
         images,
@@ -5893,7 +5969,7 @@ type OcrPipelineOutput = (
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<OcrPageNoiseVerdict>,
-    bool,
+    OcrReadEvidence,
 );
 
 /// Add to `doc` the records that the stages of a pipeline run made for the pages the run
@@ -6284,7 +6360,7 @@ async fn run_ocr_pipeline_stages(
         ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
         ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
         Vec<OcrPageNoiseVerdict>,
-        bool,
+        OcrReadEvidence,
     )> = None;
 
     let mut accumulated_usage: Vec<crate::types::LlmUsage> = Vec::new();
@@ -6361,7 +6437,11 @@ async fn run_ocr_pipeline_stages(
                 stage_recognition_noise_verdicts,
                 read_evidence,
             )) => {
-                let original_tesseract_raster = automatic_paddle && read_evidence.original_tesseract_raster;
+                let selected_read_evidence = if automatic_paddle && read_evidence.original_tesseract_raster {
+                    read_evidence
+                } else {
+                    OcrReadEvidence::default()
+                };
                 let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
                 let score = pipeline_stage_score(text_score, mean_conf);
 
@@ -6443,7 +6523,7 @@ async fn run_ocr_pipeline_stages(
                         stage_preprocessing,
                         stage_ocr_confidence,
                         stage_recognition_noise_verdicts,
-                        original_tesseract_raster,
+                        selected_read_evidence,
                     ));
                 }
 
@@ -6484,7 +6564,7 @@ async fn run_ocr_pipeline_stages(
                         stage_preprocessing,
                         stage_ocr_confidence,
                         stage_recognition_noise_verdicts,
-                        original_tesseract_raster,
+                        selected_read_evidence,
                     ));
                 }
             }
@@ -6517,7 +6597,7 @@ async fn run_ocr_pipeline_stages(
             preprocessing,
             ocr_confidence,
             noise_verdicts,
-            original_tesseract_raster,
+            read_evidence,
         )) => {
             let (text, page_texts, doc) = with_run_layers_first(
                 run_layers,
@@ -6582,7 +6662,7 @@ async fn run_ocr_pipeline_stages(
                 preprocessing,
                 ocr_confidence,
                 noise_verdicts,
-                original_tesseract_raster,
+                read_evidence,
             ))
         }
         None => {
@@ -6638,7 +6718,7 @@ async fn run_ocr_pipeline_stages(
                     recovery.preprocessing,
                     ahash::AHashMap::new(),
                     Vec::new(),
-                    false,
+                    OcrReadEvidence::default(),
                 ));
             }
 
