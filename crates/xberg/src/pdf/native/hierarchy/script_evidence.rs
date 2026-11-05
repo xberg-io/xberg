@@ -8,6 +8,7 @@ use xberg_native_pdf::{fonts::MappingProvenance, layout::TextSpan};
 use super::{ArtifactRetention, ScriptGeometry};
 use crate::pdf::hierarchy::SegmentData;
 
+mod decimal_power;
 mod literal_prime;
 pub(super) use literal_prime::{LiteralPrimeWitness, capture_literal_primes};
 
@@ -114,7 +115,7 @@ impl NativePageSegments {
         artifacts: ArtifactRetention,
     ) -> Self {
         let primes = capture_literal_primes(&spans);
-        Self::from_final_spans_with_primes(spans, roles, artifacts, primes)
+        Self::from_final_spans_with_primes(spans, roles, artifacts, primes, None)
     }
 
     fn from_final_spans_with_primes(
@@ -122,15 +123,9 @@ impl NativePageSegments {
         roles: &HashMap<u32, Option<u8>>,
         artifacts: ArtifactRetention,
         prime_witnesses: Vec<LiteralPrimeWitness>,
+        decimal_authority: Option<decimal_power::Authority>,
     ) -> Self {
-        let projected: Vec<_> = spans
-            .iter()
-            .cloned()
-            .map(|span| super::project_final_span(span, roles, ScriptGeometry::Preserve))
-            .collect();
-        let mut owners = collect_owners(&spans, &projected);
-        let primes = literal_prime::bind_literal_primes(prime_witnesses, &spans, &projected, &owners);
-        owners.extend(primes);
+        let (spans, projected, owners) = script_projection(spans, roles, prime_witnesses, decimal_authority);
         let segments = super::dedupe_redrawn_segments(
             spans
                 .iter()
@@ -208,6 +203,33 @@ impl NativePageSegments {
         self.segments.retain(keep);
         self.owners = self.valid_owners(&self.segments);
     }
+}
+
+fn script_projection(
+    mut spans: Vec<TextSpan>,
+    roles: &HashMap<u32, Option<u8>>,
+    prime_witnesses: Vec<LiteralPrimeWitness>,
+    decimal_authority: Option<decimal_power::Authority>,
+) -> (Vec<TextSpan>, Vec<SegmentData>, Vec<ScriptOwner>) {
+    let project = |spans: &[TextSpan]| {
+        spans
+            .iter()
+            .cloned()
+            .map(|span| super::project_final_span(span, roles, ScriptGeometry::Preserve))
+            .collect::<Vec<_>>()
+    };
+    let mut projected = project(&spans);
+    let mut owners = collect_owners(&spans, &projected);
+    let primes = literal_prime::bind_literal_primes(prime_witnesses, &spans, &projected, &owners);
+    owners.extend(primes);
+    if let Some(authority) = decimal_authority {
+        let runs = decimal_power::prepare_with_authority(&mut spans, &mut owners, || Some(authority));
+        if !runs.is_empty() {
+            projected = project(&spans);
+            decimal_power::bind(runs, &spans, &projected, &mut owners);
+        }
+    }
+    (spans, projected, owners)
 }
 
 fn projection_counts(segments: &[SegmentData]) -> HashMap<SegmentKey, usize> {
@@ -529,7 +551,9 @@ fn extract_page(
 ) -> crate::pdf::error::Result<NativePageSegments> {
     let mut prime_witnesses = Vec::new();
     let spans = super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses))?;
-    let mut captured = NativePageSegments::from_final_spans_with_primes(spans, roles, artifacts, prime_witnesses);
+    let decimal_authority = decimal_power::authority(&doc.doc, page, &spans);
+    let mut captured =
+        NativePageSegments::from_final_spans_with_primes(spans, roles, artifacts, prime_witnesses, decimal_authority);
     if !captured.prose_rows.is_empty()
         && (!doc
             .doc

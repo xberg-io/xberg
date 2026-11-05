@@ -135,3 +135,97 @@ fn should_not_omit_a_decimal_point_from_a_new_exponent_annotation() {
         assert!(result.content.contains("( Log Re)<sup>2.58</sup>"));
     }
 }
+
+fn assert_complete_power(result: &xberg::ExtractedDocument, power: &str, base: &str) {
+    let document = result.document.as_ref().expect("requested formula structure");
+    let matches = document
+        .nodes
+        .iter()
+        .filter_map(|node| node.content.text().map(|text| (node, text)))
+        .flat_map(|(node, text)| {
+            node.annotations.iter().filter_map(move |annotation| {
+                let start = annotation.start as usize;
+                let end = annotation.end as usize;
+                (matches!(annotation.kind, AnnotationKind::Superscript) && text.get(start..end) == Some(power))
+                    .then_some(&text[..start])
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        matches.len(),
+        1,
+        "the complete source exponent {power} must be annotated once"
+    );
+    assert!(
+        matches[0].ends_with(base),
+        "power {power} must immediately follow its actual base {base}: {}",
+        matches[0]
+    );
+}
+
+#[test]
+fn should_preserve_both_complete_signed_decimal_powers_on_their_actual_bases() {
+    let result = ambiguity_page(
+        "ntrs-20040081236-p13.pdf",
+        "71cd7420f93701108312f7b8bd1ba0b1c55665386e1e4051ae2a05782e639308",
+    );
+    let mut glyphs = result
+        .document
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .filter_map(|node| node.content.text())
+        .flat_map(str::chars)
+        .filter(|character| !character.is_whitespace())
+        .collect::<Vec<_>>();
+    glyphs.sort_unstable();
+    let inventory: String = glyphs.into_iter().collect();
+    assert_eq!(
+        inventory.chars().count(),
+        2048,
+        "retain the complete baseline body glyph inventory"
+    );
+    assert_eq!(
+        hex::encode(Sha256::digest(inventory.as_bytes())),
+        "5c2053eef4dc5dafcfb4f18055a81a6f878c02f79dc6badfc1fabfa017f4c15f"
+    );
+    assert_complete_power(&result, "6", "10");
+    assert_complete_power(&result, "−0.15", "Re");
+    assert_complete_power(&result, "2.58", "Re)");
+    assert!(result.content.contains("Re<sup>−0.15</sup>"));
+    assert!(result.content.contains("Re)<sup>2.58</sup>"));
+}
+
+#[test]
+fn should_preserve_complete_decimal_powers_in_the_actual_drag_denominators() {
+    let result = ambiguity_page(
+        "ntrs-20040081236-p36.pdf",
+        "4002b2651dc5f7a49dcf4c5107a4192974a15817af0df141c91e4a881c096b99",
+    );
+    let mut glyphs = result
+        .document
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .filter_map(|node| node.content.text())
+        .flat_map(str::chars)
+        .filter(|character| !character.is_whitespace())
+        .collect::<Vec<_>>();
+    glyphs.sort_unstable();
+    let inventory: String = glyphs.into_iter().collect();
+    assert_eq!(
+        inventory.chars().count(),
+        2297,
+        "retain the complete baseline body glyph inventory"
+    );
+    assert_eq!(
+        hex::encode(Sha256::digest(inventory.as_bytes())),
+        "7179d926ff39247ee7b3c0a5905af670ba2b9e72c4369d85b9c4b68df58e8cf6"
+    );
+    assert_complete_power(&result, "0.08", "Re");
+    assert_complete_power(&result, "0.2", "Re");
+    assert!(result.content.contains("Re<sup>0.08</sup>"));
+    assert!(result.content.contains("Re<sup>0.2</sup>"));
+}

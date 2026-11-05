@@ -185,6 +185,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Keep caller words when a Form shadows the selected font resource name, on cold and warm reads.
   Resolve a Form's own font binding even when its name and size match the caller's selection.
 
+- **(pdf): Keep complete signed decimal powers with their native bases.** (#2511)
+  Verify separately drawn points against actual glyph advances while retaining ambiguous fractions and existing scripts.
+
 - **(pdf): Keep stepped-baseline prose panels in source order and preserve their separate lines.** (#2323)
 
 - **(markdown): Retain rendered headings and scripts after canonical Unicode normalization.** (#2512)

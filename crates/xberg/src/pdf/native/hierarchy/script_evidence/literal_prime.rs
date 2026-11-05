@@ -234,6 +234,7 @@ mod tests {
                 &HashMap::new(),
                 ArtifactRetention::default(),
                 capture_literal_primes(&original),
+                None,
             );
             assert!(page.valid_owners(&page.segments).is_empty());
             assert_eq!(page.segments.len(), original.len());
