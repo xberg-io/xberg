@@ -193,6 +193,7 @@ impl Preparation<'_> {
             (width, height)
         };
         if self.native_needs_retry(native_dimensions, policy)? {
+            self.check_unknown_dpi_upscale(&decoded, native_dimensions, dpi, policy)?;
             return Ok(retry_candidate(decoded, policy));
         }
         self.check_reduced_dpi(&decoded, dpi, policy)?;
@@ -200,6 +201,36 @@ impl Preparation<'_> {
             return Ok(retry_candidate(decoded, policy));
         }
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
+    }
+
+    fn check_unknown_dpi_upscale(
+        &self,
+        decoded: &DecodedOcrImage,
+        normalized: (u32, u32),
+        dpi: Option<f64>,
+        policy: Option<&ImagePreprocessingConfig>,
+    ) -> crate::Result<()> {
+        let (Some(dpi), Some(policy)) = (dpi, policy) else {
+            return Ok(());
+        };
+        let (width, height) = decoded.image.dimensions();
+        if decoded.scale_denominator != 1
+            || (normalized.0 <= width && normalized.1 <= height)
+            || self.source_dpi(width, height).is_some()
+            || !self.known_native_fits((width, height), Some(policy))?
+        {
+            return Ok(());
+        }
+        // A reduced decode cannot reuse the inferred DPI of the original raster. ~keep
+        dpi_workspace::check_known_dpi_resize(
+            width,
+            height,
+            dpi,
+            &ocr_dpi_config(policy, self.images),
+            self.bytes.len(),
+            self.limits.max_content_size,
+        )?;
+        Err(self.native_error("OCR native image workspace after DPI resize"))
     }
 
     fn check_reduced_policy(

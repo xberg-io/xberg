@@ -198,6 +198,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep separate figure labels out of empty inferred table row spans.** (#2332)
   Require an existing source anchor before borrowing words from covered rows.
 
+- **(ocr): Report the actual budget limit when upscaling a JPEG with unknown DPI.** (#2531)
+  Check the planned upscale without retrying at a reduced decode that cannot reuse the source DPI estimate.
+
 - **(paddle): Preserve reading order after automatically correcting rotated PDF pages.** (#2519)
   Compose the page hint with the applied pixel correction so upright labels are not reversed.
 
