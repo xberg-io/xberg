@@ -130,7 +130,7 @@ Then add the product to the relevant target:
 ```
 
 ### System Requirements
-- **Swift 6.2+** (`swift-tools-version: 6.2`) on macOS 14+ or iOS 16+
+- **Swift 6.2+** (`swift-tools-version: 6.2`) on macOS 14+ or iOS 16+; the prebuilt macOS library is Apple Silicon (arm64) only
 - Native runtime delivered through the C FFI surface from `xberg-ffi`; published artifacts ship as a binary target
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
