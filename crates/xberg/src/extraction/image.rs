@@ -23,18 +23,10 @@ mod bounded_jpeg;
 #[cfg(all(feature = "ocr", feature = "pdf"))]
 pub(crate) use bounded_jpeg::load_image_for_ocr_within;
 #[cfg(feature = "ocr")]
-pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr_with_scale};
+pub(crate) use bounded_jpeg::{admit_oversized_jpeg, load_image_for_ocr, load_image_for_ocr_with_processing};
 #[cfg(feature = "ocr")]
 #[doc(hidden)]
 pub use bounded_jpeg::{decode_reduced_jpeg, reduced_decode_bound};
-
-#[cfg(feature = "ocr")]
-pub(crate) struct DecodedOcrImage {
-    pub image: image::RgbImage,
-    pub original_width: u32,
-    pub original_height: u32,
-    pub scale_denominator: u8,
-}
 
 /// JP2 file signature: 12-byte box starting with length 0x0000000C and type "jP  "
 const JP2_MAGIC: &[u8] = &[0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20];
@@ -471,18 +463,6 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
 
     image::GrayImage::from_raw(width, height, decoder.pixels)
         .ok_or_else(|| XbergError::parsing("Failed to construct grayscale image from JBIG2 data".to_string()))
-}
-
-/// Load image bytes for OCR, with JPEG 2000 and JBIG2 fallback support.
-///
-/// The standard `image` crate does not support JPEG 2000 or JBIG2 formats.
-/// This function detects these formats by magic bytes and uses `hayro-jpeg2000`
-/// / `hayro-jbig2` for decoding, falling back to the standard `image` crate
-/// for all other formats.
-#[cfg(feature = "ocr")]
-pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) -> Result<image::DynamicImage> {
-    load_image_for_ocr_with_scale(image_bytes, limits, |_| true)
-        .map(|decoded| image::DynamicImage::ImageRgb8(decoded.image))
 }
 
 /// Meters-per-inch, used to convert a PNG `pHYs` pixels-per-metre density into DPI.

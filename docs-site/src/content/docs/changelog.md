@@ -192,12 +192,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Whole-document and page recovery take their other security limits from the same base.
 
 - **(ocr): Decode oversized JPEG scans at a reduced IDCT scale that fits the content size limit.** (#2339)
-  8-bit color and grayscale scans, baseline or progressive, decode at 1/2, 1/4 or 1/8; fitting images keep their dimensions.
+  8-bit color and grayscale scans, baseline or progressive, decode at 1/2, 1/4 or 1/8.
+  Raw Tesseract ingestion also checks its native image buffers before accepting a fitting full RGB raster.
   The scale is the finest one that fits and needs no DPI resize, so a higher limit never turns a success into an error.
   When no fitting scale meets target_dpi, the error names the limit to raise and the target_dpi to set.
   Lossless, hierarchical, arithmetic-coded, 12-bit and CMYK scans keep the size-limit error, which names the reason.
   Standalone JPEG files that only a reduced decode can take are no longer rejected by the image metadata check.
   With `ocr.pipeline` set, a JPEG whose per-stage PNG encode does not fit decodes at the finest scale whose encode fits.
+  Known no-binarization contrast checks its native image buffers and refuses an unaffordable configured target before Pix allocation.
 
 - **(pdf): Recover text on tall scans when an OCR strip contains only blank space.** (#2501)
 

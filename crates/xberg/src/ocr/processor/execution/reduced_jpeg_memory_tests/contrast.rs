@@ -7,8 +7,8 @@ use xberg_tesseract::Pix;
 
 const CHILD_ENV: &str = "XBERG_REDUCED_JPEG_CONTRAST_CHILD";
 const TEST_NAME: &str =
-    "ocr::processor::execution::reduced_jpeg_memory_tests::contrast::should_keep_no_resize_contrast_within_40_mib";
-const BUDGET: usize = 40 * MIB;
+    "ocr::processor::execution::reduced_jpeg_memory_tests::contrast::should_keep_no_resize_contrast_within_96_mib";
+const BUDGET: usize = 96 * MIB;
 
 fn synthetic_gray_baseline() -> Vec<u8> {
     let original = vec![180; usize::from(DIMENSION).pow(2) * 3];
@@ -99,7 +99,17 @@ fn measure_contrast() {
     let bytes = synthetic_gray_baseline();
     let source_sha = Sha256::digest(&bytes);
     assert!(bytes.capacity() < 2 * MIB);
-    assert!(usize::from(DIMENSION).pow(2) * 3 > BUDGET);
+    assert!(
+        super::super::native_image_budget::known_phase_peak(
+            u32::from(DIMENSION),
+            u32::from(DIMENSION),
+            bytes.len(),
+            config().preprocessing.as_ref(),
+        )
+        .expect("known contrast policy")
+            > BUDGET as u64,
+        "full-resolution contrast must require reduced decoding even though its RGB fits",
+    );
     pixel_memory::install();
     let prepared = prepare(&bytes);
     let rgb_sha = Sha256::digest(&prepared.data);
@@ -138,7 +148,7 @@ fn measure_contrast() {
 }
 
 #[test]
-fn should_keep_no_resize_contrast_within_40_mib() {
+fn should_keep_no_resize_contrast_within_96_mib() {
     if std::env::var(CHILD_ENV).as_deref() == Ok(TEST_NAME) {
         let args: Vec<_> = std::env::args().collect();
         assert!(args.iter().any(|arg| arg == "--exact"));
@@ -166,5 +176,55 @@ fn should_keep_no_resize_contrast_within_40_mib() {
     assert!(
         stdout.contains("CONTRAST_PIX_MEMORY_OBSERVATION="),
         "actual native measurement did not fire"
+    );
+}
+
+#[test]
+fn rejects_unaffordable_contrast_before_native_preprocessing() {
+    const NAME: &str = "ocr::processor::execution::reduced_jpeg_memory_tests::contrast::rejects_unaffordable_contrast_before_native_preprocessing";
+    if std::env::var(CHILD_ENV).as_deref() == Ok(NAME) {
+        let bytes = synthetic_gray_baseline();
+        let source_sha = Sha256::digest(&bytes);
+        pixel_memory::install();
+        let result = super::super::prepare_encoded_ocr_image(
+            &bytes,
+            &super::super::SecurityLimits {
+                max_content_size: 40 * MIB,
+                ..Default::default()
+            },
+            &config(),
+            Some(&ImageExtractionConfig {
+                auto_adjust_dpi: false,
+                ..Default::default()
+            }),
+            false,
+        );
+        let error = result.err().expect("unaffordable target must be rejected");
+        assert!(
+            matches!(error, crate::XbergError::Validation { ref message, .. }
+                if message.contains("security_limits.max_content_size") && message.contains("target_dpi")),
+            "{error}"
+        );
+        assert_eq!(
+            pixel_memory::observation().allocations,
+            0,
+            "no native Pix was allocated"
+        );
+        assert_eq!(Sha256::digest(&bytes), source_sha);
+        println!("NATIVE_PREFLIGHT_REFUSAL");
+        return;
+    }
+    let output = Command::new(std::env::current_exe().expect("current native executable"))
+        .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
+        .env(CHILD_ENV, NAME)
+        .output()
+        .expect("run isolated refusal control");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success()
+            && stdout.contains("NATIVE_PREFLIGHT_REFUSAL")
+            && stdout.contains("1 passed; 0 failed; 0 ignored;"),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }

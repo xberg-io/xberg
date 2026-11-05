@@ -201,3 +201,12 @@ fn public_reduced_decode_helpers_keep_supported_scales() {
         );
     }
 }
+
+#[test]
+fn processing_admission_does_not_fall_back_to_a_disallowed_full_raster() {
+    let bytes = rgb();
+    let error = super::load_image_for_ocr_with_processing(&bytes, &limits(16 * 1024 * 1024), |_, _| false, |_| true)
+        .err()
+        .expect("no candidate satisfies downstream admission");
+    assert!(matches!(error, crate::XbergError::Validation { .. }));
+}

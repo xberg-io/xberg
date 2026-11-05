@@ -21,7 +21,25 @@ use crate::error::{Result, XbergError};
 use crate::extraction::image_decode::{decoded_byte_count, image_dimension_error};
 use crate::extractors::security::SecurityLimits;
 
-use super::{DecodedOcrImage, decode_image_to_rgb8_with_security_limits, validate_encoded_image_input};
+use super::{decode_image_to_rgb8_with_security_limits, validate_encoded_image_input};
+
+pub(crate) struct DecodedOcrImage {
+    pub image: image::RgbImage,
+    pub original_width: u32,
+    pub original_height: u32,
+    pub scale_denominator: u8,
+}
+
+/// Load image bytes for OCR, with JPEG 2000 and JBIG2 fallback support.
+///
+/// The standard `image` crate does not support JPEG 2000 or JBIG2 formats.
+/// This function detects these formats by magic bytes and uses `hayro-jpeg2000`
+/// / `hayro-jbig2` for decoding, falling back to the standard `image` crate
+/// for all other formats.
+pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) -> Result<image::DynamicImage> {
+    load_image_for_ocr_with_scale(image_bytes, limits, |_| true)
+        .map(|decoded| image::DynamicImage::ImageRgb8(decoded.image))
+}
 
 const DENOMINATORS: [u8; 3] = [2, 4, 8];
 const COEFFICIENT_BYTES: u64 = 64 * 2;
@@ -62,7 +80,7 @@ pub(crate) fn load_image_for_ocr_with_scale(
     limits: &SecurityLimits,
     accept: impl Fn(ReducedScale) -> bool,
 ) -> Result<DecodedOcrImage> {
-    load_reduced_or_full(image_bytes, limits, |_, _| true, accept)
+    load_reduced_or_full(image_bytes, limits, |_, _| true, accept, true)
 }
 
 /// Decode a JPEG for a caller that holds more than the decoded raster: `fits` approves the output
@@ -75,7 +93,17 @@ pub(crate) fn load_image_for_ocr_within(
     limits: &SecurityLimits,
     fits: impl Fn(u32, u32) -> bool,
 ) -> Result<DecodedOcrImage> {
-    load_reduced_or_full(image_bytes, limits, fits, |_| true)
+    load_reduced_or_full(image_bytes, limits, fits, |_| true, true)
+}
+
+/// Require the full or reduced output to satisfy the caller's downstream image budget.
+pub(crate) fn load_image_for_ocr_with_processing(
+    image_bytes: &[u8],
+    limits: &SecurityLimits,
+    fits: impl Fn(u32, u32) -> bool,
+    accept: impl Fn(ReducedScale) -> bool,
+) -> Result<DecodedOcrImage> {
+    load_reduced_or_full(image_bytes, limits, fits, accept, false)
 }
 
 fn load_reduced_or_full(
@@ -83,8 +111,9 @@ fn load_reduced_or_full(
     limits: &SecurityLimits,
     fits: impl Fn(u32, u32) -> bool,
     accept: impl Fn(ReducedScale) -> bool,
+    allow_full_fallback: bool,
 ) -> Result<DecodedOcrImage> {
-    if let Some((frame, scale)) = admit_reduced_decode(image_bytes, limits, fits, accept)? {
+    if let Some((frame, scale)) = admit_reduced_decode(image_bytes, limits, fits, accept, allow_full_fallback)? {
         return decode(image_bytes, &frame, scale);
     }
     let image = decode_image_to_rgb8_with_security_limits(image_bytes, limits)?;
@@ -101,7 +130,10 @@ fn load_reduced_or_full(
 /// input, which the full decoder then takes. An oversized JPEG that no reduced decode can take
 /// gets the same error as the OCR path.
 pub(crate) fn admit_oversized_jpeg(bytes: &[u8], limits: &SecurityLimits) -> Result<Option<(u32, u32)>> {
-    Ok(admit_reduced_decode(bytes, limits, |_, _| true, |_| false)?.map(|(frame, _)| (frame.width, frame.height)))
+    Ok(
+        admit_reduced_decode(bytes, limits, |_, _| true, |_| false, true)?
+            .map(|(frame, _)| (frame.width, frame.height)),
+    )
 }
 
 /// Choose the reduced decode of a JPEG whose full RGB raster does not fit the limit, or whose original
@@ -113,6 +145,7 @@ fn admit_reduced_decode(
     limits: &SecurityLimits,
     fits: impl Fn(u32, u32) -> bool,
     accept: impl Fn(ReducedScale) -> bool,
+    allow_full_fallback: bool,
 ) -> Result<Option<(Frame, ReducedScale)>> {
     if !bytes.starts_with(&[0xff, 0xd8]) {
         return Ok(None);
@@ -130,7 +163,7 @@ fn admit_reduced_decode(
     }
     // A full decode within the limit stays the answer when no reduced decode is possible. ~keep
     let reject = |reason: &str| {
-        if full_fits {
+        if full_fits && allow_full_fallback {
             Ok(None)
         } else {
             Err(reduced_decode_error(&frame, full_peak, maximum, reason))

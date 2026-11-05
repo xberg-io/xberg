@@ -1092,6 +1092,10 @@ mod reduced_jpeg_dpi_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod reduced_jpeg_memory_tests;
 
+mod native_image_budget;
+
+const JPEG_PREPARATION_CANDIDATES: usize = 4;
+
 fn prepare_encoded_ocr_image(
     bytes: &[u8],
     limits: &SecurityLimits,
@@ -1105,57 +1109,101 @@ fn prepare_encoded_ocr_image(
     // the DPI target of the preprocessing that would run. ~keep
     let planned_preprocessing = config.preprocessing.clone().unwrap_or_default();
     let planned_dpi = ocr_dpi_config(&planned_preprocessing, images);
-    let decoded = crate::extraction::image::load_image_for_ocr_with_scale(bytes, limits, |scale| {
-        source_dpi(scale.original_width, scale.original_height).is_some_and(|dpi| {
-            !normalization_requires_resize(
-                scale.width,
-                scale.height,
-                &planned_dpi,
-                dpi / f64::from(scale.denominator),
-            )
-        })
-    })?;
-    let dpi = source_dpi(decoded.original_width, decoded.original_height)
-        .map(|dpi| dpi / f64::from(decoded.scale_denominator));
-    let (width, height) = decoded.image.dimensions();
-    log_ci_debug(ci_debug_enabled, "image", || {
-        format!("dimensions={width}x{height} color_type=RGB8")
-    });
-    let preprocessing = ocr_preprocessing_decision(
-        decoded.image.as_raw(),
-        width,
-        height,
-        config.preprocessing.as_ref(),
-        config.known_full_page_scan,
-    );
-    if decoded.scale_denominator != 1
-        && let Some(preprocessing) = preprocessing.as_deref()
-    {
-        let dpi_config = ocr_dpi_config(preprocessing, images);
-        if dpi.is_none_or(|dpi| normalization_requires_resize(width, height, &dpi_config, dpi)) {
-            // No public setting gives the source DPI of a standalone image, so an unknown DPI
-            // leaves only the limit as the remedy. ~keep
-            let (reason, remedy) = dpi.map_or_else(
-                || (", and its source DPI is unknown, so", String::new()),
-                |dpi| (", and", format!(", or set target_dpi to {}", dpi.round())),
-            );
-            return Err(crate::XbergError::validation(format!(
-                "The image exceeds security_limits.max_content_size ({} bytes) at its source resolution{reason} a \
+    let mut assessed_policy = config.preprocessing.clone().map(Some);
+    let mut maximum_pixels = u64::MAX;
+    let is_jpeg = bytes.starts_with(&[0xff, 0xd8]);
+    // Full, half, quarter and eighth are the only JPEG output candidates. ~keep
+    for _ in 0..JPEG_PREPARATION_CANDIDATES {
+        let fits = |width, height| {
+            let pixels = u64::from(width) * u64::from(height);
+            pixels <= maximum_pixels
+                && assessed_policy.as_ref().is_none_or(|policy| {
+                    native_image_budget::known_phase_peak(width, height, bytes.len(), policy.as_ref())
+                        .is_none_or(|peak| peak <= limits.max_content_size as u64)
+                })
+        };
+        let decoded = crate::extraction::image::load_image_for_ocr_with_processing(bytes, limits, fits, |scale| {
+            source_dpi(scale.original_width, scale.original_height).is_some_and(|dpi| {
+                !normalization_requires_resize(
+                    scale.width,
+                    scale.height,
+                    &planned_dpi,
+                    dpi / f64::from(scale.denominator),
+                )
+            })
+        })?;
+        let dpi = source_dpi(decoded.original_width, decoded.original_height)
+            .map(|dpi| dpi / f64::from(decoded.scale_denominator));
+        let (width, height) = decoded.image.dimensions();
+        log_ci_debug(ci_debug_enabled, "image", || {
+            format!("dimensions={width}x{height} color_type=RGB8")
+        });
+        let preprocessing = ocr_preprocessing_decision(
+            decoded.image.as_raw(),
+            width,
+            height,
+            config.preprocessing.as_ref(),
+            config.known_full_page_scan,
+        );
+        if is_jpeg
+            && native_image_budget::known_phase_peak(width, height, bytes.len(), preprocessing.as_deref())
+                .is_some_and(|peak| peak > limits.max_content_size as u64)
+        {
+            assessed_policy = Some(preprocessing.as_deref().cloned());
+            maximum_pixels = (u64::from(width) * u64::from(height)).saturating_sub(1);
+            // Release the old raster before asking the decoder for a smaller one. ~keep
+            drop(decoded);
+            continue;
+        }
+        if decoded.scale_denominator != 1
+            && let Some(preprocessing) = preprocessing.as_deref()
+        {
+            let dpi_config = ocr_dpi_config(preprocessing, images);
+            if dpi.is_none_or(|dpi| normalization_requires_resize(width, height, &dpi_config, dpi)) {
+                // No public setting gives the source DPI of a standalone image, so an unknown DPI
+                // leaves only the limit as the remedy. ~keep
+                let (reason, remedy) = dpi.map_or_else(
+                    || (", and its source DPI is unknown, so", String::new()),
+                    |dpi| (", and", format!(", or set target_dpi to {}", dpi.round())),
+                );
+                return Err(crate::XbergError::validation(format!(
+                    "The image exceeds security_limits.max_content_size ({} bytes) at its source resolution{reason} a \
                  reduced-size image cannot be resized to target_dpi {} within that limit. Raise \
                  security_limits.max_content_size{remedy}",
-                limits.max_content_size, dpi_config.target_dpi,
+                    limits.max_content_size, dpi_config.target_dpi,
+                )));
+            }
+        }
+        let prepared = prepare_decided_ocr_image(
+            decoded.image.into_raw(),
+            width,
+            height,
+            preprocessing.as_deref(),
+            images,
+            ci_debug_enabled,
+            dpi,
+        );
+        if is_jpeg
+            && native_image_budget::known_phase_peak(
+                prepared.width,
+                prepared.height,
+                bytes.len(),
+                prepared.preprocessing.as_ref(),
+            )
+            .is_some_and(|peak| peak > limits.max_content_size as u64)
+        {
+            return Err(crate::XbergError::validation(format!(
+                "JPEG preprocessing and native image workspace exceeds security_limits.max_content_size ({} bytes). \
+                 Raise security_limits.max_content_size or lower target_dpi",
+                limits.max_content_size,
             )));
         }
+        return Ok(prepared);
     }
-    Ok(prepare_decided_ocr_image(
-        decoded.image.into_raw(),
-        width,
-        height,
-        preprocessing.as_deref(),
-        images,
-        ci_debug_enabled,
-        dpi,
-    ))
+    Err(crate::XbergError::validation(format!(
+        "JPEG image workspace exceeds security_limits.max_content_size ({} bytes). Raise security_limits.max_content_size",
+        limits.max_content_size,
+    )))
 }
 
 /// The preprocessing that OCR applies to this raster, or `None` when the raster passes through
