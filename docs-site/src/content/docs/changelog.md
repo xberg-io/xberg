@@ -181,6 +181,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(swift): Lower the Swift package's macOS floor from 26 to 14.**
+  The bundled ONNX Runtime needs macOS 13.4, and nothing in xberg needs a later release; the manifests use `swift-tools-version: 6.0`.
+
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
 
