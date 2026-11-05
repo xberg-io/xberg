@@ -6,31 +6,47 @@ fn latin_pdf(embedded: bool, explicit_winansi: bool, glyph: u8) -> PdfDocument {
     let mut content = b"BT /F0 60 Tf 18 22 Td (".to_vec();
     content.push(glyph);
     content.extend(b") Tj ET");
-    let mut objects = vec![
-        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R           /Resources << /Font << /F0 5 0 R >> >> >>".to_vec(),
-        pdf_stream("", &content),
-    ];
-    if embedded {
-        objects.push(
-            format!(
-                "<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /Encoding /WinAnsiEncoding /FirstChar {glyph} /LastChar {glyph} /Widths [787] /FontDescriptor 6 0 R >>"
-            ).into_bytes(),
-        );
-        objects.push(
-            b"<< /Type /FontDescriptor /FontName /DejaVuSans /Flags 32 /FontBBox [-1021 -463 1793 1232]               /Ascent 928 /Descent -236 /CapHeight 729 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>".to_vec(),
-        );
-        let font = crate::fonts::bundled::DEJAVU_SANS;
-        objects.push(pdf_stream(&format!("/Length1 {} ", font.len()), font));
+    let font = if embedded {
+        embedded_dejavu("DejaVuSans", crate::fonts::bundled::DEJAVU_SANS, glyph)
     } else {
         let encoding = if explicit_winansi {
             " /Encoding /WinAnsiEncoding"
         } else {
             ""
         };
-        objects.push(format!("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica{encoding} >>").into_bytes());
-    }
+        vec![format!("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica{encoding} >>").into_bytes()]
+    };
+    page_pdf((100, 100), &content, font)
+}
+
+/// Objects 5 to 7 of [`page_pdf`]: a WinAnsi TrueType font that embeds `font`.
+fn embedded_dejavu(base_font: &str, font: &[u8], glyph: u8) -> Vec<Vec<u8>> {
+    vec![
+        format!(
+            "<< /Type /Font /Subtype /TrueType /BaseFont /{base_font} /Encoding /WinAnsiEncoding /FirstChar {glyph} /LastChar {glyph} /Widths [787] /FontDescriptor 6 0 R >>"
+        )
+        .into_bytes(),
+        format!(
+            "<< /Type /FontDescriptor /FontName /{base_font} /Flags 32 /FontBBox [-1021 -463 1793 1232] /Ascent 928 /Descent -236 /CapHeight 729 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>"
+        )
+        .into_bytes(),
+        pdf_stream(&format!("/Length1 {} ", font.len()), font),
+    ]
+}
+
+/// A one-page PDF whose content uses font `/F0`, the first of `font_objects`.
+/// The font objects are numbered from 5.
+fn page_pdf((width, height): (u32, u32), content: &[u8], font_objects: Vec<Vec<u8>>) -> PdfDocument {
+    let mut objects = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R /Resources << /Font << /F0 5 0 R >> >> >>"
+        )
+        .into_bytes(),
+        pdf_stream("", content),
+    ];
+    objects.extend(font_objects);
 
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
@@ -168,4 +184,344 @@ fn standard_latin_font_renders_a_real_counter_with_only_the_cjk_face_available()
         .is_some()
     );
     assert_eq!(glyph_runs_with_font_provider(false, true, db), LATIN_O);
+}
+
+fn render_without_system_fonts(doc: &PdfDocument) -> RenderedImage {
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer.text_rasterizer = TextRasterizer::with_fontdb(Arc::new(fontdb::Database::new()));
+    renderer.render_page(doc, 0).expect("render the synthetic page")
+}
+
+/// A 400 x 60 page that shows `run` once, at 24 pt, in the font `font`.
+fn run_pdf(font: &str, run: &[u8]) -> PdfDocument {
+    let mut content = b"BT /F0 24 Tf 10 20 Td (".to_vec();
+    content.extend(run);
+    content.extend(b") Tj ET");
+    page_pdf((400, 60), &content, vec![font.as_bytes().to_vec()])
+}
+
+/// The pixel columns in which two renders of the same page size differ.
+fn differing_columns(a: &RenderedImage, b: &RenderedImage) -> Vec<usize> {
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    let row_bytes = a.width as usize * 4;
+    (0..a.width as usize)
+        .filter(|&column| {
+            a.data
+                .chunks(row_bytes)
+                .zip(b.data.chunks(row_bytes))
+                .any(|(row_a, row_b)| row_a[column * 4..column * 4 + 4] != row_b[column * 4..column * 4 + 4])
+        })
+        .collect()
+}
+
+const HELVETICA_DIFFERENCES: &str = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [128 /ohungarumlaut 129 /Lslash 130 /minus 131 /uni4E2D] >> >>";
+
+/// #2347: one character outside WinAnsi does not blank its run, whether the
+/// bundled face has its glyph or not (the CJK ideograph). The character ends
+/// the run, so against the same run with a WinAnsi character in its place,
+/// every column before that last cell draws the same.
+#[test]
+fn a_character_outside_winansi_draws_with_the_rest_of_its_run() {
+    let standard = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+    let cases: [(&str, &[u8], &[u8], char); 5] = [
+        (standard, b"Hello world \\350", b"Hello world L", '\u{141}'),
+        (HELVETICA_DIFFERENCES, b"Hello world \\201", b"Hello world L", '\u{141}'),
+        (HELVETICA_DIFFERENCES, b"Hello world \\200", b"Hello world o", '\u{151}'),
+        (
+            HELVETICA_DIFFERENCES,
+            b"Hello world \\202",
+            b"Hello world +",
+            '\u{2212}',
+        ),
+        (
+            HELVETICA_DIFFERENCES,
+            b"Hello world \\203",
+            b"Hello world L",
+            '\u{4E2D}',
+        ),
+    ];
+    for (font, run, plain, outside) in cases {
+        let doc = run_pdf(font, run);
+        let text: String = doc
+            .extract_spans(0)
+            .unwrap()
+            .iter()
+            .map(|span| span.text.as_str())
+            .collect();
+        assert!(text.contains(outside), "fixture decodes to {text:?}");
+        let changed = differing_columns(
+            &render_without_system_fonts(&doc),
+            &render_without_system_fonts(&run_pdf(font, plain)),
+        );
+        let (Some(first), Some(last)) = (changed.first(), changed.last()) else {
+            panic!("{outside:?} draws the same as the WinAnsi character in its place");
+        };
+        assert!(
+            *first > 100 && last - first < 24,
+            "{outside:?} changes columns {first} to {last}, more than its own cell at the end of the run"
+        );
+    }
+}
+
+/// A bold font, by name or by its descriptor, draws with the bundled
+/// DejaVu Sans Bold: the same pixels as that face embedded in the PDF.
+#[test]
+fn a_bold_standard_font_draws_with_the_bundled_bold_face() {
+    let glyph = b'O';
+    let one_glyph = |font: Vec<Vec<u8>>| {
+        let content = format!("BT /F0 60 Tf 18 22 Td ({}) Tj ET", char::from(glyph));
+        render_without_system_fonts(&page_pdf((100, 100), content.as_bytes(), font))
+    };
+    let bold = one_glyph(embedded_dejavu(
+        "DejaVuSans-Bold",
+        crate::fonts::bundled::DEJAVU_SANS_BOLD,
+        glyph,
+    ));
+    let regular = one_glyph(embedded_dejavu("DejaVuSans", crate::fonts::bundled::DEJAVU_SANS, glyph));
+    assert!(bold.data != regular.data, "the two embedded faces must differ");
+
+    let by_name = one_glyph(vec![
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>".to_vec(),
+    ]);
+    assert!(by_name.data == bold.data, "Helvetica-Bold draws with DejaVu Sans Bold");
+
+    let by_descriptor = one_glyph(vec![
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R >>"
+            .to_vec(),
+        b"<< /Type /FontDescriptor /FontName /Helvetica /Flags 32 /FontWeight 700 /FontBBox [-166 -225 1000 931] /Ascent 718 /Descent -207 /CapHeight 718 /ItalicAngle 0 /StemV 88 >>".to_vec(),
+    ]);
+    assert!(
+        by_descriptor.data == bold.data,
+        "FontWeight 700 draws with DejaVu Sans Bold"
+    );
+    let by_flags = one_glyph(vec![
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R >>".to_vec(),
+        b"<< /Type /FontDescriptor /FontName /Helvetica /Flags 262176 /FontBBox [-166 -225 1000 931] /Ascent 718 /Descent -207 /CapHeight 718 /ItalicAngle 0 /StemV 88 >>".to_vec(),
+    ]);
+    assert!(by_flags.data == bold.data, "ForceBold draws with DejaVu Sans Bold");
+
+    let plain = one_glyph(vec![
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec(),
+    ]);
+    assert!(plain.data == regular.data, "Helvetica draws with DejaVu Sans");
+}
+
+fn render_with_database(doc: &PdfDocument, db: Arc<fontdb::Database>) -> RenderedImage {
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer.text_rasterizer = TextRasterizer::with_fontdb(db);
+    renderer
+        .render_page(doc, 0)
+        .expect("render through the supplied font provider")
+}
+
+fn provided_font_case() {
+    let mut db = fontdb::Database::new();
+    db.load_font_data(crate::fonts::bundled::DEJAVU_SANS_BOLD.to_vec());
+    let face = db
+        .query(&fontdb::Query {
+            families: &[fontdb::Family::Name("DejaVu Sans")],
+            weight: fontdb::Weight::NORMAL,
+            stretch: fontdb::Stretch::Normal,
+            style: fontdb::Style::Normal,
+        })
+        .expect("the provider supplies a face for this family");
+    assert_eq!(db.face(face).unwrap().weight, fontdb::Weight::BOLD);
+
+    let content = b"BT /F0 60 Tf 18 22 Td (O) Tj ET";
+    let provided = page_pdf(
+        (100, 100),
+        content,
+        vec![b"<< /Type /Font /Subtype /Type1 /BaseFont /DejaVu#20Sans /Encoding /WinAnsiEncoding >>".to_vec()],
+    );
+    let actual = render_with_database(&provided, Arc::new(db));
+    let bold = render_without_system_fonts(&page_pdf(
+        (100, 100),
+        content,
+        embedded_dejavu("DejaVuSans-Bold", crate::fonts::bundled::DEJAVU_SANS_BOLD, b'O'),
+    ));
+    let regular = render_without_system_fonts(&page_pdf(
+        (100, 100),
+        content,
+        embedded_dejavu("DejaVuSans", crate::fonts::bundled::DEJAVU_SANS, b'O'),
+    ));
+    assert_ne!(bold.data, regular.data);
+    assert_eq!(
+        actual.data, bold.data,
+        "the provider wins despite regular PDF weight metadata"
+    );
+}
+
+fn ink_count(image: &RenderedImage) -> usize {
+    image
+        .data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| pixel[0] < 128)
+        .count()
+}
+
+fn cjk_database(present: bool) -> Arc<fontdb::Database> {
+    let db = fontdb::Database::new();
+    #[cfg(feature = "cjk-render-fallback")]
+    let db = {
+        let mut db = db;
+        if present {
+            db.load_font_data(crate::fonts::form_fallback::render_cjk_fallback_bytes().to_vec());
+        }
+        db
+    };
+    #[cfg(not(feature = "cjk-render-fallback"))]
+    assert!(!present, "the CJK provider needs its explicit font feature");
+    assert_eq!(
+        db.query(&fontdb::Query {
+            families: &[fontdb::Family::Name("Droid Sans Fallback")],
+            weight: fontdb::Weight::NORMAL,
+            stretch: fontdb::Stretch::Normal,
+            style: fontdb::Style::Normal,
+        })
+        .is_some(),
+        present
+    );
+    Arc::new(db)
+}
+
+fn mixed_cjk_case(present: bool) {
+    let db = cjk_database(present);
+    let widths = "600 ".repeat(256);
+    let font = format!(
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 0 /LastChar 255 /Widths [{widths}] /Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [131 /uni4E2D] >> >>"
+    );
+    let full = run_pdf(&font, b"Hello world \\203");
+    let text: String = full
+        .extract_spans(0)
+        .unwrap()
+        .iter()
+        .map(|span| span.text.as_str())
+        .collect();
+    assert_eq!(text, "Hello world 中");
+    let actual = render_with_database(&full, db.clone());
+    let prefix = render_with_database(&run_pdf(&font, b"Hello world "), db.clone());
+    let changed = differing_columns(&actual, &prefix);
+    assert!(!changed.is_empty(), "a missing glyph must remain visible as a box");
+    assert!(
+        *changed.first().unwrap() > 170,
+        "only the final glyph changes: {changed:?}"
+    );
+    assert!(
+        ink_count(&actual) > ink_count(&prefix),
+        "the last glyph must not vanish"
+    );
+    assert_following_latin_position(&font, db);
+    if present {
+        #[cfg(feature = "cjk-render-fallback")]
+        assert_real_cjk_glyph(&actual);
+    }
+}
+
+fn assert_following_latin_position(font: &str, db: Arc<fontdb::Database>) {
+    let leading_cjk = render_with_database(&run_pdf(font, b"\\203 O"), db.clone());
+    let leading_latin = render_with_database(&run_pdf(font, b"X O"), db.clone());
+    assert!(
+        leading_cjk
+            .data
+            .as_chunks::<{ 400 * 4 }>()
+            .0
+            .iter()
+            .zip(leading_latin.data.as_chunks::<{ 400 * 4 }>().0.iter())
+            .all(|(actual, expected)| actual[38 * 4..] == expected[38 * 4..]),
+        "the CJK glyph must preserve the PDF-declared advance before following Latin text"
+    );
+}
+
+#[cfg(feature = "cjk-render-fallback")]
+fn assert_real_cjk_glyph(actual: &RenderedImage) {
+    let font = crate::fonts::form_fallback::render_cjk_fallback_bytes();
+    let mut objects = embedded_dejavu("DroidSansFallback", font, 131);
+    objects[0] = String::from_utf8(objects[0].clone())
+        .unwrap()
+        .replace(
+            "/Encoding /WinAnsiEncoding",
+            "/Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [131 /uni4E2D] >>",
+        )
+        .into_bytes();
+    let x = 10.0 + (0..12).fold(0.0_f32, |sum, _| sum + 600.0 * 24.0 / 1000.0);
+    let content = format!("BT /F0 24 Tf {x} 20 Td (\\203) Tj ET");
+    let expected = render_without_system_fonts(&page_pdf((400, 60), content.as_bytes(), objects));
+    let mask = |image: &RenderedImage| {
+        image
+            .data
+            .as_chunks::<{ 400 * 4 }>()
+            .0
+            .iter()
+            .flat_map(|row| {
+                row[(x.floor() as usize) * 4..]
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|pixel| pixel[0] < 128)
+            })
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        mask(actual) == mask(&expected),
+        "the supplied CJK glyph has the embedded face's outline and orientation"
+    );
+}
+
+#[test]
+fn mixed_latin_cjk_fallback_isolated() {
+    const CHILD: &str = "XBERG_LATIN_CJK_FALLBACK_CHILD_2510";
+    if let Ok(mode) = std::env::var(CHILD) {
+        assert!(matches!(mode.as_str(), "absent" | "present"));
+        mixed_cjk_case(mode == "present");
+        return;
+    }
+    let modes = if cfg!(feature = "cjk-render-fallback") {
+        vec!["absent", "present"]
+    } else {
+        vec!["absent"]
+    };
+    for mode in modes {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "rendering::page_renderer::latin_font_fallback_tests::mixed_latin_cjk_fallback_isolated",
+                "--nocapture",
+            ])
+            .env(CHILD, mode)
+            .output()
+            .expect("run isolated font-provider case");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("running 1 test"),
+            "child must collect exactly one case: {stdout}"
+        );
+        assert!(
+            output.status.success(),
+            "{mode}: {stdout} {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(stdout.contains("1 passed"), "{stdout}");
+    }
+}
+
+#[test]
+fn provided_font_is_used_before_the_bundled_regular_face() {
+    const CHILD: &str = "XBERG_PROVIDED_LATIN_FONT_CHILD_2510";
+    if std::env::var(CHILD).as_deref() == Ok("child") {
+        provided_font_case();
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap()).args([
+        "--exact", "rendering::page_renderer::latin_font_fallback_tests::provided_font_is_used_before_the_bundled_regular_face", "--nocapture",
+    ]).env(CHILD, "child").output().expect("run isolated provider case");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("running 1 test"), "{stdout}");
+    assert!(
+        output.status.success(),
+        "{stdout} {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("1 passed"), "{stdout}");
 }
