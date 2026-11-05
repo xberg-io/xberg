@@ -188,6 +188,12 @@ pub(crate) fn page_boundaries_required(config: &ExtractionConfig) -> bool {
         || config.ocr_scanned_page_quality_gate == Some(true)
 }
 
+#[derive(Clone, Copy, Default)]
+struct NativePageTextOptions {
+    margins: PageMarginFractions,
+    preserve_panel_rows: bool,
+}
+
 /// Extract text from a xberg_native_pdf document with optional page boundary tracking.
 ///
 /// Mirrors the signature and behaviour of `extract_text_from_pdf_document`.
@@ -209,14 +215,22 @@ fn extract_text_from_native_document(
 ) -> Result<PdfTextExtractionResult> {
     let needs_boundaries = extraction_config.is_some_and(page_boundaries_required);
     let cancel_token = extraction_config.and_then(|config| config.cancel_token.as_ref());
+    let options = NativePageTextOptions {
+        margins,
+        preserve_panel_rows: extraction_config.is_some_and(|config| {
+            config.output_format == crate::core::config::OutputFormat::Plain
+                && !config.force_ocr
+                && !config.pdf_options.as_ref().is_some_and(|pdf| pdf.reading_order)
+        }),
+    };
 
     if let Some(config) = page_config {
-        extract_text_with_tracking(doc, config, margins, cancel_token)
+        extract_text_with_tracking(doc, config, options, cancel_token)
     } else if needs_boundaries {
         let default_config = PageConfig::default();
-        extract_text_with_tracking(doc, &default_config, margins, cancel_token)
+        extract_text_with_tracking(doc, &default_config, options, cancel_token)
     } else {
-        extract_text_fast_path(doc, margins, cancel_token)
+        extract_text_fast_path(doc, options, cancel_token)
     }
 }
 
@@ -238,9 +252,9 @@ fn extract_one_page_text(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     excluded_layers: &std::collections::HashSet<String>,
-    margins: PageMarginFractions,
+    options: NativePageTextOptions,
 ) -> Result<NativePageText> {
-    let mut page = extract_page_text_column_aware(doc, page_index, excluded_layers, margins)?;
+    let mut page = extract_page_text_column_aware(doc, page_index, excluded_layers, options)?;
     if let std::borrow::Cow::Owned(cleaned) = apply_text_cleanup(&page.text) {
         page.text = cleaned;
     }
@@ -260,7 +274,7 @@ fn extract_one_page_text(
 /// (issue #1744).
 fn extract_all_page_texts(
     doc: &xberg_native_pdf::PdfDocument,
-    margins: PageMarginFractions,
+    options: NativePageTextOptions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<(Vec<String>, NativeTextEvidence)> {
     let page_count = doc
@@ -281,7 +295,7 @@ fn extract_all_page_texts(
         if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
             return Err(PdfError::Cancelled);
         }
-        let page = extract_one_page_text(doc, page_idx, &excluded_layers, margins)?;
+        let page = extract_one_page_text(doc, page_idx, &excluded_layers, options)?;
         texts.push(page.text);
         if let Some(collected) = evidence.provenance_counts.as_mut() {
             collected.push(
@@ -303,10 +317,10 @@ fn extract_all_page_texts(
 /// pages in order into a single string.
 fn extract_text_fast_path(
     doc: &NativeDocument,
-    margins: PageMarginFractions,
+    options: NativePageTextOptions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<PdfTextExtractionResult> {
-    let (page_texts, evidence) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
+    let (page_texts, evidence) = extract_all_page_texts(&doc.doc, options, cancel_token)?;
 
     let separators = page_texts.len().saturating_sub(1) * PAGE_SEPARATOR.len();
     let mut content = String::with_capacity(page_texts.iter().map(String::len).sum::<usize>() + separators);
@@ -329,10 +343,10 @@ fn extract_text_fast_path(
 fn extract_text_with_tracking(
     doc: &NativeDocument,
     config: &PageConfig,
-    margins: PageMarginFractions,
+    options: NativePageTextOptions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<PdfTextExtractionResult> {
-    let (page_texts, evidence) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
+    let (page_texts, evidence) = extract_all_page_texts(&doc.doc, options, cancel_token)?;
     let page_count = page_texts.len();
 
     let markers: Vec<String> = if config.insert_page_markers {
@@ -881,13 +895,17 @@ fn append_span_separator(
         } else {
             span_start - previous_end
         };
-        if visual_gap > span.font_size * 0.15 {
-            text.push(' ');
-        }
+        append_visual_word_gap(text, visual_gap, span.font_size);
     } else if baseline_gap > paragraph_gap_threshold {
         text.push_str("\n\n");
     } else {
         text.push('\n');
+    }
+}
+
+fn append_visual_word_gap(text: &mut String, gap: f32, font_size: f32) {
+    if gap > font_size * 0.15 {
+        text.push(' ');
     }
 }
 
@@ -2864,6 +2882,51 @@ fn producer_financial_row_order(spans: &[TextSpan], page_index: usize) -> Option
     Some((order, first_line.len()))
 }
 
+const MIN_PROSE_PANEL_ROWS: usize = 3;
+const PROSE_PANEL_START_TOLERANCE_EM: f32 = 0.5;
+
+pub(super) fn certified_stepped_panel_rows(spans: &[TextSpan]) -> Option<Vec<Vec<usize>>> {
+    let rows = xberg_native_pdf::pipeline::reading_order::xycut::certified_stepped_prose_rows(spans)?;
+    let first = &spans[rows[0][0]];
+    let tolerance = first.font_size * PROSE_PANEL_START_TOLERANCE_EM;
+    let left = rows
+        .iter()
+        .filter(|row| (spans[row[0]].bbox.x - first.bbox.x).abs() < tolerance)
+        .count();
+    (left >= MIN_PROSE_PANEL_ROWS && rows.len() - left >= MIN_PROSE_PANEL_ROWS).then_some(rows)
+}
+
+fn render_stepped_panel_text(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[TextSpan],
+) -> Option<String> {
+    let rows = certified_stepped_panel_rows(spans)?;
+    if !untagged_upright_page(doc, page_index)
+        || !doc
+            .get_annotations(page_index)
+            .is_ok_and(|annotations| annotations.is_empty())
+    {
+        return None;
+    }
+
+    let mut output = String::new();
+    for (index, row) in rows.into_iter().enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        let mut spans = row.into_iter().map(|index| &spans[index]);
+        let mut previous = spans.next()?;
+        output.push_str(&previous.text);
+        for span in spans {
+            append_visual_word_gap(&mut output, span.bbox.x - previous.bbox.right(), span.font_size);
+            output.push_str(&span.text);
+            previous = span;
+        }
+    }
+    Some(output)
+}
+
 pub(super) fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
     matches!(
         doc.get_page_rotation_status(page_index),
@@ -3032,12 +3095,13 @@ fn extract_page_text_column_aware(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     excluded_layers: &std::collections::HashSet<String>,
-    margins: PageMarginFractions,
+    options: NativePageTextOptions,
 ) -> Result<NativePageText> {
     let (page_bottom, page_top) = page_vertical_bounds(doc, page_index)?;
     let mut widgets = collect_widget_field_values(doc, page_index);
-    widgets
-        .retain(|(baseline_y, _)| baseline_is_inside_page_margins(*baseline_y as f32, page_bottom, page_top, margins));
+    widgets.retain(|(baseline_y, _)| {
+        baseline_is_inside_page_margins(*baseline_y as f32, page_bottom, page_top, options.margins)
+    });
 
     let mut page_text_data = super::guard_native_panic(
         || {
@@ -3059,7 +3123,7 @@ fn extract_page_text_column_aware(
         .then(|| crate::pdf::scan_detect::fabricated_char_counts(&page_text_data.spans));
 
     let span_count = page_text_data.spans.len();
-    retain_spans_inside_page_margins(&mut page_text_data.spans, page_bottom, page_top, margins);
+    retain_spans_inside_page_margins(&mut page_text_data.spans, page_bottom, page_top, options.margins);
 
     let complete_page = excluded_layers.is_empty() && widgets.is_empty() && span_count == page_text_data.spans.len();
     let financial_rows = if complete_page
@@ -3090,7 +3154,12 @@ fn extract_page_text_column_aware(
     };
 
     let rotation_spans = page_text_data.spans.iter().map(rotation_span).collect::<Vec<_>>();
-    let mut text = if let Some(repaired) = crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans) {
+    let panel_text = (options.preserve_panel_rows && complete_page && financial_rows.is_none())
+        .then(|| render_stepped_panel_text(doc, page_index, &page_text_data.spans))
+        .flatten();
+    let mut text = if let Some(repaired) = panel_text {
+        repaired
+    } else if let Some(repaired) = crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans) {
         repaired
     } else if is_fragmented_span_list(&page_text_data.spans) {
         tracing::debug!(
@@ -3245,7 +3314,7 @@ mod tests {
                 &document,
                 0,
                 &std::collections::HashSet::new(),
-                PageMarginFractions::default(),
+                NativePageTextOptions::default(),
             )
             .expect("RTL PDF fixture must extract")
             .text,
@@ -7374,9 +7443,13 @@ mod tests {
         let margins = PageMarginFractions::default();
 
         let excluded_layers = xberg_native_pdf::optional_content::compute_default_off_ocgs(&doc.doc);
+        let options = NativePageTextOptions {
+            margins,
+            ..Default::default()
+        };
         let sequential: Vec<String> = (0..page_count)
             .map(|page_idx| {
-                extract_one_page_text(&doc.doc, page_idx, &excluded_layers, margins)
+                extract_one_page_text(&doc.doc, page_idx, &excluded_layers, options)
                     .expect("page must extract")
                     .text
             })
@@ -7387,7 +7460,7 @@ mod tests {
         );
 
         let (collected, _) =
-            extract_all_page_texts(&doc.doc, margins, None).expect("collecting every page must succeed");
+            extract_all_page_texts(&doc.doc, options, None).expect("collecting every page must succeed");
         assert_eq!(
             collected, sequential,
             "the collected page texts must match a page-by-page run, page for page"
@@ -7442,7 +7515,7 @@ mod tests {
         let token = crate::cancellation::CancellationToken::new();
         token.cancel();
 
-        let error = extract_all_page_texts(&doc.doc, PageMarginFractions::default(), Some(&token))
+        let error = extract_all_page_texts(&doc.doc, NativePageTextOptions::default(), Some(&token))
             .expect_err("a cancelled extraction must not read any page text");
 
         assert!(matches!(error, PdfError::Cancelled));

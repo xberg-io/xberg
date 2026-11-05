@@ -17,8 +17,6 @@ pub(super) use literal_prime::{LiteralPrimeWitness, capture_literal_primes};
 const ROW_CANDIDATE_MAX_SHIFT_EM: f32 = 0.5;
 const MAX_CANDIDATE_EDGES: usize = 64;
 const NUMERIC_SUFFIX_OVERHANG_EM: f32 = 0.005;
-const MIN_PROSE_PANEL_ROWS: usize = 3;
-const PROSE_PANEL_START_TOLERANCE_EM: f32 = 0.5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SegmentKey {
@@ -518,21 +516,12 @@ pub(crate) fn extract_all_segment_carriers(
 }
 
 fn certified_prose_row_keys(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<Vec<SegmentKey>> {
-    let Some(rows) = xberg_native_pdf::pipeline::reading_order::xycut::certified_stepped_prose_rows(spans) else {
-        return Vec::new();
-    };
-    let first_x = spans[rows[0][0]].bbox.x;
-    let tolerance = spans[rows[0][0]].font_size * PROSE_PANEL_START_TOLERANCE_EM;
-    let left = rows
-        .iter()
-        .filter(|row| (spans[row[0]].bbox.x - first_x).abs() < tolerance)
-        .count();
-    if left < MIN_PROSE_PANEL_ROWS
-        || rows.len() - left < MIN_PROSE_PANEL_ROWS
-        || projected.iter().any(|segment| segment.assigned_role.is_some())
-    {
+    if projected.iter().any(|segment| segment.assigned_role.is_some()) {
         return Vec::new();
     }
+    let Some(rows) = super::super::text::certified_stepped_panel_rows(spans) else {
+        return Vec::new();
+    };
     rows.into_iter()
         .map(|row| {
             row.into_iter()
