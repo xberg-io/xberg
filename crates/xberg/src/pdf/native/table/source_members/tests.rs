@@ -83,7 +83,7 @@ fn fixture() -> (Vec<SegmentData>, TableSources, Table) {
         }),
         ..Default::default()
     };
-    let source = capture(&native, &table).unwrap();
+    let source = capture(&native, &table, None).unwrap();
     let mut segments = tick(350.686_37, 645.023_44, "6");
     segments.extend(tick(444.646_36, 663.616_94, "6"));
     segments.extend(tick(444.646_36, 633.722_05, "4"));
@@ -94,6 +94,7 @@ fn owned(segments: Vec<SegmentData>, source: &TableSources, table: Table) -> AHa
     project(&[segments], &[source], &[table])
         .remove(&0)
         .unwrap_or_default()
+        .contained
         .into_iter()
         .flatten()
         .collect()
@@ -342,7 +343,7 @@ fn reference_projection() -> (Vec<SegmentData>, AHashSet<SegmentKey>) {
     let keys = project(std::slice::from_ref(&segments), &sources, &emitted)
         .remove(&0)
         .expect("actual source membership proof");
-    (segments, keys.into_iter().flatten().collect())
+    (segments, keys.contained.into_iter().flatten().collect())
 }
 
 #[cfg(feature = "tokio-runtime")]
@@ -406,12 +407,12 @@ fn a_cell_run_outside_the_emitted_table_cannot_authorize_source_removal() {
     };
     let run_left = f64::from(native.rows[0].cells[0].spans[0].bbox.x);
     table.bounding_box.as_mut().unwrap().x0 = run_left;
-    let source = capture(&native, &table).expect("exact boundary contact qualifies");
+    let source = capture(&native, &table, None).expect("exact boundary contact qualifies");
     assert_eq!(owned(segments.clone(), &source, table.clone()).len(), 6);
 
     for left in [run_left + 1e-8, 456.0] {
         table.bounding_box.as_mut().unwrap().x0 = left;
-        let keys = capture(&native, &table)
+        let keys = capture(&native, &table, None)
             .map(|source| owned(segments.clone(), &source, table.clone()))
             .unwrap_or_default();
         assert!(keys.is_empty(), "source run crosses emitted table edge {left}");

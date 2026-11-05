@@ -45,3 +45,8 @@ blake3 = "bb6a39507686ac3737169c52b8e1d7c4ce2c71fe142d986b9a1d83b73da9c46f"
 number = 8
 status = "accepted"
 blake3 = "aa22e213c162ef00a18629983627f7a93c7f7d727a1374d7a74d478bb16a87c6"
+
+[adrs."adrs/0009-preserve-certified-painted-pdf-cells-when-text-has-decorative-paint.md"]
+number = 9
+status = "accepted"
+blake3 = "532d2a2120cfc797b323eb4d4cc8291010eba74b853345cee97c50362598127b"

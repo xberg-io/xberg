@@ -5,6 +5,8 @@
 
 use std::borrow::Cow;
 
+use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
+
 use super::lines::{
     crosses_visual_line_break, needs_space_between, raised_numeric_prefix_has_word_gap, segments_need_space,
 };
@@ -424,11 +426,12 @@ fn paragraph_is_covered_and_carried_by_table(
     inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO && table_carries_every_token(text, table_token_counts)
 }
 
-pub(super) fn recover_mixed_table_tick_paragraphs(
+pub(super) fn reconcile_certified_table_paragraphs(
     pages: &mut [Vec<PdfParagraph>],
     tables: &[crate::types::Table],
     members: &ahash::AHashMap<usize, crate::pdf::native::table::source_members::CertifiedRuns>,
     hyphens: &super::pipeline::HyphenWitnesses,
+    image_positions: &[(u32, u32)],
 ) {
     if members.is_empty() {
         return;
@@ -449,9 +452,10 @@ pub(super) fn recover_mixed_table_tick_paragraphs(
             continue;
         };
         let counts = table_coverage_token_counts(table);
-        let Some(singletons) = single_residual_members(page, runs) else {
+        let Some(seen) = surviving_source_members(page) else {
             continue;
         };
+        let singletons = single_residual_members(&seen, &runs.contained);
         let captions: ahash::AHashSet<_> = page.iter().filter_map(|paragraph| paragraph.caption_for).collect();
         for (index, paragraph) in page.iter_mut().enumerate() {
             if !captions.contains(&index)
@@ -461,14 +465,16 @@ pub(super) fn recover_mixed_table_tick_paragraphs(
                 *paragraph = repaired;
             }
         }
+        if captions.is_empty() && !image_positions.iter().any(|&(page, _)| page == number) {
+            let painted = single_residual_members(&seen, &runs.painted_overhangs);
+            if let Some(index) = isolated_painted_orphan(page, &painted, hyphens) {
+                page.remove(index);
+            }
+        }
     }
 }
 
-fn single_residual_members<'a>(
-    page: &[PdfParagraph],
-    runs: &'a crate::pdf::native::table::source_members::CertifiedRuns,
-) -> Option<ahash::AHashSet<&'a crate::pdf::native::hierarchy::script_evidence::SegmentKey>> {
-    use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
+fn surviving_source_members(page: &[PdfParagraph]) -> Option<ahash::AHashMap<SegmentKey, usize>> {
     use crate::pdf::native::table::source_members::{MAX_PAGE_SEGMENTS, MAX_PROOF_WORK};
 
     let mut seen = ahash::AHashMap::<SegmentKey, usize>::new();
@@ -485,16 +491,52 @@ fn single_residual_members<'a>(
         }
         *seen.entry(SegmentKey::from(segment)).or_default() += 1;
     }
-    Some(
-        runs.iter()
-            .filter(|run| run.len() > 1)
-            .filter_map(|run| {
-                let mut remaining = run.iter().filter(|key| seen.contains_key(*key));
-                let key = remaining.next()?;
-                (seen.get(key) == Some(&1) && remaining.next().is_none()).then_some(key)
-            })
-            .collect(),
-    )
+    Some(seen)
+}
+
+fn single_residual_members<'a>(
+    seen: &ahash::AHashMap<SegmentKey, usize>,
+    runs: &'a [Vec<SegmentKey>],
+) -> ahash::AHashSet<&'a SegmentKey> {
+    runs.iter()
+        .filter(|run| run.len() > 1)
+        .filter_map(|run| {
+            let mut remaining = run.iter().filter(|key| seen.contains_key(*key));
+            let key = remaining.next()?;
+            (seen.get(key) == Some(&1) && remaining.next().is_none()).then_some(key)
+        })
+        .collect()
+}
+
+fn isolated_painted_orphan(
+    page: &[PdfParagraph],
+    candidates: &ahash::AHashSet<&SegmentKey>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) -> Option<usize> {
+    if candidates.len() != 1 || page.iter().any(|p| p.is_list_item || p.layout_region_path.is_some()) {
+        return None;
+    }
+    page.iter().position(|paragraph| {
+        let [line] = paragraph.lines.as_slice() else {
+            return false;
+        };
+        let [glyph] = line.segments.as_slice() else {
+            return false;
+        };
+        if !plain_source_paragraph(paragraph)
+            || !is_digit(glyph)
+            || !candidates.contains(&SegmentKey::from(glyph))
+            || paragraph.block_bbox != Some((glyph.x, glyph.y, glyph.x + glyph.width, glyph.y + glyph.height))
+        {
+            return false;
+        }
+        let (text, annotations) = extract_text_and_annotations(paragraph, hyphens);
+        text == glyph.text && annotations.is_empty()
+    })
+}
+
+fn is_digit(glyph: &crate::pdf::hierarchy::SegmentData) -> bool {
+    matches!(glyph.text.as_bytes(), [digit] if digit.is_ascii_digit())
 }
 
 fn recover_mixed_table_tick(
@@ -505,38 +547,13 @@ fn recover_mixed_table_tick(
     singletons: &ahash::AHashSet<&crate::pdf::native::hierarchy::script_evidence::SegmentKey>,
     hyphens: &super::pipeline::HyphenWitnesses,
 ) -> Option<PdfParagraph> {
-    use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
-
     let [outside, owned] = paragraph.lines.as_slice() else {
         return None;
     };
     let [orphan] = owned.segments.as_slice() else {
         return None;
     };
-    if !paragraph.text.is_empty()
-        || paragraph.heading_level.is_some()
-        || paragraph.is_bold
-        || paragraph.is_list_item
-        || paragraph.is_code_block
-        || paragraph.is_formula
-        || paragraph.is_page_furniture
-        || paragraph.layout_class.is_some()
-        || paragraph.layout_region_path.is_some()
-        || paragraph.caption_for.is_some()
-        || !orphan.text.as_bytes().first().is_some_and(u8::is_ascii_digit)
-        || orphan.text.len() != 1
-        || !singletons.contains(&SegmentKey::from(orphan))
-        || !paragraph.lines.iter().all(|line| {
-            line.native_scripts.is_empty()
-                && line.segments.iter().all(|segment| {
-                    segment.is_unrotated()
-                        && segment.assigned_role.is_none()
-                        && !segment.is_bold
-                        && !segment.is_italic
-                        && !segment.is_monospace
-                })
-        })
-    {
+    if !plain_source_paragraph(paragraph) || !is_digit(orphan) || !singletons.contains(&SegmentKey::from(orphan)) {
         return None;
     }
     let (_, annotations) = extract_text_and_annotations(paragraph, hyphens);
@@ -564,6 +581,29 @@ fn recover_mixed_table_tick(
     }
     repaired.word_count = PdfParagraph::compute_word_count("", &repaired.lines);
     Some(repaired)
+}
+
+fn plain_source_paragraph(paragraph: &PdfParagraph) -> bool {
+    !(!paragraph.text.is_empty()
+        || paragraph.heading_level.is_some()
+        || paragraph.is_bold
+        || paragraph.is_list_item
+        || paragraph.is_code_block
+        || paragraph.is_formula
+        || paragraph.is_page_furniture
+        || paragraph.layout_class.is_some()
+        || paragraph.layout_region_path.is_some()
+        || paragraph.caption_for.is_some()
+        || !paragraph.lines.iter().all(|line| {
+            line.native_scripts.is_empty()
+                && line.segments.iter().all(|segment| {
+                    segment.is_unrotated()
+                        && segment.assigned_role.is_none()
+                        && !segment.is_bold
+                        && !segment.is_italic
+                        && !segment.is_monospace
+                })
+        }))
 }
 
 fn outside_tick_bounds(line: &super::types::PdfLine, table: BoundingBox) -> Option<(f32, f32, f32, f32)> {
@@ -1890,8 +1930,6 @@ mod tests {
 
     #[test]
     fn late_tick_recovery_requires_a_unique_orphan_and_plain_disjoint_line() {
-        use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
-
         let mut paragraph = make_paragraph_at("0.6", None, 20.0);
         paragraph.lines[0].segments[0].width = 10.0;
         paragraph.lines[0].segments[0].y = 20.0;
@@ -1918,10 +1956,15 @@ mod tests {
             }),
             ..Default::default()
         };
-        let evidence = ahash::AHashMap::from_iter([(0, vec![vec![orphan_key, sibling_key]])]);
         for case in 0..7 {
             let mut page = vec![paragraph.clone()];
-            let mut members = evidence.clone();
+            let mut members = ahash::AHashMap::from_iter([(
+                0,
+                crate::pdf::native::table::source_members::CertifiedRuns {
+                    contained: vec![vec![orphan_key.clone(), sibling_key.clone()]],
+                    painted_overhangs: Vec::new(),
+                },
+            )]);
             match case {
                 1 => members.clear(),
                 2 => page.push(make_paragraph_at("caption", None, 3.0)),
@@ -1934,17 +1977,61 @@ mod tests {
             if case == 2 {
                 page[1].caption_for = Some(0);
             }
-            recover_mixed_table_tick_paragraphs(
+            reconcile_certified_table_paragraphs(
                 std::slice::from_mut(&mut page),
                 std::slice::from_ref(&table),
                 &members,
                 &Default::default(),
+                &[],
             );
             assert_eq!(page[0].lines.len(), if case == 0 { 1 } else { 2 }, "case {case}");
             if case == 0 {
                 assert_eq!(page[0].block_bbox, Some((0.0, 20.0, 10.0, 32.0)));
                 assert_eq!(page[0].word_count, 1);
             }
+        }
+    }
+
+    #[test]
+    fn painted_orphan_suppression_only_targets_the_exact_plain_source_paragraph() {
+        let mut orphan = make_paragraph_at("0", None, 390.0);
+        let digit = &mut orphan.lines[0].segments[0];
+        digit.x = 33.0;
+        digit.y = 390.0;
+        digit.width = 5.0;
+        let key = SegmentKey::from(&*digit);
+        orphan.block_bbox = Some((33.0, 390.0, 38.0, 402.0));
+        let hyphens = Default::default();
+        let keys = ahash::AHashSet::from_iter([&key]);
+        assert_eq!(isolated_painted_orphan(&[orphan.clone()], &keys, &hyphens), Some(0));
+        assert_eq!(
+            isolated_painted_orphan(&[orphan.clone()], &Default::default(), &hyphens),
+            None
+        );
+
+        let mut outside = orphan.clone();
+        outside.lines[0].segments[0].x = 3.0;
+        outside.block_bbox = Some((3.0, 390.0, 8.0, 402.0));
+        assert_eq!(
+            isolated_painted_orphan(&[outside, orphan.clone()], &keys, &hyphens),
+            Some(1)
+        );
+
+        for mutate in [
+            (|p: &mut PdfParagraph| p.lines[0].segments[0].is_italic = true) as fn(&mut PdfParagraph),
+            |p| p.caption_for = Some(1),
+            |p| p.is_list_item = true,
+            |p| p.block_bbox = None,
+        ] {
+            let mut changed = orphan.clone();
+            mutate(&mut changed);
+            assert_eq!(isolated_painted_orphan(&[changed], &keys, &hyphens), None);
+        }
+        let sibling = SegmentKey::from(&plain_segment("10.1"));
+        let runs = vec![vec![sibling.clone(), key.clone()]];
+        for seen in [vec![], vec![(key.clone(), 2)], vec![(key, 1), (sibling, 1)]] {
+            let seen = ahash::AHashMap::from_iter(seen);
+            assert!(single_residual_members(&seen, &runs).is_empty());
         }
     }
 

@@ -4,6 +4,7 @@ use crate::pdf::hierarchy::SegmentData;
 use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
 use crate::types::{BoundingBox, Table};
 use xberg_native_pdf::layout::TextSpan;
+use xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership;
 use xberg_native_pdf::structure::table_extractor::{Table as NativeTable, TableCell};
 
 mod projection;
@@ -23,6 +24,7 @@ pub(crate) struct TableSources {
     markdown: String,
     identity_work: usize,
     members: Vec<Vec<Run>>,
+    paint_overhangs: Vec<Run>,
 }
 
 // ~keep Native cell spans may be synthetic; their sequence/offset fields cannot identify original source members.
@@ -205,33 +207,57 @@ fn cell_members(cell: &TableCell, text: &str) -> Option<Vec<Run>> {
         .collect()
 }
 
-pub(super) fn capture(native: &NativeTable, table: &Table) -> Option<TableSources> {
+fn paint_overhang(
+    cell: &TableCell,
+    text: &str,
+    ownership: &PaintedCellOwnership,
+    row: usize,
+    column: usize,
+) -> Option<Run> {
+    let [span] = cell.spans.as_slice() else { return None };
+    if cell.rowspan != 1 || cell.colspan != 1 || span.text != text || !ownership.certifies_word(row, column, span.bbox)
+    {
+        return None;
+    }
+    Run::capture(span)
+}
+
+pub(super) fn capture(
+    native: &NativeTable,
+    table: &Table,
+    ownership: Option<&PaintedCellOwnership>,
+) -> Option<TableSources> {
     let text_bytes = table_text_size(table)?;
     let identity_work = text_bytes + table.cells.len() + table.cells.iter().map(Vec::len).sum::<usize>();
     source_size(native)?;
     let bbox = table_bounds(table.bounding_box)?;
     let rows: Vec<Vec<_>> = native.rows.iter().map(|row| row.cells.iter().collect()).collect();
     let mut members = Vec::new();
+    let mut paint_overhangs = Vec::new();
     crate::extraction::grid_flatten::resolve_span_grid(
         &rows,
         |cell| cell.colspan,
         |cell| cell.rowspan,
         |row, col, cell| {
             let text = table.cells.get(row as usize).and_then(|row| row.get(col as usize));
-            if let Some(text) = text
-                && let Some(runs) = cell_members(cell, text)
-            {
+            let Some(text) = text else { return };
+            if let Some(runs) = cell_members(cell, text) {
                 members.push(runs);
+            } else if let Some(run) =
+                ownership.and_then(|ownership| paint_overhang(cell, text, ownership, row as usize, col as usize))
+            {
+                paint_overhangs.push(run);
             }
         },
     );
-    (!members.is_empty()).then(|| TableSources {
+    (!members.is_empty() || !paint_overhangs.is_empty()).then(|| TableSources {
         page: table.page_number,
         bbox,
         cells: table.cells.clone(),
         markdown: table.markdown.clone(),
         identity_work,
         members,
+        paint_overhangs,
     })
 }
 

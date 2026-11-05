@@ -4,11 +4,14 @@
 //! Uses X and Y coordinate clustering to identify table structure in PDFs that lack explicit
 //! table markup in the structure tree.
 
+use crate::geometry::Rect;
+
 use crate::layout::text_block::TextSpan;
 use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_for_cell};
 use std::collections::HashMap;
 
 mod fill_backgrounds;
+mod filled_cells;
 mod header_bands;
 mod source_headers;
 
@@ -4587,32 +4590,77 @@ fn tables_from_leftover_rules(
         .collect()
 }
 
+/// Exact numeric source words that a complete painted tiling owns across a row edge.
+#[doc(hidden)]
+pub struct PaintedCellOwnership {
+    columns: usize,
+    words: Vec<Option<Rect>>,
+}
+
+impl PaintedCellOwnership {
+    /// Check a single-cell word against the original accepted paint ownership.
+    pub fn certifies_word(&self, row: usize, column: usize, bounds: Rect) -> bool {
+        column < self.columns
+            && row
+                .checked_mul(self.columns)
+                .and_then(|index| index.checked_add(column))
+                .and_then(|index| self.words.get(index))
+                .is_some_and(|word| *word == Some(bounds))
+    }
+}
+
 /// Detect tables using vector lines and text spans (main entry point for hybrid detection).
 pub fn detect_tables_with_lines(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
+    detect_tables_with_line_ownership(spans, lines, config).0
+}
+
+pub(crate) fn detect_tables_with_line_ownership(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    config: &TableDetectionConfig,
+) -> (Vec<Table>, Option<PaintedCellOwnership>) {
     if !config.enabled || spans.is_empty() {
-        return Vec::new();
+        return (Vec::new(), None);
     }
-    match (config.horizontal_strategy, config.vertical_strategy) {
-        (TableStrategy::Text, TableStrategy::Text) => {
-            return detect_tables_from_spans_column_aware(spans, config);
+    if matches!(
+        (config.horizontal_strategy, config.vertical_strategy),
+        (TableStrategy::Text, TableStrategy::Text)
+    ) {
+        return (detect_tables_from_spans_column_aware(spans, config), None);
+    }
+    if let Some(mut prepared) = filled_cells::prepare(spans, lines, config) {
+        let candidate = detect_with_unmodified_paths(spans, &prepared.paths, config);
+        if prepared.accepts(&candidate) {
+            let ownership = prepared.overhang_ownership(&candidate[0]);
+            return (candidate, ownership);
         }
-        (TableStrategy::Lines, TableStrategy::Lines) => {
-            let mut tables = detect_tables_from_intersections(spans, lines, config);
-            if tables.is_empty() {
-                for cluster in group_lines_into_clusters(lines, config) {
-                    tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
-                }
+    }
+    (detect_with_unmodified_paths(spans, lines, config), None)
+}
+
+fn detect_with_unmodified_paths(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    config: &TableDetectionConfig,
+) -> Vec<Table> {
+    if matches!(
+        (config.horizontal_strategy, config.vertical_strategy),
+        (TableStrategy::Lines, TableStrategy::Lines)
+    ) {
+        let mut tables = detect_tables_from_intersections(spans, lines, config);
+        if tables.is_empty() {
+            for cluster in group_lines_into_clusters(lines, config) {
+                tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
             }
-            let mut tables: Vec<Table> = tables.into_iter().filter(is_valid_table).collect();
-            let leftover = tables_from_leftover_rules(spans, lines, &tables, config);
-            tables.extend(leftover);
-            return tables;
         }
-        _ => {}
+        tables.retain(is_valid_table);
+        let leftover = tables_from_leftover_rules(spans, lines, &tables, config);
+        tables.extend(leftover);
+        return tables;
     }
     // Both / hybrid strategy: try intersection-based first, then cluster, then H-rule bounded,
     // then text fallback. ~keep

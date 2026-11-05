@@ -4114,11 +4114,12 @@ fn build_document_structure_with_native(
         }
     }
 
-    super::assembly::recover_mixed_table_tick_paragraphs(
+    super::assembly::reconcile_certified_table_paragraphs(
         &mut all_page_paragraphs,
         &emitted_tables,
         &table_members,
         &witnesses.hyphens,
+        if inject_placeholders { image_positions } else { &[] },
     );
 
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
