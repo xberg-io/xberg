@@ -179,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Restore caller font bindings before resuming text after a Form.** (#2516)
+  Keep caller words when a Form shadows the selected font resource name, on cold and warm reads.
+
 - **(pdf): Keep stepped-baseline prose panels in source order and preserve their separate lines.** (#2323)
 
 - **(markdown): Retain rendered headings and scripts after canonical Unicode normalization.** (#2512)

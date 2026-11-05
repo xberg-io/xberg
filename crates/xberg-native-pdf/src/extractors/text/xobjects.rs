@@ -562,6 +562,9 @@ impl<'doc> TextExtractor<'doc> {
 
                 // Restore graphics state (implicit Q per ISO 32000-1 §8.10.1) ~keep
                 self.state_stack.restore();
+                if let Some(fonts) = saved_fonts {
+                    self.fonts = fonts;
+                }
                 let current_font = self
                     .state_stack
                     .current()
@@ -571,9 +574,6 @@ impl<'doc> TextExtractor<'doc> {
                     .cloned();
                 self.set_cached_current_font(current_font);
 
-                if let Some(fonts) = saved_fonts {
-                    self.fonts = fonts;
-                }
                 if let Some(res) = saved_resources {
                     self.resources = Some(res);
                 }

@@ -188,3 +188,91 @@ fn equal_nonempty_font_scopes_reuse_the_same_cached_form_spans() {
     assert_eq!(span_text(&doc, 1), "B");
     assert_eq!(cached_span_allocation(), first, "warm read must reuse the stored spans");
 }
+
+fn shadowed_selected_font_pdf(form_glyph: &str) -> Vec<u8> {
+    let page = |font| {
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R \
+         /Resources << /Font << /F1 {font} 0 R /F2 9 0 R >> /XObject << /Shared 6 0 R >> >> >>"
+        )
+    };
+    let stream = |content: &str| format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    let form_text = "BT /F1 13 Tf 20 110 Td (A) Tj /F2 12 Tf 40 0 Td (Own) Tj ET";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 200 200] \
+         /Resources << /Font << /F1 10 0 R /F2 9 0 R >> >> /Length {} >>\nstream\n{form_text}\nendstream",
+        form_text.len()
+    );
+    let font = |glyph| {
+        format!(
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+         /Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [65 /{glyph}] >> >>"
+        )
+    };
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        &[
+            (3, page(7).as_bytes()),
+            (4, page(8).as_bytes()),
+            (
+                5,
+                stream("BT /F1 12 Tf 20 160 Td (A) Tj ET /Shared Do BT 20 60 Td (A) Tj ET").as_bytes(),
+            ),
+            (6, form.as_bytes()),
+            (7, font("B").as_bytes()),
+            (8, font("C").as_bytes()),
+            (
+                9,
+                b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            ),
+            (10, font(form_glyph).as_bytes()),
+        ],
+    )
+}
+
+fn assert_shadowed_selected_font_survives_form(form_glyph: &str, expected: [&str; 2]) {
+    let pdf = shadowed_selected_font_pdf(form_glyph);
+    for page in 0..2 {
+        let doc = PdfDocument::from_bytes(pdf.clone()).expect("open cold caller context");
+        assert_eq!(span_text(&doc, page), expected[page], "cold page {page}");
+    }
+    for order in [[0, 1], [1, 0]] {
+        let doc = PdfDocument::from_bytes(pdf.clone()).expect("open shared Form contexts");
+        for page in order.into_iter().chain(order) {
+            doc.page_spans_cache.lock().unwrap().clear();
+            assert_eq!(span_text(&doc, page), expected[page], "page {page}, order {order:?}");
+        }
+    }
+}
+
+#[test]
+fn form_cache_misses_restore_the_callers_selected_shadowed_font() {
+    assert_shadowed_selected_font_survives_form("D", ["BDOwnB", "CDOwnC"]);
+}
+
+#[test]
+fn form_cache_misses_do_not_drop_caller_words_as_form_font_spaces() {
+    assert_shadowed_selected_font_survives_form("space", ["B OwnB", "C OwnC"]);
+}
+
+#[test]
+fn form_cache_misses_restore_the_callers_character_decoder() {
+    for (glyph, expected) in [("D", ["BDOwnB", "CDOwnC"]), ("space", ["BOwnB", "COwnC"])] {
+        let pdf = shadowed_selected_font_pdf(glyph);
+        for order in [[0, 1], [1, 0]] {
+            let doc = PdfDocument::from_bytes(pdf.clone()).expect("open shared character contexts");
+            for page in order.into_iter().chain(order) {
+                doc.page_chars_cache.lock().unwrap().clear();
+                let actual: String = doc
+                    .extract_chars(page)
+                    .expect("extract independent character layer")
+                    .iter()
+                    .map(|character| character.char)
+                    .filter(|character| !character.is_whitespace())
+                    .collect();
+                assert_eq!(actual, expected[page], "glyph {glyph}, page {page}, order {order:?}");
+            }
+        }
+    }
+}
