@@ -10,8 +10,11 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import windows_wheel_clean_host as clean
+from resolve_windows_wheel_artifact import select_prior_artifact
 from test_windows_wheel_closure import expected_error, pe, require_pwsh
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -74,6 +77,65 @@ class CleanHostGuards(unittest.TestCase):
         with expected_error(ValueError, "RECORD inventory"):
             clean.verify_wheel(self.wheel)
 
+    def baseline_with_files(self, files: list[str], modules: list[Path] | None = None) -> dict:
+        for name in files:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"inbox")
+        registry = SimpleNamespace(
+            KEY_WOW64_64KEY=1,
+            KEY_WOW64_32KEY=2,
+            HKEY_LOCAL_MACHINE=3,
+            KEY_READ=4,
+            OpenKey=Mock(side_effect=FileNotFoundError),
+        )
+        missing = OSError("missing")
+        missing.winerror = 126
+        with (
+            patch.dict(sys.modules, {"winreg": registry}),
+            patch.dict(clean.os.environ, {"SYSTEMROOT": str(self.root / "Windows")}),
+            patch.object(clean.ctypes, "WinDLL", create=True, side_effect=missing) as load,
+            patch.object(clean, "loaded_modules", return_value=modules or []),
+        ):
+            result = clean.baseline(self.root / "python", ["xberg/msvcp140.dll"])
+        assert registry.OpenKey.call_count == 6
+        load.assert_called_once_with("msvcp140.dll")
+        return result
+
+    def test_exact_inbox_clr_sidecar_is_allowed_in_system_directories(self) -> None:
+        result = self.baseline_with_files(
+            [
+                "Windows/System32/msvcp140_clr0400.dll",
+                "Windows/SysWOW64/MSVCP140_CLR0400.dll",
+            ]
+        )
+        assert result["global_files_absent"] is True
+        assert result["msvcp_load_failures"] == ["msvcp140.dll"]
+        assert result["inbox_clr_files"] == [
+            "SysWOW64/MSVCP140_CLR0400.dll",
+            "System32/msvcp140_clr0400.dll",
+        ]
+
+    def test_inbox_allowance_does_not_cover_other_runtime_files_or_paths(self) -> None:
+        for name in (
+            "Windows/System32/msvcp140.dll",
+            "Windows/SysWOW64/vcruntime140.dll",
+            "Windows/System32/msvcp140_clr0401.dll",
+            "Windows/System32/subdir/msvcp140_clr0400.dll",
+            "python/msvcp140_clr0400.dll",
+        ):
+            with self.subTest(name=name):
+                try:
+                    with expected_error(ValueError, "baseline contains VC runtime"):
+                        self.baseline_with_files([name])
+                finally:
+                    (self.root / name).unlink()
+
+    def test_inbox_allowance_does_not_cover_loaded_modules(self) -> None:
+        name = "Windows/System32/msvcp140_clr0400.dll"
+        with expected_error(ValueError, "outside wheel"):
+            self.baseline_with_files([name], [self.root / name])
+
     def test_global_or_python_msvcp_module_is_rejected(self) -> None:
         for location in (self.root / "Windows/System32", self.root / "python"):
             with self.subTest(location=location), expected_error(ValueError, "outside wheel"):
@@ -119,6 +181,8 @@ class CleanHostGuards(unittest.TestCase):
                 str(self.root),
                 "-SourceSha",
                 "0" * 40,
+                "-WheelSourceSha",
+                "1" * 40,
                 "-OutputDirectory",
                 str(output),
             ],
@@ -164,6 +228,58 @@ class CleanHostGuards(unittest.TestCase):
         assert "Expected exactly one Windows x64 wheel" in outcome.stderr
         assert not output.exists()
 
+    def test_prior_artifact_requires_exact_producer_and_successful_upload(self) -> None:
+        source = "a" * 40
+        identity = {"id": 10, "head_branch": "main", "head_sha": source}
+        run = {
+            **identity,
+            "event": "workflow_dispatch",
+            "status": "completed",
+            "path": ".github/workflows/ci-python-wheel-smoke.yaml",
+            "repository": {"id": 42, "full_name": "xberg-io/xberg"},
+            "head_repository": {"id": 42, "full_name": "xberg-io/xberg"},
+        }
+        upload = {
+            "name": "Upload Windows wheel for isolated qualification",
+            "conclusion": "success",
+            "started_at": "2026-11-05T21:12:34Z",
+            "completed_at": "2026-11-05T21:12:37Z",
+        }
+        job = {"name": "Build + smoke-test Python wheel (windows-2022)", "conclusion": "success", "steps": [upload]}
+        artifact = {
+            "id": 20,
+            "name": f"clean-host-windows-wheel-{source}",
+            "digest": "sha256:" + "b" * 64,
+            "expired": False,
+            "created_at": upload["completed_at"],
+            "workflow_run": {**identity, "repository_id": 42, "head_repository_id": 42},
+        }
+        assert select_prior_artifact("xberg-io/xberg", 10, run, [job], [artifact]) == artifact
+        for wrong_run in (
+            {"head_branch": "other"},
+            {"head_repository": {"id": 43, "full_name": "fork/xberg"}},
+            {"path": ".github/workflows/other.yaml"},
+            {"status": "in_progress"},
+        ):
+            with self.subTest(wrong_run=wrong_run), expected_error(ValueError, "producer run"):
+                select_prior_artifact("xberg-io/xberg", 10, {**run, **wrong_run}, [job], [artifact])
+        with expected_error(ValueError, "successful Windows upload"):
+            select_prior_artifact("xberg-io/xberg", 10, run, [{**job, "conclusion": "failure"}], [artifact])
+        for wrong_artifact in (
+            {"expired": True},
+            {"digest": None},
+            {"name": "unrelated"},
+            {"workflow_run": {**artifact["workflow_run"], "head_sha": "c" * 40}},
+        ):
+            with self.subTest(wrong_artifact=wrong_artifact), expected_error(ValueError, "artifact provenance"):
+                select_prior_artifact("xberg-io/xberg", 10, run, [job], [{**artifact, **wrong_artifact}])
+        with expected_error(ValueError, "artifact provenance"):
+            select_prior_artifact("xberg-io/xberg", 10, run, [job], [artifact, artifact])
+        with expected_error(ValueError, "successful Windows upload"):
+            select_prior_artifact(
+                "xberg-io/xberg", 10, run, [job], [{**artifact, "created_at": "2026-11-05T21:12:33Z"}]
+            )
+
     def test_workflow_binds_main_and_collects_two_real_cases(self) -> None:
         workflow = (ROOT / ".github/workflows/ci-python-wheel-smoke.yaml").read_text()
         assert "windows-wheel-clean-host:" in workflow
@@ -174,6 +290,19 @@ class CleanHostGuards(unittest.TestCase):
         assert "foreach ($case in @('intact', 'missing-runtime'))" in driver
         assert "--isolation=hyperv" not in driver
         assert "C:\\Windows:" not in driver
+
+    def test_reuse_skips_build_and_verifies_distinct_producer_and_checkout(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci-python-wheel-smoke.yaml").read_text()
+        assert "inputs.windows_producer_run_id == ''" in workflow.split("windows-wheel-clean-host:", 1)[0]
+        assert "needs.python-wheel-smoke.result == 'skipped'" in workflow
+        assert "artifact-ids: ${{ steps.prior-wheel.outputs.artifact_id }}" in workflow
+        assert "run-id: ${{ inputs.windows_producer_run_id }}" in workflow
+        assert "digest-mismatch: error" in workflow
+        assert '-SourceSha "$env:GITHUB_SHA" -WheelSourceSha "$env:WHEEL_SOURCE_SHA"' in workflow
+        driver = (ROOT / "scripts/ci/qualify-windows-wheel-clean-host.ps1").read_text()
+        assert "$actual -ne $SourceSha" in driver
+        assert "source_sha = $WheelSourceSha" in driver
+        assert "verifier_sha = $actual" in driver
 
     def test_dispatch_can_select_windows_without_changing_the_full_default(self) -> None:
         workflow = (ROOT / ".github/workflows/ci-python-wheel-smoke.yaml").read_text()

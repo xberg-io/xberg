@@ -20,6 +20,9 @@ on:
         options:
           - all
           - windows
+      windows_producer_run_id:
+        description: Completed main smoke run whose Windows wheel to reuse (Windows only)
+        type: string
 
 concurrency:
   group: ci-python-wheel-smoke-${{ github.ref }}
@@ -35,7 +38,7 @@ jobs:
   python-wheel-smoke:
     name: Build + smoke-test Python wheel (${{ matrix.os }})
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]') }}
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]') && inputs.windows_producer_run_id == '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -180,7 +183,13 @@ jobs:
   windows-wheel-clean-host:
     name: Qualify Windows wheel without global VC runtime
     needs: python-wheel-smoke
-    if: ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' }}
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' &&
+          (needs.python-wheel-smoke.result == 'success' ||
+           (needs.python-wheel-smoke.result == 'skipped' && inputs.windows_producer_run_id != '')) }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
@@ -191,13 +200,40 @@ jobs:
       - uses: xberg-io/actions/setup-mise@v1
         with:
           install-args: "python"
+      - name: Resolve prior Windows wheel
+        id: prior-wheel
+        if: inputs.windows_producer_run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WHEEL_PRODUCER_RUN_ID: ${{ inputs.windows_producer_run_id }}
+          WHEEL_PLATFORM: ${{ inputs.platform }}
+        run: mise exec -- python scripts/ci/resolve_windows_wheel_artifact.py
       - uses: actions/download-artifact@v8
+        if: inputs.windows_producer_run_id != ''
+        with:
+          artifact-ids: ${{ steps.prior-wheel.outputs.artifact_id }}
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.windows_producer_run_id }}
+          digest-mismatch: error
+          path: wheelhouse
+      - uses: actions/download-artifact@v8
+        if: inputs.windows_producer_run_id == ''
         with:
           name: clean-host-windows-wheel-${{ github.sha }}
           path: wheelhouse
       - name: Check qualification guards
         run: mise run python:wheel:clean-host:test
+      - name: Qualify isolated Windows userspace (prior wheel)
+        if: inputs.windows_producer_run_id != ''
+        shell: pwsh
+        env:
+          WHEEL_SOURCE_SHA: ${{ steps.prior-wheel.outputs.source_sha }}
+        run: |
+          mise exec -- pwsh -NoProfile -File scripts/ci/qualify-windows-wheel-clean-host.ps1 -WheelDirectory wheelhouse -SourceSha "$env:GITHUB_SHA" -WheelSourceSha "$env:WHEEL_SOURCE_SHA" -OutputDirectory clean-host-receipts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item windows-wheel-artifact.json clean-host-receipts/
       - name: Qualify isolated Windows userspace
+        if: inputs.windows_producer_run_id == ''
         run: mise run python:wheel:clean-host wheelhouse "${{ github.sha }}" clean-host-receipts
       - name: Collect clean-userspace evidence
         if: always()

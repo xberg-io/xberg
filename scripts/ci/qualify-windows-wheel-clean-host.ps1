@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$WheelDirectory,
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceSha,
-    [Parameter(Mandatory = $true)][string]$OutputDirectory
+    [Parameter(Mandatory = $true)][string]$OutputDirectory,
+    [ValidatePattern('^[0-9a-f]{40}$')][string]$WheelSourceSha = $SourceSha
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -61,7 +62,8 @@ foreach ($case in @('intact', 'missing-runtime')) {
 }
 if ($cases.Count -ne 2 -or $cases[0].extractions -ne 1 -or $cases[1].extractions -ne 0 -or $cases[1].expected_native_failures -ne 1) { throw 'Incomplete qualification case/extraction counts' }
 @{
-    source_sha = $SourceSha
+    source_sha = $WheelSourceSha
+    verifier_sha = $actual
     wheel_sha256 = (Get-FileHash $wheels[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     image = $image
     image_id = $imageInfo.Id

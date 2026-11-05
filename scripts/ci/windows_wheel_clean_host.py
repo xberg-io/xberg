@@ -147,14 +147,20 @@ def baseline(python_root: Path, msvcp: list[str]) -> dict:
             except FileNotFoundError:
                 pass
     names = sorted({PurePosixPath(name).name for name in msvcp})
+    inbox_clr_files = []
     for directory in (
         Path(os.environ["SYSTEMROOT"]) / "System32",
         Path(os.environ["SYSTEMROOT"]) / "SysWOW64",
         python_root,
     ):
         for path in directory.rglob("*.dll"):
-            if path.name.lower().startswith(("msvcp140", "vcruntime140", "concrt140", "vcomp140")):
-                if directory == python_root and path.name.lower().startswith("vcruntime"):
+            name = path.name.lower()
+            if name.startswith(("msvcp140", "vcruntime140", "concrt140", "vcomp140")):
+                if directory == python_root and name.startswith("vcruntime"):
+                    continue
+                # ~keep The pinned Server Core image ships this CLR sidecar; loader checks still apply.
+                if directory != python_root and path.parent == directory and name == "msvcp140_clr0400.dll":
+                    inbox_clr_files.append(f"{directory.name}/{path.name}")
                     continue
                 raise ValueError(f"baseline contains VC runtime: {path}")
     for name in names:
@@ -166,7 +172,12 @@ def baseline(python_root: Path, msvcp: list[str]) -> dict:
         else:
             raise ValueError(f"baseline unexpectedly loads {name}")
     verify_modules(loaded_modules(), python_root / "absent-wheel", python_root)
-    return {"registry_absent": True, "global_files_absent": True, "msvcp_load_failures": names}
+    return {
+        "registry_absent": True,
+        "global_files_absent": True,
+        "inbox_clr_files": sorted(inbox_clr_files),
+        "msvcp_load_failures": names,
+    }
 
 
 def require_missing_dependency(outcome: subprocess.CompletedProcess[str], dependency: str) -> None:
