@@ -1,5 +1,7 @@
 use crate::types::ImagePreprocessingConfig;
 
+mod binarized;
+
 const RGB_CHANNELS: u64 = 3;
 const PIX_WORD_BITS: u64 = 32;
 const PIX_WORD_BYTES: u64 = 4;
@@ -15,7 +17,7 @@ pub(super) fn known_phase_peak(
     encoded_bytes: usize,
     preprocessing: Option<&ImagePreprocessingConfig>,
 ) -> crate::Result<Option<u64>> {
-    if preprocessing.is_some_and(|options| !no_binarization_contrast(options)) {
+    if preprocessing.is_some_and(|options| !no_binarization_contrast(options) && !plain_otsu(options)) {
         return Ok(None);
     }
     calculate_phase_peak(width, height, encoded_bytes, preprocessing)
@@ -47,6 +49,7 @@ fn calculate_phase_peak(
                 .checked_mul(8)?;
             sharpening.checked_add(maps)?.max(raw_native)
         }
+        Some(options) if plain_otsu(options) => binarized::plain_otsu_peak(width, height, options.deskew)?,
         Some(_) => return None,
     };
     let rgb = u64::from(width)
@@ -57,6 +60,14 @@ fn calculate_phase_peak(
     native
         .checked_add(rgb)?
         .checked_add((encoded_bytes as u64).checked_mul(2)?)
+}
+
+fn plain_otsu(options: &ImagePreprocessingConfig) -> bool {
+    options.binarization_method.eq_ignore_ascii_case("otsu")
+        && !options.auto_rotate
+        && !options.denoise
+        && !options.contrast_enhance
+        && !options.normalize_shaded_rows
 }
 
 fn no_binarization_contrast(options: &ImagePreprocessingConfig) -> bool {
@@ -145,11 +156,37 @@ mod tests {
     #[test]
     fn unsupported_policy_and_arithmetic_overflow_are_distinct() {
         assert!(
-            known_phase_peak(1, 1, 0, Some(&ImagePreprocessingConfig::default()))
-                .expect("unsupported policy")
-                .is_none()
+            known_phase_peak(
+                1,
+                1,
+                0,
+                Some(&ImagePreprocessingConfig {
+                    denoise: true,
+                    ..Default::default()
+                })
+            )
+            .expect("unsupported policy")
+            .is_none()
         );
         assert!(known_phase_peak(u32::MAX, u32::MAX, 0, None).is_err());
+    }
+
+    #[test]
+    fn default_otsu_phase_retains_its_40_mib_result_but_exceeds_28_mib() {
+        let options = ImagePreprocessingConfig::default();
+        let peak = known_phase_peak(2048, 2048, 655360, Some(&options))
+            .expect("addressable default phase")
+            .expect("global Otsu and default deskew are modelled");
+        assert!(peak > 28 * 1024 * 1024);
+        assert!(peak <= 40 * 1024 * 1024);
+        let inverted = ImagePreprocessingConfig {
+            invert_colors: true,
+            ..options
+        };
+        assert_eq!(
+            known_phase_peak(2048, 2048, 655360, Some(&inverted)).unwrap(),
+            Some(peak)
+        );
     }
 
     #[test]

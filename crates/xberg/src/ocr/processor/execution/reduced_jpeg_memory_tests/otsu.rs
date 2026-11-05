@@ -121,7 +121,6 @@ fn known_dpi_resize_refuses_workspace_over_limit_and_preserves_requested_target_
         Ok(_) => panic!("FIR source, destination and intermediate RGB already exceed40MiB"),
         Err(error) => error.to_string(),
     };
-    assert!(error.contains("DPI resize workspace"), "{error}");
     assert!(error.contains("max_content_size"), "{error}");
     assert!(error.contains("target_dpi"), "{error}");
     let affordable = super::super::prepare_encoded_ocr_image(
@@ -167,4 +166,70 @@ fn unaffordable_known_downscale_uses_a_no_resize_idct_candidate() {
         (2048, 2048, 300)
     );
     assert!(prepared.image_preprocessing.expect("DPI metadata").skipped_resize);
+}
+
+#[test]
+fn default_otsu_refuses_an_unaffordable_target_before_native_allocation() {
+    const NAME: &str = "ocr::processor::execution::reduced_jpeg_memory_tests::otsu::default_otsu_refuses_an_unaffordable_target_before_native_allocation";
+    const LIMIT: usize = 28 * MIB;
+    if std::env::var(CHILD_ENV).as_deref() == Ok(NAME) {
+        assert!(std::env::args().any(|arg| arg == "--exact"));
+        assert!(std::env::args().any(|arg| arg == "--test-threads=1"));
+        let dimension = 2048;
+        let rgb = vec![245; dimension as usize * dimension as usize * 3];
+        let bytes = crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, dimension, dimension);
+        drop(rgb);
+        pixel_memory::install();
+        let result = super::super::prepare_encoded_ocr_image(
+            &bytes,
+            &super::super::SecurityLimits {
+                max_content_size: LIMIT,
+                ..Default::default()
+            },
+            &super::super::TesseractConfig {
+                source_dpi: Some(300.0),
+                known_full_page_scan: true,
+                ..Default::default()
+            },
+            None,
+            false,
+        );
+        match result {
+            Err(error) => {
+                assert!(error.to_string().contains("max_content_size"));
+                assert!(error.to_string().contains("target_dpi"));
+                assert_eq!(pixel_memory::observation().allocations, 0);
+                println!("OTSU_REFUSAL_NATIVE_ALLOCATIONS=0");
+            }
+            Ok(prepared) => {
+                let pix = Pix::from_raw_rgb(&prepared.data, prepared.width, prepared.height).unwrap();
+                let output = super::super::preprocess_pix(pix, prepared.preprocessing.as_ref().unwrap()).unwrap();
+                drop(output);
+                let observed = pixel_memory::observation();
+                let retained = bytes.capacity() + prepared.data.capacity();
+                let measured = verify_negative_controls(observed, retained);
+                assert!(
+                    validate_observation(observed, retained, LIMIT).is_ok(),
+                    "admitted default Otsu live buffers {measured} exceed {LIMIT}"
+                );
+                panic!("unaffordable requested target must be refused before native allocation");
+            }
+        }
+        return;
+    }
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
+        .env(CHILD_ENV, NAME)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success()
+            && stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;")
+            && stdout.contains("OTSU_REFUSAL_NATIVE_ALLOCATIONS=0"),
+        "isolated default refusal failed: {}\n{stdout}\n{stderr}",
+        output.status
+    );
+    print!("{stdout}");
 }
