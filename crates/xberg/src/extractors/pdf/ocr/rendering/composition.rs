@@ -17,10 +17,15 @@ pub(in crate::extractors::pdf::ocr) fn can_project_stored_jpeg_page(
     for handle in &handles {
         context.check_cancelled()?;
         context.budget.step()?;
-        stored |= handle.plain_stored_jpeg_for_ocr_recovery().is_some();
+        if matches!(handle.filter_chain.last(), Some(xberg_native_pdf::PdfFilter::DCTDecode)) {
+            if handle.plain_stored_jpeg_for_ocr_recovery().is_none() {
+                return Ok(false);
+            }
+            stored = true;
+        }
     }
-    // Other codecs keep their existing recovery behavior. A plain stored JPEG is
-    // a complete page projection only when no other visible content is omitted.
+    // Other codecs keep their existing recovery behavior. A JPEG is a complete
+    // page projection only when its plain payload omits no masks or other content.
     // Recovery does not map structured image geometry through arbitrary page CTMs,
     // so only a whole-page upright image is certified here. ~keep
     if !stored {

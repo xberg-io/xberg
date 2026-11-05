@@ -151,7 +151,7 @@ async fn raw_jpeg_collection_preserves_wrapped_jpeg_legacy_inputs() {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn whole_document_jpeg_backing_preserves_encrypted_jpeg_legacy_recovery() {
+async fn raw_jpeg_collection_preserves_encryption_without_claiming_complete_projection() {
     let (_guard, calls) = register_backend();
     let source = embedded_image_pdf();
     let plain_doc = xberg_native_pdf::PdfDocument::from_bytes(source.clone()).unwrap();
@@ -178,14 +178,25 @@ async fn whole_document_jpeg_backing_preserves_encrypted_jpeg_legacy_recovery() 
         doc.page_image_handles(0).unwrap()[0].raw_compressed_bytes().unwrap(),
         plain
     );
-    let recovered = recover_pipeline_document_from_image_xobjects(
-        Some(&encrypted),
+    assert!(
+        recover_pipeline_document_from_image_xobjects(
+            Some(&encrypted),
+            &ExtractionConfig::default(),
+            &OcrConfig::default(),
+            BACKEND,
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let recovered = super::super::raw_collection_test_support::whole(
+        &doc,
         &ExtractionConfig::default(),
         &OcrConfig::default(),
         BACKEND,
     )
     .await
-    .unwrap()
     .unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(recovered.images.len(), 1);

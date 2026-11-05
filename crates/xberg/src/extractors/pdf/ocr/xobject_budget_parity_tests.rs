@@ -203,14 +203,20 @@ async fn legacy_small_raw_image_recovery_is_not_lost_by_dct_budget_parity() {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn legacy_outer_filtered_dct_recovery_is_not_lost_by_direct_stream_admission() {
+async fn raw_outer_filtered_dct_transport_does_not_claim_a_complete_projection() {
     let f = support::filtered_fixture();
     let (_guard, records) = observer(Reply::Text);
     let (cfg, ocr) = config(16_384, 16_384);
-    let out = recover_pipeline_document_from_image_xobjects(Some(&f.bytes), &cfg, &ocr, BACKEND)
+    assert!(
+        recover_pipeline_document_from_image_xobjects(Some(&f.bytes), &cfg, &ocr, BACKEND)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(records.lock().unwrap().is_empty());
+    let out = super::raw_collection_test_support::whole(&f.doc, &cfg, &ocr, BACKEND)
         .await
-        .unwrap()
-        .expect("existing outer-filtered JPEG remains recoverable");
+        .expect("existing outer-filtered JPEG raw transport remains recoverable");
     assert_eq!(out.text, TEXT);
     let calls = records.lock().unwrap();
     assert_eq!(calls.len(), 1);

@@ -141,3 +141,47 @@ async fn a_public_partial_recovery_exposes_the_unrecovered_page_record() {
     assert_eq!(failures.len(), 1);
     assert_eq!((failures[0].page, failures[0].recovered), (2, false));
 }
+
+#[tokio::test]
+#[serial_test::serial]
+async fn complete_page_adoption_never_discards_a_jpeg_mask() {
+    let (_guard, calls) = observer(Reply::Text);
+    let (config, ocr) = config(32 * 1024, 32 * 1024);
+    let mut pdf = Document::load_mem(&complete_fixture().bytes).unwrap();
+    let mask = pdf.add_object(Stream::new(
+        dictionary! {
+            "Type"=>"XObject","Subtype"=>"Image","Width"=>32,"Height"=>24,
+            "ColorSpace"=>"DeviceGray","BitsPerComponent"=>8
+        },
+        vec![0; 32 * 24],
+    ));
+    let mut changed = 0;
+    for (_, object) in pdf.objects.iter_mut() {
+        if let lopdf::Object::Stream(stream) = object
+            && stream
+                .dict
+                .get(b"Filter")
+                .is_ok_and(|value| value.as_name().is_ok_and(|name| name == b"DCTDecode"))
+        {
+            stream.dict.set("SMask", mask);
+            changed += 1;
+        }
+    }
+    assert_eq!(changed, 1);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let doc = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
+    assert!(
+        recover_pipeline_page_from_image_xobjects(&doc, 0, &config, &ocr, BACKEND)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        recover_pipeline_document_from_image_xobjects(Some(&bytes), &config, &ocr, BACKEND)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}

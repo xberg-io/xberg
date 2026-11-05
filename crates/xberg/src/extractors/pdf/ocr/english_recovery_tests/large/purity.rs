@@ -102,15 +102,20 @@ async fn public_text(bytes: &[u8], config: &crate::core::config::ExtractionConfi
     Ok(result.results.into_iter().next().unwrap().content)
 }
 
-fn jpeg_masked_pdf(bytes: &[u8]) -> Vec<u8> {
+fn jpeg_masked_pdf(bytes: &[u8], dimension: u32, sample: u8) -> Vec<u8> {
     let mut pdf = Document::load_mem(bytes).unwrap();
     let mut encoded = Vec::new();
     image::codecs::jpeg::JpegEncoder::new(&mut encoded)
-        .encode(&[255; 32 * 32], 32, 32, image::ExtendedColorType::L8)
+        .encode(
+            &vec![sample; dimension as usize * dimension as usize],
+            dimension,
+            dimension,
+            image::ExtendedColorType::L8,
+        )
         .unwrap();
     let mask = pdf.add_object(Stream::new(
         dictionary! {
-            "Type"=>"XObject","Subtype"=>"Image","Width"=>32,"Height"=>32,
+            "Type"=>"XObject","Subtype"=>"Image","Width"=>dimension,"Height"=>dimension,
             "ColorSpace"=>"DeviceGray","BitsPerComponent"=>8,"Filter"=>"DCTDecode"
         },
         encoded,
@@ -139,7 +144,7 @@ fn jpeg_masked_pdf(bytes: &[u8]) -> Vec<u8> {
 }
 
 async fn qualify_affordable_jpeg_mask(bytes: &[u8], model: &std::path::Path) {
-    let masked = jpeg_masked_pdf(bytes);
+    let masked = jpeg_masked_pdf(bytes, 32, 255);
     let mut default = crate::core::config::ExtractionConfig {
         force_ocr: true,
         use_cache: false,
@@ -162,10 +167,38 @@ async fn qualify_affordable_jpeg_mask(bytes: &[u8], model: &std::path::Path) {
     println!("AFFORDABLE_JPEG_SMASK_DEFAULT_TEXT={text:?}");
 }
 
+async fn qualify_oversized_jpeg_mask(bytes: &[u8], model: &std::path::Path) {
+    let masked = jpeg_masked_pdf(bytes, 9000, 0);
+    let document = xberg_native_pdf::PdfDocument::from_bytes(masked.clone()).unwrap();
+    let visible = xberg_native_pdf::rendering::render_page(
+        &document,
+        0,
+        &xberg_native_pdf::rendering::RenderOptions::with_dpi(72).as_raw(),
+    )
+    .unwrap();
+    assert!(
+        visible.data.chunks_exact(4).all(|pixel| pixel[..3] == [255, 255, 255]),
+        "opaque-black SMask hides every base-image word"
+    );
+    let mut wrongly_recovered = Vec::new();
+    for mib in [40, 64] {
+        let result = public_text(&masked, &config(mib, model)).await;
+        println!("OVERSIZE_JPEG_SMASK_RESULT={mib}:{result:?}");
+        if let Ok(text) = result {
+            wrongly_recovered.push((mib, text));
+        }
+    }
+    assert!(
+        wrongly_recovered.is_empty(),
+        "masked base JPEG cannot represent this page: {wrongly_recovered:?}"
+    );
+}
+
 async fn qualify() {
     let model = model::verified_model_directory();
     let fixture = fixture::fixture();
     qualify_affordable_jpeg_mask(&fixture.pdf, &model).await;
+    qualify_oversized_jpeg_mask(&fixture.pdf, &model).await;
     let annotated = annotated_pdf(&fixture.pdf);
     pixel_memory::install();
     let complete = public_text(&annotated, &config(40, &model)).await.unwrap();
