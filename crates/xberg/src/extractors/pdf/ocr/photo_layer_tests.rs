@@ -1224,6 +1224,53 @@ fn should_confirm_a_number_only_layer_against_the_ocr_text() {
     );
 }
 
+/// A layer of numbers with only two distinct numbers on six full lines: it passes the per-page
+/// quality check, and the OCR text holds both numbers by chance. Two numbers never confirm a layer
+/// (#2439), and three do. ~keep
+#[test]
+fn should_need_three_distinct_numbers_to_confirm_a_number_only_layer() {
+    use super::document::ocr_confirms_layer;
+
+    let thresholds = OcrQualityThresholds::default();
+    let line = |numbers: &str| [numbers; 6].join(" ");
+    let two = vec![line("1042 2087"); 6].join("\n");
+    let three = vec![line("1042 2087 3315"); 6].join("\n");
+    assert!(
+        !ocr_confirms_layer(&two, &two, &thresholds),
+        "two distinct numbers are too few to confirm a layer"
+    );
+    assert!(
+        ocr_confirms_layer(&three, &three, &thresholds),
+        "three distinct numbers confirm a layer"
+    );
+}
+
+/// A whole-document run (#2439): an OCR line that reads one layer line exactly is never the copy of
+/// another layer line that differs from it by one word. The layer holds a line and a near twin of
+/// it; the OCR text reads the first exactly and lacks the twin. The twin comes back, and the exact
+/// OCR line stays. ~keep
+#[test]
+fn should_not_drop_an_exact_ocr_line_as_the_copy_of_its_near_twin_in_the_layer() {
+    use super::document::layer_lines_to_put_first;
+
+    let thresholds = OcrQualityThresholds::default();
+    let twin = misread_longest_word(HARBOUR_LAYER[0]);
+    let layer = format!("{}\n{twin}", HARBOUR_LAYER.join("\n"));
+    let ocr_text = HARBOUR_LAYER[..4].join("\n");
+    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds)
+        .expect("the OCR text confirms the layer, and the twin and two more lines are absent from it");
+    assert!(
+        first.lines.lines().any(|line| line == twin),
+        "the twin comes back: {:?}",
+        first.lines
+    );
+    assert!(
+        first.ocr_copies.is_empty(),
+        "an exact OCR line is not the copy of the twin: {:?}",
+        first.ocr_copies
+    );
+}
+
 /// A page of common nouns in no order that the language check calls implausible: a correct
 /// layer that the check sends to OCR (#2439). ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
