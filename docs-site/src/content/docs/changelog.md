@@ -233,6 +233,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
 
+- **(pdf): Keep aligned indexed assignments on separate display rows.** (#2443)
+  Preserve their subscripts and separate each verified row from surrounding prose.
+
 - **(pdf): Keep raised chart legend markers with their labels.** (#2443)
   Join them only where neighboring source rows prove the association and no layout hints own the page.
 

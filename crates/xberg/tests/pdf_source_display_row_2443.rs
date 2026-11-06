@@ -12,10 +12,10 @@ const PROSE: &str = "Key = 2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c for N
 const ROW: &str = "w0 = 2b7e1516 w1 = 28aed2a6 w2 = abf71588 w3 = 09cf4f3c";
 const MARKDOWN_ROW: &str = "w~0~ = 2b7e1516 w~1~ = 28aed2a6 w~2~ = abf71588 w~3~ = 09cf4f3c";
 
-fn source_result() -> ExtractedDocument {
-    let path = helpers::get_test_file_path("pdf/regression_pages/nist-fips-197-upd1-p37.pdf");
+fn extract_source(page: u8, sha: &str) -> ExtractedDocument {
+    let path = helpers::get_test_file_path(&format!("pdf/regression_pages/nist-fips-197-upd1-p{page}.pdf"));
     let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("required source {}: {error}", path.display()));
-    assert_eq!(hex::encode(Sha256::digest(&bytes)), SOURCE_SHA);
+    assert_eq!(hex::encode(Sha256::digest(&bytes)), sha);
     let pdf = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
     assert_eq!(pdf.page_count().unwrap(), 1);
     let config = ExtractionConfig {
@@ -52,14 +52,18 @@ fn assert_table_ownership(result: &ExtractedDocument) {
     assert_eq!(cells[3][6], "09cf4f3c");
 }
 
-#[test]
-fn source_display_assignments_are_a_separate_paragraph_with_four_scripts() {
-    let result = std::thread::Builder::new()
+fn source_result(page: u8, sha: &'static str) -> ExtractedDocument {
+    std::thread::Builder::new()
         .stack_size(NATIVE_TEST_STACK_BYTES)
-        .spawn(source_result)
+        .spawn(move || extract_source(page, sha))
         .expect("spawn native PDF extraction")
         .join()
-        .expect("native PDF extraction completed");
+        .expect("native PDF extraction completed")
+}
+
+#[test]
+fn source_display_assignments_are_a_separate_paragraph_with_four_scripts() {
+    let result = source_result(37, SOURCE_SHA);
     assert_table_ownership(&result);
     let document = result.document.as_ref().expect("requested document structure");
     let nodes = &document.nodes;
@@ -103,4 +107,47 @@ fn source_display_assignments_are_a_separate_paragraph_with_four_scripts() {
     let bbox = node.bbox.expect("display row geometry");
     assert!(bbox.y0 < 519.062 && bbox.y1 > 519.062 && bbox.y1 < 545.435);
     assert_eq!(result.content.lines().filter(|line| *line == MARKDOWN_ROW).count(), 1);
+}
+
+#[test]
+fn adjacent_indexed_display_rows_preserve_their_separate_source_baselines() {
+    let result = source_result(38, "c8c9a756dd18278ae368f294ab43a9f246c6737a23fce15f28e1973555eb647f");
+    let nodes = &result.document.as_ref().expect("requested document structure").nodes;
+    let prose =
+        "Key = 8e 73 b0 f7 da 0e 64 52 c8 10 f3 2b 80 90 79 e5 62 f8 ea d2 52 2c 6b 7b for Nk = 6, which results in";
+    let start = nodes
+        .iter()
+        .position(|node| node.content.text() == Some(prose))
+        .expect("separate Key prose");
+    for (offset, (expected, digits, baseline)) in [
+        ("w0 = 8e73b0f7 w1 = da0e6452 w2 = c810f32b", ["0", "1", "2"], 205.333),
+        ("w3 = 809079e5 w4 = 62f8ead2 w5 = 522c6b7b", ["3", "4", "5"], 188.3805),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let node = &nodes[start + 1 + offset];
+        assert!(matches!(&node.content, NodeContent::Paragraph { text } if text == expected));
+        let bbox = node.bbox.expect("display row geometry");
+        assert!(bbox.y0 < baseline && baseline < bbox.y1);
+        let scripts: Vec<_> = node
+            .annotations
+            .iter()
+            .map(|annotation| {
+                assert_eq!(annotation.kind, AnnotationKind::Subscript);
+                (annotation.start as usize, annotation.end as usize)
+            })
+            .collect();
+        assert_eq!(scripts, [(1, 2), (15, 16), (29, 30)]);
+        assert_eq!(
+            scripts.iter().map(|&(a, b)| &expected[a..b]).collect::<Vec<_>>(),
+            digits
+        );
+    }
+    assert!(matches!(&nodes[start + 3].content, NodeContent::Paragraph { text }
+        if text == "w[i] = i After After After XOR temp Rcon[i/Nk] w[i−Nk] temp⊕"));
+    assert!(result.tables.iter().any(|table| table.cells.len() == 17
+        && table.cells.iter().all(|row| row.len() == 8)
+        && table.cells[0][1] == "11f915bc"
+        && table.cells[0][6] == "d4d1c6f8"));
 }
