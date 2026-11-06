@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 #[cfg(not(target_arch = "wasm32"))]
+#[path = "full_scan_table/leader_rows.rs"]
 mod leader_rows;
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) use leader_rows::{can_hold_leader_raster, recover_dot_leader_rows};
