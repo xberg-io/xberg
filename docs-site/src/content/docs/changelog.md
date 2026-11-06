@@ -188,6 +188,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recover missing words behind partial hidden text on supported CCITT Group 4 scans.** (#2425)
+  Automatic Tesseract OCR checks the raster only when the bilevel image and its complete Group 4 stream can be verified.
+  Scans with complete hidden text keep their native text.
+
 - **(pdf): Preserve verified scanned figure captions as prose.** (#2530)
   Uncached Plain extraction can remove a false caption table when stock OCR and the page raster confirm the same text and geometry.
 

@@ -1,4 +1,6 @@
-use super::{ImageSource, StreamFilters, adds_text_preserving_native, decode_probe_stream, hidden_text_image_name};
+use super::{
+    ImageEncoding, ImageSource, StreamFilters, adds_text_preserving_native, decode_probe_stream, hidden_text_image_name,
+};
 use xberg_native_pdf::content::parser::visit_complete_content_stream;
 
 #[test]
@@ -110,8 +112,10 @@ fn actual_inflate_is_bounded_even_for_tiny_compressed_streams() {
         height: 16,
         channels: 1,
         data: stream.content.into(),
-        filters: StreamFilters::Flate,
-        predictor: None,
+        encoding: ImageEncoding::Stream {
+            filters: StreamFilters::Flate,
+            predictor: None,
+        },
     };
     assert!(malformed_image.decode_samples(4096).is_none());
     assert!(decode_probe_stream(&[b'z'; 32], StreamFilters::Ascii85Flate, 256, 64).is_none());
@@ -143,4 +147,76 @@ fn trailing_text_requires_separated_glyphs_past_the_native_box() {
         }
     }
     assert!(!super::has_trailing_text(&mask, width, &band, 24));
+}
+
+const CCITT_PROBE_PDF: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/ocr/hidden_layer_ccitt_2425/ccitt-partial.pdf"
+));
+
+#[test]
+fn ccitt_probe_samples_equal_the_independent_luma_oracle() {
+    use sha2::{Digest, Sha256};
+
+    let doc = super::PdfDocument::from_bytes(CCITT_PROBE_PDF.to_vec()).unwrap();
+    let source = super::image_source(&doc, 0, "Scan").unwrap();
+    let packed_bytes = (source.width as usize).div_ceil(8) * source.height as usize;
+    let exact_budget = source.data.len() + packed_bytes + source.decoded_size().unwrap();
+    let samples = source.decode_samples(exact_budget).unwrap();
+    let with_boxes = source.decode_budget(exact_budget, 1).unwrap();
+    assert!(source.decode_samples(with_boxes).is_none());
+    assert_eq!(samples.len(), 2_103_750);
+    assert_eq!(
+        hex::encode(Sha256::digest(&samples)),
+        "96b76deb96146ead1a486b9f6ba115424a6bee7183467eb7347930f20f35d885"
+    );
+}
+
+#[test]
+fn ccitt_probe_refuses_real_truncation_wrong_polarity_and_small_budget() {
+    let doc = super::PdfDocument::from_bytes(CCITT_PROBE_PDF.to_vec()).unwrap();
+    let mut source = super::image_source(&doc, 0, "Scan").unwrap();
+    assert!(source.decode_samples(2 * 1024 * 1024).is_none());
+    source.data.truncate(source.data.len() - 1);
+    assert!(source.decode_samples(4 * 1024 * 1024).is_none());
+
+    let mut pdf = lopdf::Document::load_mem(CCITT_PROBE_PDF).unwrap();
+    let image = pdf
+        .objects
+        .values_mut()
+        .find_map(|object| {
+            let stream = object.as_stream_mut().ok()?;
+            (stream.dict.get(b"Filter").ok()?.as_name().ok()? == b"CCITTFaxDecode").then_some(stream)
+        })
+        .unwrap();
+    image
+        .dict
+        .get_mut(b"DecodeParms")
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("BlackIs1", false);
+    let mut inverted = Vec::new();
+    pdf.save_to(&mut inverted).unwrap();
+    let inverted = super::PdfDocument::from_bytes(inverted).unwrap();
+    assert!(super::image_source(&inverted, 0, "Scan").is_none());
+}
+
+#[test]
+fn ccitt_group4_parameters_require_exact_geometry_and_grammar() {
+    use super::Object;
+
+    let mut params = std::collections::HashMap::from([
+        ("K".to_owned(), Object::Integer(-1)),
+        ("Columns".to_owned(), Object::Integer(1275)),
+        ("Rows".to_owned(), Object::Integer(1650)),
+        ("BlackIs1".to_owned(), Object::Boolean(true)),
+    ]);
+    assert!(super::supported_group4_params(&params, 1275, 1650));
+    assert!(!super::supported_group4_params(&params, 1276, 1650));
+    assert!(!super::supported_group4_params(&params, 1275, 1649));
+    params.insert("DamagedRowsBeforeError".to_owned(), Object::Integer(1));
+    assert!(!super::supported_group4_params(&params, 1275, 1650));
+    let filter = Object::Name("CCITTFaxDecode".to_owned());
+    assert!(super::stream_filters(Some(&filter)).is_none());
 }
