@@ -20,7 +20,7 @@ use xberg_native_pdf::object::Object;
 mod gray_jpeg;
 mod samples;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
-use samples::{GrayPacking, decode_source_gray, source_frame};
+use samples::{GrayPacking, decode_source_gray, flate_packing, source_frame};
 
 const MAX_TILE_SIDE: u32 = 4096;
 const MAX_SOURCE_PIXELS: usize = 24_000_000;
@@ -444,23 +444,12 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
     let Object::Stream { dict, data } = doc.resolve_object(xobjects.as_dict()?.get(&name)?).ok()? else {
         return None;
     };
-    let depth = dict.get("BitsPerComponent")?.as_integer()?;
-    let color = dict.get("ColorSpace")?.as_name()?;
-    let codec = dict.get("Filter")?.as_name()?;
-    let packing = match (rendered_width, codec, color, depth) {
-        (None, "DCTDecode", "DeviceGray", 8) => None,
-        (Some(_), "FlateDecode", "DeviceGray", 8) => Some(GrayPacking::Byte),
-        (Some(_), "FlateDecode", "DeviceGray", 1) => Some(GrayPacking::Bilevel),
-        (Some(_), "FlateDecode", "DeviceRGB", 8) if unfiltered_paint => Some(GrayPacking::NeutralRgb),
-        _ => return None,
-    };
     if dict.get("Subtype")?.as_name()? != "Image"
         || [
             "Mask",
             "SMask",
             "SMaskInData",
             "Decode",
-            "DecodeParms",
             "ImageMask",
             "Alternates",
             "OC",
@@ -471,6 +460,17 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         return None;
     }
     let (width, height, dpi) = source_frame(&dict, frame, rendered_width)?;
+    let packing = match (rendered_width, dict.get("Filter")?.as_name()?) {
+        (None, "DCTDecode")
+            if dict.get("ColorSpace")?.as_name()? == "DeviceGray"
+                && dict.get("BitsPerComponent")?.as_integer()? == 8
+                && !dict.contains_key("DecodeParms") =>
+        {
+            None
+        }
+        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width, unfiltered_paint)?),
+        _ => return None,
+    };
     let (samples, retained_bytes) = if let Some(packing) = packing {
         decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?
     } else {
@@ -484,7 +484,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         dpi,
         samples,
         retained_bytes,
-        certify_rows: packing.is_none_or(|packing| packing == GrayPacking::Bilevel),
+        certify_rows: packing.is_none_or(GrayPacking::requires_line_certificate),
     })
 }
 

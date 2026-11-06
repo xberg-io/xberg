@@ -207,3 +207,23 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
         assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
     }
 }
+
+fn assert_exact_tall_source_text(source: &[u8]) {
+    let document = extract(source, &extraction_config());
+    assert_image_text(&document, true);
+    assert!(document.content.split_whitespace().eq(ORACLE.split_whitespace()));
+    let pages = document.pages.as_ref().unwrap();
+    assert!(pages[0].content.split_whitespace().eq(ORACLE.split_whitespace()));
+}
+
+#[test]
+fn tall_png_predictor_recovers_all_source_words_in_order() {
+    let source = include_bytes!("../../../fixtures/repros/tall-scan-strips/predictor-mixed.pdf");
+    assert_exact_tall_source_text(source);
+}
+
+#[test]
+fn tall_inverted_indexed_scan_recovers_all_source_words_in_order() {
+    let source = include_bytes!("../../../fixtures/repros/tall-scan-strips/indexed-inverted.pdf");
+    assert_exact_tall_source_text(source);
+}
