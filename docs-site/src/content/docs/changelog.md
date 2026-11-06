@@ -406,6 +406,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover tall scans with default PNG predictor parameters.** (#2620)
   Accept omitted values when the PDF defaults match the source image.
 
+- **(pdf): Certify painted table-cell overhangs by exact source geometry.** (#2616)
+  Keep matching values with alternate number formatting in their original cells.
+
+- **(ocr): Separate a merged table header from its first record in standalone OCR.** (#2432)
+  Require independent row geometry and preserve recognized text and later cell boundaries.
+
 - **(pdf): Preserve a figure tick beside a table using exact source ownership.** (#2616)
   A decimal comma no longer blocks recovery of the outside figure label.
 
