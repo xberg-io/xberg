@@ -3129,6 +3129,7 @@ fn detect_intersections(
                 lines,
                 config.row_tolerance,
             );
+            source_headers::retain_grouped_leaf_header(&mut table_rows, lines, *num_cols);
         }
         #[cfg(test)]
         header_source_diagnostic::event("intersection_assigned", || {
