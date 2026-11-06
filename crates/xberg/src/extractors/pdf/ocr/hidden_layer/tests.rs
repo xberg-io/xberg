@@ -118,6 +118,11 @@ fn split_source_audit_requires_independently_complete_paint_and_hidden_text() {
     let work = paint.len() + hidden.len() + 14;
     assert_eq!(audit(paint, hidden, 1024, work).as_deref(), Some("Scan"));
     assert_eq!(audit(paint, hidden, 1024, work - 1), None, "both parser passes");
+    assert_eq!(
+        audit(paint, hidden, 1024, paint.len() + hidden.len() - 1),
+        None,
+        "raw bytes are debited before copying"
+    );
     assert_eq!(audit(paint, hidden, 128, work), None, "cumulative bytes");
     for bad_paint in [
         b"q 612 0 0 792 0 0 cm /Scan".as_slice(),
@@ -138,6 +143,29 @@ fn split_source_audit_requires_independently_complete_paint_and_hidden_text() {
     ] {
         assert_eq!(audit(paint, bad_text, 1024, 4096), None);
     }
+}
+
+#[test]
+fn split_source_audit_rejects_compressed_content() {
+    use super::{Object, source_audit::audit_split_contents};
+    use std::io::Write;
+
+    let doc = super::PdfDocument::from_bytes(CCITT_PROBE_PDF.to_vec()).unwrap();
+    let paint = b"q 612 0 0 792 0 0 cm /Scan Do Q";
+    let hidden = b"BT /F 12 Tf 3 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET";
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+    encoder.write_all(hidden).unwrap();
+    let streams = [
+        Object::Stream {
+            dict: Default::default(),
+            data: bytes::Bytes::copy_from_slice(paint),
+        },
+        Object::Stream {
+            dict: std::collections::HashMap::from([("Filter".to_owned(), Object::Name("FlateDecode".into()))]),
+            data: encoder.finish().unwrap().into(),
+        },
+    ];
+    assert!(audit_split_contents(&doc, &streams, 1024, &mut 4096).is_none());
 }
 
 #[test]

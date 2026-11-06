@@ -48,33 +48,24 @@ pub(super) fn audit_split_contents(
     };
     let paint = doc.resolve_object(paint).ok()?;
     let text = doc.resolve_object(text).ok()?;
-    let mut encoded = 0usize;
-    for content in [&paint, &text] {
-        let Object::Stream { dict, data } = content else {
-            return None;
-        };
-        if dict.keys().any(|key| !matches!(key.as_str(), "Length" | "Filter")) {
-            return None;
-        }
-        encoded = encoded.checked_add(data.len())?;
-    }
-    // Bound encoded bytes, both decoded streams, the joined audit and Native's comparison. ~keep
-    if encoded > byte_limit / 4 {
+    let paint = raw_stream(&paint)?;
+    let text = raw_stream(&text)?;
+    let raw_bytes = paint.len().checked_add(text.len())?;
+    let joined_bytes = raw_bytes.checked_add(2)?;
+    // The raw inputs, joined audit, and Native's comparison must fit together. ~keep
+    if joined_bytes > MAX_CONTENT_BYTES.min(byte_limit / 4) {
         return None;
     }
-    let decoded_limit = MAX_CONTENT_BYTES.min(byte_limit / 8);
-    let paint = decode_content_stream(&paint, decoded_limit.checked_sub(2)?, byte_limit / 4)?;
-    let text = decode_content_stream(&text, decoded_limit.checked_sub(paint.len() + 2)?, byte_limit / 4)?;
-    *remaining_work = remaining_work.checked_sub(paint.len().checked_add(text.len())?)?;
+    *remaining_work = remaining_work.checked_sub(raw_bytes)?;
     // The general parser normalizes malformed operator operands. Validate exact raw syntax first. ~keep
-    let text_operators = strict_split_syntax(&paint, &text)?;
+    let text_operators = strict_split_syntax(paint, text)?;
     let joined_operators = SPLIT_PAINT_OPERATORS.checked_add(text_operators)?;
     if joined_operators > MAX_OPERATORS {
         return None;
     }
     *remaining_work = remaining_work.checked_sub(SPLIT_PAINT_OPERATORS.checked_add(joined_operators)?)?;
     let mut count = 0;
-    let complete = visit_complete_content_stream(&paint, SPLIT_PAINT_OPERATORS, |_| {
+    let complete = visit_complete_content_stream(paint, SPLIT_PAINT_OPERATORS, |_| {
         count += 1;
         true
     })
@@ -82,12 +73,19 @@ pub(super) fn audit_split_contents(
     if !complete || count != SPLIT_PAINT_OPERATORS {
         return None;
     }
-    let mut bytes = Vec::with_capacity(paint.len() + text.len() + 2);
-    bytes.extend_from_slice(&paint);
+    let mut bytes = Vec::with_capacity(joined_bytes);
+    bytes.extend_from_slice(paint);
     bytes.push(b'\n');
-    bytes.extend_from_slice(&text);
+    bytes.extend_from_slice(text);
     bytes.push(b'\n');
     Some(bytes)
+}
+
+fn raw_stream(content: &Object) -> Option<&[u8]> {
+    let Object::Stream { dict, data } = content else {
+        return None;
+    };
+    dict.keys().all(|key| key == "Length").then_some(data.as_ref())
 }
 
 fn strict_split_syntax(paint: &[u8], text: &[u8]) -> Option<usize> {
