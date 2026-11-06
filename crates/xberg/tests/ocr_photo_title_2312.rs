@@ -89,6 +89,21 @@ async fn recovers_the_photo_title_and_keeps_the_entire_primary_body() {
 }
 
 #[tokio::test]
+async fn certified_photo_title_does_not_repeat_its_source_glyph_as_a_separate_line() {
+    let document = extract_primary(PHOTO, 215, 0).await;
+    let page = &document.pages.as_ref().unwrap()[0];
+    for content in [&document.content, &page.content] {
+        assert_eq!(content.matches(TITLE).count(), 1);
+        assert_eq!(
+            content.lines().filter(|line| line.trim() == "I").count(),
+            0,
+            "the primary I occupies the same source glyph recovered inside SECTION"
+        );
+        assert!(content.lines().any(|line| line.trim() == "*"));
+    }
+}
+
+#[tokio::test]
 async fn recovers_the_photo_title_without_losing_the_independent_sign_or_amount() {
     let document = extract_primary(MIXED, 6, 0).await;
     assert!(document.content.contains("NORTH GATE 42"), "{:?}", document.content);
