@@ -750,12 +750,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
+            let mut remaining_ccitt_work = page_limit;
             let selected = page_indices
                 .into_iter()
                 .take(page_limit)
                 .take_while(|_| !is_cancelled())
                 .filter(|&index| {
-                    let needed = super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, is_cancelled);
+                    let needed = super::hidden_layer::needs_ocr(
+                        &probe_doc,
+                        index,
+                        byte_limit,
+                        &mut remaining_ccitt_work,
+                        is_cancelled,
+                    );
                     tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
                     needed == Some(true)
                 })

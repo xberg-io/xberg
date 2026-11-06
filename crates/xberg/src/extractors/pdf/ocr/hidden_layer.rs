@@ -7,7 +7,9 @@ use std::sync::Arc;
 use xberg_native_pdf::PdfDocument;
 use xberg_native_pdf::content::Operator;
 use xberg_native_pdf::content::parser::visit_complete_content_stream;
-use xberg_native_pdf::decoders::{Ascii85Decoder, DecodeParams, FlateDecoder, StreamDecoder, decode_predictor};
+use xberg_native_pdf::decoders::{
+    Ascii85Decoder, DecodeParams, FlateDecoder, StreamDecoder, decode_complete_group4, decode_predictor,
+};
 use xberg_native_pdf::document::{PageRotation, ReadingOrder};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
@@ -103,6 +105,7 @@ pub(super) fn needs_ocr(
     doc: &PdfDocument,
     page: usize,
     byte_limit: usize,
+    remaining_ccitt_work: &mut usize,
     is_cancelled: impl Fn() -> bool,
 ) -> Option<bool> {
     if is_cancelled() {
@@ -129,7 +132,9 @@ pub(super) fn needs_ocr(
     if is_cancelled() {
         return None;
     }
-    let samples = source.decode_samples(byte_limit)?;
+    let decode_limit = source.decode_budget(byte_limit, boxes.capacity())?;
+    source.charge_ccitt_work(remaining_ccitt_work)?;
+    let samples = source.decode_samples(decode_limit)?;
     let preview = gray_preview(&samples, &source, size)?;
     Some(!is_cancelled() && has_uncovered_text(&preview, handle.bbox, &boxes))
 }
@@ -407,13 +412,20 @@ pub(super) fn decode_probe_stream(
     }
 }
 
+enum ImageEncoding {
+    Stream {
+        filters: StreamFilters,
+        predictor: Option<DecodeParams>,
+    },
+    CcittGroup4,
+}
+
 struct ImageSource {
     width: u32,
     height: u32,
     channels: usize,
     data: bytes::Bytes,
-    filters: StreamFilters,
-    predictor: Option<DecodeParams>,
+    encoding: ImageEncoding,
 }
 
 impl ImageSource {
@@ -423,26 +435,76 @@ impl ImageSource {
             .checked_mul(self.channels)
     }
 
-    fn inflated_size(&self) -> Option<usize> {
-        if let Some(params) = &self.predictor {
+    fn inflated_size(&self, predictor: Option<&DecodeParams>) -> Option<usize> {
+        if let Some(params) = predictor {
             params.checked_bytes_per_row().ok()?.checked_mul(self.height as usize)
         } else {
             self.decoded_size()
         }
     }
 
+    fn charge_ccitt_work(&self, remaining: &mut usize) -> Option<()> {
+        if matches!(self.encoding, ImageEncoding::CcittGroup4) {
+            // A unit is a pixel/edge visit or a bounded prefix probe, not an individual bit
+            // inspection. Charge packing, grayscale expansion, and the forward edge walk
+            // by pixel. Each Huffman code tests at most 104 prefixes and consumes at least
+            // two bits. The rest of the per-bit allowance covers mode probes and backward
+            // steps (at most three columns). A terminal bad code can consume zero bits.
+            const WORK_PER_PIXEL: usize = 3;
+            const WORK_PER_ENCODED_BIT: usize = 64;
+            const TERMINAL_CODE_WORK: usize = 128;
+            let pixels = self.decoded_size()?.checked_mul(WORK_PER_PIXEL)?;
+            let input = self.data.len().checked_mul(8)?.checked_mul(WORK_PER_ENCODED_BIT)?;
+            let work = pixels.checked_add(input)?.checked_add(TERMINAL_CODE_WORK)?;
+            *remaining = remaining.checked_sub(work)?;
+        }
+        Some(())
+    }
+
+    fn decode_budget(&self, byte_limit: usize, box_capacity: usize) -> Option<usize> {
+        match self.encoding {
+            ImageEncoding::CcittGroup4 => byte_limit.checked_sub(box_capacity.checked_mul(size_of::<Rect>())?),
+            ImageEncoding::Stream { .. } => Some(byte_limit),
+        }
+    }
+
     fn decode_samples(&self, byte_limit: usize) -> Option<Vec<u8>> {
-        let expected = self.inflated_size()?;
-        let inflated = decode_probe_stream(&self.data, self.filters, expected, byte_limit)?;
+        let ImageEncoding::Stream { filters, predictor } = &self.encoding else {
+            return self.decode_group4_samples(byte_limit);
+        };
+        let expected = self.inflated_size(predictor.as_ref())?;
+        let inflated = decode_probe_stream(&self.data, *filters, expected, byte_limit)?;
         if inflated.len() != expected {
             return None;
         }
-        let samples = if let Some(params) = &self.predictor {
+        let samples = if let Some(params) = predictor {
             decode_predictor(&inflated, params).ok()?
         } else {
             inflated
         };
         (samples.len() == self.decoded_size()?).then_some(samples)
+    }
+
+    fn decode_group4_samples(&self, byte_limit: usize) -> Option<Vec<u8>> {
+        let width = u16::try_from(self.width).ok()?;
+        let columns = usize::from(width);
+        let row_bytes = columns.div_ceil(8);
+        let packed_bytes = row_bytes.checked_mul(self.height as usize)?;
+        let gray_bytes = self.decoded_size()?;
+        if self.data.len().checked_add(packed_bytes)?.checked_add(gray_bytes)? > byte_limit {
+            return None;
+        }
+        let packed = decode_complete_group4(&self.data, width, self.height, byte_limit).ok()?;
+        let mut samples = Vec::new();
+        samples.try_reserve_exact(gray_bytes).ok()?;
+        for row in packed.chunks_exact(row_bytes) {
+            for x in 0..columns {
+                // Match Native's supported /BlackIs1 inversion before expanding the gray sample.
+                let bit_set = row[x / 8] & (0x80 >> (x % 8)) != 0;
+                samples.push(if bit_set { 255 } else { 0 });
+            }
+        }
+        Some(samples)
     }
 }
 
@@ -459,7 +521,6 @@ fn image_source(doc: &PdfDocument, page: usize, name: &str) -> Option<ImageSourc
         _ => return None,
     };
     if dict.get("Subtype")?.as_name()? != "Image"
-        || dict.get("BitsPerComponent")?.as_integer()? != 8
         || [
             "Mask",
             "SMask",
@@ -477,22 +538,46 @@ fn image_source(doc: &PdfDocument, page: usize, name: &str) -> Option<ImageSourc
     }
     let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
     let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
-    let filters = stream_filters(dict.get("Filter"))?;
-    let predictor = match dict.get("DecodeParms") {
-        None => None,
-        Some(params) if matches!(filters, StreamFilters::Flate) => {
-            Some(image_predictor(params.as_dict()?, width, channels)?)
+    let bits = dict.get("BitsPerComponent")?.as_integer()?;
+    let filter = dict.get("Filter");
+    let parameters = dict.get("DecodeParms");
+    let encoding = if filter.and_then(Object::as_name) == Some("CCITTFaxDecode") {
+        if bits != 1 || channels != 1 || !supported_group4_params(parameters?.as_dict()?, width, height) {
+            return None;
         }
-        Some(_) => return None,
+        ImageEncoding::CcittGroup4
+    } else {
+        if bits != 8 {
+            return None;
+        }
+        let filters = stream_filters(filter)?;
+        let predictor = match parameters {
+            None => None,
+            Some(params) if matches!(filters, StreamFilters::Flate) => {
+                Some(image_predictor(params.as_dict()?, width, channels)?)
+            }
+            Some(_) => return None,
+        };
+        ImageEncoding::Stream { filters, predictor }
     };
     Some(ImageSource {
         width,
         height,
         channels,
         data,
-        filters,
-        predictor,
+        encoding,
     })
+}
+
+fn supported_group4_params(params: &std::collections::HashMap<String, Object>, width: u32, height: u32) -> bool {
+    width > 0
+        && u16::try_from(width).is_ok()
+        && height > 0
+        && params.len() == 4
+        && params.get("K").and_then(Object::as_integer) == Some(-1)
+        && params.get("Columns").and_then(Object::as_integer) == Some(i64::from(width))
+        && params.get("Rows").and_then(Object::as_integer) == Some(i64::from(height))
+        && matches!(params.get("BlackIs1"), Some(Object::Boolean(true)))
 }
 
 fn image_predictor(
@@ -620,14 +705,25 @@ fn preview_size(bounds: Rect, source: &ImageSource, limit: usize) -> Option<(u32
         .checked_add(preview_bytes)?
         .checked_add(intervals)?
         .checked_add(box_bytes)?;
-    let wrapped_bytes = match source.filters {
-        StreamFilters::Ascii85Flate => source.data.len().checked_mul(8)?,
-        _ => source.data.len(),
+    let peak = match &source.encoding {
+        ImageEncoding::CcittGroup4 => preview_peak.checked_add(source.data.len())?,
+        ImageEncoding::Stream { filters, predictor } => {
+            let wrapped_bytes = match filters {
+                StreamFilters::Ascii85Flate => source.data.len().checked_mul(8)?,
+                _ => source.data.len(),
+            };
+            let filter_peak = wrapped_bytes
+                .checked_add(
+                    source
+                        .inflated_size(predictor.as_ref())?
+                        .checked_add(1)?
+                        .checked_mul(2)?,
+                )?
+                .checked_add(decoded_bytes)?;
+            preview_peak.max(filter_peak)
+        }
     };
-    let filter_peak = wrapped_bytes
-        .checked_add(source.inflated_size()?.checked_add(1)?.checked_mul(2)?)?
-        .checked_add(decoded_bytes)?;
-    (preview_peak.max(filter_peak) <= limit).then_some((width, height))
+    (peak <= limit).then_some((width, height))
 }
 
 fn gray_preview(samples: &[u8], source: &ImageSource, (width, height): (u32, u32)) -> Option<GrayImage> {
