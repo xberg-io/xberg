@@ -64,13 +64,9 @@ impl Prepared<'_> {
 
 fn certified_overhang(cell: &super::TableCell, paint: Rect, word: &TextSpan, tolerance: f32) -> Option<Rect> {
     let bounds = word.bbox;
-    let (whole, fraction) = word.text.split_once('.')?;
     (cell.rowspan == 1
         && cell.colspan == 1
         && cell.text == word.text
-        && !whole.is_empty()
-        && !fraction.is_empty()
-        && whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
         && cell.bbox.is_some_and(|cell| same_bounds(cell, paint))
         && paint.left() <= bounds.left()
         && bounds.right() <= paint.right()

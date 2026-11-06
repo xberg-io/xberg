@@ -625,7 +625,9 @@ fn isolated_painted_orphan(
     candidates: &ahash::AHashSet<&SegmentKey>,
     hyphens: &super::pipeline::HyphenWitnesses,
 ) -> Option<usize> {
-    if candidates.len() != 1 || page.iter().any(|p| p.is_list_item || p.layout_region_path.is_some()) {
+    let mut digits = candidates.iter().copied().filter(|key| key.is_ascii_digit());
+    let candidate = digits.next()?;
+    if digits.next().is_some() || page.iter().any(|p| p.is_list_item || p.layout_region_path.is_some()) {
         return None;
     }
     page.iter().position(|paragraph| {
@@ -636,8 +638,7 @@ fn isolated_painted_orphan(
             return false;
         };
         if !plain_source_paragraph(paragraph)
-            || !is_digit(glyph)
-            || !candidates.contains(&SegmentKey::from(glyph))
+            || &SegmentKey::from(glyph) != candidate
             || paragraph.block_bbox != Some((glyph.x, glyph.y, glyph.x + glyph.width, glyph.y + glyph.height))
         {
             return false;
@@ -645,10 +646,6 @@ fn isolated_painted_orphan(
         let (text, annotations) = extract_text_and_annotations(paragraph, hyphens);
         text == glyph.text && annotations.is_empty()
     })
-}
-
-fn is_digit(glyph: &crate::pdf::hierarchy::SegmentData) -> bool {
-    matches!(glyph.text.as_bytes(), [digit] if digit.is_ascii_digit())
 }
 
 fn recover_mixed_table_tick(

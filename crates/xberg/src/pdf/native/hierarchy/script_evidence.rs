@@ -26,6 +26,12 @@ pub(crate) struct SegmentKey {
     role: Option<u8>,
 }
 
+impl SegmentKey {
+    pub(crate) fn is_ascii_digit(&self) -> bool {
+        matches!(self.text.as_bytes(), [digit] if digit.is_ascii_digit())
+    }
+}
+
 impl From<&SegmentData> for SegmentKey {
     fn from(segment: &SegmentData) -> Self {
         Self {
