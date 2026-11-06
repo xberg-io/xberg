@@ -1,6 +1,9 @@
 //! Tokio runtime sizing and construction for extraction work.
 
-use xberg::{ExtractInput, ExtractionConfig, ExtractionResult, extract, extract_batch};
+use xberg::{
+    ExtractInput, ExtractInputWithOptions, ExtractionConfig, ExtractionResult, extract,
+    extract_batch_with_input_options,
+};
 
 const DEFAULT_RUNTIME_THREAD_LIMIT: usize = 8;
 const MIN_RUNTIME_THREAD_COUNT: usize = 1;
@@ -56,7 +59,7 @@ pub(super) fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -
 }
 
 pub(super) fn block_on_extract_batch(
-    inputs: Vec<ExtractInput>,
+    inputs: Vec<ExtractInputWithOptions>,
     config: &ExtractionConfig,
 ) -> xberg::Result<ExtractionResult> {
     let worker_threads = batch_runtime_worker_threads(config, inputs.len());
@@ -65,7 +68,7 @@ pub(super) fn block_on_extract_batch(
         .enable_all()
         .thread_stack_size(RUNTIME_WORKER_STACK_SIZE_BYTES)
         .build()?
-        .block_on(extract_batch(inputs, config))
+        .block_on(extract_batch_with_input_options(inputs, config))
 }
 
 #[cfg(test)]

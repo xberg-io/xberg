@@ -26,8 +26,12 @@ sync with the generated snippet tree automatically — no per-language import li
 ## Choose PDF layout for each input
 
 Each input can override the batch's `use_layout_for_markdown` setting. An
-omitted option inherits the batch setting. Swift takes the inputs as a JSON
-array:
+omitted option inherits the batch setting, and explicit `false` disables it for
+that input. In REST `/extract` requests and MCP `extract_batch` calls, set the
+option alongside `uri` in each input object. In the CLI, set it alongside other
+per-file overrides in the `--file-configs` JSON map.
+
+Swift takes the inputs as a JSON array:
 
 ```swift
 import Xberg

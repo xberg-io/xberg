@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionErrorItem, ExtractionResult};
+use xberg::{ExtractInputWithOptions, ExtractedDocument, ExtractionConfig, ExtractionErrorItem, ExtractionResult};
 
 use crate::{
     WireFormat,
@@ -151,11 +151,11 @@ fn batch_toon_output(
 /// The batch text output joins documents under headers, which a binary document cannot be.
 fn refuse_binary_text_output<'a>(
     config: &'a ExtractionConfig,
-    inputs: &'a [ExtractInput],
+    inputs: &'a [ExtractInputWithOptions],
     writes_files: bool,
 ) -> Result<()> {
     let per_file_binary_format = inputs.iter().find_map(|input| {
-        let xberg::OutputFormat::Custom(name) = input.config.as_ref()?.output_format.as_ref()? else {
+        let xberg::OutputFormat::Custom(name) = input.input.config.as_ref()?.output_format.as_ref()? else {
             return None;
         };
         (name == super::DOCX_CONTENT_FORMAT || name == super::PDF_CONTENT_FORMAT).then_some(name.as_str())
@@ -249,7 +249,7 @@ fn content_extension(result: &ExtractedDocument, config: &ExtractionConfig) -> &
 }
 
 /// Run batch extraction using the synchronous batch API for non-JSON output paths.
-fn run_batch_sync(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> Result<ExtractionResult> {
+fn run_batch_sync(inputs: Vec<ExtractInputWithOptions>, config: &ExtractionConfig) -> Result<ExtractionResult> {
     let input_count = inputs.len();
     // Describe the attempted operation only; the returned `ExtractionResult` retains every
     // per-input failure with its original source and index. ~keep
@@ -259,17 +259,17 @@ fn run_batch_sync(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> Resul
 #[cfg(test)]
 mod binary_output_tests {
     use super::*;
-    use xberg::{FileExtractionConfig, OutputFormat};
+    use xberg::{ExtractInput, FileExtractionConfig, OutputFormat};
 
     #[test]
     fn batch_text_output_rejects_a_per_file_docx_override() {
-        let inputs = vec![ExtractInput {
+        let inputs = vec![ExtractInputWithOptions::new(ExtractInput {
             config: Some(FileExtractionConfig {
                 output_format: Some(OutputFormat::Custom(super::super::DOCX_CONTENT_FORMAT.to_string())),
                 ..Default::default()
             }),
             ..Default::default()
-        }];
+        })];
 
         let error = refuse_binary_text_output(&ExtractionConfig::default(), &inputs, false)
             .expect_err("a per-file DOCX result cannot be joined into text output");
@@ -278,13 +278,13 @@ mod binary_output_tests {
 
     #[test]
     fn batch_text_output_rejects_a_per_file_pdf_override() {
-        let inputs = vec![ExtractInput {
+        let inputs = vec![ExtractInputWithOptions::new(ExtractInput {
             config: Some(FileExtractionConfig {
                 output_format: Some(OutputFormat::Custom(super::super::PDF_CONTENT_FORMAT.to_string())),
                 ..Default::default()
             }),
             ..Default::default()
-        }];
+        })];
 
         let error = refuse_binary_text_output(&ExtractionConfig::default(), &inputs, false)
             .expect_err("a per-file PDF result cannot be joined into text output");
@@ -356,7 +356,7 @@ fn batch_per_file_timings(
 }
 
 fn run_json_batch_sync(
-    inputs: Vec<ExtractInput>,
+    inputs: Vec<ExtractInputWithOptions>,
     config: &ExtractionConfig,
 ) -> Result<(ExtractionResult, Vec<Option<f64>>)> {
     let input_count = inputs.len();
@@ -491,9 +491,9 @@ mod tests {
 
     #[test]
     fn json_batch_preserves_partial_batch_errors() {
-        let inputs = vec![ExtractInput::from_uri(
-            "/definitely/missing/xberg-batch-input.txt".to_string(),
-        )];
+        let inputs = vec![ExtractInputWithOptions::new(xberg::ExtractInput::from_uri(
+            "/definitely/missing/xberg-batch-input.txt",
+        ))];
 
         let (output, per_file_ms) = run_json_batch_sync(inputs, &ExtractionConfig::default()).unwrap();
 

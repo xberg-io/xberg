@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
-use xberg::{ExtractInput, ExtractInputKind, FileExtractionConfig};
+use xberg::{ExtractInput, ExtractInputWithOptions, FileExtractionConfig};
 
 /// Batch input manifest format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -79,7 +79,7 @@ fn manifest_items_to_uris(items: Vec<BatchManifestItem>) -> Result<Vec<String>> 
 pub(super) fn build_batch_inputs(
     uris: &[String],
     file_configs_map: Option<&std::collections::HashMap<String, serde_json::Value>>,
-) -> Result<Vec<ExtractInput>> {
+) -> Result<Vec<ExtractInputWithOptions>> {
     uris.iter()
         .map(|uri| build_extract_input(uri, file_configs_map))
         .collect()
@@ -88,21 +88,26 @@ pub(super) fn build_batch_inputs(
 fn build_extract_input(
     uri: &str,
     file_configs_map: Option<&std::collections::HashMap<String, serde_json::Value>>,
-) -> Result<ExtractInput> {
-    let file_config = file_configs_map
-        .and_then(|m| m.get(uri))
-        .map(|v| {
-            serde_json::from_value::<FileExtractionConfig>(v.clone())
-                .with_context(|| format!("Failed to parse file config for '{}'", uri))
-        })
-        .transpose()?;
+) -> Result<ExtractInputWithOptions> {
+    let mut options = ExtractInputWithOptions::new(ExtractInput::from_uri(uri));
+    if let Some(config) = file_configs_map.and_then(|map| map.get(uri)) {
+        let (file_config, use_layout_for_markdown) =
+            parse_file_config(config.clone()).with_context(|| format!("Failed to parse file config for '{}'", uri))?;
+        options.input.config = Some(file_config);
+        options.use_layout_for_markdown = use_layout_for_markdown;
+    }
+    Ok(options)
+}
 
-    Ok(ExtractInput {
-        kind: ExtractInputKind::Uri,
-        uri: Some(uri.to_string()),
-        config: file_config,
-        ..Default::default()
-    })
+fn parse_file_config(mut value: serde_json::Value) -> serde_json::Result<(FileExtractionConfig, Option<bool>)> {
+    let use_layout_for_markdown = value
+        .as_object_mut()
+        .and_then(|fields| fields.remove("use_layout_for_markdown"))
+        .map(serde_json::from_value::<Option<bool>>)
+        .transpose()?
+        .flatten();
+    let config = serde_json::from_value(value)?;
+    Ok((config, use_layout_for_markdown))
 }
 
 #[cfg(test)]
@@ -113,6 +118,19 @@ mod tests {
     fn parse_batch_json_manifest_accepts_inputs_object() {
         let uris = parse_batch_json_manifest(r#"{"inputs":["a.txt",{"path":"b.txt"}]}"#).unwrap();
         assert_eq!(uris, vec!["a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn mixed_batch_accepts_per_file_layout_overrides() {
+        let uris = ["a.pdf".into(), "b.pdf".into(), "c.pdf".into()];
+        let overrides = std::collections::HashMap::from([
+            ("a.pdf".into(), serde_json::json!({"use_layout_for_markdown": true})),
+            ("c.pdf".into(), serde_json::json!({"use_layout_for_markdown": false})),
+        ]);
+
+        let inputs = build_batch_inputs(&uris, Some(&overrides)).unwrap();
+        let overrides: Vec<_> = inputs.iter().map(|input| input.use_layout_for_markdown).collect();
+        assert_eq!(overrides, [Some(true), None, Some(false)]);
     }
 
     #[test]

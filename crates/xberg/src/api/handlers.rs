@@ -8,7 +8,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 
 use crate::cache;
-use crate::core::config::{ExtractInput, ExtractInputKind, ExtractionResult};
+use crate::core::config::{ExtractInput, ExtractInputKind, ExtractInputWithOptions, ExtractionResult};
 
 use std::sync::Arc;
 
@@ -55,34 +55,51 @@ enum ApiExtractInput {
         mime_type: String,
         file_name: Option<String>,
         config: Option<crate::core::config::FileExtractionConfig>,
+        use_layout_for_markdown: Option<bool>,
     },
     Uri {
         uri: String,
         mime_type: Option<String>,
         config: Option<crate::core::config::FileExtractionConfig>,
+        use_layout_for_markdown: Option<bool>,
     },
 }
 
 impl ApiExtractInput {
-    fn into_core_input(self) -> ExtractInput {
-        match self {
+    fn into_core_input(self) -> ExtractInputWithOptions {
+        let (input, use_layout_for_markdown) = match self {
             Self::Bytes {
                 data,
                 mime_type,
                 file_name,
                 config,
-            } => ExtractInput {
-                config,
-                ..ExtractInput::from_bytes(data.to_vec(), mime_type, file_name)
-            },
-            Self::Uri { uri, mime_type, config } => ExtractInput {
-                kind: ExtractInputKind::Uri,
-                uri: Some(uri),
+                use_layout_for_markdown,
+            } => (
+                ExtractInput {
+                    config,
+                    ..ExtractInput::from_bytes(data.to_vec(), mime_type, file_name)
+                },
+                use_layout_for_markdown,
+            ),
+            Self::Uri {
+                uri,
                 mime_type,
                 config,
-                ..Default::default()
-            },
-        }
+                use_layout_for_markdown,
+            } => (
+                ExtractInput {
+                    kind: ExtractInputKind::Uri,
+                    uri: Some(uri),
+                    mime_type,
+                    config,
+                    ..Default::default()
+                },
+                use_layout_for_markdown,
+            ),
+        };
+        let mut options = ExtractInputWithOptions::new(input);
+        options.use_layout_for_markdown = use_layout_for_markdown;
+        options
     }
 }
 
@@ -182,6 +199,8 @@ struct JsonExtractInputObject {
     /// only ever apply one config to every input in a batch (#247).
     #[serde(default)]
     config: Option<crate::core::config::FileExtractionConfig>,
+    #[serde(default)]
+    use_layout_for_markdown: Option<bool>,
 }
 
 impl<S> FromRequest<S> for UnifiedExtractRequest
@@ -309,6 +328,7 @@ where
                     // Multipart file parts carry no per-part config; per-input
                     // overrides are expressed through the JSON `inputs` field.
                     config: None,
+                    use_layout_for_markdown: None,
                 });
             }
             "urls" => {
@@ -409,6 +429,7 @@ fn parse_urls_field(raw: &str) -> Result<Vec<ApiExtractInput>, ApiError> {
             uri,
             mime_type: None,
             config: None,
+            use_layout_for_markdown: None,
         }]),
         serde_json::Value::Array(values) => values
             .into_iter()
@@ -417,6 +438,7 @@ fn parse_urls_field(raw: &str) -> Result<Vec<ApiExtractInput>, ApiError> {
                     uri,
                     mime_type: None,
                     config: None,
+                    use_layout_for_markdown: None,
                 }),
                 _ => Err(ApiError::validation(crate::error::XbergError::validation(
                     "urls field must be a JSON string or array of strings",
@@ -455,6 +477,7 @@ fn json_input_to_api_input(input: JsonExtractInput) -> Result<ApiExtractInput, A
             uri,
             mime_type: None,
             config: None,
+            use_layout_for_markdown: None,
         }),
         JsonExtractInput::Object(object) => object_to_api_input(*object),
     }
@@ -481,6 +504,7 @@ fn object_to_api_input(object: JsonExtractInputObject) -> Result<ApiExtractInput
                 .unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string()),
             file_name: object.filename,
             config: object.config,
+            use_layout_for_markdown: object.use_layout_for_markdown,
         });
     }
 
@@ -493,6 +517,7 @@ fn object_to_api_input(object: JsonExtractInputObject) -> Result<ApiExtractInput
             mime_type: object.mime_type.unwrap_or_else(|| "text/plain".to_string()),
             file_name: object.filename,
             config: object.config,
+            use_layout_for_markdown: object.use_layout_for_markdown,
         });
     }
 
@@ -501,6 +526,7 @@ fn object_to_api_input(object: JsonExtractInputObject) -> Result<ApiExtractInput
             uri,
             mime_type: object.mime_type,
             config: object.config,
+            use_layout_for_markdown: object.use_layout_for_markdown,
         });
     }
 
@@ -752,7 +778,9 @@ async fn extract_unified_inputs(
     }
 
     let inputs = inputs.into_iter().map(ApiExtractInput::into_core_input).collect();
-    crate::extract_batch(inputs, &config).await.map_err(ApiError::from)
+    crate::extract_batch_with_input_options(inputs, &config)
+        .await
+        .map_err(ApiError::from)
 }
 
 fn enforce_and_apply_api_uri_policy(
@@ -1724,7 +1752,7 @@ mod tests {
             .await
             .expect("per-input config must parse");
 
-        let core_inputs: Vec<ExtractInput> = parsed
+        let core_inputs: Vec<ExtractInputWithOptions> = parsed
             .inputs
             .into_iter()
             .map(ApiExtractInput::into_core_input)
@@ -1732,14 +1760,54 @@ mod tests {
 
         assert_eq!(core_inputs.len(), 2, "both inputs must survive parsing");
         assert_eq!(
-            core_inputs[0].config.as_ref().and_then(|config| config.force_ocr),
+            core_inputs[0].input.config.as_ref().and_then(|config| config.force_ocr),
             Some(true),
             "the first input's force_ocr override must reach ExtractInput::config"
         );
         assert!(
-            core_inputs[1].config.is_none(),
+            core_inputs[1].input.config.is_none(),
             "an input that declared no config must not inherit its sibling's override"
         );
+    }
+
+    #[tokio::test]
+    async fn should_preserve_mixed_layout_overrides_in_extract_batch() {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"inputs":[
+                    {"text":"first","use_layout_for_markdown":true},
+                    "https://example.com/inherit.pdf",
+                    {"uri":"https://example.com/disabled.pdf","use_layout_for_markdown":false}
+                ]}"#,
+            ))
+            .unwrap();
+
+        let parsed = UnifiedExtractRequest::from_request(request, &()).await.unwrap();
+        let overrides: Vec<_> = parsed
+            .inputs
+            .into_iter()
+            .map(|input| input.into_core_input().use_layout_for_markdown)
+            .collect();
+
+        assert_eq!(overrides, [Some(true), None, Some(false)]);
+    }
+
+    #[tokio::test]
+    async fn should_reject_non_boolean_layout_option_in_extract_batch() {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"inputs":[{"text":"first","use_layout_for_markdown":"false"},{"text":"second"}]}"#,
+            ))
+            .unwrap();
+        let error = UnifiedExtractRequest::from_request(request, &()).await.unwrap_err();
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
@@ -1986,6 +2054,7 @@ mod tests {
             uri: "https://example.com/document.pdf".to_string(),
             mime_type: None,
             config: None,
+            use_layout_for_markdown: None,
         }];
         let mut config = crate::ExtractionConfig::default();
         config.url.allow_local_file_inputs = true;
@@ -2003,6 +2072,7 @@ mod tests {
             uri: "file:///etc/passwd".to_string(),
             mime_type: None,
             config: None,
+            use_layout_for_markdown: None,
         }];
         let mut config = crate::ExtractionConfig::default();
 

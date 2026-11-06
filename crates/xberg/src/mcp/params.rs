@@ -118,7 +118,14 @@ fn extract_input_schema(_generator: &mut schemars::SchemaGenerator) -> schemars:
 }
 
 fn extract_inputs_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    let input_schema = extract_input_schema(generator);
+    let mut input_schema = extract_input_schema(generator);
+    input_schema
+        .ensure_object()
+        .get_mut("properties")
+        .expect("input properties exist")["use_layout_for_markdown"] = serde_json::json!({
+        "type": "boolean",
+        "description": "Override native PDF layout for Markdown for this input. Omit to inherit the batch setting."
+    });
     schemars::json_schema!({
         "type": "array",
         "items": input_schema
@@ -200,6 +207,14 @@ mod tests {
 
         assert_eq!(params.input, deserialized.input);
         assert_eq!(params.config, deserialized.config);
+    }
+
+    #[test]
+    fn batch_schema_accepts_an_optional_boolean_layout_override() {
+        let schema = serde_json::to_value(schemars::schema_for!(ExtractBatchParams)).unwrap();
+        let item = &schema["properties"]["inputs"]["items"];
+        assert_eq!(item["properties"]["use_layout_for_markdown"]["type"], "boolean");
+        assert_eq!(item["required"], serde_json::json!(["kind"]));
     }
 
     #[test]

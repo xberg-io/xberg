@@ -220,10 +220,10 @@ impl XbergMcp {
         let inputs = params
             .inputs
             .into_iter()
-            .map(|input| parse_extract_input(input, &config))
+            .map(|input| parse_batch_extract_input(input, &config))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let output = crate::extract_batch(inputs, &config)
+        let output = crate::extract_batch_with_input_options(inputs, &config)
             .await
             .map_err(map_xberg_error_to_mcp)?;
         let response = format_extraction_result_for_wire(&output, use_toon);
@@ -791,6 +791,24 @@ fn parse_extract_input(
         crate::core::config::request_security::adopt_file_operator_crawl_egress(config, operator);
     }
     Ok(input)
+}
+
+fn parse_batch_extract_input(
+    value: serde_json::Value,
+    operator: &ExtractionConfig,
+) -> Result<crate::ExtractInputWithOptions, rmcp::ErrorData> {
+    let use_layout_for_markdown = value
+        .get("use_layout_for_markdown")
+        .filter(|value| !value.is_null())
+        .map(|value| {
+            value
+                .as_bool()
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("use_layout_for_markdown must be a boolean", None))
+        })
+        .transpose()?;
+    let mut options = crate::ExtractInputWithOptions::new(parse_extract_input(value, operator)?);
+    options.use_layout_for_markdown = use_layout_for_markdown;
+    Ok(options)
 }
 
 fn format_extraction_result_for_wire(output: &crate::ExtractionResult, use_toon: bool) -> String {
@@ -1710,6 +1728,46 @@ mod tests {
             call_result.structured_content.is_some(),
             "cache_manifest should have structured_content"
         );
+    }
+
+    #[test]
+    fn should_preserve_mixed_layout_overrides_in_mcp_batch() {
+        let inputs = [
+            serde_json::json!({"kind": "uri", "uri": "first.pdf", "use_layout_for_markdown": true}),
+            serde_json::json!({"kind": "uri", "uri": "second.pdf"}),
+            serde_json::json!({"kind": "uri", "uri": "third.pdf", "use_layout_for_markdown": false}),
+        ];
+        let config = ExtractionConfig::default();
+        let overrides: Vec<_> = inputs
+            .into_iter()
+            .map(|input| {
+                parse_batch_extract_input(input, &config)
+                    .unwrap()
+                    .use_layout_for_markdown
+            })
+            .collect();
+
+        assert_eq!(overrides, [Some(true), None, Some(false)]);
+    }
+
+    #[tokio::test]
+    async fn should_reject_non_boolean_layout_option_in_mcp_batch() {
+        let server = XbergMcp::with_config(ExtractionConfig::default());
+        let params = crate::mcp::params::ExtractBatchParams {
+            inputs: vec![
+                serde_json::json!({"kind": "uri", "uri": "first.pdf", "use_layout_for_markdown": "false"}),
+                serde_json::json!({"kind": "uri", "uri": "second.pdf"}),
+            ],
+            config: None,
+            pdf_password: None,
+            response_format: None,
+        };
+        let error = server
+            .extract_batch(rmcp::handler::server::wrapper::Parameters(params))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.message, "use_layout_for_markdown must be a boolean");
     }
 
     #[tokio::test]
