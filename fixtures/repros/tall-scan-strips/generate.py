@@ -7,7 +7,9 @@ from PIL import Image, ImageDraw, ImageFont
 parser = argparse.ArgumentParser()
 parser.add_argument("target", type=Path)
 parser.add_argument("font", type=Path)
-parser.add_argument("--bilevel-only", action="store_true")
+variants = parser.add_mutually_exclusive_group()
+variants.add_argument("--bilevel-only", action="store_true")
+variants.add_argument("--neutral-rgb-only", action="store_true")
 args = parser.parse_args()
 target, font_path = args.target, args.font
 phrase = "Source scan keeps all words from this repeated line safely today"
@@ -61,31 +63,35 @@ def _stream(data: bytes, fields: str = "") -> bytes:
     return f"<< /Length {len(data)} {fields} >>\nstream\n".encode() + data + b"\nendstream"
 
 
-def _raster(height: int, bilevel: bool) -> bytes:
+def _raster(height: int, packing: str) -> bytes:
     width = 1275
     image = Image.new("L", (width, height), 255)
     font = ImageFont.truetype(str(font_path), 18)
     draw = ImageDraw.Draw(image)
     for line in range(40):
         draw.text((95, 180 + line * ((height - 350) // 40)), lines[line], fill=0, font=font)
-    if bilevel:
+    if packing == "bilevel":
         image = image.convert("1")
+    elif packing == "neutral-rgb":
+        image = image.convert("RGB")
     compressed = zlib.compress(image.tobytes())
-    depth = 1 if bilevel else 8
+    depth = 1 if packing == "bilevel" else 8
+    color_space = "DeviceRGB" if packing == "neutral-rgb" else "DeviceGray"
     return _stream(
         compressed,
-        f"/Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceGray /BitsPerComponent {depth} /Filter /FlateDecode",
+        f"/Type /XObject /Subtype /Image /Width {width} /Height {height} "
+        f"/ColorSpace /{color_space} /BitsPerComponent {depth} /Filter /FlateDecode",
     )
 
 
-def _pdf(name: str, height: int, *, mixed: bool = False, bilevel: bool = False) -> None:
+def _pdf(name: str, height: int, *, mixed: bool = False, packing: str = "gray") -> None:
     pts = height * 0.48
     entries = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 {pts:g}] /Resources << /XObject << /Scan 5 0 R >> >> /Contents 4 0 R >>".encode(),
         _stream(f"q 612 0 0 {pts:g} 0 0 cm /Scan Do Q".encode()),
-        _raster(height, bilevel),
+        _raster(height, packing),
     ]
     if mixed:
         entries[1] = b"<< /Type /Pages /Kids [6 0 R 3 0 R] /Count 2 >>"
@@ -114,7 +120,9 @@ def _pdf(name: str, height: int, *, mixed: bool = False, bilevel: bool = False) 
 
 
 if args.bilevel_only:
-    _pdf("bilevel-tall.pdf", 12000, bilevel=True)
+    _pdf("bilevel-tall.pdf", 12000, packing="bilevel")
+elif args.neutral_rgb_only:
+    _pdf("neutral-rgb-tall.pdf", 12000, packing="neutral-rgb")
 else:
     _pdf("strict-tall.pdf", 9000)
     _pdf("strict-short.pdf", 3600)
