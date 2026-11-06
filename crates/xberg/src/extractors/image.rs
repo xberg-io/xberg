@@ -3380,7 +3380,7 @@ impl ImageExtractor {
 
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(title) = photo_title {
-                image_photo_title::append(&mut doc, title);
+                image_photo_title::append(&mut doc, title, &config.output_format);
             }
             Ok(doc)
         }
