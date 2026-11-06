@@ -186,6 +186,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
+  When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
+
 - **(pdf): Recover missing words behind partial hidden text on supported CCITT Group 4 scans.** (#2425)
   Automatic Tesseract OCR checks the raster only when the bilevel image and its complete Group 4 stream can be verified.
   Scans with complete hidden text keep their native text.
