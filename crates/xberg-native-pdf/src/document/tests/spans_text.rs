@@ -733,3 +733,12 @@ fn test_should_insert_space_still_separates_words_around_a_ligature() {
     let prev = make_test_span("the", 72.0, 700.0, 25.0, 12.0);
     assert!(PdfDocument::should_insert_space(&prev, &ligature_start));
 }
+
+/// A word-final ligature inside a longer run ("staﬀ") is not a bare ligature run, so
+/// a gap only slightly above the ordinary threshold still separates the next word.
+#[test]
+fn test_should_insert_space_after_a_word_final_ligature_uses_the_ordinary_gap() {
+    let word = make_test_span("sta\u{FB00}", 72.0, 700.0, 25.0, 12.0);
+    let next = make_test_span("only", 99.5, 700.0, 20.0, 12.0); // 2.5pt = 0.21em gap ~keep
+    assert!(PdfDocument::should_insert_space(&word, &next));
+}
