@@ -191,6 +191,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Recover a single sideways prose paragraph when native lines prove the complete text and geometry.
   Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
 
+- **(ocr): Remove duplicate dot-leader rows from standalone Tesseract PSM 6 output.** (#2503)
+  Require matching text and geometry while preserving numeric cells, default OCR, and PDF output.
+
 - **(pdf): Preserve complete painted exhibit tables when cells contain decorative text fills.** (#2376)
   Verify source cell contents and suppress only an exactly proven residual duplicate digit.
 
