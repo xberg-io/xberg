@@ -4469,12 +4469,15 @@ pub(super) async fn extract_with_ocr_for_page(
             } else {
                 None
             };
-            #[cfg(not(all(
-                feature = "pdf",
-                feature = "ocr",
-                feature = "tokio-runtime",
-                not(target_arch = "wasm32")
-            )))]
+            #[cfg(all(
+                any(not(feature = "layout-detection"), feature = "ocr", feature = "ocr-wasm"),
+                not(all(
+                    feature = "pdf",
+                    feature = "ocr",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))
+            ))]
             let detached_paragraph_scale: Option<(f32, f32)> = None;
             let mut backend_tables = std::mem::take(&mut ocr_result.tables);
             for table in &mut backend_tables {
