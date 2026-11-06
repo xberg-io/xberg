@@ -1143,7 +1143,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             config.images.as_ref(),
         );
         raster_dpis.extend(batch_raster_dpis);
+        let mut budget_refused: Vec<(usize, crate::XbergError)> = Vec::new();
         for (page_idx, error) in render_failures {
+            if render_refused_by_source_image_budget(&error) {
+                budget_refused.push((page_idx, error));
+                continue;
+            }
             let recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
             push_mixed_ocr_page_failure_warning(
                 &mut accumulated_warnings,
@@ -1650,6 +1655,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         drop(page_images);
         // A page whose backend call failed waits here for the embedded-image retry below.
         let mut failed_pages: ahash::AHashMap<usize, crate::XbergError> = ahash::AHashMap::new();
+        let budget_refused_pages: Vec<usize> = budget_refused.iter().map(|(page_idx, _)| *page_idx).collect();
+        failed_pages.extend(budget_refused);
 
         // `tokio::task::JoinSet::spawn` requires `Send` futures, but extractor/backend futures
         // are `!Send` on wasm32 (async_trait(?Send), see plugins/extractor/trait.rs) — and
@@ -2008,11 +2015,24 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         // A page whose OCR came back blank or failed is retried on its embedded image XObjects,
         // as the whole-document route does (#1355, #1444). The pipeline branch above gets the
         // same retry inside each stage, from the document it hands the runner (#1912).
-        for (page_idx, png, _, _) in encoded.iter().filter(|_| !probing_hidden_layer) {
+        // A page whose source image the render budget refused has no raster to inspect: its embedded
+        // images are the only place the text can come from. ~keep
+        let retry_pages = encoded
+            .iter()
+            .map(|(page_idx, png, _, _)| (page_idx, Some(png.as_slice())))
+            .chain(budget_refused_pages.iter().map(|page_idx| (page_idx, None)))
+            .filter(|_| !probing_hidden_layer);
+        for (page_idx, png) in retry_pages {
             let page_number = (page_idx + 1) as u32;
             let failure = failed_pages.remove(page_idx);
             let page_text = ocr_results.get(&page_number).map_or("", String::as_str);
-            let trigger = page_needs_xobject_fallback(page_text, png, security_limits);
+            let trigger = match png {
+                Some(png) => page_needs_xobject_fallback(page_text, png, security_limits),
+                None => super::rendering::XObjectFallbackTrigger {
+                    needs_fallback: true,
+                    draw_failed: true,
+                },
+            };
             let recovery = if trigger.needs_fallback {
                 recover_page_text_from_image_xobjects(
                     backend,
@@ -7027,6 +7047,13 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
         }
     }
     resolved
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn render_refused_by_source_image_budget(error: &crate::XbergError) -> bool {
+    use std::error::Error as _;
+    error
+        .source()
+        .is_some_and(|source| source.is::<super::rendering::SourceImageBudgetExceeded>())
 }
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
 /// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.

@@ -735,9 +735,11 @@ fn render_one_full_pdf_ocr_page(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-#[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub(super) struct SourceImageBudgetExceeded(#[source] xberg_native_pdf::Error);
+mod error_source;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) use error_source::SourceImageBudgetExceeded;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+use error_source::render_error_source;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn render_one_full_pdf_ocr_page_with_dpi(
@@ -762,14 +764,9 @@ fn render_one_full_pdf_ocr_page_with_dpi(
     )
     .map_err(|error| {
         let message = format!("Failed to render page {page_idx} for OCR: {error:?}");
-        let source: Box<dyn std::error::Error + Send + Sync> = if exceeded {
-            Box::new(SourceImageBudgetExceeded(error))
-        } else {
-            Box::new(error)
-        };
         crate::XbergError::Parsing {
             message,
-            source: Some(source),
+            source: Some(render_error_source(error, exceeded)),
         }
     })?;
     let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
@@ -876,14 +873,9 @@ fn render_one_selected_page(
     )
     .map_err(|error| {
         let message = format!("Failed to render PDF page {}: {}", idx + 1, error);
-        let source: Box<dyn std::error::Error + Send + Sync> = if exceeded {
-            Box::new(SourceImageBudgetExceeded(error))
-        } else {
-            Box::new(error)
-        };
         crate::XbergError::Parsing {
             message,
-            source: Some(source),
+            source: Some(render_error_source(error, exceeded)),
         }
     })?;
     let rotation = page_rotations.get(idx).copied().unwrap_or(0);
