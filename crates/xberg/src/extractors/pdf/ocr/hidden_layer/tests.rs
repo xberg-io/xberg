@@ -220,3 +220,24 @@ fn ccitt_group4_parameters_require_exact_geometry_and_grammar() {
     let filter = Object::Name("CCITTFaxDecode".to_owned());
     assert!(super::stream_filters(Some(&filter)).is_none());
 }
+
+#[test]
+fn ccitt_work_is_debited_per_request_without_charging_legacy_streams() {
+    let doc = super::PdfDocument::from_bytes(CCITT_PROBE_PDF.to_vec()).unwrap();
+    let ccitt = super::image_source(&doc, 0, "Scan").unwrap();
+    let mut remaining = 10_000_000;
+    assert_eq!(ccitt.charge_ccitt_work(&mut remaining), Some(()));
+    assert_eq!(remaining, 270_510);
+    assert_eq!(ccitt.charge_ccitt_work(&mut remaining), None);
+    assert_eq!(remaining, 270_510);
+
+    let legacy = ImageSource {
+        encoding: ImageEncoding::Stream {
+            filters: StreamFilters::Raw,
+            predictor: None,
+        },
+        ..ccitt
+    };
+    assert_eq!(legacy.charge_ccitt_work(&mut remaining), Some(()));
+    assert_eq!(remaining, 270_510);
+}

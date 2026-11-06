@@ -9,8 +9,8 @@ const CCITT_COMPLETE: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_24
 const FLATE_PARTIAL: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/flate8-partial.pdf");
 const FLATE_COMPLETE: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/flate8-complete.pdf");
 
-async fn assert_read(pdf: &[u8], force_ocr: bool, expected_ocr: bool) {
-    let config = ExtractionConfig {
+fn config(force_ocr: bool) -> ExtractionConfig {
+    ExtractionConfig {
         force_ocr,
         // The PDF route forwards this cache opt-out to Tesseract after stock routing.
         use_cache: false,
@@ -20,12 +20,20 @@ async fn assert_read(pdf: &[u8], force_ocr: bool, expected_ocr: bool) {
             ..Default::default()
         }),
         ..Default::default()
-    };
-    let output = xberg::extract(ExtractInput::from_bytes(pdf.to_vec(), "application/pdf", None), &config)
+    }
+}
+
+async fn read(pdf: &[u8], config: &ExtractionConfig) -> xberg::ExtractedDocument {
+    let output = xberg::extract(ExtractInput::from_bytes(pdf.to_vec(), "application/pdf", None), config)
         .await
         .expect("extract the synthetic scan");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     let [document] = <[_; 1]>::try_from(output.results).unwrap();
+    document
+}
+
+async fn assert_read(pdf: &[u8], force_ocr: bool, expected_ocr: bool) {
+    let document = read(pdf, &config(force_ocr)).await;
     let expected = SOURCE.split_whitespace().collect::<Vec<_>>();
     assert_eq!(expected.len(), 81);
     let actual = document.content.split_whitespace().collect::<Vec<_>>();
@@ -87,4 +95,34 @@ async fn independently_decoded_raster_controls_preserve_words_and_native_coverag
         assert_fixture(pdf, sha);
         assert_read(pdf, force_ocr, expected_ocr).await;
     }
+}
+
+#[tokio::test]
+async fn tight_ccitt_work_limit_keeps_the_partial_native_text() {
+    let mut config = config(false);
+    config.security_limits = Some(xberg::extractors::security::SecurityLimits {
+        max_iterations: 3_000_000,
+        ..Default::default()
+    });
+    let ccitt = read(CCITT_PARTIAL, &config).await;
+    let expected = SOURCE
+        .lines()
+        .enumerate()
+        .filter(|(index, _)| [0, 1, 2, 3, 10].contains(index))
+        .flat_map(|(_, line)| line.split_whitespace())
+        .collect::<Vec<_>>();
+    assert_eq!(expected.len(), 29);
+    assert!(!ccitt.metadata.ocr_used);
+    assert_eq!(ccitt.content.split_whitespace().collect::<Vec<_>>(), expected);
+    assert_eq!(
+        ccitt.pages.unwrap()[0].content.split_whitespace().collect::<Vec<_>>(),
+        expected
+    );
+
+    let flate = read(FLATE_PARTIAL, &config).await;
+    assert!(flate.metadata.ocr_used);
+    assert_eq!(
+        flate.content.split_whitespace().collect::<Vec<_>>(),
+        SOURCE.split_whitespace().collect::<Vec<_>>()
+    );
 }

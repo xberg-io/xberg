@@ -105,6 +105,7 @@ pub(super) fn needs_ocr(
     doc: &PdfDocument,
     page: usize,
     byte_limit: usize,
+    remaining_ccitt_work: &mut usize,
     is_cancelled: impl Fn() -> bool,
 ) -> Option<bool> {
     if is_cancelled() {
@@ -132,6 +133,7 @@ pub(super) fn needs_ocr(
         return None;
     }
     let decode_limit = source.decode_budget(byte_limit, boxes.capacity())?;
+    source.charge_ccitt_work(remaining_ccitt_work)?;
     let samples = source.decode_samples(decode_limit)?;
     let preview = gray_preview(&samples, &source, size)?;
     Some(!is_cancelled() && has_uncovered_text(&preview, handle.bbox, &boxes))
@@ -439,6 +441,24 @@ impl ImageSource {
         } else {
             self.decoded_size()
         }
+    }
+
+    fn charge_ccitt_work(&self, remaining: &mut usize) -> Option<()> {
+        if matches!(self.encoding, ImageEncoding::CcittGroup4) {
+            // A unit is a pixel/edge visit or a bounded prefix probe, not an individual bit
+            // inspection. Charge packing, grayscale expansion, and the forward edge walk
+            // by pixel. Each Huffman code tests at most 104 prefixes and consumes at least
+            // two bits. The rest of the per-bit allowance covers mode probes and backward
+            // steps (at most three columns). A terminal bad code can consume zero bits.
+            const WORK_PER_PIXEL: usize = 3;
+            const WORK_PER_ENCODED_BIT: usize = 64;
+            const TERMINAL_CODE_WORK: usize = 128;
+            let pixels = self.decoded_size()?.checked_mul(WORK_PER_PIXEL)?;
+            let input = self.data.len().checked_mul(8)?.checked_mul(WORK_PER_ENCODED_BIT)?;
+            let work = pixels.checked_add(input)?.checked_add(TERMINAL_CODE_WORK)?;
+            *remaining = remaining.checked_sub(work)?;
+        }
+        Some(())
     }
 
     fn decode_budget(&self, byte_limit: usize, box_capacity: usize) -> Option<usize> {
