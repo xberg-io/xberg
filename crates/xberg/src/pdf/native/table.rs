@@ -383,8 +383,6 @@ pub(crate) fn extract_tables_heuristic(
     skip_pages: &HashSet<u32>,
     artifacts: crate::pdf::native::hierarchy::ArtifactRetention,
 ) -> Result<HeuristicTableExtraction> {
-    use crate::pdf::table_reconstruct::{HocrWord, segments_to_words};
-
     let (per_page_segments, used_structure_tree) =
         crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
             PdfError::TextExtractionFailed(format!(
@@ -418,7 +416,13 @@ pub(crate) fn extract_tables_heuristic(
             .fold(0.0_f32, f32::max)
             .max(792.0);
 
-        let words: Vec<HocrWord> = segments_to_words(segments, page_height);
+        let source_frame = source_columns::supports_page_frame(segments);
+        let mut sources = Vec::new();
+        let words = crate::pdf::table_reconstruct::project_segment_words(
+            segments,
+            page_height,
+            source_frame.then_some(&mut sources),
+        );
         if words.len() < 4 {
             continue;
         }
@@ -447,7 +451,8 @@ pub(crate) fn extract_tables_heuristic(
         .ok()
         .unwrap_or_default();
         let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
-        let column_rules = source_columns::PageRules::new(&paths, source_columns::supports_page_frame(segments));
+        let column_rules =
+            source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
 
         let page_tables_start = tables.len();
         tables.extend(reconstruct_page_region_tables(

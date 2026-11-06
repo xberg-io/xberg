@@ -125,3 +125,73 @@ async fn should_preserve_seven_source_columns_in_the_1987_to_1988_budget() {
         &["27,435", DOT_PLACEHOLDER, "27,435", "30,462", DOT_PLACEHOLDER, "30,462"],
     );
 }
+
+#[tokio::test]
+async fn should_keep_seven_columns_where_source_rules_start_at_fractional_row_edges() {
+    let tables = extract_budget_page(191, "4193e7b4abaa7e1e36a7b1c29f8b181aa4638eca91a4ccb96f5e3bd77aed2f74").await;
+    assert_eq!(
+        tables.iter().map(|table| table.cells.len()).collect::<Vec<_>>(),
+        [7, 3, 6, 4]
+    );
+    let food = &tables[2..3];
+    for (label, values) in [
+        (
+            "Housing assistance",
+            ["12,626", "5,226", "7,400", "13,841", "5,190", "8,651"],
+        ),
+        (
+            "Food stamp program",
+            ["12,407", "10,448", "1,959", "13,145", "11,152", "1,993"],
+        ),
+        ("Child nutrition", ["4,060", "138", "3,922", "4,305", "146", "4,158"]),
+        ("Supplemental feeding", ["1,670", "*", "1,669", "1,804", "3", "1,801"]),
+        ("Commodity donations", ["725", "10", "716", "745", "9", "736"]),
+    ] {
+        assert_source_row(food, label, &values);
+    }
+    assert_eq!(
+        food[0].cells[1],
+        ["Food and nutrition assistance:", "", "", "", "", "", ""]
+    );
+}
+
+#[tokio::test]
+async fn fractional_rules_refine_housing_cells_without_repartitioning_the_sibling_section() {
+    let tables = extract_budget_page(190, "79855f73beedeaf6acac434337a85525eb8db9627d352344fb621244349ed49d").await;
+    assert_eq!(tables.len(), 6);
+    assert_source_row(
+        &tables[3..4],
+        "Student assistance",
+        &["7,036 6,966", "70 7,800", "7,724 76", "8,036 7,954", "82"],
+    );
+    for (label, values) in [
+        (
+            "Housing assistance",
+            [
+                "9,932", "4,163", "5,769", "11,200", "4,783", "6,417", "12,279", "4,836", "7,443",
+            ],
+        ),
+        (
+            "Food stamp program",
+            [
+                "12,375", "10,829", "1,547", "12,526", "10,815", "1,710", "12,443", "10,651", "1,792",
+            ],
+        ),
+        (
+            "Child nutrition",
+            [
+                "3,552", "192", "3,361", "3,681", "201", "3,480", "3,835", "157", "3,678",
+            ],
+        ),
+        (
+            "Supplemental feeding",
+            ["1,367", "2", "1,365", "1,495", "*", "1,495", "1,578", "*", "1,577"],
+        ),
+        (
+            "Commodity donations",
+            ["677", "9", "668", "756", "9", "747", "668", "9", "660"],
+        ),
+    ] {
+        assert_source_row(&tables[4..5], label, &values);
+    }
+}
