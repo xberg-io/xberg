@@ -521,6 +521,16 @@ impl TesseractBackend {
             .await
     }
 
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) async fn process_standalone_sparse_image(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows)
+            .await
+    }
+
     async fn process_image_with_policy(
         &self,
         image_bytes: Arc<Vec<u8>>,

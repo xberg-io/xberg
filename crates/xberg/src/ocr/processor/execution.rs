@@ -2623,6 +2623,10 @@ pub(super) fn perform_ocr(
 
     let mut tables = Vec::new();
     let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    let mut standalone_claimed = false;
+    #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
+    let standalone_claimed = false;
 
     if config.enable_table_detection {
         let tsv_data = tsv_data_for_tables.as_ref().unwrap();
@@ -2647,6 +2651,12 @@ pub(super) fn perform_ocr(
             && regions.len() == 1
             && dictionary_filtered_line_count == 0
             && hocr_for_tables.is_some()
+            && full_scan_table::uses_default_table_thresholds(config);
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        let can_prove_sparse_grid = policy == ImageOcrPolicy::StandaloneSparseRows
+            && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+            && regions.len() == 1
+            && dictionary_filtered_line_count == 0
             && full_scan_table::uses_default_table_thresholds(config);
         tables.extend(oriented.into_iter().flatten());
         for (region_index, mut region) in regions.into_iter().enumerate() {
@@ -2756,10 +2766,23 @@ pub(super) fn perform_ocr(
 
             #[cfg(feature = "pdf")]
             let cleaned = post_process_table(table, false, false).or_else(|| {
-                if !can_prove_scan_grid {
-                    return None;
+                let bbox = region.bounding_box();
+                #[cfg(not(target_arch = "wasm32"))]
+                if can_prove_sparse_grid {
+                    let cells = full_scan_table::recover_standalone(
+                        tsv_data,
+                        &content,
+                        &bbox,
+                        &security_limits,
+                        hocr_for_tables.as_deref()?,
+                        hocr_document.as_ref()?,
+                    )?;
+                    standalone_claimed = true;
+                    return Some(cells);
                 }
-                full_scan_table::recover(tsv_data, &content, &region.bounding_box(), &security_limits)
+                can_prove_scan_grid
+                    .then(|| full_scan_table::recover(tsv_data, &content, &bbox, &security_limits))
+                    .flatten()
             });
             #[cfg(not(feature = "pdf"))]
             let cleaned = Some(table);
@@ -2829,7 +2852,10 @@ pub(super) fn perform_ocr(
             hocr_document = Some(restored.document);
         }
     }
-    if let Some(document) = hocr_document.as_mut() {
+    if let Some(document) = hocr_document.as_mut().filter(|_| standalone_claimed) {
+        document.elements.clear();
+        document.ocr_text_claimed_by_tables = true;
+    } else if let Some(document) = hocr_document.as_mut() {
         // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
         let reconciled = hocr_for_tables
             .as_deref()
@@ -3015,6 +3041,8 @@ fn process_image_resolved(
         ImageOcrPolicy::Default => "",
         ImageOcrPolicy::BoundedInferredUpscale => ":bounded-inferred-upscale",
         ImageOcrPolicy::StandaloneDotLeaderRows => ":standalone-dot-leader-rows",
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        ImageOcrPolicy::StandaloneSparseRows => ":standalone-sparse-rows",
     });
 
     // `output_format` is part of the cache identity: it selects the renderer and

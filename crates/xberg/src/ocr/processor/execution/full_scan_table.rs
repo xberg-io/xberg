@@ -24,6 +24,15 @@ pub(super) fn recover(
     region: &OcrTableBoundingBox,
     limits: &SecurityLimits,
 ) -> Option<Vec<Vec<String>>> {
+    certify(tsv, content, region, limits).map(|(cells, _)| cells)
+}
+
+fn certify(
+    tsv: &str,
+    content: &str,
+    region: &OcrTableBoundingBox,
+    limits: &SecurityLimits,
+) -> Option<(Vec<Vec<String>>, Vec<Word>)> {
     let bytes = tsv.len().checked_add(content.len())?;
     if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
         return None;
@@ -43,7 +52,69 @@ pub(super) fn recover(
     let rows = disjoint_rows(&mut words)?;
     let grid = build_grid(&rows, limits.max_table_cells)?;
     let cleaned = post_process_table(grid.clone(), false, false)?;
-    (cleaned == grid).then_some(cleaned)
+    (cleaned == grid).then_some((cleaned, words))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn recover_standalone(
+    tsv: &str,
+    content: &str,
+    bbox: &OcrTableBoundingBox,
+    limits: &SecurityLimits,
+    hocr: &str,
+    document: &super::InternalDocument,
+) -> Option<Vec<Vec<String>>> {
+    let page_number = document.elements.first()?.page?;
+    let proof_bytes = tsv.len().checked_add(content.len())?.checked_add(hocr.len())?;
+    if proof_bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size)
+        || !document
+            .elements
+            .iter()
+            .all(|element| element.page == Some(page_number) && plain_ocr_fragment(element))
+    {
+        return None;
+    }
+    let mut limits = limits.clone();
+    limits.max_iterations = limits.max_iterations.checked_sub(hocr.len().checked_mul(4)?)?;
+    let (cells, words) = certify(tsv, content, bbox, &limits)?;
+    if !super::has_table_grid(&cells) {
+        return None;
+    }
+    // Reparse with the exact geometry and text of the already-certified TSV occurrences.
+    // A remaining hOCR fragment leaves the original OCR result untouched.
+    let claimed = super::parse_hocr_without_proved_table_fragments(
+        hocr,
+        page_number,
+        words.iter().map(|(_, word)| word).collect(),
+    );
+    claimed.elements.is_empty().then_some(cells)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn plain_ocr_fragment(element: &crate::types::internal::InternalElement) -> bool {
+    use crate::ocr::hocr_parser::{
+        HOCR_BOLD_FRACTION_ATTRIBUTE, HOCR_ITALIC_FRACTION_ATTRIBUTE, HOCR_TEXT_ANGLE_ATTRIBUTE,
+    };
+    use crate::types::internal::ElementKind;
+
+    matches!(element.kind, ElementKind::OcrText { .. })
+        && element.depth == 0
+        && element.layer == crate::types::ContentLayer::Body
+        && element.annotations.is_empty()
+        && element.anchor.is_none()
+        && element.attributes.as_ref().is_none_or(|attributes| {
+            [
+                HOCR_BOLD_FRACTION_ATTRIBUTE,
+                HOCR_ITALIC_FRACTION_ATTRIBUTE,
+                HOCR_TEXT_ANGLE_ATTRIBUTE,
+            ]
+            .iter()
+            .all(|key| {
+                attributes
+                    .get(*key)
+                    .is_none_or(|value| value.parse::<f64>().ok() == Some(0.0))
+            })
+        })
 }
 
 fn inside(word: &HocrWord, region: &OcrTableBoundingBox) -> bool {
@@ -224,6 +295,39 @@ mod tests {
         right: 1300,
         bottom: 545,
     };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn standalone_recovery_and_default_ocr_have_distinct_cold_and_warm_entries() {
+        use super::super::{ImageOcrPolicy, TessPageSegMode, process_image_with_cache_and_policy};
+        use crate::core::config::OutputFormat;
+        use crate::ocr::cache::OcrCache;
+        use crate::ocr::processor::api_pool::TesseractApiPool;
+
+        let directory = tempfile::tempdir().unwrap();
+        let cache = OcrCache::new(Some(directory.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!("../../../../tests/fixtures/ocr_source_row_layout_2432/image-11-no-leaders.png");
+        let config = TesseractConfig {
+            psm: TessPageSegMode::PSM_SPARSE_TEXT as u8,
+            use_cache: true,
+            ..Default::default()
+        };
+        let extract = |policy| {
+            process_image_with_cache_and_policy(image, &config, &cache, &pool, Some(OutputFormat::Plain), policy)
+                .unwrap()
+        };
+        for _ in 0..2 {
+            assert!(extract(ImageOcrPolicy::Default).tables.is_empty());
+            let recovered = extract(ImageOcrPolicy::StandaloneSparseRows);
+            let [table] = recovered.tables.as_slice() else {
+                panic!("expected exactly one recovered table");
+            };
+            assert_eq!(table.cells[7], ["Storm drains", "86", "346,028", "(1.463)"]);
+            assert!(recovered.internal_document.unwrap().ocr_text_claimed_by_tables);
+            assert_eq!(cache.get_stats().unwrap().total_files, 2);
+        }
+    }
 
     fn fixture() -> (String, String) {
         let mut tsv = HEADER.to_owned();

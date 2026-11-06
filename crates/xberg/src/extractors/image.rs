@@ -2563,6 +2563,26 @@ pub(crate) struct SparseRetryPolicy {
 struct StandaloneTesseract<'a> {
     sparse_retry: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
     dot_leader_rows: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
+    #[cfg(feature = "pdf")]
+    sparse_rows: bool,
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn allows_standalone_sparse_rows(
+    config: &ExtractionConfig,
+    ocr: &crate::core::config::OcrConfig,
+    mime_type: &str,
+) -> bool {
+    #[cfg(feature = "layout-types")]
+    if config.layout.is_some() {
+        return false;
+    }
+    config.output_format == crate::core::config::OutputFormat::Plain
+        && !config.include_document_structure
+        && !["image/tiff", "image/x-tiff"]
+            .iter()
+            .any(|alias| mime_type.eq_ignore_ascii_case(alias))
+        && !ocr.numeric_repair
 }
 
 #[cfg(any(feature = "pdf", test))]
@@ -2620,6 +2640,12 @@ async fn process_whole_image_ocr(
     let primary = match standalone.dot_leader_rows {
         Some(tesseract) => {
             Box::pin(tesseract.process_standalone_psm6_image(primary_bytes, effective_config.as_ref())).await?
+        }
+        #[cfg(feature = "pdf")]
+        None if standalone.sparse_rows
+            && let Some(tesseract) = standalone.sparse_retry =>
+        {
+            Box::pin(tesseract.process_standalone_sparse_image(primary_bytes, effective_config.as_ref())).await?
         }
         None => {
             backend
@@ -3154,6 +3180,8 @@ impl ImageExtractor {
                         .is_none_or(|config| config.preprocessing.is_none())
                 }),
                 dot_leader_rows: psm6_tesseract.as_deref(),
+                #[cfg(feature = "pdf")]
+                sparse_rows: allows_standalone_sparse_rows(config, ocr_config, mime_type),
             },
         )
         .await?;
@@ -4218,6 +4246,41 @@ mod image_sparse_retry_cancellation_tests;
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn tiff_media_type_aliases_disable_standalone_sparse_row_claims() {
+        let config = crate::core::config::ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Plain,
+            ..Default::default()
+        };
+        let ocr = crate::core::config::OcrConfig::default();
+        assert!(super::allows_standalone_sparse_rows(&config, &ocr, "image/png"));
+        for mime_type in ["image/tiff", "image/x-tiff", "IMAGE/X-TIFF"] {
+            assert!(
+                !super::allows_standalone_sparse_rows(&config, &ocr, mime_type),
+                "{mime_type}"
+            );
+        }
+    }
+
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "layout-types",
+        not(target_arch = "wasm32")
+    ))]
+    #[test]
+    fn configured_layout_disables_standalone_sparse_row_claims() {
+        let ocr = crate::core::config::OcrConfig::default();
+        let mut config = crate::core::config::ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Plain,
+            ..Default::default()
+        };
+        assert!(super::allows_standalone_sparse_rows(&config, &ocr, "image/png"));
+        config.layout = Some(crate::core::config::LayoutDetectionConfig::default());
+        assert!(!super::allows_standalone_sparse_rows(&config, &ocr, "image/png"));
+    }
+
     use super::*;
 
     #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
