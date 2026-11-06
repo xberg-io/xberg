@@ -34,6 +34,7 @@ defmodule MacosElixirArchiveSmoke do
 
   def run([mode, archive, native_source, unpacked])
       when mode in ["encode-decode", "missing-x265"] do
+    verify_hosted_beam!()
     unpacked = Path.expand(unpacked)
     {nif, codecs} = extract!(Path.expand(archive), unpacked)
     if mode == "missing-x265", do: withhold_x265!(unpacked, codecs)
@@ -48,6 +49,21 @@ defmodule MacosElixirArchiveSmoke do
   def run(_args),
     do:
       raise("usage: elixir smoke_macos_elixir_archive.exs MODE ARCHIVE NATIVE_EX EMPTY_DIRECTORY")
+
+  defp verify_hosted_beam! do
+    if System.get_env("XBERG_EXPECT_HOSTED_BEAM") == "1" do
+      otp = System.otp_release()
+      elixir = System.version()
+      architecture = :erlang.system_info(:system_architecture) |> List.to_string()
+
+      unless otp == "27" and String.starts_with?(elixir, "1.17.") and
+               Regex.match?(~r/\A(?:aarch64|arm64)-apple-darwin(?:[0-9.]+)?\z/, architecture) do
+        raise "expected Elixir 1.17 on OTP 27 arm64 macOS, got Elixir #{elixir}, OTP #{otp}, #{architecture}"
+      end
+
+      IO.puts("Verified scrubbed BEAM runtime: Elixir #{elixir}, OTP #{otp}, #{architecture}")
+    end
+  end
 
   defp digest(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
 
