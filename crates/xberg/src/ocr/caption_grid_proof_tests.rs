@@ -174,3 +174,112 @@ fn refuses_more_than_the_fixed_capture_limit_even_with_a_generous_caller_budget(
     assert_eq!(source.elements.len(), 1025);
     assert!(!accepts(&source));
 }
+
+fn assert_exact_lines(source: &Source, frame: (u32, u32)) {
+    let proof = certify_figure_caption(&source.table, &source.elements, frame, &SecurityLimits::default())
+        .expect("complete caption rows with exact cell and word ownership");
+    let expected: Vec<_> = source
+        .elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Line)
+        .map(|line| line.text.as_str())
+        .collect();
+    assert_eq!(proof.lines(), expected);
+    assert_eq!(
+        proof.lines().iter().flat_map(|line| line.split_whitespace()).count(),
+        85
+    );
+}
+
+#[test]
+fn wrapped_caption_ownership_is_independent_of_the_label_and_punctuation() {
+    for (label, number) in [("Fig.", "4:"), ("Fig", "4:"), ("Table", "4:"), ("Figure", "4")] {
+        let mut source = source();
+        let original = "Figure 4:";
+        let replacement = format!("{label} {number}");
+        assert_eq!(source.table.cells[0][0], original);
+        assert_eq!(source.elements[1].text, "Figure");
+        assert_eq!(source.elements[2].text, "4:");
+        source.table.cells[0][0].clone_from(&replacement);
+        source.elements[0].text = source.elements[0].text.replacen(original, &replacement, 1);
+        source.elements[1].text = label.to_owned();
+        source.elements[2].text = number.to_owned();
+        assert_exact_lines(&source, FRAME);
+    }
+
+    let mut source = source();
+    let last_cell = &mut source.table.cells[5][0];
+    assert!(last_cell.ends_with("(C)."));
+    last_cell.pop();
+    let last_line = source
+        .elements
+        .iter_mut()
+        .rfind(|element| element.level == OcrElementLevel::Line)
+        .unwrap();
+    assert!(last_line.text.ends_with("(C)."));
+    last_line.text.pop();
+    let last_word = source.elements.last_mut().unwrap();
+    assert_eq!(last_word.text, "(C).");
+    last_word.text.pop();
+    assert_exact_lines(&source, FRAME);
+}
+
+#[test]
+fn accepts_a_short_full_line_edge_at_equivalent_raster_scales() {
+    for scale in [1, 2, 3] {
+        let mut source = source();
+        let shortened_line = source
+            .elements
+            .iter()
+            .enumerate()
+            .filter(|(_, element)| element.level == OcrElementLevel::Line)
+            .nth(2)
+            .unwrap()
+            .0;
+        let shortened_word = source.elements[shortened_line + 1..]
+            .iter()
+            .position(|element| element.level == OcrElementLevel::Line)
+            .unwrap()
+            + shortened_line;
+        assert_eq!(source.elements[shortened_word].text, "(B),");
+        for (index, element) in source.elements.iter_mut().enumerate() {
+            let OcrBoundingGeometry::Rectangle {
+                left,
+                top,
+                width,
+                height,
+            } = &mut element.geometry
+            else {
+                panic!("axis-aligned source geometry");
+            };
+            if index == shortened_line || index == shortened_word {
+                *width -= 5;
+            }
+            *left *= scale;
+            *top *= scale;
+            *width *= scale;
+            *height *= scale;
+        }
+        let region = source.table.bounding_box.as_mut().unwrap();
+        region.left *= scale;
+        region.top *= scale;
+        region.right *= scale;
+        region.bottom *= scale;
+        assert_exact_lines(&source, (FRAME.0 * scale, FRAME.1 * scale));
+    }
+}
+
+#[test]
+fn keeps_staggered_unruled_cells_without_an_intact_intervening_line() {
+    let mut source = source();
+    for (row, word_count) in [(2, 4), (3, 8)] {
+        let cells = &mut source.table.cells[row];
+        assert!(cells[1..].iter().all(String::is_empty));
+        let words: Vec<_> = cells[0].split_whitespace().collect();
+        let first = words[..word_count].join(" ");
+        let second = words[word_count..].join(" ");
+        cells[0] = first;
+        cells[1] = second;
+    }
+    assert!(!accepts(&source));
+}
