@@ -104,12 +104,13 @@ fn contiguous_groups(spans: &[TextSpan], order: &[usize], hints: &[LayoutHint]) 
     }
     let mut seen = vec![false; spans.len()];
     let mut groups: Vec<Option<Range<usize>>> = vec![None; hints.len()];
+    let mut unavailable = vec![false; hints.len()];
     for (position, &index) in order.iter().enumerate() {
         let span = spans.get(index)?;
         if std::mem::replace(&mut seen[index], true) {
             return None;
         }
-        let Some(owner) = unique_owner(span, hints)? else {
+        let Some(owner) = unique_owner(span, hints, &mut unavailable)? else {
             continue;
         };
         match &mut groups[owner] {
@@ -121,27 +122,29 @@ fn contiguous_groups(spans: &[TextSpan], order: &[usize], hints: &[LayoutHint]) 
     let mut owned: Vec<_> = groups
         .into_iter()
         .enumerate()
-        .filter_map(|(index, run)| Some((index, run?)))
+        .filter_map(|(index, run)| (!unavailable[index]).then_some((index, run?)))
         .collect();
     owned.sort_by_key(|(_, range)| range.start);
     (!owned.is_empty()).then_some(owned)
 }
 
-fn unique_owner(span: &TextSpan, hints: &[LayoutHint]) -> Option<Option<usize>> {
+fn unique_owner(span: &TextSpan, hints: &[LayoutHint], unavailable: &mut [bool]) -> Option<Option<usize>> {
     let (left, bottom, right, top) = (span.x, span.y, span.x + span.width, span.y + span.height);
     if ![left, bottom, right, top].into_iter().all(f32::is_finite) || left >= right || bottom >= top {
         return None;
     }
     let mut owner = None;
+    // A competing span invalidates every box it touches, even one already carrying a range. ~keep
     for (index, hint) in hints.iter().enumerate() {
         if left < hint.right && right > hint.left && bottom < hint.top && top > hint.bottom {
-            if owner.is_some() || left < hint.left || right > hint.right || bottom < hint.bottom || top > hint.top {
-                return None;
+            if let Some(previous) = owner.replace(index) {
+                unavailable[previous] = true;
+                unavailable[index] = true;
             }
-            owner = Some(index);
+            unavailable[index] |= left < hint.left || right > hint.right || bottom < hint.bottom || top > hint.top;
         }
     }
-    Some(owner)
+    Some(owner.filter(|&index| !unavailable[index]))
 }
 
 fn whole_word_range(text: &str, range: Range<usize>) -> Option<Range<usize>> {
@@ -215,6 +218,16 @@ mod tests {
             contiguous_groups(&spans[..1], &[0], &[hint(0., 70.), hint(20., 70.)]),
             None
         );
+        let spans = [span(10.), span(40.), span(110.), span(65.)];
+        let hints = [hint(0., 50.), hint(50., 90.), hint(100., 150.)];
+        assert_eq!(
+            contiguous_groups(&spans, &[0, 1, 3, 2], &hints),
+            Some(vec![(2, 3..4)]),
+            "both sides of a shared source boundary must refuse"
+        );
+        let mut malformed = spans;
+        malformed[1].x = f32::NAN;
+        assert_eq!(contiguous_groups(&malformed, &[0, 1, 3, 2], &hints), None);
         assert_eq!(whole_word_range("é lan", 1..5), None);
         assert_eq!(whole_word_range("élan", 0..2), None);
         assert_eq!(whole_word_range("élan 東京", 0..5), Some(0..5));
