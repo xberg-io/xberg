@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(pdf): Reduce allocations in native text extraction.** (#2429)
+  Reuse ordered spans directly when the text pass does not need character records.
+
 - **(pdf): Reuse each page's words and ruling paths across both ruled-table detectors.** (#2429)
   Strict and bordered detection retain their existing thresholds and precedence.
 
