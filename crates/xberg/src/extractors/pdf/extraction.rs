@@ -886,11 +886,17 @@ pub(crate) fn extract_all_from_native_document(
         if crate::extraction::image_ocr::pdf_gap::eligible(config)
             && let [image] = extracted.as_slice()
         {
-            let limits = config
+            let ocr_limits = config.ocr.as_ref().and_then(|ocr| ocr.security_limits.as_ref());
+            let mut limits = config
                 .security_limits
                 .as_ref()
-                .or_else(|| config.ocr.as_ref()?.security_limits.as_ref());
-            *gap = super::ocr::embedded_gap_placement(&doc.doc, image, limits.unwrap_or(&Default::default()));
+                .or(ocr_limits)
+                .cloned()
+                .unwrap_or_default();
+            limits.max_content_size = ocr_limits.map_or(limits.max_content_size, |ocr| {
+                limits.max_content_size.min(ocr.max_content_size)
+            });
+            *gap = super::ocr::embedded_gap_placement(&doc.doc, image, &limits);
         }
 
         let positions: Vec<(u32, u32)> = extracted

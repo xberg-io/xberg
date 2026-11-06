@@ -716,7 +716,7 @@ impl TextAccumulator {
 
 #[cfg(test)]
 mod tests {
-    use super::samples::decode_exact_gray;
+    use super::super::hidden_layer::decode_exact_flate;
     use super::*;
     use std::io::Write;
 
@@ -826,12 +826,12 @@ mod tests {
         let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(&[0, 1, 254, 255]).unwrap();
         let mut compressed = encoder.finish().unwrap();
-        assert_eq!(decode_exact_gray(&compressed, 4), Some(vec![0, 1, 254, 255]));
-        assert_eq!(decode_exact_gray(&compressed, 3), None);
-        assert_eq!(decode_exact_gray(&compressed, 5), None);
-        assert_eq!(decode_exact_gray(&compressed[..compressed.len() - 1], 4), None);
+        assert_eq!(decode_exact_flate(&compressed, 4), Some(vec![0, 1, 254, 255]));
+        assert_eq!(decode_exact_flate(&compressed, 3), None);
+        assert_eq!(decode_exact_flate(&compressed, 5), None);
+        assert_eq!(decode_exact_flate(&compressed[..compressed.len() - 1], 4), None);
         compressed.push(0);
-        assert_eq!(decode_exact_gray(&compressed, 4), None);
+        assert_eq!(decode_exact_flate(&compressed, 4), None);
     }
 
     #[test]
