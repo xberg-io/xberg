@@ -6,3 +6,8 @@ The decoded image SHA-256 stayed
 The decoded page operator SHA-256 stayed
 `35aac8acdfce35da0c488e262235dd084c0faba86c2c0e735ee1aaeed1bcac59`.
 The test also accepts the exact original file via `XBERG_2503_SCAN`.
+
+`scan-200-dashes.pdf` is the same image with each leader dot redrawn as a
+six-by-two pixel dash (127 dots in the 12 leader runs), wrapped by a minimal
+uncompressed-structure PDF writer. It keeps the layout and tint, and the dash
+aspect ratio fails the dot proof.

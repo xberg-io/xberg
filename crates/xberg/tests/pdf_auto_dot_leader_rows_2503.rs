@@ -8,7 +8,7 @@
 mod helpers;
 
 use sha2::{Digest, Sha256};
-use xberg::{ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
+use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
 
 const SOURCE_ROWS: [[&str; 3]; 12] = [
     ["97", "623,093", "(8,538)"],
@@ -59,19 +59,7 @@ fn numeric_fields(text: &str) -> impl Iterator<Item = &str> {
         })
 }
 
-#[test]
-fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
-    let (bytes, expected_sha) = match std::env::var_os("XBERG_2503_SCAN") {
-        Some(path) => (
-            std::fs::read(path).unwrap(),
-            "646f94cfca1f44d2aae766cf7b694bf8e606445336f0fa548cff8636de6ec3a6",
-        ),
-        None => (
-            include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-tinted.pdf").to_vec(),
-            "b284ba53054ea40b23e00c79adeed3ac646645bdaeb12a0c67f9e515754c26c4",
-        ),
-    };
-    assert_eq!(hex::encode(Sha256::digest(&bytes)), expected_sha);
+fn extract(bytes: &[u8]) -> ExtractedDocument {
     let models = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
     assert_eq!(
@@ -92,8 +80,41 @@ fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
         }),
         ..Default::default()
     };
-    let result = helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    helpers::extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap()
+}
+
+fn tinted_scan() -> Vec<u8> {
+    match std::env::var_os("XBERG_2503_SCAN") {
+        Some(path) => {
+            let bytes = std::fs::read(path).unwrap();
+            assert_eq!(
+                hex::encode(Sha256::digest(&bytes)),
+                "646f94cfca1f44d2aae766cf7b694bf8e606445336f0fa548cff8636de6ec3a6"
+            );
+            bytes
+        }
+        None => {
+            let bytes = include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-tinted.pdf").to_vec();
+            assert_eq!(
+                hex::encode(Sha256::digest(&bytes)),
+                "b284ba53054ea40b23e00c79adeed3ac646645bdaeb12a0c67f9e515754c26c4"
+            );
+            bytes
+        }
+    }
+}
+
+#[test]
+fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
+    let result = extract(&tinted_scan());
     assert!(result.metadata.ocr_used);
+    let [table] = result.tables.as_slice() else {
+        panic!(
+            "the dot-leader route must claim the rows as one table, found {}",
+            result.tables.len()
+        );
+    };
+    assert_eq!(table.cells.len(), 13);
     let [page] = result.pages.as_deref().unwrap() else {
         panic!("expected one source page");
     };
@@ -122,4 +143,12 @@ fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
             .collect::<Vec<_>>();
         assert_eq!(rows, SOURCE_ROWS, "{name}: place each exact source triplet on one row");
     }
+}
+
+#[test]
+fn regular_dashes_in_place_of_leader_dots_do_not_form_a_table() {
+    let bytes = include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-dashes.pdf");
+    let result = extract(bytes);
+    assert!(result.metadata.ocr_used);
+    assert!(result.tables.is_empty(), "found {} tables", result.tables.len());
 }
