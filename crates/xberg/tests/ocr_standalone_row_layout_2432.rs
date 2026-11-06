@@ -143,3 +143,29 @@ fn standalone_row_claim_keeps_the_public_ocr_elements() {
         serde_json::to_value(ordinary.ocr_elements.expect("explicit sparse elements")).unwrap()
     );
 }
+
+#[test]
+fn markdown_and_djot_keep_the_certified_standalone_rows() {
+    let expected = expected_rows();
+    for format in [OutputFormat::Markdown, OutputFormat::Djot] {
+        let mut config = config();
+        config.output_format = format.clone();
+        let result = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
+        assert!(result.metadata.ocr_used);
+        let [table] = result.tables.as_slice() else {
+            panic!(
+                "{format:?}: expected one certified standalone table, found {}",
+                result.tables.len()
+            );
+        };
+        assert_eq!(table.cells, expected, "{format:?}");
+        for row in &expected {
+            let line = format!("| {} |", row.join(" | "));
+            assert!(
+                result.content.lines().any(|candidate| candidate.trim() == line),
+                "{format:?}: missing row {line:?} in\n{}",
+                result.content
+            );
+        }
+    }
+}

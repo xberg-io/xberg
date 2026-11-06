@@ -2581,8 +2581,12 @@ fn allows_standalone_sparse_rows(
     if config.layout.is_some() {
         return false;
     }
-    config.output_format == crate::core::config::OutputFormat::Plain
-        && !config.include_document_structure
+    matches!(
+        config.output_format,
+        crate::core::config::OutputFormat::Plain
+            | crate::core::config::OutputFormat::Markdown
+            | crate::core::config::OutputFormat::Djot
+    ) && !config.include_document_structure
         && !["image/tiff", "image/x-tiff"]
             .iter()
             .any(|alias| mime_type.eq_ignore_ascii_case(alias))
