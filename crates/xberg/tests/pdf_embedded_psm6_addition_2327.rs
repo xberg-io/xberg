@@ -79,7 +79,7 @@ fn panel_pdf_with_decode(overpaint: bool, duplicate: bool, unproved_decode: bool
     bytes
 }
 
-fn config(psm: i32, use_cache: bool) -> ExtractionConfig {
+fn config(psm: impl Into<Option<i32>>, use_cache: bool) -> ExtractionConfig {
     ExtractionConfig {
         use_cache,
         pages: Some(PageConfig {
@@ -93,7 +93,7 @@ fn config(psm: i32, use_cache: bool) -> ExtractionConfig {
         }),
         ocr: Some(OcrConfig {
             tesseract_config: Some(TesseractConfig {
-                psm: Some(psm),
+                psm: psm.into(),
                 use_cache: false,
                 ..Default::default()
             }),
@@ -153,6 +153,43 @@ async fn explicit_psm6_adds_only_the_missing_embedded_line() {
         serde_json::to_value(original).unwrap(),
         serde_json::to_value(untouched.images.as_deref().unwrap()[0].ocr_result.as_ref().unwrap()).unwrap()
     );
+}
+
+#[tokio::test]
+async fn omitted_psm_keeps_actual_psm3_and_adds_only_the_missing_embedded_line() {
+    let mut reference_config = config(None, false);
+    reference_config.images.as_mut().unwrap().inject_placeholders = true;
+    let reference = extract(panel_pdf(false, false), &reference_config).await;
+    let [reference_image] = reference.images.as_deref().unwrap() else {
+        panic!("one reference image")
+    };
+    let reference_nested = reference_image.ocr_result.as_ref().unwrap();
+    assert_eq!(reference_nested.content, format!("{FIRST}\n\n{LAST}"));
+    assert_eq!(
+        reference_nested.metadata.additional.get("psm"),
+        Some(&serde_json::json!("3"))
+    );
+    assert!(!reference.content.contains(MISSING));
+
+    let result = extract(panel_pdf(false, false), &config(None, false)).await;
+    let [image] = result.images.as_deref().unwrap() else {
+        panic!("one retained image")
+    };
+    let nested = image.ocr_result.as_ref().expect("original nested OCR");
+    assert_eq!(
+        serde_json::to_value(nested).unwrap(),
+        serde_json::to_value(reference_nested).unwrap()
+    );
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("one extracted page")
+    };
+    assert_eq!(page.page_number, 1);
+    let expected = format!("{}\n\n{FIRST}\n\n{MISSING}\n\n{LAST}", NATIVE.join("\n\n"));
+    assert_eq!(
+        result.content, expected,
+        "recover the literal missing line under actual PSM 3"
+    );
+    assert_eq!(page.content, expected);
 }
 
 #[tokio::test]

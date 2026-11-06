@@ -1,5 +1,5 @@
 use super::{
-    MAX_CONTENT_BYTES, MAX_OPERATORS, Object, Operator, PdfDocument, decode_probe_stream, image_source,
+    ImageEncoding, MAX_CONTENT_BYTES, MAX_OPERATORS, Object, Operator, PdfDocument, decode_probe_stream, image_source,
     page_frame_and_contents, simple_font_resources, stream_filters, visit_complete_content_stream,
 };
 use crate::extraction::image_ocr::pdf_gap::Placement;
@@ -51,7 +51,7 @@ pub(crate) fn embedded_gap_placement(
     let dimensions = (source.width, source.height);
     let dpi = f64::from(source.width) * POINTS_PER_INCH / (right - left);
     if source.channels != 3
-        || source.predictor.is_some()
+        || !matches!(source.encoding, ImageEncoding::Stream { predictor: None, .. })
         || image.width.zip(image.height) != Some(dimensions)
         || f64::from(source.height) * POINTS_PER_INCH / (top - bottom) != dpi
         || !(0.0 < dpi && dpi <= POINTS_PER_INCH)

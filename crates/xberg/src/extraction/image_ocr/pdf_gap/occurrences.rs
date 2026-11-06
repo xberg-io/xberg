@@ -55,12 +55,12 @@ struct Read<'a> {
     words: Vec<(&'a str, Bounds)>,
 }
 
-fn read(doc: &ExtractedDocument, frame: (u32, u32), scale: (u32, u32), n: usize) -> Option<Read<'_>> {
+fn read(doc: &ExtractedDocument, frame: (u32, u32), scale: (u32, u32), n: usize, psm: i32) -> Option<Read<'_>> {
     let metadata = &doc.metadata;
     if !doc.tables.is_empty()
         || !doc.processing_warnings.is_empty()
         || doc.content.len() > MAX_TEXT_BYTES
-        || !matches!(&metadata.format, Some(FormatMetadata::Ocr(ocr)) if ocr.psm == 6 && ocr.language == "eng")
+        || !matches!(&metadata.format, Some(FormatMetadata::Ocr(ocr)) if ocr.psm == psm && ocr.language == "eng")
         || metadata
             .additional
             .get(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY)?
@@ -135,8 +135,8 @@ fn owns_literal_words(read: &Read<'_>, doc: &ExtractedDocument) -> bool {
     claimed == read.words.len()
 }
 
-pub(super) fn has_primary(doc: &ExtractedDocument, frame: (u32, u32)) -> bool {
-    doc.metadata.image_preprocessing.is_none() && read(doc, frame, (1, 1), 2).is_some()
+pub(super) fn has_primary(doc: &ExtractedDocument, frame: (u32, u32), psm: i32) -> bool {
+    doc.metadata.image_preprocessing.is_none() && read(doc, frame, (1, 1), 2, psm).is_some()
 }
 
 pub(super) fn insert(
@@ -144,6 +144,7 @@ pub(super) fn insert(
     retry: &ExtractedDocument,
     placement: &Placement,
     native: &str,
+    psm: i32,
 ) -> Option<String> {
     let resize = retry.metadata.image_preprocessing.as_ref()?;
     let dimensions = resize.new_dimensions?;
@@ -157,8 +158,8 @@ pub(super) fn insert(
     {
         return None;
     }
-    let before = read(primary, placement.dimensions, placement.scaled, 2)?;
-    let after = read(retry, placement.scaled, placement.dimensions, 3)?;
+    let before = read(primary, placement.dimensions, placement.scaled, 2, psm)?;
+    let after = read(retry, placement.scaled, placement.dimensions, 3, psm)?;
     let [(first, first_box), (last, last_box)] = before.lines.as_slice() else {
         return None;
     };

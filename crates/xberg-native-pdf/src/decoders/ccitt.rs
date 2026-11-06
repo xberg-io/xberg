@@ -16,6 +16,9 @@ use crate::decoders::{CcittParams, StreamDecoder};
 use crate::error::{Error, Result};
 use crate::extractors::ccitt_bilevel::{append_transition_row, transitions_to_bytes};
 
+mod strict;
+pub use strict::decode_complete_group4;
+
 /// CCITTFaxDecode stream filter (pass-through).
 ///
 /// The raw CCITT codestream is kept compressed in the filter chain; actual
@@ -97,7 +100,7 @@ pub fn decode(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
         }
 
         current.clear();
-        match decode_row_g4(&mut reader, &reference, width, &mut current) {
+        match decode_row_g4::<false>(&mut reader, &reference, width, &mut current) {
             RowStatus::EndOfBlock => break,
             RowStatus::AllocationFailed => {
                 return Err(Error::Decode("Unable to grow CCITT row transition buffer".to_string()));
@@ -179,7 +182,7 @@ fn decode_g3(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
         let status = if one_d {
             decode_row_g3_1d(&mut reader, width, &mut current)
         } else {
-            decode_row_g4(&mut reader, &reference, width, &mut current)
+            decode_row_g4::<false>(&mut reader, &reference, width, &mut current)
         };
         match status {
             RowStatus::EndOfBlock => break,
@@ -529,7 +532,12 @@ fn try_push_transition(transitions: &mut Vec<u16>, position: u16) -> bool {
 /// Decode one G4 (T.6) row relative to `reference`, pushing color-flip column
 /// positions (first run white) into `current`. Ported from the verified `fax`
 /// crate `Group4Decoder::advance`.
-fn decode_row_g4(reader: &mut BitReader, reference: &[u16], width: u16, current: &mut Vec<u16>) -> RowStatus {
+fn decode_row_g4<const STRICT: bool>(
+    reader: &mut BitReader,
+    reference: &[u16],
+    width: u16,
+    current: &mut Vec<u16>,
+) -> RowStatus {
     let mut pos = 0usize;
     let mut a0: u16 = 0;
     let mut black = false;
@@ -547,17 +555,25 @@ fn decode_row_g4(reader: &mut BitReader, reference: &[u16], width: u16, current:
                 } else if next_color(reference, &mut pos, a0, !black, false).is_none() {
                     return RowStatus::Error;
                 }
-                if let Some(b2) = ref_next(reference, &mut pos) {
-                    a0 = b2;
+                match ref_next(reference, &mut pos) {
+                    Some(b2) if !STRICT || b2 > a0 => a0 = b2,
+                    _ if STRICT => return RowStatus::Error,
+                    _ => {}
                 }
             }
             Mode::Vertical(delta) => {
                 let b1 = next_color(reference, &mut pos, a0, !black, start_of_row).unwrap_or(width);
                 let a1i = b1 as i32 + delta as i32;
                 if a1i < 0 || a1i > width as i32 {
+                    if STRICT {
+                        return RowStatus::Error;
+                    }
                     break;
                 }
                 let a1 = a1i as u16;
+                if STRICT && !advances_at_row_edge(a0, a1, start_of_row) {
+                    return RowStatus::Error;
+                }
                 if a1 < width && !try_push_transition(current, a1) {
                     return RowStatus::AllocationFailed;
                 }
@@ -567,7 +583,7 @@ fn decode_row_g4(reader: &mut BitReader, reference: &[u16], width: u16, current:
                     seek_back(reference, &mut pos, a0);
                 }
             }
-            Mode::Horizontal => match decode_horizontal(reader, current, width, black, a0) {
+            Mode::Horizontal => match decode_horizontal::<STRICT>(reader, current, width, black, a0, start_of_row) {
                 HorizontalStep::Advance(new_a0) => a0 = new_a0,
                 HorizontalStep::EndOfRow => break,
                 HorizontalStep::Status(status) => return status,
@@ -581,6 +597,10 @@ fn decode_row_g4(reader: &mut BitReader, reference: &[u16], width: u16, current:
         }
     }
     RowStatus::Ok
+}
+
+fn advances_at_row_edge(previous: u16, next: u16, start_of_row: bool) -> bool {
+    next > previous || (start_of_row && next == previous)
 }
 
 /// Outcome of decoding one Horizontal-mode code pair within a G4/G3 row.
@@ -597,12 +617,13 @@ enum HorizontalStep {
 /// to two transition columns. Split out of [`decode_row_g4`] purely to bring
 /// that function's cyclomatic complexity under the repo's linter cap; the
 /// logic is unchanged from the inline `Mode::Horizontal` arm.
-fn decode_horizontal(
+fn decode_horizontal<const STRICT: bool>(
     reader: &mut BitReader,
     current: &mut Vec<u16>,
     width: u16,
     black: bool,
     a0: u16,
+    start_of_row: bool,
 ) -> HorizontalStep {
     let r1 = match read_run(reader, !black) {
         Some(v) => v,
@@ -620,6 +641,9 @@ fn decode_horizontal(
         Some(v) => v,
         None => return HorizontalStep::Status(RowStatus::Error),
     };
+    if STRICT && (a2 > width || (r1 == 0 && !start_of_row) || (r2 == 0 && a1 != width)) {
+        return HorizontalStep::Status(RowStatus::Error);
+    }
     if a1 < width && !try_push_transition(current, a1) {
         return HorizontalStep::Status(RowStatus::AllocationFailed);
     }
@@ -662,6 +686,10 @@ mod tests {
     }
 
     fn p(params: CcittParams, bits: &str) -> Result<CcittDecoded> {
+        decode(&pack_bits(bits), &params)
+    }
+
+    fn pack_bits(bits: &str) -> Vec<u8> {
         // Pack an MSB-first bit string into bytes (zero-padded to a byte). ~keep
         let mut bytes = Vec::new();
         let mut acc = 0u8;
@@ -678,7 +706,38 @@ mod tests {
         if n > 0 {
             bytes.push(acc << (8 - n));
         }
-        decode(&bytes, &params)
+        bytes
+    }
+
+    #[test]
+    fn strict_group4_requires_exact_rows_trailer_and_padding() {
+        let valid = pack_bits("001 1000 11 1 000000000001 000000000001");
+        assert_eq!(decode_complete_group4(&valid, 8, 1, 1024).unwrap(), [0x18]);
+        assert!(decode_complete_group4(&valid, 8, 2, 1024).is_err());
+        assert!(decode_complete_group4(&valid, 8, 1, 32).is_err());
+        assert!(decode_complete_group4(&valid[..valid.len() - 1], 8, 1, 1024).is_err());
+        let mut nonzero_padding = valid.clone();
+        *nonzero_padding.last_mut().unwrap() |= 1;
+        assert!(decode_complete_group4(&nonzero_padding, 8, 1, 1024).is_err());
+        let mut extra = valid;
+        extra.push(0);
+        assert!(decode_complete_group4(&extra, 8, 1, 1024).is_err());
+    }
+
+    #[test]
+    fn strict_group4_rejects_rows_the_renderer_can_recover() {
+        let params = CcittParams {
+            k: -1,
+            columns: 8,
+            rows: Some(1),
+            ..Default::default()
+        };
+        for row in ["011", "001 10100 010", "001 00110101 0000110111 1"] {
+            let stream = pack_bits(&format!("{row} 000000000001 000000000001"));
+            let recovered = decode(&stream, &params).unwrap();
+            assert_eq!(recovered.rows_decoded, 1);
+            assert!(decode_complete_group4(&stream, 8, 1, 1024).is_err(), "{row}");
+        }
     }
 
     #[test]

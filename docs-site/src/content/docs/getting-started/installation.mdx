@@ -695,7 +695,7 @@ Kotlin Android uses the Android AAR (`io.xberg:xberg-android`). It embeds JNI li
 
 ### Swift
 
-Swift Package Manager from `swift-tools-version: 6.2` upward. `Package.swift` declares macOS 14+ and iOS 16+ (the bundled ONNX Runtime requires macOS 13.4). The prebuilt macOS library is Apple Silicon (arm64) only; SwiftPM has no platform declaration for Linux, so no minimum is stated there. The package pulls a prebuilt static library through a `binaryTarget` (`RustBridgeBinary`), so consuming it needs no local cargo build.
+Use a Swift 6.2 or newer toolchain. The compiler and SDK have their own host requirements. The package declares deployment targets of macOS 14 or newer on Apple Silicon (arm64) and iOS 16 or newer. SwiftPM has no platform declaration for Linux. The package supplies a prebuilt static library through the `RustBridgeBinary` target, so consuming it needs no local Cargo build.
 
 ### Zig
 

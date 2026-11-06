@@ -2,6 +2,7 @@
 
 use super::types::PdfParagraph;
 
+mod display_rows;
 mod legend_rows;
 pub(super) use legend_rows::reattach_chart_legend_markers;
 
@@ -120,6 +121,8 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
             && same_rotation
             && vertical_gap_compatible
             && !next_starts_section
+            && !display_rows::is_indexed_display_row(&next)
+            && !display_rows::is_indexed_display_row(&current)
             && (!current_starts_section || heading_wrap_exempt);
 
         if should_merge {
@@ -528,6 +531,95 @@ mod tests {
         ];
         merge_continuation_paragraphs(&mut paragraphs);
         assert_eq!(paragraphs.len(), 1, "adjacent continuation lines should merge");
+    }
+
+    fn indexed_display_row() -> PdfParagraph {
+        let mut row = make_body_paragraph_at("a", 12.0, 698.0);
+        let line = &mut row.lines[0];
+        let template = line.segments.pop().unwrap();
+        for (lane, (digit, value)) in [("1", "12"), ("2", "34"), ("3", "56")].into_iter().enumerate() {
+            for (text, offset, width, size, drop) in [
+                ("a", 0.0, 7.0, 12.0, 0.0),
+                (digit, 7.0, 5.0, 9.0, 2.0),
+                ("=", 15.0, 6.0, 12.0, 0.0),
+                (value, 24.0, 12.0, 12.0, 0.0),
+            ] {
+                let mut segment = template.clone();
+                segment.text = text.to_owned();
+                segment.x = lane as f32 * 60.0 + offset;
+                segment.y -= drop;
+                segment.baseline_y -= drop;
+                segment.font_size = size;
+                segment.height = size;
+                segment.width = width;
+                line.segments.push(segment);
+            }
+        }
+        row
+    }
+
+    fn merge_after_prose(next: PdfParagraph) -> Vec<PdfParagraph> {
+        let mut paragraphs = vec![make_body_paragraph_at("This leaves us with", 12.0, 712.0), next];
+        merge_continuation_paragraphs(&mut paragraphs);
+        paragraphs
+    }
+
+    #[test]
+    fn continuation_merge_keeps_a_complete_indexed_display_row_separate() {
+        assert_eq!(merge_after_prose(indexed_display_row()).len(), 2);
+    }
+
+    #[test]
+    fn continuation_merge_keeps_prose_after_an_indexed_display_row_separate() {
+        let mut paragraphs = vec![
+            indexed_display_row(),
+            make_body_paragraph_at("and then continues below", 12.0, 684.0),
+        ];
+        merge_continuation_paragraphs(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 2);
+    }
+
+    #[test]
+    fn continuation_merge_rejects_unrelated_runs_inside_assignment_lanes() {
+        let mut row = indexed_display_row();
+        for segment in &mut row.lines[0].segments[3..] {
+            segment.x += 14.0;
+        }
+        assert_eq!(merge_after_prose(row).len(), 1);
+    }
+
+    #[test]
+    fn continuation_merge_rejects_overpainted_assignment_lanes() {
+        let mut row = indexed_display_row();
+        row.lines[0].segments[2].width += 14.0;
+        assert_eq!(merge_after_prose(row).len(), 1);
+    }
+
+    #[test]
+    fn continuation_merge_keeps_inline_indexed_assignment_with_its_prose() {
+        let mut row = indexed_display_row();
+        row.lines[0].segments.truncate(4);
+        assert_eq!(merge_after_prose(row).len(), 1);
+    }
+
+    #[test]
+    fn continuation_merge_accepts_assignments_on_different_native_baselines() {
+        let mut row = indexed_display_row();
+        for segment in &mut row.lines[0].segments[8..] {
+            segment.baseline_y -= 4.0;
+            segment.y -= 4.0;
+        }
+        assert_eq!(merge_after_prose(row).len(), 1);
+    }
+
+    #[test]
+    fn continuation_merge_accepts_repeated_assignments_without_lowered_indices() {
+        let mut row = indexed_display_row();
+        for digit in row.lines[0].segments.iter_mut().skip(1).step_by(4) {
+            digit.baseline_y += 2.0;
+            digit.y += 2.0;
+        }
+        assert_eq!(merge_after_prose(row).len(), 1);
     }
 
     #[test]

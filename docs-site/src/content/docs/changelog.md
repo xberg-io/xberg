@@ -188,11 +188,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(swift): Lower the Swift package's macOS floor from 26 to 14.** (#2528)
-  The bundled ONNX Runtime needs macOS 13.4, and nothing in xberg needs a later release; the manifests keep `swift-tools-version: 6.2`, which the static-library artifact bundle needs.
+- **(swift): Target macOS 14 for the Apple Silicon Swift package.** (#2528)
+  The Swift tools version stays at 6.2 and the iOS deployment target stays at 16.
 
-- **(cli): The macOS CLI ships a libheif built for its own macOS floor.** (#2528)
-  The CLI bundled the runner's Homebrew libheif and codecs, which need macOS 15 on Apple Silicon and 14 on Intel; it now builds them from source for macOS 11, as the wheels already do.
+- **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
+  When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
+
+- **(pdf): Recover missing words behind partial hidden text on supported CCITT Group 4 scans.** (#2425)
+  Automatic Tesseract OCR checks the raster only when the bilevel image and its complete Group 4 stream can be verified.
+  Scans with complete hidden text keep their native text.
+
+- **(pdf): Preserve verified scanned figure captions as prose.** (#2530)
+  Uncached Plain extraction can remove a false caption table when stock OCR and the page raster confirm the same text and geometry.
+
 - **(pdf): Place the heading and table from an upright scanned page in PDF points.** (#2497)
   Applies to single-page detached Tesseract OCR with caching off and plain output with document structure requested.
   A verified resize preserves the heading and table content and gives both bounds the same bottom-left page origin.
@@ -227,6 +235,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
+
+- **(pdf): Keep aligned indexed assignments on separate display rows.** (#2443)
+  Preserve their subscripts and separate each verified row from surrounding prose.
 
 - **(pdf): Keep raised chart legend markers with their labels.** (#2443)
   Join them only where neighboring source rows prove the association and no layout hints own the page.
@@ -389,6 +400,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
   Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
+
+- **(ocr): Recover a verified photo title in Markdown PNG extraction.** (#2312)
+  Append the title as a paragraph while preserving the original Markdown and page text.
 
 - **(ocr): Recover an outlined photo title in Plain PNG extraction, including cache hits.** (#2312)
   Add a title supported by two distinct source masks while keeping the original OCR text.
