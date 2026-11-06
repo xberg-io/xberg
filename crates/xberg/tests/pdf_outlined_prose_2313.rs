@@ -5,6 +5,8 @@ use xberg::{ExtractInput, ExtractionConfig, OcrConfig};
 // Synthetic 12pt DejaVu Sans glyph outlines, placed as five rows on a Letter page. ~keep
 const OUTLINED: &[u8] = include_bytes!("fixtures/ocr/outlined_prose_2313.pdf");
 const SINGLE_OUTLINE: &[u8] = include_bytes!("fixtures/ocr/outlined_caption_2313.pdf");
+const RASTER_PROSE: &[u8] = include_bytes!("fixtures/ocr/raster_prose_stubs_2313.pdf");
+const RASTER_CAPTION: &[u8] = include_bytes!("fixtures/ocr/raster_caption_stubs_2313.pdf");
 const HEADER: &str = "Minutes of the municipal library planning committee and public consultation working group";
 const PROSE: [&str; 5] = [
     "The committee met on Tuesday to review the plans for the library.",
@@ -53,6 +55,39 @@ async fn auto_ocr_recovers_outline_only_paragraphs_between_native_stubs() {
             "all five outlined lines and both native stubs with force_ocr={force}"
         );
     }
+}
+
+#[tokio::test]
+async fn page_raster_prose_recovers_between_visible_native_stubs() {
+    let expected: Vec<_> = std::iter::once(HEADER)
+        .chain(PROSE)
+        .chain(std::iter::once("Page 7"))
+        .flat_map(str::split_whitespace)
+        .collect();
+    for (force, method) in [
+        (true, xberg::types::ExtractionMethod::Ocr),
+        (false, xberg::types::ExtractionMethod::Mixed),
+    ] {
+        let document = read(RASTER_PROSE, force, None).await;
+        assert_eq!(
+            document.content.split_whitespace().collect::<Vec<_>>(),
+            expected,
+            "five raster-only lines and both independently painted native stubs with force_ocr={force}"
+        );
+        assert_eq!(document.extraction_method, Some(method));
+    }
+
+    let disabled = read(RASTER_PROSE, false, Some(false)).await;
+    assert_eq!(disabled.content.trim(), format!("{HEADER}\n\nPage 7"));
+    assert!(!disabled.metadata.ocr_used);
+}
+
+#[tokio::test]
+async fn page_raster_figure_and_caption_keep_visible_native_stubs() {
+    let document = read(RASTER_CAPTION, false, None).await;
+    assert_eq!(document.content.trim(), format!("{HEADER}\n\nPage 7"));
+    assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Native));
+    assert!(!document.metadata.ocr_used);
 }
 
 #[tokio::test]
