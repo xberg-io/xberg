@@ -15,6 +15,8 @@
     ".agents/skills/config-loading-precedence/SKILL.md",
     ".agents/skills/config-placement/SKILL.md",
     ".agents/skills/consumer-release-gates/SKILL.md",
+    ".agents/skills/correctness-review/SKILL.md",
+    ".agents/skills/correctness-review/references/more-invariants.md",
     ".agents/skills/crate-structure/SKILL.md",
     ".agents/skills/dependency-awareness/SKILL.md",
     ".agents/skills/document-corpus-handling/SKILL.md",
@@ -41,6 +43,7 @@
     ".agents/skills/plugin-architecture-patterns/SKILL.md",
     ".agents/skills/poly-lint-format/SKILL.md",
     ".agents/skills/polyrepo-boundaries/SKILL.md",
+    ".agents/skills/pull-requests/SKILL.md",
     ".agents/skills/release-workflow/SKILL.md",
     ".agents/skills/rule-layout-from-input/SKILL.md",
     ".agents/skills/scoop-distribution/SKILL.md",
@@ -124,6 +127,8 @@
     ".claude/skills/config-loading-precedence/SKILL.md",
     ".claude/skills/config-placement/SKILL.md",
     ".claude/skills/consumer-release-gates/SKILL.md",
+    ".claude/skills/correctness-review/SKILL.md",
+    ".claude/skills/correctness-review/references/more-invariants.md",
     ".claude/skills/crate-structure/SKILL.md",
     ".claude/skills/dependency-awareness/SKILL.md",
     ".claude/skills/document-corpus-handling/SKILL.md",
@@ -148,6 +153,7 @@
     ".claude/skills/plugin-architecture-patterns/SKILL.md",
     ".claude/skills/poly-lint-format/SKILL.md",
     ".claude/skills/polyrepo-boundaries/SKILL.md",
+    ".claude/skills/pull-requests/SKILL.md",
     ".claude/skills/release-workflow/SKILL.md",
     ".claude/skills/scoop-distribution/SKILL.md",
     ".claude/skills/skill-authoring/SKILL.md",
@@ -219,5 +225,9 @@
         "playwright"
       ]
     ]
+  },
+  "assets": {
+    ".agents/skills/correctness-review/references/more-invariants.md": "487f6be34e27b3b5eb834b391c9997abbf98668b7be80a97b056faca251ba8a6",
+    ".claude/skills/correctness-review/references/more-invariants.md": "487f6be34e27b3b5eb834b391c9997abbf98668b7be80a97b056faca251ba8a6"
   }
 }

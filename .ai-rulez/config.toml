@@ -99,6 +99,11 @@ tools = ["find_skill", "load_skill"]
 [lock]
 include_outputs = false
 
+[exposure]
+mcp_server_tokens = 1150
+start_budget = 7600
+codex_start_budget = 9050
+
 [lint]
 # ~keep The local feature-flag-conventions skill carries the languages module's shared flag contract verbatim plus the
 # Xberg feature sets, so one skill is listed instead of two. Re-copy the shared part when that module changes it.
