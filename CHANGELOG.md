@@ -293,6 +293,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Retain independently shaded source table headers and ruled cell boundaries.** (#2332)
   Keep nested text backgrounds from creating extra columns while preserving separate table records.
 
+- **(pdf): Preserve source-proven grouped leaf headers in ruled tables.** (#2332)
+  Two bold group bands over a bold leaf band stay header rows only when dark solid rules, which may be split into collinear segments, underline both.
+
 
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
   Retain words beside large graphics while preserving the dense-text recovery introduced in #2475.
