@@ -199,7 +199,7 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
         let page_number = (page_idx + 1) as u32;
         match doc
             .doc
-            .extract_tables_with_source_ownership(page_idx, [&strict_config, &bordered_config])
+            .extract_tables_with_wide_source_recovery(page_idx, [&strict_config, &bordered_config])
         {
             Ok([(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)]) => {
                 let recovered_from_empty =

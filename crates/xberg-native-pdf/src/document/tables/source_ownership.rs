@@ -1,7 +1,8 @@
 use super::*;
 use crate::structure::spatial_table_detector::{
-    PaintedCellOwnership, TableDetectionConfig, detect_tables_with_line_ownership,
-    detect_tables_without_painted_recovery,
+    MAX_SOURCE_SPANNED_COLUMNS, PaintedCellOwnership, TableDetectionConfig, TableStrategy,
+    certify_source_spanned_wide_table, detect_tables_with_line_ownership, detect_tables_without_painted_recovery,
+    source_spanned_rules_present, source_spanned_work_fits,
 };
 use crate::structure::table_extractor::Table;
 
@@ -25,6 +26,25 @@ impl PdfDocument {
         &self,
         page_index: usize,
         configs: [&crate::structure::spatial_table_detector::TableDetectionConfig; N],
+    ) -> Result<[RuledSourceTables; N]> {
+        self.extract_ruled_source_tables(page_index, configs, false)
+    }
+
+    /// Retry an empty default ruled route for a fully source-spanned wide table.
+    #[doc(hidden)]
+    pub fn extract_tables_with_wide_source_recovery(
+        &self,
+        page_index: usize,
+        configs: [&TableDetectionConfig; 2],
+    ) -> Result<[RuledSourceTables; 2]> {
+        self.extract_ruled_source_tables(page_index, configs, true)
+    }
+
+    fn extract_ruled_source_tables<const N: usize>(
+        &self,
+        page_index: usize,
+        configs: [&TableDetectionConfig; N],
+        recover_wide: bool,
     ) -> Result<[RuledSourceTables; N]> {
         // Use words instead of spans for better granularity.
         // This ensures that strings with spaces are split into separate columns
@@ -74,13 +94,55 @@ impl PdfDocument {
         // spatial candidate, independent of anything else in this function. ~keep
         let mut results = configs.map(|config| {
             let (mut tables, ownership) = detect_tables_with_line_ownership(&spans, &lines, config);
-            tables.retain(is_public_ruled_table);
+            tables.retain(|table| {
+                is_public_ruled_table(table)
+                    || (is_line_only(config)
+                        && table.col_count <= config.max_table_columns
+                        && certify_source_spanned_wide_table(table, &spans, &lines).is_some()
+                        && !looks_like_prose_table(table))
+            });
             let ownership = if tables.len() == 1 { ownership } else { None };
             (tables, ownership)
         });
         certify_empty_legacy_routes(&mut results, configs, &spans, &lines);
+        if recover_wide
+            && results.iter().all(|(tables, _)| tables.is_empty())
+            && let Some(config) = configs.last()
+            && let Some(last) = results.last_mut()
+            && let Some(recovered) = recover_wide_source_table(config, &spans, &lines)
+        {
+            *last = recovered;
+        }
         Ok(results)
     }
+}
+
+fn is_line_only(config: &TableDetectionConfig) -> bool {
+    config.horizontal_strategy == TableStrategy::Lines && config.vertical_strategy == TableStrategy::Lines
+}
+
+fn recover_wide_source_table(
+    config: &TableDetectionConfig,
+    spans: &[crate::layout::TextSpan],
+    lines: &[crate::elements::PathContent],
+) -> Option<RuledSourceTables> {
+    if !is_line_only(config)
+        || config.max_table_columns >= MAX_SOURCE_SPANNED_COLUMNS
+        || !source_spanned_work_fits(spans, lines)
+        || !source_spanned_rules_present(lines)
+    {
+        return None;
+    }
+    let mut retry = config.clone();
+    retry.max_table_columns = MAX_SOURCE_SPANNED_COLUMNS;
+    let tables = detect_tables_without_painted_recovery(spans, lines, &retry);
+    let [table] = <[Table; 1]>::try_from(tables).ok()?;
+    if table.col_count <= config.max_table_columns || looks_like_prose_table(&table) {
+        return None;
+    }
+    let mut ownership = certify_source_spanned_wide_table(&table, spans, lines)?;
+    ownership.replaces_empty_ruled_route = true;
+    Some((vec![table], Some(ownership)))
 }
 
 fn is_public_ruled_table(table: &Table) -> bool {

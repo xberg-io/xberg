@@ -15,6 +15,7 @@ mod filled_cells;
 mod header_bands;
 mod painted_double_rule_grid;
 mod source_headers;
+mod source_spanned_rows;
 
 /// Disjoint-set (union-find) with path compression.
 struct UnionFind {
@@ -4658,6 +4659,25 @@ impl PaintedCellOwnership {
                 .is_some_and(|word| *word == Some(bounds))
     }
 }
+
+pub(crate) fn certify_source_spanned_wide_table(
+    table: &Table,
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+) -> Option<PaintedCellOwnership> {
+    let bounds = source_spanned_rows::certify(table, spans, lines)?;
+    Some(PaintedCellOwnership {
+        columns: table.col_count,
+        words: Vec::new(),
+        recovered_bounds: Some(bounds),
+        double_rule: false,
+        replaces_empty_ruled_route: false,
+    })
+}
+
+pub(crate) use source_spanned_rows::{
+    MAX_SOURCE_SPANNED_COLUMNS, source_spanned_rules_present, source_spanned_work_fits,
+};
 
 /// Detect tables using vector lines and text spans (main entry point for hybrid detection).
 pub fn detect_tables_with_lines(
