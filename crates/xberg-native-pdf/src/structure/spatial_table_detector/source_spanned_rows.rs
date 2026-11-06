@@ -11,6 +11,7 @@ const MAX_SOURCE_SPANNED_PATHS: usize = 128;
 const MAX_SOURCE_SPANNED_WORDS: usize = 1_024;
 const MAX_SOURCE_SPANNED_TEXT_BYTES: usize = 64 * 1024;
 const MAX_RULE_STROKE_WIDTH: f32 = 2.0;
+const MAX_DARK_CHANNEL: f32 = 0.5;
 const RULE_AXIS_TOLERANCE: f32 = 1.0;
 const RULE_ENDPOINT_TOLERANCE: f32 = 1.0;
 
@@ -126,9 +127,9 @@ fn painted_rule(paths: &[PathContent], vertical: bool, coordinate: f32, start: f
             && path.dash_pattern.is_none()
             && (0.0..=MAX_RULE_STROKE_WIDTH).contains(&path.stroke_width)
             && path.stroke_color.is_some_and(|color| {
-                [color.r, color.g, color.b]
-                    .iter()
-                    .all(|channel| (0.0..1.0).contains(channel))
+                let channels = [color.r, color.g, color.b];
+                channels.iter().all(|channel| (0.0..=1.0).contains(channel))
+                    && channels.iter().any(|channel| *channel <= MAX_DARK_CHANNEL)
             })
             && minor.abs() <= RULE_AXIS_TOLERANCE
             && (center - coordinate).abs() <= SNAP_TOL
@@ -170,3 +171,7 @@ fn span_identity(span: &TextSpan) -> (usize, &str, [u32; 4]) {
         [bounds.x, bounds.y, bounds.width, bounds.height].map(f32::to_bits),
     )
 }
+
+#[cfg(test)]
+#[path = "source_spanned_rows_tests.rs"]
+mod tests;

@@ -49,6 +49,12 @@ fn byte_index_cells_span_their_eight_source_bit_columns() {
     );
     assert!(result.content.contains("colspan=\"8\">0</"));
     assert!(result.content.contains("colspan=\"8\">1</"));
+    assert_eq!(
+        result.content.matches("Byte index").count(),
+        1,
+        "source-spanned row text must not also remain as body text: {}",
+        result.content
+    );
 }
 
 #[test]
@@ -79,46 +85,58 @@ fn native_ruled_grid_admission_honors_the_explicit_column_cap() {
 
 #[test]
 fn native_wide_ruled_admission_declines_clipped_transparent_or_dashed_boundaries() {
-    use lopdf::{Document, dictionary};
-
-    let source = source_pdf();
+    let neutral = wrapped_source_tables(b"q\n", false);
+    assert_eq!(
+        neutral.len(),
+        1,
+        "a neutral q/Q wrapper must still certify, or the declines below prove nothing"
+    );
     for (control, prefix) in [
         ("clip", b"q 0 0 1 1 re W n\n".as_slice()),
         ("transparent", b"q /InvisibleStroke gs\n".as_slice()),
         ("dash", b"q [1 12] 0 d\n".as_slice()),
     ] {
-        let mut pdf = Document::load_mem(&source).unwrap();
-        let page = pdf.get_pages()[&1];
-        if control == "transparent" {
-            let resources = pdf
-                .get_object_mut(page)
-                .unwrap()
-                .as_dict_mut()
-                .unwrap()
-                .get_mut(b"Resources")
-                .unwrap()
-                .as_dict_mut()
-                .unwrap();
-            resources.set(
-                "ExtGState",
-                dictionary! { "InvisibleStroke" => dictionary! { "CA" => 0 } },
-            );
-        }
-        let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
-        let content = pdf.get_page_content(page);
-        let wrapped = [prefix, content.as_slice(), b"\nQ\n"].concat();
-        pdf.get_object_mut(stream)
-            .unwrap()
-            .as_stream_mut()
-            .unwrap()
-            .set_plain_content(wrapped);
-        let mut bytes = Vec::new();
-        pdf.save_to(&mut bytes).unwrap();
-
-        let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).unwrap();
-        let tables = document.extract_tables_with_config(0, native_ruled_config(18)).unwrap();
+        let tables = wrapped_source_tables(prefix, control == "transparent");
         assert!(tables.is_empty(), "{control} boundary unexpectedly certified a table");
     }
+}
+
+fn wrapped_source_tables(
+    prefix: &[u8],
+    transparent_stroke: bool,
+) -> Vec<xberg_native_pdf::structure::table_extractor::Table> {
+    use lopdf::{Document, dictionary};
+
+    let mut pdf = Document::load_mem(&source_pdf()).unwrap();
+    let page = pdf.get_pages()[&1];
+    if transparent_stroke {
+        let resources = pdf
+            .get_object_mut(page)
+            .unwrap()
+            .as_dict_mut()
+            .unwrap()
+            .get_mut(b"Resources")
+            .unwrap()
+            .as_dict_mut()
+            .unwrap();
+        resources.set(
+            "ExtGState",
+            dictionary! { "InvisibleStroke" => dictionary! { "CA" => 0 } },
+        );
+    }
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let content = pdf.get_page_content(page);
+    let wrapped = [prefix, content.as_slice(), b"\nQ\n"].concat();
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(wrapped);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+
+    let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).unwrap();
+    document.extract_tables_with_config(0, native_ruled_config(18)).unwrap()
 }
 
 fn native_ruled_config(
