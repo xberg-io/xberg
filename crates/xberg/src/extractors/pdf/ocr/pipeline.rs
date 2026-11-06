@@ -7600,7 +7600,7 @@ mod retained_raster_budget_tests;
 #[path = "pipeline/upright_processed_geometry_tests.rs"]
 mod upright_processed_geometry_tests;
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[path = "pipeline/raw_workspace_geometry.rs"]
 mod raw_workspace_geometry;
 
