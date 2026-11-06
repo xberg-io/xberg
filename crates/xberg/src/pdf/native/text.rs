@@ -2950,40 +2950,39 @@ pub(super) fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_in
     })
 }
 
-/// Build a page's `PageText` (spans + derived chars + dimensions), honouring
-/// optional-content (OCG/layer) visibility (issue #67).
-///
-/// `PdfDocument::extract_page_text_with_options` always treats every layer as
-/// visible; a default-OFF `/OCProperties` layer that mirrors the page's content
-/// (a common PDF-authoring pattern for redlines/translations/print-vs-screen
-/// variants) then contributes a second, hidden-in-every-viewer copy of the page
-/// text. When `excluded_layers` is non-empty, this instead calls xberg_native_pdf's
-/// filtered span extraction so the surfaced text matches what any viewer
-/// actually renders. An empty set is byte-identical to the unfiltered call.
+/// Positioned spans and page width consumed by the core text path. Native `PageText` also
+/// derives a per-character vector, which this path never reads. ~keep
+struct NativeSpanPage {
+    spans: Vec<TextSpan>,
+    page_width: f32,
+}
+
+/// Keep the existing optional-content filtering and coordinate conventions while reading
+/// the same ordered native spans without synthesizing unused character records. ~keep
 fn page_text_with_options_excluding_layers(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     excluded_layers: &std::collections::HashSet<String>,
-) -> xberg_native_pdf::error::Result<xberg_native_pdf::layout::PageText> {
-    if excluded_layers.is_empty() {
-        let mut page = doc.extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)?;
-        prefer_tagged_rtl_structure_order(doc, page_index, &mut page);
-        return Ok(page);
-    }
-
-    let spans = doc.extract_spans_filtered_with_reading_order(
-        page_index,
-        ReadingOrder::ColumnAware,
-        excluded_layers.clone(),
-        Default::default(),
-    )?;
-    let (_, _, page_width, page_height) = doc.get_page_media_box(page_index)?;
-    let mut page = xberg_native_pdf::layout::PageText {
-        chars: spans.iter().flat_map(|s| s.to_chars()).collect(),
-        spans,
-        page_width,
-        page_height,
+) -> xberg_native_pdf::error::Result<NativeSpanPage> {
+    let spans = if excluded_layers.is_empty() {
+        doc.extract_spans_with_reading_order(page_index, ReadingOrder::ColumnAware)?
+    } else {
+        doc.extract_spans_filtered_with_reading_order(
+            page_index,
+            ReadingOrder::ColumnAware,
+            excluded_layers.clone(),
+            Default::default(),
+        )?
     };
+    let (left, _, right, _) = doc.get_page_media_box(page_index)?;
+    // The filtered path historically reports upper-right coordinates, while the unfiltered
+    // native PageText API reports extents. Preserve both contracts in this allocation change. ~keep
+    let page_width = if excluded_layers.is_empty() {
+        right - left
+    } else {
+        right
+    };
+    let mut page = NativeSpanPage { spans, page_width };
     prefer_tagged_rtl_structure_order(doc, page_index, &mut page);
     Ok(page)
 }
@@ -2991,7 +2990,7 @@ fn page_text_with_options_excluding_layers(
 fn prefer_tagged_rtl_structure_order(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
-    page: &mut xberg_native_pdf::layout::PageText,
+    page: &mut NativeSpanPage,
 ) {
     let has_rtl = page.spans.iter().any(|span| {
         span.text
@@ -3008,7 +3007,6 @@ fn prefer_tagged_rtl_structure_order(
         span.order_info.source == xberg_native_pdf::pipeline::ordered_span::ReadingOrderSource::StructureTree
     }) {
         page.spans = ordered.into_iter().map(|span| span.span).collect();
-        page.chars = page.spans.iter().flat_map(|span| span.to_chars()).collect();
     }
 }
 
@@ -3097,9 +3095,9 @@ fn retain_spans_inside_page_margins(
 ///
 /// Also returns the page's fabricated-mapping character counts, captured from the raw spans
 /// before margin filtering or reordering mutate them — `Some` only when `excluded_layers` is
-/// empty, i.e. `page_text_with_options_excluding_layers` took its fast path and made exactly
-/// the same `extract_page_text_with_options(.., ColumnAware)` call that
-/// `scan_detect::page_has_fabricated_text` used to make separately for every page (issue
+/// empty: `page_text_with_options_excluding_layers` then reads the same ordered spans as
+/// `extract_page_text_with_options(.., ColumnAware)`, which
+/// `scan_detect::page_has_fabricated_text` used to call separately for every page (issue
 /// #1744). When layers are excluded the two callers would otherwise read different span sets,
 /// so provenance is left to its own separate read for such documents; see
 /// [`PageProvenanceCounts`]. ~keep
