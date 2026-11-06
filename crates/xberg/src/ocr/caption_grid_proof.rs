@@ -15,8 +15,7 @@ const MAX_EVIDENCE_BYTES: usize = 512 * 1024;
 const MIN_LINES: usize = 4;
 const MAX_LINES: usize = 12;
 const MAX_COLUMNS: usize = 6;
-const MIN_SPLIT_ROWS: usize = 2;
-const MARGIN_TOLERANCE_PX: u32 = 1;
+const MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR: u32 = 6;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Rect {
@@ -111,7 +110,7 @@ fn remaining_evidence_work(cells: &[Vec<String>], elements: &[OcrElement], limit
     })?;
     // ~keep Bound text passes, per-row geometry scans, and sorting before allocating evidence.
     const MAX_GAPS: usize = MAX_LINES * (MAX_COLUMNS - 1);
-    let geometry_work = elements.len() * (MAX_LINES + MAX_ELEMENTS.ilog2() as usize + 2 * MAX_GAPS + 8);
+    let geometry_work = elements.len() * (MAX_LINES + MAX_ELEMENTS.ilog2() as usize + 3 * MAX_GAPS + 8);
     limits
         .max_iterations
         .checked_sub(bytes * 8 + geometry_work + MAX_GAPS * MAX_GAPS)
@@ -152,22 +151,19 @@ fn follows_wrapped_caption_shape(lines: &[SourceElement<'_>]) -> bool {
     let [first, middle @ .., last] = lines else {
         return false;
     };
-    let mut label = first.text.split_whitespace();
-    let figure = label.next() == Some("Figure")
-        && label
-            .next()
-            .and_then(|value| value.strip_suffix(':'))
-            .is_some_and(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()))
-        && label.next().is_some();
+    let line_height = lines
+        .iter()
+        .map(|line| line.bounds.bottom - line.bounds.top)
+        .min()
+        .unwrap_or_default();
+    let margin_tolerance = line_height / MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR;
     let first_width = first.bounds.right - first.bounds.left;
     let last_width = last.bounds.right - last.bounds.left;
-    figure
-        && last.text.trim_end().ends_with('.')
-        && last_width <= first_width / 2
-        && last.bounds.left.abs_diff(first.bounds.left) <= MARGIN_TOLERANCE_PX
+    last_width <= first_width / 2
+        && last.bounds.left.abs_diff(first.bounds.left) <= margin_tolerance
         && middle.iter().all(|line| {
-            line.bounds.left.abs_diff(first.bounds.left) <= MARGIN_TOLERANCE_PX
-                && line.bounds.right.abs_diff(first.bounds.right) <= MARGIN_TOLERANCE_PX
+            line.bounds.left.abs_diff(first.bounds.left) <= margin_tolerance
+                && line.bounds.right.abs_diff(first.bounds.right) <= margin_tolerance
         })
         && lines.windows(2).all(|pair| {
             let previous = pair[0].bounds;
@@ -239,15 +235,21 @@ fn word_gap_proof(
     region: Rect,
     remaining_work: usize,
 ) -> Option<CaptionPaintProof> {
+    let mut split_rows = cells
+        .iter()
+        .enumerate()
+        .filter_map(|(index, row)| row.iter().filter(|cell| !cell.trim().is_empty()).nth(1).map(|_| index));
+    let first_split = split_rows.next()?;
+    let last_split = split_rows.next_back()?;
     let mut previous_cuts: Vec<Gap> = Vec::new();
-    let mut split_rows = 0;
+    let mut interior_words = Vec::new();
     let mut owned_words = 0;
     let mut paint = CaptionPaintProof::new(
         region,
         lines.iter().map(|line| line.bounds.bottom - line.bounds.top).min()?,
         remaining_work,
     );
-    for (line, row) in lines.iter().zip(cells) {
+    for (index, (line, row)) in lines.iter().zip(cells).enumerate() {
         let owned = row_owners(line, words)?;
         owned_words += owned.len();
         let cuts = row_cell_cuts(row, &owned, line.bounds)?;
@@ -258,13 +260,21 @@ fn word_gap_proof(
         }) {
             return None;
         }
-        split_rows += usize::from(!cuts.is_empty());
+        if cuts.is_empty() && (first_split + 1..last_split).contains(&index) {
+            interior_words.extend(owned.iter().copied());
+        }
         for (gap, left, right) in cuts {
             paint.push(line.bounds, left, right, words);
             previous_cuts.push(gap);
         }
     }
-    (owned_words == words.len() && split_rows >= MIN_SPLIT_ROWS).then_some(paint)
+    // A whole word in an intact interior line must cross each proposed column cut. ~keep
+    let cuts_crossed = previous_cuts.iter().all(|cut| {
+        interior_words
+            .iter()
+            .any(|word| word.bounds.left <= cut.left && word.bounds.right >= cut.right)
+    });
+    (owned_words == words.len() && cuts_crossed).then_some(paint)
 }
 
 /// Verify line and word ownership in the same frame as the table.
