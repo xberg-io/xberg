@@ -9,6 +9,12 @@ use crate::engine::seams::CacheBackend;
 const NATIVE_TEXT: &str = "Explicit layout selection preserves the complete native paragraph.";
 
 fn native_pdf() -> Vec<u8> {
+    native_pdf_with_page_entries(|_, _, _| {})
+}
+
+fn native_pdf_with_page_entries(
+    set_entries: impl FnOnce(&mut lopdf::Document, lopdf::ObjectId, lopdf::ObjectId),
+) -> Vec<u8> {
     use lopdf::{Document, Object, Stream, dictionary};
     let mut document = Document::with_version("1.5");
     let pages = document.new_object_id();
@@ -30,6 +36,7 @@ fn native_pdf() -> Vec<u8> {
             "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1,
         }),
     );
+    set_entries(&mut document, page, pages);
     let catalog = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
     document.trailer.set("Root", catalog);
     let mut bytes = Vec::new();
@@ -362,6 +369,108 @@ async fn selected_chart_returns_exact_native_page_text_with_original_detector_cl
         }
     );
     assert_eq!(selected.text, NATIVE_TEXT);
+}
+
+fn input_with_page_entries(
+    set_entries: impl FnOnce(&mut lopdf::Document, lopdf::ObjectId, lopdf::ObjectId),
+) -> ExtractInput {
+    ExtractInput::from_bytes(
+        native_pdf_with_page_entries(set_entries),
+        "application/pdf",
+        Some("selected.pdf".to_string()),
+    )
+}
+
+#[tokio::test]
+async fn selected_chart_accepts_exact_identity_crop_boxes() {
+    let baseline = extract_selected_chart(input()).await;
+    assert_eq!(baseline.regions.len(), 1);
+    assert_eq!(baseline.regions[0].text, NATIVE_TEXT);
+
+    for (inherited, indirect) in [(false, false), (true, false), (false, true)] {
+        let request = input_with_page_entries(|doc, page, pages| {
+            let crop = lopdf::Object::Array(vec![0.into(), 0.into(), 612.into(), 792.into()]);
+            let crop = if indirect { doc.add_object(crop).into() } else { crop };
+            let owner = if inherited { pages } else { page };
+            doc.get_object_mut(owner)
+                .unwrap()
+                .as_dict_mut()
+                .unwrap()
+                .set("CropBox", crop);
+        });
+        let output = extract_selected_chart(request).await;
+        assert_eq!(output.regions.len(), 1, "inherited={inherited}, indirect={indirect}");
+        assert_eq!(
+            serde_json::to_value(output.regions).unwrap(),
+            serde_json::to_value(&baseline.regions).unwrap()
+        );
+        assert_eq!(output.extraction.results.len(), 1);
+        assert_eq!(
+            output.extraction.results[0].pages.as_ref().unwrap()[0].content,
+            NATIVE_TEXT
+        );
+    }
+}
+
+#[tokio::test]
+async fn selected_chart_refuses_unproved_crop_frames() {
+    use lopdf::Object;
+
+    let identity = || Object::Array(vec![0.into(), 0.into(), 612.into(), 792.into()]);
+    let cases = [
+        ("short", Object::Array(vec![0.into(), 0.into()]), None),
+        (
+            "reversed",
+            Object::Array(vec![612.into(), 0.into(), 0.into(), 792.into()]),
+            None,
+        ),
+        (
+            "shifted",
+            Object::Array(vec![1.into(), 0.into(), 612.into(), 792.into()]),
+            None,
+        ),
+        ("user unit", identity(), Some(("UserUnit", 2))),
+        ("rotated", identity(), Some(("Rotate", 90))),
+    ];
+    for (case, crop, extra) in cases {
+        let request = input_with_page_entries(|doc, page, _| {
+            let dict = doc.get_object_mut(page).unwrap().as_dict_mut().unwrap();
+            dict.set("CropBox", crop);
+            if let Some((key, value)) = extra {
+                dict.set(key, value);
+            }
+        });
+        let output = extract_selected_chart(request).await;
+        assert_eq!(output.extraction.results.len(), 1, "{case}");
+        assert!(!output.extraction.results[0].content.is_empty(), "{case}");
+        assert!(output.regions.is_empty(), "{case}");
+    }
+}
+
+#[tokio::test]
+async fn selected_chart_refuses_crop_that_only_equals_media_after_f32_rounding() {
+    // lopdf stores reals as f32. Replace a same-length integer sentinel to retain the PDF's xref offsets.
+    let mut bytes = native_pdf_with_page_entries(|doc, page, _| {
+        doc.get_object_mut(page)
+            .unwrap()
+            .as_dict_mut()
+            .unwrap()
+            .set("CropBox", vec![0.into(), 0.into(), 123_456_789.into(), 792.into()]);
+    });
+    let sentinel = b"123456789";
+    let start = bytes
+        .windows(sentinel.len())
+        .position(|window| window == sentinel)
+        .unwrap();
+    bytes[start..start + sentinel.len()].copy_from_slice(b"611.99999");
+    let request = ExtractInput::from_bytes(bytes, "application/pdf", Some("selected.pdf".to_string()));
+    let output = extract_selected_chart(request).await;
+    assert_eq!(output.extraction.results.len(), 1);
+    assert_eq!(
+        output.extraction.results[0].pages.as_ref().unwrap()[0].content,
+        NATIVE_TEXT
+    );
+    assert!(output.regions.is_empty());
 }
 
 #[cfg(feature = "redaction")]

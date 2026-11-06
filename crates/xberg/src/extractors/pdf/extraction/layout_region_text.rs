@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use xberg_native_pdf::object::Object;
+
 use crate::engine::layout_region_text::PageRegionRanges;
 use crate::extractors::pdf::rotation::TextSpan;
 use crate::pdf::structure::types::LayoutHint;
@@ -18,7 +20,12 @@ pub(super) fn page_area(doc: &xberg_native_pdf::PdfDocument, page: usize, hints:
     }
     let object = doc.get_page(page).ok()?;
     let dictionary = object.as_dict()?;
-    if dictionary.contains_key("CropBox") || dictionary.contains_key("UserUnit") {
+    if dictionary.contains_key("UserUnit") {
+        return None;
+    }
+    if let Some(crop) = dictionary.get("CropBox")
+        && strict_page_box(doc, crop)? != strict_page_box(doc, dictionary.get("MediaBox")?)?
+    {
         return None;
     }
     let (left, bottom, right, top) = doc.get_page_media_box(page).ok()?;
@@ -38,6 +45,23 @@ pub(super) fn page_area(doc: &xberg_native_pdf::PdfDocument, page: usize, hints:
                 && (0.0..=1.0).contains(&hint.confidence)
         }))
     .then_some(f64::from(right) * f64::from(top))
+}
+
+fn strict_page_box(doc: &xberg_native_pdf::PdfDocument, object: &Object) -> Option<[f64; 4]> {
+    let Object::Array(entries) = doc.resolve_object(object).ok()? else {
+        return None;
+    };
+    let [left, bottom, right, top] = entries.as_slice() else {
+        return None;
+    };
+    // A rounded match in the raster frame cannot prove that the PDF boxes are identical.
+    let number = |entry: &Object| match doc.resolve_object(entry).ok()? {
+        Object::Integer(value) if (value as f64) as i128 == i128::from(value) => Some(value as f64),
+        Object::Real(value) if value.is_finite() => Some(value),
+        _ => None,
+    };
+    let (left, bottom, right, top) = (number(left)?, number(bottom)?, number(right)?, number(top)?);
+    (left == 0.0 && bottom == 0.0 && right > 0.0 && top > 0.0).then_some([left, bottom, right, top])
 }
 
 pub(super) fn assemble(
