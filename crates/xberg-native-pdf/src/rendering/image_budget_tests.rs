@@ -30,6 +30,26 @@ fn assert_refused(renderer: &mut PageRenderer, document: &PdfDocument) {
 }
 
 #[test]
+fn render_bridge_marks_only_a_qualified_source_image_budget_excess() {
+    let oversized = source::document(&source::jpeg(1200), 1200, false);
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&oversized, 0, 72, 72, LIMIT)
+        .err()
+        .expect("large source cannot fit");
+    assert!(matches!(error, crate::Error::Image(_)));
+    assert!(exceeded);
+
+    let mut malformed = source::jpeg(32);
+    let frame = malformed.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    malformed[frame + 4] = 12;
+    let unqualified = source::document(&malformed, 32, false);
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&unqualified, 0, 72, 72, LIMIT)
+        .err()
+        .expect("unqualified source cannot render");
+    assert!(matches!(error, crate::Error::Image(_)));
+    assert!(!exceeded);
+}
+
+#[test]
 fn source_jpeg_budget_failure_does_not_poison_a_reused_renderer() {
     let document = source::document(&source::jpeg(LARGE), LARGE, false);
     let mut renderer = renderer();

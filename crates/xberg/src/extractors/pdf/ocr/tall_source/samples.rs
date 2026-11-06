@@ -1,5 +1,9 @@
 //! Exact, budgeted decoding of grayscale-equivalent source samples.
 
+use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE};
+use xberg_native_pdf::geometry::Rect;
+use xberg_native_pdf::object::Object;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum GrayPacking {
     Byte,
@@ -73,4 +77,28 @@ pub(super) fn decode_exact_gray(compressed: &[u8], pixels: usize) -> Option<Vec<
     }
     samples.truncate(pixels);
     Some(samples)
+}
+
+pub(super) fn source_frame(
+    dict: &std::collections::HashMap<String, Object>,
+    frame: Rect,
+    rendered_width: Option<u32>,
+) -> Option<(u32, u32, f64)> {
+    let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
+    let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
+    let pixels = (width as usize).checked_mul(height as usize)?;
+    if rendered_width.is_some_and(|rendered| u64::from(rendered) * 100 >= u64::from(width) * 98)
+        || width > MAX_TILE_SIDE
+        || height <= MAX_TILE_SIDE
+        || height > MAX_TILE_SIDE * MAX_STRIPS as u32
+        || pixels > MAX_SOURCE_PIXELS
+    {
+        return None;
+    }
+    let dpi = 72.0 * f64::from(width) / f64::from(frame.width);
+    let dpi_y = 72.0 * f64::from(height) / f64::from(frame.height);
+    if !(150.0..=300.0).contains(&dpi) || (dpi - dpi_y).abs() > 0.01 {
+        return None;
+    }
+    Some((width, height, dpi))
 }

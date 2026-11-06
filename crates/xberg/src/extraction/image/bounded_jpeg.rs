@@ -342,6 +342,41 @@ fn reduced_peak(frame: &Frame, scale: ReducedScale, encoded: u64) -> Option<u64>
     (peak <= isize::MAX as u64).then_some(peak)
 }
 
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn decode_sequential_gray_jpeg(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    max_working_bytes: usize,
+) -> Option<Vec<u8>> {
+    use jpeg_decoder::{Decoder, PixelFormat};
+
+    if !bytes.starts_with(&[0xff, 0xd8]) || !bytes.ends_with(&[0xff, 0xd9]) || bytes.len() > max_working_bytes {
+        return None;
+    }
+    let frame = read_frame(bytes)?;
+    if (frame.width, frame.height) != dimensions
+        || frame.process != Process::Sequential
+        || frame.precision != 8
+        || frame.sampling != [(1, 1)]
+    {
+        return None;
+    }
+    // The IDCT proof also covers denominator 1. Its RGB conversion allowance is
+    // conservative here because the strip planner retains the native L8 output.
+    if reduced_peak(&frame, reduced_scale(&frame, 1), bytes.len() as u64)? > max_working_bytes as u64 {
+        return None;
+    }
+    let pixels = usize::try_from(u64::from(frame.width) * u64::from(frame.height)).ok()?;
+    let mut decoder = Decoder::new(bytes);
+    decoder.set_max_decoding_buffer_size(pixels);
+    let data = decoder.decode().ok()?;
+    let info = decoder.info()?;
+    (info.pixel_format == PixelFormat::L8
+        && (u32::from(info.width), u32::from(info.height)) == dimensions
+        && data.len() == pixels)
+        .then_some(data)
+}
+
 fn decode(bytes: &[u8], frame: &Frame, scale: ReducedScale) -> Result<DecodedOcrImage> {
     let failed =
         |error: jpeg_decoder::Error| XbergError::parsing(format!("The JPEG image could not be decoded: {error}"));

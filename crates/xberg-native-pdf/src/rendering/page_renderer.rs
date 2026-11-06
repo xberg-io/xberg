@@ -215,6 +215,7 @@ impl RenderedImage {
 pub struct PageRenderer {
     options: RenderOptions,
     source_image_budget: Option<image_budget::ImageBudget>,
+    pub(super) reported_source_budget_exceeded: bool,
     pub(super) text_contrast_probe: Option<super::text_contrast_probe::TextContrastProbe>,
     path_rasterizer: PathRasterizer,
     text_rasterizer: TextRasterizer,
@@ -458,6 +459,7 @@ impl PageRenderer {
         Self {
             options,
             source_image_budget: None,
+            reported_source_budget_exceeded: false,
             text_contrast_probe: None,
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
@@ -589,6 +591,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        self.reported_source_budget_exceeded = false;
         self.source_image_budget = png_budget
             .as_ref()
             .map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
@@ -746,15 +749,14 @@ impl PageRenderer {
         ))
     }
 
-    fn check_source_image_budget(&self) -> Result<()> {
-        match self
-            .source_image_budget
-            .as_ref()
-            .and_then(image_budget::ImageBudget::error)
+    fn check_source_image_budget(&mut self) -> Result<()> {
+        if let Some(budget) = &self.source_image_budget
+            && let Some(error) = budget.error()
         {
-            Some(error) => Err(error),
-            None => Ok(()),
+            self.reported_source_budget_exceeded = budget.exceeded();
+            return Err(error);
         }
+        Ok(())
     }
 
     fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {

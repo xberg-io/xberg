@@ -2794,6 +2794,33 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
     let run_layers = page_ocr_hints
         .as_ref()
         .and_then(|hints| hints.native_page_layers.clone());
+    let run = Box::pin(extract_with_ocr_for_page(
+        content,
+        images,
+        #[cfg(feature = "layout-detection")]
+        layout_detections,
+        config,
+        path,
+        0,
+        false,
+        None,
+        page_ocr_hints,
+        0,
+        None,
+    ))
+    .await;
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    if images.is_none()
+        && let Err(failed) = &run
+        && let Some(output) = try_gray_jpeg_render_recovery(content, config, failed).await?
+    {
+        return Ok((output, false));
+    }
     let (
         text,
         mean_conf,
@@ -2809,21 +2836,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
         ocr_confidence,
         recognition_noise_verdicts,
         read_evidence,
-    ) = Box::pin(extract_with_ocr_for_page(
-        content,
-        images,
-        #[cfg(feature = "layout-detection")]
-        layout_detections,
-        config,
-        path,
-        0,
-        false,
-        None,
-        page_ocr_hints,
-        0,
-        None,
-    ))
-    .await?;
+    ) = run?;
     let (text, page_texts, doc) = with_run_layers_first(
         run_layers,
         RunLayerSources {
@@ -2854,6 +2867,128 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
         ),
         read_evidence.discarded_visible_native_page,
     ))
+}
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+async fn try_gray_jpeg_render_recovery(
+    content: Option<&[u8]>,
+    config: &ExtractionConfig,
+    failed: &FailedOcrRun,
+) -> crate::Result<Option<WholeDirectOcrOutput>> {
+    use std::error::Error as _;
+
+    if !failed
+        .error
+        .source()
+        .is_some_and(|source| source.is::<super::rendering::SourceImageBudgetExceeded>())
+        || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
+        || !super::document::native_preservation_is_automatic(config, 1)
+        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
+    {
+        return Ok(None);
+    }
+    let ocr = super::resolve_ocr_config(config);
+    if !super::tall_source::supports(config, &ocr) || ocr.effective_pipeline().is_some() {
+        return Ok(None);
+    }
+    let Some(content) = content else { return Ok(None) };
+    let Ok((document, 1, _)) = open_pdf_for_full_ocr(content) else {
+        return Ok(None);
+    };
+    let backend = {
+        let registry = crate::plugins::registry::get_ocr_backend_registry();
+        let registry = registry.read();
+        let Ok(backend) = registry.get(&ocr.backend) else {
+            return Ok(None);
+        };
+        if !registry.is_builtin_tesseract(&backend) {
+            return Ok(None);
+        }
+        backend
+    };
+    let Some((result, psm)) =
+        super::tall_source::recover_after_gray_jpeg_render_failure(&document, &backend, config, &ocr).await?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(gray_jpeg_recovery_output(result, psm, backend.as_ref())))
+}
+
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(paddle_ocr),
+    not(target_arch = "wasm32")
+))]
+#[tokio::test]
+async fn tall_source_rejects_an_unrelated_image_error_even_with_a_certifiable_jpeg() {
+    crate::plugins::ensure_ocr_backends_initialized();
+    let content = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf"
+    ));
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(crate::core::config::OcrConfig::default()),
+        ..Default::default()
+    };
+    let failed = crate::XbergError::Parsing {
+        message: "an unrelated image decoder refused the source".into(),
+        source: Some(Box::new(xberg_native_pdf::Error::Image("image decoder failure".into()))),
+    }
+    .into();
+    assert!(
+        try_gray_jpeg_render_recovery(Some(content), &config, &failed)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn gray_jpeg_recovery_output(
+    mut result: crate::types::ExtractedDocument,
+    psm: i32,
+    backend: &dyn crate::plugins::OcrBackend,
+) -> WholeDirectOcrOutput {
+    let confidence = mean_text_conf_of(&result.metadata.additional);
+    let summary = page_ocr_confidence(
+        backend.confidence_semantics(),
+        confidence,
+        word_count_of(&result.metadata.additional).unwrap_or(0),
+        backend.name(),
+    );
+    let text = result.content;
+    let mut doc = attach_ocr_fallback_warnings(result.ocr_internal_document.take(), &text, result.processing_warnings);
+    if let Some(doc) = &mut doc {
+        attach_page_segmentation_modes(doc, [(1, psm)]);
+    }
+    (
+        text.clone(),
+        summary.as_ref().and_then(|value| value.score),
+        Vec::new(),
+        Vec::new(),
+        doc,
+        Vec::new(),
+        vec![text],
+        None,
+        Vec::new(),
+        Default::default(),
+        summary.into_iter().map(|value| (1, value)).collect(),
+    )
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

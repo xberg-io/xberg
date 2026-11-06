@@ -735,6 +735,11 @@ fn render_one_full_pdf_ocr_page(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub(super) struct SourceImageBudgetExceeded(#[source] xberg_native_pdf::Error);
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn render_one_full_pdf_ocr_page_with_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_rotations: &[u32],
@@ -747,13 +752,26 @@ fn render_one_full_pdf_ocr_page_with_dpi(
     // GH#1786 + GH#1796: the scan-density choice is made
     // per page HERE rather than in the batch loop above, so the parallel render keeps it. Doing
     // it in the caller would have serialized the batch again. ~keep
-    let (rendered, dpi) =
-        crate::pdf::render::render_pdf_ocr_page_with_dpi(doc, page_idx, images_config, security_limits).map_err(
-            |e| crate::XbergError::Parsing {
-                message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
-                source: None,
-            },
-        )?;
+    let mut exceeded = false;
+    let (rendered, dpi) = crate::pdf::render::render_pdf_ocr_page_with_budget_evidence(
+        doc,
+        page_idx,
+        images_config,
+        security_limits,
+        &mut exceeded,
+    )
+    .map_err(|error| {
+        let message = format!("Failed to render page {page_idx} for OCR: {error:?}");
+        let source: Box<dyn std::error::Error + Send + Sync> = if exceeded {
+            Box::new(SourceImageBudgetExceeded(error))
+        } else {
+            Box::new(error)
+        };
+        crate::XbergError::Parsing {
+            message,
+            source: Some(source),
+        }
+    })?;
     let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
     let (data, width, height) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
         rendered.data,

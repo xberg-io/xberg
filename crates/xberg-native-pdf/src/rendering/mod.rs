@@ -351,7 +351,9 @@ pub fn render_page(
     page_num: usize,
     options: &RenderOptions,
 ) -> Result<RenderedImage> {
-    render_page_impl(doc, page_num, options, None).map(|(image, _, _)| image)
+    render_page_impl(doc, page_num, options, None)
+        .map(|(image, _, _)| image)
+        .map_err(|(error, _)| error)
 }
 
 /// Internal Core bridge for admitting the per-page canvas, sidecar planes and PNG allowance.
@@ -387,6 +389,18 @@ pub fn render_png_page_with_ink_evidence(
     minimum_dpi: u32,
     max_working_bytes: usize,
 ) -> Result<(RenderedImage, u32, bool)> {
+    render_png_page_with_budget_evidence(doc, page_num, dpi, minimum_dpi, max_working_bytes).map_err(|(error, _)| error)
+}
+
+/// Internal Core bridge. The error flag identifies a reported source-image budget excess.
+#[doc(hidden)]
+pub fn render_png_page_with_budget_evidence(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> std::result::Result<(RenderedImage, u32, bool), (crate::Error, bool)> {
     let budget = page_renderer::PngRenderBudget {
         max_working_bytes,
         minimum_dpi,
@@ -439,7 +453,7 @@ fn render_page_impl(
     page_num: usize,
     options: &RenderOptions,
     png_budget: Option<page_renderer::PngRenderBudget>,
-) -> Result<(RenderedImage, u32, bool)> {
+) -> std::result::Result<(RenderedImage, u32, bool), (crate::Error, bool)> {
     // The rasterizer decodes text through the same font paths as extraction, so
     // it needs the document in scope for those recoveries to be counted rather
     // than lost (GH#1547). ~keep
@@ -449,7 +463,9 @@ fn render_page_impl(
     if let Err(error) = &result {
         crate::error::trace_failure("render_page", error);
     }
-    result.map(|(image, dpi)| (image, dpi, renderer.type0_ink_loss()))
+    result
+        .map(|(image, dpi)| (image, dpi, renderer.type0_ink_loss()))
+        .map_err(|error| (error, renderer.reported_source_budget_exceeded))
 }
 
 /// Render a rectangular region of a page. `crop_rect_pt` is in PDF
