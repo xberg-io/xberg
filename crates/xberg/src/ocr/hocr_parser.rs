@@ -266,6 +266,25 @@ pub(crate) fn parse_hocr_without_proved_table_fragments(
     page_offset: u32,
     words: Vec<&HocrWord>,
 ) -> InternalDocument {
+    parse_hocr_document(hocr_html, page_offset, proved_fragment_policy(words)).document
+}
+
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) fn hocr_matches_all_proved_table_fragments(
+    hocr_html: &str,
+    page_offset: u32,
+    words: Vec<&HocrWord>,
+) -> bool {
+    let count = words.len();
+    let mut policy = proved_fragment_policy(words);
+    if count == 0 || policy.claimed_words.as_ref().is_none_or(|keys| keys.len() != count) {
+        return false;
+    }
+    let result = parse_hocr_document_with_policy(hocr_html, page_offset, &mut policy);
+    result.document.elements.is_empty() && policy.claimed_words.is_some_and(|keys| keys.is_empty())
+}
+
+fn proved_fragment_policy(words: Vec<&HocrWord>) -> HocrLinePolicy<'static> {
     let claimed_words = words
         .into_iter()
         .map(|word| {
@@ -275,20 +294,23 @@ pub(crate) fn parse_hocr_without_proved_table_fragments(
             )
         })
         .collect();
-    parse_hocr_document(
-        hocr_html,
-        page_offset,
-        HocrLinePolicy {
-            dictionary_filter: None,
-            protected_words: None,
-            table_rows: None,
-            claimed_words: Some(claimed_words),
-        },
-    )
-    .document
+    HocrLinePolicy {
+        dictionary_filter: None,
+        protected_words: None,
+        table_rows: None,
+        claimed_words: Some(claimed_words),
+    }
 }
 
 fn parse_hocr_document(hocr_html: &str, page_offset: u32, mut line_policy: HocrLinePolicy<'_>) -> HocrParseResult {
+    parse_hocr_document_with_policy(hocr_html, page_offset, &mut line_policy)
+}
+
+fn parse_hocr_document_with_policy(
+    hocr_html: &str,
+    page_offset: u32,
+    line_policy: &mut HocrLinePolicy<'_>,
+) -> HocrParseResult {
     let mut doc = InternalDocument::new("ocr");
     doc.mime_type = "application/x-hocr".to_string();
 
@@ -358,7 +380,7 @@ fn parse_hocr_document(hocr_html: &str, page_offset: u32, mut line_policy: HocrL
                 last_page.unwrap_or(page_offset),
                 element_index,
                 &par_tag_name,
-                &mut line_policy,
+                line_policy,
                 &mut retained_word_confidence_stats,
             );
             pos = end_pos;
@@ -2218,6 +2240,36 @@ mod tests {
         assert_eq!(attrs.get(HOCR_X_DESCENDERS_ATTRIBUTE), Some(&"6".to_string()));
         assert_eq!(attrs.get(HOCR_BASELINE_SLOPE_ATTRIBUTE), Some(&"0.01".to_string()));
         assert_eq!(attrs.get(HOCR_BASELINE_CONST_ATTRIBUTE), Some(&"-18".to_string()));
+    }
+
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn proved_fragments_require_exact_hocr_occurrences_in_both_directions() {
+        let hocr = r#"<div class="ocr_page" title="ppageno 0">
+          <p class="ocr_par"><span class="ocr_line" title="bbox 10 20 30 40">
+            <span class="ocrx_word" title="bbox 10 20 30 40; x_wconf 90">One</span>
+          </span></p>
+        </div>"#;
+        let exact = HocrWord {
+            text: "One".to_owned(),
+            left: 10,
+            top: 20,
+            width: 20,
+            height: 20,
+            confidence: 90.0,
+        };
+        let unmatched = HocrWord {
+            left: 31,
+            ..exact.clone()
+        };
+        assert!(hocr_matches_all_proved_table_fragments(hocr, 1, vec![&exact]));
+        assert!(!hocr_matches_all_proved_table_fragments(
+            hocr,
+            1,
+            vec![&exact, &unmatched]
+        ));
+        assert!(!hocr_matches_all_proved_table_fragments(hocr, 1, vec![&exact, &exact]));
+        assert!(!hocr_matches_all_proved_table_fragments(hocr, 1, vec![&unmatched]));
     }
 
     #[test]

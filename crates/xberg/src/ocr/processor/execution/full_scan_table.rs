@@ -9,6 +9,11 @@ use crate::types::OcrTableBoundingBox;
 use std::collections::HashMap;
 use std::ops::Range;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod leader_rows;
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) use leader_rows::{can_hold_leader_raster, recover_dot_leader_rows};
+
 type Word = (Option<TextLine>, HocrWord);
 
 pub(super) fn uses_default_table_thresholds(config: &TesseractConfig) -> bool {
@@ -34,21 +39,7 @@ fn certify(
     limits: &SecurityLimits,
     merged_header: Option<&[Vec<String>]>,
 ) -> Option<(Vec<Vec<String>>, Vec<Word>)> {
-    let bytes = tsv.len().checked_add(content.len())?;
-    if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
-        return None;
-    }
-    let budget = limits.max_iterations.checked_sub(bytes.saturating_mul(4))?;
-    let mut words = words_on_lines(tsv, 0.0);
-    if words.is_empty()
-        || words.len() > MAX_FRAGMENTED_HOCR_WORDS
-        || words.len().saturating_mul(words.len()) > budget
-        || !words.iter().all(|(_, word)| word.confidence.is_finite())
-        || !same_word_inventory(content, &words)
-        || !words.iter().all(|(_, word)| inside(word, region))
-    {
-        return None;
-    }
+    let (mut words, _) = bounded_words(tsv, content, region, limits)?;
     words.sort_unstable_by_key(|(_, word)| word.top);
     let rows = disjoint_rows(&mut words)?;
     let grid = build_grid(&rows, limits.max_table_cells, merged_header.is_some())?;
@@ -57,6 +48,30 @@ fn certify(
     }
     let cleaned = post_process_table(grid.clone(), false, false)?;
     (cleaned == grid).then_some((cleaned, words))
+}
+
+fn bounded_words(
+    tsv: &str,
+    content: &str,
+    region: &OcrTableBoundingBox,
+    limits: &SecurityLimits,
+) -> Option<(Vec<Word>, usize)> {
+    let bytes = tsv.len().checked_add(content.len())?;
+    if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
+        return None;
+    }
+    let budget = limits.max_iterations.checked_sub(bytes.saturating_mul(4))?;
+    let words = words_on_lines(tsv, 0.0);
+    let budget = budget.checked_sub(words.len().checked_mul(words.len())?)?;
+    if words.is_empty()
+        || words.len() > MAX_FRAGMENTED_HOCR_WORDS
+        || !words.iter().all(|(_, word)| word.confidence.is_finite())
+        || !same_word_inventory(content, &words)
+        || !words.iter().all(|(_, word)| inside(word, region))
+    {
+        return None;
+    }
+    Some((words, budget))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
