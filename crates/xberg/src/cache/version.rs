@@ -98,6 +98,7 @@
 /// Invalidate cached PDFs with merged parallel legend lines (#2615). ~keep
 /// Invalidate cached OCR that missed strips with default predictor parameters (#2620). ~keep
 /// Invalidate cached oversized-image OCR under the old workspace policy (#2618, #2619). ~keep
+/// Invalidate cached PDFs missing source-owned mixed figure ticks (#2616). ~keep
 pub(crate) const CACHE_SCHEMA_VERSION: u32 = 14;
 
 /// Number of hex characters in the cache version tag.

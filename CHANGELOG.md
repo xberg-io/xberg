@@ -404,6 +404,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover tall scans with default PNG predictor parameters.** (#2620)
   Accept omitted values when the PDF defaults match the source image.
 
+- **(pdf): Preserve a figure tick beside a table using exact source ownership.** (#2616)
+  A decimal comma no longer blocks recovery of the outside figure label.
+
 - **(pdf): Keep parallel bold legend rows separate using their geometry.** (#2615)
   Punctuation, case and digits no longer change the decision for equally aligned entries.
 
