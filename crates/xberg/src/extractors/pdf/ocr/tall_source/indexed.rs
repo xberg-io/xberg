@@ -279,12 +279,8 @@ impl IndexedSource {
 
     fn distinct_hanging_prefixes(&self, rows: Range<u32>, first_x: usize) -> Option<Vec<SourceLine>> {
         let bands = ink_bands(self.rows(rows.clone()), first_x, |sample| self.white(sample));
-        let Some(marker) = bands.iter().map(|(_, x)| *x).min() else {
-            return None;
-        };
-        let Some(body) = bands.iter().filter_map(|(_, x)| (*x > marker).then_some(*x)).min() else {
-            return None;
-        };
+        let marker = bands.iter().map(|(_, x)| *x).min()?;
+        let body = bands.iter().filter_map(|(_, x)| (*x > marker).then_some(*x)).min()?;
         let mut heads = Vec::new();
         let mut lines = Vec::new();
         let mut after_marker = false;
