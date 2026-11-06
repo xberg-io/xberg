@@ -580,24 +580,42 @@ fn supported_group4_params(params: &std::collections::HashMap<String, Object>, w
         && matches!(params.get("BlackIs1"), Some(Object::Boolean(true)))
 }
 
-fn image_predictor(
+pub(super) fn image_predictor(
     params: &std::collections::HashMap<String, Object>,
     width: u32,
     channels: usize,
 ) -> Option<DecodeParams> {
+    if params.len() > 4
+        || params
+            .keys()
+            .any(|key| !matches!(key.as_str(), "Predictor" | "Columns" | "Colors" | "BitsPerComponent"))
+    {
+        return None;
+    }
+    let defaults = DecodeParams::default();
+    let sample_parameter = |key, default| {
+        params
+            .get(key)
+            .map_or(Some(default), |value| usize::try_from(value.as_integer()?).ok())
+    };
     let predictor = params.get("Predictor")?.as_integer()?;
+    let columns = sample_parameter("Columns", defaults.columns)?;
+    let colors = sample_parameter("Colors", defaults.colors)?;
+    let bits_per_component = sample_parameter("BitsPerComponent", defaults.bits_per_component)?;
     if !(10..=15).contains(&predictor)
-        || params.get("Columns")?.as_integer()? != i64::from(width)
-        || params.get("Colors")?.as_integer()? != channels as i64
-        || params.get("BitsPerComponent")?.as_integer()? != 8
+        || columns == 0
+        || columns != width as usize
+        || colors == 0
+        || colors != channels
+        || bits_per_component != 8
     {
         return None;
     }
     Some(DecodeParams {
         predictor,
-        columns: width as usize,
-        colors: channels,
-        bits_per_component: 8,
+        columns,
+        colors,
+        bits_per_component,
     })
 }
 

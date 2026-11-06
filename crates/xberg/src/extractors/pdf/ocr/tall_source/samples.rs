@@ -1,5 +1,6 @@
 //! Exact, budgeted decoding of grayscale-equivalent source samples.
 
+use super::super::hidden_layer::image_predictor;
 use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE};
 use xberg_native_pdf::decoders::{DecodeParams, decode_predictor};
 use xberg_native_pdf::geometry::Rect;
@@ -33,13 +34,7 @@ pub(super) fn flate_packing(
         (Some("DeviceGray"), 1, None) => Some(GrayPacking::Bilevel),
         (Some("DeviceRGB"), 8, None) if unfiltered_paint => Some(GrayPacking::NeutralRgb),
         (Some("DeviceGray"), 8, Some(Object::Dictionary(parameters))) => {
-            let predictor = parameters.get("Predictor")?.as_integer()?;
-            (parameters.len() == 4
-                && (10..=15).contains(&predictor)
-                && parameters.get("Columns")?.as_integer()? == i64::from(width)
-                && parameters.get("Colors")?.as_integer()? == 1
-                && parameters.get("BitsPerComponent")?.as_integer()? == 8)
-                .then_some(GrayPacking::PngPredictor(predictor))
+            image_predictor(parameters, width, 1).map(|params| GrayPacking::PngPredictor(params.predictor))
         }
         (None, 1, None) => indexed_palette(color).map(GrayPacking::Indexed),
         _ => None,
@@ -220,9 +215,30 @@ mod tests {
             flate_packing(&image, 3, true),
             Some(GrayPacking::PngPredictor(12))
         ));
+        let mut defaults = parameters.clone();
+        defaults.remove("Colors");
+        defaults.remove("BitsPerComponent");
+        image.insert("DecodeParms".into(), Object::Dictionary(defaults.clone()));
+        assert!(matches!(
+            flate_packing(&image, 3, true),
+            Some(GrayPacking::PngPredictor(12))
+        ));
+        defaults.remove("Columns");
+        image.insert("DecodeParms".into(), Object::Dictionary(defaults));
+        assert!(flate_packing(&image, 3, true).is_none());
+        assert!(matches!(
+            flate_packing(&image, 1, true),
+            Some(GrayPacking::PngPredictor(12))
+        ));
         for (key, invalid) in [("Predictor", 2), ("Columns", 4), ("Colors", 3), ("BitsPerComponent", 1)] {
             let mut malformed = parameters.clone();
             malformed.insert(key.into(), Object::Integer(invalid));
+            image.insert("DecodeParms".into(), Object::Dictionary(malformed));
+            assert!(flate_packing(&image, 3, true).is_none(), "{key}");
+        }
+        for key in ["Predictor", "Columns", "Colors", "BitsPerComponent", "Unknown"] {
+            let mut malformed = parameters.clone();
+            malformed.insert(key.into(), Object::Name("invalid".into()));
             image.insert("DecodeParms".into(), Object::Dictionary(malformed));
             assert!(flate_packing(&image, 3, true).is_none(), "{key}");
         }

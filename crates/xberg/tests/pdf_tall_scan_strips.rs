@@ -10,6 +10,7 @@ use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod,
 const TALL_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf");
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
 const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
+const TALL_PREDICTOR: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/predictor-mixed.pdf");
 const NEUTRAL_RGB: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/neutral-rgb-tall.pdf");
 const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-mixed.pdf");
 const SHORT: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-short.pdf");
@@ -218,8 +219,25 @@ fn assert_exact_tall_source_text(source: &[u8]) {
 
 #[test]
 fn tall_png_predictor_recovers_all_source_words_in_order() {
-    let source = include_bytes!("../../../fixtures/repros/tall-scan-strips/predictor-mixed.pdf");
-    assert_exact_tall_source_text(source);
+    assert_exact_tall_source_text(TALL_PREDICTOR);
+}
+
+#[test]
+fn tall_png_predictor_recovers_all_source_words_with_default_parameters() {
+    let full = b"/DecodeParms << /Predictor 12 /Columns 1275 /Colors 1 /BitsPerComponent 8 >>";
+    let short = b"/DecodeParms << /Predictor 12 /Columns 1275 >>";
+    let positions = TALL_PREDICTOR
+        .windows(full.len())
+        .enumerate()
+        .filter_map(|(index, window)| (window == full).then_some(index))
+        .collect::<Vec<_>>();
+    let [start] = positions.as_slice() else {
+        panic!("the predictor fixture must have exactly one matching DecodeParms dictionary");
+    };
+    let mut abbreviated = TALL_PREDICTOR.to_vec();
+    abbreviated[*start..*start + short.len()].copy_from_slice(short);
+    abbreviated[*start + short.len()..*start + full.len()].fill(b' ');
+    assert_exact_tall_source_text(&abbreviated);
 }
 
 #[test]

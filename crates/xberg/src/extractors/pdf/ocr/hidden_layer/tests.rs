@@ -203,6 +203,40 @@ fn ccitt_probe_refuses_real_truncation_wrong_polarity_and_small_budget() {
 }
 
 #[test]
+fn hidden_image_predictor_defaults_must_match_the_image_geometry() {
+    use super::{Object, image_predictor};
+
+    let mut params = std::collections::HashMap::from([
+        ("Predictor".to_owned(), Object::Integer(12)),
+        ("Columns".to_owned(), Object::Integer(3)),
+    ]);
+    let decoded = image_predictor(&params, 3, 1).expect("default gray predictor parameters");
+    assert_eq!(
+        (
+            decoded.predictor,
+            decoded.columns,
+            decoded.colors,
+            decoded.bits_per_component
+        ),
+        (12, 3, 1, 8)
+    );
+    assert!(image_predictor(&params, 3, 3).is_none(), "default Colors is one");
+
+    params.insert("Colors".into(), Object::Integer(3));
+    assert_eq!(image_predictor(&params, 3, 3).unwrap().colors, 3);
+    params.remove("Colors");
+    params.remove("Columns");
+    assert!(image_predictor(&params, 3, 1).is_none(), "default Columns is one");
+    assert_eq!(image_predictor(&params, 1, 1).unwrap().columns, 1);
+
+    for key in ["Predictor", "Columns", "Colors", "BitsPerComponent", "Unknown"] {
+        let mut malformed = params.clone();
+        malformed.insert(key.into(), Object::Name("invalid".into()));
+        assert!(image_predictor(&malformed, 1, 1).is_none(), "{key}");
+    }
+}
+
+#[test]
 fn ccitt_group4_parameters_require_exact_geometry_and_grammar() {
     use super::Object;
 
