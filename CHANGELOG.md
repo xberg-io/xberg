@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(layout): Return source-proven text for selected native PDF layout regions in Rust.** (#2357)
   `Engine::extract_with_layout_region_text` returns region text in page reading order and omits unproved or redacted text.
   An explicitly declared crop box is supported when its resolved geometry exactly matches the media box.
+  A native span crossing a detector box withholds that region while exact independent regions remain available.
 
 - **(engine): Override layout-for-Markdown behavior per batch input.** (#2367)
   Explicit options take precedence after file overrides; omitted options inherit the batch configuration.
