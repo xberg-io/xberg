@@ -105,7 +105,8 @@
 /// Invalidate cached merged table headers and uncertified painted overhangs (#2432, #2616). ~keep
 /// Invalidate cached PDFs whose layout raster exceeded the memory budget (#2332). ~keep
 /// Invalidate cached lower-density grayscale Flate scans missing certified strips (#2502). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 19;
+/// Invalidate tall PDF results cached before certified strips could be recovered (#2426). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 20;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;

@@ -117,25 +117,30 @@ fn write_english_model(directory: &std::path::Path) {
     std::fs::write(directory.join("eng.traineddata"), english).expect("write private English data");
 }
 
-async fn read_pinned(use_cache: bool) -> xberg::types::ExtractedDocument {
-    let bytes = pinned_page();
-    let tessdata = tempfile::tempdir().expect("create private tessdata directory");
-    write_english_model(tessdata.path());
+fn pinned_config(use_cache: bool, use_ocr_cache: bool, tessdata: &std::path::Path) -> xberg::ExtractionConfig {
     let mut config: xberg::ExtractionConfig = serde_json::from_str(
         r#"{"use_cache":false,"ocr":{"backend":"tesseract","language":["eng"]},"pages":{"extract_pages":true}}"#,
     )
     .unwrap();
     config.use_cache = use_cache;
     let ocr = config.ocr.as_mut().unwrap();
-    ocr.tessdata_path = Some(tessdata.path().to_path_buf());
-    // Keep the inner Tesseract cache out of this test. Only the outer switch controls admission.
-    ocr.backend_options = Some(serde_json::json!({"use_cache": false}));
-    let output = xberg::extract(
-        xberg::ExtractInput::from_bytes(bytes, "application/pdf", Some("page4.pdf".into())),
-        &config,
-    )
-    .await
-    .unwrap();
+    ocr.tessdata_path = Some(tessdata.to_path_buf());
+    ocr.backend_options = Some(serde_json::json!({"use_cache": use_ocr_cache}));
+    config
+}
+
+async fn read_pinned(
+    engine: &xberg::engine::Engine,
+    bytes: &[u8],
+    config: &xberg::ExtractionConfig,
+) -> xberg::types::ExtractedDocument {
+    let output = engine
+        .extract(
+            xberg::ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", Some("page4.pdf".into())),
+            config,
+        )
+        .await
+        .unwrap();
     assert!(output.errors.is_empty());
     assert_eq!(output.results.len(), 1);
     output.results.into_iter().next().unwrap()
@@ -143,7 +148,10 @@ async fn read_pinned(use_cache: bool) -> xberg::types::ExtractedDocument {
 
 #[tokio::test]
 async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original_projections() {
-    let doc = read_pinned(false).await;
+    let tessdata = tempfile::tempdir().expect("private tessdata directory");
+    write_english_model(tessdata.path());
+    let config = pinned_config(false, false, tessdata.path());
+    let doc = read_pinned(&xberg::engine::Engine::new_default(), &pinned_page(), &config).await;
     let [page] = doc.pages.as_ref().unwrap().as_slice() else {
         panic!("exactly one page")
     };
@@ -166,9 +174,62 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
     assert_projection(&page.content, 2316, 2266, PAGE_SHA);
 }
 
+#[derive(Default)]
+struct CountedCache {
+    entries: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    hits: std::sync::atomic::AtomicUsize,
+    writes: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl xberg::engine::seams::CacheBackend for CountedCache {
+    async fn get(&self, key: &str) -> Option<Vec<u8>> {
+        let bytes = self.entries.lock().unwrap().get(key).cloned();
+        if bytes.is_some() {
+            self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        bytes
+    }
+
+    async fn put(&self, key: &str, bytes: Vec<u8>, _ttl: Option<std::time::Duration>) {
+        self.entries.lock().unwrap().insert(key.into(), bytes);
+        self.writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[tokio::test]
-async fn cache_enabled_pdf_keeps_both_stock_projections() {
-    let doc = read_pinned(true).await;
+async fn cached_pdf_recovers_the_same_certified_strips_on_cold_and_warm_reads() {
+    use std::sync::{Arc, atomic::Ordering};
+
+    let tessdata = tempfile::tempdir().expect("private tessdata directory");
+    write_english_model(tessdata.path());
+    let bytes = pinned_page();
+    let config = pinned_config(true, false, tessdata.path());
+    let cache = Arc::new(CountedCache::default());
+    let engine = xberg::engine::Engine::builder()
+        .with_cache_backend(cache.clone())
+        .build();
+    let cold = read_pinned(&engine, &bytes, &config).await;
+    assert_projection(&cold.content, 2321, 2267, DOCUMENT_SHA);
+    assert_projection(&cold.pages.as_deref().unwrap()[0].content, 2316, 2266, PAGE_SHA);
+    assert_eq!(cache.hits.load(Ordering::SeqCst), 0);
+    assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
+
+    let warm = read_pinned(&engine, &bytes, &config).await;
+    assert_eq!(cache.hits.load(Ordering::SeqCst), 1);
+    assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        serde_json::to_value(&warm).unwrap(),
+        serde_json::to_value(&cold).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn explicit_inner_ocr_cache_keeps_both_stock_projections() {
+    let tessdata = tempfile::tempdir().expect("private tessdata directory");
+    write_english_model(tessdata.path());
+    let config = pinned_config(true, true, tessdata.path());
+    let doc = read_pinned(&xberg::engine::Engine::new_default(), &pinned_page(), &config).await;
     let [page] = doc.pages.as_ref().unwrap().as_slice() else {
         panic!("exactly one page")
     };

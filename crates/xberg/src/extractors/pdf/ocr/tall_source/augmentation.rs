@@ -16,8 +16,15 @@ const MAX_ATTEMPTS: usize = 4;
 const MAX_OWNERS: usize = 1024;
 const MAX_PRIMARY_BYTES: usize = 16 * 1024;
 
-pub(in super::super) fn supports_run(config: &ExtractionConfig, height: u32) -> bool {
-    !config.use_cache && height > MAX_TILE_SIDE
+pub(in super::super) fn supports_run(ocr: &OcrConfig, height: u32) -> bool {
+    // A cached Tesseract read cannot certify the preprocessing of this raster. ~keep
+    height > MAX_TILE_SIDE
+        && ocr
+            .backend_options
+            .as_ref()
+            .and_then(|options| options.get("use_cache"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(false)
 }
 
 #[derive(Clone, Copy)]
@@ -326,7 +333,11 @@ async fn read_tiles(
         let result = match backend.process_image_owned(Arc::new(png), &config).await {
             Ok(result) => result,
             Err(error @ crate::XbergError::Cancelled) => return Some(Err(error)),
-            Err(_) => return None,
+            Err(error) => {
+                crate::core::extractor::cacheability::invalidate_current();
+                tracing::debug!(%error, "optional ordered source-strip OCR failed");
+                return None;
+            }
         };
         let frame = (source.width, rows.end - rows.start);
         if !accepted_raw_read(&result) || processed_frame(&result)? != frame || !result.tables.is_empty() {
@@ -505,6 +516,23 @@ mod tests {
     }
 
     #[test]
+    fn source_strip_observation_requires_an_uncached_ocr_read() {
+        for (value, eligible) in [
+            (serde_json::Value::Bool(false), true),
+            (serde_json::Value::Bool(true), false),
+            (serde_json::Value::String("false".into()), false),
+        ] {
+            let config = OcrConfig {
+                backend_options: Some(serde_json::json!({"use_cache": value})),
+                ..Default::default()
+            };
+            assert_eq!(supports_run(&config, MAX_TILE_SIDE + 1), eligible);
+            assert!(!supports_run(&config, MAX_TILE_SIDE));
+        }
+        assert!(!supports_run(&OcrConfig::default(), MAX_TILE_SIDE + 1));
+    }
+
+    #[test]
     fn a_refused_first_or_last_strip_refuses_the_whole_contiguous_run() {
         for (first, last) in [(None, Some("last")), (Some("first"), None)] {
             assert!(select_complete_run(vec![tile(10..20, first), tile(20..30, last)]).is_none());
@@ -530,15 +558,23 @@ mod tests {
     }
 
     #[test]
-    fn cached_extraction_never_admits_optional_strip_recognition() {
+    fn resolved_ocr_cache_policy_controls_optional_strip_recognition() {
+        use super::super::super::resolve_ocr_config;
+
         let mut config = ExtractionConfig {
             use_cache: true,
             ..Default::default()
         };
-        assert!(!supports_run(&config, MAX_TILE_SIDE + 1));
+        assert!(!supports_run(&resolve_ocr_config(&config), MAX_TILE_SIDE + 1));
+        config.ocr = Some(OcrConfig {
+            backend_options: Some(serde_json::json!({"use_cache": false})),
+            ..Default::default()
+        });
+        assert!(supports_run(&resolve_ocr_config(&config), MAX_TILE_SIDE + 1));
+
         config.use_cache = false;
-        assert!(supports_run(&config, MAX_TILE_SIDE + 1));
-        assert!(!supports_run(&config, MAX_TILE_SIDE));
+        config.ocr = None;
+        assert!(supports_run(&resolve_ocr_config(&config), MAX_TILE_SIDE + 1));
     }
 
     #[test]

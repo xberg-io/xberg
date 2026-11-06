@@ -3921,7 +3921,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let retained_source_bytes = retained_ocr_source_bytes(image_data, &upright_data, retained_pixels);
                 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
                 let ordered_raster = (try_tall_source
-                    && super::tall_source::augmentation::supports_run(config, *height)
+                    && super::tall_source::augmentation::supports_run(base_ocr_config, *height)
                     && total_pages == 1
                     && page_index_offset == 0
                     && idx == 0
