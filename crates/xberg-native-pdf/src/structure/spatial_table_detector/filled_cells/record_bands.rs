@@ -112,7 +112,7 @@ fn source_indices(
 fn record_rows(cells: &[&PathContent], columns: usize, words: &[Vec<usize>]) -> Option<usize> {
     let occupied = |band: &[Vec<usize>]| band.iter().map(|cell| !cell.is_empty()).collect::<Vec<_>>();
     let active = occupied(&words[..columns]);
-    if active.iter().filter(|&&used| used).count() < 3 || active.windows(2).any(|pair| pair == [true, true]) {
+    if active.iter().filter(|&&used| used).count() < 3 {
         return None;
     }
     let last = words
@@ -125,7 +125,7 @@ fn record_rows(cells: &[&PathContent], columns: usize, words: &[Vec<usize>]) -> 
 
     let record_color = cells[0].fill_color?;
     let spacer_color = cells[columns].fill_color?;
-    if spacer_color != crate::layout::Color::white() || spacer_color == record_color {
+    if spacer_color == record_color {
         return None;
     }
     for (index, band) in words.chunks_exact(columns).enumerate() {

@@ -220,17 +220,27 @@ fn numeric_paint_overhang_requires_the_exact_cell_and_stays_within_its_row_allow
 
 fn alternating_record_bands() -> (Vec<TextSpan>, Vec<PathContent>) {
     use crate::layout::Color;
+    record_bands_fixture(
+        &[(10., 40.), (50., 8.), (58., 50.), (108., 8.), (116., 40.)],
+        [Color::new(0.8, 0.93, 1.), Color::white()],
+    )
+}
+
+fn record_bands_fixture(
+    tracks: &[(f32, f32)],
+    [record_fill, spacer_fill]: [crate::layout::Color; 2],
+) -> (Vec<TextSpan>, Vec<PathContent>) {
     let mut spans = Vec::new();
     let mut paths = Vec::new();
     let mut top = 170.0;
     for band in 0..5 {
         let is_record = band % 2 == 0;
         let (height, color) = if is_record {
-            (24., Color::new(0.8, 0.93, 1.))
+            (24., record_fill)
         } else {
-            (10., Color::white())
+            (10., spacer_fill)
         };
-        for (x, width) in [(10., 40.), (50., 8.), (58., 50.), (108., 8.), (116., 40.)] {
+        for &(x, width) in tracks {
             paths.push(painted_cell(x, top - height, width, height, color));
         }
         if is_record {
@@ -352,4 +362,42 @@ fn an_outer_glyph_overhang_cannot_capture_unowned_heading_text() {
         ..Default::default()
     });
     assert!(preserve_record_bands(&rows, &owners, &spans, &paths, &config).is_none());
+}
+
+#[test]
+fn adjacent_painted_columns_keep_wrapped_text_inside_its_record() {
+    use crate::layout::Color;
+    let (spans, paths) = record_bands_fixture(
+        &[(10., 48.), (58., 58.), (116., 40.)],
+        [Color::new(0.8, 0.93, 1.), Color::white()],
+    );
+    let tables = super::super::detect_tables_with_lines(&spans, &paths, &TableDetectionConfig::default());
+    assert_eq!(tables.len(), 1);
+    assert_record_cells(&tables[0], &spans, 3);
+}
+
+#[test]
+fn contrasting_painted_spacers_keep_wrapped_text_inside_its_record() {
+    use crate::layout::Color;
+    let tracks = [(10., 40.), (50., 8.), (58., 50.), (108., 8.), (116., 40.)];
+    let spacer = Color::new(0.8, 0.93, 1.);
+    for record in [Color::white(), Color::new(1., 0.91, 0.75)] {
+        let (spans, paths) = record_bands_fixture(&tracks, [record, spacer]);
+        let tables = super::super::detect_tables_with_lines(&spans, &paths, &TableDetectionConfig::default());
+        assert_eq!(tables.len(), 1);
+        assert_record_cells(&tables[0], &spans, 5);
+    }
+}
+
+fn assert_record_cells(table: &Table, spans: &[TextSpan], columns: usize) {
+    assert_eq!(table.col_count, columns);
+    assert_eq!(table.rows.len(), 3);
+    for (index, row) in table.rows.iter().enumerate() {
+        let cell = &row.cells[columns / 2];
+        assert_eq!(cell.text, "Background\ncontinued");
+        assert_eq!(cell.spans.len(), 2);
+        assert_eq!(cell.spans[0].bbox, spans[index * 4 + 1].bbox);
+        assert_eq!(cell.spans[1].bbox, spans[index * 4 + 2].bbox);
+        assert!(cell.spans.iter().all(|span| contains(cell.bbox.unwrap(), span.bbox)));
+    }
 }
