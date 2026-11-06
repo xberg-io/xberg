@@ -1387,7 +1387,7 @@ pub(crate) async fn extract_async_handler(
 ///
 /// Returns the current `JobStatus`. Once `state == completed` the `result`
 /// field is populated; once `state == failed` the `error` field is populated.
-/// Jobs expire after 5 minutes and return 404 once evicted.
+/// Jobs expire 5 minutes after they finish and return 404 once evicted.
 #[cfg(feature = "api")]
 #[utoipa::path(
     get,
@@ -1427,8 +1427,8 @@ pub(crate) async fn job_status_handler(
 /// signalled to stop cooperatively at its next checkpoint. Both transition to
 /// `cancelled` and return the updated `JobStatus`. A job that already reached
 /// `completed`, `failed`, or `cancelled` cannot be cancelled again and returns
-/// 409. Jobs expire after 5 minutes and return 404 once evicted, as with
-/// `GET /jobs/{job_id}`.
+/// 409. Jobs expire 5 minutes after they finish and return 404 once evicted,
+/// as with `GET /jobs/{job_id}`.
 #[cfg(feature = "api")]
 #[utoipa::path(
     delete,

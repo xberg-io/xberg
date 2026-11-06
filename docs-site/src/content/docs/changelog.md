@@ -190,6 +190,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(api): Keep async jobs while they run.**
+  Jobs expire 5 minutes after they finish, not 5 minutes after submission.
+  Long extractions keep their result, can be cancelled, and no longer leak active-job slots.
+
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
 
