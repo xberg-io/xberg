@@ -66,7 +66,8 @@ setup() {
 			>"$XBERG_HEIF_PREFIX/lib/pkgconfig/$name.pc"
 	done
 	touch "$XBERG_HEIF_PREFIX/lib/libde265.dylib" "$XBERG_HEIF_PREFIX/lib/libaom.dylib"
-	xberg_stub otool 'if [ "$1" = -l ]; then printf "LC_BUILD_VERSION\nminos 11.0\n"; else printf "fixture:\nidentity:\n"; fi'
+	xberg_stub lipo '[ "$1" = -archs ] || exit 97' 'printf "x86_64\n"'
+	xberg_stub otool 'if [ "$1" = -arch ] && [ "$2" = x86_64 ] && [ "$3" = -l ]; then printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 11.0\n"; else printf "fixture:\nidentity:\n"; fi'
 	run "$BASH" "$SCRIPT"
 	xberg_assert_status 0
 	xberg_assert_output_contains "Verified libheif stack already present"
