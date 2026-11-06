@@ -1333,10 +1333,11 @@ pub(crate) async fn extract_async_handler(
     }
 
     request.adopt_operator_crawl_egress(&state.default_config);
-    let job_id = state.job_store.create_job();
     let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
     apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
     enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, api_allows_local_uri_inputs())?;
+    // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
+    let job_id = state.job_store.create_job();
     effective_config.cancel_token = state.job_store.cancellation_token(&job_id);
     let inputs = request.inputs;
     let include_image_data = request.include_image_data;
@@ -1348,6 +1349,10 @@ pub(crate) async fn extract_async_handler(
     tokio::spawn(async move {
         let store = job_store;
         let jid = job_id_bg;
+        let _abort = JobAbortGuard {
+            store: Arc::clone(&store),
+            job_id: jid.clone(),
+        };
 
         store.set_running(&jid, super::jobs::now_rfc3339());
 
@@ -1379,6 +1384,26 @@ pub(crate) async fn extract_async_handler(
         axum::Json(AsyncJobResponse { job_id }),
     )
         .into_response())
+}
+
+/// Fails the job when its task ends without reporting a result (extractor panic,
+/// runtime shutdown) so it does not stay `Running` and hold its slot forever.
+/// After a normal completion or failure `fail` is a no-op.
+#[cfg(feature = "api")]
+struct JobAbortGuard {
+    store: Arc<super::jobs::JobStore>,
+    job_id: String,
+}
+
+#[cfg(feature = "api")]
+impl Drop for JobAbortGuard {
+    fn drop(&mut self) {
+        self.store.fail(
+            &self.job_id,
+            "extraction task ended without a result".to_string(),
+            super::jobs::now_rfc3339(),
+        );
+    }
 }
 
 /// Poll the status of an async extraction job.
@@ -1515,6 +1540,10 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_router() -> Router {
+        test_router_with_store(std::sync::Arc::new(crate::api::jobs::JobStore::new()))
+    }
+
+    fn test_router_with_store(job_store: std::sync::Arc<crate::api::jobs::JobStore>) -> Router {
         let extraction_service = crate::service::ExtractionServiceBuilder::new()
             .build()
             .expect("default extraction service configuration should be valid");
@@ -1522,7 +1551,7 @@ mod tests {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
-            job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
+            job_store,
             #[cfg(feature = "api")]
             job_timeout_secs: crate::core::ServerConfig::default().job_timeout_secs,
             #[cfg(feature = "prometheus")]
@@ -2358,6 +2387,81 @@ mod tests {
             .expect("body bytes readable");
         let resp: AsyncJobResponse = serde_json::from_slice(&bytes).expect("response parses as AsyncJobResponse");
         assert!(!resp.job_id.is_empty(), "job_id must be non-empty");
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_rejected_uri_holds_no_job_slot() {
+        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+        let app = test_router_with_store(std::sync::Arc::clone(&job_store));
+        let body = serde_json::json!({"inputs": [{"uri": "file:///etc/passwd"}]});
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/extract-async")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("handler responded");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            job_store.active_count(),
+            0,
+            "a rejected submission must not hold a job slot"
+        );
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_returns_429_at_active_job_limit() {
+        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+        for _ in 0..crate::api::jobs::MAX_ACTIVE_JOBS {
+            job_store.create_job();
+        }
+        let app = test_router_with_store(std::sync::Arc::clone(&job_store));
+        let body = serde_json::json!({"inputs": [{"uri": "https://example.com/doc.pdf"}]});
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/extract-async")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("handler responded");
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(job_store.active_count(), crate::api::jobs::MAX_ACTIVE_JOBS);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_job_abort_guard_fails_job_when_task_panics() {
+        use crate::api::types::JobState;
+
+        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+        let job_id = job_store.create_job();
+        let guard = JobAbortGuard {
+            store: std::sync::Arc::clone(&job_store),
+            job_id: job_id.clone(),
+        };
+
+        let task = tokio::spawn(async move {
+            let _guard = guard;
+            panic!("extractor crashed");
+        });
+        assert!(task.await.is_err());
+
+        assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Failed);
+        assert_eq!(job_store.active_count(), 0);
     }
 
     #[cfg(feature = "api")]
