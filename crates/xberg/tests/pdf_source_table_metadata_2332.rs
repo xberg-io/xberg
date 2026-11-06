@@ -137,7 +137,7 @@ fn parsebench_survey_bold_leaves_without_a_visible_separator_stay_body_cells() {
     let mut pdf = lopdf::Document::load_mem(&parsebench_source()).unwrap();
     let page = pdf.get_pages()[&1];
     let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
-    let source = String::from_utf8(pdf.get_page_content(page).unwrap()).unwrap();
+    let source = String::from_utf8(pdf.get_page_content(page)).unwrap();
     let separator = ".7 .7 .7 RG\nn 0 154 m 406.8 154 l S";
     assert_eq!(source.matches(separator).count(), 1);
     let white = source.replace(separator, "1 1 1 RG\nn 0 154 m 406.8 154 l S");
