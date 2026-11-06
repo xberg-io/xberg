@@ -153,6 +153,22 @@ impl PdfDocument {
         ))
     }
 
+    /// Page `/UserUnit` (ISO 32000-1 §14.11.2): the size of a default user space unit in
+    /// 1/72 inch. `1.0` when absent; a non-numeric or non-positive value is an error. The key
+    /// is page-only, not inherited.
+    pub fn get_page_user_unit(&self, page_index: usize) -> Result<f64> {
+        let page = self.get_page(page_index)?;
+        let dict = page
+            .as_dict()
+            .ok_or_else(|| Error::InvalidPdf("Page is not a dictionary".to_string()))?;
+        match dict.get("UserUnit").map(|raw| self.resolve_obj_ref(raw)) {
+            None => Ok(1.0),
+            Some(Object::Integer(v)) if v > 0 => Ok(v as f64),
+            Some(Object::Real(v)) if v.is_finite() && v > 0.0 => Ok(v),
+            Some(_) => Err(Error::InvalidPdf("UserUnit is not a positive number".to_string())),
+        }
+    }
+
     /// Page `/Rotate` normalised to one of `{0, 90, 180, 270}`
     /// (ISO 32000-1 §7.7.3.3); `0` when absent or invalid.
     ///

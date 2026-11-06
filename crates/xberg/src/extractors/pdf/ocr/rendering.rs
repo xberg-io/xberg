@@ -470,16 +470,6 @@ pub(super) fn account_xobject_structured_output(
     }
     Ok(())
 }
-/// Whether the caller already set a usable `source_dpi`, which a derived one must not replace.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn has_explicit_source_dpi(config: &crate::core::config::OcrConfig) -> bool {
-    config
-        .backend_options
-        .as_ref()
-        .and_then(|options| options.get(crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION))
-        .is_some()
-}
-
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn collect_xobject_recovery_result(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
@@ -489,25 +479,8 @@ pub(super) async fn collect_xobject_recovery_result(
     budget: &mut crate::extractors::security::SecurityBudget,
     outcome: &mut XObjectRecoveryOutcome,
 ) -> crate::Result<()> {
-    let with_proven_dpi;
-    let ocr_config = match fallback.source_dpi {
-        Some(dpi) if !has_explicit_source_dpi(ocr_config) => {
-            let mut config = ocr_config.clone();
-            let mut options = match config.backend_options.take() {
-                Some(serde_json::Value::Object(options)) => options,
-                _ => serde_json::Map::new(),
-            };
-            options.insert(
-                crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION.to_owned(),
-                serde_json::json!(dpi),
-            );
-            config.backend_options = Some(serde_json::Value::Object(options));
-            with_proven_dpi = config;
-            &with_proven_dpi
-        }
-        _ => ocr_config,
-    };
-    let result = match backend.process_image(&fallback.bytes, ocr_config).await {
+    let ocr_config = source_dpi::with_proven_source_dpi(ocr_config, fallback.source_dpi);
+    let result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
         Err(error) => {
             tracing::debug!(
@@ -663,7 +636,7 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     }
     let mut fallback_images = fallback_images;
     if context.use_proven_source_dpi {
-        let proven_dpis = crate::pdf::native::images::proven_source_dpis(render_doc, page_idx);
+        let proven_dpis = crate::pdf::native::proven_dpi::proven_source_dpis(render_doc, page_idx);
         for image in &mut fallback_images {
             image.source_dpi = proven_dpis.get(&image.paint_order).copied();
         }
@@ -777,6 +750,8 @@ fn render_one_full_pdf_ocr_page(
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 mod error_source;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+mod source_dpi;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) use error_source::SourceImageBudgetExceeded;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
