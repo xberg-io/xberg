@@ -285,6 +285,27 @@ fn tile_config(config: &OcrConfig, dpi: f64) -> OcrConfig {
     config
 }
 
+struct TileRead {
+    rows: Range<u32>,
+    lines: Option<Vec<String>>,
+}
+
+fn select_complete_run(mut reads: Vec<TileRead>) -> Option<(Range<u32>, Vec<String>)> {
+    let mut complete = reads
+        .chunk_by_mut(|left, right| left.rows.end == right.rows.start)
+        .filter(|run| run.iter().all(|tile| tile.lines.is_some()));
+    let run = complete.next()?;
+    if complete.next().is_some() {
+        return None;
+    }
+    let rows = run.first()?.rows.start..run.last()?.rows.end;
+    let mut text = Vec::new();
+    for tile in run {
+        text.extend(tile.lines.take()?);
+    }
+    Some((rows, text))
+}
+
 async fn read_tiles(
     proof: &PrimaryProof,
     source: &IndexedSource,
@@ -294,8 +315,7 @@ async fn read_tiles(
     cancel: impl Fn() -> bool,
 ) -> Option<crate::Result<(Range<u32>, Vec<String>)>> {
     let mut config = tile_config(config, source.dpi);
-    let mut range = None::<Range<u32>>;
-    let mut text = Vec::new();
+    let mut reads = Vec::new();
     let mut text_bytes = 0usize;
     for (rows, column) in source_tiles(proof, source, attempts, &cancel)? {
         if cancel() {
@@ -321,26 +341,22 @@ async fn read_tiles(
         {
             return None;
         }
-        let Some(lines) = right_column(elements, frame, &column) else {
-            continue;
-        };
-        if let Some(range) = range.as_mut() {
-            if range.end != rows.start {
-                return None;
+        let lines = if let Some(lines) = right_column(elements, frame, &column) {
+            let mut text = Vec::new();
+            for (line, _) in lines {
+                text_bytes = text_bytes.checked_add(line.len())?;
+                if text_bytes > MAX_PRIMARY_BYTES {
+                    return None;
+                }
+                text.push(line.to_owned());
             }
-            range.end = rows.end;
+            Some(text)
         } else {
-            range = Some(rows);
-        }
-        for (line, _) in lines {
-            text_bytes = text_bytes.checked_add(line.len())?;
-            if text_bytes > MAX_PRIMARY_BYTES {
-                return None;
-            }
-            text.push(line.to_owned());
-        }
+            None
+        };
+        reads.push(TileRead { rows, lines });
     }
-    Some(Ok((range?, text)))
+    select_complete_run(reads).map(Ok)
 }
 
 fn typed_bands(doc: &InternalDocument, proof: &PrimaryProof) -> Option<Vec<(usize, Band)>> {
@@ -480,6 +496,38 @@ pub(in super::super) async fn augment(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tile(rows: Range<u32>, line: Option<&str>) -> TileRead {
+        TileRead {
+            rows,
+            lines: line.map(|line| vec![line.to_owned()]),
+        }
+    }
+
+    #[test]
+    fn a_refused_first_or_last_strip_refuses_the_whole_contiguous_run() {
+        for (first, last) in [(None, Some("last")), (Some("first"), None)] {
+            assert!(select_complete_run(vec![tile(10..20, first), tile(20..30, last)]).is_none());
+        }
+    }
+
+    #[test]
+    fn a_refused_run_cannot_displace_one_complete_run() {
+        for (first, last) in [(None, Some("last")), (Some("first"), None)] {
+            let selected = select_complete_run(vec![
+                tile(10..20, first),
+                tile(20..30, last),
+                tile(40..50, Some("kept first")),
+                tile(50..60, Some("kept last")),
+            ]);
+            assert_eq!(selected, Some((40..60, vec!["kept first".into(), "kept last".into()])));
+        }
+    }
+
+    #[test]
+    fn two_complete_disjoint_runs_are_ambiguous() {
+        assert!(select_complete_run(vec![tile(10..20, Some("first")), tile(30..40, Some("second"))]).is_none());
+    }
 
     #[test]
     fn cached_extraction_never_admits_optional_strip_recognition() {
