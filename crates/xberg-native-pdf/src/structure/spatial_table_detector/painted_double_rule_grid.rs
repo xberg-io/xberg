@@ -81,28 +81,36 @@ fn has_joined_double_rule(fills: &[(Rect, Color)], xs: &[f32], snapped: f32, sou
 }
 
 // A detached lower accounting bar can win horizontal snapping over the bar
-// touching the paint edge. Both painted bands must independently establish
-// every source seam before the snapped grid can use those seams again. ~keep
-fn exact_source_bands(lines: &[PathContent], xs: &[f32], ys: &[f32]) -> Option<[f32; 3]> {
+// touching the paint edge. The paint must independently establish every
+// source seam before the snapped grid can use those seams again. ~keep
+fn exact_source_bands(lines: &[PathContent], xs: &[f32], ys: &[f32]) -> Option<Vec<f32>> {
     let fills: Vec<_> = lines.iter().filter_map(painted_rectangle).collect();
-    let (low, low_color) = cell_band(&fills, xs, [ys[0], ys[1]])?;
-    let (high, high_color) = cell_band(&fills, xs, [ys[1], ys[2]])?;
-    if low_color == high_color
-        || low.bottom() != high.top()
-        || low.top() - ys[0] <= BAND_RULE_SPAN_TOL
+    let (low, mut previous_color) = cell_band(&fills, xs, [ys[0], ys[1]])?;
+    if low.top() - ys[0] <= BAND_RULE_SPAN_TOL
         || (low.bottom() - ys[1]).abs() > BAND_RULE_SPAN_TOL
-        || (high.bottom() - ys[2]).abs() > BAND_RULE_SPAN_TOL
         || !has_joined_double_rule(&fills, xs, ys[0], low.top())
     {
         return None;
     }
-    Some([low.top(), high.top(), high.bottom()])
+    let mut bands = Vec::with_capacity(ys.len());
+    bands.extend([low.top(), low.bottom()]);
+    for pair in ys[1..].windows(2) {
+        let (band, color) = cell_band(&fills, xs, [pair[0], pair[1]])?;
+        if color == previous_color
+            || bands.last() != Some(&band.top())
+            || (band.bottom() - pair[1]).abs() > BAND_RULE_SPAN_TOL
+        {
+            return None;
+        }
+        previous_color = color;
+        bands.push(band.bottom());
+    }
+    Some(bands)
 }
 
-fn owns_words(indices: &[Vec<Vec<usize>>], spans: &[TextSpan], xs: &[f32], bands: [f32; 3]) -> bool {
+fn owns_words(indices: &[Vec<Vec<usize>>], spans: &[TextSpan], xs: &[f32], bands: &[f32]) -> bool {
     let mut owned = 0;
-    for (row, cells) in indices.iter().enumerate() {
-        let y = 1 - row;
+    for (cells, band) in indices.iter().zip(bands.windows(2).rev()) {
         for (column, words) in cells.iter().enumerate() {
             let left = if column > 0 && cells[column - 1].is_empty() {
                 xs[column - 1]
@@ -119,8 +127,8 @@ fn owns_words(indices: &[Vec<Vec<usize>>], spans: &[TextSpan], xs: &[f32], bands
                 let b = span.bbox;
                 if !(b.left() >= left
                     && b.right() <= right
-                    && b.top() >= bands[y]
-                    && b.bottom() <= bands[y + 1]
+                    && b.top() >= band[0]
+                    && b.bottom() <= band[1]
                     && b.width > 0.
                     && b.height > 0.
                     && span.rotation_degrees == 0.
@@ -140,7 +148,7 @@ fn owns_words(indices: &[Vec<Vec<usize>>], spans: &[TextSpan], xs: &[f32], bands
             b.right() > xs[0]
                 && b.left() < xs[xs.len() - 1]
                 && b.bottom() > bands[0]
-                && b.top() < bands[2]
+                && b.top() < bands[bands.len() - 1]
                 && !span.text.trim().is_empty()
         })
         .count();
@@ -149,16 +157,10 @@ fn owns_words(indices: &[Vec<Vec<usize>>], spans: &[TextSpan], xs: &[f32], bands
 
 // Replace snapped intersections with the painted bounds. The preceding
 // ownership proof allows horizontal overflow only into a discarded track. ~keep
-fn restore_cell_bounds(rows: &mut [TableRow], xs: &[f32], bands: [f32; 3]) {
-    for (row, output) in rows.iter_mut().enumerate() {
-        let y = 1 - row;
+fn restore_cell_bounds(rows: &mut [TableRow], xs: &[f32], bands: &[f32]) {
+    for (output, band) in rows.iter_mut().zip(bands.windows(2).rev()) {
         for (column, cell) in output.cells.iter_mut().enumerate() {
-            let paint = Rect::new(
-                xs[column],
-                bands[y],
-                xs[column + 1] - xs[column],
-                bands[y + 1] - bands[y],
-            );
+            let paint = Rect::new(xs[column], band[0], xs[column + 1] - xs[column], band[1] - band[0]);
             cell.bbox = Some(cell.spans.iter().fold(paint, |bounds, span| bounds.union(&span.bbox)));
         }
     }
@@ -173,9 +175,11 @@ pub(super) fn recover(
     config: &TableDetectionConfig,
 ) -> Option<Table> {
     let tracks = xs.len().checked_sub(1)?;
-    if ys.len() != 3
+    let row_count = ys.len().checked_sub(1)?;
+    if row_count < 2
         || !(WIDE_GRID_COLUMNS..=MAX_TRACKS).contains(&tracks)
-        || cells.len() != tracks * 2
+        || row_count > MAX_PATHS / tracks
+        || cells.len() != tracks * row_count
         || spans.len() > MAX_SPANS
         || lines.len() > MAX_PATHS
         || spans
@@ -187,20 +191,19 @@ pub(super) fn recover(
     }
     let bands = exact_source_bands(lines, xs, ys)?;
     let (mut rows, mut indices) = assign_spans_to_intersection_grid(cells, xs, ys, tracks, spans, &[], false)?;
-    if !owns_words(&indices, spans, xs, bands) {
+    if !owns_words(&indices, spans, xs, &bands) {
         return None;
     }
-    restore_cell_bounds(&mut rows, xs, bands);
+    restore_cell_bounds(&mut rows, xs, &bands);
     for column in (0..tracks).rev() {
-        match (indices[0][column].is_empty(), indices[1][column].is_empty()) {
-            (true, true) => {
-                for (row, ids) in rows.iter_mut().zip(&mut indices) {
-                    row.cells.remove(column);
-                    ids.remove(column);
-                }
+        let occupied = indices.iter().filter(|row| !row[column].is_empty()).count();
+        if occupied == 0 {
+            for (row, ids) in rows.iter_mut().zip(&mut indices) {
+                row.cells.remove(column);
+                ids.remove(column);
             }
-            (false, false) => {}
-            _ => return None,
+        } else if occupied != row_count {
+            return None;
         }
     }
     let columns = rows[0].cells.len();
@@ -212,7 +215,7 @@ pub(super) fn recover(
     if !is_valid_table(&table)
         || !table.is_real_grid()
         || crate::document::looks_like_prose_table(&table)
-        || table.rows.len() != 2
+        || table.rows.len() != row_count
     {
         return None;
     }
