@@ -42,6 +42,42 @@ impl BoxPx {
     }
 }
 
+pub(super) struct SourceLine {
+    pub(super) rows: Range<u32>,
+    pub(super) prefix: Option<BoxPx>,
+}
+
+pub(super) struct SourceColumn {
+    pub(super) separator: Range<u32>,
+    pub(super) lines: Vec<SourceLine>,
+}
+
+fn source_matches(lines: &[&Line<'_>], source: &[SourceLine]) -> bool {
+    if lines.len() != source.len() {
+        return false;
+    }
+    for (i, (line, band)) in lines.iter().zip(source).enumerate() {
+        let overlaps = |rows: &Range<u32>| line.bounds.y0 < rows.end && rows.start < line.bounds.y1;
+        if !overlaps(&band.rows)
+            || i.checked_sub(1)
+                .is_some_and(|previous| overlaps(&source[previous].rows))
+            || source.get(i + 1).is_some_and(|next| overlaps(&next.rows))
+        {
+            return false;
+        }
+        let Some((word, text)) = line.words.first() else {
+            return false;
+        };
+        match (band.prefix, ordinal(text)) {
+            (Some(prefix), Some(_))
+                if word.x0 < prefix.x1 && prefix.x0 < word.x1 && word.y0 < prefix.y1 && prefix.y0 < word.y1 => {}
+            (None, None) => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
 struct Line<'a> {
     bounds: BoxPx,
     text: &'a str,
@@ -161,8 +197,9 @@ fn complete_ordered_group(lines: &[&Line<'_>]) -> Option<()> {
 pub(super) fn right_column<'a>(
     elements: &'a [OcrElement],
     frame: (u32, u32),
-    separator: Range<u32>,
+    source: &SourceColumn,
 ) -> Option<Vec<(&'a str, BoxPx)>> {
+    let separator = &source.separator;
     if separator.is_empty() || separator.end > frame.0 {
         return None;
     }
@@ -182,6 +219,9 @@ pub(super) fn right_column<'a>(
         }
     }
     if left == 0 || right.windows(2).any(|pair| pair[0].bounds.y1 > pair[1].bounds.y0) {
+        return None;
+    }
+    if !source_matches(&right, &source.lines) {
         return None;
     }
     complete_ordered_group(&right)?;
@@ -237,10 +277,46 @@ mod tests {
         out
     }
 
+    fn painted_column(entries: usize) -> SourceColumn {
+        SourceColumn {
+            separator: 40..65,
+            lines: (0..entries as u32 * 2)
+                .map(|i| {
+                    let y = i * 10 + 10;
+                    SourceLine {
+                        rows: y..y + 8,
+                        prefix: (i % 2 == 0).then_some(BoxPx {
+                            x0: 75,
+                            y0: y,
+                            x1: 78,
+                            y1: y + 8,
+                        }),
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn refuses_complete_ocr_group_that_omits_a_painted_fourth_entry() {
+        let recognized = specimen(&["7", "8", "9"], true);
+        assert!(right_column(&recognized, (200, 100), &painted_column(3)).is_some());
+        assert!(right_column(&recognized, (200, 100), &painted_column(4)).is_none());
+    }
+
+    #[test]
+    fn refuses_ordinal_box_outside_its_painted_prefix() {
+        let recognized = specimen(&["7", "8", "9"], true);
+        let mut source = painted_column(3);
+        source.lines[2].prefix.as_mut().unwrap().x0 += 5;
+        source.lines[2].prefix.as_mut().unwrap().x1 += 5;
+        assert!(right_column(&recognized, (200, 100), &source).is_none());
+    }
+
     #[test]
     fn retains_each_owned_line_of_complete_ordered_runs() {
         let specimen = specimen(&["7", "8.", "9,"], true);
-        let lines = right_column(&specimen, (200, 100), 40..65).unwrap();
+        let lines = right_column(&specimen, (200, 100), &painted_column(3)).unwrap();
         assert_eq!(
             lines.iter().map(|(text, _)| *text).collect::<Vec<_>>(),
             [
@@ -261,7 +337,7 @@ mod tests {
             (&["7", "8", "10"][..], true),
             (&["7", "8", "9"][..], false),
         ] {
-            assert!(right_column(&specimen(numbers, continuation), (200, 100), 40..65).is_none());
+            assert!(right_column(&specimen(numbers, continuation), (200, 100), &painted_column(3)).is_none());
         }
     }
 
@@ -270,7 +346,7 @@ mod tests {
         let mut sample = specimen(&["7", "8", "9"], true);
         for x in [43, 170] {
             sample.push(element("orphan", OcrElementLevel::Word, x, 11, 12));
-            assert!(right_column(&sample, (200, 100), 40..65).is_none());
+            assert!(right_column(&sample, (200, 100), &painted_column(3)).is_none());
             sample.pop();
         }
     }

@@ -108,7 +108,12 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
         });
     }
     if config.deskew && processed.depth() == 1 {
-        processed = apply_optional(processed, "deskew", Pix::deskew);
+        processed = apply_optional(processed, "deskew", |source| {
+            let output = source.deskew();
+            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            geometry_evidence::record(output.as_ref().is_ok_and(|result| result.as_ptr() == source.as_ptr()));
+            output
+        });
     }
     Ok(processed)
 }
@@ -533,5 +538,82 @@ mod tests {
             },
             false
         ));
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) mod geometry_evidence {
+    use std::sync::Arc;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Observation {
+        Absent,
+        ScaleOnly,
+        Refused,
+    }
+
+    #[derive(Clone)]
+    pub(crate) struct GeometryEvidence(Arc<parking_lot::Mutex<Observation>>);
+
+    tokio::task_local! {
+        static REQUEST: GeometryEvidence;
+    }
+
+    pub(crate) async fn observe<F: std::future::Future>(read: F) -> (F::Output, bool) {
+        let request = GeometryEvidence(Arc::new(parking_lot::Mutex::new(Observation::Absent)));
+        let result = REQUEST.scope(request.clone(), read).await;
+        let scale_only = *request.0.lock() == Observation::ScaleOnly;
+        (result, scale_only)
+    }
+
+    impl GeometryEvidence {
+        pub(crate) fn requested() -> Option<Self> {
+            REQUEST.try_with(Clone::clone).ok()
+        }
+
+        pub(crate) fn on_worker<T>(self, run: impl FnOnce() -> T) -> T {
+            REQUEST.sync_scope(self, run)
+        }
+    }
+
+    // Leptonica pixDeskew returns a reference-counted clone for a no-op.
+    // Any distinct Pix, error, or repeated observation is insufficient evidence.
+    pub(super) fn record(same_pix: bool) {
+        let _ = REQUEST.try_with(|request| {
+            let mut current = request.0.lock();
+            *current = if same_pix && *current == Observation::Absent {
+                Observation::ScaleOnly
+            } else {
+                Observation::Refused
+            };
+        });
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn only_one_positive_deskew_observation_can_certify_the_selected_worker_read() {
+            for (observations, expected) in [
+                (&[][..], false),
+                (&[true][..], true),
+                (&[false][..], false),
+                (&[true, true][..], false),
+                (&[false, true][..], false),
+            ] {
+                let (_, certified) = observe(async {
+                    let request = GeometryEvidence::requested().unwrap();
+                    tokio::task::spawn_blocking(move || {
+                        request.on_worker(|| observations.iter().copied().for_each(record));
+                    })
+                    .await
+                    .unwrap();
+                })
+                .await;
+                assert_eq!(certified, expected);
+                assert!(GeometryEvidence::requested().is_none());
+            }
+        }
     }
 }

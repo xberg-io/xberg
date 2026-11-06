@@ -15,6 +15,8 @@ const SECOND: &str =
     "industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and";
 const THIRD: &str = "scrambled it to make a type specimen book";
 const ORDINALS: [char; 6] = ['1', '2', '3', '1', '2', '3'];
+const DOCUMENT_SHA: &str = "89b055edbdfb99a7cf707b5d15c1bf65c2460ddddf9c9a6bfb54bc79d786d1f7";
+const PAGE_SHA: &str = "1d6b45f0322b7f2c3bc19ef3b0e0ad099112d14ad79e61c0109441ae7bd9900b";
 
 fn sha(bytes: impl AsRef<[u8]>) -> String {
     hex::encode(Sha256::digest(bytes))
@@ -115,8 +117,7 @@ fn write_english_model(directory: &std::path::Path) {
     std::fs::write(directory.join("eng.traineddata"), english).expect("write private English data");
 }
 
-#[tokio::test]
-async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original_projections() {
+async fn read_pinned(use_cache: bool) -> xberg::types::ExtractedDocument {
     let bytes = pinned_page();
     let tessdata = tempfile::tempdir().expect("create private tessdata directory");
     write_english_model(tessdata.path());
@@ -124,7 +125,11 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
         r#"{"use_cache":false,"ocr":{"backend":"tesseract","language":["eng"]},"pages":{"extract_pages":true}}"#,
     )
     .unwrap();
-    config.ocr.as_mut().unwrap().tessdata_path = Some(tessdata.path().to_path_buf());
+    config.use_cache = use_cache;
+    let ocr = config.ocr.as_mut().unwrap();
+    ocr.tessdata_path = Some(tessdata.path().to_path_buf());
+    // Keep the inner Tesseract cache out of this test. Only the outer switch controls admission.
+    ocr.backend_options = Some(serde_json::json!({"use_cache": false}));
     let output = xberg::extract(
         xberg::ExtractInput::from_bytes(bytes, "application/pdf", Some("page4.pdf".into())),
         &config,
@@ -132,9 +137,13 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
     .await
     .unwrap();
     assert!(output.errors.is_empty());
-    let [doc] = output.results.as_slice() else {
-        panic!("exactly one document")
-    };
+    assert_eq!(output.results.len(), 1);
+    output.results.into_iter().next().unwrap()
+}
+
+#[tokio::test]
+async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original_projections() {
+    let doc = read_pinned(false).await;
     let [page] = doc.pages.as_ref().unwrap().as_slice() else {
         panic!("exactly one page")
     };
@@ -153,16 +162,18 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
         table.cells[0],
         ["Palo alte Netware,", "the plbaleypersecurty lender", "gah ne"]
     );
-    assert_projection(
-        &doc.content,
-        2321,
-        2267,
-        "89b055edbdfb99a7cf707b5d15c1bf65c2460ddddf9c9a6bfb54bc79d786d1f7",
-    );
-    assert_projection(
-        &page.content,
-        2316,
-        2266,
-        "1d6b45f0322b7f2c3bc19ef3b0e0ad099112d14ad79e61c0109441ae7bd9900b",
-    );
+    assert_projection(&doc.content, 2321, 2267, DOCUMENT_SHA);
+    assert_projection(&page.content, 2316, 2266, PAGE_SHA);
+}
+
+#[tokio::test]
+async fn cache_enabled_pdf_keeps_both_stock_projections() {
+    let doc = read_pinned(true).await;
+    let [page] = doc.pages.as_ref().unwrap().as_slice() else {
+        panic!("exactly one page")
+    };
+    assert_eq!(sha(&doc.content), DOCUMENT_SHA);
+    assert_eq!(sha(&page.content), PAGE_SHA);
+    assert_eq!(doc.tables.len(), 1);
+    assert_eq!(page.tables.len(), 1);
 }

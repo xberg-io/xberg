@@ -1,7 +1,7 @@
 //! Add independently ordered source occurrences only at certified projection cuts.
 
 use super::indexed::IndexedSource;
-use super::ordered::{BoxPx, right_column};
+use super::ordered::{BoxPx, SourceColumn, right_column};
 use super::{Attempt, MAX_TILE_SIDE, STRIP_OCR, wait_for_cancel};
 use crate::core::config::{ExtractionConfig, OcrConfig};
 use crate::plugins::OcrBackend;
@@ -16,8 +16,8 @@ const MAX_ATTEMPTS: usize = 4;
 const MAX_OWNERS: usize = 1024;
 const MAX_PRIMARY_BYTES: usize = 16 * 1024;
 
-pub(in super::super) fn supports_raster_height(height: u32) -> bool {
-    height > MAX_TILE_SIDE
+pub(in super::super) fn supports_run(config: &ExtractionConfig, height: u32) -> bool {
+    !config.use_cache && height > MAX_TILE_SIDE
 }
 
 #[derive(Clone, Copy)]
@@ -243,7 +243,7 @@ fn source_tiles(
     source: &IndexedSource,
     max_attempts: usize,
     cancel: impl Fn() -> bool,
-) -> Option<Vec<(Range<u32>, Range<u32>)>> {
+) -> Option<Vec<(Range<u32>, SourceColumn)>> {
     let seams = source.seams(&cancel)?;
     let mut candidates = Vec::new();
     for pair in seams.windows(2) {
@@ -253,12 +253,12 @@ fn source_tiles(
         let rows = pair[0]..pair[1];
         if rows.len() <= source.max_tile_rows()
             && raw_tile_is_empty(proof, source, &rows)
-            && let Some(separator) = source.right_separator(rows.clone())
+            && let Some(column) = source.right_column(rows.clone())
         {
             if candidates.len() == max_attempts {
                 return None;
             }
-            candidates.push((rows, separator));
+            candidates.push((rows, column));
         }
     }
     Some(candidates)
@@ -274,6 +274,8 @@ fn tile_config(config: &OcrConfig, dpi: f64) -> OcrConfig {
     if let Some(tesseract) = config.tesseract_config.as_mut() {
         tesseract.preprocessing = Some(crate::types::ImagePreprocessingConfig {
             target_dpi: dpi as i32,
+            auto_rotate: false,
+            deskew: false,
             ..Default::default()
         });
     }
@@ -290,18 +292,22 @@ async fn read_tiles(
     config: &OcrConfig,
     attempts: usize,
     cancel: impl Fn() -> bool,
-) -> Option<(Range<u32>, Vec<String>)> {
+) -> Option<crate::Result<(Range<u32>, Vec<String>)>> {
     let mut config = tile_config(config, source.dpi);
     let mut range = None::<Range<u32>>;
     let mut text = Vec::new();
     let mut text_bytes = 0usize;
-    for (rows, separator) in source_tiles(proof, source, attempts, &cancel)? {
+    for (rows, column) in source_tiles(proof, source, attempts, &cancel)? {
         if cancel() {
             return None;
         }
         let png = source.encode(rows.clone())?;
         config.security_limits.get_or_insert_default().max_content_size = source.backend_limit(png.capacity())?;
-        let result = backend.process_image_owned(Arc::new(png), &config).await.ok()?;
+        let result = match backend.process_image_owned(Arc::new(png), &config).await {
+            Ok(result) => result,
+            Err(error @ crate::XbergError::Cancelled) => return Some(Err(error)),
+            Err(_) => return None,
+        };
         let frame = (source.width, rows.end - rows.start);
         if !accepted_raw_read(&result) || processed_frame(&result)? != frame || !result.tables.is_empty() {
             return None;
@@ -315,7 +321,7 @@ async fn read_tiles(
         {
             return None;
         }
-        let Some(lines) = right_column(elements, frame, separator) else {
+        let Some(lines) = right_column(elements, frame, &column) else {
             continue;
         };
         if let Some(range) = range.as_mut() {
@@ -334,7 +340,7 @@ async fn read_tiles(
             text.push(line.to_owned());
         }
     }
-    Some((range?, text))
+    Some(Ok((range?, text)))
 }
 
 fn typed_bands(doc: &InternalDocument, proof: &PrimaryProof) -> Option<Vec<(usize, Band)>> {
@@ -466,6 +472,7 @@ pub(in super::super) async fn augment(
         return Err(crate::XbergError::Cancelled);
     }
     Ok(result
+        .transpose()?
         .and_then(|(rows, text)| apply(&proof, &source, doc, page, rows, text))
         .is_some())
 }
@@ -473,6 +480,31 @@ pub(in super::super) async fn augment(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_extraction_never_admits_optional_strip_recognition() {
+        let mut config = ExtractionConfig {
+            use_cache: true,
+            ..Default::default()
+        };
+        assert!(!supports_run(&config, MAX_TILE_SIDE + 1));
+        config.use_cache = false;
+        assert!(supports_run(&config, MAX_TILE_SIDE + 1));
+        assert!(!supports_run(&config, MAX_TILE_SIDE));
+    }
+
+    #[test]
+    fn tile_recognition_never_applies_deskew_or_auto_rotation() {
+        let config = OcrConfig {
+            backend: "tesseract".into(),
+            ..Default::default()
+        };
+        let tile = tile_config(&config, 72.0);
+        let preprocessing = tile.tesseract_config.unwrap().preprocessing.unwrap();
+        assert_eq!(preprocessing.target_dpi, 72);
+        assert!(!preprocessing.deskew);
+        assert!(!preprocessing.auto_rotate);
+    }
 
     #[test]
     fn both_cut_neighbors_must_be_wholly_outside_the_inserted_source_band() {

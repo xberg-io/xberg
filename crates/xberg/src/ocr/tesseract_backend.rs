@@ -552,17 +552,31 @@ impl TesseractBackend {
                 source: None,
             })?;
 
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let geometry = crate::ocr::preprocessing::geometry_evidence::GeometryEvidence::requested();
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                processor.process_image_with_policy(image_bytes.as_slice(), &tess_config_clone, output_format, policy)
-            }))
-            .unwrap_or_else(|_| {
-                Err(crate::ocr::error::OcrError::ProcessingFailed(
-                    "Tesseract/Leptonica foreign exception caught".to_string(),
-                ))
-            })
+            let run = || {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    processor.process_image_with_policy(
+                        image_bytes.as_slice(),
+                        &tess_config_clone,
+                        output_format,
+                        policy,
+                    )
+                }))
+                .unwrap_or_else(|_| {
+                    Err(crate::ocr::error::OcrError::ProcessingFailed(
+                        "Tesseract/Leptonica foreign exception caught".to_string(),
+                    ))
+                })
+            };
+            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Some(geometry) = geometry {
+                return geometry.on_worker(run);
+            }
+            run()
         };
         #[cfg(not(target_arch = "wasm32"))]
         let ocr_result = tokio::task::spawn_blocking(crate::core::extractor::cacheability::blocking(operation))

@@ -1,5 +1,6 @@
 //! Source and visible-frame evidence for a single painted indexed RGB raster.
 
+use super::ordered::{BoxPx, SourceColumn, SourceLine};
 use super::{FIXED_WORK_BYTES, MAX_SOURCE_PIXELS, MAX_TILE_SIDE, TILE_BYTES_PER_PIXEL};
 use crate::extractors::pdf::ocr::hidden_layer::{decode_probe_stream, page_frame_and_contents, stream_filters};
 use image::ImageEncoder;
@@ -248,7 +249,7 @@ impl IndexedSource {
         Some(seams)
     }
 
-    pub(super) fn right_separator(&self, rows: Range<u32>) -> Option<Range<u32>> {
+    pub(super) fn right_column(&self, rows: Range<u32>) -> Option<SourceColumn> {
         let mut columns = vec![true; self.width as usize];
         for row in self.rows(rows.clone()) {
             for (white, &sample) in columns.iter_mut().zip(row) {
@@ -270,38 +271,47 @@ impl IndexedSource {
             }
         }
         let separator = best?;
-        self.distinct_hanging_prefixes(rows, separator.end)
-            .then_some(separator.start as u32..separator.end as u32)
+        Some(SourceColumn {
+            lines: self.distinct_hanging_prefixes(rows, separator.end)?,
+            separator: separator.start as u32..separator.end as u32,
+        })
     }
 
-    fn distinct_hanging_prefixes(&self, rows: Range<u32>, first_x: usize) -> bool {
+    fn distinct_hanging_prefixes(&self, rows: Range<u32>, first_x: usize) -> Option<Vec<SourceLine>> {
         let bands = ink_bands(self.rows(rows.clone()), first_x, |sample| self.white(sample));
         let Some(marker) = bands.iter().map(|(_, x)| *x).min() else {
-            return false;
+            return None;
         };
         let Some(body) = bands.iter().filter_map(|(_, x)| (*x > marker).then_some(*x)).min() else {
-            return false;
+            return None;
         };
         let mut heads = Vec::new();
+        let mut lines = Vec::new();
         let mut after_marker = false;
         for (band, x) in bands {
             if x == marker {
                 if after_marker {
-                    return false;
+                    return None;
                 }
                 heads.push(rows.start + band.start..rows.start + band.end);
                 after_marker = true;
             } else {
                 if heads.is_empty() {
-                    return false;
+                    return None;
                 }
                 after_marker = false;
             }
+            let prefix = if x == marker {
+                Some(self.prefix_bounds(rows.start, &band, marker..body)?)
+            } else {
+                None
+            };
+            lines.push(SourceLine { rows: band, prefix });
         }
         if after_marker || heads.len() < super::ordered::MIN_ORDERED_ENTRIES {
-            return false;
+            return None;
         }
-        !heads.windows(2).any(|pair| {
+        (!heads.windows(2).any(|pair| {
             pair[0].len() == pair[1].len()
                 && self
                     .rows(pair[0].clone())
@@ -312,6 +322,33 @@ impl IndexedSource {
                             .zip(&b[marker..body])
                             .all(|(&x, &y)| self.white(x) == self.white(y))
                     })
+        }))
+        .then_some(lines)
+    }
+
+    fn prefix_bounds(&self, tile_start: u32, band: &Range<u32>, columns: Range<usize>) -> Option<BoxPx> {
+        let mut x0 = usize::MAX;
+        let mut x1 = 0;
+        let mut y0 = u32::MAX;
+        let mut y1 = 0;
+        for (i, row) in self.rows(tile_start + band.start..tile_start + band.end).enumerate() {
+            let pixels = &row[columns.clone()];
+            if let (Some(left), Some(right)) = (
+                pixels.iter().position(|&p| !self.white(p)),
+                pixels.iter().rposition(|&p| !self.white(p)),
+            ) {
+                x0 = x0.min(columns.start + left);
+                x1 = x1.max(columns.start + right + 1);
+                let y = band.start + i as u32;
+                y0 = y0.min(y);
+                y1 = y + 1;
+            }
+        }
+        (x0 < x1 && y0 < y1).then_some(BoxPx {
+            x0: x0 as u32,
+            y0,
+            x1: x1 as u32,
+            y1,
         })
     }
 

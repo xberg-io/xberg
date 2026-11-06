@@ -3854,7 +3854,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let retained_source_bytes = retained_ocr_source_bytes(image_data, &upright_data, retained_pixels);
                 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
                 let ordered_raster = (try_tall_source
-                    && super::tall_source::augmentation::supports_raster_height(*height)
+                    && super::tall_source::augmentation::supports_run(config, *height)
                     && total_pages == 1
                     && page_index_offset == 0
                     && idx == 0
@@ -3904,21 +3904,32 @@ pub(super) async fn extract_with_ocr_for_page(
                         cancel_token.as_ref(),
                     );
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-                    let result = if let Some((retry, _)) = &retry {
-                        retry.read_primary(&config_clone, read).await
+                    let primary = async {
+                        if let Some((retry, _)) = &retry {
+                            retry.read_primary(&config_clone, read).await
+                        } else {
+                            read.await
+                        }
+                    };
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let (result, scale_only) = if ordered_raster.is_some() {
+                        crate::ocr::preprocessing::geometry_evidence::observe(primary).await
                     } else {
-                        read.await
+                        (primary.await, false)
                     };
                     // Stock orientation preserves table-bearing primaries but later restores
                     // the caller's public element policy. Capture the complete internal read here.
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-                    let ordered_proof = ordered_raster.zip(result.as_ref().ok()).and_then(|(raster, document)| {
-                        super::tall_source::augmentation::PrimaryProof::capture(
-                            document,
-                            document.ocr_elements.as_deref()?,
-                            raster,
-                        )
-                    });
+                    let ordered_proof = ordered_raster
+                        .filter(|_| scale_only)
+                        .zip(result.as_ref().ok())
+                        .and_then(|(raster, document)| {
+                            super::tall_source::augmentation::PrimaryProof::capture(
+                                document,
+                                document.ocr_elements.as_deref()?,
+                                raster,
+                            )
+                        });
                     #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
                     let (result, ordered_proof) = (read.await, None::<()>);
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
