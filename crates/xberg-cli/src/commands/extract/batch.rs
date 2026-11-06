@@ -524,6 +524,82 @@ mod tests {
         assert!(!rendered.contains('\u{1b}'));
     }
 
+    struct LayoutProbe;
+
+    const LAYOUT_PROBE_NAME: &str = "cli-batch-layout-probe";
+    const LAYOUT_PROBE_MIME: &str = "text/x-quarto";
+
+    impl xberg::plugins::Plugin for LayoutProbe {
+        fn name(&self) -> &str {
+            LAYOUT_PROBE_NAME
+        }
+    }
+
+    impl xberg::plugins::DocumentExtractor for LayoutProbe {
+        fn extract<'probe, 'config, 'future>(
+            &'probe self,
+            _input: xberg::ExtractInput,
+            config: &'config ExtractionConfig,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = xberg::Result<ExtractedDocument>> + Send + 'future>>
+        where
+            'probe: 'future,
+            'config: 'future,
+            Self: 'future,
+        {
+            let mut document = ExtractedDocument::default();
+            document.content = config.use_layout_for_markdown.to_string();
+            document.mime_type = LAYOUT_PROBE_MIME.into();
+            Box::pin(std::future::ready(Ok(document)))
+        }
+
+        fn supported_mime_types(&self) -> &[&str] {
+            &[LAYOUT_PROBE_MIME]
+        }
+
+        fn priority(&self) -> i32 {
+            100
+        }
+    }
+
+    struct LayoutProbeRegistration;
+
+    impl Drop for LayoutProbeRegistration {
+        fn drop(&mut self) {
+            xberg::plugins::unregister_document_extractor(LAYOUT_PROBE_NAME).unwrap();
+        }
+    }
+
+    #[test]
+    fn should_dispatch_mixed_layout_overrides_in_cli_batch() {
+        xberg::plugins::register_document_extractor(std::sync::Arc::new(LayoutProbe)).unwrap();
+        let _registration = LayoutProbeRegistration;
+        let dir = tempdir().unwrap();
+        let uris = ["enabled.qmd", "inherit.qmd", "disabled.qmd"].map(|name| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, name).unwrap();
+            path.display().to_string()
+        });
+        let overrides = std::collections::HashMap::from([
+            (uris[0].clone(), serde_json::json!({"use_layout_for_markdown": true})),
+            (uris[2].clone(), serde_json::json!({"use_layout_for_markdown": false})),
+        ]);
+
+        for base_layout in [false, true] {
+            let config = ExtractionConfig {
+                use_layout_for_markdown: base_layout,
+                use_cache: false,
+                ..Default::default()
+            };
+            let inputs = build_batch_inputs(&uris, Some(&overrides)).unwrap();
+            let (output, _) = run_json_batch_sync(inputs, &config).unwrap();
+
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let content: Vec<_> = output.results.iter().map(|result| result.content.as_str()).collect();
+            let inherited = if base_layout { "true" } else { "false" };
+            assert_eq!(content, ["true", inherited, "false"]);
+        }
+    }
+
     #[test]
     fn json_batch_applies_per_file_chunking_override() {
         let dir = tempdir().unwrap();
