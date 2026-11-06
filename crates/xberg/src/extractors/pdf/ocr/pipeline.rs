@@ -1029,6 +1029,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut caption_rewrites = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_words_covered_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -1349,6 +1351,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if !paragraphs_in_points {
                         ocr_raster_by_page.insert(page_number, raster_size_px);
                     }
+                    let page_size_pt = page_dimensions_pt(&render_doc, page_idx);
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(rewrite) = read_evidence
+                        .caption
+                        .and_then(|rewrite| rewrite.bind_page(raster_size_px, page_size_pt))
+                    {
+                        caption_rewrites.insert(page_number, rewrite);
+                    }
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
                         tables,
@@ -1356,7 +1366,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &page_text,
                         page_number,
                         raster_size_px,
-                        page_dimensions_pt(&render_doc, page_idx),
+                        page_size_pt,
                     ) {
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
@@ -2493,6 +2503,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    for (page, rewrite) in caption_rewrites {
+        if let Some(text) = accepted_replacements.get_mut(&page)
+            && let Some(document) = structured_ocr_pages.get_mut(&page)
+        {
+            rewrite.apply(document, text, page);
+        }
+    }
+
     let result = apply_ocr_page_replacements(native_text, boundaries, &accepted_replacements);
     page_failures.sort_by_key(|failure| failure.page);
 
@@ -3052,8 +3071,10 @@ fn attach_page_segmentation_modes(
     }
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 pub(super) struct OcrReadEvidence {
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    caption: Option<super::caption_conversion::CaptionRewrite>,
     no_admitted_images: bool,
     original_tesseract_raster: bool,
     discarded_visible_native_page: bool,
@@ -3491,6 +3512,11 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut retry_texts_outside_tables: Vec<Option<String>> = vec![None; total_pages];
     #[allow(unused_mut)]
     let mut collected_tables: Vec<crate::types::Table> = Vec::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut caption = None;
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let capture_caption =
+        detached_page.is_some() && !has_layout_detections && super::caption_conversion::eligible(config);
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     let mut detached_table_pair = false;
     #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
@@ -3761,7 +3787,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 // real OCR work to get it. ~keep
                 if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     let task = crate::engine::seams::inherit_progress(async move {
-                        (idx, 0, 0, 0, Err(crate::XbergError::Cancelled), None, false)
+                        (idx, 0, 0, 0, Err(crate::XbergError::Cancelled), None, false, None)
                     });
                     join_set.spawn(crate::core::extractor::cacheability::inherit(task));
                     continue;
@@ -3858,6 +3884,16 @@ pub(super) async fn extract_with_ocr_for_page(
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let allow_prose = detached_page.is_none() && images.is_none();
+                #[cfg(feature = "ocr")]
+                let caption_raster =
+                    (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(
+                        || {
+                            (
+                                Arc::clone(&upright_data),
+                                super::caption_conversion::proof_limits(config, base_ocr_config),
+                            )
+                        },
+                    );
                 let retained_pixels = batch_slice
                     .as_ref()
                     .and_then(|images| images.get(idx - batch_start))
@@ -3895,6 +3931,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             Err(crate::XbergError::Cancelled),
                             None,
                             false,
+                            None,
                         );
                     }
                     let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
@@ -3912,6 +3949,7 @@ pub(super) async fn extract_with_ocr_for_page(
                                 Err(error),
                                 None,
                                 false,
+                                None,
                             );
                         }
                     };
@@ -3943,10 +3981,13 @@ pub(super) async fn extract_with_ocr_for_page(
                         }
                     };
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-                    let (result, scale_only) = if ordered_raster.is_some() || observe_detached_frame {
-                        crate::ocr::preprocessing::geometry_evidence::observe(primary).await
+                    let (result, scale_only, inventory) = if caption_raster.is_some() {
+                        crate::ocr::preprocessing::geometry_evidence::observe_with_word_inventory(primary).await
+                    } else if ordered_raster.is_some() || observe_detached_frame {
+                        let (result, scale_only) = crate::ocr::preprocessing::geometry_evidence::observe(primary).await;
+                        (result, scale_only, None)
                     } else {
-                        (primary.await, false)
+                        (primary.await, false, None)
                     };
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let detached_frame_read = observe_detached_frame
@@ -3969,6 +4010,33 @@ pub(super) async fn extract_with_ocr_for_page(
                         });
                     #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
                     let (result, ordered_proof) = (read.await, None::<()>);
+                    // ~keep A table makes the recognition retry keep the original attempt.
+                    #[cfg(feature = "ocr")]
+                    let captured_caption = if let Some((raster, mut limits)) = caption_raster
+                        && primary_config.is_some()
+                        && scale_only
+                    {
+                        let candidate = inventory.zip(result.as_ref().ok()).and_then(|(inventory, result)| {
+                            super::caption_conversion::capture(
+                                result,
+                                (upright_width, upright_height),
+                                &mut limits,
+                                inventory,
+                            )
+                        });
+                        super::caption_conversion::verify_paint(
+                            candidate,
+                            raster,
+                            retained_source_bytes,
+                            limits,
+                            cancel_token.clone(),
+                        )
+                        .await
+                    } else {
+                        None
+                    };
+                    #[cfg(not(feature = "ocr"))]
+                    let captured_caption = None::<()>;
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let result = if let Some((retry, raster)) = retry {
                         retry
@@ -3987,6 +4055,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let ordered_proof =
                         ordered_proof.filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches(selected)));
+                    #[cfg(feature = "ocr")]
+                    let captured_caption = captured_caption
+                        .filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches_selected(selected)));
                     (
                         idx,
                         correction_degrees,
@@ -3995,6 +4066,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         result,
                         ordered_proof,
                         detached_frame_read,
+                        captured_caption,
                     )
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
@@ -4008,6 +4080,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     ocr_result,
                     ordered_proof,
                     detached_frame_read,
+                    captured_caption,
                 ) = join_result.map_err(|e| crate::XbergError::Plugin {
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
@@ -4055,6 +4128,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     backend_name.as_str(),
                 );
                 batch_upright_correction[page_idx - batch_start] = (correction_degrees, upright_width, upright_height);
+                #[cfg(feature = "ocr")]
+                if ocr_result.is_ok() && captured_caption.is_some() {
+                    caption = captured_caption;
+                }
+                #[cfg(not(feature = "ocr"))]
+                let _ = captured_caption;
                 match ocr_result {
                     Ok(document) => batch_ocr_results[page_idx - batch_start] = Some(document),
                     Err(error) => {
@@ -5451,6 +5530,8 @@ pub(super) async fn extract_with_ocr_for_page(
         ocr_confidence_by_page,
         recognition_noise_verdicts,
         OcrReadEvidence {
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            caption,
             no_admitted_images,
             discarded_visible_native_page,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -6982,11 +7063,6 @@ async fn run_ocr_pipeline_stages(
                 stage_recognition_noise_verdicts,
                 read_evidence,
             )) => {
-                let selected_read_evidence = if automatic_paddle && read_evidence.original_tesseract_raster {
-                    read_evidence
-                } else {
-                    OcrReadEvidence::default()
-                };
                 let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
                 let score = pipeline_stage_score(text_score, mean_conf);
 
@@ -7036,6 +7112,11 @@ async fn run_ocr_pipeline_stages(
                     return Err(crate::XbergError::Cancelled.into());
                 }
 
+                let selected_read_evidence = if automatic_paddle && read_evidence.original_tesseract_raster {
+                    read_evidence
+                } else {
+                    OcrReadEvidence::default()
+                };
                 if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,

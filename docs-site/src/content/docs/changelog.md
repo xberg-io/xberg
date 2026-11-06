@@ -188,6 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Preserve verified scanned figure captions as prose.** (#2530)
+  Uncached Plain extraction can remove a false caption table when stock OCR and the page raster confirm the same text and geometry.
+
 - **(pdf): Place the heading and table from an upright scanned page in PDF points.** (#2497)
   Applies to single-page detached Tesseract OCR with caching off and plain output with document structure requested.
   A verified resize preserves the heading and table content and gives both bounds the same bottom-left page origin.

@@ -556,18 +556,69 @@ pub(crate) mod geometry_evidence {
         Refused,
     }
 
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) struct WordInventory {
+        pub(crate) count: usize,
+        pub(crate) skipped: usize,
+    }
+
+    enum InventoryObservation {
+        NotRequested,
+        Absent,
+        Recorded(WordInventory),
+        Refused,
+    }
+
+    struct ReadEvidence {
+        geometry: Observation,
+        inventory: InventoryObservation,
+    }
+
     #[derive(Clone)]
-    pub(crate) struct GeometryEvidence(Arc<parking_lot::Mutex<Observation>>);
+    pub(crate) struct GeometryEvidence(Arc<parking_lot::Mutex<ReadEvidence>>);
 
     tokio::task_local! {
         static REQUEST: GeometryEvidence;
     }
 
     pub(crate) async fn observe<F: std::future::Future>(read: F) -> (F::Output, bool) {
-        let request = GeometryEvidence(Arc::new(parking_lot::Mutex::new(Observation::Absent)));
-        let result = REQUEST.scope(request.clone(), read).await;
-        let scale_only = *request.0.lock() == Observation::ScaleOnly;
+        let (result, scale_only, _) = observe_read(read, InventoryObservation::NotRequested).await;
         (result, scale_only)
+    }
+
+    pub(crate) async fn observe_with_word_inventory<F: std::future::Future>(
+        read: F,
+    ) -> (F::Output, bool, Option<WordInventory>) {
+        observe_read(read, InventoryObservation::Absent).await
+    }
+
+    async fn observe_read<F: std::future::Future>(
+        read: F,
+        inventory: InventoryObservation,
+    ) -> (F::Output, bool, Option<WordInventory>) {
+        let request = GeometryEvidence(Arc::new(parking_lot::Mutex::new(ReadEvidence {
+            geometry: Observation::Absent,
+            inventory,
+        })));
+        let result = REQUEST.scope(request.clone(), read).await;
+        let state = request.0.lock();
+        let inventory = match state.inventory {
+            InventoryObservation::Recorded(inventory) => Some(inventory),
+            _ => None,
+        };
+        (result, state.geometry == Observation::ScaleOnly, inventory)
+    }
+
+    pub(crate) fn record_word_inventory(inventory: WordInventory) {
+        let _ = REQUEST.try_with(|request| {
+            let mut state = request.0.lock();
+            state.inventory = match state.inventory {
+                InventoryObservation::Absent => InventoryObservation::Recorded(inventory),
+                InventoryObservation::Recorded(_) => InventoryObservation::Refused,
+                InventoryObservation::NotRequested => InventoryObservation::NotRequested,
+                InventoryObservation::Refused => InventoryObservation::Refused,
+            };
+        });
     }
 
     impl GeometryEvidence {
@@ -585,7 +636,7 @@ pub(crate) mod geometry_evidence {
     pub(super) fn record(same_pix: bool) {
         let _ = REQUEST.try_with(|request| {
             let mut current = request.0.lock();
-            *current = if same_pix && *current == Observation::Absent {
+            current.geometry = if same_pix && current.geometry == Observation::Absent {
                 Observation::ScaleOnly
             } else {
                 Observation::Refused
@@ -596,6 +647,32 @@ pub(crate) mod geometry_evidence {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[tokio::test]
+        async fn inventory_is_kept_only_for_one_authoritative_worker_read() {
+            for reads in 0..=2 {
+                let (_, scale_only, inventory) = observe_with_word_inventory(async {
+                    let request = GeometryEvidence::requested().unwrap();
+                    tokio::task::spawn_blocking(move || {
+                        request.on_worker(|| {
+                            record(true);
+                            for _ in 0..reads {
+                                record_word_inventory(WordInventory { count: 513, skipped: 0 });
+                            }
+                        });
+                    })
+                    .await
+                    .unwrap();
+                })
+                .await;
+                assert!(scale_only);
+                assert_eq!(
+                    inventory.map(|inventory| (inventory.count, inventory.skipped)),
+                    (reads == 1).then_some((513, 0))
+                );
+                assert!(GeometryEvidence::requested().is_none());
+            }
+        }
 
         #[tokio::test]
         async fn only_one_positive_deskew_observation_can_certify_the_selected_worker_read() {
