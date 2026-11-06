@@ -1361,7 +1361,7 @@ fn apply_element_transform(result: &mut ExtractedDocument, config: &ExtractionCo
 /// element is also added to the prebuilt content of its page: an extractor writes those
 /// pages before the pictures are sent to OCR. Runs before any renderer, so `content`, the
 /// page content and the chunks all come from the same elements (GH#2068). ~keep
-#[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
+#[cfg(all(test, feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 fn fold_embedded_image_ocr_text(doc: &mut InternalDocument) {
     fold_embedded_image_ocr_text_with_gap(
         doc,
