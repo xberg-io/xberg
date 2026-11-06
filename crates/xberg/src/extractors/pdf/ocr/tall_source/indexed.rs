@@ -2,7 +2,9 @@
 
 use super::ordered::{BoxPx, SourceColumn, SourceLine};
 use super::{FIXED_WORK_BYTES, MAX_SOURCE_PIXELS, MAX_TILE_SIDE, TILE_BYTES_PER_PIXEL};
-use crate::extractors::pdf::ocr::hidden_layer::{decode_probe_stream, page_frame_and_contents, stream_filters};
+use crate::extractors::pdf::ocr::hidden_layer::{
+    decode_exact_flate, decode_probe_stream, page_frame_and_contents, stream_filters,
+};
 use image::ImageEncoder;
 use std::ops::Range;
 use xberg_native_pdf::PdfDocument;
@@ -164,7 +166,7 @@ impl IndexedSource {
         let dpi = placement_fits(frame, (width, height), (painted_w, painted_height))?;
         let available = available.checked_sub(data.len())?.checked_sub(pixels.checked_add(1)?)?;
         let palette = palette(attempt.document, &resources, dict.get("ColorSpace")?, available)?;
-        let indices = super::samples::decode_exact_gray(&data, pixels)?;
+        let indices = decode_exact_flate(&data, pixels)?;
         let available = available.checked_sub(indices.capacity().saturating_sub(pixels + 1))?;
         let source = Self {
             width,

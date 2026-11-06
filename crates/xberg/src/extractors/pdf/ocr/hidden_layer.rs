@@ -322,6 +322,27 @@ pub(super) fn stream_filters(filter: Option<&Object>) -> Option<StreamFilters> {
     }
 }
 
+pub(super) fn decode_exact_flate(compressed: &[u8], expected: usize) -> Option<Vec<u8>> {
+    use flate2::{Decompress, FlushDecompress, Status};
+
+    let capacity = expected.checked_add(1)?;
+    let mut samples = Vec::new();
+    samples.try_reserve_exact(capacity).ok()?;
+    samples.resize(capacity, 0);
+    let mut decoder = Decompress::new(true);
+    let status = decoder
+        .decompress(compressed, &mut samples, FlushDecompress::Finish)
+        .ok()?;
+    if status != Status::StreamEnd
+        || decoder.total_out() != expected as u64
+        || decoder.total_in() != compressed.len() as u64
+    {
+        return None;
+    }
+    samples.truncate(expected);
+    Some(samples)
+}
+
 pub(super) fn decode_probe_stream(
     data: &[u8],
     filters: StreamFilters,

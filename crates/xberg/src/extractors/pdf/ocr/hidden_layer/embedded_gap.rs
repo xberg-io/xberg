@@ -39,6 +39,8 @@ pub(crate) fn embedded_gap_placement(
     if doc.get_page_content_data(0).ok()? != bytes {
         return None;
     }
+    drop(bytes);
+    drop(data);
     let [left, bottom, right, top] = bbox;
     if !is_partial_page_panel(page, bbox) {
         return None;
@@ -51,7 +53,6 @@ pub(crate) fn embedded_gap_placement(
     let dimensions = (source.width, source.height);
     let dpi = f64::from(source.width) * POINTS_PER_INCH / (right - left);
     if source.channels != 3
-        || !matches!(source.encoding, ImageEncoding::Stream { predictor: None, .. })
         || image.width.zip(image.height) != Some(dimensions)
         || f64::from(source.height) * POINTS_PER_INCH / (top - bottom) != dpi
         || !(0.0 < dpi && dpi <= POINTS_PER_INCH)
@@ -79,9 +80,12 @@ fn same_rgb_pixels(source: &super::ImageSource, image: &ExtractedImage, limits: 
         if image.format != "png" || source.decoded_size()? as u64 / 3 > MAX_SOURCE_PIXELS {
             return None;
         }
-        let samples = source.decode_samples(limits.max_content_size)?;
+        let (samples, retained_source_bytes) = panel_samples(source, image.data.len(), limits.max_content_size)?;
         let mut remaining = limits.clone();
-        remaining.max_content_size = remaining.max_content_size.checked_sub(samples.capacity())?;
+        remaining.max_content_size = remaining
+            .max_content_size
+            .checked_sub(retained_source_bytes)?
+            .checked_sub(samples.capacity())?;
         let image::DynamicImage::ImageRgb8(raster) =
             crate::extraction::image_decode::decode_standard_image_with_security_limits(&image.data, &remaining)
                 .ok()?
@@ -92,6 +96,31 @@ fn same_rgb_pixels(source: &super::ImageSource, image: &ExtractedImage, limits: 
         Some(raster.dimensions() == (source.width, source.height) && raster.as_raw() == &samples)
     };
     verify() == Some(true)
+}
+
+fn panel_samples(source: &super::ImageSource, png_bytes: usize, byte_limit: usize) -> Option<(Vec<u8>, usize)> {
+    let ImageEncoding::Stream { predictor, .. } = &source.encoding else {
+        return None;
+    };
+    let Some(params) = predictor else {
+        return Some((source.decode_samples(byte_limit)?, 0));
+    };
+
+    let compressed_bytes = source.data.len();
+    let tagged_bytes = source.inflated_size(Some(params))?;
+    let decoded_bytes = source.decoded_size()?;
+    if compressed_bytes
+        .checked_add(png_bytes)?
+        .checked_add(tagged_bytes)?
+        .checked_add(1)?
+        .checked_add(decoded_bytes)?
+        > byte_limit
+    {
+        return None;
+    }
+    let tagged = super::decode_exact_flate(&source.data, tagged_bytes)?;
+    let samples = super::decode_predictor(&tagged, params).ok()?;
+    (samples.len() == decoded_bytes).then_some((samples, compressed_bytes))
 }
 
 enum Paint {
@@ -162,5 +191,46 @@ fn last_opaque_panel(bytes: &[u8], known_font: impl Fn(&str) -> bool) -> Option<
     match state {
         Paint::Closed(name, bounds) if complete => Some((name, bounds)),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{ImageSource, StreamFilters};
+    use super::*;
+    use std::io::Write;
+    use xberg_native_pdf::decoders::DecodeParams;
+
+    #[test]
+    fn predictor_requires_complete_tagged_rows_and_live_decode_budget() {
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&[2, 11, 13, 17]).unwrap();
+        let mut compressed = encoder.finish().unwrap();
+        let png_bytes = 8;
+        let limit = compressed.len() + png_bytes + 4 + 1 + 3;
+        let mut source = ImageSource {
+            width: 1,
+            height: 1,
+            channels: 3,
+            data: bytes::Bytes::copy_from_slice(&compressed),
+            encoding: ImageEncoding::Stream {
+                filters: StreamFilters::Flate,
+                predictor: Some(DecodeParams {
+                    predictor: 12,
+                    columns: 1,
+                    colors: 3,
+                    bits_per_component: 8,
+                }),
+            },
+        };
+        assert_eq!(
+            panel_samples(&source, png_bytes, limit),
+            Some((vec![11, 13, 17], compressed.len()))
+        );
+        assert!(panel_samples(&source, png_bytes, limit - 1).is_none());
+
+        compressed.push(0);
+        source.data = bytes::Bytes::from(compressed);
+        assert!(panel_samples(&source, png_bytes, limit + 1).is_none());
     }
 }
