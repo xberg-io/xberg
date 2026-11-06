@@ -46,9 +46,9 @@ defmodule MacosElixirArchiveSmoke do
     verify_loaded_paths!(unpacked, codecs)
   end
 
-  def run(_args),
-    do:
-      raise("usage: elixir smoke_macos_elixir_archive.exs MODE ARCHIVE NATIVE_EX EMPTY_DIRECTORY")
+  def run(_args) do
+    raise("usage: elixir smoke_macos_elixir_archive.exs MODE ARCHIVE NATIVE_EX EMPTY_DIRECTORY")
+  end
 
   defp verify_hosted_beam! do
     if System.get_env("XBERG_EXPECT_HOSTED_BEAM") == "1" do
@@ -77,7 +77,8 @@ defmodule MacosElixirArchiveSmoke do
     :ok = :erl_tar.extract({:binary, bytes}, [:compressed, cwd: String.to_charlist(directory)])
 
     members = File.ls!(directory)
-    @member_count = length(members)
+    count = length(members)
+    @member_count = count
 
     for name <- ["LICENSE", "THIRD_PARTY_LICENSES.md", "sources.tsv", "notices.sha256"] do
       true = name in members
@@ -88,9 +89,7 @@ defmodule MacosElixirArchiveSmoke do
     codecs = Enum.filter(members, &Regex.match?(@codec, &1))
     4 = length(codecs)
 
-    IO.puts(
-      "OTP archive extraction verified #{length(members)} members, SHA-256 #{digest(bytes)}"
-    )
+    IO.puts("OTP archive extraction verified #{count} members, SHA-256 #{hash}")
 
     {Path.join(directory, root), codecs}
   end
@@ -215,8 +214,8 @@ defmodule MacosElixirArchiveSmoke do
     {body, offsets, xref_position} =
       objects
       |> Enum.with_index(1)
-      |> Enum.reduce({[header], [], byte_size(header)}, fn {object, index},
-                                                           {body, offsets, offset} ->
+      |> Enum.reduce({[header], [], byte_size(header)}, fn {object, index}, accumulator ->
+        {body, offsets, offset} = accumulator
         entry = ["#{index} 0 obj\n", object, "\nendobj\n"]
         {[body, entry], [offset | offsets], offset + IO.iodata_length(entry)}
       end)
