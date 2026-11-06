@@ -900,11 +900,26 @@ fn render_one_selected_page(
 ) -> crate::Result<raster_dpi::PageWithDpi> {
     #[cfg(test)]
     record_render_thread();
-    let (rendered, dpi) = crate::pdf::render::render_pdf_ocr_page_with_dpi(doc, idx, images_config, security_limits)
-        .map_err(|e| crate::XbergError::Parsing {
-            message: format!("Failed to render PDF page {}: {}", idx + 1, e),
-            source: None,
-        })?;
+    let mut exceeded = false;
+    let (rendered, dpi) = crate::pdf::render::render_pdf_ocr_page_with_budget_evidence(
+        doc,
+        idx,
+        images_config,
+        security_limits,
+        &mut exceeded,
+    )
+    .map_err(|error| {
+        let message = format!("Failed to render PDF page {}: {}", idx + 1, error);
+        let source: Box<dyn std::error::Error + Send + Sync> = if exceeded {
+            Box::new(SourceImageBudgetExceeded(error))
+        } else {
+            Box::new(error)
+        };
+        crate::XbergError::Parsing {
+            message,
+            source: Some(source),
+        }
+    })?;
     let rotation = page_rotations.get(idx).copied().unwrap_or(0);
     let (data, _, _) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
         rendered.data,

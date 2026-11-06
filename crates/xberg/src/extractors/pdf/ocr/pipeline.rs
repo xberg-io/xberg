@@ -2632,13 +2632,7 @@ fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (Str
 }
 
 #[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
-    content: &[u8],
-    config: &ExtractionConfig,
-    _path: Option<&std::path::Path>,
-    page_ocr_hints: Option<PageOcrHints>,
-    #[cfg(feature = "layout-detection")] prepared_layout_inputs: Option<&PreparedLayoutInputs>,
-) -> OcrRunResult<(
+type PerPageOcrOutput = (
     String,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -2649,7 +2643,65 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
     Vec<crate::types::Formula>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-)> {
+);
+
+#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
+    content: &[u8],
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<PageOcrHints>,
+    #[cfg(feature = "layout-detection")] prepared_layout_inputs: Option<&PreparedLayoutInputs>,
+) -> OcrRunResult<PerPageOcrOutput> {
+    let run = extract_pages_with_per_page_pipeline(
+        content,
+        config,
+        path,
+        page_ocr_hints,
+        #[cfg(feature = "layout-detection")]
+        prepared_layout_inputs,
+    )
+    .await;
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    if let Err(failed) = &run
+        && let Some((
+            text,
+            _,
+            tables,
+            elements,
+            document,
+            usage,
+            page_texts,
+            rasters,
+            formulas,
+            preprocessing,
+            confidence,
+        )) = try_gray_jpeg_render_recovery(Some(content), config, failed).await?
+    {
+        return Ok((
+            text,
+            tables,
+            elements,
+            document,
+            usage,
+            page_texts,
+            rasters,
+            formulas,
+            preprocessing,
+            confidence,
+        ));
+    }
+    run
+}
+
+#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+async fn extract_pages_with_per_page_pipeline(
+    content: &[u8],
+    config: &ExtractionConfig,
+    _path: Option<&std::path::Path>,
+    page_ocr_hints: Option<PageOcrHints>,
+    #[cfg(feature = "layout-detection")] prepared_layout_inputs: Option<&PreparedLayoutInputs>,
+) -> OcrRunResult<PerPageOcrOutput> {
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
         return Err(crate::XbergError::Cancelled.into());
     }
@@ -2931,7 +2983,10 @@ async fn try_gray_jpeg_render_recovery(
         return Ok(None);
     }
     let ocr = super::resolve_ocr_config(config);
-    if !super::tall_source::supports(config, &ocr) || ocr.effective_pipeline().is_some() {
+    if !super::tall_source::supports(config, &ocr)
+        || ocr.pipeline.is_some()
+        || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
+    {
         return Ok(None);
     }
     let Some(content) = content else { return Ok(None) };
