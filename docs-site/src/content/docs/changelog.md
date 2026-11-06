@@ -433,7 +433,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recover hidden CCITT prose across two audited content streams.** (#2425)
   The split path requires bounded, independently complete raw paint and text streams.
 
-- **(ocr): Recover certified tall grayscale predictor strips down to 120 DPI.** (#2502)
+- **(ocr): Recover certified tall grayscale Flate strips down to 120 DPI.** (#2502)
   Require each recovered strip to match the source ink rows.
 
 - **(ocr): Recover verified embedded PDF prose with caching enabled.** (#2327)

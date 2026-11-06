@@ -495,7 +495,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         dpi,
         samples,
         retained_bytes,
-        certify_rows: packing.is_none_or(GrayPacking::requires_line_certificate),
+        certify_rows: dpi < MIN_STANDARD_SOURCE_DPI || packing.is_none_or(GrayPacking::requires_line_certificate),
     })
 }
 
@@ -881,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    fn bilevel_line_proof_rejects_a_split_that_hides_a_missing_source_line() {
+    fn source_line_proof_rejects_a_split_or_omission_of_an_ink_row() {
         use crate::ocr_metadata_keys::{
             OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
         };
@@ -913,6 +913,9 @@ mod tests {
         let ink = [110..117, 130..137];
         assert!(certified_strip_lines(&result, 200, &(100..160), &ink));
         result.ocr_elements.as_mut().unwrap()[1] = line("two", 12);
+        assert!(!certified_strip_lines(&result, 200, &(100..160), &ink));
+        result.ocr_elements.as_mut().unwrap().pop();
+        result.content = "one".to_owned();
         assert!(!certified_strip_lines(&result, 200, &(100..160), &ink));
     }
 

@@ -242,6 +242,10 @@ fn tall_png_predictor_recovers_all_source_words_with_default_parameters() {
 
 #[test]
 fn tall_lower_density_png_predictor_recovers_all_source_words_in_order() {
+    assert_exact_tall_source_text(&lower_density_predictor());
+}
+
+fn lower_density_predictor() -> Vec<u8> {
     // Keep the exact encoded image and xref offsets; only the page and paint size change.
     let swaps: [(&[u8], &[u8]); 2] = [
         (b"/MediaBox [0 0 612 5760]", b"/MediaBox [0 0 765 7200]"),
@@ -258,7 +262,29 @@ fn tall_lower_density_png_predictor_recovers_all_source_words_in_order() {
         assert!(positions.next().is_none());
         lower_density[start..start + new.len()].copy_from_slice(new);
     }
-    assert_exact_tall_source_text(&lower_density);
+    lower_density
+}
+
+#[test]
+fn tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order() {
+    const SOURCE_PIXELS: usize = 1275 * 12000;
+    let mut pdf = lopdf::Document::load_mem(&lower_density_predictor()).expect("read exact synthetic source");
+    let stream = pdf
+        .get_object_mut((5, 0))
+        .and_then(lopdf::Object::as_stream_mut)
+        .expect("the source image stream");
+    assert_eq!(stream.dict.get(b"Subtype").unwrap().as_name().unwrap(), b"Image");
+    let samples = stream
+        .get_plain_content_with_limit(SOURCE_PIXELS + 12000)
+        .expect("decode the exact predictor source samples");
+    assert_eq!(samples.len(), SOURCE_PIXELS);
+    stream.set_plain_content(samples);
+    stream.compress().expect("losslessly encode without prediction");
+    assert_eq!(stream.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+    assert!(stream.dict.get(b"DecodeParms").is_err());
+    let mut plain = Vec::new();
+    pdf.save_to(&mut plain).expect("serialize the unpredicted source");
+    assert_exact_tall_source_text(&plain);
 }
 
 #[test]
