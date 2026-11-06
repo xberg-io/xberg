@@ -136,9 +136,9 @@ assert_macho_bundle() {
 	export PATH="$REAL_PATH"
 	host="$(uname -m)"
 	case "$host" in
-		arm64) other=x86_64 ;;
-		x86_64) other=arm64 ;;
-		*) skip 'requires a supported macOS architecture' ;;
+	arm64) other=x86_64 ;;
+	x86_64) other=arm64 ;;
+	*) skip 'requires a supported macOS architecture' ;;
 	esac
 	printf 'int codec(void) { return 42; }\n' >codec.c
 	printf 'extern int codec(void); int entry(void) { return codec(); }\n' >other.c
