@@ -99,7 +99,9 @@
 /// Invalidate cached OCR that missed strips with default predictor parameters (#2620). ~keep
 /// Invalidate cached oversized-image OCR under the old workspace policy (#2618, #2619). ~keep
 /// Invalidate cached PDFs missing source-owned mixed figure ticks (#2616). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 14;
+/// Invalidate cached PDFs missing certified raster or embedded prose (#2313, #2327). ~keep
+/// Invalidate cached tall scans missing lower-density predictor strips (#2502). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 15;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;

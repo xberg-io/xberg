@@ -415,6 +415,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recover rejected multirow painted double-rule grids.** (#2614)
   Preserve tables the detector already accepts, including their empty columns.
 
+- **(ocr): Recover certified tall grayscale predictor strips down to 120 DPI.** (#2502)
+  Require each recovered strip to match the source ink rows.
+
+- **(ocr): Recover verified embedded PDF prose with caching enabled.** (#2327)
+  Preserve the primary cache identity and bypass the cache for the private source-DPI retry.
+
+- **(pdf): Recover full-page grayscale raster prose beside visible native stubs.** (#2313)
+  Bound the source paint audit and keep the native lines in order.
+
 - **(pdf): Recover verified outlined prose beside sparse native text.** (#2313)
   Auto OCR checks bounded vector rows and preserves the original native text.
 
