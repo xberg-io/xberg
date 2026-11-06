@@ -107,15 +107,19 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
             binarize(source, &config.binarization_method)
         });
     }
-    if config.deskew && processed.depth() == 1 {
-        processed = apply_optional(processed, "deskew", |source| {
-            let output = source.deskew();
-            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            geometry_evidence::record(output.as_ref().is_ok_and(|result| result.as_ptr() == source.as_ptr()));
-            output
-        });
+    Ok(deskew_if_enabled(processed, config.deskew))
+}
+
+fn deskew_if_enabled(pix: Pix, enabled: bool) -> Pix {
+    if !enabled || pix.depth() != 1 {
+        return pix;
     }
-    Ok(processed)
+    apply_optional(pix, "deskew", |source| {
+        let output = source.deskew();
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        geometry_evidence::record(output.as_ref().is_ok_and(|result| result.as_ptr() == source.as_ptr()));
+        output
+    })
 }
 
 fn enhance_non_binarized(pix: Pix, invert: bool) -> Result<Pix, OcrError> {
