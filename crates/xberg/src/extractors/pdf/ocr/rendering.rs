@@ -384,6 +384,8 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) formulas: Vec<crate::types::Formula>,
     /// First preprocessing record in paint order, matching the per-page metadata surface.
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+    /// Why each embedded image the backend rejected yielded nothing, in paint order.
+    pub(super) failure_causes: Vec<String>,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_image_xobjects(
@@ -403,6 +405,7 @@ pub(super) async fn recover_image_xobjects(
         tables: Vec::new(),
         formulas: Vec::new(),
         image_preprocessing: None,
+        failure_causes: Vec::new(),
     };
     for fallback in fallback_images {
         context.check_cancelled()?;
@@ -467,6 +470,16 @@ pub(super) fn account_xobject_structured_output(
     }
     Ok(())
 }
+/// Whether the caller already set a usable `source_dpi`, which a derived one must not replace.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn has_explicit_source_dpi(config: &crate::core::config::OcrConfig) -> bool {
+    config
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get(crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION))
+        .is_some()
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn collect_xobject_recovery_result(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
@@ -476,6 +489,24 @@ pub(super) async fn collect_xobject_recovery_result(
     budget: &mut crate::extractors::security::SecurityBudget,
     outcome: &mut XObjectRecoveryOutcome,
 ) -> crate::Result<()> {
+    let with_proven_dpi;
+    let ocr_config = match fallback.source_dpi {
+        Some(dpi) if !has_explicit_source_dpi(ocr_config) => {
+            let mut config = ocr_config.clone();
+            let mut options = match config.backend_options.take() {
+                Some(serde_json::Value::Object(options)) => options,
+                _ => serde_json::Map::new(),
+            };
+            options.insert(
+                crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION.to_owned(),
+                serde_json::json!(dpi),
+            );
+            config.backend_options = Some(serde_json::Value::Object(options));
+            with_proven_dpi = config;
+            &with_proven_dpi
+        }
+        _ => ocr_config,
+    };
     let result = match backend.process_image(&fallback.bytes, ocr_config).await {
         Ok(result) => result,
         Err(error) => {
@@ -483,6 +514,9 @@ pub(super) async fn collect_xobject_recovery_result(
                 page = page_idx,
                 "force_ocr fallback: OCR of embedded image bytes failed: {error}"
             );
+            outcome
+                .failure_causes
+                .push(format!("image {}: {error}", fallback.paint_order));
             return Ok(());
         }
     };
@@ -626,6 +660,13 @@ pub(super) async fn recover_page_text_from_image_xobjects(
             );
         }
         return Ok(None);
+    }
+    let mut fallback_images = fallback_images;
+    if context.use_proven_source_dpi {
+        let proven_dpis = crate::pdf::native::images::proven_source_dpis(render_doc, page_idx);
+        for image in &mut fallback_images {
+            image.source_dpi = proven_dpis.get(&image.paint_order).copied();
+        }
     }
     let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();
     let ocr_config =

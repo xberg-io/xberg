@@ -1185,6 +1185,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 no_admitted_images: None,
                                 stored_jpegs: None,
                                 cancel_token: config.cancel_token.as_ref(),
+                                use_proven_source_dpi: automatic_ocr_may_read_proven_source_dpi(config),
                             },
                         )
                         .await?
@@ -1193,6 +1194,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 };
                 let page_number = (page_idx + 1) as u32;
                 let mut recovered = false;
+                let mut retry_causes = Vec::new();
                 if let Some(XObjectRecoveryOutcome {
                     text,
                     text_outside_tables,
@@ -1202,8 +1204,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     tables,
                     mut formulas,
                     image_preprocessing,
+                    failure_causes,
                 }) = recovery
                 {
+                    retry_causes = failure_causes;
                     recovered = should_adopt_xobject_retry_text("", &text) || !tables.is_empty();
                     if should_adopt_xobject_retry_text("", &text) {
                         structured_ocr_pages.insert(
@@ -1249,6 +1253,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         }],
                     );
                 } else {
+                    let error = with_retry_causes(error, &retry_causes);
                     let native_recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
                     push_mixed_ocr_page_failure_warning(
                         &mut accumulated_warnings,
@@ -2142,6 +2147,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         no_admitted_images: None,
                         stored_jpegs: None,
                         cancel_token: config.cancel_token.as_ref(),
+                        use_proven_source_dpi: automatic_ocr_may_read_proven_source_dpi(config),
                     },
                 )
                 .await?
@@ -2149,6 +2155,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 None
             };
             let mut recovered = false;
+            let mut retry_causes = Vec::new();
             if let Some(XObjectRecoveryOutcome {
                 text,
                 text_outside_tables,
@@ -2158,8 +2165,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 tables,
                 mut formulas,
                 image_preprocessing,
+                failure_causes,
             }) = recovery
             {
+                retry_causes = failure_causes;
                 let recovered_tables = !tables.is_empty();
                 let recovered_text_is_empty = text.trim().is_empty();
                 if should_adopt_xobject_retry_text(page_text, &text) {
@@ -2210,6 +2219,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if let Some(error) = failure {
                 if !recovered {
+                    let error = with_retry_causes(error, &retry_causes);
                     let native_recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
                     push_mixed_ocr_page_failure_warning(
                         &mut accumulated_warnings,
@@ -4822,6 +4832,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             no_admitted_images: can_prove_no_admitted_images.then_some(&mut no_admitted_images),
                             stored_jpegs: None,
                             cancel_token: config.cancel_token.as_ref(),
+                            use_proven_source_dpi: false,
                         },
                     )
                     .await?
@@ -4835,6 +4846,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         mut tables,
                         mut formulas,
                         image_preprocessing,
+                        failure_causes: _,
                     } = recovery;
                     let recovered_tables = !tables.is_empty();
                     let recovered_payload = !text.trim().is_empty() || recovered_tables || !formulas.is_empty();
@@ -6378,6 +6390,9 @@ pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) no_admitted_images: Option<&'a mut bool>,
     pub(super) stored_jpegs: Option<&'a mut crate::pdf::native::images::StoredJpegRecoveryBudget>,
     pub(super) cancel_token: Option<&'a crate::cancellation::CancellationToken>,
+    /// Hand the backend the resolution a page-covering image's placement proves. Off, the
+    /// backend estimates it as before.
+    pub(super) use_proven_source_dpi: bool,
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -6392,6 +6407,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             no_admitted_images: None,
             stored_jpegs: None,
             cancel_token,
+            use_proven_source_dpi: false,
         }
     }
 
@@ -7151,6 +7167,31 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
         }
     }
     resolved
+}
+/// Whether the retry may hand the backend a proven resolution. Only automatic OCR does: a forced
+/// OCR run keeps the refusal, because the proven resolution lets the backend read a tall image
+/// at a size the budget otherwise refused.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn automatic_ocr_may_read_proven_source_dpi(config: &ExtractionConfig) -> bool {
+    config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && !config.force_ocr
+        && config.force_ocr_pages.is_none()
+}
+
+/// The error of a page whose embedded-image retry also recovered nothing, naming why each image
+/// failed. The typed source stays, so callers still match on the original cause.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn with_retry_causes(error: crate::XbergError, causes: &[String]) -> crate::XbergError {
+    match error {
+        crate::XbergError::Parsing { message, source } if !causes.is_empty() => crate::XbergError::Parsing {
+            message: format!(
+                "{message}; embedded-image retry recovered no text ({})",
+                causes.join("; ")
+            ),
+            source,
+        },
+        other => other,
+    }
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn render_refused_by_source_image_budget(error: &crate::XbergError) -> bool {
