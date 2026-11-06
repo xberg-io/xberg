@@ -6,7 +6,10 @@ use crate::structure::spatial_table_detector::{
 };
 use crate::structure::table_extractor::Table;
 
+mod visible_paint;
+
 type RuledSourceTables = (Vec<Table>, Option<PaintedCellOwnership>);
+const DEFAULT_BORDERED_COLUMNS: usize = 15;
 
 impl PdfDocument {
     /// Extract tables with independent configurations using one page's words and ruling paths.
@@ -92,6 +95,8 @@ impl PdfDocument {
         // `detect_tables_with_lines` directly with no post-filter at all, so
         // it was already able to fabricate/garble tables on any prose-shaped
         // spatial candidate, independent of anything else in this function. ~keep
+        let visible_frame = std::cell::OnceCell::new();
+        let rule_frame = || *visible_frame.get_or_init(|| visible_paint::plain_rule_frame(self, page_index));
         let mut results = configs.map(|config| {
             let (mut tables, ownership) = detect_tables_with_line_ownership(&spans, &lines, config);
             tables.retain(|table| {
@@ -99,6 +104,7 @@ impl PdfDocument {
                     || (is_line_only(config)
                         && table.col_count <= config.max_table_columns
                         && certify_source_spanned_wide_table(table, &spans, &lines).is_some()
+                        && in_rule_frame(table, rule_frame())
                         && !looks_like_prose_table(table))
             });
             let ownership = if tables.len() == 1 { ownership } else { None };
@@ -109,7 +115,7 @@ impl PdfDocument {
             && results.iter().all(|(tables, _)| tables.is_empty())
             && let Some(config) = configs.last()
             && let Some(last) = results.last_mut()
-            && let Some(recovered) = recover_wide_source_table(config, &spans, &lines)
+            && let Some(recovered) = recover_wide_source_table(config, &spans, &lines, rule_frame)
         {
             *last = recovered;
         }
@@ -125,24 +131,36 @@ fn recover_wide_source_table(
     config: &TableDetectionConfig,
     spans: &[crate::layout::TextSpan],
     lines: &[crate::elements::PathContent],
+    rule_frame: impl FnOnce() -> Option<crate::geometry::Rect>,
 ) -> Option<RuledSourceTables> {
     if !is_line_only(config)
-        || config.max_table_columns >= MAX_SOURCE_SPANNED_COLUMNS
+        || config.max_table_columns != DEFAULT_BORDERED_COLUMNS
         || !source_spanned_work_fits(spans, lines)
         || !source_spanned_rules_present(lines)
     {
         return None;
     }
+    let frame = rule_frame()?;
     let mut retry = config.clone();
     retry.max_table_columns = MAX_SOURCE_SPANNED_COLUMNS;
     let tables = detect_tables_without_painted_recovery(spans, lines, &retry);
     let [table] = <[Table; 1]>::try_from(tables).ok()?;
-    if table.col_count <= config.max_table_columns || looks_like_prose_table(&table) {
+    if table.col_count <= config.max_table_columns
+        || !in_rule_frame(&table, Some(frame))
+        || looks_like_prose_table(&table)
+    {
         return None;
     }
     let mut ownership = certify_source_spanned_wide_table(&table, spans, lines)?;
     ownership.replaces_empty_ruled_route = true;
     Some((vec![table], Some(ownership)))
+}
+
+fn in_rule_frame(table: &Table, frame: Option<crate::geometry::Rect>) -> bool {
+    table
+        .bbox
+        .zip(frame)
+        .is_some_and(|(table, frame)| frame.contains_rect(&table))
 }
 
 fn is_public_ruled_table(table: &Table) -> bool {

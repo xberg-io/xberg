@@ -12,6 +12,7 @@ const MAX_SOURCE_SPANNED_WORDS: usize = 1_024;
 const MAX_SOURCE_SPANNED_TEXT_BYTES: usize = 64 * 1024;
 const MAX_RULE_STROKE_WIDTH: f32 = 2.0;
 const RULE_AXIS_TOLERANCE: f32 = 1.0;
+const RULE_ENDPOINT_TOLERANCE: f32 = 1.0;
 
 pub(crate) fn source_spanned_work_fits(spans: &[TextSpan], paths: &[PathContent]) -> bool {
     (MIN_SOURCE_SPANNED_COLUMNS + 5..=MAX_SOURCE_SPANNED_PATHS).contains(&paths.len())
@@ -121,6 +122,7 @@ fn painted_rule(paths: &[PathContent], vertical: bool, coordinate: f32, start: f
         };
         path.is_straight_line()
             && path.matrix.is_none()
+            && path.layer.is_none()
             && path.dash_pattern.is_none()
             && (0.0..=MAX_RULE_STROKE_WIDTH).contains(&path.stroke_width)
             && path.stroke_color.is_some_and(|color| {
@@ -130,8 +132,8 @@ fn painted_rule(paths: &[PathContent], vertical: bool, coordinate: f32, start: f
             })
             && minor.abs() <= RULE_AXIS_TOLERANCE
             && (center - coordinate).abs() <= SNAP_TOL
-            && low <= start + SNAP_TOL
-            && high >= end - SNAP_TOL
+            && low <= start + RULE_ENDPOINT_TOLERANCE
+            && high >= end - RULE_ENDPOINT_TOLERANCE
     })
 }
 
