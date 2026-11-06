@@ -103,7 +103,8 @@
 /// Invalidate cached tall scans missing lower-density predictor strips (#2502). ~keep
 /// Invalidate cached photo title duplicates and incomplete split-stream scans (#2312, #2425). ~keep
 /// Invalidate cached merged table headers and uncertified painted overhangs (#2432, #2616). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 17;
+/// Invalidate cached PDFs whose layout raster exceeded the memory budget (#2332). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 18;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;

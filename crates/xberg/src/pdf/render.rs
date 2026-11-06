@@ -964,6 +964,69 @@ pub(crate) fn render_page_with_safeguards(
     render_page_with_options(doc, page_index, &options, max_png_working_bytes)
 }
 
+#[cfg(feature = "layout-detection")]
+pub(crate) fn render_pdf_layout_page(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    max_working_bytes: usize,
+) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+    const POINT_DPI: u32 = 72;
+    let media = doc.get_page_media_box(page_index).ok();
+    let dimensions = media
+        .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
+        .unwrap_or((612.0, 792.0));
+    let requested =
+        crate::image::dpi::effective_pdf_render_dpi(images_config, f64::from(dimensions.0), f64::from(dimensions.1));
+    let options = safeguarded_render_options(page_index, requested.max(1) as u32, dimensions);
+    // The layout point frame also depends on a valid MediaBox. Keep the fixed-DPI
+    // behavior when layout would project into fallback dimensions. ~keep
+    if !layout_media_matches_renderer(doc, page_index, media) {
+        return render_page_with_options(doc, page_index, &options, Some(max_working_bytes));
+    }
+    let minimum_dpi = images_config
+        .map_or(POINT_DPI, |images| (images.min_dpi.max(1) as u32).max(POINT_DPI))
+        .min(options.dpi);
+    let (image, dpi) = render_page_capturing_glyph_drops(page_index, || {
+        guard_render_panic(page_index, || {
+            xberg_native_pdf::rendering::render_png_page_with_dpi_budget(
+                doc,
+                page_index,
+                options.dpi,
+                minimum_dpi,
+                max_working_bytes,
+            )
+        })
+    })?;
+    if dpi < options.dpi {
+        tracing::debug!(
+            page = page_index + 1,
+            requested_dpi = options.dpi,
+            dpi,
+            "layout raster DPI reduced to fit the render budget"
+        );
+    }
+    Ok(image)
+}
+
+#[cfg(feature = "layout-detection")]
+fn layout_media_matches_renderer(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    media: Option<(f32, f32, f32, f32)>,
+) -> bool {
+    let Some((left, bottom, right, top)) = media else {
+        return false;
+    };
+    let (width, height) = (right - left, top - bottom);
+    [left, bottom, width, height].into_iter().all(f32::is_finite)
+        && width > 0.0
+        && height > 0.0
+        && doc
+            .get_page_info(page_index)
+            .is_ok_and(|info| info.media_box == xberg_native_pdf::geometry::Rect::new(left, bottom, width, height))
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct OcrRasterDpi {

@@ -678,17 +678,11 @@ fn render_layout_page(
         crate::pdf::render::render_pdf_ocr_page_with_dpi(doc, page_index, budget.images_config, budget.security_limits)
             .map(|(image, dpi)| (image, Some(dpi)))
     } else {
-        let (media_width_pt, media_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_index);
-        let render_dpi = crate::image::dpi::effective_pdf_render_dpi(
-            budget.images_config,
-            f64::from(media_width_pt),
-            f64::from(media_height_pt),
-        );
-        crate::pdf::render::render_page_with_safeguards(
+        crate::pdf::render::render_pdf_layout_page(
             doc,
             page_index,
-            render_dpi.max(1) as u32,
-            Some(budget.security_limits.max_content_size),
+            budget.images_config,
+            budget.security_limits.max_content_size,
         )
         .map(|image| (image, None))
     }
@@ -1541,6 +1535,14 @@ mod tests {
     }
 
     fn pdf_with_media_box(inherited: bool, rotation: i64, media_box: &[i64]) -> Vec<u8> {
+        pdf_with_media_box_objects(
+            inherited,
+            rotation,
+            media_box.iter().copied().map(lopdf::Object::from).collect(),
+        )
+    }
+
+    fn pdf_with_media_box_objects(inherited: bool, rotation: i64, media_box: Vec<lopdf::Object>) -> Vec<u8> {
         use lopdf::{Document, Object, Stream, dictionary};
 
         let mut document = Document::with_version("1.5");
@@ -1551,7 +1553,7 @@ mod tests {
         let mut page = dictionary! {
             "Type" => "Page",
             "Parent" => pages_id,
-            "MediaBox" => media_box.iter().copied().map(Object::from).collect::<Vec<_>>(),
+            "MediaBox" => media_box,
             "Resources" => dictionary! {},
             "Contents" => content_id,
         };
@@ -2321,6 +2323,85 @@ mod tests {
     }
 
     #[test]
+    fn landscape_layout_render_fits_default_budget_and_keeps_pdf_points() {
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[0, 0, 1920, 1080]))
+            .expect("landscape fixture must open");
+        let limits = crate::extractors::security::SecurityLimits::default();
+        let mut pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::SkipRender,
+            RenderBudget {
+                security_limits: &limits,
+                images_config: None,
+            },
+        );
+        let page = pages.pop().expect("one physical page");
+        assert!(page.render_failure.is_none(), "{:?}", page.render_failure);
+        assert!(page.run_inference);
+        assert!(page.raster_dpi.is_none(), "layout does not supply an OCR input raster");
+        let (width, height) = page.image.as_ref().expect("actual layout raster").dimensions();
+        assert_eq!((width, height), (3921, 2205));
+        let detected = crate::layout::DetectionResult {
+            page_width: width,
+            page_height: height,
+            detections: vec![crate::layout::LayoutDetection::new(
+                crate::layout::LayoutClass::Formula,
+                0.9,
+                crate::layout::BBox::new(
+                    width as f32 / 4.0,
+                    height as f32 / 4.0,
+                    width as f32 / 2.0,
+                    height as f32 / 2.0,
+                ),
+            )],
+        };
+        let assembled = super::assemble_layout_page(page, Some(detected));
+        assert_eq!(
+            (assembled.result.page_width_pts, assembled.result.page_height_pts),
+            (1920.0, 1080.0)
+        );
+        let [hint] = assembled.hints.as_slice() else {
+            panic!("expected one projected detection");
+        };
+        assert!((hint.left - 480.0).abs() < 0.001 && (hint.right - 960.0).abs() < 0.001);
+        assert!((hint.bottom - 540.0).abs() < 0.001 && (hint.top - 810.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn layout_budget_honors_the_callers_minimum_dpi() {
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf_with_media_box(false, 0, &[0, 0, 1920, 1080]))
+            .expect("landscape fixture must open");
+        let images = crate::core::config::ImageExtractionConfig {
+            auto_adjust_dpi: false,
+            target_dpi: 150,
+            min_dpi: 149,
+            ..Default::default()
+        };
+        let pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::SkipRender,
+            RenderBudget {
+                security_limits: &Default::default(),
+                images_config: Some(&images),
+            },
+        );
+        assert!(pages[0].image.is_none());
+        let failure = pages[0].render_failure.as_deref().expect("refusal is reported");
+        assert!(
+            failure.contains("PDF raster 3974x2235 exceeds security_limits.max_content_size"),
+            "{failure}"
+        );
+    }
+
+    #[test]
     fn layout_render_rejects_over_budget_raster_at_final_dpi() {
         let security_limits = crate::extractors::security::SecurityLimits {
             max_content_size: 2 << 20,
@@ -2369,6 +2450,36 @@ mod tests {
             "native render must reject the true raster instead of estimating from Letter: {failure}"
         );
         assert!(pages[0].image.is_none());
+    }
+
+    #[test]
+    fn layout_render_refuses_budget_adjustment_when_media_frames_disagree() {
+        let pdf = pdf_with_media_box_objects(false, 0, vec![100.into(), 0.into(), lopdf::Object::Null, 1080.into()]);
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf).expect("malformed coordinate fixture must open");
+        assert_eq!(crate::pdf::render::get_page_dimensions_pt(&doc, 0), (100.0, 1080.0));
+        assert_eq!(doc.get_page_info(0).unwrap().media_box.width, 512.0);
+        let security_limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 27 << 20,
+            ..Default::default()
+        };
+        let pages = render_layout_chunk(
+            &doc,
+            &[0],
+            0,
+            1,
+            None,
+            GatedPageHandling::SkipRender,
+            RenderBudget {
+                security_limits: &security_limits,
+                images_config: None,
+            },
+        );
+        assert!(pages[0].image.is_none());
+        let failure = pages[0].render_failure.as_deref().expect("refusal is reported");
+        assert!(
+            failure.contains("PDF raster 1067x2250 exceeds security_limits.max_content_size"),
+            "{failure}"
+        );
     }
 
     #[test]
@@ -2482,7 +2593,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_only_budget_refusal_does_not_claim_reduced_ocr_dpi() {
+    fn layout_budget_refuses_to_render_below_point_dpi() {
         let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(720.0, 720.0);
         let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf).unwrap();
         let limits = crate::extractors::security::SecurityLimits {
@@ -2503,7 +2614,7 @@ mod tests {
         );
         assert!(
             pages[0].image.is_none(),
-            "the fixed-DPI render must fail rather than downsample"
+            "the layout raster cannot downsample below 72 DPI"
         );
         assert!(pages[0].raster_dpi.is_none(), "a failed render has no actual OCR DPI");
         let error = pages[0]
@@ -2511,7 +2622,7 @@ mod tests {
             .as_deref()
             .expect("the budget refusal is retained");
         assert!(
-            error.contains("PDF raster 1500x1500 exceeds security_limits.max_content_size (1048576 bytes)"),
+            error.contains("PDF raster 720x720 exceeds security_limits.max_content_size (1048576 bytes)"),
             "{error}"
         );
     }

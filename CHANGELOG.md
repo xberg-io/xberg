@@ -404,6 +404,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover tall scans with default PNG predictor parameters.** (#2620)
   Accept omitted values when the PDF defaults match the source image.
 
+- **(pdf): Render layout rasters within the configured memory budget.** (#2332)
+  Lower DPI within the allowed range while keeping detections in the original PDF point frame.
+
 - **(pdf): Certify painted table-cell overhangs by exact source geometry.** (#2616)
   Keep matching values with alternate number formatting in their original cells.
 
