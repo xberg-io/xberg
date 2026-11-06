@@ -188,6 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recover verified right-column text from supported tall indexed-color scans.** (#2426)
+  Uncached Plain extraction with stock Tesseract can add a complete ordered run while preserving existing text and tables.
+
 - **(ocr): Recover language-only explicit sideways PDF scans with cached Tesseract orientation data.** (#2496)
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
   Recover counterclockwise table rows when native line membership proves the source geometry.

@@ -710,6 +710,16 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         Err(_) => return String::new(),
     };
 
+    render_inline_ocr_table_content(&words, tables, None)
+}
+
+type InlineOcrOwner<'a> = &'a mut dyn FnMut(std::ops::Range<usize>, Option<(u32, u32)>);
+
+pub(crate) fn render_inline_ocr_table_content(
+    words: &[HocrWord],
+    tables: &[OcrTable],
+    mut observe: Option<InlineOcrOwner<'_>>,
+) -> String {
     if words.is_empty() {
         return String::new();
     }
@@ -717,7 +727,7 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
     let table_bboxes: Vec<_> = tables.iter().filter_map(|t| t.bounding_box.as_ref()).collect();
 
     let mut non_table_words = Vec::new();
-    for word in &words {
+    for word in words {
         let in_table = table_bboxes.iter().any(|bbox| {
             let word_cx = word.left + word.width / 2;
             let word_cy = word.top + word.height / 2;
@@ -807,8 +817,16 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
     }
 
     enum ContentElement<'a> {
-        Paragraph { y: u32, text: String },
-        Table { y: u32, markdown: &'a str },
+        Paragraph {
+            y: u32,
+            text: String,
+            lines: std::ops::Range<usize>,
+        },
+        Table {
+            y: u32,
+            markdown: &'a str,
+            bottom: Option<u32>,
+        },
     }
 
     let mut elements: Vec<ContentElement> = Vec::new();
@@ -826,6 +844,7 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
             elements.push(ContentElement::Paragraph {
                 y: first_y,
                 text: para.text.clone(),
+                lines: line_idx..line_idx + line_count,
             });
             line_idx += line_count;
             para_idx += 1;
@@ -837,11 +856,13 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         if let Some(ref bbox) = table.bounding_box {
             elements.push(ContentElement::Table {
                 y: bbox.top,
+                bottom: Some(bbox.bottom),
                 markdown: &table.markdown,
             });
         } else {
             elements.push(ContentElement::Table {
                 y: u32::MAX,
+                bottom: None,
                 markdown: &table.markdown,
             });
         }
@@ -865,7 +886,22 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         if !output.is_empty() {
             output.push_str("\n\n");
         }
+        let start = output.len();
         output.push_str(trimmed);
+        if let Some(observer) = observe.as_mut() {
+            let band = match elem {
+                ContentElement::Paragraph { lines: owned, .. } => lines.get(owned.clone()).and_then(|owned_lines| {
+                    let mut words = owned_lines.iter().flat_map(|line| line.words.iter());
+                    let first = words.next()?;
+                    words.try_fold(
+                        (first.top, first.top.checked_add(first.height)?),
+                        |(top, bottom), word| Some((top.min(word.top), bottom.max(word.top.checked_add(word.height)?))),
+                    )
+                }),
+                ContentElement::Table { y, bottom, .. } => bottom.map(|bottom| (*y, bottom)),
+            };
+            observer(start..output.len(), band);
+        }
     }
 
     output
