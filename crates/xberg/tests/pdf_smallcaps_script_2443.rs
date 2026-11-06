@@ -89,17 +89,24 @@ fn should_leave_actual_small_cap_rotword_without_subscript_annotation() {
 fn should_preserve_all_six_actual_key_expansion_subscripts() {
     let result = nist_key_expansion_page();
     let document = result.document.as_ref().expect("requested actual structure");
-    let nodes: Vec<_> = document
+    let context: Vec<_> = document
         .nodes
         .iter()
         .filter(|node| node.content.text().is_some_and(|text| text.contains("8e 73 b0 f7")))
         .collect();
-    assert_eq!(nodes.len(), 1, "the complete key-expansion context must survive");
-    let node = nodes[0];
-    let text = node.content.text().unwrap();
+    assert_eq!(context.len(), 1, "the complete key-expansion context must survive");
+
+    // The indexed assignments are display rows, kept apart from the prose line above them. ~keep
     for digit in 0..6 {
-        let variable = format!("w{digit}");
-        let offset = text.find(&variable).expect("every original indexed word survives") + 1;
+        let variable = format!("w{digit} = ");
+        let holders: Vec<_> = document
+            .nodes
+            .iter()
+            .filter(|node| node.content.text().is_some_and(|text| text.contains(&variable)))
+            .collect();
+        assert_eq!(holders.len(), 1, "every original indexed word survives once: {variable}");
+        let node = holders[0];
+        let offset = node.content.text().unwrap().find(&variable).unwrap() + 1;
         assert!(
             node.annotations.iter().any(|annotation| {
                 matches!(annotation.kind, AnnotationKind::Subscript)
