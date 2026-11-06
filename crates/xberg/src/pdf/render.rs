@@ -1060,7 +1060,10 @@ impl OcrRasterDpi {
     }
 }
 
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+#[cfg(any(
+    feature = "layout-detection",
+    all(test, any(feature = "ocr", feature = "ocr-pipeline"))
+))]
 pub(crate) fn render_pdf_ocr_page_with_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,

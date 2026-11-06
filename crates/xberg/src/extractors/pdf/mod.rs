@@ -1350,10 +1350,20 @@ async fn run_ocr_with_layout_pages(
 
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
-    #[cfg(feature = "layout-detection")]
-    let ocr_images_absent = ocr_images.is_none();
-    #[cfg(not(feature = "layout-detection"))]
-    let ocr_images_absent = true;
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let ocr_images_absent = {
+        #[cfg(feature = "layout-detection")]
+        let absent = ocr_images.is_none();
+        #[cfg(not(feature = "layout-detection"))]
+        let absent = true;
+        absent
+    };
 
     #[cfg(all(
         paddle_ocr,

@@ -965,7 +965,7 @@ pub(super) fn share_rendered_page_images(
 mod thread_probe;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
 mod xobject_text_tests;
-#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
 pub(super) use thread_probe::RENDER_CALL_THREAD_NAMES;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
 pub(super) use thread_probe::clear_render_call_thread_ids;
