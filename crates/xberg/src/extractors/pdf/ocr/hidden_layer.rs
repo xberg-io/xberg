@@ -23,6 +23,9 @@ pub(crate) use embedded_gap::embedded_gap_placement;
 mod visible_raster;
 pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 
+mod source_audit;
+use source_audit::audited_image_name;
+
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_OPERATORS: usize = 4096;
 const MAX_PREVIEW_PIXELS: usize = 1024 * 1024;
@@ -169,23 +172,6 @@ pub(super) fn page_frame_and_contents(doc: &PdfDocument, page: usize) -> Option<
     Some((media, contents))
 }
 
-fn audited_image_name(doc: &PdfDocument, page: usize, content: &Object, byte_limit: usize) -> Option<String> {
-    let Object::Stream { dict, data } = content else {
-        return None;
-    };
-    if dict.contains_key("DecodeParms") {
-        return None;
-    }
-    let filters = stream_filters(dict.get("Filter"))?;
-    let output_limit = MAX_CONTENT_BYTES.min(byte_limit / 4);
-    let bytes = decode_probe_stream(data, filters, output_limit, byte_limit)?;
-    let fonts = simple_font_resources(doc, page)?;
-    let source = hidden_text_image_name(&bytes, |font| fonts.contains_key(font))?;
-    // Subsequent Native inspection uses the same immutable single stream. Require
-    // its ordinary decoder to agree with the audited bytes before trusting geometry.
-    (doc.get_page_content_data(page).ok()? == bytes).then_some(source)
-}
-
 /// Certify one literal native line painted above a raster by a simple page stream.
 pub(super) fn has_visible_native_line(doc: &PdfDocument, layer: &str, byte_limit: usize) -> bool {
     const MAX_AUDITED_LINE_BYTES: usize = 128;
@@ -316,57 +302,6 @@ fn resolved_page_box(doc: &PdfDocument, object: &Object) -> Option<Rect> {
     let (x0, y0, x1, y1) = (number(x0)?, number(y0)?, number(x1)?, number(y1)?);
     let bounds = Rect::new(x0, y0, x1 - x0, y1 - y0);
     finite_box(bounds).then_some(bounds)
-}
-
-fn hidden_text_image_name(content: &[u8], font_is_known: impl Fn(&str) -> bool) -> Option<String> {
-    let mut mode = 0;
-    let mut known_font = false;
-    let mut inside_text = false;
-    let mut states = Vec::new();
-    let mut image = None;
-    let mut hidden = false;
-    let complete = visit_complete_content_stream(content, MAX_OPERATORS, |op| {
-        match op {
-            Operator::SaveState if !inside_text => states.push((mode, known_font)),
-            Operator::RestoreState if !inside_text => {
-                let Some((previous_mode, previous_font)) = states.pop() else {
-                    return false;
-                };
-                mode = previous_mode;
-                known_font = previous_font;
-            }
-            Operator::Cm { a, b, c, d, e, f } if !inside_text && positive_axis_matrix(a, b, c, d, e, f) => {}
-            Operator::Do { name } if !inside_text && image.is_none() => image = Some(name),
-            Operator::BeginText if !inside_text => inside_text = true,
-            Operator::EndText if inside_text => inside_text = false,
-            Operator::Tr { render } if inside_text => mode = render,
-            Operator::Tf { font, size } if inside_text && size.is_finite() && size > 0.0 && font_is_known(&font) => {
-                known_font = true;
-            }
-            Operator::Tj { .. } | Operator::TJ { .. } | Operator::Quote { .. } | Operator::DoubleQuote { .. }
-                if inside_text && mode == 3 && known_font =>
-            {
-                hidden = true
-            }
-            Operator::Td { .. }
-            | Operator::TD { .. }
-            | Operator::Tm { .. }
-            | Operator::TStar
-            | Operator::Tz { .. }
-            | Operator::TL { .. }
-            | Operator::Tc { .. }
-            | Operator::Tw { .. }
-            | Operator::Ts { .. }
-                if inside_text => {}
-            _ => return false,
-        }
-        true
-    })
-    .ok()?;
-    if !complete || inside_text || !states.is_empty() || !hidden {
-        return None;
-    }
-    image
 }
 
 #[derive(Clone, Copy)]
