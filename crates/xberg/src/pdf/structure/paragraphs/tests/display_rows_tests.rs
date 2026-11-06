@@ -37,3 +37,26 @@ fn continuation_merge_refuses_inconsistent_display_lane_anchors() {
         );
     }
 }
+
+#[test]
+fn continuation_merge_refuses_word_width_separators_and_unbounded_source_runs() {
+    let mut row = indexed_display_row();
+    for lane in row.lines[0].segments.chunks_exact_mut(4) {
+        lane[2].text = "therefore".to_owned();
+        lane[2].width = 14.0;
+        lane[3].x += 8.0;
+    }
+    assert_eq!(
+        merge_after_prose(row).len(),
+        1,
+        "a wide prose run cannot certify a separator"
+    );
+
+    let mut row = indexed_display_row();
+    row.lines[0].segments[3].text = format!("12{:>64}", "");
+    assert_eq!(
+        merge_after_prose(row).len(),
+        1,
+        "whitespace still counts toward the raw run bound"
+    );
+}
