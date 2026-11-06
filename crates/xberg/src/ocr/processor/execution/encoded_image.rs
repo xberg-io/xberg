@@ -1,3 +1,4 @@
+use super::budgeted_downscale::{self, SourceDpi};
 use super::{
     PreparedOcrImage, SecurityLimits, TesseractConfig, dpi_workspace, log_ci_debug, native_image_budget,
     ocr_dpi_config, ocr_preprocessing_decision, prepare_decided_ocr_image, resolve_known_source_dpi,
@@ -199,19 +200,7 @@ impl Preparation<'_> {
         self.check_reduced_policy(&decoded, policy)?;
         let dpi = match self.candidate_dpi(&decoded, policy) {
             Ok(dpi) => dpi,
-            Err(error) if self.config.preprocessing.is_none() => {
-                return super::budgeted_downscale::recover(
-                    decoded.image,
-                    self.bytes,
-                    self.limits,
-                    policy,
-                    self.images,
-                    super::budgeted_downscale::SourceDpi::Unknown,
-                )?
-                .map(Candidate::Ready)
-                .ok_or(error);
-            }
-            Err(error) => return Err(error),
+            Err(error) => return self.recover_downscale(decoded, policy, None, error),
         };
         let native_dimensions = if decoded.scale_denominator == 1
             && let Some(preprocessing) = policy
@@ -228,25 +217,15 @@ impl Preparation<'_> {
                 .finish_budgeted_upscale(decoded, dpi, policy, target_dpi)
                 .map(Candidate::Ready);
         }
-        // Resizing before automatic binarization can erase glyph detail and displace a usable fallback.
-        if policy.is_none()
-            && self.config.source_dpi.is_some()
-            && let Some(dpi) = dpi
-            && !self.is_jpeg()
-            && !self.known_native_fits((width, height), None)?
-        {
-            return super::budgeted_downscale::recover(
-                decoded.image,
-                self.bytes,
-                self.limits,
-                policy,
-                self.images,
-                super::budgeted_downscale::SourceDpi::Known(dpi),
-            )?
-            .map(Candidate::Ready)
-            .ok_or_else(|| self.native_error("OCR native image workspace", false));
-        }
-        if self.native_needs_retry(native_dimensions, policy)? {
+        if !self.known_native_fits(native_dimensions, policy)? {
+            if !self.is_jpeg() {
+                let error = self.native_error("OCR native image workspace", false);
+                // A source that fits may still require its explicit DPI normalization. ~keep
+                if !self.known_native_fits((width, height), policy)? {
+                    return self.recover_downscale(decoded, policy, dpi, error);
+                }
+                return Err(error);
+            }
             self.check_unknown_dpi_upscale(&decoded, native_dimensions, dpi, policy)?;
             return Ok(retry_candidate(decoded, policy));
         }
@@ -470,18 +449,23 @@ impl Preparation<'_> {
         .map(Some)
     }
 
-    fn native_needs_retry(
+    fn recover_downscale(
         &self,
-        dimensions: (u32, u32),
+        decoded: DecodedOcrImage,
         preprocessing: Option<&ImagePreprocessingConfig>,
-    ) -> crate::Result<bool> {
-        if self.known_native_fits(dimensions, preprocessing)? {
-            return Ok(false);
-        }
-        if !self.is_jpeg() {
-            return Err(self.native_error("OCR native image workspace", false));
-        }
-        Ok(true)
+        dpi: Option<f64>,
+        error: crate::XbergError,
+    ) -> crate::Result<Candidate> {
+        budgeted_downscale::recover(
+            decoded.image,
+            self.bytes,
+            self.limits,
+            preprocessing,
+            self.images,
+            dpi.map_or(SourceDpi::Unknown, SourceDpi::Known),
+        )?
+        .map(Candidate::Ready)
+        .ok_or(error)
     }
 
     fn check_reduced_dpi(

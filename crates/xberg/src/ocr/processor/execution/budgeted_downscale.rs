@@ -14,14 +14,6 @@ impl SourceDpi {
     fn requires_estimation(self) -> bool {
         matches!(self, Self::Unknown)
     }
-
-    fn target(self, policy: Option<&ImagePreprocessingConfig>) -> Option<i32> {
-        match (self, policy) {
-            (_, Some(policy)) => Some(policy.target_dpi),
-            (Self::Known(source), None) => Some(source.round() as i32),
-            (Self::Unknown, None) => None,
-        }
-    }
 }
 
 pub(super) fn recover(
@@ -35,9 +27,6 @@ pub(super) fn recover(
     if matches!(source_dpi, SourceDpi::Known(dpi) if !dpi.is_finite() || dpi <= 0.0) {
         return Ok(None);
     }
-    let Some(target_dpi) = source_dpi.target(policy) else {
-        return Ok(None);
-    };
     if !matches!(
         image::guess_format(encoded),
         Ok(image::ImageFormat::Png | image::ImageFormat::Tiff)
@@ -51,6 +40,11 @@ pub(super) fn recover(
     if !dpi.auto_adjust_dpi {
         return Ok(None);
     }
+
+    let target_dpi = match source_dpi {
+        SourceDpi::Known(source) if policy.is_none() => source.round() as i32,
+        _ => dpi.target_dpi,
+    };
 
     let source = image.dimensions();
     let limit = limits.max_content_size as u64;
@@ -382,18 +376,43 @@ mod tests {
     }
 
     #[test]
-    fn explicit_preprocessing_still_reports_the_original_workspace_error() {
+    fn downscaling_keeps_the_explicit_native_preprocessing_policy() {
         let bytes = include_bytes!("../../../../tests/fixtures/ocr_unknown_dpi_2530/records.png");
         let config = super::super::TesseractConfig {
-            preprocessing: Some(ImagePreprocessingConfig::default()),
+            preprocessing: Some(ImagePreprocessingConfig {
+                target_dpi: 280,
+                contrast_enhance: true,
+                binarization_method: "none".into(),
+                deskew: false,
+                ..Default::default()
+            }),
             ..Default::default()
         };
-        let error = super::super::prepare_encoded_ocr_image(bytes, &SecurityLimits::default(), &config, None, false)
-            .err()
-            .expect("an explicit preprocessing policy must not be replaced by implicit recovery");
-        assert!(
-            error.to_string().contains("OCR image DPI estimation workspace"),
-            "{error}"
-        );
+        let prepared = super::super::prepare_encoded_ocr_image(bytes, &SecurityLimits::default(), &config, None, false)
+            .expect("the explicit policy fits on the smaller frame");
+        assert!(prepared.apply_pix_preprocessing);
+        assert!(prepared.raw_ocr_source_frame.is_none());
+        let policy = prepared.preprocessing.expect("original policy");
+        assert_eq!(policy.target_dpi, 280);
+        assert!(policy.contrast_enhance);
+        assert_eq!(policy.binarization_method, "none");
+        assert!(!policy.deskew);
+    }
+
+    #[test]
+    fn a_densityless_beige_source_keeps_the_raw_native_policy_after_downscaling() {
+        let bytes = include_bytes!("../../../../tests/fixtures/ocr_unknown_dpi_2530/raw-records.png");
+        let prepared = super::super::prepare_encoded_ocr_image(
+            bytes,
+            &SecurityLimits::default(),
+            &Default::default(),
+            None,
+            false,
+        )
+        .expect("raw raster fits on a smaller frame");
+        assert!(!prepared.apply_pix_preprocessing);
+        assert!(prepared.preprocessing.is_none());
+        assert_eq!(prepared.raw_ocr_source_frame.unwrap().dimensions, (4000, 3000));
+        assert!(prepared.width < 4000 && prepared.height < 3000);
     }
 }

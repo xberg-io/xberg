@@ -17,3 +17,9 @@ including the 30 distinct two-digit record numbers.
 image on a 46 × 71 inch page. The image contains a large heading and 42 rows
 of fine print. The 64 MiB regression asserts that OCR succeeds and recovers
 the heading; it makes no assertion about the fine print at the reduced DPI.
+
+`raw-records.png` keeps the 30 source lines and recolors the background to
+RGB (236, 228, 210), below the automatic preprocessing brightness threshold.
+It has no PNG physical-density chunk and exercises the raw downscale path
+reported in #2618. The encoded SHA-256 is
+`42fffe5932bddc2d0df54e5daff437c749fe11a49ff3ea61cd2ce3afe3393c08`.
