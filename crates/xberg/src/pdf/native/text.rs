@@ -3221,6 +3221,10 @@ fn apply_text_cleanup(text: &str) -> Cow<'_, str> {
 }
 
 #[cfg(test)]
+#[path = "text/span_carrier_tests.rs"]
+mod span_carrier_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use xberg_native_pdf::geometry::Rect;
@@ -7346,7 +7350,7 @@ mod tests {
     /// The text is real content-stream operators, not an empty `/MediaBox`, so each page
     /// costs real parsing, font-metric and span-assembly work, so the page-order test
     /// exercises the same per-page path a real document does.
-    fn build_paged_text_pdf(page_count: usize, rows: usize) -> Vec<u8> {
+    pub(super) fn build_paged_text_pdf(page_count: usize, rows: usize) -> Vec<u8> {
         let font_obj = 3 + 2 * page_count;
         let mut pdf = b"%PDF-1.4\n".to_vec();
         let mut offsets: Vec<usize> = Vec::new();
