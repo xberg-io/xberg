@@ -358,6 +358,7 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
 
 #[cfg(test)]
 mod tests {
+    mod display_rows_tests;
     use super::*;
 
     fn make_body_paragraph(text: &str, font_size: f32) -> PdfParagraph {
