@@ -220,6 +220,11 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   composer require xberg-io/xberg
   ```
 
+  The Xberg 1.3.10 Apple Silicon PHP extension archives for PHP 8.3, 8.4, and 8.5
+  require Homebrew's `libheif` at `/opt/homebrew/opt/libheif/lib/libheif.1.dylib`.
+  Install it with `brew install libheif` on a Mac supported by that formula. PHP
+  needs this library to load the extension, even when processing other formats.
+
   [API Reference](/reference/api-php/)
   [Quick Start](/getting-started/quickstart/)
 
