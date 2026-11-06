@@ -234,6 +234,57 @@ fn explicit_language_block_recovers_the_upside_down_source_grid() {
     assert_eq!(page.tables[0].cells, actual.tables[0].cells);
     assert!(actual.ocr_elements.is_none(), "private evidence must not leak");
     assert!(!actual.metadata.additional.contains_key("auto_rotated"));
+    assert!(!actual.metadata.additional.contains_key("ocr_recognition_page_down"));
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker() {
+    const CASE: &str = "caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let (_, mut config) = controls();
+    let source = PdfDocument::from_bytes(PDF.to_vec()).unwrap();
+    let images = source.page_image_handles(0).unwrap();
+    let sideways = images[0].decode().unwrap().to_dynamic_image().unwrap().to_rgb8();
+    let upside_down_pdf = image_pdf(&image::imageops::rotate270(&sideways));
+    config.ocr = Some(OcrConfig {
+        element_config: Some(xberg::types::OcrElementConfig {
+            include_elements: true,
+            min_level: xberg::types::OcrElementLevel::Word,
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    config
+        .ocr
+        .as_mut()
+        .unwrap()
+        .tesseract_config
+        .get_or_insert_default()
+        .psm = Some(1);
+    let result = extract("caller-psm1-elements", &upside_down_pdf, &config);
+    assert_eq!(
+        result
+            .metadata
+            .additional
+            .get("psm")
+            .and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+    assert!(
+        result
+            .ocr_elements
+            .as_ref()
+            .is_some_and(|elements| !elements.is_empty()),
+        "the caller asked for word elements"
+    );
+    assert!(
+        !result.metadata.additional.contains_key("ocr_recognition_page_down"),
+        "internal orientation evidence must not reach a caller"
+    );
 }
 
 #[test]

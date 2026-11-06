@@ -219,56 +219,152 @@ fn row_threshold(config: &OcrConfig) -> f64 {
     )
 }
 
+/// Tokens of the recognition-orientation read, kept as independent witness text for a half-turn.
+pub(super) fn witness_tokens(candidate: &ExtractedDocument) -> Vec<String> {
+    if candidate.content.len() > MAX_CERTIFICATE_TEXT_BYTES {
+        return Vec::new();
+    }
+    candidate
+        .content
+        .split_whitespace()
+        .take(MAX_CERTIFICATE_WORDS + 1)
+        .map(str::to_owned)
+        .collect()
+}
+
+/// A primary the half-turn pass could ever certify: more words or bytes than a certificate holds
+/// can never be accepted.
+pub(super) fn within_certificate_limits(result: &ExtractedDocument) -> bool {
+    result.content.len() <= MAX_CERTIFICATE_TEXT_BYTES
+        && result
+            .content
+            .split_whitespace()
+            .take(MAX_CERTIFICATE_WORDS + 1)
+            .count()
+            <= MAX_CERTIFICATE_WORDS
+}
+
 /// Accepts a read of the half-turned raster once Tesseract's own layout analysis reported every text
-/// block rotated 180 degrees. The primary read then covered an inverted page, so its confident words
-/// are not evidence to retain; the replacement must instead be a complete table whose every iterator
-/// word sits in exactly one cell. ~keep
+/// block rotated 180 degrees. On an inverted page the primary's confident words are upside-down
+/// readings, so they cannot be required in the replacement. Instead the replacement must be a
+/// complete table whose every iterator word sits in exactly one cell, and the recognition-orientation
+/// read (an independent read of the unrotated pixels) must agree with most of its tokens. Geometry is
+/// mirrored back into the caller's frame. ~keep
 pub(super) fn select_half_turned(
     original: ExtractedDocument,
     mut candidate: ExtractedDocument,
     thresholds: &OcrQualityThresholds,
     confidence: ConfidenceSemantics,
     config: &OcrConfig,
+    witness: &[String],
 ) -> ExtractedDocument {
-    if !accepts_half_turned(&original, &candidate, thresholds, confidence, row_threshold(config)) {
+    let Some(text) = half_turned_text(&original, &candidate, thresholds, confidence, row_threshold(config)) else {
         return original;
-    }
+    };
     let Some((width, height)) = processed_ocr_layout_dimensions(&candidate.metadata) else {
         return original;
     };
-    for element in candidate.ocr_elements.iter_mut().flatten() {
-        let (left, top, element_width, element_height) = element.geometry.to_aabb();
-        element.geometry = crate::types::OcrBoundingGeometry::Rectangle {
-            left: width - left - element_width,
-            top: height - top - element_height,
-            width: element_width,
-            height: element_height,
-        };
+    if !corroborates(witness, &text) || mirror_half_turn(&mut candidate, width, height).is_none() {
+        return original;
     }
     crate::core::diagnostics::dedup_extend_warnings(&mut candidate.processing_warnings, original.processing_warnings);
     candidate
 }
 
-fn accepts_half_turned(
+/// More than half of the witness tokens occur in the text, each occurrence used once.
+fn corroborates(witness: &[String], text: &str) -> bool {
+    let mut inventory = HashMap::new();
+    for token in text.split_whitespace() {
+        *inventory.entry(token).or_insert(0usize) += 1;
+    }
+    let agreed = witness
+        .iter()
+        .filter(|token| {
+            inventory
+                .get_mut(token.as_str())
+                .filter(|count| **count > 0)
+                .map(|count| *count -= 1)
+                .is_some()
+        })
+        .count();
+    agreed * 2 > witness.len()
+}
+
+fn mirror_half_turn(candidate: &mut ExtractedDocument, width: u32, height: u32) -> Option<()> {
+    let geometry = |geometry: &crate::types::OcrBoundingGeometry| {
+        let crate::types::OcrBoundingGeometry::Rectangle {
+            left,
+            top,
+            width: w,
+            height: h,
+        } = *geometry
+        else {
+            return None;
+        };
+        Some(crate::types::OcrBoundingGeometry::Rectangle {
+            left: width.checked_sub(left.checked_add(w)?)?,
+            top: height.checked_sub(top.checked_add(h)?)?,
+            width: w,
+            height: h,
+        })
+    };
+    let mirror_box = |bbox: &mut BoundingBox| {
+        *bbox = BoundingBox {
+            x0: f64::from(width) - bbox.x1,
+            y0: f64::from(height) - bbox.y1,
+            x1: f64::from(width) - bbox.x0,
+            y1: f64::from(height) - bbox.y0,
+        };
+    };
+    for element in candidate.ocr_elements.iter_mut().flatten() {
+        element.geometry = geometry(&element.geometry)?;
+    }
+    for table in &mut candidate.tables {
+        table.bounding_box.iter_mut().for_each(mirror_box);
+    }
+    for document in [
+        candidate.ocr_internal_document.as_mut(),
+        candidate.internal_document.as_mut(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for table in &mut document.tables {
+            table.bounding_box.iter_mut().for_each(mirror_box);
+        }
+        for element in &mut document.elements {
+            if element.ocr_rotation.is_some() {
+                return None;
+            }
+            element.bbox.iter_mut().for_each(mirror_box);
+            if let Some(value) = &element.ocr_geometry {
+                element.ocr_geometry = Some(geometry(value)?);
+            }
+        }
+    }
+    Some(())
+}
+
+fn half_turned_text(
     original: &ExtractedDocument,
     candidate: &ExtractedDocument,
     thresholds: &OcrQualityThresholds,
     confidence: ConfidenceSemantics,
     row_threshold: f64,
-) -> bool {
+) -> Option<String> {
     if !plain_primary(original)
         || !candidate.formulas.is_empty()
+        || candidate.document.is_some()
+        || candidate.elements.as_ref().is_some_and(|elements| !elements.is_empty())
         || checked_words(candidate).is_none()
         || processed_ocr_layout_dimensions(&original.metadata) != processed_ocr_layout_dimensions(&candidate.metadata)
     {
-        return false;
+        return None;
     }
-    let Some(text) = complete_table_text(candidate, row_threshold, table_matches_iterator_rows) else {
-        return false;
-    };
+    let text = complete_table_text(candidate, row_threshold, table_matches_iterator_rows)?;
     let mean = mean_text_conf_of(&candidate.metadata.additional);
     let noise = ocr_recognition_noise_decision(&text, thresholds, confidence, mean);
-    !noise.low_confidence && !noise.fragmented_noise && mean.is_some()
+    (!noise.low_confidence && !noise.fragmented_noise && mean.is_some()).then_some(text)
 }
 
 fn accepts(
@@ -595,24 +691,68 @@ mod tests {
     }
 
     fn half_turned(original: ExtractedDocument, candidate: ExtractedDocument) -> ExtractedDocument {
+        let witness = witness_tokens(&candidate);
+        half_turned_with(original, candidate, &witness)
+    }
+
+    fn half_turned_with(
+        original: ExtractedDocument,
+        candidate: ExtractedDocument,
+        witness: &[String],
+    ) -> ExtractedDocument {
         select_half_turned(
             original,
             candidate,
             &OcrQualityThresholds::default(),
             ConfidenceSemantics::Legibility { scale_max: 100.0 },
             &OcrConfig::default(),
+            witness,
         )
     }
 
     #[test]
     fn half_turned_read_replaces_an_inverted_primary_with_geometry_in_the_callers_frame() {
-        let candidate = super::super::tests::table_candidate();
+        use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+        let mut candidate = super::super::tests::table_candidate();
+        let table_box = BoundingBox {
+            x0: 20.0,
+            y0: 40.0,
+            x1: 190.0,
+            y1: 160.0,
+        };
+        candidate.tables[0].bounding_box = Some(table_box);
+        let mut internal = InternalDocument::new("ocr");
+        internal.tables.push(candidate.tables[0].clone());
+        let mut element = InternalElement::text(ElementKind::Paragraph, "Cash", 0);
+        element.bbox = Some(table_box);
+        element.ocr_geometry = Some(crate::types::OcrBoundingGeometry::Rectangle {
+            left: 20,
+            top: 40,
+            width: 30,
+            height: 10,
+        });
+        internal.elements.push(element);
+        candidate.ocr_internal_document = Some(internal);
         let upright = candidate.ocr_elements.clone().unwrap();
         // The primary's confident "Caption" is absent from the table; an upright page would protect it.
         let original = primary(&["Cash", "Caption"]);
         assert!(!accepted(&original, &sideways_candidate()));
         let selected = half_turned(original, candidate.clone());
         assert_eq!(selected.tables[0].cells, candidate.tables[0].cells);
+        let mirrored = BoundingBox {
+            x0: 10.0,
+            y0: 40.0,
+            x1: 180.0,
+            y1: 160.0,
+        };
+        assert_eq!(selected.tables[0].bounding_box, Some(mirrored));
+        let internal = selected.ocr_internal_document.unwrap();
+        assert_eq!(internal.tables[0].bounding_box, Some(mirrored));
+        assert_eq!(internal.elements[0].bbox, Some(mirrored));
+        assert_eq!(
+            internal.elements[0].ocr_geometry.as_ref().unwrap().to_aabb(),
+            (150, 150, 30, 10)
+        );
         for (back, word) in selected.ocr_elements.unwrap().iter().zip(&upright) {
             let (left, top, width, height) = word.geometry.to_aabb();
             assert_eq!(
@@ -620,6 +760,44 @@ mod tests {
                 (200 - left - width, 200 - top - height, width, height)
             );
         }
+    }
+
+    #[test]
+    fn half_turned_read_needs_the_unrotated_read_to_agree_with_most_of_its_text() {
+        let candidate = super::super::tests::table_candidate();
+        let original = primary(&["Cash", "Caption"]);
+        let mut witness = witness_tokens(&candidate);
+        assert_eq!(
+            half_turned_with(original.clone(), candidate.clone(), &witness)
+                .tables
+                .len(),
+            1
+        );
+        let kept = witness.len() / 2 + 1;
+        for token in witness.iter_mut().skip(kept) {
+            *token = "other".into();
+        }
+        assert_eq!(
+            half_turned_with(original.clone(), candidate.clone(), &witness)
+                .tables
+                .len(),
+            1
+        );
+        witness[kept - 1] = "other".into();
+        for refused in [witness, Vec::new(), vec!["other".to_string(); 9]] {
+            let kept_primary = half_turned_with(original.clone(), candidate.clone(), &refused);
+            assert_eq!(kept_primary.content, original.content);
+        }
+    }
+
+    #[test]
+    fn mirroring_refuses_geometry_outside_the_processed_frame_or_not_a_rectangle() {
+        let mut candidate = super::super::tests::table_candidate();
+        assert!(mirror_half_turn(&mut candidate.clone(), 10, 10).is_none());
+        candidate.ocr_elements.as_mut().unwrap()[0].geometry = crate::types::OcrBoundingGeometry::Quadrilateral {
+            points: vec![crate::types::OcrPoint { x: 0, y: 0 }; 4],
+        };
+        assert!(mirror_half_turn(&mut candidate, 200, 200).is_none());
     }
 
     #[test]

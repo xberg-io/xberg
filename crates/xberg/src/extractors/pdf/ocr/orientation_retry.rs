@@ -119,6 +119,25 @@ impl OrientationRetry {
         cancel: Option<&CancellationToken>,
         allow_prose: bool,
     ) -> crate::Result<ExtractedDocument> {
+        let mut result = self
+            .after_ocr_unscrubbed(backend, raster, config, original, cancel, allow_prose)
+            .await?;
+        result
+            .metadata
+            .additional
+            .remove(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY);
+        Ok(result)
+    }
+
+    async fn after_ocr_unscrubbed(
+        &self,
+        backend: &Arc<dyn OcrBackend>,
+        raster: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        original: crate::Result<ExtractedDocument>,
+        cancel: Option<&CancellationToken>,
+        allow_prose: bool,
+    ) -> crate::Result<ExtractedDocument> {
         let original = original?;
         check_cancelled(cancel)?;
         if let Some(requested) = &self.recognition_config {
@@ -239,7 +258,10 @@ impl OrientationRetry {
         allow_prose: bool,
     ) -> crate::Result<ExtractedDocument> {
         let confidence = backend.confidence_semantics();
-        if !recognition::plain_primary(&original) || !self.noise(&original, confidence).low_confidence {
+        if !recognition::plain_primary(&original)
+            || !recognition::within_certificate_limits(&original)
+            || !self.noise(&original, confidence).low_confidence
+        {
             return Ok(original);
         }
         let probe = lookup_osd_directory(config.clone());
@@ -250,17 +272,21 @@ impl OrientationRetry {
         let mut retry_config = recognition::capture_words(config);
         retry_config.tessdata_path = Some(directory.into());
         retry_config.tesseract_config.get_or_insert_default().psm = Some(1);
-        let candidate = backend.process_image_owned(Arc::clone(&raster), &retry_config).await;
+        let candidate = requesting_page_down(backend.process_image_owned(Arc::clone(&raster), &retry_config)).await;
         check_cancelled(cancel)?;
         match candidate {
             Ok(mut candidate) => {
+                let witness = recognition::witness_tokens(&candidate);
                 let page_down = candidate
                     .metadata
                     .additional
                     .remove(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
                     .is_some();
                 match recognition::try_select(original, candidate, &self.thresholds, confidence, config, allow_prose) {
-                    Err(original) if page_down => self.after_half_turn(backend, raster, config, original, cancel).await,
+                    Err(original) if page_down => {
+                        self.after_half_turn(backend, raster, config, original, &witness, cancel)
+                            .await
+                    }
                     Ok(selected) | Err(selected) => Ok(selected),
                 }
             }
@@ -278,6 +304,7 @@ impl OrientationRetry {
         raster: Arc<Vec<u8>>,
         config: &OcrConfig,
         original: ExtractedDocument,
+        witness: &[String],
         cancel: Option<&CancellationToken>,
     ) -> crate::Result<ExtractedDocument> {
         check_cancelled(cancel)?;
@@ -285,10 +312,14 @@ impl OrientationRetry {
             return Ok(original);
         }
         let limits = config.security_limits.clone().unwrap_or_default();
-        let half_turned = tokio::task::spawn_blocking(move || half_turn(&raster, &limits))
-            .await
-            .ok()
-            .flatten();
+        let half_turned = match tokio::task::spawn_blocking(move || half_turn(&raster, &limits)).await {
+            Ok(half_turned) => half_turned,
+            Err(error) if error.is_cancelled() => return Err(crate::XbergError::Cancelled),
+            Err(error) => {
+                tracing::warn!(%error, "Optional half-turn raster preparation failed; retaining primary OCR");
+                None
+            }
+        };
         check_cancelled(cancel)?;
         let Some(half_turned) = half_turned else {
             return Ok(original);
@@ -304,6 +335,7 @@ impl OrientationRetry {
                 &self.thresholds,
                 backend.confidence_semantics(),
                 config,
+                witness,
             )),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
@@ -388,12 +420,22 @@ fn implicit_config(config: &OcrConfig) -> (OcrConfig, f64) {
 }
 
 fn half_turn(raster: &[u8], limits: &crate::extractors::security::SecurityLimits) -> Option<Vec<u8>> {
-    let rgb = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(raster, limits).ok()?;
+    let mut rgb = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(raster, limits).ok()?;
+    image::imageops::rotate180_in_place(&mut rgb);
     let mut encoded = Vec::new();
-    image::imageops::rotate180(&rgb)
-        .write_to(&mut std::io::Cursor::new(&mut encoded), image::ImageFormat::Png)
+    rgb.write_to(&mut std::io::Cursor::new(&mut encoded), image::ImageFormat::Png)
         .ok()?;
     Some(encoded)
+}
+
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+async fn requesting_page_down<T>(read: impl std::future::Future<Output = T>) -> T {
+    crate::ocr::tesseract_backend::page_down_request::requesting(read).await
+}
+
+#[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
+async fn requesting_page_down<T>(read: impl std::future::Future<Output = T>) -> T {
+    read.await
 }
 
 fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
@@ -935,5 +977,179 @@ mod tests {
         assert_eq!(elements.len(), 1);
         assert_eq!(elements[0].level, OcrElementLevel::Word);
         assert_eq!(elements[0].text, expected);
+    }
+
+    struct ScriptedBackend {
+        replies: parking_lot::Mutex<std::collections::VecDeque<ExtractedDocument>>,
+        rasters: parking_lot::Mutex<Vec<Vec<u8>>>,
+    }
+
+    impl crate::plugins::Plugin for ScriptedBackend {
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".into()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl OcrBackend for ScriptedBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+
+        fn confidence_semantics(&self) -> ConfidenceSemantics {
+            ConfidenceSemantics::Legibility { scale_max: 100.0 }
+        }
+
+        async fn process_image(&self, image_bytes: &[u8], _config: &OcrConfig) -> crate::Result<ExtractedDocument> {
+            self.rasters.lock().push(image_bytes.to_vec());
+            Ok(self.replies.lock().pop_front().expect("scripted reply"))
+        }
+    }
+
+    fn marked_recognition_read() -> ExtractedDocument {
+        let mut read = table_candidate();
+        read.tables.clear();
+        read.content = "Cash 100 31,290 Rent 107 77,078 Fuel 114 71,433".into();
+        read.metadata
+            .additional
+            .insert(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY.into(), true.into());
+        read
+    }
+
+    fn inverted_primary() -> ExtractedDocument {
+        let mut primary = table_candidate();
+        primary.tables.clear();
+        primary.content = "zzq xkv".into();
+        primary.metadata.additional.insert("mean_text_conf".into(), 10.into());
+        primary
+    }
+
+    fn png_with_one_red_corner() -> Vec<u8> {
+        let mut image = image::RgbImage::new(8, 6);
+        image.put_pixel(0, 0, image::Rgb([255, 0, 0]));
+        let mut encoded = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut encoded), image::ImageFormat::Png)
+            .unwrap();
+        encoded
+    }
+
+    /// Runs the retry against a backend that returns `replies` in order; reports the result and every raster the
+    /// backend was given.
+    async fn run_recognition_retry(
+        replies: Vec<ExtractedDocument>,
+        max_iterations: Option<usize>,
+    ) -> (ExtractedDocument, Vec<Vec<u8>>) {
+        let models = tempfile::tempdir().unwrap();
+        for language in ["eng", "osd"] {
+            std::fs::write(models.path().join(format!("{language}.traineddata")), b"fixture").unwrap();
+        }
+        let ocr = OcrConfig {
+            tessdata_path: Some(models.path().into()),
+            ..Default::default()
+        };
+        let config = ExtractionConfig {
+            ocr: Some(ocr.clone()),
+            security_limits: max_iterations.map(|max_iterations| SecurityLimits {
+                max_iterations,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let retry = OrientationRetry::new(&config, OcrQualityThresholds::default());
+        let scripted = Arc::new(ScriptedBackend {
+            replies: parking_lot::Mutex::new(replies.into()),
+            rasters: Default::default(),
+        });
+        let backend: Arc<dyn OcrBackend> = scripted.clone();
+        let result = retry
+            .after_ocr(
+                &backend,
+                Arc::new(png_with_one_red_corner()),
+                &ocr,
+                Ok(inverted_primary()),
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+        let rasters = scripted.rasters.lock().clone();
+        (result, rasters)
+    }
+
+    #[tokio::test]
+    async fn page_down_evidence_rereads_the_half_turned_raster_and_returns_only_the_table() {
+        let (result, rasters) = run_recognition_retry(vec![marked_recognition_read(), table_candidate()], None).await;
+        assert_eq!(rasters.len(), 2, "one recognition-orientation read, one half-turn read");
+        let decoded = |bytes: &[u8]| image::load_from_memory(bytes).unwrap().to_rgb8();
+        assert_eq!(decoded(&rasters[0]).get_pixel(0, 0).0, [255, 0, 0]);
+        let half_turned = decoded(&rasters[1]);
+        assert_eq!(half_turned.get_pixel(7, 5).0, [255, 0, 0]);
+        assert_eq!(half_turned.get_pixel(0, 0).0, [0, 0, 0]);
+        assert_eq!(result.tables.len(), 1);
+        assert!(
+            !result
+                .metadata
+                .additional
+                .contains_key(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
+        );
+    }
+
+    #[tokio::test]
+    async fn without_page_down_evidence_the_half_turn_is_never_read() {
+        let mut unmarked = marked_recognition_read();
+        unmarked
+            .metadata
+            .additional
+            .remove(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY);
+        let (result, rasters) = run_recognition_retry(vec![unmarked, table_candidate()], None).await;
+        assert_eq!(rasters.len(), 1);
+        assert!(result.tables.is_empty());
+        assert_eq!(result.content, "zzq xkv");
+    }
+
+    #[tokio::test]
+    async fn an_exhausted_attempt_budget_keeps_the_primary_without_a_half_turn_read() {
+        let (result, rasters) =
+            run_recognition_retry(vec![marked_recognition_read(), table_candidate()], Some(1)).await;
+        assert_eq!(rasters.len(), 1);
+        assert_eq!(result.content, "zzq xkv");
+        assert!(
+            !result
+                .metadata
+                .additional
+                .contains_key(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rejected_half_turn_keeps_the_primary_and_no_marker() {
+        let mut broken = table_candidate();
+        broken.tables[0].cells[0][1] = "31,299".into();
+        let (result, rasters) = run_recognition_retry(vec![marked_recognition_read(), broken], None).await;
+        assert_eq!(rasters.len(), 2);
+        assert_eq!(result.content, "zzq xkv");
+        assert!(
+            !result
+                .metadata
+                .additional
+                .contains_key(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
+        );
     }
 }

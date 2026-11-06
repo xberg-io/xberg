@@ -16,8 +16,9 @@ expected_names=()
 case "$profile" in
 warm)
   features+=",auto-rotate-tract"
-  expected=14
+  expected=15
   expected_names=(
+    caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
     cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
@@ -42,8 +43,9 @@ warm)
   fi
   ;;
 native)
-  expected=8
+  expected=9
   expected_names=(
+    caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
     cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
