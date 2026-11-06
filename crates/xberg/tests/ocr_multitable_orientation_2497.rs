@@ -17,8 +17,8 @@ const MODEL_CACHE_PATH: &str = concat!(
 );
 const MODEL_HASH: &str = "6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947";
 
-fn in_pinned_child() -> bool {
-    if env::var(CHILD).as_deref() == Ok(CASE) {
+fn in_pinned_child(case: &str) -> bool {
+    if env::var(CHILD).as_deref() == Ok(case) {
         return true;
     }
     let Some(model) = env::var_os("XBERG_ORIENTATION_TEST_MODEL") else {
@@ -39,10 +39,14 @@ fn in_pinned_child() -> bool {
     let tessdata = temp.path().join("tessdata");
     fs::create_dir(&tessdata).unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("enable bundle-tessdata-eng");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
     fs::write(tessdata.join("eng.traineddata"), english).unwrap();
     let output = Command::new(env::current_exe().unwrap())
-        .args(["--exact", CASE, "--nocapture"])
-        .env(CHILD, CASE)
+        .args(["--exact", case, "--nocapture"])
+        .env(CHILD, case)
         .env("HF_HOME", temp.path())
         .env("HF_HUB_CACHE", hub)
         .env("HF_HUB_OFFLINE", "1")
@@ -156,7 +160,7 @@ fn assert_detached_upright_structure(document: &ExtractedDocument) {
 
 #[tokio::test]
 async fn implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence() {
-    if !in_pinned_child() {
+    if !in_pinned_child(CASE) {
         return;
     }
     let expected: Vec<Vec<Vec<String>>> =
@@ -217,5 +221,67 @@ async fn implicit_rotation_retains_primary_when_two_tables_lack_complete_primary
     assert_tables(&implicit, &expected, (792., 612.48));
     for (actual, control) in implicit.tables.iter().zip(forced.tables) {
         assert_eq!(actual.bounding_box, control.bounding_box);
+    }
+}
+
+#[tokio::test]
+async fn implicit_sideways_heading_recovers_exact_source_and_table_bounds() {
+    if !in_pinned_child("implicit_sideways_heading_recovers_exact_source_and_table_bounds") {
+        return;
+    }
+    let pdf = include_bytes!("fixtures/ocr/detached_heading_frame_2497/heading-table-90.pdf");
+    assert_eq!(
+        hex::encode(Sha256::digest(pdf)),
+        "1128fc7e3586699c33b14372e71265e2cec284311c493a7a85ac1c0ac30073a0"
+    );
+    let expected: Vec<Vec<String>> =
+        serde_json::from_str(include_str!("fixtures/ocr/detached_heading_frame_2497/cells.json")).unwrap();
+    assert_eq!(expected.len(), 46);
+    assert!(expected.iter().all(|row| row.len() == 8));
+    let forced = extract(
+        pdf,
+        Some(OcrConfig {
+            auto_rotate: true,
+            ..Default::default()
+        }),
+    )
+    .await;
+    assert_heading_and_table(&forced, &expected);
+    let implicit = extract(pdf, None).await;
+    assert_heading_and_table(&implicit, &expected);
+    assert_eq!(implicit.tables[0].bounding_box, forced.tables[0].bounding_box);
+    assert!(implicit.ocr_elements.is_none());
+}
+
+#[track_caller]
+fn assert_heading_and_table(document: &ExtractedDocument, expected: &[Vec<String>]) {
+    const HEADING: &str = "Cedar Company Ledger Summary For The March Quarter Report 2026";
+    let [table] = document.tables.as_slice() else {
+        panic!("expected one table, found {}", document.tables.len());
+    };
+    assert_eq!(table.cells.as_slice(), expected);
+    assert_eq!(table.page_number, 1);
+    let [page] = document.pages.as_deref().unwrap() else {
+        panic!("expected one extracted page");
+    };
+    let [page_table] = page.tables.as_slice() else {
+        panic!("expected one page table");
+    };
+    assert_eq!(page_table.cells, table.cells);
+    assert_eq!(page_table.bounding_box, table.bounding_box);
+    assert_eq!(page.content.trim(), format!("{HEADING}\n\n{}", table.markdown.trim()));
+    let words = HEADING
+        .split_whitespace()
+        .chain(expected.iter().flatten().flat_map(|cell| cell.split_whitespace()))
+        .collect::<Vec<_>>();
+    assert_eq!(words.len(), 470);
+    assert_eq!(document.content.split_whitespace().collect::<Vec<_>>(), words);
+    let bbox = table.bounding_box.expect("table bounds in rotated PDF page points");
+    let source_bounds = [53.76, 36.48, 689.28, 583.68];
+    for (actual, expected) in [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().zip(source_bounds) {
+        assert!(
+            (actual - expected).abs() < 0.01,
+            "point coordinate {actual} != {expected}"
+        );
     }
 }
