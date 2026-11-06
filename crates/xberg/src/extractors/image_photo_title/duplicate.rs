@@ -11,7 +11,7 @@ fn foreground_columns(mask: &GrayImage, word: &MaskWord) -> Option<Vec<Rect>> {
     for x in word.bounds.left..word.bounds.right {
         let mut foreground = (word.bounds.top..word.bounds.bottom).filter(|&y| mask.get_pixel(x, y).0[0] == 0);
         let Some(top) = foreground.next() else { continue };
-        let bottom = foreground.last().unwrap_or(top) + 1;
+        let bottom = foreground.next_back().unwrap_or(top) + 1;
         if let Some(run) = runs.last_mut().filter(|run| run.right == x) {
             run.right += 1;
             run.top = run.top.min(top);

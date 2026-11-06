@@ -415,6 +415,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recover rejected multirow painted double-rule grids.** (#2614)
   Preserve tables the detector already accepts, including their empty columns.
 
+- **(ocr): Remove a certified duplicate glyph from a recovered photo title.** (#2312)
+  Both text projections must identify the same standalone source occurrence.
+
+- **(pdf): Recover hidden CCITT prose across two audited content streams.** (#2425)
+  The split path requires bounded, independently complete raw paint and text streams.
+
 - **(ocr): Recover certified tall grayscale predictor strips down to 120 DPI.** (#2502)
   Require each recovered strip to match the source ink rows.
 
