@@ -756,14 +756,19 @@ def test_swift_ios_builds_pin_the_deployment_target_to_the_manifest_floor() -> N
 def test_swift_macos_builds_pin_the_deployment_target_to_the_manifest_floor() -> None:
     root = Path(__file__).parents[2]
     floors = set()
-    for manifest in (root / "Package.swift", root / "packages" / "swift" / "Package.swift"):
-        floor = re.findall(r"\.macOS\(\.v(\d+)\)", manifest.read_text())
-        assert len(floor) == 1, f"{manifest} must declare exactly one macOS floor"
+    for path in ("Package.swift", "packages/swift/Package.swift", "e2e/swift_e2e/Package.swift"):
+        manifest = (root / path).read_text()
+        floor = re.findall(r"\.macOS\(\.v(\d+)\)", manifest)
+        assert len(floor) == 1, f"{path} must declare exactly one macOS floor"
+        assert manifest.splitlines()[0] == "// swift-tools-version: 6.2", path
         floors.add(int(floor[0]))
     assert len(floors) == 1, f"Swift manifests declare different macOS floors: {sorted(floors)}"
     floor = floors.pop()
     # The bundled ONNX Runtime prebuilt requires macOS 13.4 and `.macOS(.vN)` holds only a major.
     assert floor >= 14, f"macOS floor {floor} is below the bundled ONNX Runtime's 13.4"
+    alef_config = tomllib.loads((root / "alef.toml").read_text())
+    swift_crate = next(crate["swift"] for crate in alef_config["crates"] if crate["name"] == "xberg")
+    assert swift_crate["min_macos_version"] == f"{floor}.0"
     swift = job_block(WORKFLOW.read_text(), "swift-target")
     build = re.search(
         r"(?ms)^      - uses: xberg-io/actions/build-swift-artifactbundle@[^\n]+\n(.*?)(?=^      - |\Z)", swift

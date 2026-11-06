@@ -188,6 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(swift): Target macOS 14 for the Apple Silicon Swift package.** (#2528)
+  The Swift tools version stays at 6.2 and the iOS deployment target stays at 16.
+
 - **(pdf): Preserve verified scanned figure captions as prose.** (#2530)
   Uncached Plain extraction can remove a false caption table when stock OCR and the page raster confirm the same text and geometry.
 

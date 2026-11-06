@@ -11,7 +11,7 @@ import PackageDescription
 let package = Package(
   name: "Xberg",
   platforms: [
-    .macOS(.v26),
+    .macOS(.v14),
     .iOS(.v16),
   ],
   products: [
