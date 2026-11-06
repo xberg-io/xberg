@@ -214,12 +214,22 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	grep -Fq -- '-p xberg-libheif --all-targets' "$XBERG_TRACE"
 }
 
-@test "Rust unit runner should avoid unsupported candle features on Linux aarch64" {
-	export TEST_OS=Linux TEST_ARCH=aarch64
+@test "Rust unit runner should chunk tests without unsupported candle features on Linux aarch64" {
+	prepare_chunk_metadata '[{"name":"first-case","kind":["test"]},{"name":"second_case","kind":["test"]}]'
+	export TEST_ARCH=aarch64
+	mkdir -p "$REPO_ROOT/target/debug/deps"
+	touch "$REPO_ROOT/target/debug/deps/"{first_case-abc123,second_case-def456,first_case-abc123.rlib}
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 14 ]
-	grep -Fq -- '--features full-no-heic,heic,formula-recognition,bundle-tessdata-eng' "$XBERG_TRACE"
+	xberg_assert_output_contains 'integration-test targets: 2 (chunks of 1)'
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 16 ]
+	local features='full-no-heic,heic,formula-recognition,bundle-tessdata-eng'
+	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --lib --benches --verbose" "$XBERG_TRACE"
+	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --test first-case --verbose" "$XBERG_TRACE"
+	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --test second_case --verbose" "$XBERG_TRACE"
+	[ ! -e "$REPO_ROOT/target/debug/deps/first_case-abc123" ]
+	[ ! -e "$REPO_ROOT/target/debug/deps/second_case-def456" ]
+	[ -f "$REPO_ROOT/target/debug/deps/first_case-abc123.rlib" ]
 	grep -Fq -- '--exclude xberg-ffi --exclude xberg-php --exclude xberg-dart --exclude xberg-swift' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-gliner --features ort-dynamic' "$XBERG_TRACE"
 	refute_trace_pattern '^mise '
