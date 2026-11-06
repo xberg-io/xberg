@@ -487,9 +487,11 @@ pub(super) async fn collect_xobject_recovery_result(
                 page = page_idx,
                 "force_ocr fallback: OCR of embedded image bytes failed: {error}"
             );
-            outcome
-                .failure_causes
-                .push(format!("image {}: {error}", fallback.paint_order));
+            outcome.failure_causes.push(format!(
+                "image {}: {}",
+                fallback.paint_order,
+                source_dpi::failure_cause(&error)
+            ));
             return Ok(());
         }
     };
@@ -638,7 +640,9 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     if context.use_proven_source_dpi {
         let proven_dpis = crate::pdf::native::proven_dpi::proven_source_dpis(render_doc, page_idx);
         for image in &mut fallback_images {
-            image.source_dpi = proven_dpis.get(&image.paint_order).copied();
+            image.source_dpi = proven_dpis
+                .get(&image.paint_order)
+                .and_then(|placement| placement.confirmed_by(image.format, &image.bytes));
         }
     }
     let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();

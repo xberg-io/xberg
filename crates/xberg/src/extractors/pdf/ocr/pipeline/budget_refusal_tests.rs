@@ -107,3 +107,106 @@ async fn empty_embedded_image_retry_surfaces_the_original_render_refusal() {
         );
     }
 }
+
+#[test]
+fn retry_causes_are_capped_and_keep_the_typed_source() {
+    use crate::extractors::pdf::ocr::pipeline::with_retry_causes;
+    let original = crate::XbergError::Parsing {
+        message: "Failed to render PDF page 1".to_owned(),
+        source: Some(Box::new(std::io::Error::other("render refused"))),
+    };
+    let causes: Vec<String> = (0..5)
+        .map(|i| format!("image {i}: exceeds a configured size limit"))
+        .collect();
+    let crate::XbergError::Parsing { message, source } = with_retry_causes(original, &causes) else {
+        panic!("a parsing error stays a parsing error");
+    };
+    assert!(
+        message.contains("image 2: exceeds a configured size limit; +2 more"),
+        "{message}"
+    );
+    assert!(!message.contains("image 3"), "{message}");
+    assert_eq!(source.expect("typed source kept").to_string(), "render refused");
+
+    let untouched = crate::XbergError::Parsing {
+        message: "Failed to render PDF page 1".to_owned(),
+        source: None,
+    };
+    let crate::XbergError::Parsing { message, .. } = with_retry_causes(untouched, &[]) else {
+        panic!("a parsing error stays a parsing error");
+    };
+    assert_eq!(message, "Failed to render PDF page 1");
+}
+
+struct RecordingBackend(Arc<std::sync::Mutex<Vec<Option<serde_json::Value>>>>);
+
+impl Plugin for RecordingBackend {
+    fn name(&self) -> &str {
+        "recording-source-dpi-backend"
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_owned()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for RecordingBackend {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<crate::ExtractedDocument> {
+        self.0.lock().unwrap().push(config.backend_options.clone());
+        Ok(crate::ExtractedDocument::default())
+    }
+}
+
+async fn options_seen_by_the_backend(
+    use_proven_source_dpi: bool,
+    caller_options: Option<serde_json::Value>,
+) -> Vec<Option<serde_json::Value>> {
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let backend: Arc<dyn OcrBackend> = Arc::new(RecordingBackend(seen.clone()));
+    let (document, ..) = open_pdf_for_full_ocr(TALL_JPEG).unwrap();
+    let mut budget = crate::extractors::security::SecurityBudget::from_limits(&SecurityLimits::default());
+    let ocr_config = OcrConfig {
+        backend_options: caller_options,
+        ..Default::default()
+    };
+    let mut context = XObjectRecoveryContext::with_budget(&mut budget, None);
+    context.use_proven_source_dpi = use_proven_source_dpi;
+    let outcome =
+        super::super::rendering::recover_page_text_from_image_xobjects(&backend, &document, 0, 1, &ocr_config, context)
+            .await
+            .unwrap()
+            .expect("the page paints one JPEG");
+    assert_eq!(outcome.attempted, 1);
+    let recorded = seen.lock().unwrap().clone();
+    recorded
+}
+
+#[tokio::test]
+async fn the_retry_hands_the_backend_the_confirmed_resolution_only_when_asked() {
+    let dpi = |seen: &[Option<serde_json::Value>]| {
+        seen.iter()
+            .map(|options| {
+                options
+                    .as_ref()
+                    .and_then(|o| o.get("source_dpi"))
+                    .and_then(serde_json::Value::as_f64)
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(dpi(&options_seen_by_the_backend(true, None).await), [Some(150.0)]);
+    assert_eq!(dpi(&options_seen_by_the_backend(false, None).await), [None]);
+    let caller = Some(serde_json::json!({ "source_dpi": 96.0 }));
+    assert_eq!(dpi(&options_seen_by_the_backend(true, caller).await), [Some(96.0)]);
+}

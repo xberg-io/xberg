@@ -7178,18 +7178,28 @@ fn automatic_ocr_may_read_proven_source_dpi(config: &ExtractionConfig) -> bool {
         && config.force_ocr_pages.is_none()
 }
 
+/// Most image causes a page error names before summarizing the rest.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+const RETRY_CAUSES_SHOWN: usize = 3;
+
 /// The error of a page whose embedded-image retry also recovered nothing, naming why each image
 /// failed. The typed source stays, so callers still match on the original cause.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn with_retry_causes(error: crate::XbergError, causes: &[String]) -> crate::XbergError {
     match error {
-        crate::XbergError::Parsing { message, source } if !causes.is_empty() => crate::XbergError::Parsing {
-            message: format!(
-                "{message}; embedded-image retry recovered no text ({})",
-                causes.join("; ")
-            ),
-            source,
-        },
+        crate::XbergError::Parsing { message, source } if !causes.is_empty() => {
+            let mut named = causes.iter().take(RETRY_CAUSES_SHOWN).cloned().collect::<Vec<_>>();
+            if causes.len() > RETRY_CAUSES_SHOWN {
+                named.push(format!("+{} more", causes.len() - RETRY_CAUSES_SHOWN));
+            }
+            crate::XbergError::Parsing {
+                message: format!(
+                    "{message}; embedded-image retry recovered no text ({})",
+                    named.join("; ")
+                ),
+                source,
+            }
+        }
         other => other,
     }
 }
