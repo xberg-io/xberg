@@ -93,7 +93,12 @@
 /// Invalidate cached PDFs that removed explicitly requested geometric headers or footers. ~keep
 /// Invalidate cached OCR of images without resolution metadata, now sized by their text (#2127). ~keep
 /// Invalidate standalone photo titles appended after lower source text (#2611). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 13;
+/// Invalidate cached PDFs missing a source-verified outlined body (#2313). ~keep
+/// Invalidate cached PDFs with incomplete painted table rows (#2613, #2614). ~keep
+/// Invalidate cached PDFs with merged parallel legend lines (#2615). ~keep
+/// Invalidate cached OCR that missed strips with default predictor parameters (#2620). ~keep
+/// Invalidate cached oversized-image OCR under the old workspace policy (#2618, #2619). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 14;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;

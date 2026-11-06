@@ -124,3 +124,56 @@ async fn a_raster_figure_keeps_its_native_text_extraction_method() {
     }
     assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Native));
 }
+
+#[derive(Default)]
+struct DocumentCache {
+    entry: std::sync::Mutex<Option<(String, Vec<u8>)>>,
+    hits: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl xberg::engine::seams::CacheBackend for DocumentCache {
+    async fn get(&self, key: &str) -> Option<Vec<u8>> {
+        let guard = self.entry.lock().unwrap();
+        let (_, bytes) = guard.as_ref().filter(|(stored_key, _)| stored_key == key)?;
+        self.hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Some(bytes.clone())
+    }
+
+    async fn put(&self, key: &str, value: Vec<u8>, _ttl: Option<std::time::Duration>) {
+        *self.entry.lock().unwrap() = Some((key.to_owned(), value));
+    }
+}
+
+#[tokio::test]
+async fn cached_auto_ocr_keeps_the_recovered_outline_text() {
+    use std::sync::{Arc, atomic::Ordering};
+
+    let cache = Arc::new(DocumentCache::default());
+    let engine = xberg::engine::Engine::builder()
+        .with_cache_backend(cache.clone())
+        .build();
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig::default()),
+        use_cache: true,
+        ..Default::default()
+    };
+    let extract = || {
+        engine.extract(
+            ExtractInput::from_bytes(OUTLINED.to_vec(), "application/pdf", None),
+            &config,
+        )
+    };
+    let cold = extract().await.unwrap();
+    assert!(cold.errors.is_empty(), "{:?}", cold.errors);
+    let [cold] = <[_; 1]>::try_from(cold.results).unwrap();
+    assert!(PROSE.iter().all(|line| cold.content.contains(line)));
+    assert_eq!(cold.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    assert_eq!(cache.hits.load(Ordering::Relaxed), 0);
+
+    let warm = extract().await.unwrap();
+    assert!(warm.errors.is_empty(), "{:?}", warm.errors);
+    let [warm] = <[_; 1]>::try_from(warm.results).unwrap();
+    assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+    assert_eq!(serde_json::to_value(cold).unwrap(), serde_json::to_value(warm).unwrap());
+}

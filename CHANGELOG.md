@@ -398,6 +398,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
   Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
 
+- **(ocr): Downscale oversized PNG and TIFF inputs within the workspace budget.** (#2618, #2619)
+  Preserve explicit preprocessing and use a bounded DPI fallback when the source does not supply one.
+
+- **(ocr): Recover tall scans with default PNG predictor parameters.** (#2620)
+  Accept omitted values when the PDF defaults match the source image.
+
+- **(pdf): Keep parallel bold legend rows separate using their geometry.** (#2615)
+  Punctuation, case and digits no longer change the decision for equally aligned entries.
+
+- **(pdf): Keep wrapped text in painted record rows with adjacent cells and contrasting spacers.** (#2613)
+
+- **(pdf): Recover rejected multirow painted double-rule grids.** (#2614)
+  Preserve tables the detector already accepts, including their empty columns.
+
+- **(pdf): Recover verified outlined prose beside sparse native text.** (#2313)
+  Auto OCR checks bounded vector rows and preserves the original native text.
+
 - **(ocr): Place recovered PNG photo titles in source order.** (#2611)
   Use OCR line geometry to place the title while preserving the original document and page text.
 
