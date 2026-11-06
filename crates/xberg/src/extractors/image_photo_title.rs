@@ -87,7 +87,7 @@ pub(super) fn eligible(config: &ExtractionConfig, ocr: &OcrConfig, mime_type: &s
         return false;
     }
     mime_type.eq_ignore_ascii_case("image/png")
-        && config.output_format == OutputFormat::Plain
+        && supports_output(config)
         && config.images.is_none()
         && !config.force_ocr
         && config.force_ocr_pages.is_none()
@@ -95,6 +95,20 @@ pub(super) fn eligible(config: &ExtractionConfig, ocr: &OcrConfig, mime_type: &s
         && config.redaction.is_none()
         && config.structured_extraction.is_none()
         && is_default_english_profile(ocr)
+}
+
+fn supports_output(config: &ExtractionConfig) -> bool {
+    match config.output_format {
+        OutputFormat::Plain => true,
+        OutputFormat::Markdown => {
+            #[cfg(feature = "redaction")]
+            if crate::text::redaction::external::external_redaction_is_scoped() {
+                return false;
+            }
+            config.escape_markdown && config.chunking.is_none()
+        }
+        _ => false,
+    }
 }
 
 fn is_default_english_profile(ocr: &OcrConfig) -> bool {
@@ -514,7 +528,25 @@ async fn recover(
     Ok(Some(Title { text, bounds }))
 }
 
-pub(super) fn append(document: &mut InternalDocument, title: Title) {
+fn preserves_markdown_page(document: &InternalDocument) -> bool {
+    document.pre_rendered_content.is_none()
+        && document.annotations.as_ref().is_none_or(Vec::is_empty)
+        && document.images.is_empty()
+        && document.elements.iter().all(|element| {
+            element.page.is_none()
+                && element.annotations.is_empty()
+                && matches!(
+                    element.kind,
+                    ElementKind::Paragraph | ElementKind::Heading { .. } | ElementKind::Image { image_index: 0 }
+                )
+        })
+}
+
+pub(super) fn append(document: &mut InternalDocument, title: Title, output_format: &OutputFormat) {
+    // Tagged elements would make Markdown rerender the page instead of keeping its raw OCR body.
+    if *output_format == OutputFormat::Markdown && !preserves_markdown_page(document) {
+        return;
+    }
     let Some([page]) = document.prebuilt_pages.as_deref_mut() else {
         return;
     };

@@ -7,7 +7,7 @@
 ))]
 
 use sha2::{Digest, Sha256};
-use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, PageConfig, extract};
+use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig, extract};
 
 const TITLE: &str = "SECTION TITLE";
 const TITLE_SUFFIX: &str = "\n\nSECTION TITLE";
@@ -138,19 +138,107 @@ async fn leaves_requested_document_structure_untouched() {
     assert!(!document.pages.unwrap()[0].content.contains(TITLE));
 }
 
+fn remove_markdown_title(document: &mut ExtractedDocument) {
+    let before = document
+        .content
+        .strip_suffix("\n\nSECTION TITLE\n")
+        .expect("append only the certified title paragraph to the original Markdown");
+    assert!(!before.contains(TITLE));
+    document.content = format!("{before}\n");
+    let [page] = document.pages.as_deref_mut().expect("requested pages") else {
+        panic!("one standalone PNG page")
+    };
+    assert_eq!(page.page_number, 1);
+    let before = page
+        .content
+        .strip_suffix(TITLE_SUFFIX)
+        .expect("retain the entire raw page before the title");
+    assert!(!before.contains(TITLE));
+    page.content.truncate(before.len());
+}
+
+fn markdown_config() -> ExtractionConfig {
+    ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        ..png_config()
+    }
+}
+
+#[tokio::test]
+async fn recovers_photo_title_in_markdown() {
+    let config = markdown_config();
+    let mut reference_config = config.clone();
+    // The standalone extractor sets this same effective OCR format. Supplying it explicitly
+    // disqualifies the optional title proof while leaving the ordinary Markdown read unchanged.
+    reference_config.ocr.as_mut().unwrap().output_format = Some(OutputFormat::Markdown);
+    let reference = extract_png(PHOTO, &reference_config).await;
+    assert_body(
+        &reference.content,
+        "b48f67548d303c58954cbe54c95bd7545eca1de64a73b45e59f4dafa8ae37fbf",
+    );
+    assert_body(
+        &reference.pages.as_ref().unwrap()[0].content,
+        "2ab44fd7d097fd8353d7c6f346ce3a4ba370e64fec2871d7131de9382012507c",
+    );
+    assert_eq!(
+        reference.pages.as_ref().unwrap()[0]
+            .ocr_confidence
+            .as_ref()
+            .unwrap()
+            .word_count,
+        215
+    );
+    let mut recovered = extract_png(PHOTO, &config).await;
+    assert!(recovered.tables.is_empty());
+    remove_markdown_title(&mut recovered);
+    assert_same_document(&reference, &recovered);
+}
+
+#[tokio::test]
+async fn preserves_markdown_table_and_protected_words_with_photo_title_policy() {
+    let config = markdown_config();
+    let mut reference_config = config.clone();
+    reference_config.ocr.as_mut().unwrap().output_format = Some(OutputFormat::Markdown);
+    for (fixture, table_count, word_count) in [(TABLE, 2, 318), (PARTIAL, 0, 21), (NUMERIC, 0, 3)] {
+        let actual = extract_png(fixture, &config).await;
+        let reference = extract_png(fixture, &reference_config).await;
+        assert_eq!(actual.tables.len(), table_count);
+        assert_eq!(
+            actual.pages.as_ref().unwrap()[0]
+                .ocr_confidence
+                .as_ref()
+                .unwrap()
+                .word_count,
+            word_count
+        );
+        assert!(!actual.content.contains(TITLE));
+        assert_same_document(&reference, &actual);
+    }
+}
+
 const CACHE_CASE: &str = "recovers_the_photo_title_with_extraction_cache_enabled";
+const MARKDOWN_CACHE_CASE: &str = "recovers_markdown_photo_title_with_extraction_cache_enabled";
 const CACHE_CHILD: &str = "XBERG_PHOTO_TITLE_CACHE_TEST_CHILD";
 
 #[tokio::test]
 async fn recovers_the_photo_title_with_extraction_cache_enabled() {
     if std::env::var(CACHE_CHILD).as_deref() == Ok(CACHE_CASE) {
-        check_photo_title_cache_paths().await;
+        check_photo_title_cache_paths(png_config()).await;
     } else {
-        run_isolated_cache_test();
+        run_isolated_cache_test(CACHE_CASE);
     }
 }
 
-fn run_isolated_cache_test() {
+#[tokio::test]
+async fn recovers_markdown_photo_title_with_extraction_cache_enabled() {
+    if std::env::var(CACHE_CHILD).as_deref() == Ok(MARKDOWN_CACHE_CASE) {
+        check_photo_title_cache_paths(markdown_config()).await;
+    } else {
+        run_isolated_cache_test(MARKDOWN_CACHE_CASE);
+    }
+}
+
+fn run_isolated_cache_test(case: &str) {
     let root = tempfile::tempdir().expect("isolated OCR data and cache");
     let tessdata = root.path().join("tessdata");
     std::fs::create_dir(&tessdata).expect("create isolated tessdata");
@@ -161,8 +249,8 @@ fn run_isolated_cache_test() {
     );
     std::fs::write(tessdata.join("eng.traineddata"), english).expect("write bundled English fixture");
     let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-        .args(["--exact", CACHE_CASE, "--nocapture"])
-        .env(CACHE_CHILD, CACHE_CASE)
+        .args(["--exact", case, "--nocapture"])
+        .env(CACHE_CHILD, case)
         .env("TESSDATA_PREFIX", tessdata)
         .env("XBERG_CACHE_DIR", root.path().join("cache"))
         .output()
@@ -178,7 +266,7 @@ fn run_isolated_cache_test() {
     );
 }
 
-async fn check_photo_title_cache_paths() {
+async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {
     use std::sync::{Arc, atomic::Ordering};
     use tracing_subscriber::layer::SubscriberExt as _;
 
@@ -192,11 +280,15 @@ async fn check_photo_title_cache_paths() {
         .build();
     let config = ExtractionConfig {
         use_cache: ExtractionConfig::default().use_cache,
-        ..png_config()
+        ..uncached.clone()
     };
     assert!(config.use_cache, "exercise the default cache policy");
     let cold = read_engine(&engine, PHOTO, &config).await;
-    assert_cached_title(&cold);
+    if config.output_format == OutputFormat::Markdown {
+        remove_markdown_title(&mut cold.clone());
+    } else {
+        assert_cached_title(&cold);
+    }
     assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
     assert_eq!(cache.hits.load(Ordering::SeqCst), 0);
     let first_lookup = lookups.0.lock().unwrap().clone();
@@ -224,7 +316,6 @@ async fn check_photo_title_cache_paths() {
         "a second Engine must miss its outer cache and hit the same built-in OCR key"
     );
 
-    let uncached = png_config();
     assert_same_document(&cold, &read_engine(&engine, PHOTO, &uncached).await);
     for fixture in [NUMERIC, TABLE] {
         let baseline = read_engine(&engine, fixture, &uncached).await;
@@ -254,7 +345,7 @@ fn assert_same_document(expected: &ExtractedDocument, actual: &ExtractedDocument
     assert_eq!(
         serde_json::to_value(expected).unwrap(),
         serde_json::to_value(actual).unwrap(),
-        "the complete public document must be identical across cache modes"
+        "the complete public document must be identical after accounting for the certified title"
     );
 }
 
