@@ -28,6 +28,8 @@ pub(crate) mod test_recovery_model;
 pub(crate) mod validation;
 
 pub(crate) use api_pool::tesseract_api_capacity;
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use execution::render_inline_ocr_table_content;
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) use execution::{light_page_foreground_mode, lower_mode_mask_has_text_structure};
 

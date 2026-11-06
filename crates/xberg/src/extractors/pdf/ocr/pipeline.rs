@@ -3229,6 +3229,13 @@ pub(super) async fn extract_with_ocr_for_page(
         && !has_stored_scan
         && super::tall_source::supports(config, base_ocr_config)
         && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut tall_ordered_primary = None;
     let backend_confidence_semantics = backend.confidence_semantics();
     // Owned up front: the per-page summaries below outlive the borrow-heavy OCR loop, and
     // the backend that actually produced a page is part of what `ocr_confidence` reports. ~keep
@@ -3732,8 +3739,7 @@ pub(super) async fn extract_with_ocr_for_page(
         // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         {
-            let mut join_set: JoinSet<(usize, u32, u32, u32, crate::Result<crate::types::ExtractedDocument>)> =
-                JoinSet::new();
+            let mut join_set = JoinSet::new();
             for (page_idx, image_data, width, height) in &encoded_batch {
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
@@ -3744,7 +3750,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 // real OCR work to get it. ~keep
                 if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     let task = crate::engine::seams::inherit_progress(async move {
-                        (idx, 0, 0, 0, Err(crate::XbergError::Cancelled))
+                        (idx, 0, 0, 0, Err(crate::XbergError::Cancelled), None)
                     });
                     join_set.spawn(crate::core::extractor::cacheability::inherit(task));
                     continue;
@@ -3846,6 +3852,17 @@ pub(super) async fn extract_with_ocr_for_page(
                     .and_then(|images| images.get(idx - batch_start))
                     .map_or(0, |image| image.as_bytes().len());
                 let retained_source_bytes = retained_ocr_source_bytes(image_data, &upright_data, retained_pixels);
+                #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+                let ordered_raster = (try_tall_source
+                    && super::tall_source::augmentation::supports_raster_height(*height)
+                    && total_pages == 1
+                    && page_index_offset == 0
+                    && idx == 0
+                    && correction_degrees == 0
+                    && detached_page.is_none()
+                    && lazy_pdf_render_state.is_some()
+                    && config.pages.as_ref().is_none_or(|pages| !pages.insert_page_markers))
+                .then_some((*width, *height, image_data.capacity()));
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -3854,6 +3871,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             upright_width,
                             upright_height,
                             Err(crate::XbergError::Cancelled),
+                            None,
                         );
                     }
                     let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
@@ -3862,7 +3880,9 @@ pub(super) async fn extract_with_ocr_for_page(
                         retained_source_bytes,
                     ) {
                         Ok(configs) => configs,
-                        Err(error) => return (idx, correction_degrees, upright_width, upright_height, Err(error)),
+                        Err(error) => {
+                            return (idx, correction_degrees, upright_width, upright_height, Err(error), None);
+                        }
                     };
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let primary_config = retry
@@ -3889,8 +3909,18 @@ pub(super) async fn extract_with_ocr_for_page(
                     } else {
                         read.await
                     };
+                    // Stock orientation preserves table-bearing primaries but later restores
+                    // the caller's public element policy. Capture the complete internal read here.
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let ordered_proof = ordered_raster.zip(result.as_ref().ok()).and_then(|(raster, document)| {
+                        super::tall_source::augmentation::PrimaryProof::capture(
+                            document,
+                            document.ocr_elements.as_deref()?,
+                            raster,
+                        )
+                    });
                     #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
-                    let result = read.await;
+                    let (result, ordered_proof) = (read.await, None::<()>);
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let result = if let Some((retry, raster)) = retry {
                         retry
@@ -3906,16 +3936,28 @@ pub(super) async fn extract_with_ocr_for_page(
                     } else {
                         result
                     };
-                    (idx, correction_degrees, upright_width, upright_height, result)
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let ordered_proof =
+                        ordered_proof.filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches(selected)));
+                    (
+                        idx,
+                        correction_degrees,
+                        upright_width,
+                        upright_height,
+                        result,
+                        ordered_proof,
+                    )
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
             }
             while let Some(join_result) = join_set.join_next().await {
-                let (page_idx, correction_degrees, upright_width, upright_height, ocr_result) =
+                let (page_idx, correction_degrees, upright_width, upright_height, ocr_result, ordered_proof) =
                     join_result.map_err(|e| crate::XbergError::Plugin {
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
+                #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+                let _ = ordered_proof;
                 #[cfg(all(
                     feature = "ocr",
                     feature = "pdf",
@@ -3924,6 +3966,9 @@ pub(super) async fn extract_with_ocr_for_page(
                 ))]
                 let ocr_result = {
                     let mut ocr_result = ocr_result;
+                    if let Some(proof) = ordered_proof {
+                        tall_ordered_primary = Some(proof);
+                    }
                     if try_tall_source
                         && correction_degrees == 0
                         && let Ok(document) = &mut ocr_result
@@ -5130,6 +5175,35 @@ pub(super) async fn extract_with_ocr_for_page(
             Some(document)
         }
         None => None,
+    };
+
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let ocr_doc = {
+        let mut ocr_doc = ocr_doc;
+        if let (Some(proof), Some(document), [page], Some((pdf, _, _))) = (
+            tall_ordered_primary,
+            ocr_doc.as_mut(),
+            page_texts.as_mut_slice(),
+            lazy_pdf_render_state.as_ref(),
+        ) && *page == result
+            && super::tall_source::augmentation::augment(
+                proof,
+                (document, page),
+                &backend,
+                config,
+                base_ocr_config,
+                pdf,
+            )
+            .await?
+        {
+            result.clone_from(page);
+        }
+        ocr_doc
     };
 
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]

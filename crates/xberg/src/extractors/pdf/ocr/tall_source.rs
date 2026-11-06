@@ -17,7 +17,10 @@ use xberg_native_pdf::content::parser::visit_complete_content_stream;
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
 
+pub(super) mod augmentation;
 mod gray_jpeg;
+mod indexed;
+mod ordered;
 mod samples;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
 use samples::{GrayPacking, decode_source_gray, flate_packing, source_frame};
