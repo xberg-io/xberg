@@ -111,8 +111,7 @@ pub(crate) fn eligible(config: &ExtractionConfig) -> bool {
     if crate::text::redaction::external::external_redaction_is_scoped() {
         return false;
     }
-    !config.use_cache
-        && config.redaction.is_none()
+    config.redaction.is_none()
         && config.output_format == OutputFormat::Plain
         && config.ocr_strategy == OcrStrategy::Auto
         && !config.force_ocr
@@ -139,9 +138,11 @@ fn eligible_tesseract(ocr: &OcrConfig) -> bool {
     ocr.backend == "tesseract"
         && ocr.effective_tesseract_language() == ["eng"]
         && ocr.element_config.is_none()
-        && ocr.tesseract_config.as_ref().is_some_and(|config| {
-            certified_psm(config).is_some() && !config.use_cache && config.preprocessing.is_none()
-        })
+        && certified_psm(ocr.tesseract_config.as_ref()).is_some()
+        && ocr
+            .tesseract_config
+            .as_ref()
+            .is_none_or(|config| config.preprocessing.is_none())
         && ocr.backend_options.is_none()
         && ocr.pipeline.is_none()
         && ocr.quality_thresholds.is_none()
@@ -153,8 +154,8 @@ fn eligible_tesseract(ocr: &OcrConfig) -> bool {
         && ocr.vlm_fallback == VlmFallbackPolicy::Disabled
 }
 
-fn certified_psm(config: &TesseractConfig) -> Option<i32> {
-    match config.psm {
+fn certified_psm(config: Option<&TesseractConfig>) -> Option<i32> {
+    match config.and_then(|config| config.psm) {
         None => Some(TessPageSegMode::PSM_AUTO as i32),
         Some(psm) if psm == TessPageSegMode::PSM_SINGLE_BLOCK as i32 => Some(psm),
         _ => None,
@@ -203,6 +204,7 @@ pub(crate) async fn process(
         ))
         .await?
     } else {
+        crate::core::extractor::cacheability::invalidate_current();
         None
     };
     super::apply_ocr_result(&mut images, index, primary, ocr, warnings);
@@ -218,7 +220,7 @@ async fn retry(
     native: &str,
     extraction: &ExtractionConfig,
 ) -> crate::Result<Option<String>> {
-    let Some(psm) = config.tesseract_config.as_ref().and_then(certified_psm) else {
+    let Some(psm) = certified_psm(config.tesseract_config.as_ref()) else {
         return Ok(None);
     };
     if !occurrences::has_primary(primary, placement.dimensions, psm) {
@@ -227,8 +229,7 @@ async fn retry(
     config.backend_options = Some(serde_json::json!({"source_dpi": placement.dpi, "use_cache": false}));
     config
         .tesseract_config
-        .as_mut()
-        .expect("eligible Tesseract configuration")
+        .get_or_insert_with(TesseractConfig::default)
         .preprocessing = Some(ImagePreprocessingConfig {
         deskew: false,
         binarization_method: "none".into(),
@@ -239,6 +240,7 @@ async fn retry(
     match result {
         Ok(result) => Ok(occurrences::insert(primary, &result, placement, native, psm)),
         Err(error) => {
+            crate::core::extractor::cacheability::invalidate_current();
             tracing::debug!(%error, "optional embedded image line OCR failed");
             Ok(None)
         }

@@ -192,6 +192,147 @@ async fn omitted_psm_keeps_actual_psm3_and_adds_only_the_missing_embedded_line()
     assert_eq!(page.content, expected);
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
+#[tokio::test]
+async fn cached_default_recovers_embedded_line_in_cold_and_warm_reads() {
+    const CHILD: &str = "XBERG_EMBEDDED_PROSE_2327_CACHE_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        run_isolated_cache_test(CHILD);
+        return;
+    }
+
+    use tracing_subscriber::layer::SubscriberExt as _;
+    let lookups = CacheLookups::default();
+    tracing::subscriber::set_global_default(tracing_subscriber::registry().with(lookups.clone())).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cached-panel.pdf");
+    let bytes = panel_pdf(false, false);
+    std::fs::write(&path, &bytes).unwrap();
+
+    let mut cached = config(None, true);
+    cached.ocr = Some(OcrConfig::default());
+    let expected = format!("{}\n\n{FIRST}\n\n{MISSING}\n\n{LAST}", NATIVE.join("\n\n"));
+    let cold = extract(bytes.clone(), &cached).await;
+    assert_eq!(cold.content, expected);
+    assert_eq!(cold.pages.as_deref().unwrap()[0].content, expected);
+    let cold_lookups = lookups.entries();
+    let [(key, false)] = cold_lookups.as_slice() else {
+        panic!("one cold primary OCR lookup: {cold_lookups:?}");
+    };
+    let inner_warm = extract(bytes, &cached).await;
+    assert_eq!(
+        serde_json::to_value(&cold).unwrap(),
+        serde_json::to_value(inner_warm).unwrap()
+    );
+    assert_eq!(lookups.entries(), [(key.clone(), false), (key.clone(), true)]);
+
+    let uri = ExtractInput::from_uri(path.to_string_lossy().into_owned());
+    let uri_cold = extract_input(uri.clone(), &cached).await;
+    assert_eq!(uri_cold.content, expected);
+    assert_eq!(uri_cold.pages.as_deref().unwrap()[0].content, expected);
+    let before_outer_warm = [(key.clone(), false), (key.clone(), true), (key.clone(), true)];
+    assert_eq!(lookups.entries(), before_outer_warm);
+    let outer_warm = extract_input(uri, &cached).await;
+    assert_eq!(
+        serde_json::to_value(&uri_cold).unwrap(),
+        serde_json::to_value(outer_warm).unwrap()
+    );
+    assert_eq!(lookups.entries(), before_outer_warm, "a warm extraction skips OCR");
+
+    cached.images.as_mut().unwrap().inject_placeholders = true;
+    let reference = extract(panel_pdf(false, false), &cached).await;
+    let nested = |doc: &ExtractedDocument| {
+        serde_json::to_value(doc.images.as_deref().unwrap()[0].ocr_result.as_ref().unwrap()).unwrap()
+    };
+    assert_eq!(nested(&cold), nested(&reference));
+    assert_eq!(nested(&uri_cold), nested(&reference));
+    assert!(!reference.content.contains(MISSING));
+
+    cached.images = None;
+    let ordinary = extract(panel_pdf(false, false), &cached).await;
+    assert_eq!(ordinary.content, expected);
+    assert_eq!(ordinary.pages.as_deref().unwrap()[0].content, expected);
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+fn run_isolated_cache_test(child: &str) {
+    use sha2::{Digest, Sha256};
+    let root = tempfile::tempdir().expect("isolated OCR cache");
+    let tessdata = root.path().join("tessdata");
+    std::fs::create_dir(&tessdata).unwrap();
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English fixture");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
+    std::fs::write(tessdata.join("eng.traineddata"), english).unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "cached_default_recovers_embedded_line_in_cold_and_warm_reads",
+            "--nocapture",
+        ])
+        .env(child, "1")
+        .env("TESSDATA_PREFIX", tessdata)
+        .env("XBERG_CACHE_DIR", root.path().join("cache"))
+        .output()
+        .expect("run isolated cache test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+#[derive(Clone, Default)]
+struct CacheLookups(std::sync::Arc<std::sync::Mutex<Vec<(String, bool)>>>);
+
+#[cfg(feature = "bundle-tessdata-eng")]
+impl CacheLookups {
+    fn entries(&self) -> Vec<(String, bool)> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for CacheLookups {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        if event.metadata().target() == "xberg::ocr::cache" {
+            let mut lookup = CacheLookup::default();
+            event.record(&mut lookup);
+            if let (Some(key), Some(hit)) = (lookup.key, lookup.hit) {
+                self.0.lock().unwrap().push((key, hit));
+            }
+        }
+    }
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+#[derive(Default)]
+struct CacheLookup {
+    key: Option<String>,
+    hit: Option<bool>,
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+impl tracing::field::Visit for CacheLookup {
+    fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+
+    fn record_bool(&mut self, field: &tracing::field::Field, hit: bool) {
+        if field.name() == "xberg.cache.hit" {
+            self.hit = Some(hit);
+        }
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, key: &str) {
+        if field.name() == "xberg.cache.key" {
+            self.key = Some(key.to_owned());
+        }
+    }
+}
+
 #[tokio::test]
 async fn embedded_line_recovery_leaves_other_modes_and_unproved_placements_untouched() {
     for (psm, late, duplicate) in [(11, false, false), (6, true, false), (6, false, true)] {
@@ -208,7 +349,7 @@ async fn embedded_line_recovery_leaves_other_modes_and_unproved_placements_untou
 }
 
 #[tokio::test]
-async fn uri_recovery_keeps_the_nested_result_and_respects_cache_opt_in() {
+async fn uri_recovery_keeps_the_nested_result_with_or_without_extraction_cache() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("embedded-panel.pdf");
     std::fs::write(&path, panel_pdf(false, false)).unwrap();
@@ -217,7 +358,11 @@ async fn uri_recovery_keeps_the_nested_result_and_respects_cache_opt_in() {
     let cached = extract_input(uri, &config(6, true)).await;
     assert_eq!(enabled.content.matches(MISSING).count(), 1);
     assert_eq!(enabled.pages.as_ref().unwrap()[0].content.matches(MISSING).count(), 1);
-    assert!(!cached.content.contains(MISSING));
+    assert_eq!(cached.content, enabled.content);
+    assert_eq!(
+        cached.pages.as_ref().unwrap()[0].content,
+        enabled.pages.as_ref().unwrap()[0].content
+    );
     assert_eq!(
         serde_json::to_value(enabled.images.as_deref().unwrap()[0].ocr_result.as_ref().unwrap()).unwrap(),
         serde_json::to_value(cached.images.as_deref().unwrap()[0].ocr_result.as_ref().unwrap()).unwrap()
