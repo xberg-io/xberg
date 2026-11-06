@@ -605,12 +605,14 @@ impl TesseractBackend {
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
         let ocr_elements = select_byte_read_elements(&mut ocr_result, config);
+        let page_down = take_recognition_page_down(&mut ocr_result.metadata, config);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
 
         let mut additional = AHashMap::new();
         for (key, value) in ocr_result.metadata {
             additional.insert(Cow::Owned(key), value);
         }
+        restore_recognition_page_down(&mut additional, page_down);
 
         let metadata = crate::types::Metadata {
             format: Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
@@ -716,6 +718,7 @@ impl OcrBackend for TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
+        let page_down = take_recognition_page_down(&mut ocr_result.metadata, config);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
         let ocr_elements = select_output_ocr_elements(ocr_result.ocr_elements.take(), config);
 
@@ -723,6 +726,7 @@ impl OcrBackend for TesseractBackend {
         for (key, value) in ocr_result.metadata {
             additional.insert(Cow::Owned(key), value);
         }
+        restore_recognition_page_down(&mut additional, page_down);
 
         let metadata = crate::types::Metadata {
             format: Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
@@ -1057,6 +1061,27 @@ fn warnings_from_ocr_metadata(
     }
 
     warnings
+}
+
+/// Only an extraction that asked for word evidence is an orientation retry; any other caller never
+/// sees the recognition-orientation marker. ~keep
+fn take_recognition_page_down(
+    metadata: &mut std::collections::HashMap<String, serde_json::Value>,
+    config: &OcrConfig,
+) -> bool {
+    let marked = metadata
+        .remove(crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
+        .is_some();
+    marked && config.element_config.is_some()
+}
+
+fn restore_recognition_page_down(additional: &mut AHashMap<Cow<'static, str>, serde_json::Value>, marked: bool) {
+    if marked {
+        additional.insert(
+            Cow::Borrowed(crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY),
+            serde_json::Value::Bool(true),
+        );
+    }
 }
 
 /// Remove the OCR pipeline's internal scratch metadata keys before the

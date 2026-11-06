@@ -203,7 +203,7 @@ fn explicit_language_block_recovers_the_counterclockwise_source_grid() {
 }
 
 #[test]
-#[ignore = "Requires the pinned local OSD model"]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn explicit_language_block_recovers_the_upside_down_source_grid() {
     const CASE: &str = "explicit_language_block_recovers_the_upside_down_source_grid";
     if std::env::var(CHILD).as_deref() != Ok(CASE) {

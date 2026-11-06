@@ -13,6 +13,7 @@ use crate::doc_orientation::detector::tesseract_detector;
 use crate::extractors::security::SecurityBudget;
 #[cfg(any(auto_rotate, test))]
 use crate::extractors::security::SecurityLimits;
+use crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY;
 use crate::plugins::{ConfidenceSemantics, OcrBackend};
 use crate::table_core::{HocrWord, detect_rows, find_row_index};
 use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementConfig, OcrElementLevel};
@@ -238,7 +239,7 @@ impl OrientationRetry {
         allow_prose: bool,
     ) -> crate::Result<ExtractedDocument> {
         let confidence = backend.confidence_semantics();
-        if !recognition::primary_supported(&original) || !self.noise(&original, confidence).low_confidence {
+        if !recognition::plain_primary(&original) || !self.noise(&original, confidence).low_confidence {
             return Ok(original);
         }
         let probe = lookup_osd_directory(config.clone());
@@ -249,20 +250,64 @@ impl OrientationRetry {
         let mut retry_config = recognition::capture_words(config);
         retry_config.tessdata_path = Some(directory.into());
         retry_config.tesseract_config.get_or_insert_default().psm = Some(1);
-        let candidate = backend.process_image_owned(raster, &retry_config).await;
+        let candidate = backend.process_image_owned(Arc::clone(&raster), &retry_config).await;
         check_cancelled(cancel)?;
         match candidate {
-            Ok(candidate) => Ok(recognition::select(
-                original,
-                candidate,
-                &self.thresholds,
-                confidence,
-                config,
-                allow_prose,
-            )),
+            Ok(mut candidate) => {
+                let page_down = candidate
+                    .metadata
+                    .additional
+                    .remove(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
+                    .is_some();
+                match recognition::try_select(original, candidate, &self.thresholds, confidence, config, allow_prose) {
+                    Err(original) if page_down => self.after_half_turn(backend, raster, config, original, cancel).await,
+                    Ok(selected) | Err(selected) => Ok(selected),
+                }
+            }
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
                 tracing::warn!(%error, "Optional recognition-orientation OCR failed; retaining primary OCR");
+                Ok(original)
+            }
+        }
+    }
+
+    async fn after_half_turn(
+        &self,
+        backend: &Arc<dyn OcrBackend>,
+        raster: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        original: ExtractedDocument,
+        cancel: Option<&CancellationToken>,
+    ) -> crate::Result<ExtractedDocument> {
+        check_cancelled(cancel)?;
+        if self.attempts.lock().step().is_err() {
+            return Ok(original);
+        }
+        let limits = config.security_limits.clone().unwrap_or_default();
+        let half_turned = tokio::task::spawn_blocking(move || half_turn(&raster, &limits))
+            .await
+            .ok()
+            .flatten();
+        check_cancelled(cancel)?;
+        let Some(half_turned) = half_turned else {
+            return Ok(original);
+        };
+        let candidate = backend
+            .process_image_owned(Arc::new(half_turned), &recognition::capture_words(config))
+            .await;
+        check_cancelled(cancel)?;
+        match candidate {
+            Ok(candidate) => Ok(recognition::select_half_turned(
+                original,
+                candidate,
+                &self.thresholds,
+                backend.confidence_semantics(),
+                config,
+            )),
+            Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+            Err(error) => {
+                tracing::warn!(%error, "Optional half-turn OCR failed; retaining primary OCR");
                 Ok(original)
             }
         }
@@ -340,6 +385,15 @@ fn implicit_config(config: &OcrConfig) -> (OcrConfig, f64) {
         |config| config.table_row_threshold_ratio,
     );
     (rotated_config, row_threshold)
+}
+
+fn half_turn(raster: &[u8], limits: &crate::extractors::security::SecurityLimits) -> Option<Vec<u8>> {
+    let rgb = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(raster, limits).ok()?;
+    let mut encoded = Vec::new();
+    image::imageops::rotate180(&rgb)
+        .write_to(&mut std::io::Cursor::new(&mut encoded), image::ImageFormat::Png)
+        .ok()?;
+    Some(encoded)
 }
 
 fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
@@ -438,7 +492,6 @@ fn iterator_word(element: &OcrElement, bbox: BoundingBox) -> Option<HocrWord> {
         })
 }
 
-#[cfg(auto_rotate)]
 fn table_matches_iterator_rows(
     cells: &[Vec<String>],
     elements: &[OcrElement],

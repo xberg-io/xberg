@@ -71,6 +71,11 @@ fn existing_osd_directory_in(config: &OcrConfig, environment: &TessdataEnv) -> O
 }
 
 pub(super) fn primary_supported(result: &ExtractedDocument) -> bool {
+    plain_primary(result) && checked_words(result).is_some()
+}
+
+/// A primary read with nothing a replacement text-only read could drop.
+pub(super) fn plain_primary(result: &ExtractedDocument) -> bool {
     !result.content.trim().is_empty()
         && result.tables.is_empty()
         && result.formulas.is_empty()
@@ -86,7 +91,6 @@ pub(super) fn primary_supported(result: &ExtractedDocument) -> bool {
             .as_ref()
             .is_none_or(plain_internal_document)
         && result.internal_document.as_ref().is_none_or(plain_internal_document)
-        && checked_words(result).is_some()
 }
 
 fn plain_internal_document(document: &InternalDocument) -> bool {
@@ -175,16 +179,25 @@ fn within_image(element: &OcrElement, width: u32, height: u32) -> bool {
 
 pub(super) fn select(
     original: ExtractedDocument,
-    mut candidate: ExtractedDocument,
+    candidate: ExtractedDocument,
     thresholds: &OcrQualityThresholds,
     confidence: ConfidenceSemantics,
     config: &OcrConfig,
     allow_prose: bool,
 ) -> ExtractedDocument {
-    let row_threshold = config.tesseract_config.as_ref().map_or_else(
-        || crate::types::TesseractConfig::default().table_row_threshold_ratio,
-        |tess| tess.table_row_threshold_ratio,
-    );
+    try_select(original, candidate, thresholds, confidence, config, allow_prose).unwrap_or_else(|original| original)
+}
+
+/// Returns the primary read back when the candidate does not prove itself.
+pub(super) fn try_select(
+    original: ExtractedDocument,
+    mut candidate: ExtractedDocument,
+    thresholds: &OcrQualityThresholds,
+    confidence: ConfidenceSemantics,
+    config: &OcrConfig,
+    allow_prose: bool,
+) -> Result<ExtractedDocument, ExtractedDocument> {
+    let row_threshold = row_threshold(config);
     if !accepts(
         &original,
         &candidate,
@@ -193,10 +206,69 @@ pub(super) fn select(
         row_threshold,
         allow_prose,
     ) {
+        return Err(original);
+    }
+    crate::core::diagnostics::dedup_extend_warnings(&mut candidate.processing_warnings, original.processing_warnings);
+    Ok(candidate)
+}
+
+fn row_threshold(config: &OcrConfig) -> f64 {
+    config.tesseract_config.as_ref().map_or_else(
+        || crate::types::TesseractConfig::default().table_row_threshold_ratio,
+        |tess| tess.table_row_threshold_ratio,
+    )
+}
+
+/// Accepts a read of the half-turned raster once Tesseract's own layout analysis reported every text
+/// block rotated 180 degrees. The primary read then covered an inverted page, so its confident words
+/// are not evidence to retain; the replacement must instead be a complete table whose every iterator
+/// word sits in exactly one cell. ~keep
+pub(super) fn select_half_turned(
+    original: ExtractedDocument,
+    mut candidate: ExtractedDocument,
+    thresholds: &OcrQualityThresholds,
+    confidence: ConfidenceSemantics,
+    config: &OcrConfig,
+) -> ExtractedDocument {
+    if !accepts_half_turned(&original, &candidate, thresholds, confidence, row_threshold(config)) {
         return original;
+    }
+    let Some((width, height)) = processed_ocr_layout_dimensions(&candidate.metadata) else {
+        return original;
+    };
+    for element in candidate.ocr_elements.iter_mut().flatten() {
+        let (left, top, element_width, element_height) = element.geometry.to_aabb();
+        element.geometry = crate::types::OcrBoundingGeometry::Rectangle {
+            left: width - left - element_width,
+            top: height - top - element_height,
+            width: element_width,
+            height: element_height,
+        };
     }
     crate::core::diagnostics::dedup_extend_warnings(&mut candidate.processing_warnings, original.processing_warnings);
     candidate
+}
+
+fn accepts_half_turned(
+    original: &ExtractedDocument,
+    candidate: &ExtractedDocument,
+    thresholds: &OcrQualityThresholds,
+    confidence: ConfidenceSemantics,
+    row_threshold: f64,
+) -> bool {
+    if !plain_primary(original)
+        || !candidate.formulas.is_empty()
+        || checked_words(candidate).is_none()
+        || processed_ocr_layout_dimensions(&original.metadata) != processed_ocr_layout_dimensions(&candidate.metadata)
+    {
+        return false;
+    }
+    let Some(text) = complete_table_text(candidate, row_threshold, table_matches_iterator_rows) else {
+        return false;
+    };
+    let mean = mean_text_conf_of(&candidate.metadata.additional);
+    let noise = ocr_recognition_noise_decision(&text, thresholds, confidence, mean);
+    !noise.low_confidence && !noise.fragmented_noise && mean.is_some()
 }
 
 fn accepts(
@@ -520,6 +592,63 @@ mod tests {
             0.5,
             false,
         )
+    }
+
+    fn half_turned(original: ExtractedDocument, candidate: ExtractedDocument) -> ExtractedDocument {
+        select_half_turned(
+            original,
+            candidate,
+            &OcrQualityThresholds::default(),
+            ConfidenceSemantics::Legibility { scale_max: 100.0 },
+            &OcrConfig::default(),
+        )
+    }
+
+    #[test]
+    fn half_turned_read_replaces_an_inverted_primary_with_geometry_in_the_callers_frame() {
+        let candidate = super::super::tests::table_candidate();
+        let upright = candidate.ocr_elements.clone().unwrap();
+        // The primary's confident "Caption" is absent from the table; an upright page would protect it.
+        let original = primary(&["Cash", "Caption"]);
+        assert!(!accepted(&original, &sideways_candidate()));
+        let selected = half_turned(original, candidate.clone());
+        assert_eq!(selected.tables[0].cells, candidate.tables[0].cells);
+        for (back, word) in selected.ocr_elements.unwrap().iter().zip(&upright) {
+            let (left, top, width, height) = word.geometry.to_aabb();
+            assert_eq!(
+                back.geometry.to_aabb(),
+                (200 - left - width, 200 - top - height, width, height)
+            );
+        }
+    }
+
+    #[test]
+    fn half_turned_read_keeps_the_primary_unless_the_table_is_complete_and_exact() {
+        let original = primary(&["Cash", "Caption"]);
+        let candidate = super::super::tests::table_candidate();
+        let mut cases = Vec::new();
+        let mut changed = candidate.clone();
+        changed.tables[0].cells[0][1] = "31,299".into();
+        changed.content = changed.content.replace("31,290", "31,299");
+        cases.push(changed);
+        let mut changed = candidate.clone();
+        changed.content.push_str(" Caption outside the table");
+        cases.push(changed);
+        let mut changed = candidate.clone();
+        changed.tables.clear();
+        cases.push(changed);
+        let mut changed = candidate.clone();
+        changed.metadata.additional.insert("mean_text_conf".into(), 10.into());
+        cases.push(changed);
+        let mut changed = candidate.clone();
+        changed.metadata.additional.remove("mean_text_conf");
+        cases.push(changed);
+        for changed in cases {
+            assert_eq!(half_turned(original.clone(), changed).content, original.content);
+        }
+        let mut rich = original.clone();
+        rich.tables = candidate.tables.clone();
+        assert_eq!(half_turned(rich.clone(), candidate).content, rich.content);
     }
 
     #[test]
