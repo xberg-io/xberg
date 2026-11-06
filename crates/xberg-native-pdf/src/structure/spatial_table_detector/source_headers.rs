@@ -6,6 +6,7 @@ use crate::structure::table_extractor::{Table, TableCell, TableRow};
 const MIN_SHADED_CELL_AREA_RATIO: f32 = 0.9;
 const HEADER_RULE_TOLERANCE: f32 = 1.0;
 const MAX_HEADER_RULE_CHANNEL: f32 = 0.9;
+const MAX_GROUPED_HEADER_PATHS: usize = 128;
 
 pub(super) fn shading_rectangles(paths: &[PathContent]) -> Vec<Rect> {
     paths
@@ -85,9 +86,10 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
     let [groups, leaves, first_body, ..] = rows else {
         return;
     };
-    if [groups.is_header, leaves.is_header, first_body.is_header]
-        .into_iter()
-        .any(|header| header)
+    if paths.len() > MAX_GROUPED_HEADER_PATHS
+        || [groups.is_header, leaves.is_header, first_body.is_header]
+            .into_iter()
+            .any(|header| header)
         || !complete_source_band(first_body, columns, false)
         || !complete_source_band(leaves, columns, true)
         || !grouped_header_rules(groups, leaves, paths)
