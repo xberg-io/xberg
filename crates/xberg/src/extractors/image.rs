@@ -4290,6 +4290,32 @@ mod tests {
         }
     }
 
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn standalone_sparse_rows_are_admitted_for_plain_markdown_and_djot_only() {
+        use crate::core::config::OutputFormat;
+        let ocr = crate::core::config::OcrConfig::default();
+        for (output_format, admitted) in [
+            (OutputFormat::Plain, true),
+            (OutputFormat::Markdown, true),
+            (OutputFormat::Djot, true),
+            (OutputFormat::Html, false),
+            (OutputFormat::Json, false),
+            (OutputFormat::DocTags, false),
+            (OutputFormat::Custom("custom".into()), false),
+        ] {
+            let config = crate::core::config::ExtractionConfig {
+                output_format: output_format.clone(),
+                ..Default::default()
+            };
+            assert_eq!(
+                super::allows_standalone_sparse_rows(&config, &ocr, "image/png"),
+                admitted,
+                "{output_format:?}"
+            );
+        }
+    }
+
     #[cfg(all(
         feature = "ocr",
         feature = "pdf",

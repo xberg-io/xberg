@@ -159,6 +159,20 @@ fn markdown_and_djot_keep_the_certified_standalone_rows() {
             );
         };
         assert_eq!(table.cells, expected, "{format:?}");
+        let expected_text = expected.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+        let pages = result.pages.as_ref().expect("requested page output");
+        if format == OutputFormat::Markdown {
+            for row in &expected {
+                let line = format!("| {} |", row.join(" | "));
+                assert!(
+                    pages[0].content.lines().any(|candidate| candidate.trim() == line),
+                    "page text missing row {line:?} in\n{}",
+                    pages[0].content
+                );
+            }
+        } else {
+            assert_eq!(pages[0].content.trim(), expected_text, "{format:?} page text");
+        }
         for row in &expected {
             let line = format!("| {} |", row.join(" | "));
             assert!(
