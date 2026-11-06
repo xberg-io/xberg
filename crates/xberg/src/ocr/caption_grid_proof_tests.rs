@@ -283,3 +283,19 @@ fn keeps_staggered_unruled_cells_without_an_intact_intervening_line() {
     }
     assert!(!accepts(&source));
 }
+
+#[test]
+fn keeps_a_cell_boundary_without_a_whole_word_crossing_its_gap() {
+    let mut source = source();
+    let word = source
+        .elements
+        .iter_mut()
+        .find(|element| element.level == OcrElementLevel::Word && element.text == "guarantees")
+        .unwrap();
+    let OcrBoundingGeometry::Rectangle { left, width, .. } = &mut word.geometry else {
+        panic!("axis-aligned source word");
+    };
+    assert_eq!((*left, *left + *width), (572, 750));
+    *width = 620 - *left;
+    assert!(!accepts(&source));
+}
