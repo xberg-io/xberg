@@ -7,6 +7,7 @@
 
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod, extract as extract_public};
 
+const TALL_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf");
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
 const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
 const NEUTRAL_RGB: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/neutral-rgb-tall.pdf");
@@ -166,4 +167,43 @@ fn low_per_page_content_limit_keeps_existing_render_fallback() {
     let document = extract(TALL, &config);
     assert!(!strip_warning(&document));
     assert_eq!(document.pages.as_ref().expect("original page record").len(), 1);
+}
+
+#[test]
+fn tall_gray_jpeg_recovers_every_source_word_after_render_budget_refusal() {
+    assert_image_text(&extract(TALL_JPEG, &extraction_config()), true);
+}
+
+#[test]
+fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr() {
+    let forced = ExtractionConfig {
+        force_ocr: true,
+        ..extraction_config()
+    };
+    let mut low = extraction_config();
+    low.security_limits
+        .get_or_insert_with(Default::default)
+        .max_content_size = 16 * 1024 * 1024;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    for config in [forced, low] {
+        let input = ExtractInput::from_bytes(TALL_JPEG.to_vec(), "application/pdf", None);
+        let error = runtime
+            .block_on(extract_public(input, &config))
+            .expect_err("existing render refusal");
+        let xberg::XbergError::Parsing {
+            source: Some(source), ..
+        } = error
+        else {
+            panic!("expected typed Native render error, got {error:?}");
+        };
+        let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
+            source
+                .source()
+                .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
+        });
+        assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
+    }
 }

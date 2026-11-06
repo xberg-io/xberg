@@ -22,3 +22,13 @@ uv run --no-project --with pillow==13.0.0 python generate.py . \
 
 The neutral RGB variant stores the same 12,000-pixel grayscale raster in
 three identical channels. Use the same font and `--neutral-rgb-only`.
+
+The grayscale JPEG fixture uses the same 1275 × 12000 source grid and 150 DPI
+as the bilevel fixture. It uses sequential 8-bit JPEG with quality 88 and
+optimized entropy coding. Generate it with the bundled DejaVu Sans font and
+Pillow 11.3.0.
+
+```sh
+uv run --no-project --with pillow==11.3.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --jpeg-only
+```

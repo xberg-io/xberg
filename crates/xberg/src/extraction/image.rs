@@ -20,6 +20,14 @@ use std::io::Cursor;
 #[cfg(feature = "ocr")]
 mod bounded_jpeg;
 
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) use bounded_jpeg::decode_sequential_gray_jpeg;
+
 #[cfg(all(feature = "ocr", feature = "pdf"))]
 pub(crate) use bounded_jpeg::load_image_for_ocr_within;
 #[cfg(feature = "ocr")]

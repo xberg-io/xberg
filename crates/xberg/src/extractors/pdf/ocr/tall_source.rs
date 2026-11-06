@@ -17,8 +17,10 @@ use xberg_native_pdf::content::parser::visit_complete_content_stream;
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
 
+mod gray_jpeg;
 mod samples;
-use samples::{GrayPacking, decode_source_gray};
+pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
+use samples::{GrayPacking, decode_source_gray, source_frame};
 
 const MAX_TILE_SIDE: u32 = 4096;
 const MAX_SOURCE_PIXELS: usize = 24_000_000;
@@ -27,7 +29,7 @@ const MIN_BLANK_ROWS: u32 = 20;
 const MIN_LIGHT_SAMPLE: u8 = 210;
 const MAX_LINE_ROWS: u32 = 80;
 const MAX_COLUMN_GAP: usize = 48;
-const MAX_BILEVEL_CERTIFIED_LINES: usize = 256;
+const MAX_CERTIFIED_SOURCE_LINES: usize = 256;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024;
 // Reserve input encoding, decoded pixels and preprocessing work for one tile.
 const TILE_BYTES_PER_PIXEL: usize = 24;
@@ -40,7 +42,7 @@ struct Source {
     dpi: f64,
     samples: Vec<u8>,
     retained_bytes: usize,
-    bilevel: bool,
+    certify_rows: bool,
 }
 
 struct StripPlan {
@@ -52,10 +54,40 @@ struct StripPlan {
 struct Attempt<'a> {
     document: &'a PdfDocument,
     page: usize,
-    raster: (u32, u32, usize),
+    raster: Option<(u32, u32, usize)>,
     byte_limit: usize,
     max_strips: usize,
     cancel: Option<&'a CancellationToken>,
+}
+
+impl<'a> Attempt<'a> {
+    fn new(
+        document: &'a PdfDocument,
+        page: usize,
+        raster: Option<(u32, u32, usize)>,
+        config: &'a ExtractionConfig,
+        ocr: &OcrConfig,
+    ) -> Self {
+        let defaults = crate::extractors::security::SecurityLimits::default();
+        let limits = config.security_limits.as_ref().unwrap_or(&defaults);
+        let ocr_limits = ocr.security_limits.as_ref();
+        let byte_limit = ocr_limits.map_or(limits.max_content_size, |ocr| {
+            limits.max_content_size.min(ocr.max_content_size)
+        });
+        let max_strips = ocr_limits
+            .map_or(limits.max_iterations, |ocr| {
+                limits.max_iterations.min(ocr.max_iterations)
+            })
+            .min(MAX_STRIPS);
+        Self {
+            document,
+            page,
+            raster,
+            byte_limit,
+            max_strips,
+            cancel: config.cancel_token.as_ref(),
+        }
+    }
 }
 
 pub(super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> bool {
@@ -96,25 +128,7 @@ pub(super) async fn try_replace(
     let Some(quality) = RecognitionQuality::from_result(original) else {
         return Ok(false);
     };
-    let defaults = crate::extractors::security::SecurityLimits::default();
-    let limits = config.security_limits.as_ref().unwrap_or(&defaults);
-    let byte_limit = ocr.security_limits.as_ref().map_or(limits.max_content_size, |ocr| {
-        limits.max_content_size.min(ocr.max_content_size)
-    });
-    let attempt = Attempt {
-        document,
-        page,
-        raster: (*width, *height, png.len()),
-        byte_limit,
-        max_strips: ocr
-            .security_limits
-            .as_ref()
-            .map_or(limits.max_iterations, |ocr| {
-                limits.max_iterations.min(ocr.max_iterations)
-            })
-            .min(MAX_STRIPS),
-        cancel: config.cancel_token.as_ref(),
-    };
+    let attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     if let Some((recovered, strips)) = recover(attempt, backend, ocr).await?
         && should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds)
@@ -154,7 +168,7 @@ fn recovered_bilevel_lines_are_clean(
 ) -> bool {
     const MIN_STRIP_MEAN_CONFIDENCE: f64 = 85.0;
     const MAX_STRIP_DICTIONARY_INVALID: f64 = 0.05;
-    recovered.complete_bilevel_rows
+    recovered.complete_source_rows
         && quality.mean_confidence < thresholds.min_ocr_mean_confidence
         && super::scoring::is_ocr_recognition_noise(original_text, thresholds)
         && !super::scoring::is_ocr_recognition_noise(&recovered.text, thresholds)
@@ -249,7 +263,7 @@ async fn recover(
         options["use_cache"] = serde_json::Value::Bool(false);
     }
     let mut output = TextAccumulator {
-        complete_bilevel_rows: !ink_rows.is_empty(),
+        complete_source_rows: !ink_rows.is_empty(),
         lowest_strip_confidence: 100.0,
         ..Default::default()
     };
@@ -268,7 +282,7 @@ async fn recover(
         let Ok(result) = result else {
             return Ok(None);
         };
-        output.complete_bilevel_rows &= certified_strip_lines(&result, source.width, &rows, &ink_rows);
+        output.complete_source_rows &= certified_strip_lines(&result, source.width, &rows, &ink_rows);
         if !output.add(result) {
             return Ok(None);
         }
@@ -349,20 +363,28 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
     if attempt.max_strips < 2 {
         return None;
     }
-    let (width, height, encoded) = attempt.raster;
-    let normal_bytes = (width as usize)
-        .checked_mul(height as usize)?
-        .checked_mul(4)?
-        .checked_add(encoded)?;
+    let normal_bytes = if let Some((width, height, encoded)) = attempt.raster {
+        (width as usize)
+            .checked_mul(height as usize)?
+            .checked_mul(4)?
+            .checked_add(encoded)?
+    } else {
+        0
+    };
     let available = attempt
         .byte_limit
         .checked_sub(normal_bytes)?
         .checked_sub(FIXED_WORK_BYTES)?;
-    let source = certify(attempt.document, attempt.page, width, available)?;
+    let source = certify(
+        attempt.document,
+        attempt.page,
+        attempt.raster.map(|raster| raster.0),
+        available,
+    )?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
-    let mut bands = source.blank_bands(&cancelled, if source.bilevel { 1 } else { MIN_BLANK_ROWS })?;
-    let ink_rows = if source.bilevel
-        && bands.len() <= MAX_BILEVEL_CERTIFIED_LINES + 1
+    let mut bands = source.blank_bands(&cancelled, if source.certify_rows { 1 } else { MIN_BLANK_ROWS })?;
+    let ink_rows = if source.certify_rows
+        && bands.len() <= MAX_CERTIFIED_SOURCE_LINES + 1
         && bands.first().is_some_and(|band| band.start == 0)
         && bands.last().is_some_and(|band| band.end == source.height)
     {
@@ -370,6 +392,9 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
     } else {
         Vec::new()
     };
+    if attempt.raster.is_none() && ink_rows.is_empty() {
+        return None;
+    }
     bands.retain(|band| band.end - band.start >= MIN_BLANK_ROWS);
     let mut plan = plan_strips(
         source.width,
@@ -398,7 +423,7 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
     })
 }
 
-fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usize) -> Option<Source> {
+fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_limit: usize) -> Option<Source> {
     let (frame, content) = page_frame_and_contents(doc, page)?;
     let Object::Stream { dict, data } = content else {
         return None;
@@ -420,14 +445,16 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
         return None;
     };
     let depth = dict.get("BitsPerComponent")?.as_integer()?;
-    let packing = match (dict.get("ColorSpace")?.as_name()?, depth) {
-        ("DeviceGray", 8) => GrayPacking::Byte,
-        ("DeviceGray", 1) => GrayPacking::Bilevel,
-        ("DeviceRGB", 8) if unfiltered_paint => GrayPacking::NeutralRgb,
+    let color = dict.get("ColorSpace")?.as_name()?;
+    let codec = dict.get("Filter")?.as_name()?;
+    let packing = match (rendered_width, codec, color, depth) {
+        (None, "DCTDecode", "DeviceGray", 8) => None,
+        (Some(_), "FlateDecode", "DeviceGray", 8) => Some(GrayPacking::Byte),
+        (Some(_), "FlateDecode", "DeviceGray", 1) => Some(GrayPacking::Bilevel),
+        (Some(_), "FlateDecode", "DeviceRGB", 8) if unfiltered_paint => Some(GrayPacking::NeutralRgb),
         _ => return None,
     };
     if dict.get("Subtype")?.as_name()? != "Image"
-        || dict.get("Filter")?.as_name()? != "FlateDecode"
         || [
             "Mask",
             "SMask",
@@ -443,30 +470,21 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: u32, byte_limit: usiz
     {
         return None;
     }
-    let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
-    let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
-    let pixels = (width as usize).checked_mul(height as usize)?;
-    if u64::from(rendered_width) * 100 >= u64::from(width) * 98
-        || width > MAX_TILE_SIDE
-        || height <= MAX_TILE_SIDE
-        || height > MAX_TILE_SIDE * MAX_STRIPS as u32
-        || pixels > MAX_SOURCE_PIXELS
-    {
-        return None;
-    }
-    let dpi = 72.0 * f64::from(width) / f64::from(frame.width);
-    let dpi_y = 72.0 * f64::from(height) / f64::from(frame.height);
-    if !(150.0..=300.0).contains(&dpi) || (dpi - dpi_y).abs() > 0.01 {
-        return None;
-    }
-    let (samples, retained_bytes) = decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?;
+    let (width, height, dpi) = source_frame(&dict, frame, rendered_width)?;
+    let (samples, retained_bytes) = if let Some(packing) = packing {
+        decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?
+    } else {
+        let samples = crate::extraction::image::decode_sequential_gray_jpeg(&data, (width, height), byte_limit)?;
+        let retained_bytes = samples.capacity().checked_add(data.len())?;
+        (samples, retained_bytes)
+    };
     Some(Source {
         width,
         height,
         dpi,
         samples,
         retained_bytes,
-        bilevel: packing == GrayPacking::Bilevel,
+        certify_rows: packing.is_none_or(|packing| packing == GrayPacking::Bilevel),
     })
 }
 
@@ -626,7 +644,7 @@ struct TextAccumulator {
     dictionary_invalid_sum: f64,
     worst_dictionary_invalid: f64,
     lowest_strip_confidence: f64,
-    complete_bilevel_rows: bool,
+    complete_source_rows: bool,
 }
 
 impl TextAccumulator {
@@ -912,7 +930,7 @@ mod tests {
         let mut attempt = Attempt {
             document: &document,
             page: 0,
-            raster: (1100, 7765, 128_000),
+            raster: Some((1100, 7765, 128_000)),
             byte_limit: 100 * 1024 * 1024,
             max_strips: MAX_STRIPS,
             cancel: None,
@@ -948,7 +966,7 @@ mod tests {
         let attempt = Attempt {
             document: &doc,
             page: 0,
-            raster: (1100, 7765, 128_000),
+            raster: Some((1100, 7765, 128_000)),
             byte_limit: 100 * 1024 * 1024,
             max_strips: MAX_STRIPS,
             cancel: Some(&token),

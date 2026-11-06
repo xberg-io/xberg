@@ -65,6 +65,10 @@ impl ImageBudget {
         Err(failure.error())
     }
 
+    pub(super) fn exceeded(&self) -> bool {
+        matches!(self.failure, Some(Failure::Exceeded { .. }))
+    }
+
     pub(super) fn error(&self) -> Option<Error> {
         self.failure.as_ref().map(Failure::error)
     }
