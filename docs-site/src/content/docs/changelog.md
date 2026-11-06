@@ -188,6 +188,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Place the heading and table from an upright scanned page in PDF points.** (#2497)
+  Applies to single-page detached Tesseract OCR with caching off and plain output with document structure requested.
+  A verified resize preserves the heading and table content and gives both bounds the same bottom-left page origin.
+
 - **(pdf): Recover verified right-column text from supported tall indexed-color scans.** (#2426)
   Uncached Plain extraction with stock Tesseract can add a complete ordered run while preserving existing text and tables.
 
