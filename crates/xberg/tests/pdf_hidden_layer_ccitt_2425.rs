@@ -65,6 +65,23 @@ async fn ccitt_partial_hidden_layer_recovers_all_raster_words_in_order() {
 }
 
 #[tokio::test]
+async fn ccitt_hidden_layer_in_separate_content_stream_preserves_exact_words() {
+    let partial = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-partial-split.pdf");
+    let complete = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-complete-split.pdf");
+    assert_fixture(
+        partial,
+        "f15c24652fe73b2f430254ce56d5702e0dfca2e3f78f6b94b0999dfa9b5d2d6d",
+    );
+    assert_fixture(
+        complete,
+        "d3f95ed8eec386a4f6c87025db43fa356d7da934f448a1c7cccdb4d543090402",
+    );
+    assert_read(complete, false, false).await;
+    assert_read(partial, true, true).await;
+    assert_read(partial, false, true).await;
+}
+
+#[tokio::test]
 async fn independently_decoded_raster_controls_preserve_words_and_native_coverage() {
     for (pdf, sha, force_ocr, expected_ocr) in [
         (

@@ -33,20 +33,26 @@ def stream(fields: str, data: bytes) -> bytes:
     return f"<< {fields} /Length {len(data)} >>\nstream\n".encode() + data + b"\nendstream"
 
 
-def write_pdf(path: Path, content: str, image: bytes | None = None) -> None:
+def write_pdf(path: Path, content: str | tuple[str, str], image: bytes | None = None) -> None:
     resources = "/Font << /F1 4 0 R >>"
     if image is not None:
         resources += " /XObject << /Scan 6 0 R >>"
+    streams = (content,) if isinstance(content, str) else content
+    if len(streams) == 2:
+        assert image is not None
+    contents = "5 0 R" if len(streams) == 1 else "[5 0 R 7 0 R]"
     entries = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PAGE_WIDTH} {PAGE_HEIGHT}] "
-        f"/Resources << {resources} >> /Contents 5 0 R >>".encode(),
+        f"/Resources << {resources} >> /Contents {contents} >>".encode(),
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-        stream("", content.encode()),
+        stream("", streams[0].encode()),
     ]
     if image is not None:
         entries.append(image)
+    if len(streams) == 2:
+        entries.append(stream("", streams[1].encode()))
     output = bytearray(b"%PDF-1.4\n")
     offsets = [0]
     for index, entry in enumerate(entries, 1):
@@ -113,7 +119,7 @@ def verify_image(source: Path, scratch: Path, pixels: bytes) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("output", type=Path, help="new directory for the four generated PDFs")
+    parser.add_argument("output", type=Path, help="new directory for the generated PDFs")
     output = parser.parse_args().output
     output.mkdir()
     lines = Path(__file__).with_name("source.txt").read_text().splitlines()
@@ -125,9 +131,14 @@ def main() -> None:
         for codec, image in (("flate8", flate), ("ccitt", ccitt)):
             for layer, indices in (("partial", PARTIAL_ROWS), ("complete", range(len(lines)))):
                 path = output / f"{codec}-{layer}.pdf"
-                content = f"q {PAGE_WIDTH} 0 0 {PAGE_HEIGHT} 0 0 cm /Scan Do Q\n"
-                write_pdf(path, content + operators(lines, indices, hidden=True), image)
+                paint = f"q {PAGE_WIDTH} 0 0 {PAGE_HEIGHT} 0 0 cm /Scan Do Q\n"
+                hidden = operators(lines, indices, hidden=True)
+                write_pdf(path, paint + hidden, image)
                 verify_image(path, scratch, pixels)
+                if codec == "ccitt":
+                    split_path = output / f"{codec}-{layer}-split.pdf"
+                    write_pdf(split_path, (paint, hidden), image)
+                    verify_image(split_path, scratch, pixels)
 
 
 if __name__ == "__main__":

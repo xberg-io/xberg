@@ -1,4 +1,4 @@
-These four synthetic scans use the same 1275×1650 bilevel raster at 150 ppi.
+These synthetic scans use the same 1275×1650 bilevel raster at 150 ppi.
 The source was rasterized with Poppler and thresholded at 128. The Flate
 variant stores 8-bit gray samples. The CCITT variant contains a single
 6,676-byte Group 4 strip made by libtiff, with explicit columns, rows and
@@ -12,4 +12,10 @@ rendering and is stored separately as the 81-token OCR oracle.
 Run `generate.py` with Pillow 11.3.0, Poppler 26.10.0, and libtiff 4.7.2
 to reproduce the fixtures in a new directory. The generator checks each
 decoded image against the original luma bytes. The public Rust regression
-pins all four PDF hashes.
+pins every PDF hash.
+
+
+The split CCITT variants place the complete picture paint and the complete
+invisible text block in separate ordered content streams. Their decoded
+page raster and native text match the corresponding single-stream PDFs
+byte for byte.
