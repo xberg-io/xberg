@@ -58,8 +58,8 @@ pub(in crate::ocr::processor::execution) fn recover_dot_leader_rows(
     let mut lines = line_envelopes(&words)?;
     lines.sort_unstable_by_key(|(_, line)| line.top);
     let rows = disjoint_rows(&mut lines)?;
-    let grid = build_leader_grid(&rows, limits.max_table_cells, |label, leader| {
-        raster_proves_dots(raster, leader, label.height, &mut budget)
+    let grid = build_leader_grid(&rows, limits.max_table_cells, |leader, text_height| {
+        raster_proves_dots(raster, leader, text_height, &mut budget)
     })?;
     if !super::super::has_table_grid(&grid)
         || !hocr_matches_all_proved_table_fragments(hocr, page, words.iter().map(|(_, word)| word).collect())
@@ -124,7 +124,7 @@ fn horizontal(word: &HocrWord) -> Range<u32> {
 fn build_leader_grid(
     rows: &[&mut [Word]],
     max_cells: usize,
-    mut proves_dots: impl FnMut(&HocrWord, &HocrWord) -> Option<()>,
+    mut proves_dots: impl FnMut(&HocrWord, u32) -> Option<()>,
 ) -> Option<Vec<Vec<String>>> {
     let (header, body) = rows.split_first()?;
     if header.len() < 4
@@ -137,6 +137,12 @@ fn build_leader_grid(
     let mut tracks: Vec<_> = header.iter().map(|(_, word)| Track::new(horizontal(word))).collect();
     let mut grid = vec![header.iter().map(|(_, word)| word.text.clone()).collect()];
     let mut leaders = None;
+    // A label without ascenders or descenders is shorter than its leader dots' text height. ~keep
+    let text_height = body
+        .iter()
+        .filter_map(|row| row.first())
+        .map(|(_, label)| label.height)
+        .max()?;
     for row in body {
         let [(_, label), (_, leader), values @ ..] = &**row else {
             return None;
@@ -151,7 +157,7 @@ fn build_leader_grid(
         leaders
             .get_or_insert_with(|| Track::new(horizontal(leader)))
             .admit(horizontal(leader))?;
-        proves_dots(label, leader)?;
+        proves_dots(leader, text_height)?;
         let mut cells = vec![format!("{} {}", label.text, leader.text)];
         for ((_, value), track) in values.iter().zip(&mut tracks[1..]) {
             track.admit(horizontal(value))?;
@@ -285,6 +291,66 @@ mod tests {
             }
         }
         assert!(!regular_dot_runs(&dots, 80, 27));
+    }
+
+    fn word(text: &str, left: u32, width: u32, height: u32) -> Word {
+        let word = HocrWord {
+            text: text.to_owned(),
+            left,
+            top: 0,
+            width,
+            height,
+            confidence: 90.0,
+        };
+        (None, word)
+    }
+
+    #[test]
+    fn leader_proof_uses_the_tallest_label_height_in_the_table() {
+        let mut rows: Vec<Vec<Word>> = [("Item", 27), ("Tree", 27), ("our", 14), ("Fleet", 27)]
+            .iter()
+            .enumerate()
+            .map(|(index, (label, height))| {
+                if index == 0 {
+                    vec![
+                        word("Item", 0, 40, 20),
+                        word("Count", 100, 40, 20),
+                        word("Budget", 200, 40, 20),
+                        word("Change", 300, 40, 20),
+                    ]
+                } else {
+                    vec![
+                        word(label, 0, 40, *height),
+                        word("...", 60, 30, 5),
+                        word("10", 100, 30, 20),
+                        word("20", 200, 30, 20),
+                        word("30", 300, 30, 20),
+                    ]
+                }
+            })
+            .collect();
+        let rows: Vec<&mut [Word]> = rows.iter_mut().map(Vec::as_mut_slice).collect();
+        let mut heights = Vec::new();
+        let grid = build_leader_grid(&rows, 100, |_, height| {
+            heights.push(height);
+            Some(())
+        });
+        assert!(grid.is_some());
+        assert_eq!(heights, [27, 27, 27]);
+    }
+
+    #[test]
+    fn raster_proof_accepts_dots_beside_a_label_without_ascenders() {
+        let mut dots = vec![0; 80 * 12];
+        for x in (3..70).step_by(12) {
+            for y in 3..9 {
+                for x in x..x + 6 {
+                    dots[y * 80 + x] = 1;
+                }
+            }
+        }
+        assert!(!regular_dot_runs(&dots, 80, 14));
+        assert!(regular_dot_runs(&dots, 80, 27));
     }
 
     #[test]
