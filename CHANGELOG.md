@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **(ocr): Read a scan's embedded JPEG at the resolution its placement proves.** (#2530)
-  When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Forced OCR and unproven placements keep the previous behavior, and a retry that still recovers nothing reports why each image failed beside the original error.
+  When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Unproven placements keep the previous behavior, a read the recognition-noise check rejects keeps the original refusal, and a retry that still recovers nothing reports why each image failed beside the original error.
 
 - **(classification): Add an experimental Rust API for CPU ONNX NLI.** (#2335)
   Prepare pinned model artifacts explicitly; classification preserves model identity, bounded execution and cancellation.

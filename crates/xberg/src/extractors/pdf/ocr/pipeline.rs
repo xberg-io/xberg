@@ -1185,7 +1185,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 no_admitted_images: None,
                                 stored_jpegs: None,
                                 cancel_token: config.cancel_token.as_ref(),
-                                use_proven_source_dpi: automatic_ocr_may_read_proven_source_dpi(config),
+                                use_proven_source_dpi: true,
                             },
                         )
                         .await?
@@ -1205,9 +1205,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     mut formulas,
                     image_preprocessing,
                     failure_causes,
+                    used_proven_source_dpi,
                 }) = recovery
                 {
                     retry_causes = failure_causes;
+                    let text = if used_proven_source_dpi && proven_read_is_noise(&text, &ocr_output_thresholds) {
+                        retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+                        String::new()
+                    } else {
+                        text
+                    };
                     recovered = should_adopt_xobject_retry_text("", &text) || !tables.is_empty();
                     if should_adopt_xobject_retry_text("", &text) {
                         structured_ocr_pages.insert(
@@ -2147,7 +2154,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         no_admitted_images: None,
                         stored_jpegs: None,
                         cancel_token: config.cancel_token.as_ref(),
-                        use_proven_source_dpi: automatic_ocr_may_read_proven_source_dpi(config),
+                        use_proven_source_dpi: true,
                     },
                 )
                 .await?
@@ -2166,9 +2173,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 mut formulas,
                 image_preprocessing,
                 failure_causes,
+                used_proven_source_dpi,
             }) = recovery
             {
                 retry_causes = failure_causes;
+                let text = if used_proven_source_dpi && proven_read_is_noise(&text, &ocr_output_thresholds) {
+                    retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+                    String::new()
+                } else {
+                    text
+                };
                 let recovered_tables = !tables.is_empty();
                 let recovered_text_is_empty = text.trim().is_empty();
                 if should_adopt_xobject_retry_text(page_text, &text) {
@@ -4847,6 +4861,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         mut formulas,
                         image_preprocessing,
                         failure_causes: _,
+                        used_proven_source_dpi: _,
                     } = recovery;
                     let recovered_tables = !tables.is_empty();
                     let recovered_payload = !text.trim().is_empty() || recovered_tables || !formulas.is_empty();
@@ -7168,14 +7183,16 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
     }
     resolved
 }
-/// Whether the retry may hand the backend a proven resolution. Only automatic OCR does: a forced
-/// OCR run keeps the refusal, because the proven resolution lets the backend read a tall image
-/// at a size the budget otherwise refused.
+/// Why a retry read made at a placement-proven resolution was not adopted.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn automatic_ocr_may_read_proven_source_dpi(config: &ExtractionConfig) -> bool {
-    config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-        && !config.force_ocr
-        && config.force_ocr_pages.is_none()
+const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
+
+/// Whether text read at a proven resolution is recognition noise. The proven resolution lets the
+/// backend read an image the budget refused, but a dimension clamp can still shrink it until
+/// the glyphs are illegible, and only the output shows that.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn proven_read_is_noise(text: &str, thresholds: &crate::core::config::OcrQualityThresholds) -> bool {
+    super::scoring::is_ocr_recognition_noise(text, thresholds)
 }
 
 /// Most image causes a page error names before summarizing the rest.

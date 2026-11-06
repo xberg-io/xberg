@@ -386,6 +386,9 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
     /// Why each embedded image the backend rejected yielded nothing, in paint order.
     pub(super) failure_causes: Vec<String>,
+    /// Whether any image was read at a resolution the page's placement proved rather than one
+    /// the backend estimated.
+    pub(super) used_proven_source_dpi: bool,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_image_xobjects(
@@ -406,6 +409,7 @@ pub(super) async fn recover_image_xobjects(
         formulas: Vec::new(),
         image_preprocessing: None,
         failure_causes: Vec::new(),
+        used_proven_source_dpi: false,
     };
     for fallback in fallback_images {
         context.check_cancelled()?;
@@ -480,6 +484,9 @@ pub(super) async fn collect_xobject_recovery_result(
     outcome: &mut XObjectRecoveryOutcome,
 ) -> crate::Result<()> {
     let ocr_config = source_dpi::with_proven_source_dpi(ocr_config, fallback.source_dpi);
+    if matches!(ocr_config, std::borrow::Cow::Owned(_)) {
+        outcome.used_proven_source_dpi = true;
+    }
     let result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
         Err(error) => {
