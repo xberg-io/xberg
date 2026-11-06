@@ -465,7 +465,28 @@ pub struct TextRasterizer {
     type0_ink_loss: std::sync::atomic::AtomicBool,
     /// Paint every glyph fully transparent while still advancing the text matrix, so a render
     /// shows what the page holds besides glyph ink.
-    suppress_ink: bool,
+    suppress_ink: std::sync::atomic::AtomicBool,
+}
+
+/// Glyph painting restored to its normal behaviour for the guard's lifetime.
+pub(super) struct InkGuard<'a> {
+    rasterizer: &'a TextRasterizer,
+    suppressed: bool,
+}
+
+impl std::ops::Deref for InkGuard<'_> {
+    type Target = TextRasterizer;
+    fn deref(&self) -> &TextRasterizer {
+        self.rasterizer
+    }
+}
+
+impl Drop for InkGuard<'_> {
+    fn drop(&mut self) {
+        self.rasterizer
+            .suppress_ink
+            .store(self.suppressed, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl TextRasterizer {
@@ -475,12 +496,22 @@ impl TextRasterizer {
             fontdb: system_fontdb(),
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
-            suppress_ink: false,
+            suppress_ink: Default::default(),
         }
     }
 
-    pub(super) fn suppress_ink(&mut self) {
-        self.suppress_ink = true;
+    pub(super) fn suppress_ink(&self) {
+        self.suppress_ink.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Paint glyphs normally while the guard lives. A clip silhouette is built from glyph
+    /// paint, so it must not be blanked with the visible ink.
+    pub(super) fn with_ink(&self) -> InkGuard<'_> {
+        let suppressed = self.suppress_ink.swap(false, std::sync::atomic::Ordering::Relaxed);
+        InkGuard {
+            rasterizer: self,
+            suppressed,
+        }
     }
 
     /// Construct with a caller-supplied font database. Bypasses the
@@ -492,7 +523,7 @@ impl TextRasterizer {
             fontdb,
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
-            suppress_ink: false,
+            suppress_ink: Default::default(),
         }
     }
 
@@ -647,7 +678,7 @@ impl TextRasterizer {
         // §9.3.6); it previously fell through and painted glyphs visibly. The
         // clip-path accumulation itself (modes 4–7) is not yet applied, but
         // mode-7 glyphs must at minimum not paint. (WS1.5) ~keep
-        if gs.render_mode == 3 || gs.render_mode == 7 || self.suppress_ink {
+        if gs.render_mode == 3 || gs.render_mode == 7 || self.suppress_ink.load(std::sync::atomic::Ordering::Relaxed) {
             paint.set_color(tiny_skia::Color::from_rgba(0.0, 0.0, 0.0, 0.0).unwrap());
         }
 

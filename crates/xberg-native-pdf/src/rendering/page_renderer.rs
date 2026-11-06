@@ -581,7 +581,7 @@ impl PageRenderer {
             .map(|(image, _)| image)
     }
 
-    pub(super) fn without_text_ink(mut self) -> Self {
+    pub(super) fn without_text_ink(self) -> Self {
         self.text_rasterizer.suppress_ink();
         self
     }
@@ -5349,7 +5349,7 @@ impl PageRenderer {
         // Coverage raster is permitted to fail silently — the visible-paint
         // call for the same show already surfaces any real error, and a
         // missing silhouette simply means no clip contribution. ~keep
-        let _ = self.text_rasterizer.render_text(
+        let _ = self.text_rasterizer.with_ink().render_text(
             scratch,
             text,
             transform,
@@ -5383,7 +5383,7 @@ impl PageRenderer {
             return;
         };
         let cov_gs = Self::coverage_only_gs(gs);
-        let _ = self.text_rasterizer.render_tj_array(
+        let _ = self.text_rasterizer.with_ink().render_tj_array(
             scratch,
             array,
             transform,
@@ -5422,7 +5422,7 @@ impl PageRenderer {
         let (w, h) = sidecar.dims();
         let mut scratch = Pixmap::new(w, h)?;
         let cov_gs = Self::coverage_only_gs(gs);
-        let _ = self.text_rasterizer.render_text(
+        let _ = self.text_rasterizer.with_ink().render_text(
             &mut scratch,
             text,
             base_transform,
@@ -5452,7 +5452,7 @@ impl PageRenderer {
         let (w, h) = sidecar.dims();
         let mut scratch = Pixmap::new(w, h)?;
         let cov_gs = Self::coverage_only_gs(gs);
-        let _ = self.text_rasterizer.render_tj_array(
+        let _ = self.text_rasterizer.with_ink().render_tj_array(
             &mut scratch,
             array,
             base_transform,
