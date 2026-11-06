@@ -86,13 +86,17 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
     let [groups, leaves, first_body, ..] = rows else {
         return;
     };
-    if paths.len() > MAX_GROUPED_HEADER_PATHS
+    let Some(bounds) = header_bounds(groups, leaves) else {
+        return;
+    };
+    let nearby: Vec<&PathContent> = paths.iter().filter(|path| near_header(path, bounds)).collect();
+    if nearby.len() > MAX_GROUPED_HEADER_PATHS
         || [groups.is_header, leaves.is_header, first_body.is_header]
             .into_iter()
             .any(|header| header)
         || !complete_source_band(first_body, columns, false)
         || !complete_source_band(leaves, columns, true)
-        || !grouped_header_rules(groups, leaves, paths)
+        || !grouped_header_rules(groups, leaves, &nearby)
     {
         return;
     }
@@ -127,7 +131,7 @@ fn source_label(cell: &TableCell, bold: bool) -> bool {
     })
 }
 
-fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[PathContent]) -> bool {
+fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[&PathContent]) -> bool {
     let Some(first) = leaves.cells.first().and_then(|cell| cell.bbox) else {
         return false;
     };
@@ -157,6 +161,7 @@ fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[PathConte
         }
         if group.colspan >= 2
             && source_label(group, true)
+            && group.text.chars().any(char::is_alphabetic)
             && visible_rule(paths, bounds.left(), bounds.right(), bounds.y)
         {
             grouped += 1;
@@ -173,29 +178,77 @@ fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[PathConte
     grouped >= 2 && remaining.is_empty()
 }
 
-fn visible_rule(paths: &[PathContent], left: f32, right: f32, y: f32) -> bool {
-    paths
+fn header_bounds(groups: &TableRow, leaves: &TableRow) -> Option<Rect> {
+    groups
+        .cells
         .iter()
-        .rev()
-        .find(|path| {
-            path.is_horizontal_line(HEADER_RULE_TOLERANCE)
-                && path.stroke_color.is_some()
-                && same_rule_position(path.bbox.left(), left)
-                && same_rule_position(path.bbox.right(), right)
-                && same_rule_position(path.bbox.center().y, y)
-        })
-        .is_some_and(|path| {
-            path.dash_pattern.is_none()
-                && path.stroke_width.is_finite()
-                && path.stroke_width > 0.0
-                && path.stroke_color.is_some_and(|color| {
-                    let channels = [color.r, color.g, color.b];
-                    channels.iter().all(|channel| (0.0..=1.0).contains(channel))
-                        && channels.iter().any(|channel| *channel <= MAX_HEADER_RULE_CHANNEL)
+        .chain(&leaves.cells)
+        .filter_map(|cell| cell.bbox)
+        .reduce(|all, bounds| all.union(&bounds))
+}
+
+fn near_header(path: &PathContent, bounds: Rect) -> bool {
+    let drawn = path.rendered_bbox();
+    drawn.right() >= bounds.left() - HEADER_RULE_TOLERANCE
+        && drawn.left() <= bounds.right() + HEADER_RULE_TOLERANCE
+        && drawn.bottom() >= bounds.top() - HEADER_RULE_TOLERANCE
+        && drawn.top() <= bounds.bottom() + HEADER_RULE_TOLERANCE
+}
+
+/// Paint order decides visibility: a later dashed or light stroke over the same line hides
+/// what was drawn before it, and a rule may be split into collinear segments. ~keep
+fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
+    let mut visible: Vec<(f32, f32)> = Vec::new();
+    for path in paths {
+        if !path.is_horizontal_line(HEADER_RULE_TOLERANCE)
+            || path.stroke_color.is_none()
+            || !same_rule_position(path.bbox.center().y, y)
+        {
+            continue;
+        }
+        let drawn = path.rendered_bbox();
+        let (low, high) = (drawn.left(), drawn.right());
+        if dark_solid_stroke(path) {
+            visible.push((low, high));
+        } else {
+            visible = visible
+                .into_iter()
+                .flat_map(|(start, end)| {
+                    let before = (start, end.min(low));
+                    let after = (start.max(high), end);
+                    [before, after].into_iter().filter(|(a, b)| a < b)
                 })
+                .collect();
+        }
+    }
+    visible.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut covered = left;
+    for (low, high) in visible {
+        if low > covered + HEADER_RULE_TOLERANCE {
+            return false;
+        }
+        covered = covered.max(high);
+        if covered >= right - HEADER_RULE_TOLERANCE {
+            return true;
+        }
+    }
+    false
+}
+
+fn dark_solid_stroke(path: &PathContent) -> bool {
+    path.dash_pattern.is_none()
+        && path.stroke_width.is_finite()
+        && path.stroke_width > 0.0
+        && path.stroke_color.is_some_and(|color| {
+            let channels = [color.r, color.g, color.b];
+            channels.iter().all(|channel| (0.0..=1.0).contains(channel))
+                && channels.iter().any(|channel| *channel <= MAX_HEADER_RULE_CHANNEL)
         })
 }
 
 fn same_rule_position(left: f32, right: f32) -> bool {
     (left - right).abs() <= HEADER_RULE_TOLERANCE
 }
+
+#[cfg(test)]
+mod tests;
