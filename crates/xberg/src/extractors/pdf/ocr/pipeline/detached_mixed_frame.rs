@@ -14,6 +14,8 @@ pub(super) fn supports(config: &crate::core::config::ExtractionConfig, page_coun
         && !config.use_cache
         && config.output_format == crate::core::config::OutputFormat::Plain
         && config.content_filter.is_none()
+        && config.images.is_none()
+        && config.redaction.is_none()
 }
 
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -46,6 +48,10 @@ fn plain_text_block(doc: &crate::types::internal::InternalDocument) -> bool {
         && element.layer == ContentLayer::Body
         && element.anchor.is_none()
         && element.annotations.is_empty()
+        && element
+            .attributes
+            .as_ref()
+            .is_none_or(|attrs| attrs.keys().all(|key| stock_block_attribute(key)))
         && !text.is_empty()
         && text.lines().count() == 1
         && !crate::pdf::structure::pipeline::looks_like_list_item(text)
@@ -59,6 +65,31 @@ fn plain_text_block(doc: &crate::types::internal::InternalDocument) -> bool {
         && doc.form_fields.is_empty()
         && doc.formulas.is_empty()
         && doc.recorded_formulas.is_empty()
+}
+
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn stock_block_attribute(key: &str) -> bool {
+    use crate::ocr::hocr_parser::{
+        HOCR_BASELINE_CONST_ATTRIBUTE, HOCR_BASELINE_SLOPE_ATTRIBUTE, HOCR_BLOCK_ID_ATTRIBUTE,
+        HOCR_BOLD_FRACTION_ATTRIBUTE, HOCR_FONT_SIZE_ATTRIBUTE, HOCR_ITALIC_FRACTION_ATTRIBUTE,
+        HOCR_LINE_FONT_SIZES_ATTRIBUTE, HOCR_LINE_X_HEIGHTS_ATTRIBUTE, HOCR_X_ASCENDERS_ATTRIBUTE,
+        HOCR_X_DESCENDERS_ATTRIBUTE, HOCR_X_HEIGHT_ATTRIBUTE,
+    };
+
+    matches!(
+        key,
+        HOCR_BASELINE_CONST_ATTRIBUTE
+            | HOCR_BASELINE_SLOPE_ATTRIBUTE
+            | HOCR_BLOCK_ID_ATTRIBUTE
+            | HOCR_BOLD_FRACTION_ATTRIBUTE
+            | HOCR_FONT_SIZE_ATTRIBUTE
+            | HOCR_ITALIC_FRACTION_ATTRIBUTE
+            | HOCR_LINE_FONT_SIZES_ATTRIBUTE
+            | HOCR_LINE_X_HEIGHTS_ATTRIBUTE
+            | HOCR_X_ASCENDERS_ATTRIBUTE
+            | HOCR_X_DESCENDERS_ATTRIBUTE
+            | HOCR_X_HEIGHT_ATTRIBUTE
+    )
 }
 
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -154,6 +185,40 @@ mod tests {
         config.use_cache = false;
         config.output_format = OutputFormat::Markdown;
         assert!(!supports(&config, Some(1)));
+    }
+
+    #[test]
+    fn explicit_redaction_or_image_extraction_disables_detached_placement() {
+        let mut config = ExtractionConfig {
+            use_cache: false,
+            include_document_structure: true,
+            ..Default::default()
+        };
+        assert!(supports(&config, Some(1)));
+        config.redaction = Some(Default::default());
+        assert!(!supports(&config, Some(1)));
+        config.redaction = None;
+        config.images = Some(Default::default());
+        assert!(!supports(&config, Some(1)));
+    }
+
+    #[test]
+    fn non_stock_block_attributes_cannot_claim_detached_geometry() {
+        let mut doc = InternalDocument::new("ocr");
+        let block = ElementKind::OcrText {
+            level: OcrElementLevel::Block,
+        };
+        let mut text = InternalElement::text(block, "Ledger summary", 0);
+        let attrs = text.attributes.get_or_insert_with(Default::default);
+        attrs.insert(
+            crate::ocr::hocr_parser::HOCR_X_HEIGHT_ATTRIBUTE.to_owned(),
+            "12".to_owned(),
+        );
+        doc.push_element(text);
+        assert!(plain_text_block(&doc));
+        let attrs = doc.elements[0].attributes.as_mut().unwrap();
+        attrs.insert("image_ref".to_owned(), "figure.png".to_owned());
+        assert!(!plain_text_block(&doc));
     }
 
     #[test]
