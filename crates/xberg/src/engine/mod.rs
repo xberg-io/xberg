@@ -225,17 +225,30 @@ impl Engine {
             );
             let mut uncached_config = config.clone();
             uncached_config.use_cache = false;
-            let result = crate::text::redaction::external::scope_external_redaction(
-                request.clone(),
-                self.extract(input, &uncached_config),
-            )
-            .await;
-            if result.is_ok() && !request.was_consumed() {
-                return Err(crate::XbergError::validation(
-                    "external redaction request did not reach the Late processor".to_string(),
-                ));
+            let engine = self.clone();
+            let work = async move {
+                let result = crate::text::redaction::external::scope_external_redaction(
+                    request.clone(),
+                    engine.extract(input, &uncached_config),
+                )
+                .await;
+                if result.is_ok() && !request.was_consumed() {
+                    return Err(crate::XbergError::validation(
+                        "external redaction request did not reach the Late processor".to_string(),
+                    ));
+                }
+                result
+            };
+            // The poll chain of this future exceeds the ~2 MB stack of an FFI host thread or a default tokio
+            // worker, so it runs as a task on the shared 16 MiB runtime. wasm32 has no threads to spawn onto.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let work: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + Send>> =
+                    Box::pin(work);
+                crate::core::runtime::run_on_large_stack(work).await?
             }
-            result
+            #[cfg(target_arch = "wasm32")]
+            work.await
         }
     }
 

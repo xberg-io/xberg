@@ -15,7 +15,12 @@
 #[cfg(all(
     feature = "tokio-runtime",
     not(target_arch = "wasm32"),
-    any(feature = "embeddings", feature = "static-embeddings", feature = "reranker")
+    any(
+        feature = "embeddings",
+        feature = "static-embeddings",
+        feature = "reranker",
+        feature = "redaction"
+    )
 ))]
 use once_cell::sync::OnceCell;
 
@@ -25,7 +30,12 @@ use once_cell::sync::OnceCell;
 #[cfg(all(
     feature = "tokio-runtime",
     not(target_arch = "wasm32"),
-    any(feature = "embeddings", feature = "static-embeddings", feature = "reranker")
+    any(
+        feature = "embeddings",
+        feature = "static-embeddings",
+        feature = "reranker",
+        feature = "redaction"
+    )
 ))]
 static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 
@@ -39,7 +49,12 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 #[cfg(all(
     feature = "tokio-runtime",
     not(target_arch = "wasm32"),
-    any(feature = "embeddings", feature = "static-embeddings", feature = "reranker")
+    any(
+        feature = "embeddings",
+        feature = "static-embeddings",
+        feature = "reranker",
+        feature = "redaction"
+    )
 ))]
 const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
@@ -58,7 +73,12 @@ const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 #[cfg(all(
     feature = "tokio-runtime",
     not(target_arch = "wasm32"),
-    any(feature = "embeddings", feature = "static-embeddings", feature = "reranker")
+    any(
+        feature = "embeddings",
+        feature = "static-embeddings",
+        feature = "reranker",
+        feature = "redaction"
+    )
 ))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
@@ -73,4 +93,120 @@ pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime
                 plugin_name: "runtime".to_string(),
             })
     })
+}
+
+/// Run `future` as a task on the shared 16 MiB-stack runtime and await its result.
+///
+/// The caller's own thread may be a host thread of about 2 MB (an FFI caller) or a default tokio worker of
+/// the same size, while the extraction poll chain needs more. Dropping the returned future aborts the task,
+/// so cancellation still stops the work. A panic in the task resumes unwinding in the caller, and the task
+/// does not inherit the caller's task-locals, so the future must establish any it needs.
+#[cfg(all(
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32"),
+    any(
+        feature = "embeddings",
+        feature = "static-embeddings",
+        feature = "reranker",
+        feature = "redaction"
+    )
+))]
+pub(crate) async fn run_on_large_stack<T, F>(future: F) -> crate::Result<T>
+where
+    T: Send + 'static,
+    F: std::future::Future<Output = T> + Send + 'static,
+{
+    use tracing::Instrument;
+
+    struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+    impl<T> Drop for AbortOnDrop<T> {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+
+    let mut task = AbortOnDrop(global_runtime()?.spawn(future.instrument(tracing::Span::current())));
+    match (&mut task.0).await {
+        Ok(value) => Ok(value),
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => Err(crate::XbergError::Cancelled),
+    }
+}
+
+#[cfg(all(
+    test,
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32"),
+    any(
+        feature = "embeddings",
+        feature = "static-embeddings",
+        feature = "reranker",
+        feature = "redaction"
+    )
+))]
+mod large_stack_tests {
+    use super::run_on_large_stack;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn returns_the_task_output() {
+        assert_eq!(run_on_large_stack(async { 7 }).await.unwrap(), 7);
+    }
+
+    #[tokio::test]
+    async fn task_runs_on_a_thread_with_the_large_stack() {
+        #[inline(never)]
+        fn deep(depth: usize) -> usize {
+            let frame = [depth as u8; 4096];
+            if depth == 0 {
+                0
+            } else {
+                deep(depth - 1) + usize::from(std::hint::black_box(frame)[0] & 1)
+            }
+        }
+        // 4 MiB of frames: overflows a 2 MB worker, fits the 16 MiB runtime.
+        assert!(run_on_large_stack(async { deep(1024) }).await.is_ok());
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "boom from task")]
+    async fn task_panic_resumes_in_the_caller() {
+        let _ = run_on_large_stack(async { panic!("boom from task") }).await;
+    }
+
+    #[tokio::test]
+    async fn dropping_the_future_aborts_the_task() {
+        struct SetOnDrop(Arc<AtomicBool>);
+        impl Drop for SetOnDrop {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let started = Arc::new(tokio::sync::Notify::new());
+        let dropped = Arc::new(AtomicBool::new(false));
+        let (started_task, guard) = (Arc::clone(&started), SetOnDrop(Arc::clone(&dropped)));
+        let outer = run_on_large_stack(async move {
+            let _guard = guard;
+            started_task.notify_one();
+            std::future::pending::<()>().await;
+        });
+        let outcome = tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::select! {
+                _ = outer => unreachable!("pending task cannot finish"),
+                () = started.notified() => {}
+            }
+        })
+        .await;
+        assert!(outcome.is_ok());
+        for _ in 0..200 {
+            if dropped.load(Ordering::SeqCst) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        panic!("task kept running after the outer future was dropped");
+    }
 }
