@@ -1,4 +1,6 @@
-use super::{PreparedOcrImage, SecurityLimits, dpi_workspace, native_image_budget, ocr_dpi_config};
+use super::{
+    PreparedOcrImage, RAW_IMAGE_SOURCE_DPI, SecurityLimits, dpi_workspace, native_image_budget, ocr_dpi_config,
+};
 use crate::core::config::ImageExtractionConfig;
 use crate::image::preprocessing::inferred_raster_dpi;
 use crate::image::text_height::glyph_workspace_bound;
@@ -11,8 +13,8 @@ pub(super) enum SourceDpi {
 }
 
 impl SourceDpi {
-    fn requires_estimation(self) -> bool {
-        matches!(self, Self::Unknown)
+    fn requires_estimation(self, target_dpi: i32) -> bool {
+        matches!(self, Self::Unknown) && target_dpi > RAW_IMAGE_SOURCE_DPI
     }
 }
 
@@ -54,7 +56,7 @@ pub(super) fn recover(
         encoded: encoded.len(),
         limit,
         policy,
-        estimate_dpi: source_dpi.requires_estimation(),
+        estimate_dpi: source_dpi.requires_estimation(target_dpi),
     };
     let Some(destination) = budget.finest_frame(dpi.max_image_dimension)? else {
         return Ok(None);
@@ -68,9 +70,7 @@ pub(super) fn recover(
     if !budget.admits_after_resize(destination, data.capacity() as u64, extra)? {
         return Ok(None);
     }
-    let Some(resolution) = reduced_resolution(source_dpi, &data, source, destination, target_dpi) else {
-        return Ok(None);
-    };
+    let resolution = reduced_resolution(source_dpi, &data, source, destination, target_dpi);
     let dimension_clamped = budget.dimension_clamps(destination, dpi.max_image_dimension)?;
     Ok(Some(prepared(
         data,
@@ -186,24 +186,27 @@ fn reduced_resolution(
     source: (u32, u32),
     destination: (u32, u32),
     target: i32,
-) -> Option<ReducedResolution> {
+) -> ReducedResolution {
     let (width, height) = destination;
+    let from_original = |dpi| ((dpi, dpi), dpi * f64::from(width) / f64::from(source.0));
     let (original, effective) = match input {
-        SourceDpi::Known(dpi) => ((dpi, dpi), dpi * f64::from(width) / f64::from(source.0)),
-        SourceDpi::Unknown => {
-            let estimated = inferred_raster_dpi(data, width as usize, height as usize, target)?;
-            let original = (
-                estimated * f64::from(source.0) / f64::from(width),
-                estimated * f64::from(source.1) / f64::from(height),
-            );
-            (original, estimated)
-        }
+        SourceDpi::Known(dpi) => from_original(dpi),
+        SourceDpi::Unknown => inferred_raster_dpi(data, width as usize, height as usize, target).map_or_else(
+            || from_original(f64::from(RAW_IMAGE_SOURCE_DPI)),
+            |estimated| {
+                let original = (
+                    estimated * f64::from(source.0) / f64::from(width),
+                    estimated * f64::from(source.1) / f64::from(height),
+                );
+                (original, estimated)
+            },
+        ),
     };
-    Some(ReducedResolution {
+    ReducedResolution {
         original,
         final_dpi: (effective.round() as i32).max(1),
         target,
-    })
+    }
 }
 
 fn prepared(
@@ -300,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_recovery_if_reduced_pixels_do_not_supply_a_glyph_estimate() {
+    fn assumes_the_original_resolution_when_reduced_pixels_have_no_glyphs() {
         let policy = ImagePreprocessingConfig::default();
         let image = image::RgbImage::from_pixel(100, 100, image::Rgb([245, 245, 245]));
         let limits = SecurityLimits {
@@ -320,12 +323,50 @@ mod tests {
             budget.finest_frame(4096).unwrap().is_some(),
             "a smaller blank raster fits"
         );
-        assert!(
-            recover(image, png, &limits, Some(&policy), None, SourceDpi::Unknown)
-                .unwrap()
-                .is_none()
-        );
+        let prepared = recover(image, png, &limits, Some(&policy), None, SourceDpi::Unknown)
+            .unwrap()
+            .expect("the smaller glyphless raster fits");
+        assert!(prepared.apply_pix_preprocessing);
+        assert!(prepared.preprocessing.is_some());
+        assert_fallback_resolution(&prepared, 100, policy.target_dpi);
     }
+
+    #[test]
+    fn densityless_raw_png_downscales_when_the_target_is_72_dpi() {
+        let bytes = include_bytes!("../../../../tests/fixtures/ocr_unknown_dpi_2530/raw-records.png");
+        let images = ImageExtractionConfig {
+            target_dpi: 72,
+            ..Default::default()
+        };
+        let prepared = super::super::prepare_encoded_ocr_image(
+            bytes,
+            &SecurityLimits::default(),
+            &Default::default(),
+            Some(&images),
+            false,
+        )
+        .expect("the raw source fits on a smaller frame at an assumed resolution");
+        assert!(!prepared.apply_pix_preprocessing);
+        assert_eq!(prepared.raw_ocr_source_frame.unwrap().dimensions, (4000, 3000));
+        assert_fallback_resolution(&prepared, 4000, 72);
+    }
+
+    fn assert_fallback_resolution(prepared: &PreparedOcrImage, original_width: u32, target_dpi: i32) {
+        assert!(prepared.width < original_width);
+        let metadata = prepared.image_preprocessing.as_ref().unwrap();
+        assert_eq!(
+            (metadata.original_dpi.horizontal, metadata.original_dpi.vertical),
+            (72.0, 72.0)
+        );
+        assert_eq!(metadata.target_dpi, target_dpi);
+        assert_eq!(
+            metadata.final_dpi,
+            (72.0 * f64::from(prepared.width) / f64::from(original_width)).round() as i32
+        );
+        assert!(metadata.final_dpi < 72);
+        assert_eq!(prepared.source_dpi, metadata.final_dpi);
+    }
+
     #[test]
     fn known_source_recovery_keeps_raw_policy_and_physical_dpi_within_the_cap() {
         let png = b"\x89PNG\r\n\x1a\n";
