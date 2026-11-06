@@ -2,6 +2,9 @@
 
 use super::types::PdfParagraph;
 
+mod legend_rows;
+pub(super) use legend_rows::reattach_chart_legend_markers;
+
 /// Maximum baseline-to-baseline gap, as a multiple of the larger paragraph's
 /// dominant font size, permitted when merging a continuation paragraph.
 ///
@@ -396,6 +399,83 @@ mod tests {
             caption_for: None,
             block_bbox: None,
             word_count,
+        }
+    }
+
+    fn legend_row(text: &str, x: f32, y: f32, width: f32, size: f32) -> PdfParagraph {
+        let mut paragraph = make_body_paragraph(text, size);
+        let line = &mut paragraph.lines[0];
+        line.baseline_y = y;
+        let run = &mut line.segments[0];
+        run.x = x;
+        run.y = y;
+        run.baseline_y = y;
+        run.width = width;
+        paragraph.block_bbox = Some((x, y, x + width, y + size));
+        paragraph
+    }
+
+    fn chart_legend_rows() -> Vec<PdfParagraph> {
+        let mut before = legend_row("· 1,Wake", 433.7, 672.2, 53.3, 9.7);
+        before
+            .lines
+            .extend(legend_row("* 4, Wake", 432.7, 660.0, 53.4, 9.7).lines);
+        before.is_list_item = true;
+        let mut after = legend_row("· 5a, Wake", 433.4, 631.4, 55.7, 9.7);
+        after
+            .lines
+            .extend(legend_row("A 5b, Wake", 433.2, 617.5, 52.5, 9.7).lines);
+        after.lines.extend(legend_row("8, Wake", 448.1, 603.4, 37.4, 9.7).lines);
+        after.is_list_item = true;
+        vec![
+            before,
+            legend_row("B", 433.7, 650.2, 5.5, 6.3),
+            legend_row(" 5, Balance", 439.2, 645.6, 60.8, 9.7),
+            after,
+        ]
+    }
+
+    #[test]
+    fn reattaches_only_the_raised_marker_between_repeated_legend_rows() {
+        let mut paragraphs = chart_legend_rows();
+        reattach_chart_legend_markers(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 3);
+        let text = |paragraph: &PdfParagraph| {
+            paragraph.lines[0]
+                .segments
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>()
+        };
+        assert_eq!(
+            paragraphs.iter().map(text).collect::<Vec<_>>(),
+            ["· 1,Wake", "B 5, Balance", "· 5a, Wake"]
+        );
+        assert_eq!(paragraphs[0].lines.len(), 2);
+        assert_eq!(paragraphs[2].lines.len(), 3);
+    }
+
+    #[test]
+    fn leaves_unrelated_initials_lists_captions_and_cross_row_labels_separate() {
+        for variant in 0..13 {
+            let mut paragraphs = chart_legend_rows();
+            match variant {
+                0 => paragraphs[0].lines[0].segments[0].text = "Prior body paragraph".into(),
+                1 => paragraphs[2].is_list_item = true,
+                2 => paragraphs[1].lines[0].segments[0].baseline_y = 660.0,
+                3 => paragraphs[3].lines.truncate(1),
+                4 => paragraphs[3].caption_for = Some(0),
+                5 => paragraphs[3].lines[1].segments[0].x += 100.0,
+                6 => paragraphs[3].lines[1].segments[0].text = "Unrelated list continuation".into(),
+                7 => paragraphs[3].lines[1].segments[0].text = "A 1, Wake".into(),
+                8 => paragraphs[3].lines[1].segments[0].width += 100.0,
+                9 => paragraphs[2].lines[0].segments[0].width = f32::INFINITY,
+                10 => paragraphs[3].lines[1].segments[0].font_size = f32::NAN,
+                11 => paragraphs[2].lines[0].segments[0].width = 0.0,
+                _ => paragraphs[1].lines[0].segments[0].y = f32::NAN,
+            }
+            reattach_chart_legend_markers(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 4, "variant {variant}");
         }
     }
 

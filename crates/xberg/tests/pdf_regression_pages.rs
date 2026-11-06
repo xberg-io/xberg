@@ -332,6 +332,24 @@ fn regression_pages_match_their_markdown_snapshots() {
     assert!(failures.is_empty(), "{}", report(&header, &failures, &regenerate));
 }
 
+#[test]
+fn native_chart_legend_keeps_the_raised_marker_with_its_label() {
+    if switch(SKIP_VAR) {
+        assert!(std::env::var_os("CI").is_none(), "{SKIP_VAR}=1 must not be set in CI");
+        return;
+    }
+    let page = get_test_documents_dir().join("pdf/regression_pages/ntrs-19940027557-p18.pdf");
+    assert_eq!(
+        sha256_hex(&page),
+        "76b68c133220c3fc1cc8e2fe2c6a0187d5eae2a154dff57dd6db06c6bd11001b"
+    );
+    let markdown = extract(&page).expect("native Markdown for verified chart page");
+    assert_eq!(
+        markdown,
+        include_str!("fixtures/pdf/regression_pages/ntrs-19940027557-p18.md")
+    );
+}
+
 fn assert_regression_page_has_script(file_name: &str, expected: &str) {
     if switch(SKIP_VAR) {
         assert!(std::env::var_os("CI").is_none(), "{SKIP_VAR}=1 must not be set in CI");
