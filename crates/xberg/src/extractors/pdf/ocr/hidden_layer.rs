@@ -111,14 +111,14 @@ pub(super) fn needs_ocr(
     doc: &PdfDocument,
     page: usize,
     byte_limit: usize,
-    remaining_ccitt_work: &mut usize,
+    remaining_preview_work: &mut usize,
     is_cancelled: impl Fn() -> bool,
 ) -> Option<bool> {
     if is_cancelled() {
         return None;
     }
     let (frame, content) = page_frame_and_contents(doc, page)?;
-    let name = audited_image_name(doc, page, &content, byte_limit)?;
+    let name = audited_image_name(doc, page, &content, byte_limit, remaining_preview_work)?;
     let source = image_source(doc, page, &name)?;
     let handles = doc.page_image_handles(page).ok()?;
     let [handle] = handles.as_slice() else {
@@ -139,7 +139,7 @@ pub(super) fn needs_ocr(
         return None;
     }
     let decode_limit = source.decode_budget(byte_limit, boxes.capacity())?;
-    source.charge_ccitt_work(remaining_ccitt_work)?;
+    source.charge_ccitt_work(remaining_preview_work)?;
     let samples = source.decode_samples(decode_limit)?;
     let preview = gray_preview(&samples, &source, size)?;
     Some(!is_cancelled() && has_uncovered_text(&preview, handle.bbox, &boxes))

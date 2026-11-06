@@ -105,37 +105,39 @@ fn split_source_audit_requires_independently_complete_paint_and_hidden_text() {
     };
 
     let doc = super::PdfDocument::from_bytes(CCITT_PROBE_PDF.to_vec()).unwrap();
-    let audit = |first: &[u8], second: &[u8], limit| {
+    let audit = |first: &[u8], second: &[u8], byte_limit, mut work| {
         let streams = [first, second].map(|bytes| Object::Stream {
             dict: Default::default(),
             data: bytes::Bytes::copy_from_slice(bytes),
         });
-        let joined = audit_split_contents(&doc, &streams, limit)?;
+        let joined = audit_split_contents(&doc, &streams, byte_limit, &mut work)?;
         audit_hidden_text_image(&joined, true, |font| font == "F")
     };
     let paint = b"q 612 0 0 792 0 0 cm /Scan Do Q";
-    let hidden = b"BT /F 12 Tf 3 Tr (layer) Tj ET";
-    assert_eq!(audit(paint, hidden, 1024).as_deref(), Some("Scan"));
-    assert_eq!(audit(paint, hidden, 128), None, "cumulative bytes");
-    assert_eq!(
-        audit(
-            b"q 612 0 0 792 0 0 cm /Scan",
-            b"Do Q BT /F 12 Tf 3 Tr (layer) Tj ET",
-            1024
-        ),
-        None
-    );
-    assert_eq!(
-        audit(
-            b"q 612 0 0 792 0 0 cm /Scan Do",
-            b"Q BT /F 12 Tf 3 Tr (layer) Tj ET",
-            1024
-        ),
-        None
-    );
-    assert_eq!(audit(paint, b"BT /F 12 Tf 3 Tr (layer) Tj", 1024), None);
-    assert_eq!(audit(paint, b"BT /F 12 Tf 3 Tr (layer) Tj ET /Cover Do", 1024), None);
-    assert_eq!(audit(paint, b"BT /F 12 Tf (visible) Tj ET", 1024), None);
+    let hidden = b"BT /F 12 Tf 3 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET";
+    let work = paint.len() + hidden.len() + 14;
+    assert_eq!(audit(paint, hidden, 1024, work).as_deref(), Some("Scan"));
+    assert_eq!(audit(paint, hidden, 1024, work - 1), None, "both parser passes");
+    assert_eq!(audit(paint, hidden, 128, work), None, "cumulative bytes");
+    for bad_paint in [
+        b"q 612 0 0 792 0 0 cm /Scan".as_slice(),
+        b"q 612 0 0 792 0 0 cm /Scan Do",
+        b"99 q 612 0 0 792 0 0 cm /Scan Do Q",
+        b"q 612 0 0 792 cm /Scan Do Q",
+        b"q 612 0 0 792 0 0 cm /Scan Do 1 Q",
+    ] {
+        assert_eq!(audit(bad_paint, hidden, 1024, 4096), None);
+    }
+    for bad_text in [
+        b"Do Q BT /F 12 Tf 3 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET".as_slice(),
+        b"BT /F 12 Tf 3 Tr\n1 0 0 1 20 20 Tm (layer) Tj",
+        b"BT /F 12 Tf 3 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET /Cover Do",
+        b"BT /F 12 Tf 0 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET",
+        b"BT /F 12 Tf 259 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET",
+        b"BT /F 12 Tf 3 0 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET",
+    ] {
+        assert_eq!(audit(paint, bad_text, 1024, 4096), None);
+    }
 }
 
 #[test]

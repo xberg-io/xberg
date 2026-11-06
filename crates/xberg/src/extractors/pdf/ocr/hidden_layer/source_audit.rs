@@ -10,9 +10,10 @@ pub(super) fn audited_image_name(
     page: usize,
     content: &Object,
     byte_limit: usize,
+    remaining_work: &mut usize,
 ) -> Option<String> {
     let (bytes, split) = if let Some(streams) = content.as_array() {
-        (audit_split_contents(doc, streams, byte_limit)?, true)
+        (audit_split_contents(doc, streams, byte_limit, remaining_work)?, true)
     } else {
         (
             decode_content_stream(content, MAX_CONTENT_BYTES.min(byte_limit / 4), byte_limit)?,
@@ -36,7 +37,12 @@ fn decode_content_stream(content: &Object, output_limit: usize, byte_limit: usiz
 
 const SPLIT_PAINT_OPERATORS: usize = 4;
 
-pub(super) fn audit_split_contents(doc: &PdfDocument, streams: &[Object], byte_limit: usize) -> Option<Vec<u8>> {
+pub(super) fn audit_split_contents(
+    doc: &PdfDocument,
+    streams: &[Object],
+    byte_limit: usize,
+    remaining_work: &mut usize,
+) -> Option<Vec<u8>> {
     let [paint, text] = streams else {
         return None;
     };
@@ -59,6 +65,14 @@ pub(super) fn audit_split_contents(doc: &PdfDocument, streams: &[Object], byte_l
     let decoded_limit = MAX_CONTENT_BYTES.min(byte_limit / 8);
     let paint = decode_content_stream(&paint, decoded_limit.checked_sub(2)?, byte_limit / 4)?;
     let text = decode_content_stream(&text, decoded_limit.checked_sub(paint.len() + 2)?, byte_limit / 4)?;
+    *remaining_work = remaining_work.checked_sub(paint.len().checked_add(text.len())?)?;
+    // The general parser normalizes malformed operator operands. Validate exact raw syntax first. ~keep
+    let text_operators = strict_split_syntax(&paint, &text)?;
+    let joined_operators = SPLIT_PAINT_OPERATORS.checked_add(text_operators)?;
+    if joined_operators > MAX_OPERATORS {
+        return None;
+    }
+    *remaining_work = remaining_work.checked_sub(SPLIT_PAINT_OPERATORS.checked_add(joined_operators)?)?;
     let mut count = 0;
     let complete = visit_complete_content_stream(&paint, SPLIT_PAINT_OPERATORS, |_| {
         count += 1;
@@ -74,6 +88,82 @@ pub(super) fn audit_split_contents(doc: &PdfDocument, streams: &[Object], byte_l
     bytes.extend_from_slice(&text);
     bytes.push(b'\n');
     Some(bytes)
+}
+
+fn strict_split_syntax(paint: &[u8], text: &[u8]) -> Option<usize> {
+    if !paint
+        .iter()
+        .chain(text)
+        .all(|byte| matches!(*byte, b' '..=b'~' | b'\t' | b'\r' | b'\n'))
+    {
+        return None;
+    }
+    let mut paint = std::str::from_utf8(paint).ok()?.split_ascii_whitespace();
+    if paint.next()? != "q" || !axis_matrix(&mut paint, "cm")? {
+        return None;
+    }
+    if !simple_name(paint.next()?) || paint.next()? != "Do" || paint.next()? != "Q" || paint.next().is_some() {
+        return None;
+    }
+    let mut lines = std::str::from_utf8(text).ok()?.trim_ascii().lines();
+    let mut header = lines.next()?.split_ascii_whitespace();
+    if header.next()? != "BT"
+        || !simple_name(header.next()?)
+        || pdf_number(header.next()?)? <= 0.0
+        || !header.eq(["Tf", "3", "Tr"])
+        || lines.next_back()?.trim_ascii() != "ET"
+    {
+        return None;
+    }
+    let mut rows = 0usize;
+    for line in lines {
+        let (matrix, literal) = line.trim_ascii().split_once(" Tm ")?;
+        let mut matrix = matrix.split_ascii_whitespace().chain(["Tm"]);
+        if !axis_matrix(&mut matrix, "Tm")? || matrix.next().is_some() || !plain_literal(literal) {
+            return None;
+        }
+        rows += 1;
+    }
+    (rows > 0).then_some(4 + 2 * rows)
+}
+
+fn axis_matrix<'a>(words: &mut impl Iterator<Item = &'a str>, operator: &str) -> Option<bool> {
+    let (a, b, c, d, e, f) = (
+        pdf_number(words.next()?)?,
+        pdf_number(words.next()?)?,
+        pdf_number(words.next()?)?,
+        pdf_number(words.next()?)?,
+        pdf_number(words.next()?)?,
+        pdf_number(words.next()?)?,
+    );
+    Some(words.next()? == operator && positive_axis_matrix(a, b, c, d, e, f))
+}
+
+fn pdf_number(token: &str) -> Option<f32> {
+    let unsigned = token.strip_prefix(['-', '+']).unwrap_or(token);
+    if unsigned.is_empty() || !unsigned.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.') {
+        return None;
+    }
+    let number: f32 = token.parse().ok()?;
+    number.is_finite().then_some(number)
+}
+
+fn simple_name(token: &str) -> bool {
+    token
+        .strip_prefix('/')
+        .is_some_and(|name| !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+}
+
+fn plain_literal(token: &str) -> bool {
+    token
+        .strip_prefix('(')
+        .and_then(|text| text.strip_suffix(") Tj"))
+        .is_some_and(|text| {
+            !text.is_empty()
+                && text
+                    .bytes()
+                    .all(|byte| (b' '..=b'~').contains(&byte) && !matches!(byte, b'(' | b')' | b'\\'))
+        })
 }
 
 #[cfg(test)]
