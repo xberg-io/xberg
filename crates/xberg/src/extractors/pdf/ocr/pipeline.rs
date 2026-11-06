@@ -3345,6 +3345,8 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut retry_texts_outside_tables: Vec<Option<String>> = vec![None; total_pages];
     #[allow(unused_mut)]
     let mut collected_tables: Vec<crate::types::Table> = Vec::new();
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let mut detached_table_pair = false;
     #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
     let mut collected_table_grids = Vec::new();
     let mut all_ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
@@ -4035,6 +4037,24 @@ pub(super) async fn extract_with_ocr_for_page(
                 }
                 #[cfg(not(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32"))))]
                 let _ = normalized_raw;
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if detached_page.is_some()
+                    && can_retry_orientation
+                    && !has_stored_scan
+                    && total_pages == 1
+                    && ocr_result.document.is_none()
+                    && ocr_result.formulas.is_empty()
+                    && ocr_result.ocr_internal_document.as_ref().is_some_and(|doc| {
+                        doc.ocr_text_claimed_by_tables && doc.elements.is_empty() && doc.tables.is_empty()
+                    })
+                    && let Some(processed) = super::document::processed_ocr_layout_dimensions(&ocr_result.metadata)
+                {
+                    // The raw path rewrites the processed dimensions to render size. The certified
+                    // orientation path already rescales its tables but leaves the text frame alone. ~keep
+                    #[cfg(auto_rotate)]
+                    let processed = if normalize_recovered_table { render } else { processed };
+                    detached_table_pair = detached_table_pair::normalize(&mut ocr_result.tables, processed, render);
+                }
             }
             // #1575: capture once, from the first page that has any -- see this function's
             // `backend_additional_metadata` declaration for why a single representative page
@@ -4858,7 +4878,18 @@ pub(super) async fn extract_with_ocr_for_page(
             // itself, document-wide, and a heuristic run here first would either be
             // wasted (too few pages to cluster) or would mark `pages` "already
             // structured" and block that wider pass from doing anything.
-            let doc = if skip_document_global_heuristic {
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            let detached_table_document = (detached_table_pair
+                && pages.as_slice().first().is_some_and(Vec::is_empty)
+                && public_ocr_pages.is_empty()
+                && pages_with_recovered_xobject_payload == [false])
+            .then(|| detached_table_pair::assemble(&collected_tables))
+            .flatten();
+            #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+            let detached_table_document: Option<crate::types::internal::InternalDocument> = None;
+            let doc = if detached_table_document.is_some() {
+                detached_table_document
+            } else if skip_document_global_heuristic {
                 Some(crate::pdf::structure::assemble_internal_document(
                     pages.clone(),
                     &collected_tables,
@@ -7599,6 +7630,10 @@ mod retained_raster_budget_tests;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/upright_processed_geometry_tests.rs"]
 mod upright_processed_geometry_tests;
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/detached_table_pair.rs"]
+mod detached_table_pair;
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[path = "pipeline/raw_workspace_geometry.rs"]
