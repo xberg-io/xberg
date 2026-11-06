@@ -10470,6 +10470,45 @@ Name: ___
         std::fs::read(&pdf_path).expect("failed to read test PDF fixture")
     }
 
+    /// One 72x72 page painted edge to edge by a single stored JPEG and nothing else: the only
+    /// page shape whose original JPEG stands for the whole page, so the pipeline-level
+    /// recovery may substitute it for the page.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    fn full_page_jpeg_fixture_bytes() -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut jpeg)
+            .encode(&image::RgbImage::new(32, 24), 32, 24, image::ColorType::Rgb8.into())
+            .unwrap();
+        let mut doc = Document::with_version("1.7");
+        let pages = doc.new_object_id();
+        let image = doc.add_object(Stream::new(
+            dictionary! {
+                "Type" => "XObject", "Subtype" => "Image", "Width" => 32, "Height" => 24,
+                "ColorSpace" => "DeviceRGB", "BitsPerComponent" => 8, "Filter" => "DCTDecode",
+            },
+            jpeg,
+        ));
+        let content = doc.add_object(Stream::new(dictionary! {}, b"q 72 0 0 72 0 0 cm /Im0 Do Q".to_vec()));
+        let page = doc.add_object(dictionary! {
+            "Type" => "Page", "Parent" => pages,
+            "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(72), Object::Integer(72)],
+            "Contents" => content, "Resources" => dictionary! { "XObject" => dictionary! { "Im0" => image } },
+        });
+        doc.objects.insert(
+            pages,
+            Object::Dictionary(
+                dictionary! { "Type" => "Pages", "Kids" => vec![Object::Reference(page)], "Count" => 1 },
+            ),
+        );
+        let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        bytes
+    }
+
     /// Whether these bytes are the recovered image XObject (an embedded JPEG) rather than
     /// the whole-page raster, which this module always encodes as PNG.
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -11164,7 +11203,7 @@ Name: ___
         let calls = Arc::new(AtomicUsize::new(0));
         crate::plugins::register_ocr_backend(Arc::new(FailsFirstTwoCallsBackend { calls: calls.clone() })).unwrap();
 
-        let pdf_bytes = single_xobject_fixture_bytes();
+        let pdf_bytes = full_page_jpeg_fixture_bytes();
         let pipeline = OcrPipelineConfig {
             stages: vec![OcrPipelineStage {
                 backend: BACKEND_NAME.to_string(),
