@@ -44,7 +44,12 @@ fn row_rules() -> Vec<PathContent> {
 }
 
 fn limit(words: &[HocrWord], paths: &[PathContent]) -> Option<u32> {
-    column_gap_limit_with_work(words, PAGE_HEIGHT, &vertical_rules(paths), &mut RuleWork::default())
+    column_gap_limit_with_work(
+        words,
+        PAGE_HEIGHT.into(),
+        &vertical_rules(paths),
+        &mut RuleWork::default(),
+    )
 }
 
 #[test]
@@ -274,7 +279,7 @@ fn should_bound_duplicate_path_proof_work_without_losing_supported_evidence() {
     let mut work = RuleWork::default();
     let rules = vertical_rules_with_work(&paths, &mut work).expect("bounded duplicate path input");
     assert_eq!(
-        column_gap_limit_with_work(&words, PAGE_HEIGHT, &rules, &mut work),
+        column_gap_limit_with_work(&words, PAGE_HEIGHT.into(), &rules, &mut work),
         Some(37)
     );
     assert!(
@@ -342,12 +347,18 @@ fn should_return_no_certificate_when_source_words_or_text_exhaust_the_budget() {
     let rules = vertical_rules(&row_rules());
     let words = vec![word("1", 100, 100, 20); MAX_SOURCE_PROOF_WORDS + 1];
     let mut work = RuleWork::default();
-    assert_eq!(column_gap_limit_with_work(&words, PAGE_HEIGHT, &rules, &mut work), None);
+    assert_eq!(
+        column_gap_limit_with_work(&words, PAGE_HEIGHT.into(), &rules, &mut work),
+        None
+    );
     assert_eq!(work.visits, 0, "oversized words must be rejected before sorting");
     let mut words = numeric_rows();
     words[0].text = "x".repeat(MAX_RULE_PROOF_WORK + 1);
     let mut work = RuleWork::default();
-    assert_eq!(column_gap_limit_with_work(&words, PAGE_HEIGHT, &rules, &mut work), None);
+    assert_eq!(
+        column_gap_limit_with_work(&words, PAGE_HEIGHT.into(), &rules, &mut work),
+        None
+    );
     assert_eq!(work.visits, MAX_RULE_PROOF_WORK);
 }
 
@@ -361,7 +372,14 @@ fn should_fail_closed_when_boundary_verification_exhausts_shared_work() {
         visits: MAX_RULE_PROOF_WORK,
     };
     assert_eq!(
-        source_boundaries::preserves_source_boundaries(&original, &corrected, &words, &rules, PAGE_HEIGHT, &mut work,),
+        source_boundaries::preserves_source_boundaries(
+            &original,
+            &corrected,
+            &words,
+            &rules,
+            PAGE_HEIGHT.into(),
+            &mut work,
+        ),
         None
     );
     assert_eq!(work.visits, MAX_RULE_PROOF_WORK);
@@ -429,7 +447,12 @@ fn assert_unmatched_page_frame_cannot_import_rules(segments: &[crate::pdf::hiera
     let words = crate::pdf::table_reconstruct::segments_to_words(segments, PAGE_HEIGHT);
     let paths = row_rules();
     assert_eq!(
-        column_gap_limit_with_work(&words, PAGE_HEIGHT, &vertical_rules(&paths), &mut RuleWork::default()),
+        column_gap_limit_with_work(
+            &words,
+            PAGE_HEIGHT.into(),
+            &vertical_rules(&paths),
+            &mut RuleWork::default()
+        ),
         Some(37),
         "wrong-frame coordinates would otherwise borrow the unrelated page rules"
     );
@@ -482,4 +505,142 @@ fn should_accept_page_axes_only_when_every_segment_is_unrotated() {
     assert!(supports_page_frame(&segments));
     segments[1].rotation_degrees = f32::NAN;
     assert!(!supports_page_frame(&segments));
+}
+
+#[test]
+fn fractional_rule_coverage_requires_unique_words_on_the_same_exact_source_row() {
+    use crate::pdf::table_reconstruct::project_segment_words;
+
+    for (case, right_y, right_x, add_duplicate, expected) in [
+        ("same source row", 684.001, 138.0, false, true),
+        ("rounded row collision", 684.002, 138.0, false, false),
+        ("paint overlaps true right glyph", 684.001, 137.8, false, false),
+        ("duplicate projected occurrence", 684.001, 138.0, true, false),
+    ] {
+        let mut segments = vec![
+            segment("8,604", 0.0, 100.0, 684.001),
+            segment("8,545", 0.0, right_x, right_y),
+        ];
+        if add_duplicate {
+            segments.push(segments[1].clone());
+        }
+        let mut sources = Vec::new();
+        let words = project_segment_words(&segments, PAGE_HEIGHT, Some(&mut sources));
+        assert_eq!(words[0].top, words[1].top, "{case}");
+        let rules = vertical_rules(&[vertical(137.4, 684.001, 694.0)]);
+        let [rule] = rules.as_slice() else {
+            panic!("one painted vertical rule")
+        };
+        let exact = ExactRows::new(&segments, &words, &sources);
+        assert!(
+            !separates_pair(rule, &words[0], &words[1], PAGE_HEIGHT.into()),
+            "{case}"
+        );
+        assert_eq!(
+            separates_pair(rule, &words[0], &words[1], exact.frame(PAGE_HEIGHT).unwrap()),
+            expected,
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn only_terminal_unmerged_words_witness_a_source_span() {
+    use crate::pdf::table_reconstruct::project_segment_words;
+
+    let segments = [
+        segment("12", 0.0, 100.0, 684.001),
+        segment("345", 0.0, 120.0, 684.001),
+        segment("word pair", 0.0, 160.0, 684.001),
+        segment("6,789", 0.0, 200.0, 684.001),
+    ];
+    let mut sources = Vec::new();
+    let words = project_segment_words(&segments, PAGE_HEIGHT, Some(&mut sources));
+    assert_eq!(
+        words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>(),
+        ["12345", "word", "pair", "6,789"]
+    );
+    assert_eq!(sources, [None, None, Some(2), Some(3)]);
+}
+
+#[test]
+fn terminal_word_cannot_certify_a_rule_crossed_by_its_source_span() {
+    use crate::pdf::table_reconstruct::project_segment_words;
+
+    let mut segments = [
+        segment("label 12", 0.0, 100.0, 684.001),
+        segment("34", 0.0, 150.0, 684.001),
+    ];
+    segments[0].width = 37.45;
+    let mut sources = Vec::new();
+    let words = project_segment_words(&segments, PAGE_HEIGHT, Some(&mut sources));
+    assert_eq!(sources, [None, Some(0), Some(1)]);
+    let mut path = vertical(137.35, 684.001, 694.0);
+    path.stroke_width = 0.2;
+    let [rule] = vertical_rules(&[path])
+        .try_into()
+        .unwrap_or_else(|_| panic!("one painted rule"));
+    let terminal = &words[1];
+    assert!(terminal.left.saturating_add(terminal.width) as f32 <= rule.x - rule.stroke_width / 2.0);
+    assert!(segments[0].x + segments[0].width > rule.x - rule.stroke_width / 2.0);
+    let exact = ExactRows::new(&segments, &words, &sources);
+    assert!(!separates_pair(
+        &rule,
+        terminal,
+        &words[2],
+        exact.frame(PAGE_HEIGHT).unwrap()
+    ));
+}
+
+#[test]
+fn source_rule_rejects_ink_overhang_hidden_by_f32_edge_rounding() {
+    use crate::pdf::table_reconstruct::project_segment_words;
+
+    let mut segments = [segment("12", 0.0, 100.0, 684.001), segment("34", 0.0, 150.0, 684.001)];
+    segments[0].width = 37.0_f32.next_up();
+    let mut sources = Vec::new();
+    let words = project_segment_words(&segments, PAGE_HEIGHT, Some(&mut sources));
+    let [rule] = vertical_rules(&[vertical(137.5, 684.001, 694.0)])
+        .try_into()
+        .unwrap_or_else(|_| panic!("one painted rule"));
+    let rounded_right = segments[0].x + segments[0].width;
+    assert_eq!(rounded_right, rule.x - rule.stroke_width / 2.0);
+    assert!(f64::from(segments[0].x) + f64::from(segments[0].width) > f64::from(rounded_right));
+    assert!(!separates_pair(&rule, &words[0], &words[1], PAGE_HEIGHT.into()));
+    let exact = ExactRows::new(&segments, &words, &sources);
+    assert!(!separates_pair(
+        &rule,
+        &words[0],
+        &words[1],
+        exact.frame(PAGE_HEIGHT).unwrap()
+    ));
+}
+
+#[test]
+fn exact_fallback_can_split_old_cells_but_cannot_move_their_cuts_or_blanks() {
+    let row = |cells: &[&str]| vec![cells.iter().map(|s| (*s).to_string()).collect::<Vec<_>>()];
+    let original = row(&["12 34", "", "56"]);
+    let refinement = row(&["12", "34", "", "56"]);
+    let moved_cut = row(&["12", "34 56", "", ""]);
+    let moved_blank = row(&["", "12", "34", "56"]);
+    for candidate in [&refinement, &moved_cut, &moved_blank] {
+        assert!(same_cell_words(&original, candidate));
+    }
+    assert!(source_boundaries::preserves_old_partitions(&original, &refinement));
+    assert!(!source_boundaries::preserves_old_partitions(&original, &moved_cut));
+    assert!(!source_boundaries::preserves_old_partitions(&original, &moved_blank));
+}
+
+#[test]
+fn coarse_rule_rejects_positive_stroke_width_hidden_by_edge_rounding() {
+    let left = word("12", 100, 100, 37);
+    let right = word("34", 150, 100, 20);
+    let mut path = vertical(137.0, 680.0, 700.0);
+    path.stroke_width = 1e-6;
+    let [rule] = vertical_rules(&[path])
+        .try_into()
+        .unwrap_or_else(|_| panic!("one painted rule"));
+    assert_eq!(rule.x - rule.stroke_width / 2.0, (left.left + left.width) as f32);
+    assert!(rule.stroke_width > 0.0);
+    assert!(!separates_pair(&rule, &left, &right, PAGE_HEIGHT.into()));
 }

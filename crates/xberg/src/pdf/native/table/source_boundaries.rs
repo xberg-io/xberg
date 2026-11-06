@@ -1,4 +1,4 @@
-use super::{RuleWork, VerticalRule, rules_in_gap, separates_pair};
+use super::{RuleFrame, RuleWork, VerticalRule, rules_in_gap, separates_pair};
 use crate::pdf::table_reconstruct::HocrWord;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -7,7 +7,7 @@ pub(super) fn preserves_source_boundaries(
     corrected: &[Vec<String>],
     words: &[HocrWord],
     rules: &[VerticalRule],
-    page_height: f32,
+    frame: RuleFrame<'_>,
     work: &mut RuleWork,
 ) -> Option<bool> {
     work.charge(words.len())?;
@@ -15,18 +15,18 @@ pub(super) fn preserves_source_boundaries(
     if rows.len() != original.len() {
         return Some(false);
     }
-    let recurring = recurring_boundaries(&rows, rules, page_height, work)?;
+    let recurring = recurring_boundaries(&rows, rules, frame, work)?;
     for ((old, new), row) in original.iter().zip(corrected).zip(&rows) {
         work.charge(old.len().saturating_add(new.len()).saturating_add(row.len()))?;
         let matches = row
             .iter()
             .flat_map(|word| word.text.split_whitespace())
             .eq(old.iter().flat_map(|cell| cell.split_whitespace()));
-        if !matches || !row_splits_are_ruled((old, new), row, rules, page_height, &recurring, work)? {
+        if !matches || !row_splits_are_ruled((old, new), row, rules, frame, &recurring, work)? {
             return Some(false);
         }
     }
-    all_columns_are_ruled(corrected, &rows, rules, page_height, &recurring, work)
+    all_columns_are_ruled(corrected, &rows, rules, frame, &recurring, work)
 }
 
 fn source_rows(words: &[HocrWord]) -> Vec<Vec<&HocrWord>> {
@@ -45,7 +45,7 @@ fn source_rows(words: &[HocrWord]) -> Vec<Vec<&HocrWord>> {
 fn recurring_boundaries(
     rows: &[Vec<&HocrWord>],
     rules: &[VerticalRule],
-    page_height: f32,
+    frame: RuleFrame<'_>,
     work: &mut RuleWork,
 ) -> Option<BTreeSet<u32>> {
     let mut supported = BTreeMap::new();
@@ -54,7 +54,7 @@ fn recurring_boundaries(
             work.charge(1)?;
             for rule in rules_in_gap(pair[0], pair[1], rules) {
                 work.charge(1)?;
-                if separates_pair(rule, pair[0], pair[1], page_height) {
+                if separates_pair(rule, pair[0], pair[1], frame) {
                     let (first_row, repeated) = supported.entry(rule.x.to_bits()).or_insert((pair[0].top, false));
                     *repeated |= *first_row != pair[0].top;
                 }
@@ -82,6 +82,16 @@ fn cell_boundaries(cells: &[String]) -> Vec<usize> {
         .collect()
 }
 
+/// Given identical ordered row words, the old cut positions must be a subsequence of the new ones.
+pub(super) fn preserves_old_partitions(original: &[Vec<String>], corrected: &[Vec<String>]) -> bool {
+    original.iter().zip(corrected).all(|(old, new)| {
+        let mut new_cuts = cell_boundaries(new).into_iter();
+        cell_boundaries(old)
+            .into_iter()
+            .all(|old_cut| new_cuts.any(|new_cut| new_cut == old_cut))
+    })
+}
+
 type SourceBoundaries<'a> = BTreeMap<usize, (&'a HocrWord, &'a HocrWord)>;
 
 fn source_word_boundaries<'a>(row: &[&'a HocrWord]) -> SourceBoundaries<'a> {
@@ -98,7 +108,7 @@ fn all_columns_are_ruled(
     corrected: &[Vec<String>],
     rows: &[Vec<&HocrWord>],
     rules: &[VerticalRule],
-    page_height: f32,
+    frame: RuleFrame<'_>,
     recurring: &BTreeSet<u32>,
     work: &mut RuleWork,
 ) -> Option<bool> {
@@ -117,7 +127,7 @@ fn all_columns_are_ruled(
             };
             for rule in rules_in_gap(left, right, rules) {
                 work.charge(1)?;
-                if recurring.contains(&rule.x.to_bits()) && separates_pair(rule, left, right, page_height) {
+                if recurring.contains(&rule.x.to_bits()) && separates_pair(rule, left, right, frame) {
                     supported[column].insert(rule.x.to_bits());
                 }
             }
@@ -139,7 +149,7 @@ fn row_splits_are_ruled(
     cells: (&[String], &[String]),
     row: &[&HocrWord],
     rules: &[VerticalRule],
-    page_height: f32,
+    frame: RuleFrame<'_>,
     recurring: &BTreeSet<u32>,
     work: &mut RuleWork,
 ) -> Option<bool> {
@@ -161,7 +171,7 @@ fn row_splits_are_ruled(
         let mut supported = false;
         for rule in rules_in_gap(left, right, rules) {
             work.charge(1)?;
-            if recurring.contains(&rule.x.to_bits()) && separates_pair(rule, left, right, page_height) {
+            if recurring.contains(&rule.x.to_bits()) && separates_pair(rule, left, right, frame) {
                 supported = true;
                 break;
             }
