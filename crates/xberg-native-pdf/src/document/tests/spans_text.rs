@@ -709,3 +709,27 @@ fn reorder_same_line_runs_de_interleaves_two_stacked_lines() {
         "stacked lines must de-interleave, not X-sort into one fake line"
     );
 }
+
+/// A ligature glyph drawn as its own run inside one word ("di" + "ﬀ" + "erent") is
+/// separated from its neighbours by kerning slightly above the ordinary word-gap
+/// threshold; it must not read as a word break (#2322).
+#[test]
+fn test_should_insert_space_keeps_a_tight_ligature_run_inside_a_word() {
+    let before = make_test_span("di", 72.0, 700.0, 10.0, 12.0);
+    let ligature = make_test_span("\u{FB00}", 84.0, 700.0, 7.0, 12.0); // 2pt = 0.17em gap ~keep
+    let after = make_test_span("erent", 93.0, 700.0, 30.0, 12.0); // 2pt gap ~keep
+    assert!(!PdfDocument::should_insert_space(&before, &ligature));
+    assert!(!PdfDocument::should_insert_space(&ligature, &after));
+}
+
+/// The same relaxed threshold must not weld two words: a real space-sized gap
+/// after a word-final ligature still separates them.
+#[test]
+fn test_should_insert_space_still_separates_words_around_a_ligature() {
+    let word = make_test_span("sta\u{FB00}", 72.0, 700.0, 25.0, 12.0);
+    let next = make_test_span("only", 100.0, 700.0, 20.0, 12.0); // 3pt = 0.25em gap ~keep
+    assert!(PdfDocument::should_insert_space(&word, &next));
+    let ligature_start = make_test_span("\u{FB01}nal", 100.0, 700.0, 20.0, 12.0);
+    let prev = make_test_span("the", 72.0, 700.0, 25.0, 12.0);
+    assert!(PdfDocument::should_insert_space(&prev, &ligature_start));
+}

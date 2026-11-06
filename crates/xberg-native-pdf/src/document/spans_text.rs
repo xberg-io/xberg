@@ -751,7 +751,11 @@ impl PdfDocument {
         // Space threshold: 0.15 × font size
         // Typical space width is ~0.25em, so 0.15em catches gaps > 60% of a space.
         // This aligns with the text extractor's font-aware threshold (~50% of space width). ~keep
-        let space_threshold = font_size * 0.15;
+        let space_threshold = if crate::extractors::text::is_ligature_boundary(&prev.text, &current.text) {
+            font_size * 0.15 * crate::extractors::text::LIGATURE_BOUNDARY_GAP_FACTOR
+        } else {
+            font_size * 0.15
+        };
 
         // Insert space if gap is significant. Previously the upper bound was
         // `gap < font_size * 5.0` on the rationale that very large gaps mean
