@@ -138,15 +138,191 @@ async fn leaves_requested_document_structure_untouched() {
     assert!(!document.pages.unwrap()[0].content.contains(TITLE));
 }
 
+const CACHE_CASE: &str = "recovers_the_photo_title_with_extraction_cache_enabled";
+const CACHE_CHILD: &str = "XBERG_PHOTO_TITLE_CACHE_TEST_CHILD";
+
 #[tokio::test]
-async fn leaves_cache_enabled_extraction_on_the_primary_route() {
+async fn recovers_the_photo_title_with_extraction_cache_enabled() {
+    if std::env::var(CACHE_CHILD).as_deref() == Ok(CACHE_CASE) {
+        check_photo_title_cache_paths().await;
+    } else {
+        run_isolated_cache_test();
+    }
+}
+
+fn run_isolated_cache_test() {
+    let root = tempfile::tempdir().expect("isolated OCR data and cache");
+    let tessdata = root.path().join("tessdata");
+    std::fs::create_dir(&tessdata).expect("create isolated tessdata");
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English fixture");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
+    std::fs::write(tessdata.join("eng.traineddata"), english).expect("write bundled English fixture");
+    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args(["--exact", CACHE_CASE, "--nocapture"])
+        .env(CACHE_CHILD, CACHE_CASE)
+        .env("TESSDATA_PREFIX", tessdata)
+        .env("XBERG_CACHE_DIR", root.path().join("cache"))
+        .output()
+        .expect("run isolated OCR test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success()
+            && stdout
+                .lines()
+                .any(|line| { line.starts_with("test result: ok. 1 passed; 0 failed; 0 ignored;") }),
+        "isolated OCR test failed: {stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+async fn check_photo_title_cache_paths() {
+    use std::sync::{Arc, atomic::Ordering};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let lookups = OcrCacheLookups::default();
+    tracing::subscriber::set_global_default(tracing_subscriber::registry().with(lookups.clone()))
+        .expect("capture OCR worker cache events in the isolated process");
+
+    let cache = Arc::new(CountedCache::default());
+    let engine = xberg::engine::Engine::builder()
+        .with_cache_backend(cache.clone())
+        .build();
     let config = ExtractionConfig {
-        use_cache: true,
+        use_cache: ExtractionConfig::default().use_cache,
         ..png_config()
     };
-    let document = extract_png(PHOTO, &config).await;
-    assert_body(
-        &document.content,
-        "56e3599e161041150f8a5363b1b8f8b6acf5ceac11adcae6528b5c47528d403e",
+    assert!(config.use_cache, "exercise the default cache policy");
+    let cold = read_engine(&engine, PHOTO, &config).await;
+    assert_cached_title(&cold);
+    assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
+    assert_eq!(cache.hits.load(Ordering::SeqCst), 0);
+    let first_lookup = lookups.0.lock().unwrap().clone();
+    assert_eq!(first_lookup.len(), 1, "the cold primary should do one lookup");
+    let (key, hit) = &first_lookup[0];
+    assert!(!hit, "the child starts with a cold disk cache");
+
+    let outer_warm = read_engine(&engine, PHOTO, &config).await;
+    assert_same_document(&cold, &outer_warm);
+    assert_eq!(cache.hits.load(Ordering::SeqCst), 1);
+    assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
+    assert_eq!(*lookups.0.lock().unwrap(), first_lookup);
+
+    let fresh_cache = Arc::new(CountedCache::default());
+    let fresh_engine = xberg::engine::Engine::builder()
+        .with_cache_backend(fresh_cache.clone())
+        .build();
+    let inner_warm = read_engine(&fresh_engine, PHOTO, &config).await;
+    assert_same_document(&cold, &inner_warm);
+    assert_eq!(fresh_cache.hits.load(Ordering::SeqCst), 0);
+    assert_eq!(fresh_cache.writes.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *lookups.0.lock().unwrap(),
+        [(key.clone(), false), (key.clone(), true)],
+        "a second Engine must miss its outer cache and hit the same built-in OCR key"
     );
+
+    let uncached = png_config();
+    assert_same_document(&cold, &read_engine(&engine, PHOTO, &uncached).await);
+    for fixture in [NUMERIC, TABLE] {
+        let baseline = read_engine(&engine, fixture, &uncached).await;
+        let cache_enabled = read_engine(&engine, fixture, &config).await;
+        assert_same_document(&baseline, &cache_enabled);
+        assert!(!cache_enabled.content.contains(TITLE));
+    }
+}
+
+fn assert_cached_title(document: &ExtractedDocument) {
+    assert_addition(
+        document,
+        "56e3599e161041150f8a5363b1b8f8b6acf5ceac11adcae6528b5c47528d403e",
+        "2ab44fd7d097fd8353d7c6f346ce3a4ba370e64fec2871d7131de9382012507c",
+    );
+    assert!(document.ocr_elements.is_none());
+    assert!(document.tables.is_empty());
+    let pages = document.pages.as_ref().expect("requested pages");
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].page_number, 1);
+    let confidence = pages[0].ocr_confidence.as_ref().expect("original primary confidence");
+    assert_eq!(confidence.word_count, 215);
+    assert_eq!(confidence.backend, "tesseract");
+}
+
+fn assert_same_document(expected: &ExtractedDocument, actual: &ExtractedDocument) {
+    assert_eq!(
+        serde_json::to_value(expected).unwrap(),
+        serde_json::to_value(actual).unwrap(),
+        "the complete public document must be identical across cache modes"
+    );
+}
+
+#[derive(Default)]
+struct CountedCache {
+    entries: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    hits: std::sync::atomic::AtomicUsize,
+    writes: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl xberg::engine::seams::CacheBackend for CountedCache {
+    async fn get(&self, key: &str) -> Option<Vec<u8>> {
+        let value = self.entries.lock().unwrap().get(key).cloned();
+        if value.is_some() {
+            self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        value
+    }
+
+    async fn put(&self, key: &str, value: Vec<u8>, _ttl: Option<std::time::Duration>) {
+        self.entries.lock().unwrap().insert(key.into(), value);
+        self.writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[derive(Default)]
+struct CacheLookup {
+    key: Option<String>,
+    hit: Option<bool>,
+}
+
+impl tracing::field::Visit for CacheLookup {
+    fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+
+    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+        if field.name() == "xberg.cache.hit" {
+            self.hit = Some(value);
+        }
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "xberg.cache.key" {
+            self.key = Some(value.to_owned());
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+struct OcrCacheLookups(std::sync::Arc<std::sync::Mutex<Vec<(String, bool)>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for OcrCacheLookups {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        if event.metadata().target() != "xberg::ocr::cache" {
+            return;
+        }
+        let mut lookup = CacheLookup::default();
+        event.record(&mut lookup);
+        if let (Some(key), Some(hit)) = (lookup.key, lookup.hit) {
+            self.0.lock().unwrap().push((key, hit));
+        }
+    }
+}
+
+async fn read_engine(engine: &xberg::engine::Engine, bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
+    let input = ExtractInput::from_bytes(bytes.to_vec(), "image/png", None);
+    let mut batch = engine.extract(input, config).await.expect("extract the synthetic PNG");
+    assert!(batch.errors.is_empty(), "{:?}", batch.errors);
+    assert_eq!(batch.results.len(), 1);
+    batch.results.remove(0)
 }

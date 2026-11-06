@@ -87,7 +87,6 @@ pub(super) fn eligible(config: &ExtractionConfig, ocr: &OcrConfig, mime_type: &s
         return false;
     }
     mime_type.eq_ignore_ascii_case("image/png")
-        && !config.use_cache
         && config.output_format == OutputFormat::Plain
         && config.images.is_none()
         && !config.force_ocr
