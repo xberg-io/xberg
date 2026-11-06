@@ -197,6 +197,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Place mixed-route OCR lines in the resampled frame when matching them to native text.**
+  OCR paragraphs are in the frame preprocessing resampled the render to, but the page-text merge scaled them by the render's size, so every OCR box was twice its true size at a 150 to 300 DPI resample, owned no native line and the native lines were prepended a second time (#2313).
+
 - **(redaction): Run external-redaction extraction on the shared 16 MiB runtime.**
   The poll chain of `extract_with_external_redaction` needs about 2.2 MB, which overflowed the roughly 2 MB host thread of an FFI caller such as the JVM and crashed the process. Dropping the call still cancels the work.
 

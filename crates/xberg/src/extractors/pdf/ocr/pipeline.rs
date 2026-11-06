@@ -1335,6 +1335,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
+                    let ocr_frame_px = preprocessing.values().next().and_then(processed_frame_px);
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
@@ -1368,7 +1369,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // single-backend route; `build_pipeline_ocr_page_document` applies it.
                     let raster_size_px = page_dims.unwrap_or((0, 0));
                     if !paragraphs_in_points {
-                        ocr_raster_by_page.insert(page_number, raster_size_px);
+                        ocr_raster_by_page.insert(page_number, ocr_frame_px.unwrap_or(raster_size_px));
                     }
                     let page_size_pt = page_dimensions_pt(&render_doc, page_idx);
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -1504,6 +1505,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
+                    let ocr_frame_px = preprocessing.values().next().and_then(processed_frame_px);
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
@@ -1526,7 +1528,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                     let page_text = page_texts.into_iter().next().unwrap_or(text);
                     if !paragraphs_in_points {
-                        ocr_raster_by_page.insert(page_number, (image.width(), image.height()));
+                        ocr_raster_by_page.insert(page_number, ocr_frame_px.unwrap_or((image.width(), image.height())));
                     }
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
@@ -6870,6 +6872,14 @@ pub(super) struct RunPageParagraphs {
     pub(super) paragraphs: Vec<crate::pdf::structure::types::PdfParagraph>,
     pub(super) ocr_scale: Option<(f32, f32)>,
     pub(super) detached_ocr_scale: Option<(f32, f32)>,
+}
+
+/// The pixel frame the OCR paragraphs of a page are in when preprocessing resampled the render
+/// before recognition: the resampled dimensions, not the render's. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn processed_frame_px(metadata: &crate::types::ImagePreprocessingMetadata) -> Option<(u32, u32)> {
+    let resized = metadata.new_dimensions?;
+    Some((u32::try_from(resized.width).ok()?, u32::try_from(resized.height).ok()?))
 }
 
 /// The factor per axis from the raster a page of a whole-document run was read from to PDF
