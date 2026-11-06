@@ -134,26 +134,52 @@ fn parsebench_survey_leaf_band_remains_a_header_below_group_labels() {
 #[test]
 #[ignore = "requires the reference-only ParseBench source PDF outside Git"]
 fn parsebench_survey_bold_leaves_without_a_visible_separator_stay_body_cells() {
-    let mut pdf = lopdf::Document::load_mem(&parsebench_source()).unwrap();
-    let page = pdf.get_pages()[&1];
-    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
-    let source = String::from_utf8(pdf.get_page_content(page)).unwrap();
-    let separator = ".7 .7 .7 RG\nn 0 154 m 406.8 154 l S";
-    assert_eq!(source.matches(separator).count(), 1);
-    let white = source.replace(separator, "1 1 1 RG\nn 0 154 m 406.8 154 l S");
-    pdf.get_object_mut(stream)
-        .unwrap()
-        .as_stream_mut()
-        .unwrap()
-        .set_plain_content(white.into_bytes());
-    let mut bytes = Vec::new();
-    pdf.save_to(&mut bytes).unwrap();
-
+    let bytes = rewrite_parsebench_source(|source| {
+        let separator = ".7 .7 .7 RG\nn 0 154 m 406.8 154 l S";
+        assert_eq!(source.matches(separator).count(), 1);
+        source.replace(separator, "1 1 1 RG\nn 0 154 m 406.8 154 l S")
+    });
     let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
     let survey_html = survey_html(&result.content);
     assert!(survey_html.contains("<th colspan=\"2\">Satisfaction Score</th>"));
     assert!(survey_html.contains("<td>Department</td>"));
     assert!(survey_html.contains("<td>Company-wide</td>"));
+}
+
+#[test]
+#[ignore = "requires the reference-only ParseBench source PDF outside Git"]
+fn parsebench_survey_keeps_distinct_baselines_in_the_ruled_leaf_band() {
+    let bytes = rewrite_parsebench_source(|source| {
+        let label = "BT 1 0 0 1 194.504 163 Tm (2025) Tj T* ET";
+        assert_eq!(source.matches(label).count(), 1);
+        source.replace(
+            label,
+            &format!("{label}\nBT 1 0 0 1 126.104 157 Tm (North) Tj T* ET\nBT 1 0 0 1 194.504 157 Tm (South) Tj T* ET"),
+        )
+    });
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    let [_, survey] = result.tables.as_slice() else {
+        panic!("expected exactly the two source tables");
+    };
+    assert_eq!(survey.cells.len(), 10);
+    assert_eq!(survey.cells[1][1..3], ["2024", "2025"]);
+    assert_eq!(survey.cells[2][1..3], ["North", "South"]);
+    assert!(survey_html(&result.content).contains("<td>Department</td>"));
+}
+
+fn rewrite_parsebench_source(rewrite: impl FnOnce(&str) -> String) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(&parsebench_source()).unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let source = String::from_utf8(pdf.get_page_content(page)).unwrap();
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(rewrite(&source).into_bytes());
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
 }
 
 fn parsebench_source() -> Vec<u8> {
