@@ -106,3 +106,132 @@ setup() {
 	xberg_assert_status 0
 	[ "$(grep -c -- '--build .* -j 1$' "$XBERG_WORK/cmake-arguments")" -eq 1 ]
 }
+
+@test "macos_heif rejects an unknown profile before downloading" {
+	run env XBERG_HEIF_PROFILE=encdoers "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "unknown XBERG_HEIF_PROFILE"
+	xberg_assert_trace_empty
+}
+
+@test "macos_heif encoder profile requires arm64 at the 11.0 floor" {
+	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "requires arm64 and MACOSX_DEPLOYMENT_TARGET=11.0"
+	xberg_assert_trace_empty
+	xberg_stub uname 'printf "arm64\n"'
+	run env XBERG_HEIF_PROFILE=elixir-encoders MACOSX_DEPLOYMENT_TARGET=15.0 "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "requires arm64 and MACOSX_DEPLOYMENT_TARGET=11.0"
+	xberg_assert_trace_empty
+}
+
+@test "macos_heif encoder profile rejects a populated prefix from another profile" {
+	xberg_stub uname 'printf "arm64\n"'
+	touch "$XBERG_HEIF_PREFIX/.hidden"
+	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "requires a fresh prefix"
+	xberg_assert_trace_empty
+}
+
+@test "macos_heif encoder profile builds both encoders and stages pinned notices" {
+	xberg_stub uname 'printf "arm64\n"'
+	xberg_stub lipo 'printf "arm64\n"'
+	xberg_stub otool '
+		if [ "$1" = -arch ]; then
+			printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 11.0\n"
+			exit
+		fi
+		printf "%s:\n" "$2"
+		if [ "$1" = -D ]; then
+			[ "${XBERG_TEST_SKIP_ID:-}" != "${2##*/}" ] && printf "%s\n" "$2"
+			exit 0
+		fi
+		printf " %s (compatibility version 1.0.0)\n" "$2"
+		[ "${XBERG_TEST_SKIP_IMPORTS:-}" = "${2##*/}" ] && exit 0
+		printf " /usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
+		if [[ "$2" == */libheif*.dylib ]]; then
+			for dep in libaom libde265 libx265; do
+				[ "$dep" = "${XBERG_TEST_SKIP_LINK:-}" ] && continue
+				printf " %s/lib/%s.dylib (compatibility version 1.0.0)\n" "$XBERG_HEIF_PREFIX" "$dep"
+			done
+		fi'
+	xberg_stub curl 'printf "%s\n" "${!#}" >>"$XBERG_TRACE"'
+	export XBERG_TEST_REAL_SHASUM="$(command -v shasum)"
+	xberg_stub shasum '[ "$*" = "-a 256 -c -" ] && exit 0' 'exec "$XBERG_TEST_REAL_SHASUM" "$@"'
+	xberg_stub tar '
+		case "$2" in
+			*/x265.tar.gz) dir=x265_4.3; names="COPYING";;
+			*/libde265.tar.gz) dir=libde265-1.1.3; names="COPYING AUTHORS libde265/COPYING";;
+			*/libaom.tar.gz) dir=libaom-3.15.3; names="LICENSE PATENTS AUTHORS third_party/fastfeat/LICENSE third_party/libyuv/LICENSE third_party/vector/LICENSE";;
+			*/libheif.tar.gz) dir=libheif-1.23.7; names="COPYING";;
+			*) exit 93;;
+		esac
+		mkdir -p "$4/$dir"
+		for name in $names; do
+			mkdir -p "$(dirname "$4/$dir/$name")"
+			printf "%s/%s\n" "$dir" "$name" >"$4/$dir/$name"
+		done'
+	xberg_stub cmake '
+		printf "cmake %s\n" "$*" >>"$XBERG_TRACE"
+		[ "$1" = --install ] || exit 0
+		case "$2" in
+			*/x265-build) name=x265; lib=libx265; version=4.3;;
+			*/libde265-build) name=libde265; lib=libde265; version=1.1.3;;
+			*/libaom-build) name=aom; lib=libaom; version=3.15.3;;
+			*/libheif-build) name=libheif; lib=libheif; version=1.23.7;;
+			*) exit 94;;
+		esac
+		mkdir -p "$XBERG_HEIF_PREFIX/lib/pkgconfig"
+		touch "$XBERG_HEIF_PREFIX/lib/$lib.dylib"
+		printf "Version: %s\n" "$version" >"$XBERG_HEIF_PREFIX/lib/pkgconfig/$name.pc"'
+	export XBERG_HEIF_PREFIX="$XBERG_WORK/fresh-prefix"
+	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
+	xberg_assert_status 0
+	grep -q -- 'x265-10 .* -DMAIN12=OFF' "$XBERG_TRACE"
+	grep -q -- 'x265-12 .* -DMAIN12=ON' "$XBERG_TRACE"
+	grep -q -- '-DLINKED_10BIT=ON -DLINKED_12BIT=ON' "$XBERG_TRACE"
+	grep -q -- '-DCONFIG_AV1_ENCODER=1' "$XBERG_TRACE"
+	grep -q -- '-DWITH_AOM_ENCODER=ON -DWITH_X265=ON' "$XBERG_TRACE"
+	grep -q -- '-DCMAKE_OSX_ARCHITECTURES=arm64' "$XBERG_TRACE"
+	local inventory="$XBERG_HEIF_PREFIX/share/xberg-heif-notices"
+	[ "$(find "$inventory" -type f | wc -l | tr -d ' ')" = 13 ]
+	[ "$(wc -l <"$inventory/sources.tsv" | tr -d ' ')" = 4 ]
+	grep -q '83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121' "$inventory/sources.tsv"
+	[ "$(cat "$inventory/libaom-3.15.3-PATENTS")" = 'libaom-3.15.3/PATENTS' ]
+	[ "$(cat "$inventory/libaom-3.15.3-third_party-vector-LICENSE")" = 'libaom-3.15.3/third_party/vector/LICENSE' ]
+
+	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'already present'
+
+	(cd "$inventory" && shasum -a 256 -c notices.sha256)
+	[ "$(wc -l <"$inventory/notices.sha256" | tr -d ' ')" = 12 ]
+
+	run env XBERG_HEIF_PROFILE=elixir-encoders XBERG_TEST_SKIP_ID=libaom.dylib "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or invalid dylib identity'
+
+	run env XBERG_HEIF_PROFILE=elixir-encoders XBERG_TEST_SKIP_IMPORTS=libaom.dylib "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or invalid dylib import rows'
+
+	run env XBERG_HEIF_PROFILE=elixir-encoders XBERG_TEST_SKIP_LINK=libx265 "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'libheif does not link to the pinned libx265'
+
+	run "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'decode profile requires a prefix separate from elixir-encoders'
+
+	printf 'modified\n' >"$inventory/x265_4.3-COPYING"
+	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or mismatched codec notice checksums'
+
+	rm "$inventory/x265_4.3-COPYING"
+	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing upstream codec notice x265_4.3-COPYING'
+}
