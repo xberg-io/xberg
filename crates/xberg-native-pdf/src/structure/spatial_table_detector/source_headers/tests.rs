@@ -235,3 +235,94 @@ fn more_than_the_cap_of_paths_near_the_header_is_rejected() {
     rules.extend(standard_rules());
     assert!(!retained(standard_rows(), &rules));
 }
+
+fn white_fill(x: f32, y: f32, width: f32, height: f32) -> PathContent {
+    let mut path = PathContent::rect(x, y, width, height).with_fill(Color::white());
+    path.stroke_color = None;
+    path
+}
+
+#[test]
+fn a_white_fill_painted_over_a_rule_hides_it() {
+    let mut rules = standard_rules();
+    rules.push(white_fill(0.0, -5.0, 100.0, 10.0));
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_white_fill_painted_before_a_rule_does_not_hide_it() {
+    let mut rules = vec![white_fill(0.0, -5.0, 100.0, 10.0)];
+    rules.extend(standard_rules());
+    assert!(retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_rule_drawn_only_as_a_thin_dark_fill_is_not_accepted() {
+    let mut rules = standard_rules();
+    let mut fill = PathContent::rect(0.0, 0.0, 100.0, 0.5).with_fill(Color::black());
+    fill.stroke_color = None;
+    rules[0] = fill;
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_group_bottom_three_points_off_the_leaf_top_is_rejected() {
+    let mut rows = standard_rows();
+    rows[0].cells[1].bbox = Some(Rect::new(20.0, HEIGHT + 3.0, 40.0, HEIGHT));
+    let mut rules = standard_rules();
+    rules.push(PathContent::line(20.0, HEIGHT + 3.0, 60.0, HEIGHT + 3.0));
+    assert!(!retained(rows, &rules));
+}
+
+#[test]
+fn a_group_right_edge_two_points_past_its_last_leaf_is_rejected() {
+    let mut rows = standard_rows();
+    rows[0].cells[1].bbox = Some(Rect::new(20.0, HEIGHT, 42.0, HEIGHT));
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn a_group_with_rowspan_two_is_rejected() {
+    let mut rows = standard_rows();
+    rows[0].cells[1].rowspan = 2;
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn a_group_span_overflowing_its_cell_is_rejected() {
+    let mut rows = standard_rows();
+    rows[0].cells[1].spans[0].bbox = Rect::new(19.0, HEIGHT + 1.0, 42.0, HEIGHT - 2.0);
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn an_already_flagged_header_row_is_left_alone() {
+    let mut rows = standard_rows();
+    rows[0].is_header = true;
+    retain_grouped_leaf_header(&mut rows, &standard_rules(), COLUMNS);
+    assert!(rows[0].is_header);
+    assert!(!rows[1].is_header);
+    assert!(rows[1].cells.iter().all(|cell| !cell.is_header));
+}
+
+#[test]
+fn a_light_stroke_over_only_the_middle_of_the_leaf_rule_is_rejected() {
+    let mut rules = standard_rules();
+    rules.push(restyled(PathContent::line(40.0, 0.0, 60.0, 0.0), Color::white()));
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_pale_tinted_rule_is_not_visible() {
+    let mut rules = standard_rules();
+    rules[0] = restyled(rules[0].clone(), Color::new(1.0, 1.0, 0.9));
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_dotted_line_of_separate_sub_paths_is_not_a_solid_rule() {
+    let mut rules = standard_rules();
+    rules.remove(0);
+    rules.extend((0..50).map(|dot| PathContent::line(dot as f32 * 2.0, 0.0, dot as f32 * 2.0 + 1.0, 0.0)));
+    assert!(!retained(standard_rows(), &rules));
+}

@@ -6,6 +6,8 @@ use crate::structure::table_extractor::{Table, TableCell, TableRow};
 const MIN_SHADED_CELL_AREA_RATIO: f32 = 0.9;
 const HEADER_RULE_TOLERANCE: f32 = 1.0;
 const MAX_HEADER_RULE_CHANNEL: f32 = 0.9;
+// Gaps wider than this separate dots or dashes from a drawn rule. ~keep
+const RULE_GAP_TOLERANCE: f32 = 0.1;
 const MAX_GROUPED_HEADER_PATHS: usize = 128;
 
 pub(super) fn shading_rectangles(paths: &[PathContent]) -> Vec<Rect> {
@@ -195,22 +197,20 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
         && drawn.top() <= bounds.bottom() + HEADER_RULE_TOLERANCE
 }
 
-/// Paint order decides visibility: a later dashed or light stroke over the same line hides
-/// what was drawn before it, and a rule may be split into collinear segments. ~keep
+/// Paint order decides visibility: a later dashed, light or filled path over the same line hides
+/// what was drawn before it, and a rule may be split into collinear segments. PathContent
+/// carries no alpha, so any fill is opaque. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
     let mut visible: Vec<(f32, f32)> = Vec::new();
     for path in paths {
-        if !path.is_horizontal_line(HEADER_RULE_TOLERANCE)
-            || path.stroke_color.is_none()
-            || !same_rule_position(path.bbox.center().y, y)
-        {
-            continue;
-        }
         let drawn = path.rendered_bbox();
         let (low, high) = (drawn.left(), drawn.right());
-        if dark_solid_stroke(path) {
+        let is_rule = path.is_horizontal_line(HEADER_RULE_TOLERANCE)
+            && path.stroke_color.is_some()
+            && same_rule_position(path.bbox.center().y, y);
+        if is_rule && dark_solid_stroke(path) {
             visible.push((low, high));
-        } else {
+        } else if is_rule || (path.fill_color.is_some() && drawn.top() < y && y < drawn.bottom()) {
             visible = visible
                 .into_iter()
                 .flat_map(|(start, end)| {
@@ -222,13 +222,15 @@ fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
         }
     }
     visible.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut covered = left;
+    let mut covered: Option<f32> = None;
     for (low, high) in visible {
-        if low > covered + HEADER_RULE_TOLERANCE {
+        let (reached, tolerance) = covered.map_or((left, HEADER_RULE_TOLERANCE), |end| (end, RULE_GAP_TOLERANCE));
+        if low > reached + tolerance {
             return false;
         }
-        covered = covered.max(high);
-        if covered >= right - HEADER_RULE_TOLERANCE {
+        let end = covered.unwrap_or(left).max(high);
+        covered = Some(end);
+        if end >= right - HEADER_RULE_TOLERANCE {
             return true;
         }
     }
@@ -242,7 +244,7 @@ fn dark_solid_stroke(path: &PathContent) -> bool {
         && path.stroke_color.is_some_and(|color| {
             let channels = [color.r, color.g, color.b];
             channels.iter().all(|channel| (0.0..=1.0).contains(channel))
-                && channels.iter().any(|channel| *channel <= MAX_HEADER_RULE_CHANNEL)
+                && channels.iter().all(|channel| *channel <= MAX_HEADER_RULE_CHANNEL)
         })
 }
 
