@@ -615,5 +615,8 @@ jobs:
             e2e/**/test-results/**
             e2e/**/build/reports/**
             e2e/**/hs_err_pid*.log
+            test_documents/hs_err_pid*.log
+            e2e/java/target/surefire-reports/*.dump
+            e2e/java/target/surefire-reports/*.dumpstream
           if-no-files-found: ignore
           retention-days: 7
