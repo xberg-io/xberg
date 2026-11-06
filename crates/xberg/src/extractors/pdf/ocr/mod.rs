@@ -116,6 +116,14 @@ pub(crate) use pipeline::{
 // ~keep Must match the definition's own gate in `pipeline.rs`; `#[cfg(test)]` alone left
 // this import unresolved on every leg without an OCR feature (GH#1951). The definition is
 // dead on an `ocr-pipeline`-only test leg, so the re-export is unused there.
+#[cfg(all(
+    paddle_ocr,
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) use pipeline::accepted_single_page_first_pass;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 #[allow(unused_imports)]
 pub(crate) use pipeline::extract_with_ocr;

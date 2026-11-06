@@ -1350,8 +1350,62 @@ async fn run_ocr_with_layout_pages(
 
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
+    #[cfg(feature = "layout-detection")]
+    let ocr_images_absent = ocr_images.is_none();
+    #[cfg(not(feature = "layout-detection"))]
+    let ocr_images_absent = true;
 
-    if let Some(pipeline) = ocr_config.effective_pipeline() {
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut accepted_first_pass = None;
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    if ocr_config.pipeline.is_none()
+        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        && ocr_config.backend == "tesseract"
+        && ocr_images_absent
+        && let Some(pipeline) = ocr_config.effective_pipeline()
+    {
+        accepted_first_pass = ocr::accepted_single_page_first_pass(
+            content,
+            config,
+            path,
+            page_ocr_hints.clone(),
+            &pipeline.quality_thresholds,
+        )
+        .await;
+    }
+
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let has_accepted_first_pass = accepted_first_pass.is_some();
+    #[cfg(not(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )))]
+    let has_accepted_first_pass = false;
+
+    if let Some(pipeline) = ocr_config.effective_pipeline()
+        && !has_accepted_first_pass
+    {
         #[cfg(paddle_ocr)]
         // The synthesized classical pipeline is an automatic page-quality fallback. Running
         // it here as one document lets a good page's score hide a bad page, so use the same
@@ -1476,19 +1530,42 @@ async fn run_ocr_with_layout_pages(
             ocr_confidence,
         ),
         discarded_visible_native_page,
-    ) = Box::pin(ocr::extract_with_ocr_with_page_hints_and_evidence(
-        Some(content),
-        #[cfg(feature = "layout-detection")]
-        ocr_images,
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_detections,
-        config,
-        path,
-        page_ocr_hints,
-    ))
-    .await?;
+    ) = {
+        #[cfg(all(
+            paddle_ocr,
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let first_pass = accepted_first_pass;
+        #[cfg(not(all(
+            paddle_ocr,
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )))]
+        let first_pass: Option<_> = None;
+        match first_pass {
+            Some(output) => output,
+            None => {
+                Box::pin(ocr::extract_with_ocr_with_page_hints_and_evidence(
+                    Some(content),
+                    #[cfg(feature = "layout-detection")]
+                    ocr_images,
+                    #[cfg(not(feature = "layout-detection"))]
+                    None,
+                    #[cfg(feature = "layout-detection")]
+                    layout_detections,
+                    config,
+                    path,
+                    page_ocr_hints,
+                ))
+                .await?
+            }
+        }
+    };
     // GH#1892: same repair as the pipeline branch above -- this is the other half of the
     // whole-document route, the one `force_ocr` and the near-empty `Auto` fallback reach. ~keep
     if ocr::numeric_repair_enabled(config) {

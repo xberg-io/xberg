@@ -2631,6 +2631,43 @@ fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (Str
     (text, boundaries)
 }
 
+/// Reads a one-page PDF on the single-backend route and keeps the result when the first stage
+/// of the synthesized classical pipeline would have accepted it, so that route's source-image
+/// recoveries and budgeted upscale apply. A page below the pipeline's quality threshold, or one
+/// the single-backend route fails, returns `None` and takes the per-page route with its
+/// automatic fallback stage.
+#[cfg(all(
+    paddle_ocr,
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) async fn accepted_single_page_first_pass(
+    content: &[u8],
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<PageOcrHints>,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+) -> Option<(WholeDirectOcrOutput, bool)> {
+    let Ok((_, 1, _)) = open_pdf_for_page_ocr(content) else {
+        return None;
+    };
+    let output = Box::pin(extract_with_ocr_with_page_hints_and_evidence(
+        Some(content),
+        None,
+        #[cfg(feature = "layout-detection")]
+        None,
+        config,
+        path,
+        page_ocr_hints,
+    ))
+    .await
+    .ok()?;
+    let score = pipeline_stage_score(compute_quality_score(&output.0.0, thresholds), output.0.1);
+    (score >= thresholds.pipeline_min_quality).then_some(output)
+}
+
 #[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 type PerPageOcrOutput = (
     String,
