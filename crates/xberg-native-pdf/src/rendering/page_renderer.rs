@@ -581,6 +581,11 @@ impl PageRenderer {
             .map(|(image, _)| image)
     }
 
+    pub(super) fn without_text_ink(mut self) -> Self {
+        self.text_rasterizer.suppress_ink();
+        self
+    }
+
     pub(super) fn type0_ink_loss(&self) -> bool {
         self.text_rasterizer.type0_ink_loss()
     }

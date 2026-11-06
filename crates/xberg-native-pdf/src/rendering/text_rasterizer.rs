@@ -463,6 +463,9 @@ pub struct TextRasterizer {
     /// (#991 asked for once per font).
     warned_fonts: std::sync::Mutex<std::collections::HashSet<(String, &'static str)>>,
     type0_ink_loss: std::sync::atomic::AtomicBool,
+    /// Paint every glyph fully transparent while still advancing the text matrix, so a render
+    /// shows what the page holds besides glyph ink.
+    suppress_ink: bool,
 }
 
 impl TextRasterizer {
@@ -472,7 +475,12 @@ impl TextRasterizer {
             fontdb: system_fontdb(),
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
+            suppress_ink: false,
         }
+    }
+
+    pub(super) fn suppress_ink(&mut self) {
+        self.suppress_ink = true;
     }
 
     /// Construct with a caller-supplied font database. Bypasses the
@@ -484,6 +492,7 @@ impl TextRasterizer {
             fontdb,
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
+            suppress_ink: false,
         }
     }
 
@@ -638,7 +647,7 @@ impl TextRasterizer {
         // §9.3.6); it previously fell through and painted glyphs visibly. The
         // clip-path accumulation itself (modes 4–7) is not yet applied, but
         // mode-7 glyphs must at minimum not paint. (WS1.5) ~keep
-        if gs.render_mode == 3 || gs.render_mode == 7 {
+        if gs.render_mode == 3 || gs.render_mode == 7 || self.suppress_ink {
             paint.set_color(tiny_skia::Color::from_rgba(0.0, 0.0, 0.0, 0.0).unwrap());
         }
 

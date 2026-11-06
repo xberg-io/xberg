@@ -408,6 +408,64 @@ pub fn render_png_page_with_budget_evidence(
     render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(budget))
 }
 
+/// One page rendered twice at the same size: as drawn, and with every glyph left unpainted.
+#[doc(hidden)]
+pub struct TextInkRasters {
+    pub width: u32,
+    pub height: u32,
+    /// Row-major luminance of the page as drawn, top-left origin.
+    pub drawn: Vec<u8>,
+    /// Row-major luminance of the same raster with glyph ink removed.
+    pub without_glyphs: Vec<u8>,
+}
+
+/// Internal Core bridge. Where the two rasters differ, glyph paints made the pixel; where
+/// `without_glyphs` varies, something other than glyphs did.
+#[doc(hidden)]
+pub fn render_text_ink_rasters(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+) -> Result<TextInkRasters> {
+    let render = |without_glyphs: bool| -> Result<RenderedImage> {
+        let budget = page_renderer::PngRenderBudget {
+            max_working_bytes,
+            minimum_dpi: dpi,
+        };
+        let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(dpi).as_raw());
+        if without_glyphs {
+            renderer = renderer.without_text_ink();
+        }
+        renderer
+            .render_page_with_budget(page_num, doc, Some(budget))
+            .map(|(image, _)| image)
+    };
+    let luminance = |image: &RenderedImage| -> Vec<u8> {
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| text_contrast_probe::luminance(pixel))
+            .collect()
+    };
+    let drawn = render(false)?;
+    let without = render(true)?;
+    if (drawn.width, drawn.height) != (without.width, without.height) {
+        return Err(crate::Error::InvalidOperation(
+            "glyph-free render differs in size from the drawn render".to_string(),
+        ));
+    }
+    Ok(TextInkRasters {
+        width: drawn.width,
+        height: drawn.height,
+        drawn: luminance(&drawn),
+        without_glyphs: luminance(&without),
+    })
+}
+
 /// Check for actual pixel contrast in each glyph region of an audited literal text show.
 #[doc(hidden)]
 pub fn exact_text_show_has_contrast(
