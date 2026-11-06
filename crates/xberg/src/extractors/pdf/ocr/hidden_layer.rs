@@ -19,6 +19,9 @@ use xberg_native_pdf::object::Object;
 mod embedded_gap;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) use embedded_gap::embedded_gap_placement;
+#[path = "hidden_layer/visible_raster.rs"]
+mod visible_raster;
+pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_OPERATORS: usize = 4096;

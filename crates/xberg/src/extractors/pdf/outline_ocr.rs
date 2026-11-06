@@ -29,6 +29,7 @@ pub(super) fn candidates(
     {
         return Vec::new();
     }
+    let mut raster = super::ocr::VisibleRasterProof::new(config);
     boundaries
         .iter()
         .take_while(|_| config.cancel_token.as_ref().is_none_or(|token| !token.is_cancelled()))
@@ -46,8 +47,8 @@ pub(super) fn candidates(
         .take(MAX_CANDIDATE_PAGES)
         .filter_map(|(page, nonspace)| {
             let index = page.checked_sub(1)? as usize;
-            let uncovered_rows = outline_rows(doc, index, nonspace)?;
-            (uncovered_rows >= MIN_PROSE_ROWS).then_some(page)
+            let outlined = outline_rows(doc, index, nonspace).is_some_and(|rows| rows >= MIN_PROSE_ROWS);
+            (outlined || raster.as_mut().is_some_and(|proof| proof.has_prose(doc, index))).then_some(page)
         })
         .collect()
 }
