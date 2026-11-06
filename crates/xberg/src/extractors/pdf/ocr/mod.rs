@@ -25,6 +25,8 @@ mod markdown;
 pub(crate) use markdown::strip_embedded_gfm_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod hidden_layer;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use hidden_layer::embedded_gap_placement;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod native_word_coverage;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

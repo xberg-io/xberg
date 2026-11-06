@@ -12,6 +12,12 @@ use xberg_native_pdf::document::{PageRotation, ReadingOrder};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
 
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "hidden_layer/embedded_gap.rs"]
+mod embedded_gap;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use embedded_gap::embedded_gap_placement;
+
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_OPERATORS: usize = 4096;
 const MAX_PREVIEW_PIXELS: usize = 1024 * 1024;

@@ -617,6 +617,13 @@ pub(crate) fn extract_all_from_native_document(
     mut doc: crate::pdf::native::NativeDocument,
     config: &ExtractionConfig,
     outline_entries: &[crate::pdf::bookmarks::PdfOutlineEntry],
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    gap: &mut Option<crate::extraction::image_ocr::pdf_gap::Placement>,
     #[cfg(feature = "layout-detection")] layout: NativeLayoutInput<'_>,
 ) -> Result<PdfExtractionPhaseResult> {
     #[cfg(feature = "layout-detection")]
@@ -869,6 +876,21 @@ pub(crate) fn extract_all_from_native_document(
             source: None,
         })?;
         extraction_warnings.extend(image_warnings);
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        if crate::extraction::image_ocr::pdf_gap::eligible(config)
+            && let [image] = extracted.as_slice()
+        {
+            let limits = config
+                .security_limits
+                .as_ref()
+                .or_else(|| config.ocr.as_ref()?.security_limits.as_ref());
+            *gap = super::ocr::embedded_gap_placement(&doc.doc, image, limits.unwrap_or(&Default::default()));
+        }
 
         let positions: Vec<(u32, u32)> = extracted
             .iter()
