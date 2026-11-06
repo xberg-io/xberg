@@ -268,7 +268,7 @@ fn a_rule_drawn_only_as_a_thin_dark_fill_is_not_accepted() {
 #[test]
 fn a_group_bottom_three_points_off_the_leaf_top_is_rejected() {
     let mut rows = standard_rows();
-    rows[0].cells[1].bbox = Some(Rect::new(20.0, HEIGHT + 3.0, 40.0, HEIGHT));
+    rows[0].cells[1] = cell("Revenue", 1, 2, HEIGHT + 3.0, true);
     let mut rules = standard_rules();
     rules.push(PathContent::line(20.0, HEIGHT + 3.0, 60.0, HEIGHT + 3.0));
     assert!(!retained(rows, &rules));
