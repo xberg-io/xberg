@@ -41,7 +41,7 @@ fn continuation_merge_refuses_inconsistent_display_lane_anchors() {
 #[test]
 fn continuation_merge_refuses_word_width_separators_and_unbounded_source_runs() {
     let mut row = indexed_display_row();
-    for lane in row.lines[0].segments.chunks_exact_mut(4) {
+    for lane in row.lines[0].segments.as_chunks_mut::<4>().0 {
         lane[2].text = "therefore".to_owned();
         lane[2].width = 14.0;
         lane[3].x += 8.0;

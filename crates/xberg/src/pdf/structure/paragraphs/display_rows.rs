@@ -5,7 +5,8 @@ use crate::pdf::structure::pipeline::{INLINE_STYLE_BASELINE_TOLERANCE, is_script
 const RUNS_PER_ASSIGNMENT: usize = 4;
 const MIN_ASSIGNMENTS: usize = 3;
 const MAX_ASSIGNMENTS: usize = 10;
-const MAX_VALUE_BYTES: usize = 32;
+const MAX_RUN_BYTES: usize = 32;
+const MAX_SEPARATOR_ADVANCE_EM: f32 = 1.0;
 const MAX_WITHIN_LANE_GAP_EM: f32 = 1.0;
 const MAX_WITHIN_LANE_OVERLAP_EM: f32 = 0.25;
 
@@ -20,40 +21,34 @@ pub(super) fn is_indexed_display_row(paragraph: &PdfParagraph) -> bool {
         || paragraph.caption_for.is_some()
         || !extra.is_empty()
         || !(MIN_ASSIGNMENTS..=MAX_ASSIGNMENTS).contains(&lanes.len())
+        || line.segments.iter().any(|run| run.text.len() > MAX_RUN_BYTES)
     {
         return false;
     }
-    let [base, index, ..] = &lanes[0];
-    let label = base.text.trim();
-    let [first_digit] = index.text.trim().as_bytes() else {
-        return false;
-    };
-    label.len() == 1
-        && label.as_bytes()[0].is_ascii_alphabetic()
-        && first_digit.is_ascii_digit()
-        && lanes.iter().enumerate().all(|(position, lane)| {
-            is_assignment(lane, base, *first_digit + position as u8)
-        })
+    let anchor = &lanes[0];
+    lanes.iter().enumerate().all(|(position, lane)| {
+        is_assignment(lane, anchor)
+            && lanes[..position]
+                .iter()
+                .all(|prior| prior[1].text.trim() != lane[1].text.trim())
+    })
         // An ordinary inline sequence has word spacing, rather than a full
         // font-size gap between complete assignment lanes.
         && lanes.windows(2).all(|pair| {
             let gap = advance_gap(&pair[0][3], &pair[1][0]);
-            gap.is_finite() && gap >= base.font_size
+            gap.is_finite() && gap >= anchor[0].font_size
         })
 }
 
-fn is_assignment(lane: &[SegmentData; RUNS_PER_ASSIGNMENT], anchor: &SegmentData, expected_index: u8) -> bool {
-    let [base, index, equals, value] = lane;
-    let literal = value.text.trim();
-    base.text.trim() == anchor.text.trim()
-        && expected_index.is_ascii_digit()
-        && index.text.trim().as_bytes() == [expected_index]
-        && equals.text.trim() == "="
-        && literal.len() <= MAX_VALUE_BYTES
-        && literal.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        && literal.bytes().any(|byte| byte.is_ascii_digit())
+fn is_assignment(lane: &[SegmentData; RUNS_PER_ASSIGNMENT], anchor: &[SegmentData; RUNS_PER_ASSIGNMENT]) -> bool {
+    let [base, index, separator, value] = lane;
+    let anchor_base = &anchor[0];
+    base.text.trim() == anchor_base.text.trim()
+        && separator.text.trim() == anchor[2].text.trim()
+        && separator.width <= anchor_base.font_size * MAX_SEPARATOR_ADVANCE_EM
         && lane.iter().all(|run| {
-            run.is_unrotated()
+            !run.text.trim().is_empty()
+                && run.is_unrotated()
                 && run.assigned_role.is_none()
                 && run.x.is_finite()
                 && run.width.is_finite()
@@ -63,12 +58,13 @@ fn is_assignment(lane: &[SegmentData; RUNS_PER_ASSIGNMENT], anchor: &SegmentData
         && lane.windows(2).all(|pair| {
             let gap = advance_gap(&pair[0], &pair[1]);
             pair[0].x < pair[1].x
-                && (-anchor.font_size * MAX_WITHIN_LANE_OVERLAP_EM..=anchor.font_size * MAX_WITHIN_LANE_GAP_EM)
+                && (-anchor_base.font_size * MAX_WITHIN_LANE_OVERLAP_EM
+                    ..=anchor_base.font_size * MAX_WITHIN_LANE_GAP_EM)
                     .contains(&gap)
         })
-        && [base, equals, value].iter().all(|run| {
-            (run.baseline_y - anchor.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
-                && run.font_size == anchor.font_size
+        && [base, separator, value].iter().all(|run| {
+            (run.baseline_y - anchor_base.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
+                && run.font_size == anchor_base.font_size
         })
         && base.baseline_y - index.baseline_y > INLINE_STYLE_BASELINE_TOLERANCE
         && index.font_size < base.font_size

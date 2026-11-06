@@ -106,7 +106,8 @@
 /// Invalidate cached PDFs whose layout raster exceeded the memory budget (#2332). ~keep
 /// Invalidate cached lower-density grayscale Flate scans missing certified strips (#2502). ~keep
 /// Invalidate tall PDF results cached before certified strips could be recovered (#2426). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 20;
+/// Invalidate native PDFs whose indexed rows merged with surrounding prose (#2616). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 21;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;
