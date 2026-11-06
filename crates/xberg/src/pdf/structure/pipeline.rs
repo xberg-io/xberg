@@ -24,10 +24,9 @@ use super::lines::{is_cjk_char, segments_need_space};
 use super::paragraphs::{merge_continuation_paragraphs, split_embedded_list_items};
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, RepairedText, TextReplacement, WordWitnesses, apply_to_all_segments,
-    clean_duplicate_punctuation, collapse_spaced_hyphens, expand_ligatures_with_space_absorption,
-    expand_ligatures_with_space_absorption_mapped, normalize_text_encoding, normalize_unicode_text,
-    normalize_unicode_text_mapped, repair_contextual_ligatures, repair_contextual_ligatures_mapped,
-    repair_ligature_spaces,
+    clean_duplicate_punctuation, collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped,
+    normalize_text_encoding, normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
+    repair_contextual_ligatures_mapped, repair_ligature_spaces,
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
@@ -77,6 +76,8 @@ pub(super) type HyphenWitnesses = ahash::AHashSet<(String, String)>;
 struct TextRepairWitnesses {
     hyphens: HyphenWitnesses,
     words: WordWitnesses,
+    /// OCR places no glyph geometry, so a space after a ligature there is not a measured word gap.
+    ocr_text: bool,
 }
 
 fn sparse_multi_page_heading_map(
@@ -3377,6 +3378,8 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub include_footnotes: bool,
     pub include_watermarks: bool,
     pub used_structure_tree: bool,
+    /// The segment text comes from OCR, which has no glyph geometry to place word boundaries.
+    pub ocr_text: bool,
     pub image_positions: &'a [(u32, u32)],
     pub images: Option<&'a [crate::types::ExtractedImage]>,
     pub inject_placeholders: bool,
@@ -3528,6 +3531,7 @@ fn build_document_structure_with_native(
         include_footnotes,
         include_watermarks,
         used_structure_tree,
+        ocr_text,
         image_positions,
         images,
         inject_placeholders,
@@ -3996,6 +4000,7 @@ fn build_document_structure_with_native(
     let witnesses = TextRepairWitnesses {
         hyphens: collect_hyphen_witnesses(&all_page_segments),
         words: collect_word_witnesses(&all_page_segments),
+        ocr_text,
     };
     let page_inputs: Vec<PageInput> = (0..page_count)
         .map(|i| {
@@ -4172,7 +4177,7 @@ fn build_document_structure_with_native(
         if elem.text.is_empty() {
             continue;
         }
-        normalize_element_text(elem);
+        normalize_element_text(elem, ocr_text);
     }
 
     tracing::debug!(
@@ -4183,20 +4188,17 @@ fn build_document_structure_with_native(
     Ok(doc)
 }
 
-type MappedElementRepair = for<'a> fn(&'a str, bool) -> RepairedText<'a>;
-
-fn normalize_element_text(elem: &mut crate::types::internal::InternalElement) {
+fn normalize_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
     if elem.annotations.is_empty() {
-        normalize_unannotated_element_text(elem);
+        normalize_unannotated_element_text(elem, ocr_text);
         return;
     }
-    let repairs: [MappedElementRepair; 3] = [
-        repair_contextual_ligatures_mapped,
-        expand_ligatures_with_space_absorption_mapped,
-        normalize_unicode_text_mapped,
-    ];
-    for repair in repairs {
-        let repaired = repair(&elem.text, true);
+    for step in 0..3 {
+        let repaired = match step {
+            0 => repair_contextual_ligatures_mapped(&elem.text, true),
+            1 => expand_ligatures_mapped(&elem.text, true, ocr_text),
+            _ => normalize_unicode_text_mapped(&elem.text, true),
+        };
         remap_repaired_annotations(&mut elem.annotations, &repaired.replacements);
         if let Cow::Owned(normalized) = repaired.text {
             elem.text = normalized;
@@ -4204,9 +4206,9 @@ fn normalize_element_text(elem: &mut crate::types::internal::InternalElement) {
     }
 }
 
-fn normalize_unannotated_element_text(elem: &mut crate::types::internal::InternalElement) {
+fn normalize_unannotated_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
     let t1 = repair_contextual_ligatures(&elem.text);
-    let t2 = expand_ligatures_with_space_absorption(&t1);
+    let t2 = expand_ligatures(&t1, ocr_text);
     let t3 = normalize_unicode_text(&t2);
     if let Cow::Owned(normalized) = t3 {
         elem.text = normalized;
@@ -4253,7 +4255,7 @@ fn repaired_annotation_boundary(
         return offset;
     };
     if offset < replacement.before.end {
-        // ~keep Ranges inside a replaced glyph cover its complete expansion; a deleted source space maps to an empty range.
+        // ~keep Ranges inside a replaced glyph cover its complete expansion; a space absorbed from OCR text maps to an empty range.
         return match boundary {
             AnnotationBoundary::Start => replacement.after.start,
             AnnotationBoundary::End => replacement.after.end,
@@ -4278,10 +4280,14 @@ mod annotation_text_repair_tests {
     }
 
     fn normalized(text: &str, annotations: Vec<TextAnnotation>) -> InternalElement {
+        normalized_from(text, annotations, false)
+    }
+
+    fn normalized_from(text: &str, annotations: Vec<TextAnnotation>, ocr_text: bool) -> InternalElement {
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(text, annotations, None, None);
         let mut element = builder.build().elements.pop().unwrap();
-        super::normalize_element_text(&mut element);
+        super::normalize_element_text(&mut element, ocr_text);
         element
     }
 
@@ -4307,9 +4313,9 @@ mod annotation_text_repair_tests {
     }
 
     #[test]
-    fn contraction_and_space_absorption_preserve_script_ranges() {
+    fn contraction_and_ligature_expansion_preserve_script_ranges() {
         let source = "‘ﬁ eld’ 231";
-        let expected = "'field' 231";
+        let expected = "'fi eld' 231";
         let result = normalized(
             source,
             vec![
@@ -4323,8 +4329,29 @@ mod annotation_text_repair_tests {
             result.annotations,
             vec![
                 annotation(expected, "31", AnnotationKind::Superscript),
-                annotation(expected, "'field'", AnnotationKind::Bold),
+                annotation(expected, "'fi eld'", AnnotationKind::Bold),
                 annotation(expected, "eld", AnnotationKind::Italic),
+            ]
+        );
+    }
+
+    #[test]
+    fn ocr_space_absorption_remaps_annotation_ranges() {
+        let source = "\u{FB01} eld 31";
+        let result = normalized_from(
+            source,
+            vec![
+                annotation(source, "eld", AnnotationKind::Italic),
+                annotation(source, "31", AnnotationKind::Superscript),
+            ],
+            true,
+        );
+        assert_eq!(result.text, "field 31");
+        assert_eq!(
+            result.annotations,
+            vec![
+                annotation("field 31", "eld", AnnotationKind::Italic),
+                annotation("field 31", "31", AnnotationKind::Superscript),
             ]
         );
     }
@@ -4346,7 +4373,7 @@ mod annotation_text_repair_tests {
     }
 
     #[test]
-    fn boundaries_inside_replaced_ligature_cover_expansion_and_deleted_space_vanishes() {
+    fn boundaries_inside_replaced_ligature_cover_the_expansion() {
         let source = "ﬃ x";
         let result = normalized(
             source,
@@ -4364,7 +4391,7 @@ mod annotation_text_repair_tests {
                 annotation(source, source, AnnotationKind::Bold),
             ],
         );
-        assert_eq!(result.text, "ffix");
+        assert_eq!(result.text, "ffi x");
         assert_eq!(
             result.annotations,
             vec![
@@ -4374,8 +4401,13 @@ mod annotation_text_repair_tests {
                     kind: AnnotationKind::Superscript
                 },
                 TextAnnotation {
-                    start: 0,
+                    start: 3,
                     end: 4,
+                    kind: AnnotationKind::Underline
+                },
+                TextAnnotation {
+                    start: 0,
+                    end: 5,
                     kind: AnnotationKind::Bold
                 },
             ]
@@ -5241,10 +5273,10 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
 /// Apply all 5 text repair passes in a single traversal over a segment's text.
 ///
 /// Returns `Cow::Borrowed` if nothing changed, `Cow::Owned` otherwise.
-fn fused_text_repairs<'a>(text: &'a str, word_witnesses: &WordWitnesses) -> Cow<'a, str> {
+fn fused_text_repairs<'a>(text: &'a str, witnesses: &TextRepairWitnesses) -> Cow<'a, str> {
     let t1 = normalize_text_encoding(text);
-    let t2 = repair_ligature_spaces(&t1, word_witnesses);
-    let t3 = expand_ligatures_with_space_absorption(&t2);
+    let t2 = repair_ligature_spaces(&t1, &witnesses.words);
+    let t3 = expand_ligatures(&t2, witnesses.ocr_text);
     let t3b = collapse_spaced_hyphens(&t3);
     let t4 = normalize_unicode_text(&t3b);
     let t5 = clean_duplicate_punctuation(&t4);
@@ -7127,7 +7159,7 @@ fn apply_text_repair_to_structure_tree_paragraphs(
     has_positions: bool,
     witnesses: &TextRepairWitnesses,
 ) {
-    apply_to_all_segments(paragraphs, |text| fused_text_repairs(text, &witnesses.words));
+    apply_to_all_segments(paragraphs, |text| fused_text_repairs(text, witnesses));
     dehyphenate_paragraphs(paragraphs, has_positions, &witnesses.hyphens);
     split_embedded_list_items(paragraphs);
     synchronize_paragraph_text_metadata(paragraphs);

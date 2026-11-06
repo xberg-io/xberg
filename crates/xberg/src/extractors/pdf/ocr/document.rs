@@ -2903,6 +2903,7 @@ pub(super) fn heuristically_restructured_ocr_pages(
             include_footnotes,
             include_watermarks,
             used_structure_tree: false,
+            ocr_text: true,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
