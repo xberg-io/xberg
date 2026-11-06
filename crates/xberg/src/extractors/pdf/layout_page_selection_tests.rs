@@ -381,6 +381,104 @@ fn input_with_page_entries(
     )
 }
 
+const REGION_CUT_TEXT: &str = "Rejected region edge sentinel.";
+const LOWER_REGION_TEXT: &str = "Independent lower region words.";
+
+fn region_boundary_pdf() -> Vec<u8> {
+    native_pdf_with_page_entries(|doc, page, _| {
+        let content = doc
+            .get_object(page)
+            .unwrap()
+            .as_dict()
+            .unwrap()
+            .get(b"Contents")
+            .unwrap()
+            .as_reference()
+            .unwrap();
+        let stream = doc.get_object_mut(content).unwrap().as_stream_mut().unwrap();
+        stream.set_plain_content(
+            format!(
+                "BT /F1 12 Tf 72 720 Td ({NATIVE_TEXT}) Tj ET\n\
+                 BT /F1 12 Tf 72 675 Td ({REGION_CUT_TEXT}) Tj ET\n\
+                 BT /F1 12 Tf 72 620 Td ({LOWER_REGION_TEXT}) Tj ET"
+            )
+            .into_bytes(),
+        );
+    })
+}
+
+#[tokio::test]
+async fn region_text_retains_exact_neighbors_when_one_region_cuts_a_native_span() {
+    use super::layout_runner::TEST_SELECTED_PAGE_DETECTIONS;
+    use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
+
+    let bytes = region_boundary_pdf();
+    let native = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
+    let page = native
+        .extract_page_text_with_options(0, xberg_native_pdf::document::ReadingOrder::TopToBottom)
+        .unwrap();
+    let cut = page.spans.iter().find(|span| span.text == REGION_CUT_TEXT).unwrap();
+    assert!(cut.bbox.left() < 90. && cut.bbox.right() > 90.);
+    let request = || ExtractInput::from_bytes(bytes.clone(), "application/pdf", None);
+    let detection = DetectionResult::new(
+        612,
+        792,
+        vec![
+            LayoutDetection::new(LayoutClass::Text, 0.75, BBox::new(60., 150., 560., 195.)),
+            LayoutDetection::new(LayoutClass::Text, 0.75, BBox::new(60., 95., 90., 145.)),
+            LayoutDetection::new(LayoutClass::Chart, 0.75, BBox::new(60., 40., 560., 90.)),
+        ],
+    );
+    let engine = Engine::new_default();
+    let config = ExtractionConfig {
+        use_cache: false,
+        ..config()
+    };
+    let ordinary = TEST_SELECTED_PAGE_DETECTIONS
+        .scope(
+            detection.clone(),
+            engine.extract_with_layout_pages(request(), &config, vec![1]),
+        )
+        .await
+        .unwrap();
+    let selected = TEST_SELECTED_PAGE_DETECTIONS
+        .scope(
+            detection,
+            engine.extract_with_layout_region_text(request(), &config, vec![1]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&selected.extraction).unwrap(),
+        serde_json::to_value(ordinary).unwrap()
+    );
+    let [document] = selected.extraction.results.as_slice() else {
+        panic!("one extracted native document");
+    };
+    let [page] = document.pages.as_deref().unwrap() else {
+        panic!("one extracted native page");
+    };
+    for source in [NATIVE_TEXT, REGION_CUT_TEXT, LOWER_REGION_TEXT] {
+        assert_eq!(
+            page.content.matches(source).count(),
+            1,
+            "retained native source {source}"
+        );
+    }
+    assert_eq!(
+        selected
+            .regions
+            .iter()
+            .map(|region| (
+                region.page_number,
+                region.region.class_name.as_str(),
+                region.text.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        [(1, "chart", NATIVE_TEXT), (1, "text", LOWER_REGION_TEXT)]
+    );
+}
+
 #[tokio::test]
 async fn selected_chart_accepts_exact_identity_crop_boxes() {
     let baseline = extract_selected_chart(input()).await;
