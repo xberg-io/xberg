@@ -2540,6 +2540,10 @@ async fn select_rtl_retry_result(
 #[cfg(feature = "pdf")]
 #[path = "image_ocr_budget.rs"]
 mod image_ocr_budget;
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "image_photo_title.rs"]
+mod image_photo_title;
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -3162,9 +3166,16 @@ impl ImageExtractor {
         let ocr_input: &[u8] = content;
 
         #[cfg(not(target_arch = "wasm32"))]
+        let ocr_bytes = std::sync::Arc::new(ocr_input.to_vec());
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let title_source = standalone_tesseract
+            .as_deref()
+            .filter(|_| image_photo_title::eligible(config, ocr_config, mime_type))
+            .map(|tesseract| (tesseract, std::sync::Arc::clone(&ocr_bytes)));
+        #[cfg(not(target_arch = "wasm32"))]
         let ocr_result = process_whole_image_ocr(
             &backend,
-            std::sync::Arc::new(ocr_input.to_vec()),
+            ocr_bytes,
             (ocr_config, &ocr_config_with_format),
             SparseRetryPolicy {
                 whole_page_raster: true,
@@ -3204,6 +3215,14 @@ impl ImageExtractor {
             ocr_result
         };
 
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let photo_title = Box::pin(image_photo_title::recover_if_eligible(
+            title_source,
+            &ocr_config_with_format,
+            &ocr_result,
+            config.cancel_token.as_ref(),
+        ))
+        .await?;
         #[cfg(feature = "ocr")]
         let has_public_ocr_structure = ocr_result.document.is_some();
         // Only the GH#1789 numeric repair below mutates this, and that is gated on
@@ -3359,6 +3378,10 @@ impl ImageExtractor {
                 }
             }
 
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(title) = photo_title {
+                image_photo_title::append(&mut doc, title);
+            }
             Ok(doc)
         }
 
