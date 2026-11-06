@@ -207,9 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(api): Keep async jobs while they run.**
-  Jobs expire 5 minutes after they finish, not 5 minutes after submission.
-  Long extractions keep their result, can be cancelled, and no longer leak active-job slots.
+- **(api): Keep async jobs while they run.** (#2621)
+  Jobs expire 5 minutes after they finish, not 5 minutes after submission. Long extractions keep their result and can be cancelled.
+  A submission rejected by validation, a crashed extraction task, and a cancelled job all release their active-job slot.
 
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
