@@ -1730,24 +1730,32 @@ mod tests {
         );
     }
 
-    #[test]
-    fn should_preserve_mixed_layout_overrides_in_mcp_batch() {
-        let inputs = [
-            serde_json::json!({"kind": "uri", "uri": "first.pdf", "use_layout_for_markdown": true}),
-            serde_json::json!({"kind": "uri", "uri": "second.pdf"}),
-            serde_json::json!({"kind": "uri", "uri": "third.pdf", "use_layout_for_markdown": false}),
-        ];
-        let config = ExtractionConfig::default();
-        let overrides: Vec<_> = inputs
-            .into_iter()
-            .map(|input| {
-                parse_batch_extract_input(input, &config)
-                    .unwrap()
-                    .use_layout_for_markdown
-            })
-            .collect();
+    #[tokio::test]
+    async fn should_dispatch_mixed_layout_overrides_in_mcp_batch() {
+        use crate::batch_layout_probe::BatchLayoutProbe;
 
-        assert_eq!(overrides, [Some(true), None, Some(false)]);
+        const MIME: &str = "text/x-r-markdown";
+        let _probe = BatchLayoutProbe::register(&[MIME]);
+        for base_layout in [false, true] {
+            let server = XbergMcp::with_config(ExtractionConfig {
+                use_layout_for_markdown: base_layout,
+                use_cache: false,
+                ..Default::default()
+            });
+            let params = crate::mcp::params::ExtractBatchParams {
+                inputs: vec![
+                    serde_json::json!({"kind": "bytes", "bytes": [65], "mime_type": MIME, "use_layout_for_markdown": true}),
+                    serde_json::json!({"kind": "bytes", "bytes": [66], "mime_type": MIME}),
+                    serde_json::json!({"kind": "bytes", "bytes": [67], "mime_type": MIME, "use_layout_for_markdown": false}),
+                ],
+                config: None,
+                pdf_password: None,
+                response_format: None,
+            };
+            let result = server.extract_batch(Parameters(params)).await.unwrap();
+            let output = serde_json::from_value(result.structured_content.unwrap()).unwrap();
+            BatchLayoutProbe::assert_output(&output, base_layout);
+        }
     }
 
     #[tokio::test]

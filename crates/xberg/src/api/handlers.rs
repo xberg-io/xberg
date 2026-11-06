@@ -1771,28 +1771,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_preserve_mixed_layout_overrides_in_extract_batch() {
-        let request = Request::builder()
-            .method("POST")
-            .uri("/extract")
-            .header("content-type", "application/json")
-            .body(Body::from(
-                r#"{"inputs":[
-                    {"text":"first","use_layout_for_markdown":true},
-                    "https://example.com/inherit.pdf",
-                    {"uri":"https://example.com/disabled.pdf","use_layout_for_markdown":false}
-                ]}"#,
-            ))
-            .unwrap();
+    async fn should_dispatch_mixed_layout_overrides_in_rest_batch() {
+        use crate::batch_layout_probe::BatchLayoutProbe;
 
-        let parsed = UnifiedExtractRequest::from_request(request, &()).await.unwrap();
-        let overrides: Vec<_> = parsed
-            .inputs
-            .into_iter()
-            .map(|input| input.into_core_input().use_layout_for_markdown)
-            .collect();
+        const MIME: &str = "text/x-quarto";
+        let _probe = BatchLayoutProbe::register(&[MIME]);
+        for base_layout in [false, true] {
+            let router = crate::api::create_router(crate::ExtractionConfig {
+                use_layout_for_markdown: base_layout,
+                use_cache: false,
+                ..Default::default()
+            });
+            let body = serde_json::json!({
+                "inputs": [
+                    {"text": "first", "mime_type": MIME, "use_layout_for_markdown": true},
+                    {"text": "second", "mime_type": MIME},
+                    {"text": "third", "mime_type": MIME, "use_layout_for_markdown": false},
+                ]
+            });
+            let request = Request::builder()
+                .method("POST")
+                .uri("/extract")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap();
 
-        assert_eq!(overrides, [Some(true), None, Some(false)]);
+            let response = router.oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let output: ExtractionResult = serde_json::from_slice(&body).unwrap();
+            BatchLayoutProbe::assert_output(&output, base_layout);
+        }
     }
 
     #[tokio::test]

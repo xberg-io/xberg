@@ -103,6 +103,9 @@ pub mod api;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 
+#[cfg(all(test, any(feature = "api", feature = "mcp")))]
+mod batch_layout_probe;
+
 #[cfg(feature = "chunking")]
 pub mod chunking;
 
