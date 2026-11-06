@@ -95,6 +95,7 @@ fn source_pages(bytes: &[u8]) -> Vec<RunPageParagraphs> {
                     word_count: SOURCE[index].split_whitespace().count(),
                 }],
                 ocr_scale: Some((1., 1.)),
+                ..Default::default()
             }
         })
         .collect()
