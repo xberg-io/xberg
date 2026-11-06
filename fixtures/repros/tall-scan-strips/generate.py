@@ -12,6 +12,7 @@ variants = parser.add_mutually_exclusive_group()
 variants.add_argument("--bilevel-only", action="store_true")
 variants.add_argument("--neutral-rgb-only", action="store_true")
 variants.add_argument("--jpeg-only", action="store_true")
+variants.add_argument("--predictor-indexed-only", action="store_true")
 args = parser.parse_args()
 target, font_path = args.target, args.font.resolve(strict=True)
 phrase = "Source scan keeps all words from this repeated line safely today"
@@ -68,10 +69,12 @@ def _stream(data: bytes, fields: str = "") -> bytes:
 def _raster(height: int, packing: str) -> bytes:
     width = 1275
     image = Image.new("L", (width, height), 255)
-    font = ImageFont.truetype(str(font_path), 18)
+    font = ImageFont.truetype(str(font_path), 20 if packing in {"predictor", "indexed"} else 18)
     draw = ImageDraw.Draw(image)
     for line in range(40):
         draw.text((95, 180 + line * ((height - 350) // 40)), lines[line], fill=0, font=font)
+    if packing in {"predictor", "indexed"}:
+        return _predictor_or_indexed(image, packing)
     if packing == "bilevel":
         image = image.convert("1")
     elif packing == "neutral-rgb":
@@ -89,6 +92,34 @@ def _raster(height: int, packing: str) -> bytes:
         f"/Type /XObject /Subtype /Image /Width {width} /Height {height} "
         f"/ColorSpace /{color_space} /BitsPerComponent {depth} /Filter /{codec}",
     )
+
+
+def _predictor_or_indexed(image: Image.Image, packing: str) -> bytes:
+    width, height = image.size
+    samples = image.tobytes()
+    prefix = f"/Type /XObject /Subtype /Image /Width {width} /Height {height}"
+    if packing == "predictor":
+        previous = bytes(width)
+        encoded = bytearray()
+        for i in range(height):
+            row = samples[i * width : (i + 1) * width]
+            encoded.append(2 if i % 2 else 0)
+            encoded.extend(bytes((a - b) & 255 for a, b in zip(row, previous, strict=True)) if i % 2 else row)
+            previous = row
+        params = f"/DecodeParms << /Predictor 12 /Columns {width} /Colors 1 /BitsPerComponent 8 >>"
+        fields = f"{prefix} /BitsPerComponent 8 /Filter /FlateDecode /ColorSpace /DeviceGray {params}"
+    else:
+        stride = (width + 7) // 8
+        encoded = bytearray()
+        for i in range(height):
+            packed = bytearray(stride)
+            for col, value in enumerate(samples[i * width : (i + 1) * width]):
+                if value < 128:
+                    packed[col // 8] |= 1 << (7 - col % 8)
+            packed[-1] |= (1 << (stride * 8 - width)) - 1
+            encoded.extend(packed)
+        fields = f"{prefix} /BitsPerComponent 1 /Filter /FlateDecode /ColorSpace [/Indexed /DeviceGray 1 <FF00>]"
+    return _stream(zlib.compress(encoded), fields)
 
 
 def _pdf(name: str, height: int, *, mixed: bool = False, packing: str = "gray") -> None:
@@ -132,6 +163,9 @@ elif args.neutral_rgb_only:
     _pdf("neutral-rgb-tall.pdf", 12000, packing="neutral-rgb")
 elif args.jpeg_only:
     _pdf("jpeg-tall.pdf", 12000, packing="jpeg")
+elif args.predictor_indexed_only:
+    _pdf("predictor-mixed.pdf", 12000, packing="predictor")
+    _pdf("indexed-inverted.pdf", 12000, packing="indexed")
 else:
     _pdf("strict-tall.pdf", 9000)
     _pdf("strict-short.pdf", 3600)

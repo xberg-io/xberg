@@ -266,7 +266,15 @@ fn decode_png_predictor(data: &[u8], params: &DecodeParams) -> Result<Vec<u8>> {
     }
 
     let row_count = data.len() / bytes_per_row;
-    let mut output = Vec::with_capacity(row_count * pixel_bytes);
+    let output_size = row_count
+        .checked_mul(pixel_bytes)
+        .ok_or_else(|| Error::Decode("PNG predictor output size overflow".into()))?;
+    let mut output = Vec::new();
+    output.try_reserve_exact(output_size).map_err(|error| {
+        Error::Decode(format!(
+            "Failed to reserve {output_size} bytes for PNG predictor output: {error}"
+        ))
+    })?;
     let bpp = params.colors;
 
     for row_idx in 0..row_count {

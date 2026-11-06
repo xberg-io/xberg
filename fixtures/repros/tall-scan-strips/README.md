@@ -32,3 +32,13 @@ Pillow 11.3.0.
 uv run --no-project --with pillow==11.3.0 python generate.py . \
   ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --jpeg-only
 ```
+
+The predictor and indexed fixtures use the same 40 lines at 20 px. The
+DeviceGray predictor declares PNG Up and alternates actual None and Up row
+tags. The one-bit Indexed image maps index zero to white and sets all five
+padding bits on each row to the black index.
+
+```sh
+uv run --no-project --with pillow==11.3.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --predictor-indexed-only
+```
