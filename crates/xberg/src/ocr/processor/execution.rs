@@ -1682,6 +1682,8 @@ fn point_in_bbox(x: i32, y: i32, left: i32, top: i32, right: i32, bottom: i32) -
 /// (#192, #180).
 struct IteratorExtractionResult {
     elements: Vec<OcrElement>,
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    iterator_word_count: usize,
     retained_text_confidence_stats: Option<RetainedWordConfidenceStats>,
     /// Words the Tesseract result iterator itself failed to extract
     /// (null pointer / invalid parameter / invalid UTF-8 per word), per
@@ -1912,6 +1914,8 @@ fn extract_elements_via_iterator(
 ) -> Result<IteratorExtractionResult, OcrError> {
     let empty = || IteratorExtractionResult {
         elements: Vec::new(),
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        iterator_word_count: 0,
         retained_text_confidence_stats: None,
         skipped_words: 0,
         non_text_block_word_count: 0,
@@ -2022,6 +2026,8 @@ fn extract_elements_via_iterator(
 
     Ok(IteratorExtractionResult {
         elements: tesseract_elements_with_lines(words),
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        iterator_word_count: word_extraction.words.len(),
         retained_text_confidence_stats,
         skipped_words: word_extraction.skipped,
         non_text_block_word_count,
@@ -2630,6 +2636,13 @@ pub(super) fn perform_ocr(
     }
     match iterator_extraction {
         Ok(extraction) if !extraction.elements.is_empty() => {
+            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            crate::ocr::preprocessing::geometry_evidence::record_word_inventory(
+                crate::ocr::preprocessing::geometry_evidence::WordInventory {
+                    count: extraction.iterator_word_count,
+                    skipped: extraction.skipped_words,
+                },
+            );
             insert_word_iterator_skipped_count_metadata(&mut metadata, extraction.skipped_words);
             if extraction.non_text_block_word_count > 0 {
                 metadata.insert(

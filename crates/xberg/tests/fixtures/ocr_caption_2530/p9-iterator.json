@@ -1,0 +1,654 @@
+{
+  "table": {
+    "cells": [
+      ["Figure 4:", "Table 1 from the", "DocLayNet paper in the original PDF (A), as rendered Markdown (B)"],
+      ["and in", "JSON representation (C). Spanning table cells, such as the multi-column header \"triple inter-", ""],
+      ["annotator mAP@0.5-0.95 (%)”, is repeated for each column in the Markdown representation (B),", "", ""],
+      ["which guarantees that every data point can be traced back to row and column headings only by its", "", ""],
+      ["grid coordinates in the table.", "", "In the JSON representation, the span information is reflected in the"],
+      ["fields of each table cell (C).", "", ""]
+    ],
+    "markdown": "| Figure 4: | Table 1 from the | DocLayNet paper in the original PDF (A), as rendered Markdown (B) |\n| --- | --- | --- |\n| and in | JSON representation (C). Spanning table cells, such as the multi-column header \"triple inter- |  |\n| annotator mAP@0.5-0.95 (%)”, is repeated for each column in the Markdown representation (B), |  |  |\n| which guarantees that every data point can be traced back to row and column headings only by its |  |  |\n| grid coordinates in the table. |  | In the JSON representation, the span information is reflected in the |\n| fields of each table cell (C). |  |  |\n",
+    "page_number": 9,
+    "bounding_box": { "left": 457, "top": 2173, "right": 2128, "bottom": 2439 }
+  },
+  "elements": [
+    {
+      "text": "Figure 4: Table 1 from the DocLayNet paper in the original PDF (A), as rendered Markdown (B)",
+      "geometry": { "type": "rectangle", "left": 457, "top": 2173, "width": 1671, "height": 39 },
+      "confidence": { "recognition": 0.9552381717457489 },
+      "level": "line",
+      "page_number": 9
+    },
+    {
+      "text": "Figure",
+      "geometry": { "type": "rectangle", "left": 457, "top": 2173, "width": 107, "height": 39 },
+      "confidence": { "recognition": 0.9679022216796875 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "4:",
+      "geometry": { "type": "rectangle", "left": 579, "top": 2173, "width": 29, "height": 30 },
+      "confidence": { "recognition": 0.9602642822265625 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "Table",
+      "geometry": { "type": "rectangle", "left": 629, "top": 2173, "width": 92, "height": 30 },
+      "confidence": { "recognition": 0.9646810913085937 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "1",
+      "geometry": { "type": "rectangle", "left": 740, "top": 2174, "width": 11, "height": 28 },
+      "confidence": { "recognition": 0.9564181518554687 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "from",
+      "geometry": { "type": "rectangle", "left": 770, "top": 2173, "width": 80, "height": 30 },
+      "confidence": { "recognition": 0.956090087890625 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 864, "top": 2173, "width": 49, "height": 30 },
+      "confidence": { "recognition": 0.9329476928710938 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "DocLayNet",
+      "geometry": { "type": "rectangle", "left": 928, "top": 2174, "width": 196, "height": 38 },
+      "confidence": { "recognition": 0.9210624694824219 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "paper",
+      "geometry": { "type": "rectangle", "left": 1137, "top": 2182, "width": 93, "height": 30 },
+      "confidence": { "recognition": 0.9672577667236328 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "in",
+      "geometry": { "type": "rectangle", "left": 1244, "top": 2173, "width": 31, "height": 29 },
+      "confidence": { "recognition": 0.9699747467041016 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 1290, "top": 2173, "width": 49, "height": 30 },
+      "confidence": { "recognition": 0.968686752319336 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "original",
+      "geometry": { "type": "rectangle", "left": 1354, "top": 2173, "width": 129, "height": 39 },
+      "confidence": { "recognition": 0.96797119140625 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "PDF",
+      "geometry": { "type": "rectangle", "left": 1497, "top": 2174, "width": 77, "height": 28 },
+      "confidence": { "recognition": 0.9626349639892579 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "(A),",
+      "geometry": { "type": "rectangle", "left": 1588, "top": 2174, "width": 66, "height": 35 },
+      "confidence": { "recognition": 0.9615641021728516 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "as",
+      "geometry": { "type": "rectangle", "left": 1670, "top": 2182, "width": 32, "height": 21 },
+      "confidence": { "recognition": 0.9699955749511718 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "rendered",
+      "geometry": { "type": "rectangle", "left": 1717, "top": 2173, "width": 146, "height": 30 },
+      "confidence": { "recognition": 0.9634341430664063 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "Markdown",
+      "geometry": { "type": "rectangle", "left": 1877, "top": 2173, "width": 182, "height": 30 },
+      "confidence": { "recognition": 0.9249107360839843 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "(B)",
+      "geometry": { "type": "rectangle", "left": 2074, "top": 2174, "width": 54, "height": 36 },
+      "confidence": { "recognition": 0.9232529449462891 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "and in JSON representation (C). Spanning table cells, such as the multi-column header \"triple inter-",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2219, "width": 1670, "height": 38 },
+      "confidence": { "recognition": 0.9204966100056967 },
+      "level": "line",
+      "page_number": 9
+    },
+    {
+      "text": "and",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2219, "width": 58, "height": 29 },
+      "confidence": { "recognition": 0.9558039093017578 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "in",
+      "geometry": { "type": "rectangle", "left": 528, "top": 2219, "width": 31, "height": 29 },
+      "confidence": { "recognition": 0.9558039093017578 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "JSON",
+      "geometry": { "type": "rectangle", "left": 588, "top": 2219, "width": 81, "height": 30 },
+      "confidence": { "recognition": 0.9661647033691406 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "representation",
+      "geometry": { "type": "rectangle", "left": 681, "top": 2219, "width": 237, "height": 38 },
+      "confidence": { "recognition": 0.9326193237304687 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "(C).",
+      "geometry": { "type": "rectangle", "left": 931, "top": 2219, "width": 62, "height": 36 },
+      "confidence": { "recognition": 0.9309165954589844 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "Spanning",
+      "geometry": { "type": "rectangle", "left": 1008, "top": 2219, "width": 156, "height": 38 },
+      "confidence": { "recognition": 0.9638082122802735 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "table",
+      "geometry": { "type": "rectangle", "left": 1176, "top": 2219, "width": 80, "height": 29 },
+      "confidence": { "recognition": 0.9638082122802735 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "cells,",
+      "geometry": { "type": "rectangle", "left": 1268, "top": 2219, "width": 85, "height": 35 },
+      "confidence": { "recognition": 0.9689879608154297 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "such",
+      "geometry": { "type": "rectangle", "left": 1367, "top": 2219, "width": 74, "height": 29 },
+      "confidence": { "recognition": 0.9689879608154297 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "as",
+      "geometry": { "type": "rectangle", "left": 1454, "top": 2228, "width": 32, "height": 20 },
+      "confidence": { "recognition": 0.9690366363525391 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 1499, "top": 2219, "width": 49, "height": 29 },
+      "confidence": { "recognition": 0.9330125427246094 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "multi-column",
+      "geometry": { "type": "rectangle", "left": 1560, "top": 2219, "width": 227, "height": 29 },
+      "confidence": { "recognition": 0.915534896850586 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "header",
+      "geometry": { "type": "rectangle", "left": 1799, "top": 2219, "width": 112, "height": 29 },
+      "confidence": { "recognition": 0.965141830444336 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "\"triple",
+      "geometry": { "type": "rectangle", "left": 1922, "top": 2219, "width": 105, "height": 38 },
+      "confidence": { "recognition": 0.4939738845825195 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "inter-",
+      "geometry": { "type": "rectangle", "left": 2040, "top": 2219, "width": 88, "height": 29 },
+      "confidence": { "recognition": 0.9238485717773437 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "annotator mAP@0.5-0.95 (%)”, is repeated for each column in the Markdown representation (B),",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2264, "width": 1669, "height": 39 },
+      "confidence": { "recognition": 0.921189211331881 },
+      "level": "line",
+      "page_number": 9
+    },
+    {
+      "text": "annotator",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2269, "width": 157, "height": 25 },
+      "confidence": { "recognition": 0.9051566314697266 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "mAP@0.5-0.95",
+      "geometry": { "type": "rectangle", "left": 630, "top": 2264, "width": 261, "height": 31 },
+      "confidence": { "recognition": 0.869819564819336 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "(%)”,",
+      "geometry": { "type": "rectangle", "left": 909, "top": 2265, "width": 89, "height": 36 },
+      "confidence": { "recognition": 0.673841323852539 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "is",
+      "geometry": { "type": "rectangle", "left": 1015, "top": 2274, "width": 25, "height": 20 },
+      "confidence": { "recognition": 0.9651866912841797 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "repeated",
+      "geometry": { "type": "rectangle", "left": 1055, "top": 2265, "width": 142, "height": 38 },
+      "confidence": { "recognition": 0.9674166107177734 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "for",
+      "geometry": { "type": "rectangle", "left": 1212, "top": 2264, "width": 48, "height": 30 },
+      "confidence": { "recognition": 0.9668532562255859 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "each",
+      "geometry": { "type": "rectangle", "left": 1274, "top": 2265, "width": 75, "height": 29 },
+      "confidence": { "recognition": 0.9663285064697266 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "column",
+      "geometry": { "type": "rectangle", "left": 1364, "top": 2265, "width": 125, "height": 29 },
+      "confidence": { "recognition": 0.9574656677246094 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "in",
+      "geometry": { "type": "rectangle", "left": 1504, "top": 2264, "width": 31, "height": 30 },
+      "confidence": { "recognition": 0.9687635040283203 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 1550, "top": 2265, "width": 49, "height": 29 },
+      "confidence": { "recognition": 0.9634754943847657 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "Markdown",
+      "geometry": { "type": "rectangle", "left": 1614, "top": 2265, "width": 182, "height": 29 },
+      "confidence": { "recognition": 0.9424476623535156 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "representation",
+      "geometry": { "type": "rectangle", "left": 1811, "top": 2264, "width": 237, "height": 39 },
+      "confidence": { "recognition": 0.9328302001953125 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "(B),",
+      "geometry": { "type": "rectangle", "left": 2064, "top": 2265, "width": 63, "height": 36 },
+      "confidence": { "recognition": 0.8958746337890625 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "which guarantees that every data point can be traced back to row and column headings only by its",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2312, "width": 1670, "height": 38 },
+      "confidence": { "recognition": 0.964826651679145 },
+      "level": "line",
+      "page_number": 9
+    },
+    {
+      "text": "which",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2312, "width": 100, "height": 29 },
+      "confidence": { "recognition": 0.9678390502929688 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "guarantees",
+      "geometry": { "type": "rectangle", "left": 572, "top": 2317, "width": 178, "height": 33 },
+      "confidence": { "recognition": 0.9600929260253906 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "that",
+      "geometry": { "type": "rectangle", "left": 765, "top": 2312, "width": 61, "height": 29 },
+      "confidence": { "recognition": 0.9600929260253906 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "every",
+      "geometry": { "type": "rectangle", "left": 839, "top": 2321, "width": 90, "height": 29 },
+      "confidence": { "recognition": 0.9680547332763672 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "data",
+      "geometry": { "type": "rectangle", "left": 943, "top": 2312, "width": 70, "height": 29 },
+      "confidence": { "recognition": 0.9696788787841797 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "point",
+      "geometry": { "type": "rectangle", "left": 1026, "top": 2312, "width": 86, "height": 38 },
+      "confidence": { "recognition": 0.9633402252197265 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "can",
+      "geometry": { "type": "rectangle", "left": 1125, "top": 2321, "width": 56, "height": 20 },
+      "confidence": { "recognition": 0.967680435180664 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "be",
+      "geometry": { "type": "rectangle", "left": 1195, "top": 2312, "width": 38, "height": 29 },
+      "confidence": { "recognition": 0.967680435180664 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "traced",
+      "geometry": { "type": "rectangle", "left": 1247, "top": 2312, "width": 102, "height": 29 },
+      "confidence": { "recognition": 0.9631982421875 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "back",
+      "geometry": { "type": "rectangle", "left": 1362, "top": 2312, "width": 79, "height": 29 },
+      "confidence": { "recognition": 0.9643599700927734 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "to",
+      "geometry": { "type": "rectangle", "left": 1454, "top": 2317, "width": 31, "height": 24 },
+      "confidence": { "recognition": 0.9643599700927734 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "row",
+      "geometry": { "type": "rectangle", "left": 1498, "top": 2321, "width": 63, "height": 20 },
+      "confidence": { "recognition": 0.9691123962402344 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "and",
+      "geometry": { "type": "rectangle", "left": 1576, "top": 2312, "width": 59, "height": 29 },
+      "confidence": { "recognition": 0.9664532470703125 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "column",
+      "geometry": { "type": "rectangle", "left": 1648, "top": 2312, "width": 125, "height": 29 },
+      "confidence": { "recognition": 0.959729995727539 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "headings",
+      "geometry": { "type": "rectangle", "left": 1787, "top": 2312, "width": 147, "height": 38 },
+      "confidence": { "recognition": 0.9574494934082032 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "only",
+      "geometry": { "type": "rectangle", "left": 1949, "top": 2312, "width": 72, "height": 38 },
+      "confidence": { "recognition": 0.9680657958984376 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "by",
+      "geometry": { "type": "rectangle", "left": 2035, "top": 2312, "width": 40, "height": 38 },
+      "confidence": { "recognition": 0.9664271545410156 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "its",
+      "geometry": { "type": "rectangle", "left": 2090, "top": 2312, "width": 38, "height": 29 },
+      "confidence": { "recognition": 0.9632638549804687 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "grid coordinates in the table. In the JSON representation, the span information is reflected in the",
+      "geometry": { "type": "rectangle", "left": 457, "top": 2357, "width": 1671, "height": 39 },
+      "confidence": { "recognition": 0.9651528263092041 },
+      "level": "line",
+      "page_number": 9
+    },
+    {
+      "text": "grid",
+      "geometry": { "type": "rectangle", "left": 457, "top": 2357, "width": 66, "height": 39 },
+      "confidence": { "recognition": 0.9688658142089843 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "coordinates",
+      "geometry": { "type": "rectangle", "left": 538, "top": 2357, "width": 192, "height": 30 },
+      "confidence": { "recognition": 0.9660962677001953 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "in",
+      "geometry": { "type": "rectangle", "left": 746, "top": 2357, "width": 31, "height": 30 },
+      "confidence": { "recognition": 0.9660962677001953 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 793, "top": 2357, "width": 49, "height": 30 },
+      "confidence": { "recognition": 0.9656694793701172 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "table.",
+      "geometry": { "type": "rectangle", "left": 858, "top": 2357, "width": 88, "height": 30 },
+      "confidence": { "recognition": 0.9598928833007813 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "In",
+      "geometry": { "type": "rectangle", "left": 972, "top": 2358, "width": 34, "height": 28 },
+      "confidence": { "recognition": 0.9598928833007813 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 1021, "top": 2357, "width": 50, "height": 30 },
+      "confidence": { "recognition": 0.9680068206787109 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "JSON",
+      "geometry": { "type": "rectangle", "left": 1085, "top": 2357, "width": 99, "height": 30 },
+      "confidence": { "recognition": 0.9638304901123047 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "representation,",
+      "geometry": { "type": "rectangle", "left": 1200, "top": 2357, "width": 246, "height": 39 },
+      "confidence": { "recognition": 0.9678810119628907 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 1464, "top": 2357, "width": 49, "height": 30 },
+      "confidence": { "recognition": 0.9660269927978515 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "span",
+      "geometry": { "type": "rectangle", "left": 1530, "top": 2366, "width": 74, "height": 30 },
+      "confidence": { "recognition": 0.9670980834960937 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "information",
+      "geometry": { "type": "rectangle", "left": 1620, "top": 2357, "width": 196, "height": 30 },
+      "confidence": { "recognition": 0.9638441467285156 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "is",
+      "geometry": { "type": "rectangle", "left": 1832, "top": 2357, "width": 25, "height": 30 },
+      "confidence": { "recognition": 0.9638441467285156 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "reflected",
+      "geometry": { "type": "rectangle", "left": 1873, "top": 2357, "width": 144, "height": 30 },
+      "confidence": { "recognition": 0.9624535369873047 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "in",
+      "geometry": { "type": "rectangle", "left": 2032, "top": 2357, "width": 31, "height": 29 },
+      "confidence": { "recognition": 0.9661670684814453 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "the",
+      "geometry": { "type": "rectangle", "left": 2079, "top": 2357, "width": 49, "height": 30 },
+      "confidence": { "recognition": 0.9667793273925781 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "fields of each table cell (C).",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2403, "width": 461, "height": 36 },
+      "confidence": { "recognition": 0.9530950037638347 },
+      "level": "line",
+      "page_number": 9
+    },
+    {
+      "text": "fields",
+      "geometry": { "type": "rectangle", "left": 458, "top": 2403, "width": 88, "height": 29 },
+      "confidence": { "recognition": 0.9616180419921875 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "of",
+      "geometry": { "type": "rectangle", "left": 559, "top": 2403, "width": 36, "height": 29 },
+      "confidence": { "recognition": 0.970150146484375 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "each",
+      "geometry": { "type": "rectangle", "left": 604, "top": 2403, "width": 75, "height": 29 },
+      "confidence": { "recognition": 0.9673373413085937 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "table",
+      "geometry": { "type": "rectangle", "left": 692, "top": 2403, "width": 79, "height": 29 },
+      "confidence": { "recognition": 0.969580078125 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "cell",
+      "geometry": { "type": "rectangle", "left": 784, "top": 2403, "width": 58, "height": 29 },
+      "confidence": { "recognition": 0.9302198028564453 },
+      "level": "word",
+      "page_number": 9
+    },
+    {
+      "text": "(C).",
+      "geometry": { "type": "rectangle", "left": 856, "top": 2403, "width": 63, "height": 36 },
+      "confidence": { "recognition": 0.9196646118164062 },
+      "level": "word",
+      "page_number": 9
+    }
+  ]
+}

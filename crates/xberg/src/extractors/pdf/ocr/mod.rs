@@ -18,6 +18,11 @@ mod cache_policy;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use cache_policy::resolve_ocr_config;
 
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod caption_conversion;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "../../../ocr/caption_grid_proof.rs"]
+mod caption_grid_proof;
 mod document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod markdown;
