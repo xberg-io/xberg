@@ -2748,8 +2748,8 @@ default_features = false
 [crates.swift]
 module_name = "Xberg"
 package_name = "Xberg"
-# Match the macOS 26 deployment floor of the published and source Swift packages. ~keep
-min_macos_version = "26.0"
+# macOS 15 is the floor of every macOS artifact: the oldest release Apple still supports. ~keep
+min_macos_version = "15.0"
 # TesseractConfig keeps Rust-side compatibility codecs for `language` (a string or a list) and
 # `thresholding_method` (the old bool); the strict Swift decoder cannot mirror them, so its
 # Swift DTO ignores unknown keys instead of rejecting them. ~keep

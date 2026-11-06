@@ -5,7 +5,7 @@ setup() {
 	PATH="$(xberg_isolated_path)"
 	REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
 	SCRIPT="$REPO_ROOT/scripts/ci/build-macos-heif-deps.sh"
-	export XBERG_HEIF_PREFIX="$XBERG_WORK/heif" MACOSX_DEPLOYMENT_TARGET=11.0
+	export XBERG_HEIF_PREFIX="$XBERG_WORK/heif" MACOSX_DEPLOYMENT_TARGET=15.0
 	mkdir -p "$XBERG_HEIF_PREFIX/lib/pkgconfig"
 	touch "$XBERG_HEIF_PREFIX/lib/libheif.dylib"
 	xberg_stub_exit curl 42
@@ -33,7 +33,7 @@ setup() {
 }
 
 @test "macos_heif should_reject_a_current_receipt_with_stale_pkg_config_versions" {
-	printf 'libheif=1.23.7 libde265=1.1.3 libaom=3.15.2 target=11.0 arch=%s\n' "$(uname -m)" \
+	printf 'libheif=1.23.7 libde265=1.1.3 libaom=3.15.2 target=15.0 arch=%s\n' "$(uname -m)" \
 		>"$XBERG_HEIF_PREFIX/.xberg-heif-versions"
 	xberg_stub pkg-config 'printf "%s\n" 1.23.0'
 	run "$BASH" "$SCRIPT"
@@ -56,7 +56,7 @@ setup() {
 }
 
 @test "macos_heif should_reuse_only_a_complete_matching_version_and_target_prefix" {
-	printf 'libheif=1.23.7 libde265=1.1.3 libaom=3.15.2 target=11.0 arch=%s\n' "$(uname -m)" \
+	printf 'libheif=1.23.7 libde265=1.1.3 libaom=3.15.2 target=15.0 arch=%s\n' "$(uname -m)" \
 		>"$XBERG_HEIF_PREFIX/.xberg-heif-versions"
 	local spec name version
 	for spec in libheif:1.23.7 libde265:1.1.3 aom:3.15.2; do
@@ -67,7 +67,7 @@ setup() {
 	done
 	touch "$XBERG_HEIF_PREFIX/lib/libde265.dylib" "$XBERG_HEIF_PREFIX/lib/libaom.dylib"
 	xberg_stub lipo '[ "$1" = -archs ] || exit 97' 'printf "x86_64\n"'
-	xberg_stub otool 'if [ "$1" = -arch ] && [ "$2" = x86_64 ] && [ "$3" = -l ]; then printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 11.0\n"; else printf "fixture:\nidentity:\n"; fi'
+	xberg_stub otool 'if [ "$1" = -arch ] && [ "$2" = x86_64 ] && [ "$3" = -l ]; then printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 15.0\n"; else printf "fixture:\nidentity:\n"; fi'
 	run "$BASH" "$SCRIPT"
 	xberg_assert_status 0
 	xberg_assert_output_contains "Verified libheif stack already present"
@@ -114,15 +114,15 @@ setup() {
 	xberg_assert_trace_empty
 }
 
-@test "macos_heif encoder profile requires arm64 at the 11.0 floor" {
+@test "macos_heif encoder profile requires arm64 at the 15.0 floor" {
 	run env XBERG_HEIF_PROFILE=elixir-encoders "$BASH" "$SCRIPT"
 	xberg_assert_status 1
-	xberg_assert_output_contains "requires arm64 and MACOSX_DEPLOYMENT_TARGET=11.0"
+	xberg_assert_output_contains "requires arm64 and MACOSX_DEPLOYMENT_TARGET=15.0"
 	xberg_assert_trace_empty
 	xberg_stub uname 'printf "arm64\n"'
-	run env XBERG_HEIF_PROFILE=elixir-encoders MACOSX_DEPLOYMENT_TARGET=15.0 "$BASH" "$SCRIPT"
+	run env XBERG_HEIF_PROFILE=elixir-encoders MACOSX_DEPLOYMENT_TARGET=11.0 "$BASH" "$SCRIPT"
 	xberg_assert_status 1
-	xberg_assert_output_contains "requires arm64 and MACOSX_DEPLOYMENT_TARGET=11.0"
+	xberg_assert_output_contains "requires arm64 and MACOSX_DEPLOYMENT_TARGET=15.0"
 	xberg_assert_trace_empty
 }
 
@@ -140,7 +140,7 @@ setup() {
 	xberg_stub lipo 'printf "arm64\n"'
 	xberg_stub otool '
 		if [ "$1" = -arch ]; then
-			printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 11.0\n"
+			printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 15.0\n"
 			exit
 		fi
 		printf "%s:\n" "$2"

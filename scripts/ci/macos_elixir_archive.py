@@ -205,7 +205,7 @@ def verify_source_receipt(prefix: Path, sources: bytes) -> None:
     versions = source_versions(sources)
     expected = (
         f"libheif={versions['libheif']} libde265={versions['libde265']} libaom={versions['libaom']} "
-        f"target=11.0 arch=arm64 profile=elixir-encoders x265={versions['x265']}\n"
+        f"target=15.0 arch=arm64 profile=elixir-encoders x265={versions['x265']}\n"
     )
     if read_notice(prefix / ".xberg-heif-versions") != expected.encode("ascii"):
         raise ValueError("source codec build receipt does not match the notice source versions")
@@ -245,8 +245,8 @@ def verify_floor(path: Path) -> None:
         str(SCRIPTS.parent / "lib/macho.sh"),
         str(path),
     )
-    if output.splitlines() != ["arm64 11.0"]:
-        raise ValueError(f"{path.name} must declare exactly one arm64 slice at macOS 11.0: {output.strip()}")
+    if output.splitlines() != ["arm64 15.0"]:
+        raise ValueError(f"{path.name} must declare exactly one arm64 slice at macOS 15.0: {output.strip()}")
 
 
 def install_id(path: Path) -> str:
@@ -443,7 +443,7 @@ def main() -> None:
     parser.add_argument("operation", choices=("stage", "verify"))
     parser.add_argument("archive", type=Path)
     parser.add_argument(
-        "--codec-prefix", type=Path, required=True, help="verified arm64 macOS 11.0 elixir-encoders source prefix"
+        "--codec-prefix", type=Path, required=True, help="verified arm64 macOS 15.0 elixir-encoders source prefix"
     )
     parser.add_argument(
         "--project-source", type=Path, required=True, help="release-source root containing the project notices"

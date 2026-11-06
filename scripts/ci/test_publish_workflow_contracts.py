@@ -9,6 +9,7 @@ import textwrap
 import tomllib
 from pathlib import Path
 
+from test_macos_deployment_target import macos_floor
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish.yaml"
@@ -450,12 +451,6 @@ def test_go_release_matrix_covers_every_generated_setup_platform() -> None:
     assert 'return base + "-musl", nil' in setup
 
 
-def test_release_uses_supported_macos_deployment_floor() -> None:
-    workflow = WORKFLOW.read_text()
-    env = workflow[workflow.index("env:\n") : workflow.index("\npermissions:")]
-    assert 'MACOSX_DEPLOYMENT_TARGET: "11.0"' in env
-
-
 def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
     block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
     assert 'mise run go:publish:package "${{ matrix.target }}"' in block
@@ -754,16 +749,10 @@ def test_swift_ios_builds_pin_the_deployment_target_to_the_manifest_floor() -> N
 
 
 def test_swift_macos_builds_pin_the_deployment_target_to_the_manifest_floor() -> None:
-    root = Path(__file__).parents[2]
-    floors = set()
-    for manifest in (root / "Package.swift", root / "packages" / "swift" / "Package.swift"):
-        floor = re.findall(r"\.macOS\(\.v(\d+)\)", manifest.read_text())
-        assert len(floor) == 1, f"{manifest} must declare exactly one macOS floor"
-        floors.add(int(floor[0]))
-    assert len(floors) == 1, f"Swift manifests declare different macOS floors: {sorted(floors)}"
-    floor = floors.pop()
-    # The bundled ONNX Runtime prebuilt requires macOS 13.4 and `.macOS(.vN)` holds only a major.
-    assert floor >= 14, f"macOS floor {floor} is below the bundled ONNX Runtime's 13.4"
+    floor = macos_floor()
+    # The floor follows Apple's supported releases, and the bundled ONNX Runtime prebuilt
+    # requires macOS 13.4, so the floor must never fall below it. ~keep
+    assert (floor, 0) >= (13, 4), f"macOS floor {floor} is below the bundled ONNX Runtime's 13.4"
     swift = job_block(WORKFLOW.read_text(), "swift-target")
     build = re.search(
         r"(?ms)^      - uses: xberg-io/actions/build-swift-artifactbundle@[^\n]+\n(.*?)(?=^      - |\Z)", swift

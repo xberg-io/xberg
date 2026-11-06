@@ -16,7 +16,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 90
     env:
-      MACOSX_DEPLOYMENT_TARGET: "11.0"
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -52,7 +52,7 @@ jobs:
           elixir --version
           bash scripts/ci/install-system-deps/install-macos.sh
 
-      - name: Build the pinned encoder source stack at the macOS 11.0 floor
+      - name: Build the pinned encoder source stack at the macOS 15.0 floor
         id: inputs
         shell: bash
         run: |
@@ -122,4 +122,4 @@ jobs:
           fi
           cat "$work/negative.log"
           grep -Fq "Library not loaded: @loader_path/libx265." "$work/negative.log"
-          echo "Qualified the local archive on macOS 26 arm64 and OTP 27 with declared macOS 11.0 floors." >> "$GITHUB_STEP_SUMMARY"
+          echo "Qualified the local archive on macOS 26 arm64 and OTP 27 with declared macOS 15.0 floors." >> "$GITHUB_STEP_SUMMARY"

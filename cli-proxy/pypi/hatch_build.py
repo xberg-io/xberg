@@ -28,8 +28,8 @@ _TAG_MAP = {
     "aarch64-unknown-linux-gnu": "manylinux_2_28_aarch64",
     "x86_64-unknown-linux-musl": "musllinux_1_2_x86_64",
     "aarch64-unknown-linux-musl": "musllinux_1_2_aarch64",
-    "aarch64-apple-darwin": "macosx_11_0_arm64",
-    "x86_64-apple-darwin": "macosx_11_0_x86_64",
+    "aarch64-apple-darwin": "macosx_15_0_arm64",
+    "x86_64-apple-darwin": "macosx_15_0_x86_64",
 }
 
 

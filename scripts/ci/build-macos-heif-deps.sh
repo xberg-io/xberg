@@ -32,7 +32,7 @@ if [ "$PROFILE" = elixir-encoders ]; then
 fi
 LIBAOM_URL="https://storage.googleapis.com/aom-releases/libaom-$LIBAOM_VERSION.tar.gz"
 PREFIX="${XBERG_HEIF_PREFIX:-/tmp/xberg-heif}"
-TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
 WORK=""
 JOBS="${CMAKE_BUILD_PARALLEL_LEVEL:-$(sysctl -n hw.ncpu)}"
 if [[ ! "$JOBS" =~ ^[1-9][0-9]*$ ]]; then
@@ -311,8 +311,8 @@ main() {
     fi
     ;;
   elixir-encoders)
-    if [ "$arch" != arm64 ] || [ "$TARGET" != 11.0 ]; then
-      echo "::error::elixir-encoders requires arm64 and MACOSX_DEPLOYMENT_TARGET=11.0" >&2
+    if [ "$arch" != arm64 ] || [ "$TARGET" != 15.0 ]; then
+      echo "::error::elixir-encoders requires arm64 and MACOSX_DEPLOYMENT_TARGET=15.0" >&2
       return 1
     fi
     if [ -z "${XBERG_HEIF_PREFIX:-}" ]; then

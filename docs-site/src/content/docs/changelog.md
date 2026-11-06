@@ -70,9 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(corpus): Require Python 3.11 for corpus tooling.** (#2444)
   Refresh the pinned tooling and benchmark metadata; document fixtures are unchanged.
 
-- Minimum supported versions raised: Node.js 22, Ruby 3.3, PHP 8.3, Go 1.27, Java 25, Android API 24, Dart 3.13, macOS 26, Rust 1.99.
+- Minimum supported versions raised: Node.js 22, Ruby 3.3, PHP 8.3, Go 1.27, Java 25, Android API 24, Dart 3.13, macOS 15, Rust 1.99.
 - **(python): Set the package minimum and native stable ABI target to Python 3.11 (`abi3-py311`).**
-- **(swift): Preserve the macOS 26 deployment minimum in regenerated packages.**
+- **(macos): macOS 15 is the minimum for every macOS artifact.**
+  Wheels, the CLI, the FFI and Node libraries, the Elixir NIF and the Swift package (`.macOS(.v15)`) all target
+  macOS 15.0, the oldest release Apple still supports. They previously targeted 11.0, and the Swift package 26.
 - **(go): Implement `json.Marshaler` for 50 DTOs.**
   Their 74 required collection fields now encode nil slices/maps as `[]`/`{}`.
   Anonymous embedding can promote these methods and omit a wrapper's extra fields.
@@ -553,7 +555,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ci): Run Go lint with the locked Go 1.27 toolchain and a compatible linter.**
 
-- **(swift): Build release artifacts for the declared macOS 26 minimum.**
+- **(swift): Build release artifacts for the declared macOS 15 minimum.**
 
 - **(formula): Honor `XBERG_CACHE_DIR` for formula recognition models.** (#2409)
   Preserve explicit model directories and the Hugging Face cache fallback when the override is unset.
@@ -674,8 +676,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(e2e): Keep the generated Elixir mock-server helper current with Alef 0.115.9.**
 
-- **(swift): The Swift package requires macOS 14.**
-  The bundled ONNX Runtime needs macOS 13.4, and the macOS library now builds for the declared floor instead of 11.0.
+- **(swift): The Swift package requires macOS 15.**
+  The macOS library builds for the declared floor instead of 11.0; the bundled ONNX Runtime needs macOS 13.4.
 
 - **(tests): Check unsupported ZIP member compression when the lazy reader reads.**
   Retain healthy-member extraction and warning assertions with ZIP 9.2's deferred decoder initialization.

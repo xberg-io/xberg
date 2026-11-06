@@ -186,12 +186,14 @@ class MacosElixirArchiveTests(unittest.TestCase):
         with expected_error(ValueError, "outside the codec prefix"):
             archive.source_library(library_dir, "/opt/homebrew/lib/libheif.1.dylib")
 
-    def test_arch_and_floor_check_refuses_newer_or_wrong_slice(self) -> None:
-        for output in ["arm64 15.0\n", "x86_64 11.0\n"]:
+    def test_arch_and_floor_check_refuses_other_floor_or_wrong_slice(self) -> None:
+        with patch.object(archive, "tool", return_value="arm64 15.0\n"):
+            archive.verify_floor(self.root / NIF)
+        for output in ["arm64 26.0\n", "arm64 11.0\n", "x86_64 15.0\n"]:
             with (
                 self.subTest(output=output),
                 patch.object(archive, "tool", return_value=output),
-                expected_error(ValueError, "arm64 slice at macOS 11.0"),
+                expected_error(ValueError, "arm64 slice at macOS 15.0"),
             ):
                 archive.verify_floor(self.root / NIF)
 
@@ -286,7 +288,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
         receipt = self.root / ".xberg-heif-versions"
         marker.touch()
         expected = (
-            "libheif=1.23.7 libde265=1.1.3 libaom=3.15.3 target=11.0 arch=arm64 profile=elixir-encoders x265=4.3\n"
+            "libheif=1.23.7 libde265=1.1.3 libaom=3.15.3 target=15.0 arch=arm64 profile=elixir-encoders x265=4.3\n"
         )
         receipt.write_text(expected, encoding="ascii")
         archive.verify_source_receipt(self.root, notices["sources.tsv"])
