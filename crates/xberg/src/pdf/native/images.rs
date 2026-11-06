@@ -227,7 +227,7 @@ pub(crate) struct PageFallbackImage {
     pub source_dpi: Option<f64>,
 }
 
-#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(all(test, feature = "ocr"))]
 impl PageFallbackImage {
     pub(crate) fn placeholder_jpeg(paint_order: usize) -> Self {
         Self {
