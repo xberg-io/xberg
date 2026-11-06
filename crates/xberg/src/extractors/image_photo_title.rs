@@ -14,6 +14,9 @@ use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use crate::types::{BoundingBox, ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel};
 use crate::{Result, XbergError};
 
+#[path = "image_photo_title/duplicate.rs"]
+mod duplicate;
+
 const MAX_SOURCE_PIXELS: u32 = 2_500_000;
 const MAX_SOURCE_AXIS: u32 = 4096;
 const MIN_TITLE_HEIGHT: u32 = 30;
@@ -446,6 +449,7 @@ async fn read_mask(
 pub(super) struct Title {
     text: String,
     bounds: Rect,
+    duplicate_glyph: Option<char>,
 }
 
 pub(super) async fn recover_if_eligible(
@@ -525,8 +529,13 @@ async fn recover(
     let Some(bounds) = word_envelope(&words).and_then(|bounds| bounds.translate(frame)) else {
         return Ok(None);
     };
+    let duplicate_glyph = duplicate::duplicate_title_glyph(&words, [&low, &high], frame, original);
     let text = words.into_iter().map(|word| word.text).collect::<Vec<_>>().join(" ");
-    Ok(Some(Title { text, bounds }))
+    Ok(Some(Title {
+        text,
+        bounds,
+        duplicate_glyph,
+    }))
 }
 
 fn preserves_markdown_page(document: &InternalDocument) -> bool {
@@ -636,7 +645,14 @@ pub(super) fn place(document: &mut InternalDocument, title: Title, output_format
         x1: title.bounds.right.into(),
         y1: title.bounds.bottom.into(),
     });
-    if let Some((page_offset, (index, offset))) = insertion {
+    if let Some(mut insertion) = insertion {
+        if let Some(removal) = title
+            .duplicate_glyph
+            .and_then(|glyph| duplicate::duplicate_removal(&page.content, &document.elements, glyph))
+        {
+            duplicate::remove_duplicate(&mut page.content, &mut document.elements, removal, &mut insertion);
+        }
+        let (page_offset, (index, offset)) = insertion;
         let paragraph = format!("{}\n\n", element.text);
         page.content.insert_str(page_offset, &paragraph);
         if offset == 0 {

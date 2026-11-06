@@ -63,7 +63,7 @@ fn remove_positioned_photo_title(content: &str) -> String {
     let (before, after) = content
         .split_once(TITLE_PARAGRAPH)
         .expect("title is a separate paragraph");
-    assert_eq!(before.lines().filter(|line| !line.trim().is_empty()).count(), 104);
+    assert_eq!(before.lines().filter(|line| !line.trim().is_empty()).count(), 103);
     assert!(
         after.starts_with('*'),
         "the first recognized line below the source title"
@@ -79,12 +79,12 @@ fn assert_addition(document: &ExtractedDocument, body_sha: &str, page_sha: &str)
 }
 
 #[tokio::test]
-async fn recovers_the_photo_title_and_keeps_the_entire_primary_body() {
+async fn recovers_the_photo_title_and_keeps_unrelated_primary_lines() {
     let document = extract_primary(PHOTO, 215, 0).await;
     assert_addition(
         &document,
-        "56e3599e161041150f8a5363b1b8f8b6acf5ceac11adcae6528b5c47528d403e",
-        "2ab44fd7d097fd8353d7c6f346ce3a4ba370e64fec2871d7131de9382012507c",
+        "0f5edadaac602317a553d4fce3f4473215abe745ad0b5005c916cd8c5540c1d9",
+        "77d64c8b58e3646f88fdaf16a6c2e783189194293da40a8c4a9efbc6d7ddfa0f",
     );
 }
 
@@ -189,7 +189,7 @@ async fn recovers_photo_title_in_markdown() {
     // The standalone extractor sets this same effective OCR format. Supplying it explicitly
     // disqualifies the optional title proof while leaving the ordinary Markdown read unchanged.
     reference_config.ocr.as_mut().unwrap().output_format = Some(OutputFormat::Markdown);
-    let reference = extract_png(PHOTO, &reference_config).await;
+    let mut reference = extract_png(PHOTO, &reference_config).await;
     assert_body(
         &reference.content,
         "b48f67548d303c58954cbe54c95bd7545eca1de64a73b45e59f4dafa8ae37fbf",
@@ -209,6 +209,9 @@ async fn recovers_photo_title_in_markdown() {
     let mut recovered = extract_png(PHOTO, &config).await;
     assert!(recovered.tables.is_empty());
     remove_markdown_title(&mut recovered);
+    reference.content = reference.content.replacen("\n# I\n\n", "\n", 1);
+    let reference_page = &mut reference.pages.as_mut().unwrap()[0];
+    reference_page.content = reference_page.content.replacen("\nI\n\n", "\n", 1);
     assert_same_document(&reference, &recovered);
 }
 
@@ -346,8 +349,8 @@ async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {
 fn assert_cached_title(document: &ExtractedDocument) {
     assert_addition(
         document,
-        "56e3599e161041150f8a5363b1b8f8b6acf5ceac11adcae6528b5c47528d403e",
-        "2ab44fd7d097fd8353d7c6f346ce3a4ba370e64fec2871d7131de9382012507c",
+        "0f5edadaac602317a553d4fce3f4473215abe745ad0b5005c916cd8c5540c1d9",
+        "77d64c8b58e3646f88fdaf16a6c2e783189194293da40a8c4a9efbc6d7ddfa0f",
     );
     assert!(document.ocr_elements.is_none());
     assert!(document.tables.is_empty());
