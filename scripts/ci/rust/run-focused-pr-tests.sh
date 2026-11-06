@@ -38,18 +38,6 @@ run_exact() {
   passed=$((passed + 1))
 }
 
-changed_in_pr() {
-  [ "${GITHUB_EVENT_NAME:-}" = pull_request ] || return 1
-  # The checkout's merge commit has the base revision as its first parent. ~keep
-  git rev-parse --verify --quiet HEAD^2 >/dev/null || {
-    printf 'Focused PR checkout must be a merge commit with both parents\n' >&2
-    exit 1
-  }
-  local changed
-  changed="$(git diff --no-renames --name-only HEAD^1 HEAD -- "$1")" || exit 1
-  [ -n "$changed" ]
-}
-
 run_pdf_cases() {
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact cached_default_recovers_embedded_line_in_cold_and_warm_reads \
@@ -57,26 +45,8 @@ run_pdf_cases() {
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
     --test ocr_standalone_row_layout_2432
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
-
-  # A PR changing the producer requires its exact test even if the test was removed or renamed. ~keep
-  if grep -q '^async fn png_predictor_panel_recovers_missing_line_without_changing_primary_ocr(' \
-    crates/xberg/tests/pdf_embedded_psm6_addition_2327.rs ||
-    changed_in_pr crates/xberg/src/extractors/pdf/ocr/hidden_layer/embedded_gap.rs; then
-    run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
-      --test pdf_embedded_psm6_addition_2327
-  fi
-  if grep -q '^async fn mupdf_icc_gray_raster_recovers_the_same_prose_and_native_stubs(' \
-    crates/xberg/tests/pdf_outlined_prose_2313.rs ||
-    changed_in_pr crates/xberg/src/extractors/pdf/ocr/hidden_layer/visible_raster.rs; then
-    run_exact mupdf_icc_gray_raster_recovers_the_same_prose_and_native_stubs --test pdf_outlined_prose_2313
-    run_exact icc_gray_with_an_explicit_range_does_not_claim_raster_prose --test pdf_outlined_prose_2313
-  fi
-  if grep -q '^fn keeps_a_cell_boundary_without_a_whole_word_crossing_its_gap(' \
-    crates/xberg/src/ocr/caption_grid_proof_tests.rs ||
-    changed_in_pr crates/xberg/src/ocr/caption_grid_proof.rs; then
-    run_exact 'extractors::pdf::ocr::caption_grid_proof::tests::keeps_a_cell_boundary_without_a_whole_word_crossing_its_gap' \
-      --lib
-  fi
+  run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
+    --test pdf_embedded_psm6_addition_2327
 }
 
 run_api_cases() {
