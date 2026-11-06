@@ -26,6 +26,7 @@ MH_DYLIB = 6
 MAX_LOAD_COMMANDS = 512
 MAX_LOAD_COMMAND_BYTES = 64 * 1024
 CODECS = {"libheif", "libde265", "libaom", "libx265"}
+PROJECT_NOTICES = ("LICENSE", "THIRD_PARTY_LICENSES.md")
 ARCHIVE_NAME = re.compile(
     r"libxberg_nif-v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]+)?-nif-[0-9]+\.[0-9]+"
     r"-aarch64-apple-darwin\.so\.tar\.gz"
@@ -193,6 +194,10 @@ def read_notices(directory: Path) -> dict[str, bytes]:
     return {**notices, "notices.sha256": manifest}
 
 
+def read_project_notices(source: Path) -> dict[str, bytes]:
+    return {name: read_notice(source / name) for name in PROJECT_NOTICES}
+
+
 def verify_source_receipt(prefix: Path, sources: bytes) -> None:
     marker = prefix / ".xberg-heif-encoder-profile"
     if marker.is_symlink() or not marker.is_file() or marker.stat().st_size:
@@ -357,7 +362,7 @@ def verify_release(archive: Path, directory: Path, root: str, codecs: set[str], 
     unpack(archive, directory, {root, *codecs, *notices}, canonical_modes=True)
     for name, expected in notices.items():
         if read_notice(directory / name) != expected:
-            raise ValueError(f"archive source notice bytes differ: {name}")
+            raise ValueError(f"archive notice bytes differ: {name}")
     edges = {}
     for name in sorted({root, *codecs}):
         path = directory / name
@@ -440,6 +445,9 @@ def main() -> None:
     parser.add_argument(
         "--codec-prefix", type=Path, required=True, help="verified arm64 macOS 11.0 elixir-encoders source prefix"
     )
+    parser.add_argument(
+        "--project-source", type=Path, required=True, help="release-source root containing the project notices"
+    )
     parser.add_argument("--output-dir", type=Path, help="existing output directory for stage and its checksum")
     args = parser.parse_args()
     if (args.operation == "stage") != (args.output_dir is not None):
@@ -452,6 +460,7 @@ def main() -> None:
         library_dir = args.codec_prefix.absolute() / "lib"
         notices = read_notices(library_dir.parent / "share/xberg-heif-notices")
         verify_source_receipt(library_dir.parent, notices["sources.tsv"])
+        notices.update(read_project_notices(args.project_source))
         codecs = codec_filenames(library_dir)
         if args.operation == "stage":
             stage_archive(
@@ -461,7 +470,7 @@ def main() -> None:
             verify_checksum(archive, archive.with_name(f"{archive.name}.sha256"))
             with tempfile.TemporaryDirectory(prefix="elixir-archive-audit-") as temporary:
                 verify_release(archive, Path(temporary), root, codecs, notices)
-        print(f"verified macOS arm64 Elixir NIF, four codecs, and {len(notices)} source inventory files")
+        print(f"verified macOS arm64 Elixir NIF, four codecs, and {len(notices)} notice and provenance files")
     except (ValueError, OSError, EOFError, tarfile.TarError) as error:
         parser.exit(1, f"macos-elixir-archive: {error}\n")
 

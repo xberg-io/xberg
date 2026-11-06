@@ -10,11 +10,46 @@ from pathlib import Path
 from unittest.mock import patch
 
 import macos_elixir_archive as archive
-import pytest
+from test_windows_wheel_closure import expected_error
 
 NIF = "libxberg_nif-v1.3.10-nif-2.16-aarch64-apple-darwin.so"
 CODECS = {"libheif.1.dylib", "libde265.0.dylib", "libaom.3.dylib", "libx265.217.dylib"}
 SYSTEM = "/usr/lib/libSystem.B.dylib"
+
+
+def synthetic_notices(root: Path) -> tuple[Path, dict[str, bytes]]:
+    directory = root / "notices"
+    directory.mkdir()
+    names = {
+        "sources.tsv": ("libheif 1.23.7", "libde265 1.1.3", "libaom 3.15.3", "x265 4.3"),
+        "libheif-1.23.7-COPYING": (),
+        "libde265-1.1.3-COPYING": (),
+        "libde265-1.1.3-AUTHORS": (),
+        "libde265-1.1.3-libde265-COPYING": (),
+        "libaom-3.15.3-LICENSE": (),
+        "libaom-3.15.3-PATENTS": (),
+        "libaom-3.15.3-AUTHORS": (),
+        "libaom-3.15.3-third_party-fastfeat-LICENSE": (),
+        "libaom-3.15.3-third_party-libyuv-LICENSE": (),
+        "libaom-3.15.3-third_party-vector-LICENSE": (),
+        "x265_4.3-COPYING": (),
+    }
+    contents = {name: f"upstream {name}\n".encode("ascii") for name in names}
+    urls = [
+        "https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz",
+        "https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz",
+        "https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz",
+        "https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz",
+    ]
+    contents["sources.tsv"] = "".join(
+        f"{release}\t{'a' * 64}\t{url}\n" for release, url in zip(names["sources.tsv"], urls, strict=True)
+    ).encode("ascii")
+    contents["notices.sha256"] = "".join(
+        f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in contents.items()
+    ).encode("ascii")
+    for name, data in contents.items():
+        (directory / name).write_bytes(data)
+    return directory, contents
 
 
 class MacosElixirArchiveTests(unittest.TestCase):
@@ -39,7 +74,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
 
     def test_rejects_duplicate_root_before_overwriting(self) -> None:
         self.write_members([(NIF, tarfile.REGTYPE, b"original"), (NIF, tarfile.REGTYPE, b"replacement")])
-        with pytest.raises(ValueError, match="duplicate"):
+        with expected_error(ValueError, "duplicate"):
             archive.unpack(self.tar, self.extracted, {NIF})
         assert (self.extracted / NIF).read_bytes() == b"original"
 
@@ -47,14 +82,14 @@ class MacosElixirArchiveTests(unittest.TestCase):
         for name in ["../" + NIF, "./" + NIF, "/tmp/" + NIF, NIF.upper()]:
             with self.subTest(name=name):
                 self.write_members([(name, tarfile.REGTYPE, b"nif")])
-                with pytest.raises(ValueError, match="unexpected member"):
+                with expected_error(ValueError, "unexpected member"):
                     archive.unpack(self.tar, self.extracted, {NIF})
 
     def test_rejects_links_directories_and_extended_headers(self) -> None:
         for kind in [tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.DIRTYPE, tarfile.XHDTYPE, tarfile.GNUTYPE_LONGNAME]:
             with self.subTest(kind=kind):
                 self.write_members([(NIF, kind, b"")])
-                with pytest.raises(ValueError, match="regular"):
+                with expected_error(ValueError, "regular"):
                     archive.unpack(self.tar, self.extracted, {NIF})
 
     def test_allows_the_rustler_builders_mtime_only_pax_record(self) -> None:
@@ -65,7 +100,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
             output.addfile(member, io.BytesIO(b"nif"))
         archive.unpack(self.tar, self.extracted, {NIF})
         assert (self.extracted / NIF).read_bytes() == b"nif"
-        with tempfile.TemporaryDirectory() as directory, pytest.raises(ValueError, match="regular"):
+        with tempfile.TemporaryDirectory() as directory, expected_error(ValueError, "regular"):
             archive.unpack(self.tar, Path(directory), {NIF}, canonical_modes=True)
 
     def test_rejects_pax_path_size_and_unrelated_metadata(self) -> None:
@@ -75,35 +110,35 @@ class MacosElixirArchiveTests(unittest.TestCase):
                 member.size = 3
                 member.pax_headers = {key: value}
                 output.addfile(member, io.BytesIO(b"nif"))
-            with self.subTest(key=key), pytest.raises(ValueError, match="PAX"):
+            with self.subTest(key=key), expected_error(ValueError, "PAX"):
                 archive.unpack(self.tar, self.extracted, {NIF})
 
     def test_rejects_members_hidden_after_terminator(self) -> None:
         self.write_members([(NIF, tarfile.REGTYPE, b"nif")])
         first_tar = gzip.decompress(self.tar.read_bytes())
         self.tar.write_bytes(gzip.compress(first_tar + first_tar))
-        with pytest.raises(ValueError, match="terminator"):
+        with expected_error(ValueError, "terminator"):
             archive.unpack(self.tar, self.extracted, {NIF})
 
     def test_rejects_nonzero_padding_and_truncated_payload(self) -> None:
-        for data in [b"nif" + b"x" * 509, b"ni"]:
+        for data, reason in [(b"nif" + b"x" * 509, "nonzero tar padding"), (b"ni", "truncated tar")]:
             with self.subTest(data_length=len(data)):
                 member = tarfile.TarInfo(NIF)
                 member.size = 3
                 self.tar.write_bytes(gzip.compress(member.tobuf() + data))
-                with tempfile.TemporaryDirectory() as directory, pytest.raises(ValueError, match=r"padding|truncated"):
+                with tempfile.TemporaryDirectory() as directory, expected_error(ValueError, reason):
                     archive.unpack(self.tar, Path(directory), {NIF})
 
     def test_rejects_excessive_declared_size_before_payload(self) -> None:
         member = tarfile.TarInfo(NIF)
         member.size = archive.MAX_UNCOMPRESSED + 1
         self.tar.write_bytes(gzip.compress(member.tobuf()))
-        with pytest.raises(ValueError, match="size limit"):
+        with expected_error(ValueError, "size limit"):
             archive.unpack(self.tar, self.extracted, {NIF})
 
     def test_rejects_missing_required_member(self) -> None:
         self.write_members([(NIF, tarfile.REGTYPE, b"nif")])
-        with pytest.raises(ValueError, match=r"missing.*libheif"):
+        with expected_error(ValueError, "missing archive members: libheif"):
             archive.unpack(self.tar, self.extracted, {NIF, "libheif.1.dylib"})
 
     def test_checksum_covers_final_compressed_bytes(self) -> None:
@@ -112,7 +147,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
         sidecar.write_text(archive.checksum_row(self.tar), encoding="ascii")
         archive.verify_checksum(self.tar, sidecar)
         self.write_members([(NIF, tarfile.REGTYPE, b"different nif")])
-        with pytest.raises(ValueError, match="checksum"):
+        with expected_error(ValueError, "checksum"):
             archive.verify_checksum(self.tar, sidecar)
 
     def test_system_paths_cannot_traverse_or_disguise_loader_search(self) -> None:
@@ -130,7 +165,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
             "@loader_path/libunknown.dylib",
             "/opt/homebrew/lib/libheif.1.dylib",
         ]:
-            with self.subTest(path=path), pytest.raises(ValueError, match="unsupported import"):
+            with self.subTest(path=path), expected_error(ValueError, "unsupported import"):
                 archive.final_siblings(NIF, [SYSTEM, path], CODECS)
 
     def test_codec_graph_requires_each_encoder_dependency(self) -> None:
@@ -138,7 +173,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
         edges.update({name: set() for name in CODECS if name != "libheif.1.dylib"})
         archive.verify_graph(NIF, edges)
         edges["libheif.1.dylib"].remove("libx265.217.dylib")
-        with pytest.raises(ValueError, match="codec graph"):
+        with expected_error(ValueError, "codec graph"):
             archive.verify_graph(NIF, edges)
 
     def test_source_import_rejects_same_basename_from_homebrew(self) -> None:
@@ -148,7 +183,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
         assert (
             archive.source_library(library_dir, str(library_dir / "libheif.1.dylib")) == library_dir / "libheif.1.dylib"
         )
-        with pytest.raises(ValueError, match="outside the codec prefix"):
+        with expected_error(ValueError, "outside the codec prefix"):
             archive.source_library(library_dir, "/opt/homebrew/lib/libheif.1.dylib")
 
     def test_arch_and_floor_check_refuses_newer_or_wrong_slice(self) -> None:
@@ -156,7 +191,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
             with (
                 self.subTest(output=output),
                 patch.object(archive, "tool", return_value=output),
-                pytest.raises(ValueError, match=r"arm64.*11.0"),
+                expected_error(ValueError, "arm64 slice at macOS 11.0"),
             ):
                 archive.verify_floor(self.root / NIF)
 
@@ -170,7 +205,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
                 output.addfile(member, io.BytesIO(b"nif"))
             directory = self.extracted / field
             directory.mkdir()
-            with self.subTest(field=field), pytest.raises(ValueError, match="unexpected metadata"):
+            with self.subTest(field=field), expected_error(ValueError, "unexpected metadata"):
                 archive.unpack(self.tar, directory, {NIF}, canonical_modes=True)
 
     def test_validates_macho_type_before_running_external_tools(self) -> None:
@@ -185,7 +220,9 @@ class MacosElixirArchiveTests(unittest.TestCase):
             )
             with (
                 self.subTest(cpu=cpu, file_type=file_type, count=count),
-                pytest.raises(ValueError, match=r"Mach-O dylib|load command budget"),
+                expected_error(
+                    ValueError, "load command budget" if count > archive.MAX_LOAD_COMMANDS else "Mach-O dylib"
+                ),
             ):
                 archive.verify_macho_header(path)
 
@@ -201,12 +238,12 @@ class MacosElixirArchiveTests(unittest.TestCase):
             assert archive.macho_imports(path) == [SYSTEM, weak]
         with (
             patch.object(archive, "tool", side_effect=[id_output, commands, f"{path}:\n{imports}"]),
-            pytest.raises(ValueError, match="incomplete Mach-O imports"),
+            expected_error(ValueError, "incomplete Mach-O imports"),
         ):
             archive.macho_imports(path)
         with (
             patch.object(archive, "tool", side_effect=[id_output, commands + "cmd LC_RPATH\n"]),
-            pytest.raises(ValueError, match="unsupported loader search"),
+            expected_error(ValueError, "unsupported loader search"),
         ):
             archive.macho_imports(path)
 
@@ -214,12 +251,12 @@ class MacosElixirArchiveTests(unittest.TestCase):
         path = self.root / "libheif.1.dylib"
         with (
             patch.object(archive, "tool", return_value=f"{path}:\n/build/libheif.1.dylib\n"),
-            pytest.raises(ValueError, match="unexpected relocated dylib identity"),
+            expected_error(ValueError, "unexpected relocated dylib identity"),
         ):
             archive.macho_imports(path, expected_id="@loader_path/libheif.1.dylib")
 
     def test_verification_compares_notice_bytes_to_the_independent_prefix(self) -> None:
-        _, notices = self.notices()
+        _, notices = synthetic_notices(self.root)
         members = {NIF, *CODECS, *notices}
         stage = self.root / "stage"
         stage.mkdir()
@@ -227,7 +264,7 @@ class MacosElixirArchiveTests(unittest.TestCase):
             (stage / name).write_bytes(notices.get(name, b"native"))
         (stage / "libaom-3.15.3-PATENTS").write_bytes(b"replaced")
         archive.pack(self.tar, stage, members)
-        with pytest.raises(ValueError, match="archive source notice bytes differ"):
+        with expected_error(ValueError, "archive notice bytes differ"):
             archive.verify_release(self.tar, self.extracted, NIF, CODECS, notices)
 
     def test_no_overwrite_or_stray_checksum_on_failed_publication(self) -> None:
@@ -238,47 +275,13 @@ class MacosElixirArchiveTests(unittest.TestCase):
         existing.write_bytes(b"old archive")
         sidecar = self.root / (self.tar.name + ".sha256")
         sidecar.write_bytes(b"digest")
-        with pytest.raises(FileExistsError):
+        with expected_error(FileExistsError, "File exists"):
             archive.publish_local(self.tar, sidecar, output)
         assert existing.read_bytes() == b"old archive"
         assert not (output / sidecar.name).exists()
 
-    def notices(self) -> tuple[Path, dict[str, bytes]]:
-        directory = self.root / "notices"
-        directory.mkdir()
-        names = {
-            "sources.tsv": ("libheif 1.23.7", "libde265 1.1.3", "libaom 3.15.3", "x265 4.3"),
-            "libheif-1.23.7-COPYING": (),
-            "libde265-1.1.3-COPYING": (),
-            "libde265-1.1.3-AUTHORS": (),
-            "libde265-1.1.3-libde265-COPYING": (),
-            "libaom-3.15.3-LICENSE": (),
-            "libaom-3.15.3-PATENTS": (),
-            "libaom-3.15.3-AUTHORS": (),
-            "libaom-3.15.3-third_party-fastfeat-LICENSE": (),
-            "libaom-3.15.3-third_party-libyuv-LICENSE": (),
-            "libaom-3.15.3-third_party-vector-LICENSE": (),
-            "x265_4.3-COPYING": (),
-        }
-        contents = {name: f"upstream {name}\n".encode("ascii") for name in names}
-        urls = [
-            "https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz",
-            "https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz",
-            "https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz",
-            "https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz",
-        ]
-        contents["sources.tsv"] = "".join(
-            f"{release}\t{'a' * 64}\t{url}\n" for release, url in zip(names["sources.tsv"], urls, strict=True)
-        ).encode("ascii")
-        contents["notices.sha256"] = "".join(
-            f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in contents.items()
-        ).encode("ascii")
-        for name, data in contents.items():
-            (directory / name).write_bytes(data)
-        return directory, contents
-
     def test_requires_encoder_build_receipt_matching_notice_source_versions(self) -> None:
-        _, notices = self.notices()
+        _, notices = synthetic_notices(self.root)
         marker = self.root / ".xberg-heif-encoder-profile"
         receipt = self.root / ".xberg-heif-versions"
         marker.touch()
@@ -288,31 +291,65 @@ class MacosElixirArchiveTests(unittest.TestCase):
         receipt.write_text(expected, encoding="ascii")
         archive.verify_source_receipt(self.root, notices["sources.tsv"])
         receipt.write_text(expected.replace("3.15.3", "3.15.2"), encoding="ascii")
-        with pytest.raises(ValueError, match="source codec build receipt"):
+        with expected_error(ValueError, "source codec build receipt"):
             archive.verify_source_receipt(self.root, notices["sources.tsv"])
         marker.unlink()
-        with pytest.raises(ValueError, match="source codec profile marker"):
+        with expected_error(ValueError, "source codec profile marker"):
             archive.verify_source_receipt(self.root, notices["sources.tsv"])
 
     def test_source_notice_manifest_requires_exact_bytes_and_members(self) -> None:
-        directory, contents = self.notices()
+        directory, contents = synthetic_notices(self.root)
         assert archive.read_notices(directory) == contents
         path = directory / "libaom-3.15.3-PATENTS"
         path.write_bytes(b"changed")
-        with pytest.raises(ValueError, match="notice checksum"):
+        with expected_error(ValueError, "notice checksum"):
             archive.read_notices(directory)
         path.write_bytes(contents[path.name])
         path.unlink()
-        with pytest.raises(ValueError, match="notice inventory"):
+        with expected_error(ValueError, "notice inventory"):
             archive.read_notices(directory)
         path.write_bytes(contents[path.name])
         (directory / "extra.txt").write_bytes(b"unexpected")
-        with pytest.raises(ValueError, match="notice inventory"):
+        with expected_error(ValueError, "notice inventory"):
             archive.read_notices(directory)
 
     def test_extra_manifest_row_rejected_even_if_file_exists(self) -> None:
-        directory, contents = self.notices()
+        directory, contents = synthetic_notices(self.root)
         (directory / "notices.sha256").write_bytes(contents["notices.sha256"] + b"a" * 64 + b"  extra.txt\n")
         (directory / "extra.txt").write_bytes(b"unexpected")
-        with pytest.raises(ValueError, match="notice inventory"):
+        with expected_error(ValueError, "notice inventory"):
             archive.read_notices(directory)
+
+
+class ProjectNoticeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
+    def test_project_notice_pair_must_exist_under_the_release_source(self) -> None:
+        expected = {"LICENSE": b"project license\n", "THIRD_PARTY_LICENSES.md": b"third-party notices\n"}
+        (self.root / "LICENSE").write_bytes(expected["LICENSE"])
+        with expected_error(ValueError, "THIRD_PARTY_LICENSES"):
+            archive.read_project_notices(self.root)
+        (self.root / "THIRD_PARTY_LICENSES.md").write_bytes(expected["THIRD_PARTY_LICENSES.md"])
+        assert archive.read_project_notices(self.root) == expected
+
+    def test_archive_must_match_project_notice_bytes(self) -> None:
+        project = self.root / "release-source"
+        project.mkdir()
+        for name in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
+            (project / name).write_bytes(f"upstream {name}\n".encode("ascii"))
+        expected = archive.read_project_notices(project)
+        members = {NIF, *CODECS, *expected}
+        for damaged in expected:
+            with self.subTest(damaged=damaged):
+                case = self.root / damaged
+                stage, unpacked = case / "stage", case / "audit"
+                stage.mkdir(parents=True)
+                unpacked.mkdir()
+                for name in members:
+                    (stage / name).write_bytes(expected.get(name, b"native"))
+                (stage / damaged).write_bytes(b"replaced")
+                packed = case / (NIF + ".tar.gz")
+                archive.pack(packed, stage, members)
+                with expected_error(ValueError, f"archive notice bytes differ: {damaged}"):
+                    archive.verify_release(packed, unpacked, NIF, CODECS, expected)
