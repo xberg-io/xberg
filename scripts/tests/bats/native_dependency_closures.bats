@@ -20,13 +20,14 @@ setup() {
 }
 
 stub_macho_tools() {
+	xberg_stub lipo '[ "$1" = -archs ] || exit 97' 'printf "arm64\n"'
 	xberg_stub otool \
 		'printf "otool %s\n" "$*" >>"$XBERG_TRACE"' \
 		'file="${!#}"; name="${file##*/}"; id="$file"; [ ! -f "$STATE_DIR/$name.id" ] || id="$(cat "$STATE_DIR/$name.id")"' \
-		'if [ "$1" = -arch ]; then [ "$2" = all ] || exit 96; shift 2; fi' \
+		'if [ "$1" = -arch ]; then case "$2" in all|arm64) shift 2 ;; *) exit 96 ;; esac; fi' \
 		'case "$1" in' \
 		'-D) printf "%s:\n%s\n" "$file" "$id" ;;' \
-		'-l) if [ "${MACHO_LOAD_COMMANDS:-false}" != true ]; then printf "LC_BUILD_VERSION\nminos 12.0\n"; exit 0; fi' \
+		'-l) if [ "${MACHO_LOAD_COMMANDS:-false}" != true ]; then printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 12.0\n"; exit 0; fi' \
 		'    count=0; [ ! -f "$STATE_DIR/otool-count" ] || count="$(cat "$STATE_DIR/otool-count")"; count=$((count+1)); printf "%s\n" "$count" >"$STATE_DIR/otool-count"' \
 		'    [ "$count" != "${OTOOL_FAIL_CALL:-0}" ] || { echo "load-command inspection failed" >&2; exit 9; }' \
 		'    case "${MACHO_OUTPUT_CASE:-}" in' \
@@ -310,6 +311,74 @@ assert_macho_bundle() {
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-macos-node-dylibs.sh" "$XBERG_WORK/bundle"
 	xberg_assert_status 1
 	xberg_assert_output_contains 'targets macOS 12.0, expected 11.0'
+}
+
+@test "macOS deployment inspection should reject a higher non-first slice" {
+	[ "$(uname -s)" = Darwin ] || skip 'requires Darwin Mach-O tools'
+	export PATH="$REAL_PATH"
+	printf 'int entry(void) { return 1; }\n' >entry.c
+	clang -arch x86_64 -mmacosx-version-min=14.0 -dynamiclib entry.c -o x86_64.dylib
+	clang -arch arm64 -mmacosx-version-min=15.0 -dynamiclib entry.c -o arm64.dylib
+	lipo -create x86_64.dylib arm64.dylib -output universal.dylib
+	run "$BASH" -c 'source "$1"; minos_of "$2"' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'different macOS deployment floors'
+}
+
+@test "macOS deployment inspection accepts thin modern and legacy declarations and rejects a missing declaration" {
+	[ "$(uname -s)" = Darwin ] || skip 'requires Darwin Mach-O tools'
+	export PATH="$REAL_PATH"
+	printf 'int entry(void) { return 1; }\n' >entry.c
+	clang -arch arm64 -mmacosx-version-min=14.0 -dynamiclib entry.c -o modern.dylib
+	clang -arch x86_64 -mmacosx-version-min=10.13 -dynamiclib entry.c -o legacy.dylib
+	vtool -remove-build-version macos -output missing.dylib modern.dylib
+	otool -arch x86_64 -l legacy.dylib | grep -F 'cmd LC_VERSION_MIN_MACOSX'
+	run "$BASH" -c 'source "$1"; macho_minos_by_arch "$2" 1' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" modern.dylib
+	xberg_assert_status 0
+	[ "$output" = 'arm64 14.0' ]
+	run "$BASH" -c 'source "$1"; minos_of "$2" 1' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" legacy.dylib
+	xberg_assert_status 0
+	[ "$output" = '10.13' ]
+	run "$BASH" -c 'source "$1"; minos_of "$2"' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" missing.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or invalid macOS deployment floor for slice arm64'
+}
+
+@test "macOS deployment inspection rejects a malformed or non-macOS slice without partial stdout" {
+	xberg_stub lipo 'printf "x86_64 arm64\n"'
+	xberg_stub otool \
+		'[ "$1" = -arch ] && [ "$3" = -l ] || exit 9' \
+		'platform=1; if [ "$2" = arm64 ] && [ "$FLOOR_CASE" = platform ]; then platform=2; fi' \
+		'printf "Load command 0\n cmd LC_BUILD_VERSION\n platform %s\n minos 14.0\n" "$platform"' \
+		'[ "$2" = arm64 ] || exit 0' \
+		'case "$FLOOR_CASE" in' \
+		'  duplicate_platform) printf " platform 1\n" ;;' \
+		'  declaration) printf "Load command 1\n cmd LC_VERSION_MIN_MACOSX\n version 14.0\n" ;;' \
+		'  duplicate_floor) printf " minos 14.0\n" ;;' \
+		'  malformed_cmd) printf "Load command 1\n cmd LC_VERSION_MIN_MACOSX trailing\n version 15.0\n" ;;' \
+		'  duplicate_cmd) printf " cmd LC_UUID\n" ;;' \
+		'  missing_cmd) printf "Load command 1\n cmdsize 32\n" ;;' \
+		'  inspection) exit 9 ;;' \
+		'esac'
+	local case_name
+	for case_name in platform duplicate_platform declaration duplicate_floor malformed_cmd duplicate_cmd missing_cmd inspection; do
+		run env FLOOR_CASE="$case_name" "$BASH" -c 'source "$1"; macho_minos_by_arch "$2" >floors.txt' _ \
+			"$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+		xberg_assert_status 1
+		xberg_assert_output_contains 'slice arm64'
+		[ ! -s floors.txt ]
+	done
+}
+
+@test "macOS deployment inspection checks requested arity and duplicate architectures" {
+	xberg_stub lipo 'printf "x86_64 arm64\n"'
+	run "$BASH" -c 'source "$1"; minos_of "$2" 1' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'unexpected Mach-O slice count'
+	xberg_stub lipo 'printf "arm64 arm64\n"'
+	run "$BASH" -c 'source "$1"; minos_of "$2"' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'invalid or duplicate Mach-O slice arm64'
 }
 
 @test "ELF closure should copy transitive library bytes and set ORIGIN on every bundled artifact" {
