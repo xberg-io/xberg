@@ -10,7 +10,9 @@ const MAX_STACK_DEPTH: usize = 16;
 const MAX_FONTS: usize = 32;
 const MIN_RULES: usize = 21;
 
-pub(super) fn plain_rule_frame(doc: &PdfDocument, page: usize) -> Option<Rect> {
+/// Page bounds when the whole page is plain strokes and text. With no clip, ExtGState or
+/// colour-space operators admitted, the MediaBox is the only thing that can hide a rule.
+pub(super) fn plain_page_bounds(doc: &PdfDocument, page: usize) -> Option<Rect> {
     let page_object = doc.get_page(page).ok()?;
     let dict = page_object.as_dict()?;
     if doc.is_encrypted()

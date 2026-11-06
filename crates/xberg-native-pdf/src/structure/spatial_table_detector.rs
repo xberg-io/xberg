@@ -119,6 +119,9 @@ pub struct TableDetectionConfig {
     pub text_fallback: bool,
 }
 
+/// Column cap of the default and bordered detection configurations.
+pub const DEFAULT_MAX_TABLE_COLUMNS: usize = 15;
+
 impl Default for TableDetectionConfig {
     fn default() -> Self {
         Self {
@@ -130,7 +133,7 @@ impl Default for TableDetectionConfig {
             min_table_cells: 4,
             min_table_columns: 2,
             regular_row_ratio: 0.3,
-            max_table_columns: 15,
+            max_table_columns: DEFAULT_MAX_TABLE_COLUMNS,
             column_merge_threshold: 25.0,
             v_split_gap: 20.0,
             text_fallback: true,
