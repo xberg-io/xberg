@@ -1,4 +1,5 @@
 use super::*;
+use crate::elements::PathOperation;
 use crate::layout::text_block::{Color, FontWeight};
 use crate::structure::spatial_table_detector::tests::create_test_span;
 
@@ -325,4 +326,37 @@ fn a_dotted_line_of_separate_sub_paths_is_not_a_solid_rule() {
     rules.remove(0);
     rules.extend((0..50).map(|dot| PathContent::line(dot as f32 * 2.0, 0.0, dot as f32 * 2.0 + 1.0, 0.0)));
     assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_fill_starting_a_hundredth_of_a_point_before_the_rule_does_not_hide_it() {
+    let mut rules = standard_rules();
+    rules.push(white_fill(0.0, -0.01, 100.0, 5.01));
+    assert!(retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_stroked_fill_with_its_geometric_edge_on_the_rule_does_not_hide_it() {
+    let mut rules = standard_rules();
+    rules.push(
+        PathContent::rect(0.0, 0.0, 100.0, 10.0)
+            .with_fill(Color::white())
+            .with_stroke_width(4.0),
+    );
+    assert!(retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_non_rectangular_fill_over_the_rule_does_not_hide_it() {
+    let mut triangle = PathContent::from_operations(vec![
+        PathOperation::MoveTo(0.0, -5.0),
+        PathOperation::LineTo(100.0, -5.0),
+        PathOperation::LineTo(50.0, 5.0),
+        PathOperation::ClosePath,
+    ])
+    .with_fill(Color::white());
+    triangle.stroke_color = None;
+    let mut rules = standard_rules();
+    rules.push(triangle);
+    assert!(retained(standard_rows(), &rules));
 }

@@ -197,7 +197,7 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
         && drawn.top() <= bounds.bottom() + HEADER_RULE_TOLERANCE
 }
 
-/// Paint order decides visibility: a later dashed, light or filled path over the same line hides
+/// Paint order decides visibility: a later dashed, light or filled rectangle covering the whole stroke band over the same line hides
 /// what was drawn before it, and a rule may be split into collinear segments. PathContent
 /// carries no alpha, so any fill is opaque. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
@@ -210,7 +210,7 @@ fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
             && same_rule_position(path.bbox.center().y, y);
         if is_rule && dark_solid_stroke(path) {
             visible.push((low, high));
-        } else if is_rule || (path.fill_color.is_some() && drawn.top() < y && y < drawn.bottom()) {
+        } else if is_rule || covering_fill(path, y) {
             visible = visible
                 .into_iter()
                 .flat_map(|(start, end)| {
@@ -235,6 +235,13 @@ fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
         }
     }
     false
+}
+
+fn covering_fill(path: &PathContent, y: f32) -> bool {
+    path.fill_color.is_some()
+        && path.is_rectangle()
+        && path.bbox.top() <= y - HEADER_RULE_TOLERANCE / 2.0
+        && path.bbox.bottom() >= y + HEADER_RULE_TOLERANCE / 2.0
 }
 
 fn dark_solid_stroke(path: &PathContent) -> bool {
