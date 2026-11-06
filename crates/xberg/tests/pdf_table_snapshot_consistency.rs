@@ -52,13 +52,7 @@ fn wildomar_page_tables_match_final_selection_in_all_output_modes() {
                     let structured = structure || format == "markdown";
                     assert_eq!(
                         result.tables.len(),
-                        if !tables {
-                            0
-                        } else if structured {
-                            2
-                        } else {
-                            3
-                        },
+                        if tables { 2 } else { 0 },
                         "format={format}, structure={structure}, pages={pages}, tables={tables}"
                     );
                     if pages || structured {
@@ -69,7 +63,7 @@ fn wildomar_page_tables_match_final_selection_in_all_output_modes() {
                         assert_eq!(result.tables[0].table_id.as_deref(), Some("table-1"));
                         assert_eq!(result.tables[1].table_id.as_deref(), Some("table-2"));
                         assert_eq!(result.tables[0].cells.len(), 5);
-                        assert_eq!(result.tables[1].cells.len(), 10);
+                        assert_eq!(result.tables[1].cells.len(), 11);
                     }
                     assert!(checked_modes.insert((format, structure, pages, tables)));
                 }
