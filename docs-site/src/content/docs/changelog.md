@@ -382,6 +382,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A single accepted table can supply Plain and Djot page rows when it retains every recognized token occurrence.
   In Plain standalone OCR, recover a rejected grid when its geometry and the original text prove every row.
 
+- **(pdf): Recover a missing prose line in an embedded image with explicit PSM 6.** (#2327)
+  Use the proven source density to resize the retry while keeping the original nested OCR result.
+
 - **(ocr): Recover complete numeric rows in scanned PDF tables.** (#2432)
   Require matching word inventory and separate, aligned numeric columns when the first table reconstruction fails.
 

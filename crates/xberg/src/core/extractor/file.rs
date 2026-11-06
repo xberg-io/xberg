@@ -486,19 +486,41 @@ pub(crate) async fn extract_with_candidates(
     for (index, candidate) in candidates.into_iter().enumerate() {
         // The extraction stage span wraps only the extractor invocation — post-processing
         // is covered by `run_pipeline` below and must not be nested inside it.
-        #[cfg(feature = "otel")]
-        let extraction = {
-            let stage_span = crate::telemetry::spans::extraction_stage_span(
-                candidate.plugin().name(),
-                candidate.plugin().priority(),
-            );
-            candidate
-                .extract_path(path, mime_type, config)
-                .instrument(stage_span)
-                .await
+        let extraction = async {
+            #[cfg(feature = "otel")]
+            {
+                let stage_span = crate::telemetry::spans::extraction_stage_span(
+                    candidate.plugin().name(),
+                    candidate.plugin().priority(),
+                );
+                candidate
+                    .extract_path(path, mime_type, config)
+                    .instrument(stage_span)
+                    .await
+            }
+            #[cfg(not(feature = "otel"))]
+            candidate.extract_path(path, mime_type, config).await
         };
-        #[cfg(not(feature = "otel"))]
-        let extraction = candidate.extract_path(path, mime_type, config).await;
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let (extraction, placement) = crate::extraction::image_ocr::pdf_gap::capture(
+            candidate.is_builtin()
+                && mime_type == "application/pdf"
+                && crate::extraction::image_ocr::pdf_gap::eligible(config),
+            extraction,
+        )
+        .await;
+        #[cfg(not(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )))]
+        let extraction = extraction.await;
 
         match extraction {
             Ok(mut doc) => {
@@ -519,6 +541,13 @@ pub(crate) async fn extract_with_candidates(
                     doc,
                     config,
                     builtin_html,
+                    #[cfg(all(
+                        feature = "pdf",
+                        feature = "ocr",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    placement,
                 ))
                 .await?;
                 return Ok(result);
@@ -883,15 +912,38 @@ pub(in crate::core::extractor) async fn extract_bytes_with_extractor_and_layout_
 
     let (extractor, is_builtin) = super::helpers::get_extractor_with_layout_pages(mime_type, pages)?;
 
-    #[cfg(feature = "otel")]
-    let extraction = {
-        let stage_span = crate::telemetry::spans::extraction_stage_span(extractor.name(), extractor.priority());
-        Box::pin(extractor.extract_content(content, mime_type, config))
-            .instrument(stage_span)
-            .await
+    let extraction = async {
+        #[cfg(feature = "otel")]
+        {
+            let stage_span = crate::telemetry::spans::extraction_stage_span(extractor.name(), extractor.priority());
+            Box::pin(extractor.extract_content(content, mime_type, config))
+                .instrument(stage_span)
+                .await
+        }
+        #[cfg(not(feature = "otel"))]
+        Box::pin(extractor.extract_content(content, mime_type, config)).await
     };
-    #[cfg(not(feature = "otel"))]
-    let extraction = Box::pin(extractor.extract_content(content, mime_type, config)).await;
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let (extraction, placement) = crate::extraction::image_ocr::pdf_gap::capture(
+        is_builtin
+            && pages.is_none()
+            && mime_type == "application/pdf"
+            && crate::extraction::image_ocr::pdf_gap::eligible(config),
+        extraction,
+    )
+    .await;
+    #[cfg(not(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )))]
+    let extraction = extraction.await;
 
     let mut doc = match extraction {
         Ok(doc) => doc,
@@ -910,6 +962,13 @@ pub(in crate::core::extractor) async fn extract_bytes_with_extractor_and_layout_
         doc,
         config,
         builtin_html,
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        placement,
     ))
     .await?;
     Ok(result)

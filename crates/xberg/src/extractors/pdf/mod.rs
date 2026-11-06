@@ -278,6 +278,13 @@ fn extract_lopdf_compatibility_data(
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
     extraction: extraction::PdfExtractionPhaseResult,
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    image_gap: Option<crate::extraction::image_ocr::pdf_gap::Placement>,
     bookmark_uris: Vec<crate::types::ExtractedUri>,
     pdf_revisions: Option<Vec<crate::types::DocumentRevision>>,
     diagrams: Vec<crate::types::diagram::DiagramGraph>,
@@ -361,10 +368,24 @@ fn extract_native_blocking(
     } else {
         Vec::new()
     };
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut image_gap = None;
     let extraction = extract_all_from_native_document(
         native_document,
         &config,
         &outline_entries,
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        &mut image_gap,
         #[cfg(feature = "layout-detection")]
         extraction::NativeLayoutInput {
             hints: layout_hints.as_deref(),
@@ -378,6 +399,13 @@ fn extract_native_blocking(
 
     Ok(NativeBlockingOutput {
         extraction,
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        image_gap,
         bookmark_uris,
         pdf_revisions,
         diagrams,
@@ -4172,6 +4200,17 @@ impl PdfExtractor {
             }
         }
 
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        if extraction_method == ExtractionMethod::Native
+            && let Some(placement) = native_output.image_gap
+        {
+            crate::extraction::image_ocr::pdf_gap::publish(placement);
+        }
         Ok(doc)
     }
 
