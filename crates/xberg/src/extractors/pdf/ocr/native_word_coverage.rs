@@ -1,6 +1,8 @@
 use super::document::{
-    LineBox, ocr_page_has_only_plain_payload_with, processed_ocr_layout_dimensions, valid_ocr_layout_dimension,
+    LineBox, native_layer_decodes_cleanly, ocr_confirms_layer, ocr_page_has_only_plain_payload_with,
+    processed_ocr_layout_dimensions, valid_ocr_layout_dimension,
 };
+use crate::core::config::OcrQualityThresholds;
 use crate::ocr_metadata_keys::{
     OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
     OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY,
@@ -56,6 +58,14 @@ pub(super) fn covers_complete_native_page(
         })
 }
 
+/// What bounds an ink proof: the quality thresholds that judge the native layer, the memory the
+/// two renders may use, and a cancellation check consulted between them.
+pub(super) struct InkProofLimits<'a> {
+    pub(super) thresholds: &'a OcrQualityThresholds,
+    pub(super) max_working_bytes: usize,
+    pub(super) cancelled: &'a dyn Fn() -> bool,
+}
+
 /// Luminance difference, on a 0-255 scale, that makes a pixel visibly differ from its surround.
 const MIN_VISIBLE_CONTRAST: u8 = 51;
 /// Resolution of the two rasters that tell glyph ink from every other mark. Word boxes are tested
@@ -73,9 +83,17 @@ pub(super) fn native_text_paints_all_read_ink(
     page_index: usize,
     layer: &str,
     read: &ExtractedDocument,
-    max_working_bytes: usize,
+    limits: InkProofLimits<'_>,
 ) -> bool {
-    if layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+    let InkProofLimits {
+        thresholds,
+        max_working_bytes,
+        cancelled,
+    } = limits;
+    if layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
+        || !native_layer_decodes_cleanly(layer, thresholds)
+        || !ocr_confirms_layer(layer, &read.content, thresholds)
+    {
         return false;
     }
     let Some(elements) = read.ocr_elements.as_deref() else {
@@ -102,17 +120,26 @@ pub(super) fn native_text_paints_all_read_ink(
         return false;
     };
     let line_boxes: Vec<LineBox> = lines.iter().map(|line| native_box(line.bbox)).collect();
-    let Ok(rasters) =
-        xberg_native_pdf::rendering::render_text_ink_rasters(pdf, page_index, INK_PROOF_DPI, max_working_bytes)
-    else {
+    let placed: Option<Vec<LineBox>> = words()
+        .map(|word| {
+            ocr_word_in_page_points(word, raster, media)
+                .filter(|placed| line_boxes.iter().any(|line| line.owns(placed)))
+        })
+        .collect();
+    let Some(placed) = placed else {
+        return false;
+    };
+    let Ok(Some(rasters)) = xberg_native_pdf::rendering::render_text_ink_rasters(
+        pdf,
+        page_index,
+        INK_PROOF_DPI,
+        max_working_bytes,
+        cancelled,
+    ) else {
         return false;
     };
     let scale = INK_PROOF_DPI as f32 / 72.0;
-    words().all(|word| {
-        ocr_word_in_page_points(word, raster, media).is_some_and(|placed| {
-            line_boxes.iter().any(|line| line.owns(&placed)) && glyph_ink_only(&rasters, &placed, media, scale)
-        })
-    })
+    placed.iter().all(|word| glyph_ink_only(&rasters, word, media, scale))
 }
 
 fn glyph_ink_only(
@@ -258,6 +285,15 @@ mod tests {
         const PAGE: (f32, f32) = (612.0, 792.0);
         const SCALE: f32 = 2.0;
         const WORKING_BYTES: usize = 64 << 20;
+        const PROSE: [&str; 6] = [
+            "The committee met on Tuesday to review the plans for the library.",
+            "Members asked about the schedule, budget, and planned parking.",
+            "The architect said work would start after the winter season ends.",
+            "A vote is planned for the next regular meeting of the council.",
+            "Residents may send written comments before the end of the month.",
+            "The treasurer reported that the reserve fund remained steady this year.",
+        ];
+        const LAYER: &str = "mov eax, ebx\ncall puts\nThe committee met on Tuesday to review the plans for the library.\nMembers asked about the schedule, budget, and planned parking.\nThe architect said work would start after the winter season ends.\nA vote is planned for the next regular meeting of the council.\nResidents may send written comments before the end of the month.\nThe treasurer reported that the reserve fund remained steady this year.";
 
         fn pdf_with(extra_content: &str) -> PdfDocument {
             pdf_between("", extra_content)
@@ -266,8 +302,13 @@ mod tests {
         fn pdf_between(under_text: &str, over_text: &str) -> PdfDocument {
             use lopdf::{Document, Object, Stream, dictionary};
 
+            let prose: String = PROSE
+                .iter()
+                .enumerate()
+                .map(|(at, line)| format!("BT /F1 12 Tf 72 {} Td ({line}) Tj ET\n", 640 - 20 * at))
+                .collect();
             let content = format!(
-                "{under_text}\nBT /F1 12 Tf 72 700 Td (mov eax, ebx) Tj ET\nBT /F1 12 Tf 72 680 Td (call puts) Tj ET\n{over_text}"
+                "{under_text}\nBT /F1 12 Tf 72 700 Td (mov eax, ebx) Tj ET\nBT /F1 12 Tf 72 680 Td (call puts) Tj ET\n{prose}\n{over_text}"
             );
             let mut document = Document::with_version("1.5");
             let pages_id = document.new_object_id();
@@ -333,6 +374,20 @@ mod tests {
             }
         }
 
+        fn ink_owned(pdf: &PdfDocument, layer: &str, read: &ExtractedDocument) -> bool {
+            native_text_paints_all_read_ink(
+                pdf,
+                0,
+                layer,
+                read,
+                InkProofLimits {
+                    thresholds: &OcrQualityThresholds::default(),
+                    max_working_bytes: WORKING_BYTES,
+                    cancelled: &|| false,
+                },
+            )
+        }
+
         fn native_word_boxes(pdf: &PdfDocument) -> Vec<(String, Rect)> {
             pdf.extract_text_lines(0)
                 .unwrap()
@@ -343,13 +398,20 @@ mod tests {
 
         fn owns(pdf: &PdfDocument, read_texts: Option<&[&str]>) -> bool {
             let boxes = native_word_boxes(pdf);
-            assert_eq!(boxes.len(), 5, "mov eax, ebx / call puts: {boxes:?}");
+            assert_eq!(boxes.len(), LAYER.split_whitespace().count(), "{boxes:?}");
             let words = boxes
                 .iter()
                 .enumerate()
-                .map(|(at, (text, placed))| iterator_word(read_texts.map_or(text.as_str(), |texts| texts[at]), *placed))
+                .map(|(at, (text, placed))| {
+                    iterator_word(
+                        read_texts
+                            .and_then(|texts| texts.get(at).copied())
+                            .unwrap_or(text.as_str()),
+                        *placed,
+                    )
+                })
                 .collect();
-            native_text_paints_all_read_ink(pdf, 0, "mov eax, ebx\ncall puts", &read_of(words), WORKING_BYTES)
+            ink_owned(pdf, LAYER, &read_of(words))
         }
 
         #[test]
@@ -398,12 +460,11 @@ mod tests {
                 .iter()
                 .map(|(text, placed)| iterator_word(text, *placed))
                 .collect();
-            assert!(!native_text_paints_all_read_ink(
+            assert!(!ink_owned(
                 &pdf,
-                0,
-                "mov eax, ebx\ncall puts",
-                &read_of(words),
-                WORKING_BYTES,
+                "mov eax, ebx
+call puts",
+                &read_of(words)
             ));
         }
 
@@ -424,12 +485,58 @@ mod tests {
                 .map(|(text, placed)| iterator_word(text, *placed))
                 .collect();
             words.push(iterator_word("ghost", gap));
+            assert!(!ink_owned(
+                &pdf,
+                "mov eax, ebx
+call puts",
+                &read_of(words)
+            ));
+        }
+
+        #[test]
+        fn should_not_own_a_word_box_shifted_mostly_off_its_line() {
+            let pdf = pdf_with("");
+            let mut boxes = native_word_boxes(&pdf);
+            let last = boxes.len() - 1;
+            boxes[last].1.y -= 0.6 * boxes[last].1.height;
+            let words = boxes
+                .iter()
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
+            assert!(!ink_owned(&pdf, LAYER, &read_of(words)));
+        }
+
+        #[test]
+        fn should_not_own_a_page_whose_native_text_has_a_single_undecodable_character() {
+            let pdf = pdf_with("");
+            let words = native_word_boxes(&pdf)
+                .iter()
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
+            assert!(!ink_owned(
+                &pdf,
+                &LAYER.replace("budget", "bud\u{E000}et"),
+                &read_of(words)
+            ));
+        }
+
+        #[test]
+        fn should_not_render_when_cancelled() {
+            let pdf = pdf_with("");
+            let words = native_word_boxes(&pdf)
+                .iter()
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
             assert!(!native_text_paints_all_read_ink(
                 &pdf,
                 0,
-                "mov eax, ebx\ncall puts",
+                LAYER,
                 &read_of(words),
-                WORKING_BYTES,
+                InkProofLimits {
+                    thresholds: &OcrQualityThresholds::default(),
+                    max_working_bytes: WORKING_BYTES,
+                    cancelled: &|| true,
+                },
             ));
         }
     }

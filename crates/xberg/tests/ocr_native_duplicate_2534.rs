@@ -9,6 +9,7 @@ mod helpers;
 
 use sha2::{Digest, Sha256};
 use xberg::types::ExtractionMethod;
+use xberg::types::OcrElementConfig;
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, PageConfig, TesseractConfig};
 
 const BOOK: &str = "pdf/assembly_language_for_beginners_al4_b_en.pdf";
@@ -18,7 +19,6 @@ const ENGLISH_MODEL_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83b
 fn three_pages_around(page: u32) -> Vec<u8> {
     use lopdf::Object;
 
-    let started = std::time::Instant::now();
     let mut document = lopdf::Document::load(helpers::get_test_file_path(BOOK)).expect("open the corpus PDF");
     let pages = document.get_pages();
     let kept: Vec<Object> = (page - 1..=page + 1)
@@ -45,14 +45,12 @@ fn three_pages_around(page: u32) -> Vec<u8> {
             .set("Parent", root);
     }
     document.prune_objects();
-    eprintln!("excerpt built in {:?}", started.elapsed());
     let mut bytes = Vec::new();
     document.save_to(&mut bytes).expect("save the three-page excerpt");
-    eprintln!("excerpt of {} bytes saved in {:?}", bytes.len(), started.elapsed());
     bytes
 }
 
-async fn pages_of(bytes: &[u8], config: &ExtractionConfig) -> Vec<String> {
+async fn pages_of(bytes: &[u8], config: &ExtractionConfig) -> (Vec<String>, Option<ExtractionMethod>) {
     let output = xberg::extract(
         ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", None),
         config,
@@ -61,14 +59,19 @@ async fn pages_of(bytes: &[u8], config: &ExtractionConfig) -> Vec<String> {
     .expect("extract the excerpt");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     let [document]: [ExtractedDocument; 1] = output.results.try_into().expect("one document");
+    let method = document.extraction_method;
     let pages = document.pages.expect("per-page output requested");
     assert_eq!(pages.len(), 3);
-    pages.into_iter().map(|page| page.content).collect()
+    (pages.into_iter().map(|page| page.content).collect(), method)
 }
 
 #[tokio::test]
 async fn automatic_ocr_returns_a_code_listing_page_once_and_keeps_its_repeated_lines() {
     if helpers::skip_if_missing(BOOK) {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "the corpus book {BOOK} is required in CI"
+        );
         return;
     }
     let model = xberg_tesseract::bundled_eng_traineddata().expect("bundled English model");
@@ -95,7 +98,7 @@ async fn automatic_ocr_returns_a_code_listing_page_once_and_keeps_its_repeated_l
         ..Default::default()
     };
     let bytes = three_pages_around(LISTING_PAGE);
-    let native = pages_of(
+    let (native, native_method) = pages_of(
         &bytes,
         &ExtractionConfig {
             disable_ocr: true,
@@ -103,7 +106,21 @@ async fn automatic_ocr_returns_a_code_listing_page_once_and_keeps_its_repeated_l
         },
     )
     .await;
-    let automatic = pages_of(&bytes, &config).await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    assert_eq!(native_method, Some(ExtractionMethod::Native));
+
+    // Requesting OCR elements switches native preservation off, which shows that automatic
+    // routing sends this page to OCR and that the read is not a copy of the native text.
+    let mut with_elements = config.clone();
+    with_elements.ocr.as_mut().unwrap().element_config = Some(OcrElementConfig {
+        include_elements: true,
+        ..Default::default()
+    });
+    let (read, _) = pages_of(&bytes, &with_elements).await;
+    assert!(
+        read[1].split_whitespace().count() > native[1].split_whitespace().count(),
+        "automatic OCR ran on the listing page"
+    );
 
     let words = |page: &str| page.split_whitespace().count();
     assert!(words(&native[1]) > 300, "the listing page holds its native words");

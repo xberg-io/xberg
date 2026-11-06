@@ -2251,6 +2251,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), feature = "layout-detection"))]
+    let ink_proof_layout_free = resolved_layout_inputs.is_none();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), not(feature = "layout-detection")))]
+    let ink_proof_layout_free = true;
     if let Some(layers) = page_layers.as_ref() {
         let mut geometry = MergeGeometrySession::new(content, config);
         for (page_number, text) in &mut accepted_replacements {
@@ -2274,8 +2278,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if native_ink_owned_pages.contains(page_number)
+                && ink_proof_layout_free
                 && super::document::native_preservation_is_automatic(config, *page_number)
                 && !noise_verdict_pages.contains(page_number)
+                && structured_ocr_pages
+                    .get(page_number)
+                    .is_some_and(super::native_word_coverage::has_only_certified_tesseract_text)
                 && layers
                     .get(page_number)
                     .is_some_and(|layer| super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds))
@@ -4454,7 +4462,15 @@ pub(super) async fn extract_with_ocr_for_page(
                         document_page_idx,
                         layer,
                         &ocr_result,
-                        super::hidden_layer::preview_byte_limit(config),
+                        super::native_word_coverage::InkProofLimits {
+                            thresholds: &config
+                                .ocr
+                                .as_ref()
+                                .and_then(|ocr| ocr.quality_thresholds.clone())
+                                .unwrap_or_default(),
+                            max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                            cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                        },
                     );
             }
             crate::extraction::derive::adopt_public_ocr_document(
