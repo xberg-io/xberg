@@ -92,13 +92,13 @@ impl<'a> CaptionGridProof<'a> {
     }
 }
 
-fn evidence_fits(cells: &[Vec<String>], elements: &[OcrElement], limits: &SecurityLimits) -> bool {
+fn remaining_evidence_work(cells: &[Vec<String>], elements: &[OcrElement], limits: &SecurityLimits) -> Option<usize> {
     if elements.len() > MAX_ELEMENTS || !(MIN_LINES..=MAX_LINES).contains(&cells.len()) {
-        return false;
+        return None;
     }
     let columns = cells[0].len();
     if !(2..=MAX_COLUMNS).contains(&columns) || cells.iter().any(|row| row.len() != columns) {
-        return false;
+        return None;
     }
     let max_bytes = MAX_EVIDENCE_BYTES.min(limits.max_content_size);
     let mut text_lengths = cells
@@ -108,13 +108,13 @@ fn evidence_fits(cells: &[Vec<String>], elements: &[OcrElement], limits: &Securi
         .chain(elements.iter().map(|e| e.text.len()));
     let bytes = text_lengths.try_fold(0usize, |bytes, length| {
         bytes.checked_add(length).filter(|total| *total <= max_bytes)
-    });
-    bytes.is_some_and(|bytes| {
-        // ~keep Bound text passes, per-row geometry scans, and sorting before allocating evidence.
-        const MAX_GAPS: usize = MAX_LINES * (MAX_COLUMNS - 1);
-        let geometry_work = elements.len() * (MAX_LINES + MAX_ELEMENTS.ilog2() as usize + 2 * MAX_GAPS + 8);
-        bytes * 8 + geometry_work + MAX_GAPS * MAX_GAPS <= limits.max_iterations
-    })
+    })?;
+    // ~keep Bound text passes, per-row geometry scans, and sorting before allocating evidence.
+    const MAX_GAPS: usize = MAX_LINES * (MAX_COLUMNS - 1);
+    let geometry_work = elements.len() * (MAX_LINES + MAX_ELEMENTS.ilog2() as usize + 2 * MAX_GAPS + 8);
+    limits
+        .max_iterations
+        .checked_sub(bytes * 8 + geometry_work + MAX_GAPS * MAX_GAPS)
 }
 
 fn collect_sources<'a>(
@@ -237,6 +237,7 @@ fn word_gap_proof(
     words: &[SourceElement<'_>],
     cells: &[Vec<String>],
     region: Rect,
+    remaining_work: usize,
 ) -> Option<CaptionPaintProof> {
     let mut previous_cuts: Vec<Gap> = Vec::new();
     let mut split_rows = 0;
@@ -244,6 +245,7 @@ fn word_gap_proof(
     let mut paint = CaptionPaintProof::new(
         region,
         lines.iter().map(|line| line.bounds.bottom - line.bounds.top).min()?,
+        remaining_work,
     );
     for (line, row) in lines.iter().zip(cells) {
         let owned = row_owners(line, words)?;
@@ -276,9 +278,10 @@ pub(crate) fn certify_figure_caption_rows<'a>(
     limits: &SecurityLimits,
 ) -> Option<CaptionGridProof<'a>> {
     let region = Rect::table(bounds);
-    if page == 0 || !region.within_frame(frame) || !evidence_fits(cells, elements, limits) {
+    if page == 0 || !region.within_frame(frame) {
         return None;
     }
+    let remaining_work = remaining_evidence_work(cells, elements, limits)?;
     let (mut lines, words) = collect_sources(elements, page, region, frame)?;
     lines.sort_unstable_by_key(|line| line.bounds.top);
     if lines.len() != cells.len()
@@ -287,7 +290,7 @@ pub(crate) fn certify_figure_caption_rows<'a>(
     {
         return None;
     }
-    let paint = word_gap_proof(&lines, &words, cells, region)?;
+    let paint = word_gap_proof(&lines, &words, cells, region, remaining_work)?;
     Some(CaptionGridProof {
         lines: lines.into_iter().map(|line| line.text).collect(),
         paint,

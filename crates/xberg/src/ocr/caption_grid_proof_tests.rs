@@ -38,6 +38,23 @@ fn certifies_the_exact_docling_caption_from_all_its_owned_words() {
     );
 }
 
+#[test]
+fn geometry_and_raster_checks_share_the_same_iteration_budget() {
+    let source = source();
+    let defaults = SecurityLimits::default();
+    let standalone = certify_figure_caption(&source.table, &source.elements, FRAME, &defaults).unwrap();
+    let (_, post_crop) = standalone.paint.crop_work(FRAME, &defaults).unwrap();
+    let joint_charge = defaults.max_iterations - post_crop;
+    let tight = SecurityLimits {
+        max_iterations: joint_charge - 1,
+        ..defaults
+    };
+    let separately_valid = certify_figure_caption(&source.table, &source.elements, FRAME, &tight).unwrap();
+    let (crop, _) = standalone.paint.crop_work(FRAME, &tight).unwrap();
+    assert!(crop.right > crop.left);
+    assert!(separately_valid.paint.crop_work(FRAME, &tight).is_none());
+}
+
 fn set_gutter(source: &mut Source, right_start: u32) {
     let mut offset = 0;
     for cells in source.table.cells.iter_mut().take(5) {

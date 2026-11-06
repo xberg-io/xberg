@@ -53,14 +53,16 @@ struct Cut {
 pub(crate) struct CaptionPaintProof {
     crop: Rect,
     min_line_height: u32,
+    remaining_work: usize,
     cuts: Vec<Cut>,
 }
 
 impl CaptionPaintProof {
-    pub(super) fn new(crop: Rect, min_line_height: u32) -> Self {
+    pub(super) fn new(crop: Rect, min_line_height: u32, remaining_work: usize) -> Self {
         Self {
             crop,
             min_line_height,
+            remaining_work,
             cuts: Vec::new(),
         }
     }
@@ -91,19 +93,23 @@ impl CaptionPaintProof {
         retained_bytes: usize,
         limits: &SecurityLimits,
     ) -> bool {
-        let Some(crop) = self.halo_crop(frame) else {
-            return false;
-        };
-        let Some(mut work) = area(crop)
-            .filter(|pixels| *pixels <= MAX_CROP_PIXELS)
-            .and_then(|pixels| limits.max_iterations.checked_sub(pixels.checked_mul(5)?))
-        else {
+        let Some((crop, mut work)) = self.crop_work(frame, limits) else {
             return false;
         };
         let Some(raster) = decode_opaque_rgb(bytes, frame, retained_bytes, limits) else {
             return false;
         };
         self.no_ruling(&raster, crop) && self.cuts.iter().all(|cut| cut.certifies(&raster, &mut work))
+    }
+
+    pub(super) fn crop_work(&self, frame: (u32, u32), limits: &SecurityLimits) -> Option<(Rect, usize)> {
+        let crop = self.halo_crop(frame)?;
+        let pixels = area(crop).filter(|pixels| *pixels <= MAX_CROP_PIXELS)?;
+        let work = self
+            .remaining_work
+            .min(limits.max_iterations)
+            .checked_sub(pixels.checked_mul(5)?)?;
+        Some((crop, work))
     }
 
     fn halo_crop(&self, frame: (u32, u32)) -> Option<Rect> {
@@ -390,7 +396,7 @@ mod tests {
             text: "sun",
             bounds: rect(20, 30, 29, 35),
         };
-        let mut proof = CaptionPaintProof::new(rect(12, 16, 31, 35), 5);
+        let mut proof = CaptionPaintProof::new(rect(12, 16, 31, 35), 5, SecurityLimits::default().max_iterations);
         proof.push(rect(12, 16, 31, 21), &left, &right, &[reference]);
         let mut raster = RgbImage::from_pixel(48, 44, Rgb([255; 3]));
         for (x, y) in [(0, 1), (1, 1), (1, 2), (4, 1), (5, 1), (7, 1), (8, 1), (8, 2)] {
