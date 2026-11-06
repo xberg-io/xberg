@@ -4043,6 +4043,15 @@ fn build_document_structure_with_native(
         .map(|input| process_single_page(input, &heading_map, doc_body_font_size, &witnesses))
         .collect();
 
+    if !used_structure_tree {
+        for (page_index, paragraphs) in all_page_paragraphs.iter_mut().enumerate() {
+            let page_hints = layout_hints.and_then(|pages| pages.get(page_index));
+            if page_hints.is_none_or(Vec::is_empty) {
+                super::paragraphs::reattach_chart_legend_markers(paragraphs);
+            }
+        }
+    }
+
     if !used_structure_tree && outline_entries.is_empty() {
         refine_existing_font_heading_tiers(&mut all_page_paragraphs);
     }

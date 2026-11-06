@@ -213,6 +213,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
 
+- **(pdf): Keep raised chart legend markers with their labels.** (#2443)
+  Join them only where neighboring source rows prove the association and no layout hints own the page.
+
 - **(pdf): Preserve figure tick labels beside native tables.** (#2443)
   Keep the original label when the adjoining residual digit is already carried by a proven table cell.
 

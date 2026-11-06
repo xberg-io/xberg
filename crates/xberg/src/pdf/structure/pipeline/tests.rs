@@ -77,6 +77,78 @@ fn should_preserve_repeated_margin_body_text_with_deferred_model_classification_
 
 #[cfg(feature = "layout-detection")]
 #[test]
+fn native_chart_legend_yields_to_real_page_layout_hints() {
+    use sha2::{Digest, Sha256};
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../test_documents/pdf/regression_pages/ntrs-19940027557-p18.pdf");
+    let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("read {path:?}: {error}"));
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "76b68c133220c3fc1cc8e2fe2c6a0187d5eae2a154dff57dd6db06c6bd11001b"
+    );
+    let mut native = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("verified NASA page parses");
+    let (pages, used_structure_tree) = crate::pdf::native::hierarchy::extract_all_segments(
+        &mut native,
+        crate::pdf::native::hierarchy::ArtifactRetention::default(),
+    )
+    .expect("native chart segments");
+    assert!(!used_structure_tree);
+    assert_eq!(pages.len(), 1);
+
+    let hint_pages = [vec![LayoutHint {
+        class_name: LayoutHintClass::Text,
+        confidence: 0.99,
+        left: 430.0,
+        bottom: 570.0,
+        right: 505.0,
+        top: 683.0,
+    }]];
+    for (hints, expect_join) in [(None, true), (Some(hint_pages.as_slice()), false)] {
+        let document = build_document_structure(
+            pages.clone(),
+            SegmentStructureConfig {
+                k_clusters: 3,
+                tables: &[],
+                outline_entries: &[],
+                strip_repeating_text: false,
+                include_headers: true,
+                include_footers: true,
+                include_footnotes: true,
+                include_watermarks: true,
+                used_structure_tree,
+                image_positions: &[],
+                images: None,
+                inject_placeholders: false,
+                layout_hints: hints,
+                allow_single_column: true,
+                cancel_token: None,
+                layout_images: None,
+                layout_results: None,
+                table_model: crate::core::config::layout::TableModel::Disabled,
+                table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+                acceleration: None,
+                session_thread_budget: 1,
+            },
+            NO_TABLE_MODELS,
+        )
+        .expect("build native chart document");
+        let joined = document
+            .elements
+            .iter()
+            .filter(|element| element.text == "B 5, Balance")
+            .count();
+        let split = document
+            .elements
+            .windows(2)
+            .filter(|pair| pair[0].text == "B" && pair[1].text == "5, Balance")
+            .count();
+        assert_eq!((joined, split), if expect_join { (1, 0) } else { (0, 1) });
+    }
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
 fn table_model_preflight_uses_selected_slanet_variant() {
     use crate::core::config::layout::TableModel;
 
