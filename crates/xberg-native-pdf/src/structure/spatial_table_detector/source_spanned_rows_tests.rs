@@ -25,6 +25,8 @@ fn dashed_rule_is_not_painted() {
 fn white_or_light_rules_are_not_painted() {
     assert!(!certifies(rule().with_stroke(Color::new(1.0, 1.0, 1.0))));
     assert!(!certifies(rule().with_stroke(Color::new(0.9, 0.9, 0.9))));
+    assert!(!certifies(rule().with_stroke(Color::new(1.0, 1.0, 0.0))));
+    assert!(!certifies(rule().with_stroke(Color::new(0.0, 1.0, 0.0))));
     assert!(certifies(rule().with_stroke(Color::new(0.2, 0.2, 0.2))));
 }
 

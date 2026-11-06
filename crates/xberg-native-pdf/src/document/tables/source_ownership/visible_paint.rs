@@ -2,6 +2,7 @@ use crate::PdfDocument;
 use crate::content::{Operator, parser::visit_complete_content_stream};
 use crate::geometry::Rect;
 use crate::object::Object;
+use crate::structure::spatial_table_detector::is_dark_on_white;
 use flate2::{Decompress, FlushDecompress, Status};
 
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
@@ -155,8 +156,8 @@ impl PaintState {
                     && d > 0.0 => {}
             SetLineWidth { width } if width.is_finite() && width > 0.0 => {}
             SetLineCap { cap_style: 0..=2 } | SetLineJoin { join_style: 0..=2 } => {}
-            SetStrokeGray { gray } if dark_color([gray; 3]) => {}
-            SetStrokeRgb { r, g, b } if dark_color([r, g, b]) => {}
+            SetStrokeGray { gray } if is_dark_on_white([gray; 3]) => {}
+            SetStrokeRgb { r, g, b } if is_dark_on_white([r, g, b]) => {}
             _ => return false,
         }
         true
@@ -176,8 +177,8 @@ impl PaintState {
             EndMarkedContent if self.marked > 0 => self.marked -= 1,
             BeginText if !self.in_text && self.points == 0 => self.in_text = true,
             EndText if self.in_text => self.in_text = false,
-            SetFillGray { gray } if dark_color([gray; 3]) => {}
-            SetFillRgb { r, g, b } if dark_color([r, g, b]) => {}
+            SetFillGray { gray } if is_dark_on_white([gray; 3]) => {}
+            SetFillRgb { r, g, b } if is_dark_on_white([r, g, b]) => {}
             Tf { font, size } if self.in_text && size.is_finite() && size > 0.0 && known_font(&font) => {}
             Td { .. }
             | TD { .. }
@@ -198,6 +199,6 @@ impl PaintState {
     }
 }
 
-fn dark_color(channels: [f32; 3]) -> bool {
-    channels.iter().all(|channel| (0.0..=1.0).contains(channel)) && channels.iter().any(|channel| *channel <= 0.5)
-}
+#[cfg(test)]
+#[path = "visible_paint_tests.rs"]
+mod tests;

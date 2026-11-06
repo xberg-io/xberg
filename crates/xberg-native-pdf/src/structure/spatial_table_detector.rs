@@ -4679,7 +4679,7 @@ pub(crate) fn certify_source_spanned_wide_table(
 }
 
 pub(crate) use source_spanned_rows::{
-    MAX_SOURCE_SPANNED_COLUMNS, source_spanned_rules_present, source_spanned_work_fits,
+    MAX_SOURCE_SPANNED_COLUMNS, is_dark_on_white, source_spanned_rules_present, source_spanned_work_fits,
 };
 
 /// Detect tables using vector lines and text spans (main entry point for hybrid detection).

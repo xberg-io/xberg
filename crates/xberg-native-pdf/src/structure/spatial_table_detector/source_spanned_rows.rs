@@ -11,9 +11,16 @@ const MAX_SOURCE_SPANNED_PATHS: usize = 128;
 const MAX_SOURCE_SPANNED_WORDS: usize = 1_024;
 const MAX_SOURCE_SPANNED_TEXT_BYTES: usize = 64 * 1024;
 const MAX_RULE_STROKE_WIDTH: f32 = 2.0;
-const MAX_DARK_CHANNEL: f32 = 0.5;
+const MAX_DARK_LUMINANCE: f32 = 0.5;
 const RULE_AXIS_TOLERANCE: f32 = 1.0;
 const RULE_ENDPOINT_TOLERANCE: f32 = 1.0;
+
+/// Whether a colour stays visible on the white page: relative luminance at most one half.
+pub(crate) fn is_dark_on_white(rgb: [f32; 3]) -> bool {
+    let [r, g, b] = rgb;
+    rgb.iter().all(|channel| (0.0..=1.0).contains(channel))
+        && 0.2126 * r + 0.7152 * g + 0.0722 * b <= MAX_DARK_LUMINANCE
+}
 
 pub(crate) fn source_spanned_work_fits(spans: &[TextSpan], paths: &[PathContent]) -> bool {
     (MIN_SOURCE_SPANNED_COLUMNS + 5..=MAX_SOURCE_SPANNED_PATHS).contains(&paths.len())
@@ -126,11 +133,9 @@ fn painted_rule(paths: &[PathContent], vertical: bool, coordinate: f32, start: f
             && path.layer.is_none()
             && path.dash_pattern.is_none()
             && (0.0..=MAX_RULE_STROKE_WIDTH).contains(&path.stroke_width)
-            && path.stroke_color.is_some_and(|color| {
-                let channels = [color.r, color.g, color.b];
-                channels.iter().all(|channel| (0.0..=1.0).contains(channel))
-                    && channels.iter().any(|channel| *channel <= MAX_DARK_CHANNEL)
-            })
+            && path
+                .stroke_color
+                .is_some_and(|color| is_dark_on_white([color.r, color.g, color.b]))
             && minor.abs() <= RULE_AXIS_TOLERANCE
             && (center - coordinate).abs() <= SNAP_TOL
             && low <= start + RULE_ENDPOINT_TOLERANCE
