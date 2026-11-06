@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
+  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
+  The gate is not yet wired into the release workflow because the PHP macOS build still needs a single-file codec design.
+
 - **(classification): Add an experimental Rust API for CPU ONNX NLI.** (#2335)
   Prepare pinned model artifacts explicitly; classification preserves model identity, bounded execution and cancellation.
 
