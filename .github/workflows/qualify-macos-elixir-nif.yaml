@@ -1,0 +1,107 @@
+name: Qualify macOS Elixir NIF
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  macos-elixir-nif:
+    name: macOS 26 arm64 / OTP 27
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          elixir-version: "1.17"
+          otp-version: "27"
+          install-hex: "false"
+          install-rebar: "false"
+
+      - uses: xberg-io/actions/setup-mise@97c04280c1d4acc16bdc456db188782afbe63803 # v1
+        with:
+          tools: python
+          cache: "false"
+
+      - uses: xberg-io/actions/setup-rust@97c04280c1d4acc16bdc456db188782afbe63803 # v1
+        with:
+          target: aarch64-apple-darwin
+          disable-cache: "true"
+          use-sccache: "false"
+          install-llvm-cov: "false"
+
+      - name: Check runner and install release dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          [[ "$(sw_vers -productVersion)" == 26.* ]]
+          elixir -e 'unless System.otp_release() == "27" and String.starts_with?(System.version(), "1.17."), do: raise("expected Elixir 1.17 on OTP 27")'
+          elixir --version
+          bash scripts/ci/install-system-deps/install-macos.sh
+
+      - name: Build the pinned encoder source stack at the macOS 11.0 floor
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XBERG_HEIF_PROFILE=elixir-encoders
+          export XBERG_HEIF_PREFIX="$RUNNER_TEMP/xberg-elixir-heif"
+          bash scripts/ci/build-macos-heif-deps.sh
+          export PKG_CONFIG_PATH="$XBERG_HEIF_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          test "$(pkg-config --variable=pcfiledir libheif)" = "$XBERG_HEIF_PREFIX/lib/pkgconfig"
+          pkg-config --modversion libheif
+          {
+            printf 'XBERG_HEIF_PREFIX=%s\n' "$XBERG_HEIF_PREFIX"
+            printf 'PKG_CONFIG_PATH=%s\n' "$PKG_CONFIG_PATH"
+          } >> "$GITHUB_ENV"
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the Rustler archive against workspace dependencies
+        id: nif
+        uses: xberg-io/actions/build-elixir-natives@97c04280c1d4acc16bdc456db188782afbe63803 # v1
+        with:
+          target: aarch64-apple-darwin
+          nif-crate-name: xberg_nif
+          nif-crate-path: packages/elixir/native/xberg_nif
+          package-dir: packages/elixir
+          nif-version: ${{ steps.inputs.outputs.version }}
+          nif-api-version: "2.16"
+          rewrite-native-deps: "false"
+          output-dir: ${{ runner.temp }}/xberg-elixir-raw
+
+      - name: Stage, audit and load the exact archive
+        shell: bash
+        timeout-minutes: 10
+        env:
+          RAW_ARCHIVE: ${{ steps.nif.outputs.archive-path }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/xberg-elixir-qualification.XXXXXXXX")"
+          work="$(cd "$work" && pwd -P)"
+          mkdir "$work/final" "$work/positive" "$work/negative" "$work/home" "$work/cache"
+          python3 scripts/ci/macos_elixir_archive.py stage "$RAW_ARCHIVE" \
+            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE" --output-dir "$work/final"
+          archive="$work/final/$(basename "$RAW_ARCHIVE")"
+          python3 scripts/ci/macos_elixir_archive.py verify "$archive" \
+            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE"
+
+          beam_path="$(dirname "$(command -v elixir)"):$(dirname "$(command -v erl)"):/usr/bin:/bin:/usr/sbin:/sbin"
+          probe=(env -i "PATH=$beam_path" "HOME=$work/home" "XBERG_CACHE_DIR=$work/cache" elixir scripts/ci/smoke_macos_elixir_archive.exs)
+          native="$GITHUB_WORKSPACE/packages/elixir/lib/xberg/native.ex"
+          "${probe[@]}" encode-decode "$archive" "$native" "$work/positive"
+          if "${probe[@]}" missing-x265 "$archive" "$native" "$work/negative" >"$work/negative.log" 2>&1; then
+            echo "::error::The missing-x265 control unexpectedly loaded"
+            exit 1
+          fi
+          cat "$work/negative.log"
+          grep -Fq "Library not loaded: @loader_path/libx265." "$work/negative.log"
+          echo "Qualified the local archive on macOS 26 arm64 and OTP 27 with declared macOS 11.0 floors." >> "$GITHUB_STEP_SUMMARY"
