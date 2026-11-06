@@ -279,7 +279,8 @@ fn input_cache_dependency<I: BatchInputRef>(input: &I, config: &ExtractionConfig
 /// pre-extraction cache check. The key mixes the byte length and content, the
 /// MIME/filename hints, and the fully-resolved [`ExtractionConfig`] (base config
 /// merged with any per-input override), so a config or override change is a
-/// guaranteed cache miss.
+/// guaranteed cache miss. The shared extraction cache version applies to both
+/// single and batch keys through this item key.
 fn content_cache_key<I: BatchInputRef>(item: &I, base_config: &ExtractionConfig) -> Option<String> {
     let input = item.input();
     if !base_config.use_cache || input.kind != ExtractInputKind::Bytes {
@@ -299,6 +300,7 @@ fn content_cache_key<I: BatchInputRef>(item: &I, base_config: &ExtractionConfig)
 
     let mut hasher = blake3::Hasher::new();
     hasher.update(CACHE_KEY_NAMESPACE);
+    hasher.update(crate::cache::version::cache_version_tag().as_bytes());
     hasher.update(&(bytes.len() as u64).to_le_bytes());
     hasher.update(bytes);
     hasher.update(input.mime_type.as_deref().unwrap_or_default().as_bytes());

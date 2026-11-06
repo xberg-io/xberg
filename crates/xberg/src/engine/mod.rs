@@ -502,6 +502,79 @@ mod tests {
         }
     }
 
+    fn legacy_item_key(input: &ExtractInput, config: &ExtractionConfig) -> String {
+        let bytes = input.bytes.as_deref().unwrap();
+        let mut hash = blake3::Hasher::new();
+        hash.update(b"xberg-engine-extract-v2");
+        hash.update(&(bytes.len() as u64).to_le_bytes());
+        hash.update(bytes);
+        hash.update(input.mime_type.as_deref().unwrap().as_bytes());
+        hash.update(b"\0\0");
+        hash.update(&serde_json::to_vec(config).unwrap());
+        hash.finalize().to_hex().to_string()
+    }
+
+    fn legacy_batch_key(item: &str) -> String {
+        let mut hash = blake3::Hasher::new();
+        hash.update(b"xberg-engine-extract-batch-v2");
+        hash.update(&1_u64.to_le_bytes());
+        hash.update(&(item.len() as u64).to_le_bytes());
+        hash.update(item.as_bytes());
+        hash.finalize().to_hex().to_string()
+    }
+
+    #[tokio::test]
+    async fn single_and_batch_extraction_ignore_pre_version_cache_entries_and_reuse_current_ones() {
+        const TEXT: &str = "Current text from the source bytes.";
+        const STALE: &str = "Legacy cached output that must be ignored.";
+
+        let config = ExtractionConfig::default();
+        assert!(config.use_cache);
+        let input = ExtractInput::from_bytes(TEXT.as_bytes().to_vec(), "text/plain", None);
+
+        let legacy_single = legacy_item_key(&input, &config);
+        let legacy_batch = legacy_batch_key(&legacy_single);
+        let stale = serde_json::to_vec(&ExtractionResult::single(ExtractedDocument {
+            content: STALE.to_owned(),
+            ..Default::default()
+        }))
+        .unwrap();
+        let cache = Arc::new(InMemoryCacheBackend::default());
+        cache.store.lock().unwrap().extend([
+            (legacy_single.clone(), stale.clone()),
+            (legacy_batch.clone(), stale.clone()),
+        ]);
+        let engine = Engine::builder().with_cache_backend(cache.clone()).build();
+
+        let single = engine.extract(input.clone(), &config).await.unwrap();
+        let batch = engine.extract_batch(vec![input.clone()], &config).await.unwrap();
+        assert_eq!(
+            single.results[0].content.trim(),
+            TEXT,
+            "single misses pre-version entry"
+        );
+        assert_eq!(batch.results[0].content.trim(), TEXT, "batch misses pre-version entry");
+        assert_eq!(cache.gets.load(Ordering::SeqCst), 2);
+        assert_eq!(cache.puts.load(Ordering::SeqCst), 2);
+
+        let warm_single = engine.extract(input.clone(), &config).await.unwrap();
+        let warm_batch = engine.extract_batch(vec![input], &config).await.unwrap();
+        assert_eq!(
+            serde_json::to_value(warm_single).unwrap(),
+            serde_json::to_value(single).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(warm_batch).unwrap(),
+            serde_json::to_value(batch).unwrap()
+        );
+        assert_eq!(cache.gets.load(Ordering::SeqCst), 4);
+        assert_eq!(cache.puts.load(Ordering::SeqCst), 2);
+        let entries = cache.store.lock().unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries.get(&legacy_single), Some(&stale));
+        assert_eq!(entries.get(&legacy_batch), Some(&stale));
+    }
+
     // Revert line: remove the `inner.cache.put(...)` call in the `Ok(output)` arm of
     // `extract_impl::extract` to make this test fail -- `puts` stays 0 after the first
     // (miss) extraction, and the second identical extract also misses (still 0 entries
