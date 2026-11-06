@@ -3791,9 +3791,9 @@ jobs:
     # Runs on dry runs too, but checks different evidence. A real tag verifies against the
     # live GitHub Release (verify-release-assets queries it by tag, which does not exist on a
     # dry run — nothing is ever created at line ~150). A dry run instead verifies the same
-    # cli/go-ffi/c-ffi run-artifacts that upload-*-release would have uploaded, which DO get
-    # built on a dry run. Elixir and PHP are NOT covered here: elixir-natives and php-extension
-    # both skip producing real artifacts on a dry run (see their own ~keep comments), so
+    # selected CLI/Go FFI/C FFI run-artifacts that upload-*-release would have uploaded.
+    # Elixir and PHP are NOT covered here: elixir-natives and php-extension both skip
+    # producing real artifacts on a dry run (see their own ~keep comments), so
     # upload-elixir-release/upload-php-pie-release have nothing to check and a dry run does not
     # verify NIF or PHP-PIE asset packaging. ~keep
     if: >-
@@ -3842,21 +3842,21 @@ jobs:
             php_xberg-*-8.5-nts-vs17-x86_64.zip
 
       - uses: actions/download-artifact@v8
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_cli == 'true' }}
         with:
           pattern: cli-*
           path: dist/verify-assets/cli
           merge-multiple: true
 
       - uses: actions/download-artifact@v8
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_go == 'true' }}
         with:
           pattern: go-ffi-*
           path: dist/verify-assets/go-ffi
           merge-multiple: true
 
       - uses: actions/download-artifact@v8
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_c_ffi == 'true' }}
         with:
           pattern: c-ffi-*
           path: dist/verify-assets/c-ffi
@@ -3867,14 +3867,23 @@ jobs:
       # than a GitHub Release, since a dry run never creates one. ~keep
       - name: Verify locally built release assets
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        env:
+          RELEASE_CLI: ${{ needs.prepare.outputs.release_cli }}
+          RELEASE_GO: ${{ needs.prepare.outputs.release_go }}
+          RELEASE_C_FFI: ${{ needs.prepare.outputs.release_c_ffi }}
         shell: bash
         run: |
           set -euo pipefail
-          declare -A globs=(
-            ["dist/verify-assets/cli"]="xberg-cli-*.tar.gz xberg-cli-*.zip"
-            ["dist/verify-assets/go-ffi"]="xberg-go-*.tar.gz"
-            ["dist/verify-assets/c-ffi"]="xberg-ffi-*.tar.gz"
-          )
+          declare -A globs=()
+          if [[ "$RELEASE_CLI" == 'true' ]]; then
+            globs["dist/verify-assets/cli"]="xberg-cli-*.tar.gz xberg-cli-*.zip"
+          fi
+          if [[ "$RELEASE_GO" == 'true' ]]; then
+            globs["dist/verify-assets/go-ffi"]="xberg-go-*.tar.gz"
+          fi
+          if [[ "$RELEASE_C_FFI" == 'true' ]]; then
+            globs["dist/verify-assets/c-ffi"]="xberg-ffi-*.tar.gz"
+          fi
           missing=0
           for dir in "${!globs[@]}"; do
             for pattern in ${globs[$dir]}; do
