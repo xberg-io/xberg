@@ -23,9 +23,10 @@ mod indexed;
 mod ordered;
 mod samples;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
-use samples::{GrayPacking, decode_source_gray, flate_packing, source_frame};
+use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
 
 const MAX_TILE_SIDE: u32 = 4096;
+const MIN_STANDARD_SOURCE_DPI: f64 = 150.0;
 const MAX_SOURCE_PIXELS: usize = 24_000_000;
 const MAX_STRIPS: usize = 16;
 const MIN_BLANK_ROWS: u32 = 20;
@@ -232,7 +233,7 @@ async fn recover(
         return Err(crate::XbergError::Cancelled);
     }
     let (_, page_height) = super::rendering::page_dimensions_pt(attempt.document, attempt.page);
-    if page_height <= MAX_TILE_SIDE as f32 * 72.0 / 150.0 {
+    if page_height <= MAX_TILE_SIDE as f32 * 72.0 / MIN_STANDARD_SOURCE_DPI as f32 {
         return Ok(None);
     }
     // Admit one source allocation process-wide. Waiting owns only the normal raster. ~keep
@@ -285,7 +286,11 @@ async fn recover(
         let Ok(result) = result else {
             return Ok(None);
         };
-        output.complete_source_rows &= certified_strip_lines(&result, source.width, &rows, &ink_rows);
+        let certified = certified_strip_lines(&result, source.width, &rows, &ink_rows);
+        if source.dpi < MIN_STANDARD_SOURCE_DPI && !certified {
+            return Ok(None);
+        }
+        output.complete_source_rows &= certified;
         if !output.add(result) {
             return Ok(None);
         }
@@ -395,7 +400,7 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
     } else {
         Vec::new()
     };
-    if attempt.raster.is_none() && ink_rows.is_empty() {
+    if (attempt.raster.is_none() || source.dpi < MIN_STANDARD_SOURCE_DPI) && ink_rows.is_empty() {
         return None;
     }
     bands.retain(|band| band.end - band.start >= MIN_BLANK_ROWS);
@@ -474,6 +479,9 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         (Some(_), "FlateDecode") => Some(flate_packing(&dict, width, unfiltered_paint)?),
         _ => return None,
     };
+    if !source_density_allowed(dpi, packing) {
+        return None;
+    }
     let (samples, retained_bytes) = if let Some(packing) = packing {
         decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?
     } else {

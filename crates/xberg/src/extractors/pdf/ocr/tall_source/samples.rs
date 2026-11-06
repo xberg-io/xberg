@@ -1,7 +1,7 @@
 //! Exact, budgeted decoding of grayscale-equivalent source samples.
 
 use super::super::hidden_layer::image_predictor;
-use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE};
+use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI};
 use xberg_native_pdf::decoders::{DecodeParams, decode_predictor};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
@@ -159,10 +159,22 @@ pub(super) fn source_frame(
     }
     let dpi = 72.0 * f64::from(width) / f64::from(frame.width);
     let dpi_y = 72.0 * f64::from(height) / f64::from(frame.height);
-    if !(150.0..=300.0).contains(&dpi) || (dpi - dpi_y).abs() > 0.01 {
+    if !dpi.is_finite() || !dpi_y.is_finite() || (dpi - dpi_y).abs() > 0.01 {
         return None;
     }
     Some((width, height, dpi))
+}
+
+pub(super) fn source_density_allowed(dpi: f64, packing: Option<GrayPacking>) -> bool {
+    const MIN_PNG_PREDICTOR_DPI: f64 = 120.0;
+    const MAX_SOURCE_DPI: f64 = 300.0;
+
+    let minimum = if matches!(packing, Some(GrayPacking::PngPredictor(_))) {
+        MIN_PNG_PREDICTOR_DPI
+    } else {
+        MIN_STANDARD_SOURCE_DPI
+    };
+    (minimum..=MAX_SOURCE_DPI).contains(&dpi)
 }
 
 #[cfg(test)]
@@ -176,6 +188,28 @@ mod tests {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(bytes).unwrap();
         encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn lower_source_density_is_limited_to_gray_png_predictor() {
+        let predictor = Some(GrayPacking::PngPredictor(12));
+        assert!(source_density_allowed(120.0, predictor));
+        assert!(!source_density_allowed(119.99, predictor));
+        for packing in [
+            None,
+            Some(GrayPacking::Byte),
+            Some(GrayPacking::Bilevel),
+            Some(GrayPacking::NeutralRgb),
+            Some(GrayPacking::Indexed([0, 255])),
+            predictor,
+        ] {
+            assert!(source_density_allowed(150.0, packing));
+            assert!(source_density_allowed(300.0, packing));
+            assert!(!source_density_allowed(300.01, packing));
+            if packing != predictor {
+                assert!(!source_density_allowed(120.0, packing));
+            }
+        }
     }
 
     #[test]
