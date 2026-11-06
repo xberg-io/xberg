@@ -218,6 +218,46 @@ fn numeric_paint_overhang_requires_the_exact_cell_and_stays_within_its_row_allow
     assert!(certified_overhang(&cell, Rect::new(15.0, 380.0, 41.0, 21.0), &word, 2.0).is_none());
 }
 
+#[test]
+fn painted_cell_overhang_uses_exact_ownership_for_formatted_values() {
+    let paint = Rect::new(15., 380., 60., 21.);
+    let bounds = Rect::new(17., 393., 43., 9.);
+    for text in ["10.10", "1,010.10", "(3.2)", "-3.2", "3.2%", "$3.20"] {
+        let word = TextSpan {
+            text: text.into(),
+            bbox: bounds,
+            ..Default::default()
+        };
+        let cell = super::super::TableCell {
+            text: text.into(),
+            bbox: Some(paint),
+            spans: vec![word.clone()],
+            rowspan: 1,
+            colspan: 1,
+            mcids: Vec::new(),
+            is_header: false,
+        };
+        assert_eq!(
+            certified_overhang(&cell, paint, &word, 2.),
+            Some(bounds),
+            "exact source value {text} crosses only the painted row boundary"
+        );
+
+        let neighboring_paint = Rect::new(75., 380., 60., 21.);
+        let neighbor = TextSpan {
+            bbox: Rect::new(77., 393., 43., 9.),
+            ..word.clone()
+        };
+        assert_eq!(certified_overhang(&cell, paint, &neighbor, 2.), None);
+        assert_eq!(certified_overhang(&cell, neighboring_paint, &word, 2.), None);
+        let changed = TextSpan {
+            text: format!("{text}0"),
+            ..word.clone()
+        };
+        assert_eq!(certified_overhang(&cell, paint, &changed, 2.), None);
+    }
+}
+
 fn alternating_record_bands() -> (Vec<TextSpan>, Vec<PathContent>) {
     use crate::layout::Color;
     record_bands_fixture(

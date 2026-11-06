@@ -2309,6 +2309,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn painted_orphan_ignores_non_digits_without_resolving_two_digit_candidates() {
+        let paragraph = |text: &str, x| {
+            let mut paragraph = make_paragraph_at(text, None, 390.0);
+            let glyph = &mut paragraph.lines[0].segments[0];
+            glyph.x = x;
+            glyph.y = 390.0;
+            glyph.width = 5.0;
+            paragraph.block_bbox = Some((x, 390.0, x + 5.0, 402.0));
+            paragraph
+        };
+        let page = [paragraph("%", 13.0), paragraph("0", 33.0), paragraph("1", 53.0)];
+        let [punctuation, first, second] = page.each_ref().map(|p| SegmentKey::from(&p.lines[0].segments[0]));
+        let hyphens = Default::default();
+        let mut candidates = ahash::AHashSet::from_iter([&punctuation, &first]);
+        assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), Some(1));
+
+        candidates.insert(&second);
+        assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), None);
+    }
+
     fn make_paragraph_in_box(text: &str, baseline_y: f32, left: f32, right: f32) -> PdfParagraph {
         let mut paragraph = make_paragraph_at(text, None, baseline_y);
         paragraph.block_bbox = Some((left, baseline_y - 12.0, right, baseline_y));
