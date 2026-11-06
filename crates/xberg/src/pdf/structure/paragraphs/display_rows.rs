@@ -6,6 +6,8 @@ const RUNS_PER_ASSIGNMENT: usize = 4;
 const MIN_ASSIGNMENTS: usize = 3;
 const MAX_ASSIGNMENTS: usize = 10;
 const MAX_VALUE_BYTES: usize = 32;
+const MAX_WITHIN_LANE_GAP_EM: f32 = 1.0;
+const MAX_WITHIN_LANE_OVERLAP_EM: f32 = 0.25;
 
 pub(super) fn is_indexed_display_row(paragraph: &PdfParagraph) -> bool {
     let [line] = paragraph.lines.as_slice() else {
@@ -35,7 +37,8 @@ pub(super) fn is_indexed_display_row(paragraph: &PdfParagraph) -> bool {
         // An ordinary inline sequence has word spacing, rather than a full
         // font-size gap between complete assignment lanes.
         && lanes.windows(2).all(|pair| {
-            pair[1][0].x - pair[0][3].upright_advance_extent().1 >= base.font_size
+            let gap = advance_gap(&pair[0][3], &pair[1][0]);
+            gap.is_finite() && gap >= base.font_size
         })
 }
 
@@ -57,7 +60,12 @@ fn is_assignment(lane: &[SegmentData; RUNS_PER_ASSIGNMENT], anchor: &SegmentData
                 && run.width > 0.0
                 && run.upright_advance_extent().1.is_finite()
         })
-        && lane.windows(2).all(|pair| pair[0].x < pair[1].x)
+        && lane.windows(2).all(|pair| {
+            let gap = advance_gap(&pair[0], &pair[1]);
+            pair[0].x < pair[1].x
+                && (-anchor.font_size * MAX_WITHIN_LANE_OVERLAP_EM..=anchor.font_size * MAX_WITHIN_LANE_GAP_EM)
+                    .contains(&gap)
+        })
         && [base, equals, value].iter().all(|run| {
             (run.baseline_y - anchor.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
                 && run.font_size == anchor.font_size
@@ -65,4 +73,8 @@ fn is_assignment(lane: &[SegmentData; RUNS_PER_ASSIGNMENT], anchor: &SegmentData
         && base.baseline_y - index.baseline_y > INLINE_STYLE_BASELINE_TOLERANCE
         && index.font_size < base.font_size
         && is_script_run_of(base, index)
+}
+
+fn advance_gap(previous: &SegmentData, next: &SegmentData) -> f32 {
+    next.x - previous.upright_advance_extent().1
 }

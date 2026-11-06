@@ -122,6 +122,7 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
             && vertical_gap_compatible
             && !next_starts_section
             && !display_rows::is_indexed_display_row(&next)
+            && !display_rows::is_indexed_display_row(&current)
             && (!current_starts_section || heading_wrap_exempt);
 
         if should_merge {
@@ -566,6 +567,32 @@ mod tests {
     #[test]
     fn continuation_merge_keeps_a_complete_indexed_display_row_separate() {
         assert_eq!(merge_after_prose(indexed_display_row()).len(), 2);
+    }
+
+    #[test]
+    fn continuation_merge_keeps_prose_after_an_indexed_display_row_separate() {
+        let mut paragraphs = vec![
+            indexed_display_row(),
+            make_body_paragraph_at("and then continues below", 12.0, 684.0),
+        ];
+        merge_continuation_paragraphs(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 2);
+    }
+
+    #[test]
+    fn continuation_merge_rejects_unrelated_runs_inside_assignment_lanes() {
+        let mut row = indexed_display_row();
+        for segment in &mut row.lines[0].segments[3..] {
+            segment.x += 14.0;
+        }
+        assert_eq!(merge_after_prose(row).len(), 1);
+    }
+
+    #[test]
+    fn continuation_merge_rejects_overpainted_assignment_lanes() {
+        let mut row = indexed_display_row();
+        row.lines[0].segments[2].width += 14.0;
+        assert_eq!(merge_after_prose(row).len(), 1);
     }
 
     #[test]
