@@ -178,7 +178,7 @@ impl PathExtractor {
             current_point: None,
             subpath_start: None,
             current_stroke_color: Some(Color::black()),
-            current_fill_color: None,
+            current_fill_color: Some(Color::black()),
             current_line_width: 1.0,
             current_line_cap: LineCap::Butt,
             current_line_join: LineJoin::Miter,

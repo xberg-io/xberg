@@ -28,6 +28,16 @@ fn test_simple_line_stroke() {
 }
 
 #[test]
+fn filled_path_uses_black_before_any_color_operator() {
+    let mut extractor = PathExtractor::new();
+    extractor.rectangle(50.0, 50.0, 100.0, 80.0);
+    extractor.fill(FillRule::NonZero);
+    let [path] = <[_; 1]>::try_from(extractor.finish()).unwrap();
+    assert_eq!(path.fill_color, Some(Color::black()));
+    assert!(!path.has_stroke());
+}
+
+#[test]
 fn test_rectangle_fill() {
     let mut extractor = PathExtractor::new();
     extractor.set_fill_color(Color::new(1.0, 0.0, 0.0));
