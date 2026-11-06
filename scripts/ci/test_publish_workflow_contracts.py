@@ -545,7 +545,7 @@ def test_rust_ci_enables_bundled_oem_regressions_on_every_platform() -> None:
             assert result.returncode == 0, result.stderr
             features = set(result.stdout.splitlines()[-1].split(","))
             base = {"full-no-heic", "heic"} if (system, machine) == ("Linux", "aarch64") else {"full"}
-            assert features == base | {"formula-recognition", "bundle-tessdata-eng"}, (
+            assert features == base | {"formula-recognition", "classification-onnx", "bundle-tessdata-eng"}, (
                 system,
                 machine,
                 variable,

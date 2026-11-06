@@ -104,7 +104,11 @@ fn should_preserve_all_six_actual_key_expansion_subscripts() {
             .iter()
             .filter(|node| node.content.text().is_some_and(|text| text.contains(&variable)))
             .collect();
-        assert_eq!(holders.len(), 1, "every original indexed word survives once: {variable}");
+        assert_eq!(
+            holders.len(),
+            1,
+            "every original indexed word survives once: {variable}"
+        );
         let node = holders[0];
         let offset = node.content.text().unwrap().find(&variable).unwrap() + 1;
         assert!(
