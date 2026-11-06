@@ -2,12 +2,17 @@ name: Qualify macOS Elixir NIF
 
 on: workflow_dispatch
 
+concurrency:
+  group: qualify-macos-elixir-nif-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   macos-elixir-nif:
     name: macOS 26 arm64 / OTP 27
+    if: github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg'
     runs-on: macos-26
     timeout-minutes: 90
     env:
