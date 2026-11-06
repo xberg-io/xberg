@@ -1,4 +1,4 @@
-//! Recover a rejected full-scan table with literal TSV line and column evidence.
+//! Recover table rows using literal TSV line and column evidence.
 
 use super::{
     MAX_FRAGMENTED_HOCR_INPUT_BYTES, MAX_FRAGMENTED_HOCR_WORDS, SecurityLimits, TesseractConfig, post_process_table,
@@ -24,7 +24,7 @@ pub(super) fn recover(
     region: &OcrTableBoundingBox,
     limits: &SecurityLimits,
 ) -> Option<Vec<Vec<String>>> {
-    certify(tsv, content, region, limits).map(|(cells, _)| cells)
+    certify(tsv, content, region, limits, None).map(|(cells, _)| cells)
 }
 
 fn certify(
@@ -32,6 +32,7 @@ fn certify(
     content: &str,
     region: &OcrTableBoundingBox,
     limits: &SecurityLimits,
+    merged_header: Option<&[Vec<String>]>,
 ) -> Option<(Vec<Vec<String>>, Vec<Word>)> {
     let bytes = tsv.len().checked_add(content.len())?;
     if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
@@ -50,7 +51,10 @@ fn certify(
     }
     words.sort_unstable_by_key(|(_, word)| word.top);
     let rows = disjoint_rows(&mut words)?;
-    let grid = build_grid(&rows, limits.max_table_cells)?;
+    let grid = build_grid(&rows, limits.max_table_cells, merged_header.is_some())?;
+    if merged_header.is_some_and(|accepted| !only_header_row_was_merged(accepted, &grid)) {
+        return None;
+    }
     let cleaned = post_process_table(grid.clone(), false, false)?;
     (cleaned == grid).then_some((cleaned, words))
 }
@@ -61,12 +65,18 @@ pub(super) fn recover_standalone(
     content: &str,
     bbox: &OcrTableBoundingBox,
     limits: &SecurityLimits,
-    hocr: &str,
-    document: &super::InternalDocument,
+    (hocr, document): (&str, &super::InternalDocument),
+    merged_header: Option<&[Vec<String>]>,
 ) -> Option<Vec<Vec<String>>> {
     let page_number = document.elements.first()?.page?;
     let proof_bytes = tsv.len().checked_add(content.len())?.checked_add(hocr.len())?;
     if proof_bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size)
+        || merged_header.is_some_and(|accepted| {
+            // A four-column header and first record need at least eight source words.
+            accepted
+                .first()
+                .is_none_or(|first| first.iter().flat_map(|cell| cell.split_whitespace()).take(8).count() < 8)
+        })
         || !document
             .elements
             .iter()
@@ -76,7 +86,7 @@ pub(super) fn recover_standalone(
     }
     let mut limits = limits.clone();
     limits.max_iterations = limits.max_iterations.checked_sub(hocr.len().checked_mul(4)?)?;
-    let (cells, words) = certify(tsv, content, bbox, &limits)?;
+    let (cells, words) = certify(tsv, content, bbox, &limits, merged_header)?;
     if !super::has_table_grid(&cells) {
         return None;
     }
@@ -114,6 +124,31 @@ fn plain_ocr_fragment(element: &crate::types::internal::InternalElement) -> bool
                     .get(*key)
                     .is_none_or(|value| value.parse::<f64>().ok() == Some(0.0))
             })
+        })
+}
+
+fn only_header_row_was_merged(accepted: &[Vec<String>], certified: &[Vec<String>]) -> bool {
+    let ([first, remaining @ ..], [header, first_record, records @ ..]) = (accepted, certified) else {
+        return false;
+    };
+    if remaining.len() != records.len() {
+        return false;
+    }
+    let mut actual: Vec<_> = first.iter().flat_map(|cell| cell.split_whitespace()).collect();
+    let mut expected: Vec<_> = header
+        .iter()
+        .chain(first_record)
+        .flat_map(|cell| cell.split_whitespace())
+        .collect();
+    actual.sort_unstable();
+    expected.sort_unstable();
+    actual == expected
+        && remaining.iter().zip(records).all(|(previous, certified)| {
+            let populated = previous.iter().filter(|cell| !cell.trim().is_empty());
+            populated.clone().count() == certified.len()
+                && populated
+                    .zip(certified)
+                    .all(|(old, new)| old.split_whitespace().eq(new.split_whitespace()))
         })
 }
 
@@ -203,7 +238,7 @@ impl Track {
     }
 }
 
-fn build_grid(rows: &[&mut [Word]], max_cells: usize) -> Option<Vec<Vec<String>>> {
+fn build_grid(rows: &[&mut [Word]], max_cells: usize, allow_first_reading_error: bool) -> Option<Vec<Vec<String>>> {
     let (header, body) = rows.split_first()?;
     // The independent evidence consists of a named label and at least three recurring values. ~keep
     if header.len() < 4
@@ -231,8 +266,9 @@ fn build_grid(rows: &[&mut [Word]], max_cells: usize) -> Option<Vec<Vec<String>>
             }
         }
     }
-    for row in body {
-        grid.push(body_cells(row, &mut tracks)?);
+    for (index, row) in body.iter().enumerate() {
+        let allowed_reading_errors = usize::from(allow_first_reading_error && index == 0);
+        grid.push(body_cells(row, &mut tracks, allowed_reading_errors)?);
     }
     tracks
         .windows(2)
@@ -240,13 +276,13 @@ fn build_grid(rows: &[&mut [Word]], max_cells: usize) -> Option<Vec<Vec<String>>
         .then_some(grid)
 }
 
-fn body_cells(row: &[Word], tracks: &mut [Track]) -> Option<Vec<String>> {
+fn body_cells(row: &[Word], tracks: &mut [Track], allowed_reading_errors: usize) -> Option<Vec<String>> {
     let (label, values) = row.split_at(row.len().checked_sub(tracks.len() - 1)?);
     let line = label.first()?.0?;
     if !label
         .iter()
         .all(|(key, word)| *key == Some(line) && alphabetic(&word.text))
-        || !values.iter().all(|(_, word)| literal_number(&word.text))
+        || values.iter().filter(|(_, word)| !literal_number(&word.text)).count() > allowed_reading_errors
     {
         return None;
     }
@@ -378,6 +414,33 @@ mod tests {
                 ["Fleet fuel", "69", "8,534", "21,958"],
             ]
         );
+    }
+
+    #[test]
+    fn merged_header_recovery_preserves_one_uncertain_literal_and_requires_disjoint_rows() {
+        let (tsv, content) = fixture();
+        let tsv = tsv.replace("79", "BY)");
+        let content = content.replace("79", "BY)");
+        let limits = SecurityLimits::default();
+        let mut accepted = [
+            ["Street repair", "Item", "Count BY)", "Budget 828,296", "Change (592)"],
+            ["", "Library hours", "42", "50,406", "666.17"],
+            ["Fleet fuel", "", "69", "8,534", "21,958"],
+        ]
+        .map(|row| row.into_iter().map(str::to_owned).collect());
+        let (cells, _) = certify(&tsv, &content, &REGION, &limits, Some(&accepted)).unwrap();
+        assert_eq!(cells[0], HEADER_CELLS);
+        assert_eq!(cells[1], ["Street repair", "BY)", "828,296", "(592)"]);
+        assert!(certify(&tsv, &content, &REGION, &limits, None).is_none());
+
+        let conflicting_tsv = tsv.replace("\t190\t358\t109\t28\t", "\t190\t300\t109\t86\t");
+        assert_ne!(conflicting_tsv, tsv);
+        assert!(certify(&conflicting_tsv, &content, &REGION, &limits, Some(&accepted)).is_none());
+        let outside_prose = format!("{content}\nOutside prose");
+        assert!(certify(&tsv, &outside_prose, &REGION, &limits, Some(&accepted)).is_none());
+        accepted[1][0] = "Library".into();
+        accepted[1][1] = "hours".into();
+        assert!(certify(&tsv, &content, &REGION, &limits, Some(&accepted)).is_none());
     }
 
     #[test]

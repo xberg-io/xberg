@@ -2814,25 +2814,35 @@ pub(super) fn perform_ocr(
             }
 
             #[cfg(feature = "pdf")]
-            let cleaned = post_process_table(table, false, false).or_else(|| {
+            let cleaned = {
                 let bbox = region.bounding_box();
+                let cleaned = post_process_table(table, false, false);
                 #[cfg(not(target_arch = "wasm32"))]
-                if can_prove_sparse_grid {
-                    let cells = full_scan_table::recover_standalone(
-                        tsv_data,
-                        &content,
-                        &bbox,
-                        &security_limits,
-                        hocr_for_tables.as_deref()?,
-                        hocr_document.as_ref()?,
-                    )?;
-                    standalone_claimed = true;
-                    return Some(cells);
-                }
-                can_prove_scan_grid
-                    .then(|| full_scan_table::recover(tsv_data, &content, &bbox, &security_limits))
-                    .flatten()
-            });
+                let cleaned = if can_prove_sparse_grid {
+                    let recovered = hocr_for_tables
+                        .as_deref()
+                        .zip(hocr_document.as_ref())
+                        .and_then(|source| {
+                            full_scan_table::recover_standalone(
+                                tsv_data,
+                                &content,
+                                &bbox,
+                                &security_limits,
+                                source,
+                                cleaned.as_deref(),
+                            )
+                        });
+                    standalone_claimed |= recovered.is_some();
+                    recovered.or(cleaned)
+                } else {
+                    cleaned
+                };
+                cleaned.or_else(|| {
+                    can_prove_scan_grid
+                        .then(|| full_scan_table::recover(tsv_data, &content, &bbox, &security_limits))
+                        .flatten()
+                })
+            };
             #[cfg(not(feature = "pdf"))]
             let cleaned = Some(table);
             let Some(cleaned) = cleaned else {
