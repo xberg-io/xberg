@@ -381,7 +381,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
   Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
 
-- **(ocr): Recover an outlined photo title in uncached Plain PNG extraction.** (#2312)
+- **(ocr): Recover an outlined photo title in Plain PNG extraction, including cache hits.** (#2312)
   Add a title supported by two distinct source masks while keeping the original OCR text.
 
 - **(ocr): Keep rows together in standalone sparse OCR page text.** (#2432)
