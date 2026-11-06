@@ -192,6 +192,67 @@ async fn omitted_psm_keeps_actual_psm3_and_adds_only_the_missing_embedded_line()
     assert_eq!(page.content, expected);
 }
 
+fn reencode_panel_with_png_up_predictor(ordinary_pdf: &[u8]) -> Vec<u8> {
+    let mut predictor_pdf = Document::load_mem(ordinary_pdf).unwrap();
+    let panel = predictor_pdf
+        .objects
+        .values_mut()
+        .filter_map(|object| object.as_stream_mut().ok())
+        .find(|stream| stream.dict.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"Image"))
+        .expect("find the single synthetic panel");
+    let raster = image::load_from_memory(IMAGE).unwrap().into_rgb8();
+    let row_bytes = raster.width() as usize * 3;
+    let mut previous = vec![0; row_bytes];
+    let mut tagged = Vec::new();
+    for row in raster.as_raw().chunks_exact(row_bytes) {
+        tagged.push(2);
+        tagged.extend(
+            row.iter()
+                .zip(&previous)
+                .map(|(sample, above)| sample.wrapping_sub(*above)),
+        );
+        previous.copy_from_slice(row);
+    }
+    panel.dict.remove(b"Filter");
+    panel.set_content(tagged);
+    panel.compress().unwrap();
+    assert_eq!(
+        panel.dict.get(b"Filter").and_then(Object::as_name).unwrap(),
+        b"FlateDecode"
+    );
+    panel.dict.set(
+        "DecodeParms",
+        dictionary! { "Predictor" => 12, "Columns" => 612, "Colors" => 3, "BitsPerComponent" => 8 },
+    );
+    let mut bytes = Vec::new();
+    predictor_pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[tokio::test]
+async fn png_predictor_panel_recovers_missing_line_without_changing_primary_ocr() {
+    let ordinary_pdf = panel_pdf(false, false);
+    let predictor_pdf = reencode_panel_with_png_up_predictor(&ordinary_pdf);
+    let config = config(None, false);
+    let ordinary = extract(ordinary_pdf, &config).await;
+    let predicted = extract(predictor_pdf, &config).await;
+    let [ordinary_image] = ordinary.images.as_deref().unwrap() else {
+        panic!("one ordinary panel");
+    };
+    let [predicted_image] = predicted.images.as_deref().unwrap() else {
+        panic!("one predictor panel");
+    };
+    assert_eq!(ordinary_image.data, predicted_image.data);
+    assert_eq!(
+        serde_json::to_value(&ordinary_image.ocr_result).unwrap(),
+        serde_json::to_value(&predicted_image.ocr_result).unwrap()
+    );
+    let expected = format!("{}\n\n{FIRST}\n\n{MISSING}\n\n{LAST}", NATIVE.join("\n\n"));
+    assert_eq!(ordinary.content, expected);
+    assert_eq!(predicted.content, expected);
+    assert_eq!(predicted.pages.as_deref().unwrap()[0].content, expected);
+}
+
 #[cfg(feature = "bundle-tessdata-eng")]
 #[tokio::test]
 async fn cached_default_recovers_embedded_line_in_cold_and_warm_reads() {
