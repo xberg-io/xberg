@@ -83,12 +83,11 @@ export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 # fixing a font test revealed an identical bug in a second binary, and fixing a pipeline
 # test revealed a libheif floor mismatch that had never had a chance to run. ~keep
 # ~keep The xberg leg links ~380 integration-test binaries, each carrying the statically
-# linked native stack of the `full` feature set. On ubuntu-latest (x86_64) that exhausted the
-# runner's free space: rust-lld died with SIGBUS and rustc reported "No space left on device".
+# linked native stack of the selected feature set. Both Linux runners have exhausted disk
+# space while linking these binaries.
 # Build and run the targets in chunks and delete each chunk's executables once it has run, so
 # the peak is bounded by one chunk. The free space after every chunk is printed, which turns
-# the next failure of this kind into a measurement. Used on Linux x86_64 only; the other legs
-# fit and keep the single invocation.
+# the next failure of this kind into a measurement. Other platforms keep the single invocation.
 run_xberg_tests_in_chunks() {
   local features="$1"
   local chunk_size="${XBERG_TEST_CHUNK_SIZE:-40}"
@@ -170,7 +169,7 @@ if ! {
     echo "Linux aarch64: using full-no-heic,heic (full pulls candle -> gemm-f16 needs fullfp16)"
     xberg_test_features=full-no-heic,heic,formula-recognition,bundle-tessdata-eng
   fi
-  if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+  if [ "$(uname -s)" = "Linux" ]; then
     run_xberg_tests_in_chunks "$xberg_test_features" || exit
   else
     RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg --features "$xberg_test_features" --all-targets --verbose || exit
