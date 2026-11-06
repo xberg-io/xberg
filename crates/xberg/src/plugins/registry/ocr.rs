@@ -278,7 +278,7 @@ impl OcrBackendRegistry {
         }
     }
 
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "ocr", any(feature = "pdf", test), not(target_arch = "wasm32")))]
     pub(crate) fn is_builtin_tesseract(&self, backend: &Arc<dyn OcrBackend>) -> bool {
         self.builtin_tesseract_for(backend).is_some()
     }
