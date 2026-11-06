@@ -11,6 +11,9 @@ import yaml
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
+EXPECTED_WORKFLOWS = 16
+EXPECTED_JOBS = 76
+EXPECTED_CHECKOUTS = 76
 
 
 def requires_main(expression: str) -> bool:
@@ -18,7 +21,7 @@ def requires_main(expression: str) -> bool:
     expression = expression.removeprefix("${{").removesuffix("}}").strip()
     expression = expression.replace("&&", " and ").replace("||", " or ")
     expression = re.sub(r"!(?!=)", "not ", expression).strip()
-    parsed = ast.parse(expression, mode="eval").body
+    parsed = ast.parse(f"({expression})", mode="eval").body
     conjuncts = parsed.values if isinstance(parsed, ast.BoolOp) and isinstance(parsed.op, ast.And) else [parsed]
     return any(ast.dump(term) == MAIN_GUARD for term in conjuncts)
 
@@ -55,8 +58,8 @@ def keeps_latest_ci_run(concurrency: object, workflow: str) -> bool:
 class MainOnlyCiTests(unittest.TestCase):
     def test_every_ci_workflow_keeps_only_its_latest_main_run(self) -> None:
         paths = ci_workflows()
-        assert len(paths) == 15, "CI workflow inventory changed"
-        assert len({path.stem for path in paths}) == 15, "CI workflow group prefixes collide"
+        assert len(paths) == EXPECTED_WORKFLOWS, "CI workflow inventory changed"
+        assert len({path.stem for path in paths}) == EXPECTED_WORKFLOWS, "CI workflow group prefixes collide"
         job_count = 0
         for path in paths:
             workflow = yaml.safe_load(path.read_text())
@@ -68,12 +71,12 @@ class MainOnlyCiTests(unittest.TestCase):
                 with self.subTest(workflow=path.name, job=name):
                     assert "concurrency" not in job, "job concurrency can replace other jobs within one workflow run"
                 job_count += 1
-        assert job_count == 74, "CI job inventory changed"
+        assert job_count == EXPECTED_JOBS, "CI job inventory changed"
         print(f"Checked latest-only groups for {len(paths)} CI workflows and {job_count} jobs")
 
     def test_accepts_stable_workflow_ref_group_with_cancellation(self) -> None:
         paths = ci_workflows()
-        assert len(paths) == 15, "CI workflow inventory changed"
+        assert len(paths) == EXPECTED_WORKFLOWS, "CI workflow inventory changed"
         for path in paths:
             with self.subTest(workflow=path.name):
                 group = f"{path.stem}-${{{{ github.ref }}}}"
@@ -82,7 +85,7 @@ class MainOnlyCiTests(unittest.TestCase):
 
     def test_no_ci_workflow_queues_superseded_runs(self) -> None:
         paths = ci_workflows()
-        assert len(paths) == 15, "CI workflow inventory changed"
+        assert len(paths) == EXPECTED_WORKFLOWS, "CI workflow inventory changed"
         for path in paths:
             with self.subTest(workflow=path.name):
                 workflow = yaml.safe_load(path.read_text())
@@ -141,7 +144,7 @@ class MainOnlyCiTests(unittest.TestCase):
                     with self.subTest(workflow=path.name, job=name, step=step.get("name", step.get("uses"))):
                         assert checks_out_main_source(step), f"{path}:{name}: alternate source checkout"
                     checkout_count += str(step.get("uses", "")).startswith("actions/checkout@")
-        assert checkout_count == 74, "CI checkout inventory changed"
+        assert checkout_count == EXPECTED_CHECKOUTS, "CI checkout inventory changed"
         print(f"Checked {checkout_count} CI checkout steps")
 
     def test_rejects_checkout_ref_inputs_and_alternate_branches(self) -> None:
@@ -158,6 +161,7 @@ class MainOnlyCiTests(unittest.TestCase):
             "github.ref == 'refs/heads/main'",
             "${{ github.ref == 'refs/heads/main' && (always() && !cancelled()) }}",
             "${{ needs.setup.result == 'success' && github.ref == 'refs/heads/main' }}",
+            "${{ !cancelled() &&\n  github.ref == 'refs/heads/main' &&\n  (success() || failure()) }}",
         ]
         for condition in conditions:
             with self.subTest(condition=condition):
@@ -173,6 +177,8 @@ class MainOnlyCiTests(unittest.TestCase):
     def test_rejects_main_guard_in_only_one_alternative(self) -> None:
         condition = "${{ (github.ref == 'refs/heads/main' && success()) || always() }}"
         assert not requires_main(condition)
+        multiline_condition = "${{ (github.ref == 'refs/heads/main' && success()) ||\n  always() }}"
+        assert not requires_main(multiline_condition)
 
     def test_rejects_branch_or_tag_guard_instead_of_main(self) -> None:
         for ref in ["refs/heads/codex/example", "refs/pull/42/merge", "refs/tags/v1.4.0"]:
