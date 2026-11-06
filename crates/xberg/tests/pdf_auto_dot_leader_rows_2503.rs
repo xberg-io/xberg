@@ -148,6 +148,10 @@ fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
 #[test]
 fn regular_dashes_in_place_of_leader_dots_do_not_form_a_table() {
     let bytes = include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-dashes.pdf");
+    assert_eq!(
+        hex::encode(Sha256::digest(bytes)),
+        "8a7d75aea33be2c6adc464f012948fc84b55fe96e42c078ac4504d58e75a5ac1"
+    );
     let result = extract(bytes);
     assert!(result.metadata.ocr_used);
     assert!(result.tables.is_empty(), "found {} tables", result.tables.len());
