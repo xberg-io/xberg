@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(classification): Add an experimental Rust API for CPU ONNX NLI.** (#2335)
+  Prepare pinned model artifacts explicitly; classification preserves model identity, bounded execution and cancellation.
+
 - **(layout): Return source-proven text for selected native PDF layout regions in Rust.** (#2357)
   `Engine::extract_with_layout_region_text` returns region text in page reading order and omits unproved or redacted text.
   An explicitly declared crop box is supported when its resolved geometry exactly matches the media box.
