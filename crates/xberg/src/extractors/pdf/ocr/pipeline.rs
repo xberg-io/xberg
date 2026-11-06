@@ -3394,7 +3394,9 @@ pub(super) async fn extract_with_ocr_for_page(
 
     #[cfg(feature = "pdf")]
     let lazy_pdf_render_state = if !use_document_processing && images.is_none() {
-        content.map(open_pdf_for_full_ocr).transpose()?
+        content
+            .map(|bytes| run_cpu_bound(|| open_pdf_for_full_ocr(bytes)))
+            .transpose()?
     } else {
         None
     };
@@ -3696,26 +3698,28 @@ pub(super) async fn extract_with_ocr_for_page(
             validate_png_encode_pages_individually(slice.iter(), security_limits)?;
             #[allow(clippy::type_complexity)]
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = slice
-                .par_iter()
-                .enumerate()
-                .map(|(offset, image)| {
-                    let page_idx = batch_start + offset;
-                    let default_security_limits = crate::extractors::security::SecurityLimits::default();
-                    let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                    let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
-                    let (width, height) = rgb_image.dimensions();
-                    let mut image_bytes = Cursor::new(Vec::new());
-                    let encoder = PngEncoder::new(&mut image_bytes);
-                    encoder
-                        .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
-                        .map_err(|e| crate::XbergError::Parsing {
-                            message: format!("Failed to encode image: {}", e),
-                            source: None,
-                        })?;
-                    Ok((page_idx, Arc::new(image_bytes.into_inner()), width, height))
-                })
-                .collect();
+            let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = run_cpu_bound(|| {
+                slice
+                    .par_iter()
+                    .enumerate()
+                    .map(|(offset, image)| {
+                        let page_idx = batch_start + offset;
+                        let default_security_limits = crate::extractors::security::SecurityLimits::default();
+                        let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
+                        let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
+                        let (width, height) = rgb_image.dimensions();
+                        let mut image_bytes = Cursor::new(Vec::new());
+                        let encoder = PngEncoder::new(&mut image_bytes);
+                        encoder
+                            .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
+                            .map_err(|e| crate::XbergError::Parsing {
+                                message: format!("Failed to encode image: {}", e),
+                                source: None,
+                            })?;
+                        Ok((page_idx, Arc::new(image_bytes.into_inner()), width, height))
+                    })
+                    .collect()
+            });
             #[allow(clippy::type_complexity)]
             #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
             let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = slice
@@ -3751,14 +3755,16 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                let ((pages, batch_raster_dpis), warnings) = crate::pdf::render::capture_render_warnings(|| {
-                    render_full_pdf_ocr_batch_with_dpi(
-                        doc,
-                        page_rotations,
-                        batch_start..batch_end,
-                        security_limits,
-                        config.images.as_ref(),
-                    )
+                let ((pages, batch_raster_dpis), warnings) = run_cpu_bound(|| {
+                    crate::pdf::render::capture_render_warnings(|| {
+                        render_full_pdf_ocr_batch_with_dpi(
+                            doc,
+                            page_rotations,
+                            batch_start..batch_end,
+                            security_limits,
+                            config.images.as_ref(),
+                        )
+                    })
                 })?;
                 crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
                 raster_dpis.extend(batch_raster_dpis);
@@ -5575,6 +5581,49 @@ pub(super) async fn extract_with_ocr_for_page(
             },
         },
     ))
+}
+
+/// Runs CPU-bound work from an async extraction without stalling the runtime.
+///
+/// On a multi-thread runtime worker, `block_in_place` lets tokio move the worker's other
+/// tasks to another thread, so health checks and other requests keep running while pages
+/// render. Everywhere else (current-thread runtime, `block_on`, a blocking thread, no
+/// runtime) the work runs inline. Not `spawn_blocking`: the render inputs are borrowed.
+/// Panics under a `LocalSet` on a multi-thread runtime, which nothing in the crate uses. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn run_cpu_bound<T>(work: impl FnOnce() -> T) -> T {
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    if let Ok(handle) = tokio::runtime::Handle::try_current()
+        && handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread
+    {
+        return tokio::task::block_in_place(work);
+    }
+    work()
+}
+
+#[cfg(all(
+    test,
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn run_cpu_bound_keeps_the_runtime_responsive() {
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let blocked = tokio::spawn(async move {
+        run_cpu_bound(move || {
+            started_tx.send(()).unwrap();
+            // The release can only arrive if the sole worker handed its other tasks off.
+            release_rx.recv_timeout(std::time::Duration::from_secs(10)).is_ok()
+        })
+    });
+    started_rx.await.unwrap();
+    tokio::spawn(async move { release_tx.send(()) });
+    assert!(
+        blocked.await.unwrap(),
+        "the worker stayed blocked while CPU-bound work ran"
+    );
 }
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 async fn certify_discarded_native_layer(

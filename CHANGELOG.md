@@ -188,6 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep the async runtime responsive while pages render for OCR.**
+  Page rendering and PNG encoding hand their tokio worker off before they run, so the API server's `/health` and other requests keep answering during OCR of scanned PDFs.
+
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
 
