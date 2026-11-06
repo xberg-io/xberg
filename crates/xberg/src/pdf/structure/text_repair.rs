@@ -491,25 +491,19 @@ fn is_common_short_word(word: &str) -> bool {
     )
 }
 
-/// Expand Unicode ligature characters (U+FB00–U+FB06) to ASCII equivalents,
-/// absorbing a spurious space between the ligature glyph and the following word.
+/// Expand Unicode ligature characters (U+FB00–U+FB06) to their letters.
 ///
-/// PDFs sometimes emit ligature codepoints (ﬁ, ﬂ, ﬀ, ﬃ, ﬄ, ﬅ, ﬆ) that need
-/// to be expanded. Additionally, a space is often inserted between the ligature
-/// glyph and the continuation of the word (e.g. "ﬁ eld"), which must be absorbed
-/// to produce correct text ("field").
-///
-/// Matches the reference approach:
-/// ```python
-/// _LIGATURE_RE = re.compile(r"([\ufb00-\ufb06])( (?=\w))?")
-/// ```
+/// A space next to a ligature is never removed here: the extractor already decides
+/// word boundaries from glyph geometry (with a ligature-aware threshold), and an
+/// authored space after a ligature ("staﬀ only") is indistinguishable from a
+/// synthesized one at the string layer (#2322).
 ///
 /// Uses `Cow<str>` for zero-alloc fast path when no ligatures are present.
-pub(super) fn expand_ligatures_with_space_absorption(text: &str) -> Cow<'_, str> {
-    expand_ligatures_with_space_absorption_mapped(text, false).text
+pub(super) fn expand_ligatures(text: &str) -> Cow<'_, str> {
+    expand_ligatures_mapped(text, false).text
 }
 
-pub(super) fn expand_ligatures_with_space_absorption_mapped(text: &str, record: bool) -> RepairedText<'_> {
+pub(super) fn expand_ligatures_mapped(text: &str, record: bool) -> RepairedText<'_> {
     if !text.contains([
         '\u{FB00}', '\u{FB01}', '\u{FB02}', '\u{FB03}', '\u{FB04}', '\u{FB05}', '\u{FB06}',
     ]) {
@@ -517,8 +511,7 @@ pub(super) fn expand_ligatures_with_space_absorption_mapped(text: &str, record: 
     }
     let mut result = String::with_capacity(text.len());
     let mut replacements = Vec::new();
-    let mut chars = text.char_indices().peekable();
-    while let Some((offset, ch)) = chars.next() {
+    for (offset, ch) in text.char_indices() {
         let expansion = match ch {
             '\u{FB00}' => "ff",
             '\u{FB01}' => "fi",
@@ -540,22 +533,6 @@ pub(super) fn expand_ligatures_with_space_absorption_mapped(text: &str, record: 
             offset..offset + ch.len_utf8(),
             output_start..result.len(),
         );
-        if chars.peek().is_some_and(|(_, ch)| *ch == ' ') {
-            let mut lookahead = chars.clone();
-            lookahead.next();
-            if lookahead
-                .peek()
-                .is_some_and(|(_, ch)| ch.is_alphanumeric() || *ch == '_')
-            {
-                let (space_offset, _) = chars.next().expect("the absorbed space was inspected");
-                record_replacement(
-                    &mut replacements,
-                    record,
-                    space_offset..space_offset + 1,
-                    result.len()..result.len(),
-                );
-            }
-        }
     }
     RepairedText {
         text: Cow::Owned(result),
@@ -1062,96 +1039,77 @@ mod tests {
     #[test]
     fn test_expand_ligatures_no_ligatures() {
         let text = "hello world";
-        let result = expand_ligatures_with_space_absorption(text);
+        let result = expand_ligatures(text);
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "hello world");
     }
 
     #[test]
     fn test_expand_ligatures_fi() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB01}eld"), "field");
+        assert_eq!(expand_ligatures("\u{FB01}eld"), "field");
     }
 
     #[test]
     fn test_expand_ligatures_fl() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB02}oor"), "floor");
+        assert_eq!(expand_ligatures("\u{FB02}oor"), "floor");
     }
 
     #[test]
     fn test_expand_ligatures_ff() {
-        assert_eq!(expand_ligatures_with_space_absorption("e\u{FB00}ect"), "effect");
+        assert_eq!(expand_ligatures("e\u{FB00}ect"), "effect");
     }
 
     #[test]
     fn test_expand_ligatures_ffi() {
-        assert_eq!(expand_ligatures_with_space_absorption("e\u{FB03}cient"), "efficient");
+        assert_eq!(expand_ligatures("e\u{FB03}cient"), "efficient");
     }
 
     #[test]
     fn test_expand_ligatures_ffl() {
-        assert_eq!(expand_ligatures_with_space_absorption("ba\u{FB04}e"), "baffle");
+        assert_eq!(expand_ligatures("ba\u{FB04}e"), "baffle");
     }
 
     #[test]
     fn test_expand_ligatures_st() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB05}art"), "start");
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB06}art"), "start");
+        assert_eq!(expand_ligatures("\u{FB05}art"), "start");
+        assert_eq!(expand_ligatures("\u{FB06}art"), "start");
     }
 
     #[test]
-    fn test_expand_ligatures_space_absorption_fi() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB01} eld"), "field");
-    }
-
-    #[test]
-    fn test_expand_ligatures_space_absorption_fl() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB02} oor"), "floor");
-    }
-
-    #[test]
-    fn test_expand_ligatures_space_absorption_ff() {
-        assert_eq!(expand_ligatures_with_space_absorption("e \u{FB00} ect"), "e ffect");
-    }
-
-    #[test]
-    fn test_expand_ligatures_space_not_absorbed_before_punctuation() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB01} ."), "fi .");
-    }
-
-    #[test]
-    fn test_expand_ligatures_space_not_absorbed_before_space() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB01}  word"), "fi  word");
+    fn test_expand_ligatures_keeps_the_space_after_a_ligature() {
+        assert_eq!(expand_ligatures("sta\u{FB00} only"), "staff only");
+        assert_eq!(expand_ligatures("\u{FB01} eld"), "fi eld");
+        assert_eq!(expand_ligatures("e \u{FB00} ect"), "e ff ect");
+        assert_eq!(expand_ligatures("\u{FB01} ."), "fi .");
+        assert_eq!(expand_ligatures("\u{FB01}  word"), "fi  word");
     }
 
     #[test]
     fn test_expand_ligatures_at_end_of_string() {
-        assert_eq!(expand_ligatures_with_space_absorption("pro\u{FB01}"), "profi");
+        assert_eq!(expand_ligatures("pro\u{FB01}"), "profi");
     }
 
     #[test]
     fn test_expand_ligatures_space_at_end_not_absorbed() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB01} "), "fi ");
+        assert_eq!(expand_ligatures("\u{FB01} "), "fi ");
     }
 
     #[test]
     fn test_expand_ligatures_multiple_in_sentence() {
-        assert_eq!(
-            expand_ligatures_with_space_absorption("the \u{FB01} rst \u{FB02} oor"),
-            "the first floor"
-        );
+        assert_eq!(expand_ligatures("the \u{FB01} rst \u{FB02} oor"), "the fi rst fl oor");
     }
 
     #[test]
     fn test_expand_ligatures_mixed_with_normal_text() {
         assert_eq!(
-            expand_ligatures_with_space_absorption("a \u{FB01} eld of \u{FB02} owers"),
-            "a field of flowers"
+            expand_ligatures("a \u{FB01} eld of \u{FB02} owers"),
+            "a fi eld of fl owers"
         );
     }
 
     #[test]
     fn test_expand_ligatures_no_space_no_absorption() {
-        assert_eq!(expand_ligatures_with_space_absorption("\u{FB01}nally"), "finally");
+        assert_eq!(expand_ligatures("\u{FB01}nally"), "finally");
     }
 
     #[test]
