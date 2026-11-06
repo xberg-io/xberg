@@ -396,6 +396,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
   Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
 
+- **(ocr): Place recovered PNG photo titles in source order.** (#2611)
+  Use OCR line geometry to place the title while preserving the original document and page text.
+
 - **(ocr): Recover a verified photo title in Markdown PNG extraction.** (#2312)
   Append the title as a paragraph while preserving the original Markdown and page text.
 

@@ -92,7 +92,8 @@
 /// Invalidate cached PDFs that omitted bordered tables beside strict tables. ~keep
 /// Invalidate cached PDFs that removed explicitly requested geometric headers or footers. ~keep
 /// Invalidate cached OCR of images without resolution metadata, now sized by their text (#2127). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 12;
+/// Invalidate standalone photo titles appended after lower source text (#2611). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 13;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;

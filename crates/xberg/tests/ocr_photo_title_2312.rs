@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig, extract};
 
 const TITLE: &str = "SECTION TITLE";
-const TITLE_SUFFIX: &str = "\n\nSECTION TITLE";
+const TITLE_PARAGRAPH: &str = "SECTION TITLE\n\n";
 const PHOTO: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/title.png");
 const MIXED: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/mixed-sign.png");
 const TABLE: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/table.png");
@@ -59,19 +59,23 @@ fn assert_body(text: &str, expected_sha: &str) {
     assert_eq!(hex::encode(Sha256::digest(text.as_bytes())), expected_sha, "{text:?}");
 }
 
+fn remove_positioned_photo_title(content: &str) -> String {
+    let (before, after) = content
+        .split_once(TITLE_PARAGRAPH)
+        .expect("title is a separate paragraph");
+    assert_eq!(before.lines().filter(|line| !line.trim().is_empty()).count(), 104);
+    assert!(
+        after.starts_with('*'),
+        "the first recognized line below the source title"
+    );
+    assert!(!after.contains(TITLE));
+    format!("{before}{after}")
+}
+
 fn assert_addition(document: &ExtractedDocument, body_sha: &str, page_sha: &str) {
-    let body = document
-        .content
-        .strip_suffix(TITLE_SUFFIX)
-        .expect("append the independently recovered title to the unchanged OCR body");
-    assert!(!body.contains(TITLE));
-    assert_body(body, body_sha);
+    assert_body(&remove_positioned_photo_title(&document.content), body_sha);
     let page = &document.pages.as_ref().unwrap()[0].content;
-    let page_body = page
-        .trim()
-        .strip_suffix(TITLE_SUFFIX)
-        .expect("append the same title on page one");
-    assert_body(page_body, page_sha);
+    assert_body(&remove_positioned_photo_title(page.trim()), page_sha);
 }
 
 #[tokio::test]
@@ -89,9 +93,18 @@ async fn recovers_the_photo_title_without_losing_the_independent_sign_or_amount(
     let document = extract_primary(MIXED, 6, 0).await;
     assert!(document.content.contains("NORTH GATE 42"), "{:?}", document.content);
     assert!(document.content.contains("AUTHORIZED ONLY"), "{:?}", document.content);
-    assert_addition(
-        &document,
+    let page = &document.pages.as_ref().unwrap()[0];
+    for content in [&document.content, &page.content] {
+        let title = content.find(TITLE).expect("recovered title");
+        let sign = content.find("NORTH GATE 42").expect("recognized sign");
+        assert!(title < sign, "source title precedes the sign: {content:?}");
+    }
+    assert_body(
+        &document.content.replacen(TITLE_PARAGRAPH, "", 1),
         "5b429f4f81a26747baf73316a7400b5edf39313eff0ce8dc93db6539cbbe61ff",
+    );
+    assert_body(
+        &page.content.replacen(TITLE_PARAGRAPH, "", 1),
         "2b2f97eaeab18ccfa4ff22841fd76d969d241a34c948b0faab1844c32c20f6ac",
     );
 }
@@ -139,22 +152,12 @@ async fn leaves_requested_document_structure_untouched() {
 }
 
 fn remove_markdown_title(document: &mut ExtractedDocument) {
-    let before = document
-        .content
-        .strip_suffix("\n\nSECTION TITLE\n")
-        .expect("append only the certified title paragraph to the original Markdown");
-    assert!(!before.contains(TITLE));
-    document.content = format!("{before}\n");
+    document.content = remove_positioned_photo_title(&document.content);
     let [page] = document.pages.as_deref_mut().expect("requested pages") else {
         panic!("one standalone PNG page")
     };
     assert_eq!(page.page_number, 1);
-    let before = page
-        .content
-        .strip_suffix(TITLE_SUFFIX)
-        .expect("retain the entire raw page before the title");
-    assert!(!before.contains(TITLE));
-    page.content.truncate(before.len());
+    page.content = remove_positioned_photo_title(&page.content);
 }
 
 fn markdown_config() -> ExtractionConfig {

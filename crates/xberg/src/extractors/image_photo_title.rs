@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -542,7 +543,70 @@ fn preserves_markdown_page(document: &InternalDocument) -> bool {
         })
 }
 
-pub(super) fn append(document: &mut InternalDocument, title: Title, output_format: &OutputFormat) {
+fn text_lines(text: &str) -> impl Iterator<Item = (usize, &str)> + Clone {
+    text.split_inclusive('\n')
+        .scan(0, |offset, line| {
+            let start = *offset;
+            *offset += line.len();
+            Some((start, line.trim()))
+        })
+        .filter(|(_, line)| !line.is_empty())
+}
+
+fn matching_line<'a, Position: Copy>(
+    mut lines: impl Iterator<Item = (Position, &'a str)> + Clone,
+    recognized: &[&str],
+    anchor: usize,
+) -> Option<Position> {
+    if lines.clone().map(|(_, line)| line).eq(recognized.iter().copied()) {
+        return lines.nth(anchor).map(|(position, _)| position);
+    }
+
+    // If the renderer regrouped or removed lines, a repeated label cannot identify an occurrence.
+    let target = recognized[anchor];
+    if recognized.iter().filter(|&&line| line == target).count() != 1 {
+        return None;
+    }
+    let mut matches = lines.filter_map(|(position, line)| (line == target).then_some(position));
+    let first = matches.next()?;
+    matches.next().is_none().then_some(first)
+}
+
+fn title_insertion(
+    page: &str,
+    elements: &[InternalElement],
+    ocr_elements: &[OcrElement],
+    bounds: Rect,
+) -> Option<(usize, (usize, usize))> {
+    let page_lines = text_lines(page);
+    let element_lines = elements
+        .iter()
+        .enumerate()
+        .flat_map(|(index, element)| text_lines(&element.text).map(move |(offset, line)| ((index, offset), line)));
+    let emitted: HashSet<_> = page_lines
+        .clone()
+        .map(|(_, line)| line)
+        .chain(element_lines.clone().map(|(_, line)| line))
+        .collect();
+    let lines = ocr_elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Line && !element.text.trim().is_empty());
+    let anchor = lines.clone().position(|element| {
+        Rect::from_word(element).is_some_and(|line| line.top >= bounds.bottom) && emitted.contains(element.text.trim())
+    })?;
+    let recognized: Vec<_> = lines.map(|element| element.text.trim()).collect();
+    let page_offset = matching_line(page_lines, &recognized, anchor)?;
+    let (index, offset) = matching_line(element_lines, &recognized, anchor)?;
+    let element = &elements[index];
+    if offset != 0
+        && (element.kind != ElementKind::Paragraph || !element.annotations.is_empty() || element.attributes.is_some())
+    {
+        return None;
+    }
+    Some((page_offset, (index, offset)))
+}
+
+pub(super) fn place(document: &mut InternalDocument, title: Title, output_format: &OutputFormat) {
     // Tagged elements would make Markdown rerender the page instead of keeping its raw OCR body.
     if *output_format == OutputFormat::Markdown && !preserves_markdown_page(document) {
         return;
@@ -561,13 +625,10 @@ pub(super) fn append(document: &mut InternalDocument, title: Title, output_forma
     {
         return;
     }
-    if !page.content.ends_with('\n') {
-        page.content.push('\n');
-    }
-    if !page.content.ends_with("\n\n") {
-        page.content.push('\n');
-    }
-    page.content.push_str(&title.text);
+    let insertion = document
+        .prebuilt_ocr_elements
+        .as_deref()
+        .and_then(|ocr_elements| title_insertion(&page.content, &document.elements, ocr_elements, title.bounds));
     let mut element = InternalElement::text(ElementKind::Paragraph, title.text, 0);
     element.bbox = Some(BoundingBox {
         x0: title.bounds.left.into(),
@@ -575,6 +636,23 @@ pub(super) fn append(document: &mut InternalDocument, title: Title, output_forma
         x1: title.bounds.right.into(),
         y1: title.bounds.bottom.into(),
     });
+    if let Some((page_offset, (index, offset))) = insertion {
+        let paragraph = format!("{}\n\n", element.text);
+        page.content.insert_str(page_offset, &paragraph);
+        if offset == 0 {
+            document.elements.insert(index, element);
+        } else {
+            document.elements[index].text.insert_str(offset, &paragraph);
+        }
+        return;
+    }
+    if !page.content.ends_with('\n') {
+        page.content.push('\n');
+    }
+    if !page.content.ends_with("\n\n") {
+        page.content.push('\n');
+    }
+    page.content.push_str(&element.text);
     document.push_element(element);
 }
 
@@ -626,6 +704,36 @@ mod tests {
         right: 280,
         bottom: 250,
     };
+
+    fn line(text: &str, top: u32) -> OcrElement {
+        OcrElement::new(
+            text,
+            OcrBoundingGeometry::Rectangle {
+                left: 100,
+                top,
+                width: 90,
+                height: 20,
+            },
+            OcrConfidence::from_tesseract(98.0),
+        )
+        .with_level(OcrElementLevel::Line)
+    }
+
+    #[test]
+    fn places_title_before_a_repeated_line_inside_a_paragraph() {
+        let page = "Same\n\nSame";
+        let elements = [InternalElement::text(ElementKind::Paragraph, "Same\nSame", 0)];
+        let recognized = [line("Same", 150), line("Same", 300)];
+        assert_eq!(title_insertion(page, &elements, &recognized, CROP), Some((6, (0, 5))));
+    }
+
+    #[test]
+    fn skips_a_recognized_line_absent_from_both_outputs() {
+        let page = "Above\n\nBelow";
+        let elements = [InternalElement::text(ElementKind::Paragraph, "Above\nBelow", 0)];
+        let recognized = [line("Above", 150), line("Filtered", 300), line("Below", 400)];
+        assert_eq!(title_insertion(page, &elements, &recognized, CROP), Some((7, (0, 6))));
+    }
 
     #[test]
     fn protects_different_confident_primary_words_in_the_title_envelope() {
