@@ -60,9 +60,18 @@ fn in_pinned_child() -> bool {
 }
 
 async fn extract(pdf: &[u8], ocr: Option<OcrConfig>) -> ExtractedDocument {
+    extract_with_structure(pdf, ocr, false).await
+}
+
+async fn extract_with_structure(
+    pdf: &[u8],
+    ocr: Option<OcrConfig>,
+    include_document_structure: bool,
+) -> ExtractedDocument {
     let config = ExtractionConfig {
         force_ocr: true,
         use_cache: false,
+        include_document_structure,
         ocr,
         pages: Some(xberg::core::config::PageConfig {
             extract_pages: true,
@@ -85,6 +94,11 @@ fn assert_tables(document: &ExtractedDocument, expected: &[Vec<Vec<String>>], fr
     let [page] = document.pages.as_deref().unwrap() else {
         panic!("one extracted page")
     };
+    assert_eq!(page.tables.len(), document.tables.len());
+    for (table, page_table) in document.tables.iter().zip(&page.tables) {
+        assert_eq!(table.cells, page_table.cells);
+        assert_eq!(table.bounding_box, page_table.bounding_box);
+    }
     for (table, expected) in document.tables.iter().zip(expected) {
         assert_eq!(table.page_number, 1);
         assert_eq!(&table.cells, expected);
@@ -115,6 +129,31 @@ fn assert_tables(document: &ExtractedDocument, expected: &[Vec<Vec<String>>], fr
     );
 }
 
+#[cfg(feature = "paddle-ocr-ort")]
+fn assert_detached_upright_structure(document: &ExtractedDocument) {
+    let structure = serde_json::to_value(document.document.as_ref().expect("requested structure")).unwrap();
+    let nodes = structure["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2);
+    let source_rectangles = [[38.4, 459.84, 475.2, 742.08], [38.4, 75.84, 475.2, 358.08]];
+    for ((node, table), expected) in nodes.iter().zip(&document.tables).zip(source_rectangles) {
+        let bbox = table.bounding_box.unwrap();
+        for (actual, expected) in [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().zip(expected) {
+            assert!(
+                (actual - expected).abs() < 0.01,
+                "point coordinate {actual} != {expected}"
+            );
+        }
+        assert_eq!(node["content"]["node_type"], "table");
+        let cells = node["content"]["grid"]["cells"].as_array().unwrap();
+        assert_eq!(cells.len(), 80);
+        for (cell, text) in cells.iter().zip(table.cells.iter().flatten()) {
+            assert_eq!(cell["content"], *text);
+            assert!(cell.get("bbox").is_none_or(serde_json::Value::is_null));
+        }
+        assert_eq!(node["bbox"], serde_json::to_value(bbox).unwrap());
+    }
+}
+
 #[tokio::test]
 async fn implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence() {
     if !in_pinned_child() {
@@ -125,6 +164,12 @@ async fn implicit_rotation_retains_primary_when_two_tables_lack_complete_primary
     assert_eq!(expected.iter().map(Vec::len).collect::<Vec<_>>(), [20, 20]);
     let upright = include_bytes!("fixtures/ocr/multitable_orientation_2497/two-tables-0.pdf");
     assert_tables(&extract(upright, None).await, &expected, (612.48, 792.));
+    #[cfg(feature = "paddle-ocr-ort")]
+    {
+        let structured = extract_with_structure(upright, None, true).await;
+        assert_tables(&structured, &expected, (612.48, 792.));
+        assert_detached_upright_structure(&structured);
+    }
     for rotated in [
         include_bytes!("fixtures/ocr/multitable_orientation_2497/two-tables-90.pdf").as_slice(),
         include_bytes!("fixtures/ocr/multitable_orientation_2497/two-tables-270.pdf").as_slice(),
