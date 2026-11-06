@@ -53,6 +53,36 @@ fn sparse_image_recovers_rows_without_correcting_the_recognized_amount() {
 }
 
 #[test]
+fn accepted_tinted_table_keeps_the_header_and_first_record_separate() {
+    let image = include_bytes!("fixtures/ocr_source_row_layout_2432/image-20-tinted.png");
+    let mut expected = include_str!("fixtures/ocr_source_row_layout_2432/image-20-tinted-source-rows.tsv")
+        .lines()
+        .map(|row| row.split('\t').collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    assert_eq!(expected.len(), 13);
+    assert_eq!(expected[1], ["Signal timing", "59", "860,596", "(3,091)"]);
+    expected[1][1] = "BY)";
+
+    let result = helpers::extract_bytes_document_blocking(image, "image/png", &config()).unwrap();
+    assert!(result.metadata.ocr_used);
+    let [table] = result.tables.as_slice() else {
+        panic!("expected one recognized standalone table");
+    };
+    assert_eq!(table.cells.len(), 13, "header and twelve source rows");
+    assert_eq!(table.cells, expected);
+    let [page] = result.pages.as_deref().expect("requested page output") else {
+        panic!("expected one page");
+    };
+    let [page_table] = page.tables.as_slice() else {
+        panic!("expected one page table");
+    };
+    assert_eq!(page_table.cells, expected);
+    let expected_text = expected.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    assert_eq!(result.content.trim(), expected_text);
+    assert_eq!(page.content.trim(), expected_text);
+}
+
+#[test]
 fn explicit_sparse_mode_and_disabled_tables_keep_standalone_rows_unassociated() {
     for mode in [Some(11), None] {
         let mut config = config();

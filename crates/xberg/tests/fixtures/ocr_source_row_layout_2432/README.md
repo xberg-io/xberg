@@ -9,3 +9,9 @@ standalone plain image, without leaders or grid. SHA-256
 The twelve independent source rows are in `image-11-source-rows.tsv`.
 The OCR regression expects the recognized `(1.463)` to remain literal in
 the correct row. The source cell is `(1,463)`.
+
+`image-20-tinted.png` is the reporter generator's tinted 20 px DejaVu Sans
+standalone image, without leaders or grid. SHA-256
+`1acaf47a4e0604ffd9768f66b3bfbf00446f1d4e39c1abdad9bed94e3f0ab331`.
+`image-20-tinted-source-rows.tsv` records the 12 source rows. The OCR
+regression preserves the first count as recognized (`BY)` for source `59`).
