@@ -1048,6 +1048,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_words_covered_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_ink_owned_pages = ahash::AHashSet::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let native_coverage_layers = page_layers.as_ref().filter(|_| {
         all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
             && !probing_hidden_layer
@@ -1324,6 +1326,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         if read_evidence.complete_native_words {
                             native_words_covered_pages.insert(page_number);
                         }
+                        if read_evidence.native_ink_owned {
+                            native_ink_owned_pages.insert(page_number);
+                        }
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
@@ -1492,6 +1497,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         original_tesseract_raster_pages.insert(page_number);
                         if read_evidence.complete_native_words {
                             native_words_covered_pages.insert(page_number);
+                        }
+                        if read_evidence.native_ink_owned {
+                            native_ink_owned_pages.insert(page_number);
                         }
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
@@ -2051,6 +2059,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     alternative_raster_pages.insert(page_number);
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     native_words_covered_pages.remove(&page_number);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    native_ink_owned_pages.remove(&page_number);
                     // The render's paragraphs, confidence and word count describe the blank
                     // render, not the recovered text.
                     let recovered_paragraphs =
@@ -2262,6 +2272,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
             });
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            if native_ink_owned_pages.contains(page_number)
+                && super::document::native_preservation_is_automatic(config, *page_number)
+                && !noise_verdict_pages.contains(page_number)
+                && layers
+                    .get(page_number)
+                    .is_some_and(|layer| super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds))
+            {
+                complete_native_pages.insert(*page_number);
+            }
             if native_preservation_enabled
                 && super::document::native_preservation_is_automatic(config, *page_number)
                 && !noise_verdict_pages.contains(page_number)
@@ -2464,7 +2484,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     return true;
                 }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                if native_words_covered_pages.contains(&page) {
+                if native_words_covered_pages.contains(&page) || native_ink_owned_pages.contains(&page) {
                     return super::native_word_coverage::has_only_certified_tesseract_text(doc)
                         && super::document::ocr_elements_follow_text(doc, text);
                 }
@@ -3192,6 +3212,8 @@ pub(super) struct OcrReadEvidence {
     discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     complete_native_words: bool,
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    native_ink_owned: bool,
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -3670,6 +3692,8 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut pages_with_recovered_xobject_payload = vec![false; total_pages];
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     let mut complete_native_words = false;
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_ink_owned = false;
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let tall_source_used = false;
     #[cfg(all(
@@ -4424,6 +4448,14 @@ pub(super) async fn extract_with_ocr_for_page(
                     layer,
                     &ocr_result,
                 );
+                native_ink_owned = !complete_native_words
+                    && super::native_word_coverage::native_text_paints_all_read_ink(
+                        source.document,
+                        document_page_idx,
+                        layer,
+                        &ocr_result,
+                        super::hidden_layer::preview_byte_limit(config),
+                    );
             }
             crate::extraction::derive::adopt_public_ocr_document(
                 &mut ocr_result,
@@ -5651,6 +5683,8 @@ pub(super) async fn extract_with_ocr_for_page(
             discarded_visible_native_page,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             complete_native_words,
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            native_ink_owned,
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {

@@ -197,6 +197,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Return a native page's text once when automatic OCR only re-reads its ink.** (#2534)
+  When every word Tesseract read lies on a native text line, shows glyph ink and sits on a background that only glyphs vary, the native page replaces the read even where the words differ.
+  Words over rasters, outlines, rules, partial fills or overpaint keep their OCR alternative.
+
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
 

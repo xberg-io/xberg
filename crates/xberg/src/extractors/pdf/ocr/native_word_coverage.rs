@@ -56,6 +56,98 @@ pub(super) fn covers_complete_native_page(
         })
 }
 
+/// Luminance difference, on a 0-255 scale, that makes a pixel visibly differ from its surround.
+const MIN_VISIBLE_CONTRAST: u8 = 51;
+/// Resolution of the two rasters that tell glyph ink from every other mark. Word boxes are tested
+/// in points, so the resolution only has to resolve a glyph; it is not an OCR resolution.
+const INK_PROOF_DPI: u32 = 144;
+
+/// Whether the native text paints all the ink that a Tesseract read of the page sits on, for a
+/// read whose words do not literally equal the native words. Every iterator word must lie in a
+/// native text line, show glyph ink, and hold no mark that is not a glyph, so the read can only
+/// be a second reading of ink the native text already holds. A word that differs from the native
+/// word at its place is still a reading of that ink; a word over a raster, an outline, a rule or
+/// a fill is not provably one.
+pub(super) fn native_text_paints_all_read_ink(
+    pdf: &PdfDocument,
+    page_index: usize,
+    layer: &str,
+    read: &ExtractedDocument,
+    max_working_bytes: usize,
+) -> bool {
+    if layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+        return false;
+    }
+    let Some(elements) = read.ocr_elements.as_deref() else {
+        return false;
+    };
+    let words = || elements.iter().filter(|element| element.level == OcrElementLevel::Word);
+    if words().next().is_none()
+        || !words().all(is_iterator_word)
+        || !read.content.split_whitespace().eq(words().map(|word| word.text.trim()))
+    {
+        return false;
+    }
+    let Some(raster) = processed_ocr_layout_dimensions(&read.metadata) else {
+        return false;
+    };
+    let Ok(info) = pdf.get_page_info(page_index) else {
+        return false;
+    };
+    let media = info.media_box;
+    if info.rotation != 0 || media.x != 0.0 || media.y != 0.0 || info.crop_box.is_some_and(|crop| crop != media) {
+        return false;
+    }
+    let Ok(lines) = pdf.extract_text_lines(page_index) else {
+        return false;
+    };
+    let line_boxes: Vec<LineBox> = lines.iter().map(|line| native_box(line.bbox)).collect();
+    let Ok(rasters) =
+        xberg_native_pdf::rendering::render_text_ink_rasters(pdf, page_index, INK_PROOF_DPI, max_working_bytes)
+    else {
+        return false;
+    };
+    let scale = INK_PROOF_DPI as f32 / 72.0;
+    words().all(|word| {
+        ocr_word_in_page_points(word, raster, media).is_some_and(|placed| {
+            line_boxes.iter().any(|line| line.owns(&placed)) && glyph_ink_only(&rasters, &placed, media, scale)
+        })
+    })
+}
+
+fn glyph_ink_only(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    placed: &LineBox,
+    media: Rect,
+    scale: f32,
+) -> bool {
+    let (width, height) = (rasters.width as usize, rasters.height as usize);
+    let columns = (placed.left * scale).floor().max(0.0) as usize..((placed.right * scale).ceil() as usize).min(width);
+    let rows = ((media.height - placed.bottom) * scale).floor().max(0.0) as usize
+        ..(((media.height - placed.top) * scale).ceil() as usize).min(height);
+    if columns.is_empty() || rows.is_empty() {
+        return false;
+    }
+    let spread = |raster: &[u8]| {
+        let (mut low, mut high) = (u8::MAX, u8::MIN);
+        for row in rows.clone() {
+            for &value in &raster[row * width + columns.start..row * width + columns.end] {
+                low = low.min(value);
+                high = high.max(value);
+            }
+        }
+        high.saturating_sub(low)
+    };
+    let drawn_over_glyph_free = rows.clone().any(|row| {
+        let at = row * width;
+        rasters.drawn[at + columns.start..at + columns.end]
+            .iter()
+            .zip(&rasters.without_glyphs[at + columns.start..at + columns.end])
+            .any(|(drawn, bare)| drawn.abs_diff(*bare) >= MIN_VISIBLE_CONTRAST)
+    });
+    spread(&rasters.without_glyphs) < MIN_VISIBLE_CONTRAST && drawn_over_glyph_free
+}
+
 fn is_iterator_word(word: &OcrElement) -> bool {
     word.backend_metadata.get("backend").and_then(serde_json::Value::as_str) == Some("tesseract-iterator")
 }
@@ -157,5 +249,188 @@ mod tests {
 
         doc.elements[0].kind = ElementKind::Heading { level: 1 };
         assert!(!has_only_certified_tesseract_text(&doc));
+    }
+
+    mod ink_ownership {
+        use super::*;
+        use crate::types::Metadata;
+
+        const PAGE: (f32, f32) = (612.0, 792.0);
+        const SCALE: f32 = 2.0;
+        const WORKING_BYTES: usize = 64 << 20;
+
+        fn pdf_with(extra_content: &str) -> PdfDocument {
+            pdf_between("", extra_content)
+        }
+
+        fn pdf_between(under_text: &str, over_text: &str) -> PdfDocument {
+            use lopdf::{Document, Object, Stream, dictionary};
+
+            let content = format!(
+                "{under_text}\nBT /F1 12 Tf 72 700 Td (mov eax, ebx) Tj ET\nBT /F1 12 Tf 72 680 Td (call puts) Tj ET\n{over_text}"
+            );
+            let mut document = Document::with_version("1.5");
+            let pages_id = document.new_object_id();
+            let font_id = document.add_object(dictionary! {
+                "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Courier",
+            });
+            let content_id = document.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+            let page_id = document.add_object(dictionary! {
+                "Type" => "Page",
+                "Parent" => pages_id,
+                "Contents" => content_id,
+                "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+                "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+            });
+            document.objects.insert(
+                pages_id,
+                Object::Dictionary(dictionary! {
+                    "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1,
+                }),
+            );
+            let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+            document.trailer.set("Root", catalog_id);
+            let mut bytes = Vec::new();
+            document.save_to(&mut bytes).unwrap();
+            PdfDocument::from_bytes(bytes).unwrap()
+        }
+
+        fn iterator_word(text: &str, placed: Rect) -> OcrElement {
+            let raster_height = PAGE.1 * SCALE;
+            OcrElement {
+                text: text.to_owned(),
+                level: OcrElementLevel::Word,
+                geometry: OcrBoundingGeometry::Rectangle {
+                    left: (placed.x * SCALE) as u32,
+                    top: (raster_height - (placed.y + placed.height) * SCALE) as u32,
+                    width: (placed.width * SCALE) as u32,
+                    height: (placed.height * SCALE) as u32,
+                },
+                backend_metadata: [("backend".to_owned(), serde_json::json!("tesseract-iterator"))].into(),
+                ..Default::default()
+            }
+        }
+
+        fn read_of(words: Vec<OcrElement>) -> ExtractedDocument {
+            let mut metadata = Metadata::default();
+            metadata.additional.insert(
+                OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(),
+                serde_json::json!((PAGE.0 * SCALE) as u32),
+            );
+            metadata.additional.insert(
+                OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(),
+                serde_json::json!((PAGE.1 * SCALE) as u32),
+            );
+            ExtractedDocument {
+                content: words
+                    .iter()
+                    .map(|word| word.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                ocr_elements: Some(words),
+                metadata,
+                ..Default::default()
+            }
+        }
+
+        fn native_word_boxes(pdf: &PdfDocument) -> Vec<(String, Rect)> {
+            pdf.extract_text_lines(0)
+                .unwrap()
+                .iter()
+                .flat_map(|line| line.words.iter().map(|word| (word.text.clone(), word.bbox)))
+                .collect()
+        }
+
+        fn owns(pdf: &PdfDocument, read_texts: Option<&[&str]>) -> bool {
+            let boxes = native_word_boxes(pdf);
+            assert_eq!(boxes.len(), 5, "mov eax, ebx / call puts: {boxes:?}");
+            let words = boxes
+                .iter()
+                .enumerate()
+                .map(|(at, (text, placed))| iterator_word(read_texts.map_or(text.as_str(), |texts| texts[at]), *placed))
+                .collect();
+            native_text_paints_all_read_ink(pdf, 0, "mov eax, ebx\ncall puts", &read_of(words), WORKING_BYTES)
+        }
+
+        #[test]
+        fn should_own_a_read_whose_words_differ_from_the_native_words_it_sits_on() {
+            let pdf = pdf_with("");
+            assert!(owns(&pdf, None));
+            assert!(owns(&pdf, Some(&["rnov", "eax.", "ebx", "ca11", "puts"])));
+        }
+
+        #[test]
+        fn should_not_own_a_word_over_a_fill_that_ends_inside_it() {
+            let pdf = pdf_between("0.6 g 72 696 10 14 re f 0 g", "");
+            assert!(!owns(&pdf, None));
+        }
+
+        #[test]
+        fn should_own_text_on_a_flat_shaded_background() {
+            let pdf = pdf_between("0.6 g 60 670 200 45 re f 0 g", "");
+            assert!(owns(&pdf, None));
+        }
+
+        #[test]
+        fn should_not_own_a_word_painted_over_by_an_opaque_rectangle() {
+            let pdf = pdf_with("1 g 72 696 43 14 re f");
+            assert!(!owns(&pdf, None));
+        }
+
+        #[test]
+        fn should_not_own_a_word_struck_by_a_vector_stroke() {
+            let pdf = pdf_with("0 G 1 w 70 702 m 130 702 l S");
+            assert!(!owns(&pdf, None));
+        }
+
+        #[test]
+        fn should_not_own_a_stroked_box_outside_every_native_line() {
+            let pdf = pdf_with("0 G 1 w 150 676 m 190 676 l 190 690 l 150 690 l h S");
+            let mut boxes = native_word_boxes(&pdf);
+            let outlined = Rect {
+                x: 150.0,
+                y: 676.0,
+                width: 40.0,
+                height: 14.0,
+            };
+            boxes.push(("outlined".into(), outlined));
+            let words = boxes
+                .iter()
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
+            assert!(!native_text_paints_all_read_ink(
+                &pdf,
+                0,
+                "mov eax, ebx\ncall puts",
+                &read_of(words),
+                WORKING_BYTES,
+            ));
+        }
+
+        #[test]
+        fn should_not_own_a_word_on_blank_paper_inside_a_native_line() {
+            let pdf = pdf_with("");
+            let boxes = native_word_boxes(&pdf);
+            let (first, second) = (boxes[0].1, boxes[1].1);
+            let gap = Rect {
+                x: first.x + first.width + 1.0,
+                y: first.y,
+                width: second.x - first.x - first.width - 2.0,
+                height: first.height,
+            };
+            assert!(gap.width > 1.0, "{first:?} {second:?}");
+            let mut words: Vec<_> = boxes
+                .iter()
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
+            words.push(iterator_word("ghost", gap));
+            assert!(!native_text_paints_all_read_ink(
+                &pdf,
+                0,
+                "mov eax, ebx\ncall puts",
+                &read_of(words),
+                WORKING_BYTES,
+            ));
+        }
     }
 }
