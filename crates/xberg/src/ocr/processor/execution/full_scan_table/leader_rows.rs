@@ -11,7 +11,8 @@ use xberg_tesseract::Pix;
 
 const MIN_LEADER_DOTS: usize = 5;
 const MAX_LEADER_CROP_PIXELS: usize = 32_768;
-const DOT_TO_TEXT_HEIGHT_DIVISOR: u32 = 3;
+const DOT_TO_TEXT_HEIGHT_DIVISOR: usize = 3;
+const MAX_DOT_ASPECT_RATIO: usize = 2;
 
 // Reuse the actual deskewed recognition frame, retaining only a bounded 1-bpp Pix. ~keep
 pub(in crate::ocr::processor::execution) fn can_hold_leader_raster(
@@ -192,52 +193,75 @@ struct InkRun {
     count: usize,
 }
 
-fn column_ink_runs(pixels: &[u8], width: usize) -> Vec<InkRun> {
-    let mut runs: Vec<InkRun> = Vec::new();
-    for x in 0..width {
-        let mut ink = pixels.chunks_exact(width).enumerate().filter(|(_, row)| row[x] != 0);
-        let Some((top, _)) = ink.next() else { continue };
-        let (bottom, count) = ink.fold((top + 1, 1), |(_, count), (y, _)| (y + 1, count + 1));
-        if let Some(run) = runs.last_mut().filter(|run| run.right == x) {
+impl InkRun {
+    fn width(&self) -> usize {
+        self.right - self.left
+    }
+
+    fn is_compact(&self, max_dot: usize) -> bool {
+        let width = self.width();
+        let height = self.bottom - self.top;
+        let longer = width.max(height);
+        longer <= max_dot && longer <= width.min(height) * MAX_DOT_ASPECT_RATIO && self.count * 4 >= width * height * 3
+    }
+}
+
+fn column_ink_runs(pixels: &[u8], width: usize) -> impl Iterator<Item = InkRun> {
+    let mut columns = (0..width)
+        .filter_map(move |x| {
+            let mut ink = pixels.chunks_exact(width).enumerate().filter(|(_, row)| row[x] != 0);
+            let (top, _) = ink.next()?;
+            let (bottom, count) = ink.fold((top + 1, 1), |(_, count), (y, _)| (y + 1, count + 1));
+            Some((x, top, bottom, count))
+        })
+        .peekable();
+    std::iter::from_fn(move || {
+        let (left, top, bottom, count) = columns.next()?;
+        let mut run = InkRun {
+            left,
+            right: left + 1,
+            top,
+            bottom,
+            count,
+        };
+        while let Some((_, top, bottom, count)) = columns.next_if(|column| column.0 == run.right) {
             run.right += 1;
             run.top = run.top.min(top);
             run.bottom = run.bottom.max(bottom);
             run.count += count;
-        } else {
-            runs.push(InkRun {
-                left: x,
-                right: x + 1,
-                top,
-                bottom,
-                count,
-            });
         }
-    }
-    runs
+        Some(run)
+    })
 }
 
 fn regular_dot_runs(pixels: &[u8], width: usize, text_height: usize) -> bool {
-    let runs = column_ink_runs(pixels, width);
-    if runs.len() < MIN_LEADER_DOTS {
+    let mut runs = column_ink_runs(pixels, width);
+    let Some(mut previous) = runs.next() else { return false };
+    let max_dot = (text_height / DOT_TO_TEXT_HEIGHT_DIVISOR).max(1);
+    if !previous.is_compact(max_dot) {
         return false;
     }
-    let max_dot = (text_height / DOT_TO_TEXT_HEIGHT_DIVISOR as usize).max(1);
-    let compact = runs.iter().all(|run| {
-        let width = run.right - run.left;
-        let height = run.bottom - run.top;
-        width <= max_dot && height <= max_dot && run.count * 4 >= width * height * 3
-    });
-    let shared_top = runs.iter().map(|run| run.top).max().unwrap_or_default();
-    let shared_bottom = runs.iter().map(|run| run.bottom).min().unwrap_or_default();
-    let advance = runs[1].left - runs[0].left;
-    compact
-        && shared_top < shared_bottom
-        && runs.windows(2).all(|pair| {
-            let gap = pair[1].left - pair[0].right;
-            let step = pair[1].left - pair[0].left;
-            gap >= (pair[0].right - pair[0].left).max(pair[1].right - pair[1].left)
-                && step.abs_diff(advance) <= (advance / 5).max(1)
-        })
+    let mut shared_top = previous.top;
+    let mut shared_bottom = previous.bottom;
+    let mut count = 1;
+    let mut advance = None;
+    for run in runs {
+        let gap = run.left - previous.right;
+        let step = run.left - previous.left;
+        let first_step = *advance.get_or_insert(step);
+        shared_top = shared_top.max(run.top);
+        shared_bottom = shared_bottom.min(run.bottom);
+        if !run.is_compact(max_dot)
+            || shared_top >= shared_bottom
+            || gap < previous.width().max(run.width())
+            || step.abs_diff(first_step) > (first_step / 5).max(1)
+        {
+            return false;
+        }
+        previous = run;
+        count += 1;
+    }
+    count >= MIN_LEADER_DOTS
 }
 
 #[cfg(test)]
@@ -264,6 +288,18 @@ mod tests {
     }
 
     #[test]
+    fn raster_proof_rejects_regular_horizontal_dashes() {
+        let mut dashes = vec![0; 80 * 12];
+        for x in (3..73).step_by(12) {
+            for y in 5..7 {
+                dashes[y * 80 + x..y * 80 + x + 6].fill(1);
+            }
+        }
+        assert_eq!(column_ink_runs(&dashes, 80).count(), 6);
+        assert!(!regular_dot_runs(&dashes, 80, 27));
+    }
+
+    #[test]
     fn raster_proof_rejects_true_small_text() {
         let bytes = include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -274,7 +310,7 @@ mod tests {
             .flat_map(|y| (10..106).map(move |x| (x, y)))
             .map(|(x, y)| u8::from(image.get_pixel(x, y).0[0] < 130))
             .collect();
-        assert!(column_ink_runs(&pixels, 96).len() >= MIN_LEADER_DOTS);
+        assert!(column_ink_runs(&pixels, 96).count() >= MIN_LEADER_DOTS);
         assert!(!regular_dot_runs(&pixels, 96, 27));
     }
 }
