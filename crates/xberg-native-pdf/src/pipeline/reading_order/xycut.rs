@@ -773,7 +773,7 @@ impl XYCutStrategy {
                     return None;
                 }
                 // Parallel legend entries are independent rows even if the font marks every entry bold.
-                if super::xycut_legend::is_paired_definition_run(
+                if super::xycut_legend::is_paired_legend_run(
                     spans,
                     &order,
                     &span_indices,
@@ -3369,13 +3369,35 @@ mod tests {
     }
 
     #[test]
-    fn should_not_collapse_parallel_legend_definitions_into_a_heading() {
-        let spans = paired_legend_spans();
-        let runs = XYCutStrategy::new().find_heading_runs(&spans, Some(280.0));
-        assert!(
-            runs.is_empty(),
-            "each legend definition is a separate source entry: {runs:?}"
-        );
+    fn should_keep_geometrically_paired_legend_rows_separate_regardless_of_text() {
+        let cases = [
+            ("equals", ["", "", "", ""]),
+            (
+                "colon",
+                [
+                    "AB: Alpha bravo",
+                    "C: Charlie delta",
+                    "E: Echo foxtrot golf",
+                    "H: Hotel india",
+                ],
+            ),
+            ("digits", ["AB = Alpha 2", "", "E = Echo 17", ""]),
+            ("lowercase keys", ["ab = Alpha bravo", "", "e = Echo foxtrot golf", ""]),
+            ("heading text", ["Calibration and", "", "Reporting Limits", ""]),
+            ("formulas", ["A = sin x + cos y", "", "D = tan x + cot y", ""]),
+        ];
+        let merged: Vec<_> = cases
+            .into_iter()
+            .filter_map(|(case, texts)| {
+                let mut spans = paired_legend_spans();
+                for (span, text) in spans.iter_mut().zip(texts).filter(|(_, text)| !text.is_empty()) {
+                    span.text = text.into();
+                }
+                let runs = XYCutStrategy::new().find_heading_runs(&spans, Some(280.0));
+                (!runs.is_empty()).then_some((case, runs))
+            })
+            .collect();
+        assert!(merged.is_empty(), "paired rows merged: {merged:?}");
     }
 
     #[test]
@@ -3393,16 +3415,27 @@ mod tests {
         let mut wrapped_heading = paired_legend_spans();
         wrapped_heading[0].text = "Calibration and".into();
         wrapped_heading[2].text = "Reporting Limits".into();
+        wrapped_heading[0].font_size = 12.0;
+        wrapped_heading[2].font_size = 12.0;
         assert!(has_left_run(&wrapped_heading));
 
         let mut formulas = paired_legend_spans();
         formulas[0].text = "A = sin x + cos y".into();
         formulas[2].text = "D = tan x + cot y".into();
+        formulas[3].font_name = "Independent font".into();
         assert!(has_left_run(&formulas));
 
         let mut unaligned_right_track = paired_legend_spans();
         unaligned_right_track[3].bbox.x += 24.0;
         assert!(has_left_run(&unaligned_right_track));
+
+        let mut indented_continuation = paired_legend_spans();
+        indented_continuation[2].bbox.x += 4.0;
+        assert!(has_left_run(&indented_continuation));
+
+        let mut blank_right_entry = paired_legend_spans();
+        blank_right_entry[3].text = "   ".into();
+        assert!(has_left_run(&blank_right_entry));
     }
 
     #[test]
