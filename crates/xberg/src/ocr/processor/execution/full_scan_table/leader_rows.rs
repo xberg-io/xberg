@@ -12,7 +12,7 @@ use xberg_tesseract::Pix;
 const MIN_LEADER_DOTS: usize = 5;
 const MAX_LEADER_CROP_PIXELS: usize = 32_768;
 const DOT_TO_TEXT_HEIGHT_DIVISOR: usize = 3;
-const MAX_DOT_ASPECT_RATIO: usize = 2;
+const MAX_DOT_ASPECT_RATIO: (usize, usize) = (3, 2);
 
 // Reuse the actual deskewed recognition frame, retaining only a bounded 1-bpp Pix. ~keep
 pub(in crate::ocr::processor::execution) fn can_hold_leader_raster(
@@ -137,12 +137,14 @@ fn build_leader_grid(
     let mut tracks: Vec<_> = header.iter().map(|(_, word)| Track::new(horizontal(word))).collect();
     let mut grid = vec![header.iter().map(|(_, word)| word.text.clone()).collect()];
     let mut leaders = None;
-    // A label without ascenders or descenders is shorter than its leader dots' text height. ~keep
-    let text_height = body
+    // The median keeps a label without ascenders short of the reference without letting one stray tall box set it. ~keep
+    let mut heights: Vec<u32> = body
         .iter()
         .filter_map(|row| row.first())
         .map(|(_, label)| label.height)
-        .max()?;
+        .collect();
+    heights.sort_unstable();
+    let text_height = *heights.get(heights.len() / 2)?;
     for row in body {
         let [(_, label), (_, leader), values @ ..] = &**row else {
             return None;
@@ -208,7 +210,9 @@ impl InkRun {
         let width = self.width();
         let height = self.bottom - self.top;
         let longer = width.max(height);
-        longer <= max_dot && longer <= width.min(height) * MAX_DOT_ASPECT_RATIO && self.count * 4 >= width * height * 3
+        longer <= max_dot
+            && longer * MAX_DOT_ASPECT_RATIO.1 <= width.min(height) * MAX_DOT_ASPECT_RATIO.0
+            && self.count * 4 >= width * height * 3
     }
 }
 
@@ -305,30 +309,22 @@ mod tests {
         (None, word)
     }
 
-    #[test]
-    fn leader_proof_uses_the_tallest_label_height_in_the_table() {
-        let mut rows: Vec<Vec<Word>> = [("Item", 27), ("Tree", 27), ("our", 14), ("Fleet", 27)]
-            .iter()
-            .enumerate()
-            .map(|(index, (label, height))| {
-                if index == 0 {
-                    vec![
-                        word("Item", 0, 40, 20),
-                        word("Count", 100, 40, 20),
-                        word("Budget", 200, 40, 20),
-                        word("Change", 300, 40, 20),
-                    ]
-                } else {
-                    vec![
-                        word(label, 0, 40, *height),
-                        word("...", 60, 30, 5),
-                        word("10", 100, 30, 20),
-                        word("20", 200, 30, 20),
-                        word("30", 300, 30, 20),
-                    ]
-                }
-            })
-            .collect();
+    fn proof_heights(label_heights: &[u32]) -> Vec<u32> {
+        let mut rows: Vec<Vec<Word>> = vec![vec![
+            word("Item", 0, 40, 20),
+            word("Count", 100, 40, 20),
+            word("Budget", 200, 40, 20),
+            word("Change", 300, 40, 20),
+        ]];
+        rows.extend(label_heights.iter().map(|height| {
+            vec![
+                word("Tree", 0, 40, *height),
+                word("...", 60, 30, 5),
+                word("10", 100, 30, 20),
+                word("20", 200, 30, 20),
+                word("30", 300, 30, 20),
+            ]
+        }));
         let rows: Vec<&mut [Word]> = rows.iter_mut().map(Vec::as_mut_slice).collect();
         let mut heights = Vec::new();
         let grid = build_leader_grid(&rows, 100, |_, height| {
@@ -336,7 +332,39 @@ mod tests {
             Some(())
         });
         assert!(grid.is_some());
-        assert_eq!(heights, [27, 27, 27]);
+        heights
+    }
+
+    #[test]
+    fn leader_proof_uses_the_median_label_height_in_the_table() {
+        assert_eq!(proof_heights(&[27, 27, 14, 27]), [27, 27, 27, 27]);
+    }
+
+    #[test]
+    fn one_stray_tall_label_does_not_inflate_the_dot_limit() {
+        let heights = proof_heights(&[27, 27, 60, 27, 27]);
+        assert_eq!(heights, [27; 5]);
+        let mut blob = vec![0; 160 * 20];
+        for x in (3..140).step_by(32) {
+            for y in 2..17 {
+                for x in x..x + 15 {
+                    blob[y * 160 + x] = 1;
+                }
+            }
+        }
+        assert!(!regular_dot_runs(&blob, 160, heights[0] as usize));
+        assert!(regular_dot_runs(&blob, 160, 60));
+    }
+
+    #[test]
+    fn raster_proof_rejects_four_by_two_hyphen_marks() {
+        let mut hyphens = vec![0; 80 * 12];
+        for x in (3..70).step_by(8) {
+            for y in 5..7 {
+                hyphens[y * 80 + x..y * 80 + x + 4].fill(1);
+            }
+        }
+        assert!(!regular_dot_runs(&hyphens, 80, 27));
     }
 
     #[test]
