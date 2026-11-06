@@ -52,6 +52,8 @@ pub(crate) enum ImageOcrPolicy {
     Default,
     BoundedInferredUpscale,
     StandaloneDotLeaderRows,
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    StandaloneSparseRows,
 }
 
 impl OcrProcessor {
