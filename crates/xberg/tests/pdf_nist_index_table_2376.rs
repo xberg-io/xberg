@@ -105,7 +105,7 @@ fn native_wide_ruled_admission_declines_clipped_transparent_or_dashed_boundaries
             );
         }
         let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
-        let content = pdf.get_page_content(page).unwrap();
+        let content = pdf.get_page_content(page);
         let wrapped = [prefix, content.as_slice(), b"\nQ\n"].concat();
         pdf.get_object_mut(stream)
             .unwrap()
