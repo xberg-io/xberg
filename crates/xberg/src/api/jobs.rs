@@ -2,15 +2,16 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use moka::Expiry;
 use moka::ops::compute::{CompResult, Op};
 use moka::sync::Cache;
 
 use crate::api::types::{JobState, JobStatus};
 use crate::cancellation::CancellationToken;
 
-/// Default time-to-live for completed/failed jobs (5 minutes).
+/// Time-to-live for completed/failed/cancelled jobs (5 minutes).
 const JOB_TTL: Duration = Duration::from_secs(300);
 
 /// Maximum number of concurrent jobs held in the cache.
@@ -19,10 +20,40 @@ const MAX_CAPACITY: u64 = 10_000;
 /// Maximum number of jobs in Pending or Running state at any one time.
 pub const MAX_ACTIVE_JOBS: usize = 100;
 
+/// Expires finished jobs `ttl` after they finish. Pending and running jobs do not expire.
+struct JobExpiry {
+    ttl: Duration,
+}
+
+impl JobExpiry {
+    fn ttl_for(&self, status: &JobStatus) -> Option<Duration> {
+        match status.state {
+            JobState::Pending | JobState::Running => None,
+            JobState::Completed | JobState::Failed | JobState::Cancelled => Some(self.ttl),
+        }
+    }
+}
+
+impl Expiry<String, JobStatus> for JobExpiry {
+    fn expire_after_create(&self, _key: &String, value: &JobStatus, _created_at: Instant) -> Option<Duration> {
+        self.ttl_for(value)
+    }
+
+    fn expire_after_update(
+        &self,
+        _key: &String,
+        value: &JobStatus,
+        _updated_at: Instant,
+        _duration_until_expiry: Option<Duration>,
+    ) -> Option<Duration> {
+        self.ttl_for(value)
+    }
+}
+
 /// Thread-safe in-memory store for async extraction jobs.
 ///
-/// Uses [`moka::sync::Cache`] with built-in TTL eviction — no background
-/// eviction task required. Entries are evicted automatically after 5 minutes.
+/// Uses [`moka::sync::Cache`] with per-entry expiry — no background eviction
+/// task required. Finished jobs are evicted 5 minutes after they finish.
 /// Server restarts clear all active jobs.
 #[derive(Clone)]
 pub struct JobStore {
@@ -40,14 +71,17 @@ impl Default for JobStore {
 impl JobStore {
     /// Create a new empty job store with default TTL and capacity.
     pub fn new() -> Self {
+        Self::with_ttl(JOB_TTL)
+    }
+
+    /// Create a store that keeps finished jobs for `ttl`.
+    fn with_ttl(ttl: Duration) -> Self {
         let jobs = Cache::builder()
             .max_capacity(MAX_CAPACITY)
-            .time_to_live(JOB_TTL)
+            .expire_after(JobExpiry { ttl })
             .build();
-        let tokens = Cache::builder()
-            .max_capacity(MAX_CAPACITY)
-            .time_to_live(JOB_TTL)
-            .build();
+        // No TTL: tokens are dropped by complete/fail/cancel, never by time. ~keep
+        let tokens = Cache::builder().max_capacity(MAX_CAPACITY).build();
         Self {
             jobs,
             tokens,
@@ -72,7 +106,7 @@ impl JobStore {
         job_id
     }
 
-    /// Return the cancellation token associated with a job, if it still exists.
+    /// Return the cancellation token of a pending or running job.
     ///
     /// Pass the returned token's clone to the extraction call (via
     /// `ExtractionConfig::cancel_token`) so it observes cancellation at its
@@ -129,6 +163,7 @@ impl JobStore {
             None => Op::Nop,
         });
 
+        self.tokens.invalidate(job_id);
         if matches!(outcome, CompResult::ReplacedWith(_)) {
             self.active.fetch_sub(1, Ordering::Relaxed);
         }
@@ -152,6 +187,7 @@ impl JobStore {
             None => Op::Nop,
         });
 
+        self.tokens.invalidate(job_id);
         if matches!(outcome, CompResult::ReplacedWith(_)) {
             self.active.fetch_sub(1, Ordering::Relaxed);
         }
@@ -195,6 +231,7 @@ impl JobStore {
                 if let Some(token) = self.tokens.get(job_id) {
                     token.cancel();
                 }
+                self.tokens.invalidate(job_id);
                 CancelOutcome::Cancelled(entry.into_value())
             }
             CompResult::Inserted(_) | CompResult::Removed(_) => {
@@ -431,6 +468,26 @@ mod tests {
         assert!(!id.is_empty());
         let status = store.get(&id).expect("job must be created");
         assert_eq!(status.state, JobState::Pending);
+    }
+
+    #[test]
+    fn test_running_job_outlives_ttl() {
+        let store = JobStore::with_ttl(Duration::from_millis(50));
+        let job_id = store.create_job();
+        store.set_running(&job_id, "2026-05-01T12:00:01Z".to_string());
+        std::thread::sleep(Duration::from_millis(150));
+
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Running);
+        assert_eq!(store.active_count(), 1);
+        assert!(store.cancellation_token(&job_id).is_some());
+
+        store.complete(
+            &job_id,
+            serde_json::json!({"content": "done"}),
+            "2026-05-01T12:00:02Z".to_string(),
+        );
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Completed);
+        assert_eq!(store.active_count(), 0);
     }
 }
 
