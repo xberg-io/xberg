@@ -1166,6 +1166,100 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         // most `batch_size`, the resolved worker budget) via a `JoinSet`, mirroring the
         // concurrency shape of the single-backend path below.
         if let Some(ref pipeline) = effective_pipeline {
+            for (page_idx, error) in std::mem::take(&mut budget_refused) {
+                let backend = crate::plugins::registry::get_ocr_backend_registry()
+                    .read()
+                    .get(&ocr_config_owned.backend)
+                    .ok();
+                let recovery = match backend {
+                    Some(backend) => {
+                        recover_page_text_from_image_xobjects(
+                            &backend,
+                            &render_doc,
+                            page_idx,
+                            page_rotations.len(),
+                            &ocr_config_owned,
+                            XObjectRecoveryContext {
+                                budget: &mut xobject_recovery_budget,
+                                blank_raster_warnings: Some(&mut accumulated_warnings),
+                                no_admitted_images: None,
+                                stored_jpegs: None,
+                                cancel_token: config.cancel_token.as_ref(),
+                            },
+                        )
+                        .await?
+                    }
+                    None => None,
+                };
+                let page_number = (page_idx + 1) as u32;
+                let mut recovered = false;
+                if let Some(XObjectRecoveryOutcome {
+                    text,
+                    text_outside_tables,
+                    attempted,
+                    images,
+                    mut llm_usage,
+                    tables,
+                    mut formulas,
+                    image_preprocessing,
+                }) = recovery
+                {
+                    recovered = should_adopt_xobject_retry_text("", &text) || !tables.is_empty();
+                    if should_adopt_xobject_retry_text("", &text) {
+                        structured_ocr_pages.insert(
+                            page_number,
+                            super::document::flat_ocr_page_document(&text_outside_tables),
+                        );
+                        ocr_results.insert(page_number, text);
+                    }
+                    if !tables.is_empty() {
+                        let current_text = ocr_results.get(&page_number).map_or("", String::as_str);
+                        let page_doc = structured_ocr_pages
+                            .entry(page_number)
+                            .or_insert_with(|| super::document::flat_ocr_page_document(current_text));
+                        super::document::attach_page_ocr_payload(page_doc, tables, Vec::new(), page_number);
+                        if !ocr_results.contains_key(&page_number) {
+                            table_only_xobject_recovery_pages.insert(page_number);
+                        }
+                    }
+                    accumulated_llm_usage.append(&mut llm_usage);
+                    accumulated_formulas.append(&mut formulas);
+                    if let Some(metadata) = image_preprocessing {
+                        preprocessing_by_page.insert(page_number, metadata);
+                    }
+                    if capture_rasters {
+                        captured_rasters.extend(images);
+                    }
+                    accumulated_warnings.push(xobject_fallback_warning(page_idx, attempted, true));
+                }
+                if recovered {
+                    accumulated_warnings.push(crate::types::ProcessingWarning {
+                        source: std::borrow::Cow::Borrowed("ocr"),
+                        message: std::borrow::Cow::Owned(format!(
+                            "OCR of page {page_number} failed ({error}); its content was recovered from the page's \
+                             embedded image XObjects instead."
+                        )),
+                    });
+                    merge_ocr_page_failures(
+                        &mut page_failures,
+                        vec![crate::types::OcrPageFailure {
+                            page: page_number,
+                            error: error.to_string(),
+                            recovered: true,
+                        }],
+                    );
+                } else {
+                    let native_recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
+                    push_mixed_ocr_page_failure_warning(
+                        &mut accumulated_warnings,
+                        &mut page_failures,
+                        page_idx,
+                        &error,
+                        native_recovered,
+                    );
+                    failed_page_errors.insert(page_idx, error);
+                }
+            }
             let page_images = share_rendered_page_images(page_images);
             // on wasm32 (no OS threads, and extractor/backend futures are `!Send` there —
             // see the matching gate on the single-backend path below). Falls back to the
@@ -8190,6 +8284,10 @@ mod raw_workspace_geometry;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/raster_budget_tests.rs"]
 mod raster_budget_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/budget_refusal_tests.rs"]
+mod budget_refusal_tests;
 
 #[cfg(all(
     test,
