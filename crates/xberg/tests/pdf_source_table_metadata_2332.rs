@@ -101,3 +101,46 @@ fn source_header_bands_and_merged_label_reach_the_html_and_public_grid() {
     assert!(!lower.cells.iter().any(|cell| cell.row == 1 && cell.col == 0));
     assert_eq!(lower.cells.iter().filter(|cell| cell.row >= 2).count(), 27);
 }
+
+#[test]
+#[ignore = "requires the reference-only ParseBench source PDF outside Git"]
+fn parsebench_survey_leaf_band_remains_a_header_below_group_labels() {
+    let path = std::env::var_os("XBERG_PARSEBENCH_2332_SOURCE").expect("provide the pinned ParseBench source PDF");
+    let bytes = std::fs::read(path).expect("read the ParseBench reference PDF");
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "021397de9fc37d73c1412c47627e19dc3292dfa47d4b521610f653c4366254a4"
+    );
+    let config = ExtractionConfig {
+        disable_ocr: true,
+        use_cache: false,
+        enable_quality_processing: false,
+        output_format: OutputFormat::Html,
+        ..Default::default()
+    };
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    let [_, survey] = result.tables.as_slice() else {
+        panic!("expected exactly the two source tables");
+    };
+    assert_eq!(survey.cells.len(), 9);
+    assert_eq!(
+        survey.cells[1],
+        ["Department", "2024", "2025", "Voluntary Turnover", "Avg Tenure (yrs)"]
+    );
+    assert_eq!(survey.cells[2], ["Engineering", "4.2", "4.5", "8.1%", "3.8"]);
+    assert_eq!(survey.cells[8], ["Company-wide", "3.9", "4.1", "9.9%", "3.9"]);
+    let tables = result.content.split("<table").skip(1).collect::<Vec<_>>();
+    assert_eq!(tables.len(), 2);
+    let (survey_html, _) = tables[1].split_once("</table>").expect("complete survey HTML table");
+    assert!(survey_html.contains("<th colspan=\"2\">Satisfaction Score</th>"));
+    assert!(survey_html.contains("<th colspan=\"2\">Retention</th>"));
+    assert!(survey_html.contains("<td>Engineering</td>"));
+    assert!(survey_html.contains("<td>Company-wide</td>"));
+    for label in &survey.cells[1] {
+        assert_eq!(
+            survey_html.matches(&format!(">{label}</th>")).count(),
+            1,
+            "source leaf label {label:?} must be a header in survey HTML:\n{survey_html}"
+        );
+    }
+}
