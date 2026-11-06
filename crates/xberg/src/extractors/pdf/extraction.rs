@@ -37,6 +37,7 @@ pub(crate) type PdfExtractionPhaseResult = (
     Vec<crate::types::ProcessingWarning>,
     Option<Vec<String>>,
     Vec<crate::types::internal::PdfPageCoordinateFrame>,
+    Vec<u32>,
 );
 
 #[cfg(feature = "pdf")]
@@ -1109,6 +1110,12 @@ pub(crate) fn extract_all_from_native_document(
         pre_rendered_doc.as_mut(),
     );
 
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let outlined_ocr_pages =
+        super::outline_ocr::candidates(&doc.doc, config, &native_text, boundaries.as_deref().unwrap_or(&[]));
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let outlined_ocr_pages = Vec::new();
+
     let has_font_encoding_issues = false;
 
     let form_fields = if config.pdf_options.as_ref().is_none_or(|opts| opts.extract_form_fields) {
@@ -1142,6 +1149,7 @@ pub(crate) fn extract_all_from_native_document(
         extraction_warnings,
         page_labels,
         pdf_page_coordinate_frames,
+        outlined_ocr_pages,
     ))
 }
 

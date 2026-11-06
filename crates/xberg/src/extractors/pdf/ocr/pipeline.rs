@@ -559,6 +559,7 @@ struct MixedOcrPageSelection<'a> {
     ocr: &'a [u32],
     raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
     single_block: &'a [u32],
+    preserve_native: &'a [u32],
     /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
     /// read them from its own native text.
     native_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
@@ -607,6 +608,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_single_block_pages(
         content,
         config,
         None,
+        &[],
     )
     .await
 }
@@ -619,6 +621,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     content: &[u8],
     config: &ExtractionConfig,
     layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
+    preserve_native: &[u32],
 ) -> crate::Result<MixedOcrRun> {
     let (ocr_page_numbers, single_block_page_numbers) = selected_pages;
     let _ = &layout_pages;
@@ -629,6 +632,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
             ocr: ocr_page_numbers,
             raster_dpis: None,
             single_block: single_block_page_numbers,
+            preserve_native,
             native_layers: None,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -672,6 +676,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
             ocr: scanned_pages,
             raster_dpis: None,
             single_block: &[],
+            preserve_native: &[],
             native_layers: None,
             hidden_layer_backend: Some(backend),
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -705,6 +710,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     all_pages_failed_policy: AllPagesFailedPolicy,
     #[cfg(feature = "layout-detection")] layout_inputs: MixedLayoutInputs<'_>,
 ) -> OcrRunResult<MixedOcrRun> {
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let _ = pages.preserve_native;
     let ocr_set: std::collections::HashSet<u32> = pages
         .ocr
         .iter()
@@ -2207,14 +2214,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    if probing_hidden_layer {
+    if probing_hidden_layer || !pages.preserve_native.is_empty() {
         for boundary in boundaries {
             let page = boundary.page_number;
-            if let Some(text) = accepted_replacements.get(&page)
+            if (probing_hidden_layer || pages.preserve_native.contains(&page))
+                && let Some(text) = accepted_replacements.get(&page)
                 && (noise_verdict_pages.contains(&page)
                     || !native_text
                         .get(boundary.byte_start..boundary.byte_end)
-                        .is_some_and(|native| super::hidden_layer::adds_text_preserving_native(native, text)))
+                        .is_some_and(|native| {
+                            super::hidden_layer::adds_text_preserving_native(native, text)
+                                && (probing_hidden_layer
+                                    || super::hidden_layer::keeps_native_lines_in_order(native, text))
+                        }))
             {
                 accepted_replacements.remove(&page);
             }
@@ -2679,6 +2691,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
             ocr: &page_numbers,
             raster_dpis,
             single_block: &single_block_pages,
+            preserve_native: &[],
             native_layers,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

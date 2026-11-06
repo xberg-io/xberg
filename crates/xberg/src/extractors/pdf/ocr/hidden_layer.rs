@@ -942,6 +942,24 @@ pub(super) fn adds_text_preserving_native(native: &str, candidate: &str) -> bool
         })
 }
 
+pub(super) fn keeps_native_lines_in_order(native: &str, candidate: &str) -> bool {
+    let Some(words) = bounded_words(candidate) else {
+        return false;
+    };
+    let mut remaining = words.as_slice();
+    for line in native.lines() {
+        let words: Vec<_> = line.split_whitespace().collect();
+        if words.is_empty() {
+            continue;
+        }
+        let Some(start) = remaining.windows(words.len()).position(|window| window == words) else {
+            return false;
+        };
+        remaining = &remaining[start + words.len()..];
+    }
+    true
+}
+
 fn bounded_words(text: &str) -> Option<Vec<&str>> {
     let words: Vec<_> = text.split_whitespace().take(MAX_OPERATORS + 1).collect();
     (words.len() <= MAX_OPERATORS).then_some(words)

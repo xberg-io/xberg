@@ -2034,7 +2034,7 @@ impl PdfDocument {
     /// only ever reads the bytes, and a single `extract_words` page touches
     /// this twice (once for spans, once for chars), so handing back the `Arc`
     /// avoids copying the decompressed stream on every call.
-    fn cached_page_content(&self, page_index: usize) -> Result<std::sync::Arc<Vec<u8>>> {
+    pub(super) fn cached_page_content(&self, page_index: usize) -> Result<std::sync::Arc<Vec<u8>>> {
         {
             let mut cache = self.page_content_cache.lock_or_recover();
             if let Some(data) = cache.get(&page_index) {

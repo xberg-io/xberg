@@ -7,6 +7,38 @@
 use super::*;
 
 impl PdfDocument {
+    /// Inspect only a bounded page-local stream before materializing its vector paths.
+    #[doc(hidden)]
+    pub fn extract_bounded_page_local_paths(
+        &self,
+        page_index: usize,
+        byte_limit: usize,
+        operator_limit: usize,
+    ) -> Result<Vec<crate::elements::PathContent>> {
+        use crate::content::Operator;
+        use crate::content::parser::visit_complete_content_stream;
+
+        let content = self.cached_page_content(page_index)?;
+        if content.len() > byte_limit {
+            return Ok(Vec::new());
+        }
+        let mut has_curve = false;
+        let supported = visit_complete_content_stream(&content, operator_limit, |op| {
+            has_curve |= matches!(
+                op,
+                Operator::CurveTo { .. } | Operator::CurveToV { .. } | Operator::CurveToY { .. }
+            );
+            !matches!(
+                op,
+                Operator::Do { .. } | Operator::InlineImage { .. } | Operator::ClipNonZero | Operator::ClipEvenOdd
+            )
+        });
+        if !matches!(supported, Ok(true)) || !has_curve {
+            return Ok(Vec::new());
+        }
+        self.extract_paths(page_index)
+    }
+
     /// Extract path (vector graphics) content from a page.
     ///
     /// This extracts all vector graphics operations from the page's content stream,

@@ -241,3 +241,19 @@ fn ccitt_work_is_debited_per_request_without_charging_legacy_streams() {
     assert_eq!(legacy.charge_ccitt_work(&mut remaining), Some(()));
     assert_eq!(remaining, 270_510);
 }
+
+#[test]
+fn outlined_prose_may_be_added_between_native_lines_without_splitting_them() {
+    let native = "North Gate 42\nPage 7";
+    for text in [
+        "North WRONG Gate 42 Page 7",
+        "North Gate 42 Page WRONG 7",
+        "Page 7 additional prose North Gate 42",
+    ] {
+        assert!(!super::keeps_native_lines_in_order(native, text), "{text}");
+    }
+    assert!(super::keeps_native_lines_in_order(
+        native,
+        "North Gate 42 additional prose Page 7"
+    ));
+}

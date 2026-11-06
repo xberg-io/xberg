@@ -11,6 +11,8 @@ mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
 pub(crate) mod ocr;
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+mod outline_ocr;
 mod pages;
 #[cfg(all(feature = "pdf", feature = "pdf-pdfium"))]
 mod pdfium_engine;
@@ -2824,6 +2826,7 @@ impl PdfExtractor {
             mut pdf_extraction_warnings,
             pdf_page_labels,
             pdf_page_coordinate_frames,
+            mut outlined_ocr_pages,
         ) = native_output.extraction;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3015,6 +3018,7 @@ impl PdfExtractor {
                             content,
                             config,
                             layout_pages,
+                            &[],
                         )
                         .await?;
                         #[cfg(feature = "formula-recognition")]
@@ -3089,6 +3093,7 @@ impl PdfExtractor {
                     content,
                     config,
                     layout_pages,
+                    &[],
                 )
                 .await
                 {
@@ -3224,6 +3229,14 @@ impl PdfExtractor {
                 has_boundaries,
                 pdf_metadata.pdf_specific.page_count,
             );
+
+            if decision.whole_doc_failure {
+                outlined_ocr_pages.clear();
+            } else {
+                outlined_ocr_pages.retain(|page| !decision.failing_pages.contains(page));
+                // Keep the selected-page acceptance check even when every page qualifies. ~keep
+                ocr::apply_flagged_pages(&mut decision, &outlined_ocr_pages, has_boundaries, None);
+            }
 
             tracing::debug!(
                 target: "xberg::pdf::ocr",
@@ -3427,6 +3440,7 @@ impl PdfExtractor {
                             content,
                             config,
                             layout_pages,
+                            &outlined_ocr_pages,
                         )
                         .await
                         {
