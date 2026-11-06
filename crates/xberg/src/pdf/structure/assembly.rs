@@ -665,7 +665,10 @@ fn recover_mixed_table_tick(
     let [orphan] = owned.segments.as_slice() else {
         return None;
     };
-    if !plain_source_paragraph(paragraph) || !is_digit(orphan) || !singletons.contains(&SegmentKey::from(orphan)) {
+    if !plain_source_paragraph(paragraph)
+        || orphan.text.trim().is_empty()
+        || !singletons.contains(&SegmentKey::from(orphan))
+    {
         return None;
     }
     let (_, annotations) = extract_text_and_annotations(paragraph, hyphens);
@@ -678,11 +681,8 @@ fn recover_mixed_table_tick(
     repaired.lines.pop();
     repaired.block_bbox = Some(bounds);
     let (text, annotations) = extract_text_and_annotations(&repaired, hyphens);
-    let (whole, fraction) = text.split_once('.')?;
-    if !annotations.is_empty()
-        || whole.is_empty()
-        || fraction.is_empty()
-        || !whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
+    if text.is_empty()
+        || !annotations.is_empty()
         || !outside
             .segments
             .iter()
@@ -2228,6 +2228,41 @@ mod tests {
                 assert_eq!(page[0].block_bbox, Some((0.0, 20.0, 10.0, 32.0)));
                 assert_eq!(page[0].word_count, 1);
             }
+        }
+    }
+
+    #[test]
+    fn mixed_tick_recovers_literal_source_text_regardless_of_label_and_owned_glyph_shape() {
+        for (tick, owned, expected) in [
+            ("-0.5", "0", Some("-0.5")),
+            ("1,000", "X", Some("1,000")),
+            (" 1,000", "X", None),
+        ] {
+            let mut paragraph = make_paragraph_at(tick, None, 20.0);
+            paragraph.lines[0].segments[0].width = 10.0;
+            paragraph.lines[0].segments[0].y = 20.0;
+            let mut residual = make_paragraph_at(owned, None, 10.0).lines.remove(0);
+            residual.segments[0].x = 97.0;
+            residual.segments[0].width = 5.0;
+            residual.segments[0].y = 10.0;
+            let key = SegmentKey::from(&residual.segments[0]);
+            paragraph.lines.push(residual);
+            paragraph.block_bbox = Some((0.0, 10.0, 102.0, 32.0));
+
+            let table = make_table_in_box(&format!("| {tick} {owned}.4 |"), 12.0, 110.0, 40.0);
+            let hyphens = Default::default();
+            let repaired = recover_mixed_table_tick(
+                &paragraph,
+                &table,
+                table.bounding_box.unwrap(),
+                &table_coverage_token_counts(&table),
+                &ahash::AHashSet::from_iter([&key]),
+                &hyphens,
+            );
+            let text = repaired
+                .as_ref()
+                .map(|paragraph| extract_text_and_annotations(paragraph, &hyphens).0);
+            assert_eq!(text.as_deref(), expected);
         }
     }
 

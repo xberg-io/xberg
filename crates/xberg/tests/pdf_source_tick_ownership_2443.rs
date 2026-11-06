@@ -23,14 +23,14 @@ fn source_bytes() -> Vec<u8> {
     bytes
 }
 
-fn assert_native_source_ticks(bytes: &[u8]) {
+fn assert_native_source_ticks(bytes: &[u8], matching_tick: &str) {
     let pdf = xberg_native_pdf::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
     assert_eq!(pdf.page_count().unwrap(), 1);
     for order in [ReadingOrder::TopToBottom, ReadingOrder::ColumnAware] {
         let page = pdf.extract_page_text_with_script_geometry(0, order).unwrap();
         for (expected, (left, baseline)) in [
-            ("0.6", LEFT_TICK),
-            ("0.6", RIGHT_TICK),
+            (matching_tick, LEFT_TICK),
+            (matching_tick, RIGHT_TICK),
             ("0.4", (RIGHT_TICK.0, 633.722_05)),
         ] {
             let mut glyphs: Vec<_> = page
@@ -52,7 +52,11 @@ fn assert_native_source_ticks(bytes: &[u8]) {
 
 fn source_result() -> ExtractedDocument {
     let bytes = source_bytes();
-    assert_native_source_ticks(&bytes);
+    assert_native_source_ticks(&bytes, "0.6");
+    extract_source(&bytes)
+}
+
+fn extract_source(bytes: &[u8]) -> ExtractedDocument {
     let config = ExtractionConfig {
         disable_ocr: true,
         use_cache: false,
@@ -61,7 +65,7 @@ fn source_result() -> ExtractedDocument {
         include_document_structure: true,
         ..Default::default()
     };
-    let result = helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    let result = helpers::extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap();
     assert!(!result.content.trim().is_empty());
     result
 }
@@ -155,4 +159,50 @@ fn rotated_chart_label_keeps_its_paragraph_role() {
             "chart label {label} remains a paragraph at its source location"
         );
     }
+}
+
+fn with_comma_source_ticks(bytes: &[u8]) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(bytes).expect("pinned source PDF");
+    let figure = pdf.get_object_mut((81, 0)).unwrap().as_stream_mut().unwrap();
+    let mut content = String::from_utf8(figure.decompressed_content().unwrap()).expect("ASCII figure instructions");
+    for position in ["29.1327521793 328.6048246835", "217.0527521793 365.7919088042"] {
+        let tick = format!("{position} Td\n(0) Tj\n/F3 17.9327521793 Tf\n8.2242858811 0 Td\n(:) Tj");
+        assert_eq!(
+            content.matches(&tick).count(),
+            1,
+            "the selected source tick exists once"
+        );
+        // In the embedded F3 encoding, ':' and ';' select equal-width period and comma glyphs.
+        content = content.replace(&tick, &tick.replace("(:) Tj", "(;) Tj"));
+    }
+    figure.set_plain_content(content.into_bytes());
+    let mut output = Vec::new();
+    pdf.save_to(&mut output).unwrap();
+    output
+}
+
+#[test]
+fn public_mixed_figure_tick_preserves_decimal_comma_at_the_same_source_position() {
+    let bytes = with_comma_source_ticks(&source_bytes());
+    assert_native_source_ticks(&bytes, "0,6");
+    let result = extract_source(&bytes);
+    let document = result.document.as_ref().expect("requested source geometry");
+    let point = (LEFT_TICK.0 as f64 + 2.0, LEFT_TICK.1 as f64 + 4.0);
+    let left: Vec<_> = document
+        .nodes
+        .iter()
+        .filter(|node| node.bbox.is_some_and(|bbox| contains_point(bbox, point)))
+        .filter_map(|node| node.content.text())
+        .collect();
+    assert!(left.contains(&"0,6"), "source tick at its left panel: {left:?}");
+    assert_eq!(result.content.matches("0,6").count(), 2);
+    assert_eq!(
+        result
+            .tables
+            .iter()
+            .flat_map(|table| table.cells.iter().flatten())
+            .filter(|cell| cell.as_str() == "0,6 0.4")
+            .count(),
+        1
+    );
 }
