@@ -950,6 +950,50 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
 
 
+def test_dry_release_assets_verify_only_selected_groups() -> None:
+    job = job_block(WORKFLOW.read_text(), "verify-assets")
+    steps = re.split(r"(?m)^(?=      - )", job)
+    [verify] = [step for step in steps if step.startswith("      - name: Verify locally built release assets\n")]
+    header, script = verify.split("        run: |\n", 1)
+    bindings = re.findall(r"(?m)^          ([A-Z_]+): \$\{\{ (.+) \}\}$", header)
+    assets = {
+        "cli": ("release_cli", ("xberg-cli-linux.tar.gz", "xberg-cli-windows.zip")),
+        "go-ffi": ("release_go", ("xberg-go-linux.tar.gz",)),
+        "c-ffi": ("release_c_ffi", ("xberg-ffi-linux.tar.gz",)),
+    }
+    with tempfile.TemporaryDirectory() as temp:
+        for selected in itertools.product((False, True), repeat=len(assets)):
+            arm = Path(temp) / "".join(str(int(value)) for value in selected)
+            arm.mkdir()
+            outputs = {"dry_run": "true", "release_swift": "true"}
+            expected = []
+            for (group, (output, names)), enabled in zip(assets.items(), selected, strict=True):
+                outputs[output] = str(enabled).lower()
+                if enabled:
+                    expected.extend(arm / "dist" / "verify-assets" / group / name for name in names)
+            for path in expected:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            context = {"needs": {"prepare": {"outputs": outputs}}}
+            env = os.environ | {name: str(evaluate_expression(expr, context)) for name, expr in bindings}
+            result = run(["bash", "-e", "-o", "pipefail", "-c", textwrap.dedent(script)], arm, env)
+            assert result.returncode == 0, (outputs, result.stdout, result.stderr)
+            assert result.stdout.count("OK: ") == len(expected), (outputs, result.stdout)
+            for path in sorted(expected):
+                path.unlink()
+                result = run(["bash", "-e", "-o", "pipefail", "-c", textwrap.dedent(script)], arm, env)
+                assert result.returncode == 1, (outputs, path, result.stdout, result.stderr)
+                assert f"no local asset matched {path.parent.relative_to(arm)}/" in result.stderr
+                path.touch()
+            for group, (output, _) in assets.items():
+                [download] = [step for step in steps if f"path: dist/verify-assets/{group}\n" in step]
+                [condition] = re.findall(r"(?m)^        if: \$\{\{ (.+) \}\}$", download)
+                assert evaluate_condition(condition, context) == (outputs[output] == "true")
+                outputs["dry_run"] = "false"
+                assert not evaluate_condition(condition, context)
+                outputs["dry_run"] = "true"
+
+
 if __name__ == "__main__":
     for name, test in list(globals().items()):
         if name.startswith("test_") and callable(test):
