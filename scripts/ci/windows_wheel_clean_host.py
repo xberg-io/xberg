@@ -21,6 +21,9 @@ from typing import TypeVar
 import windows_wheel_closure as closure
 
 T = TypeVar("T")
+LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x1000
+LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR = 0x0100
+ERROR_MOD_NOT_FOUND = 126
 
 
 def record_hash(data: bytes) -> str:
@@ -97,15 +100,37 @@ def verify_wheel(wheel: Path) -> dict:
     }
 
 
-def verify_modules(modules: list[Path], wheel_root: Path, python_root: Path) -> None:
+def is_inbox_msvcp(path: Path, resolved: Path) -> bool:
+    if path.name.lower() != "msvcp_win.dll":
+        return False
+    system_root = Path(os.environ["SYSTEMROOT"])
+    return any(
+        path.parent == system_root / directory and resolved == system_root.resolve() / directory / path.name
+        for directory in ("System32", "SysWOW64")
+    )
+
+
+def verify_modules(
+    modules: list[Path], wheel_root: Path, python_root: Path, *, require_wheel_msvcp: bool = False
+) -> None:
+    wheel_root = wheel_root.resolve()
+    python_root = python_root.resolve()
+    wheel_msvcp_loaded = False
     for path in modules:
         name = path.name.lower()
-        if name.startswith(("msvcp", "concrt", "vcomp")) and not path.resolve().is_relative_to(wheel_root.resolve()):
+        if not name.startswith(("msvcp", "concrt", "vcomp", "vcruntime")):
+            continue
+        resolved = path.resolve()
+        in_wheel = resolved.is_relative_to(wheel_root)
+        if name.startswith("vcruntime"):
+            if not in_wheel and not resolved.is_relative_to(python_root):
+                raise ValueError(f"VCRUNTIME module outside allowed app-local roots: {path}")
+        elif not in_wheel and not is_inbox_msvcp(path, resolved):
             raise ValueError(f"runtime module outside wheel: {path}")
-        if name.startswith("vcruntime") and not any(
-            path.resolve().is_relative_to(root.resolve()) for root in (wheel_root, python_root)
-        ):
-            raise ValueError(f"VCRUNTIME module outside allowed app-local roots: {path}")
+        if in_wheel and resolved.name.lower().startswith("msvcp140"):
+            wheel_msvcp_loaded = True
+    if require_wheel_msvcp and not wheel_msvcp_loaded:
+        raise ValueError("no wheel MSVCP runtime actually loaded")
 
 
 def loaded_modules() -> list[Path]:
@@ -135,6 +160,20 @@ def loaded_modules() -> list[Path]:
     return result
 
 
+def load_library_error(path: str, flags: int) -> int:
+    # ~keep Keep the native status: ctypes.WinDLL can replace it with a FileNotFoundError.
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    load = kernel.LoadLibraryExW
+    load.argtypes = [wintypes.LPCWSTR, wintypes.HANDLE, wintypes.DWORD]
+    load.restype = wintypes.HMODULE
+    if load(path, None, flags):
+        return 0
+    error = ctypes.get_last_error()
+    if not error:
+        raise ValueError(f"loader failed without a Windows error code: {path}")
+    return error
+
+
 def baseline(python_root: Path, msvcp: list[str]) -> dict:
     import winreg
 
@@ -147,26 +186,43 @@ def baseline(python_root: Path, msvcp: list[str]) -> dict:
             except FileNotFoundError:
                 pass
     names = sorted({PurePosixPath(name).name for name in msvcp})
+    inbox_clr_files = []
+    unexpected_runtime_paths = []
     for directory in (
         Path(os.environ["SYSTEMROOT"]) / "System32",
         Path(os.environ["SYSTEMROOT"]) / "SysWOW64",
         python_root,
     ):
         for path in directory.rglob("*.dll"):
-            if path.name.lower().startswith(("msvcp140", "vcruntime140", "concrt140", "vcomp140")):
-                if directory == python_root and path.name.lower().startswith("vcruntime"):
+            name = path.name.lower()
+            if name.startswith(("msvcp140", "vcruntime140", "concrt140", "vcomp140")):
+                if directory == python_root and name.startswith("vcruntime"):
                     continue
-                raise ValueError(f"baseline contains VC runtime: {path}")
+                # ~keep The pinned Server Core image ships these CLR sidecars; loader checks still apply.
+                if (
+                    directory != python_root
+                    and path.parent == directory
+                    and name in ("msvcp140_clr0400.dll", "vcruntime140_clr0400.dll")
+                ):
+                    inbox_clr_files.append(f"{directory.name}/{path.name}")
+                    continue
+                unexpected_runtime_paths.append(str(path))
+    if unexpected_runtime_paths:
+        paths = "\n".join(sorted(unexpected_runtime_paths))
+        raise ValueError(f"baseline contains VC runtime files:\n{paths}")
     for name in names:
-        try:
-            ctypes.WinDLL(name)
-        except OSError as error:
-            if error.winerror != 126:
-                raise ValueError(f"baseline load failed for wrong reason: {name}: {error}") from error
-        else:
+        error = load_library_error(name, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)
+        if not error:
             raise ValueError(f"baseline unexpectedly loads {name}")
+        if error != ERROR_MOD_NOT_FOUND:
+            raise ValueError(f"baseline load failed for wrong reason: {name}: Windows error {error}")
     verify_modules(loaded_modules(), python_root / "absent-wheel", python_root)
-    return {"registry_absent": True, "global_files_absent": True, "msvcp_load_failures": names}
+    return {
+        "registry_absent": True,
+        "global_files_absent": True,
+        "inbox_clr_files": sorted(inbox_clr_files),
+        "msvcp_load_failures": names,
+    }
 
 
 def require_missing_dependency(outcome: subprocess.CompletedProcess[str], dependency: str) -> None:
@@ -189,13 +245,12 @@ def run_child(python: Path, *arguments: str) -> subprocess.CompletedProcess[str]
 
 
 def native_probe(dependency: str, ort: Path, *, missing: bool) -> None:
-    try:
-        ctypes.WinDLL(str(ort), winmode=0x00001100)
-    except OSError as error:
-        if missing and error.winerror == 126:
-            print(f"MISSING_DEPENDENCY:{dependency}:126")
+    error = load_library_error(str(ort), LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR)
+    if error:
+        if missing and error == ERROR_MOD_NOT_FOUND:
+            print(f"MISSING_DEPENDENCY:{dependency}:{error}")
             sys.exit(23)
-        raise
+        raise ctypes.WinError(error)
     if missing:
         raise ValueError("native load unexpectedly succeeded without runtime")
 
@@ -206,11 +261,9 @@ def positive(site: Path, python_root: Path, ort: Path, fixture: Path) -> dict:
 
     asyncio.run(smoke_test_python_wheel.run(str(fixture), "XBERG MUSL SMOKE 490"))
     modules = loaded_modules()
-    verify_modules(modules, ort.parent, python_root)
+    verify_modules(modules, ort.parent, python_root, require_wheel_msvcp=True)
     if not any(path.suffix.lower() == ".pyd" and path.resolve().is_relative_to(site.resolve()) for path in modules):
         raise ValueError("no wheel native module loaded")
-    if not any(path.name.lower().startswith("msvcp") for path in modules):
-        raise ValueError("no wheel MSVCP runtime actually loaded")
     if ort.resolve() not in [path.resolve() for path in modules]:
         raise ValueError("wheel ONNX Runtime was not loaded")
     return {

@@ -970,6 +970,8 @@ pub(crate) struct OcrRasterDpi {
     requested: u32,
     actual: u32,
     budget_clamped: bool,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) type0_ink_loss: bool,
 }
 
 /// Native OCR render provenance by zero-indexed physical PDF page, paired with that render's image.
@@ -1002,6 +1004,18 @@ pub(crate) fn render_pdf_ocr_page_with_dpi(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
+    render_pdf_ocr_page_with_budget_evidence(doc, page_index, images_config, security_limits, &mut false)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) fn render_pdf_ocr_page_with_budget_evidence(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    security_limits: &crate::extractors::security::SecurityLimits,
+    source_budget_exceeded: &mut bool,
+) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
+    *source_budget_exceeded = false;
     let (requested, planned) =
         crate::image::dpi::planned_pdf_ocr_render_dpi(doc, page_index, images_config, security_limits);
     let media = doc.get_page_info(page_index)?.media_box;
@@ -1011,21 +1025,29 @@ pub(crate) fn render_pdf_ocr_page_with_dpi(
     } else {
         1
     };
-    let (rendered, dpi) = render_page_capturing_glyph_drops(page_index, || {
+    let (rendered, dpi, type0_ink_loss) = render_page_capturing_glyph_drops(page_index, || {
         guard_render_panic(page_index, || {
-            xberg_native_pdf::rendering::render_png_page_with_dpi_budget(
+            xberg_native_pdf::rendering::render_png_page_with_budget_evidence(
                 doc,
                 page_index,
                 options.dpi,
                 floor,
                 security_limits.max_content_size,
             )
+            .map_err(|(error, exceeded)| {
+                *source_budget_exceeded = exceeded;
+                error
+            })
         })
     })?;
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let _ = type0_ink_loss;
     let raster_dpi = OcrRasterDpi {
         requested: requested.max(1) as u32,
         actual: dpi,
         budget_clamped: dpi < requested.max(1) as u32 && (planned < requested || dpi < options.dpi),
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        type0_ink_loss,
     };
     if raster_dpi.budget_clamped {
         record_render_warning(warning(

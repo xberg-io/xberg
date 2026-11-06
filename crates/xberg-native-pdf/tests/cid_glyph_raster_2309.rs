@@ -56,7 +56,7 @@ fn should_preserve_the_entire_cid_run_when_only_some_unicode_codes_are_missing()
 }
 
 #[test]
-fn should_keep_good_tounicode_text_and_ink_with_a_two_entry_font_cmap() {
+fn should_keep_good_tounicode_text_with_a_two_entry_font_cmap() {
     let document = PdfDocument::from_bytes(GOOD.to_vec()).unwrap();
     let text = document.extract_text(0).unwrap();
     let expected = [
@@ -71,7 +71,11 @@ fn should_keep_good_tounicode_text_and_ink_with_a_two_entry_font_cmap() {
         text.split_whitespace().collect::<Vec<_>>(),
         expected.split_whitespace().collect::<Vec<_>>()
     );
-    let image = raster(GOOD);
+}
+
+#[test]
+fn should_paint_all_lines_with_a_complete_embedded_unicode_map() {
+    let image = raster(include_bytes!("fixtures/cid_glyph_raster_2309/good_full.pdf"));
     assert_twenty_source_lines_have_ink(&image);
 }
 
@@ -88,4 +92,23 @@ fn should_keep_nonidentity_cmap_runs_on_their_existing_unicode_route() {
         hash, "be0c8fc8b3cb2a54e5c0bf1cbc4ac3adfeff839f580cd6251581701f8be3c2df",
         "custom code-to-CID geometry must retain its baseline Unicode route"
     );
+}
+
+#[test]
+fn ink_loss_distinguishes_unpainted_type0_glyphs_from_recovered_decode_misses() {
+    let fixtures: [(&[u8], bool); 5] = [
+        (include_bytes!("fixtures/cid_glyph_raster_2309/custom.pdf"), true),
+        (include_bytes!("fixtures/cid_glyph_raster_2309/partial.pdf"), false),
+        (include_bytes!("fixtures/cid_glyph_raster_2309/missing.pdf"), false),
+        (GOOD, false),
+        (DIRECT, false),
+    ];
+    for (source, expected_loss) in fixtures {
+        let document = PdfDocument::from_bytes(source.to_vec()).unwrap();
+        let (rendered, dpi, actual_loss) =
+            xberg_native_pdf::rendering::render_png_page_with_ink_evidence(&document, 0, 150, 150, 64 * 1024 * 1024)
+                .unwrap();
+        assert_eq!((rendered.width, rendered.height, dpi), (1275, 1650, 150));
+        assert_eq!(actual_loss, expected_loss);
+    }
 }

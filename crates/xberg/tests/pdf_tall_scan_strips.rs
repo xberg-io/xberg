@@ -7,7 +7,10 @@
 
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod, extract as extract_public};
 
+const TALL_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf");
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
+const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
+const NEUTRAL_RGB: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/neutral-rgb-tall.pdf");
 const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-mixed.pdf");
 const SHORT: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-short.pdf");
 const ORACLE: &str = include_str!("../../../fixtures/repros/tall-scan-strips/expected.txt");
@@ -84,8 +87,42 @@ fn tall_scan_recovers_every_source_line_once_in_order() {
 }
 
 #[test]
+fn bilevel_tall_scan_recovers_every_source_line_once_in_order() {
+    let document = extract(BILEVEL, &extraction_config());
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Ocr));
+    assert!(strip_warning(&document));
+    let pages = document.pages.as_ref().unwrap();
+    let [page] = pages.as_slice() else {
+        panic!("expected one page, got {}", pages.len());
+    };
+    assert_eq!(page.page_number, 1);
+    assert_eq!(page.ocr_confidence.as_ref().unwrap().word_count, 440);
+    let expected = words(ORACLE);
+    for actual in [words(&document.content), words(&page.content)] {
+        assert_eq!(actual.len(), expected.len());
+        let (rows, remainder) = actual.as_chunks::<11>();
+        assert!(remainder.is_empty());
+        assert_eq!(rows.len(), 40);
+        for (row, expected_row) in rows.iter().zip(expected.chunks(11)) {
+            assert_eq!(&row[..10], &expected_row[..10]);
+        }
+        let exact_tags = rows
+            .iter()
+            .zip(expected.chunks(11))
+            .filter(|(row, expected_row)| row[10] == expected_row[10])
+            .count();
+        assert!(exact_tags >= 36, "only {exact_tags} of 40 distinct row tags recognized");
+    }
+}
+
+#[test]
 fn in_cap_scan_keeps_original_ocr_route_and_text() {
     assert_image_text(&extract(SHORT, &extraction_config()), false);
+}
+
+#[test]
+fn neutral_rgb_tall_scan_recovers_every_source_line_once_in_order() {
+    assert_image_text(&extract(NEUTRAL_RGB, &extraction_config()), true);
 }
 
 #[test]
@@ -130,4 +167,63 @@ fn low_per_page_content_limit_keeps_existing_render_fallback() {
     let document = extract(TALL, &config);
     assert!(!strip_warning(&document));
     assert_eq!(document.pages.as_ref().expect("original page record").len(), 1);
+}
+
+#[test]
+fn tall_gray_jpeg_recovers_every_source_word_after_render_budget_refusal() {
+    assert_image_text(&extract(TALL_JPEG, &extraction_config()), true);
+}
+
+#[test]
+fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr() {
+    let forced = ExtractionConfig {
+        force_ocr: true,
+        ..extraction_config()
+    };
+    let mut low = extraction_config();
+    low.security_limits
+        .get_or_insert_with(Default::default)
+        .max_content_size = 16 * 1024 * 1024;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    for config in [forced, low] {
+        let input = ExtractInput::from_bytes(TALL_JPEG.to_vec(), "application/pdf", None);
+        let error = runtime
+            .block_on(extract_public(input, &config))
+            .expect_err("existing render refusal");
+        let xberg::XbergError::Parsing {
+            source: Some(source), ..
+        } = error
+        else {
+            panic!("expected typed Native render error, got {error:?}");
+        };
+        let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
+            source
+                .source()
+                .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
+        });
+        assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
+    }
+}
+
+fn assert_exact_tall_source_text(source: &[u8]) {
+    let document = extract(source, &extraction_config());
+    assert_image_text(&document, true);
+    assert!(document.content.split_whitespace().eq(ORACLE.split_whitespace()));
+    let pages = document.pages.as_ref().unwrap();
+    assert!(pages[0].content.split_whitespace().eq(ORACLE.split_whitespace()));
+}
+
+#[test]
+fn tall_png_predictor_recovers_all_source_words_in_order() {
+    let source = include_bytes!("../../../fixtures/repros/tall-scan-strips/predictor-mixed.pdf");
+    assert_exact_tall_source_text(source);
+}
+
+#[test]
+fn tall_inverted_indexed_scan_recovers_all_source_words_in_order() {
+    let source = include_bytes!("../../../fixtures/repros/tall-scan-strips/indexed-inverted.pdf");
+    assert_exact_tall_source_text(source);
 }

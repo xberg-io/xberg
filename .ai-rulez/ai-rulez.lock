@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.10.0'
 scope = 'all'
-tree = 'sha256:330ae64068915c265ab84fc12d11de32e72a2da8893ff331d3cec43c23c08ddd'
+tree = 'sha256:621ffff63f179badc29a874d33f6152667fdfd4b34e3a27d5d96e48b4640ec21'
 
 [[include]]
 name = 'xberg-bindings'
@@ -630,6 +630,12 @@ kind = 'rule'
 id = 'extraction-safety'
 path = 'rules/extraction-safety.md'
 digest = 'sha256:204af28774db34417270e77921e632fe83a2b72161d02b9ed993d90235512bcd'
+
+[[item]]
+kind = 'rule'
+id = 'layout-from-input'
+path = 'rules/layout-from-input.md'
+digest = 'sha256:7c1473eb5f1519b3aae38e0cbe05c3ccc20e3035072bace5f7cf46b427b2feea'
 
 [[item]]
 kind = 'rule'

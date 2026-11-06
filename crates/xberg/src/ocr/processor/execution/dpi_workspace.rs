@@ -32,6 +32,42 @@ pub(super) fn check_known_dpi_resize(
     Ok(())
 }
 
+/// Avoid the second rounding at the dimension clamp, which can shrink the short axis as DPI increases.
+pub(super) fn largest_unclamped_upscale(
+    lower: i32,
+    upper: i32,
+    long_side: u32,
+    source_dpi: f64,
+    dimension_cap: i32,
+) -> crate::Result<Option<i32>> {
+    largest_feasible_upscale(lower, upper, |target| {
+        let width = f64::from(long_side) * (f64::from(target) / source_dpi);
+        Ok(width.round() <= f64::from(dimension_cap))
+    })
+}
+
+/// Admission for unclamped upscales is monotone: destination buffers grow while filter support stays fixed.
+pub(super) fn largest_feasible_upscale(
+    mut lower: i32,
+    mut upper: i32,
+    mut fits: impl FnMut(i32) -> crate::Result<bool>,
+) -> crate::Result<Option<i32>> {
+    let mut best = None;
+    while lower <= upper {
+        let target = lower + (upper - lower) / 2;
+        if fits(target)? {
+            best = Some(target);
+            let Some(next) = target.checked_add(1) else {
+                break;
+            };
+            lower = next;
+        } else {
+            upper = target - 1;
+        }
+    }
+    Ok(best)
+}
+
 pub(super) fn has_no_resize_reduction(
     width: u32,
     height: u32,
@@ -51,10 +87,42 @@ pub(super) fn has_no_resize_reduction(
 }
 
 fn resize_peak(width: u32, height: u32, target_width: u32, target_height: u32, encoded: usize) -> Option<u64> {
+    resize_peak_with_axis(width, height, target_width, target_height, encoded, axis_workspace)
+}
+
+/// A monotone upper bound for both axes strictly shrinking under Lanczos3.
+pub(super) fn downscale_peak(
+    width: u32,
+    height: u32,
+    target_width: u32,
+    target_height: u32,
+    encoded: usize,
+) -> Option<u64> {
+    if !(0 < target_width && target_width < width && 0 < target_height && target_height < height) {
+        return None;
+    }
+    resize_peak_with_axis(
+        width,
+        height,
+        target_width,
+        target_height,
+        encoded,
+        downscale_axis_workspace,
+    )
+}
+
+fn resize_peak_with_axis(
+    width: u32,
+    height: u32,
+    target_width: u32,
+    target_height: u32,
+    encoded: usize,
+    axis: fn(u32, u32) -> Option<u64>,
+) -> Option<u64> {
     let source = rgb_bytes(width, height)?;
     let destination = rgb_bytes(target_width, target_height)?;
-    let horizontal = axis_workspace(width, target_width)?;
-    let vertical = axis_workspace(height, target_height)?;
+    let horizontal = axis(width, target_width)?;
+    let vertical = axis(height, target_height)?;
     // resizer.rs::do_convolution does the u8 vertical pass first. The RGB
     // intermediate has at most source_width*target_height pixels plus3 alignment bytes.
     // There is no intermediate when only one axis changes. ~keep
@@ -101,7 +169,20 @@ fn axis_workspace(source: u32, target: u32) -> Option<u64> {
     let radius = (MAX_FILTER_SUPPORT * filter_scale).ceil() as u64;
     let window = radius.checked_mul(2)?.checked_add(1)?;
     let outputs = u64::from(target);
-    let values = window.checked_mul(outputs)?;
+    coefficient_workspace(window.checked_mul(outputs)?, outputs)
+}
+
+fn downscale_axis_workspace(source: u32, target: u32) -> Option<u64> {
+    let outputs = u64::from(target);
+    // T * (2 * ceil(3 * S / T) + 1) <= 6*S + 3*T, so increasing T never lowers the bound. ~keep
+    let support_diameter = 2 * MAX_FILTER_SUPPORT as u64;
+    let slots = support_diameter
+        .checked_mul(u64::from(source))?
+        .checked_add(3 * outputs)?;
+    coefficient_workspace(slots, outputs)
+}
+
+fn coefficient_workspace(values: u64, outputs: u64) -> Option<u64> {
     let value_bytes = (size_of::<f64>() + size_of::<i16>()) as u64;
     values
         .checked_mul(value_bytes)?
@@ -111,6 +192,19 @@ fn axis_workspace(source: u32, target: u32) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn downscale_envelope_is_monotone_and_bounds_exact_fir_workspace() {
+        let mut prior = 0;
+        for width in 2..873 {
+            let height = (1725 * width / 873).min(1724);
+            let upper = downscale_peak(873, 1725, width, height, 43).unwrap();
+            let exact = resize_peak(873, 1725, width, height, 43).unwrap();
+            assert!(upper >= exact, "{width}×{height}: {upper} < {exact}");
+            assert!(upper >= prior, "{width}×{height}: {upper} < {prior}");
+            prior = upper;
+        }
+    }
 
     #[test]
     fn resize_bound_includes_live_rgb_and_both_coefficient_representations() {
@@ -129,6 +223,26 @@ mod tests {
         assert_eq!(resize_peak(10, 10, 20, 10, 0), Some(expected));
         assert!(resize_peak(u32::MAX, u32::MAX, u32::MAX - 1, u32::MAX - 1, 0).is_none());
         assert!(axis_workspace(1, 0).is_none());
+    }
+
+    #[test]
+    fn dpi_search_stops_before_dimension_clamping_can_reverse_rounding() {
+        let config = ImageDpiConfig {
+            target_dpi: 177,
+            auto_adjust_dpi: false,
+            ..Default::default()
+        };
+        let mut next = config.clone();
+        next.target_dpi = 178;
+        assert_eq!(
+            crate::image::preprocessing::normalized_image_dimensions(873, 1725, &config, Some(72.0)),
+            (2073, 4096)
+        );
+        assert_eq!(
+            crate::image::preprocessing::normalized_image_dimensions(873, 1725, &next, Some(72.0)),
+            (2072, 4096)
+        );
+        assert_eq!(largest_unclamped_upscale(72, 178, 1725, 72.0, 4096).unwrap(), Some(170));
     }
 
     #[test]

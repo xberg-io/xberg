@@ -986,6 +986,15 @@ typedef struct XBERGExtractInput XBERGExtractInput;
  */
 typedef struct XBERGExtractInputKind XBERGExtractInputKind;
 /**
+ * An extraction input with additional per-input options.
+ *
+ * The contained input retains its existing file overrides. An omitted layout
+ * option inherits the batch setting; an explicit boolean selects it for this
+ * input. Construct with `Self.new` or `Default` to allow future options to be
+ * added.
+ */
+typedef struct XBERGExtractInputWithOptions XBERGExtractInputWithOptions;
+/**
  * Document extracted by the core extraction pipeline.
  *
  * `extract` and `extract_batch` return an `ExtractionResult` envelope whose
@@ -11257,6 +11266,60 @@ XBERGAlefHandle xberg_extract_input_from_bytes(const uint8_t *bytes,
  * Returned pointers must be freed with the appropriate free function.
  */
 XBERGAlefHandle xberg_extract_input_from_uri(const char *uri);
+
+/**
+ * Create a `ExtractInputWithOptions` from a JSON string. Returns null on
+ * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_extract_input_with_options_free`.
+ */
+XBERGAlefHandle xberg_extract_input_with_options_from_json(const char *json);
+
+/**
+ * Serialize a `ExtractInputWithOptions` to a JSON string. Returns null on
+ * failure. # Safety `handle` must be a valid, non-zero handle returned by a
+ * `xberg` function. The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_extract_input_with_options_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `ExtractInputWithOptions` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_extract_input_with_options_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `input` field from a `ExtractInputWithOptions`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_extract_input_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_extract_input_with_options_input(XBERGAlefHandle handle);
+
+/**
+ * Get the `use_layout_for_markdown` field from a `ExtractInputWithOptions`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_extract_input_with_options_use_layout_for_markdown(
+    XBERGAlefHandle handle);
+
+/**
+ * Report whether the `use_layout_for_markdown` field on a
+ * `ExtractInputWithOptions` is `Some`.
+ *
+ * `xberg_extract_input_with_options_use_layout_for_markdown` cannot distinguish
+ * a `None` field from a legitimate zero-valued `Some` at the C ABI boundary --
+ * there is no null representation for a numeric return, so both collapse to the
+ * same sentinel. Call this function first: `1` means the field getter's return
+ * value is meaningful, `0` means the field is absent and the getter's sentinel
+ * must be ignored, `-1` reports an invalid handle (see
+ * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
+ * this library.
+ */
+int32_t xberg_extract_input_with_options_has_use_layout_for_markdown(
+    XBERGAlefHandle handle);
 
 /**
  * Create a `ExtractedDocument` from a JSON string. Returns null on failure.
@@ -30790,6 +30853,109 @@ XBERGAlefHandle xberg_extract_batch(const char *inputs, XBERGAlefHandle config);
 XBERGAlefHandle
 xberg_extract_batch_cancellable(const char *inputs, XBERGAlefHandle config,
                                 XBERGAlefHandle alef_cancel_token);
+
+/**
+ * Extract a batch whose inputs carry additional per-input options.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extract_batch_with_input_options(const char *inputs,
+                                                       XBERGAlefHandle config);
+
+/**
+ * Cancellable variant of `xberg_extract_batch_with_input_options`.
+ *
+ * Takes a trailing `alef_cancel_token` created by `xberg_cancel_token_new`.
+ * Tripping it with `xberg_cancel_token_cancel` from any thread aborts the
+ * blocking call, which then fails with the `Cancelled` error code. Pass `0` for
+ * a call that is never cancelled.
+ *
+ * Extract a batch whose inputs carry additional per-input options.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extract_batch_with_input_options_cancellable(
+    const char *inputs, XBERGAlefHandle config,
+    XBERGAlefHandle alef_cancel_token);
+
+/**
+ * Extract a batch from a JSON array of per-input objects.
+ *
+ * Uses the same fields and semantics as `ExtractInputWithOptions`. This is
+ * useful for callers that pass input values through a text-based boundary.
+ * Swift exposes this as a top-level async function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ * \code
+ * import Xberg
+ *
+ * let inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """
+ * let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+ *
+ * using Xberg;
+ *
+ * var inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """;
+ * var result = await
+ * XbergConverter.ExtractBatchWithInputOptionsJsonAsync(inputs, new
+ * ExtractionConfig());
+ * \endcode
+ */
+XBERGAlefHandle
+xberg_extract_batch_with_input_options_json(const char *inputs_json,
+                                            XBERGAlefHandle config);
+
+/**
+ * Cancellable variant of `xberg_extract_batch_with_input_options_json`.
+ *
+ * Takes a trailing `alef_cancel_token` created by `xberg_cancel_token_new`.
+ * Tripping it with `xberg_cancel_token_cancel` from any thread aborts the
+ * blocking call, which then fails with the `Cancelled` error code. Pass `0` for
+ * a call that is never cancelled.
+ *
+ * Extract a batch from a JSON array of per-input objects.
+ *
+ * Uses the same fields and semantics as `ExtractInputWithOptions`. This is
+ * useful for callers that pass input values through a text-based boundary.
+ * Swift exposes this as a top-level async function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ * \code
+ * import Xberg
+ *
+ * let inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """
+ * let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+ *
+ * using Xberg;
+ *
+ * var inputs = """
+ * [
+ *   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+ *   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+ * ]
+ * """;
+ * var result = await
+ * XbergConverter.ExtractBatchWithInputOptionsJsonAsync(inputs, new
+ * ExtractionConfig());
+ * \endcode
+ */
+XBERGAlefHandle xberg_extract_batch_with_input_options_json_cancellable(
+    const char *inputs_json, XBERGAlefHandle config,
+    XBERGAlefHandle alef_cancel_token);
 
 #if defined(XBERG_FEATURE_REDACTION)
 /**

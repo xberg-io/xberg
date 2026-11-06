@@ -6,6 +6,10 @@ use xberg_native_pdf::elements::{PathContent, PathOperation};
 #[path = "source_boundaries.rs"]
 mod source_boundaries;
 
+#[path = "source_row_bands.rs"]
+mod source_row_bands;
+use source_row_bands::{ExactRows, RuleFrame};
+
 const MAX_RULE_PROOF_WORK: usize = 65_536;
 const MAX_SOURCE_PROOF_WORDS: usize = 1_024;
 const MAX_UNIQUE_VERTICAL_RULES: usize = 4_096;
@@ -34,13 +38,22 @@ pub(super) struct VerticalRule {
     x: f32,
     bottom: f32,
     top: f32,
-    half_width: f32,
+    stroke_width: f32,
+}
+
+impl VerticalRule {
+    fn covers_gap(&self, left_edge: f64, right_edge: f64) -> bool {
+        let center = f64::from(self.x);
+        let half_width = f64::from(self.stroke_width) / 2.0;
+        half_width > 0.0 && center - left_edge >= half_width && right_edge - center >= half_width
+    }
 }
 
 pub(super) struct PageRules<'a> {
     paths: &'a [PathContent],
     eligible: bool,
     cached: OnceCell<Vec<VerticalRule>>,
+    exact_rows: Option<ExactRows<'a>>,
 }
 
 impl<'a> PageRules<'a> {
@@ -49,7 +62,18 @@ impl<'a> PageRules<'a> {
             paths,
             eligible,
             cached: OnceCell::new(),
+            exact_rows: None,
         }
+    }
+
+    pub(super) fn with_source_words(
+        mut self,
+        segments: &'a [crate::pdf::hierarchy::SegmentData],
+        words: &'a [HocrWord],
+        sources: &'a [Option<usize>],
+    ) -> Self {
+        self.exact_rows = Some(ExactRows::new(segments, words, sources));
+        self
     }
 
     fn rules(&self) -> &[VerticalRule] {
@@ -76,7 +100,7 @@ fn vertical_rules_with_work(paths: &[PathContent], work: &mut RuleWork) -> Optio
                 rule.x.to_bits(),
                 rule.bottom.to_bits(),
                 rule.top.to_bits(),
-                rule.half_width.to_bits(),
+                rule.stroke_width.to_bits(),
             );
             if !unique.contains_key(&key) && unique.len() >= MAX_UNIQUE_VERTICAL_RULES {
                 return None;
@@ -120,17 +144,17 @@ fn painted_vertical_rule(path: &PathContent) -> Option<VerticalRule> {
         x: *x,
         bottom: y.min(*other_y),
         top: y.max(*other_y),
-        half_width: path.stroke_width / 2.0,
+        stroke_width: path.stroke_width,
     })
 }
 
 fn column_gap_limit_with_work(
     words: &[HocrWord],
-    page_height: f32,
+    frame: RuleFrame<'_>,
     rules: &[VerticalRule],
     work: &mut RuleWork,
 ) -> Option<u32> {
-    if !page_height.is_finite() || rules.is_empty() || words.len() > MAX_SOURCE_PROOF_WORDS {
+    if !frame.page_height.is_finite() || rules.is_empty() || words.len() > MAX_SOURCE_PROOF_WORDS {
         return None;
     }
     for word in words {
@@ -147,7 +171,7 @@ fn column_gap_limit_with_work(
         }
         for rule in rules_in_gap(left, right, rules) {
             work.charge(1)?;
-            if separates_pair(rule, left, right, page_height) {
+            if separates_pair(rule, left, right, frame) {
                 // ~keep Clustering accepts equality, so the threshold must be strictly below this ruled-cell separation.
                 let gap = right.left.saturating_sub(left.left).saturating_sub(1);
                 let (first_row, repeated, minimum) = evidence.entry(rule.x.to_bits()).or_insert((left.top, false, gap));
@@ -163,21 +187,21 @@ fn column_gap_limit_with_work(
 }
 
 fn rules_in_gap<'a>(left: &HocrWord, right: &HocrWord, rules: &'a [VerticalRule]) -> &'a [VerticalRule] {
-    let left_edge = left.left.saturating_add(left.width) as f32;
-    let start = rules.partition_point(|rule| rule.x < left_edge);
-    let end = rules.partition_point(|rule| rule.x <= right.left as f32);
+    let left_edge = f64::from(left.left) + f64::from(left.width);
+    let right_edge = f64::from(right.left);
+    let start = rules.partition_point(|rule| f64::from(rule.x) < left_edge);
+    let end = rules.partition_point(|rule| f64::from(rule.x) <= right_edge);
     rules.get(start..end).unwrap_or_default()
 }
 
-fn separates_pair(rule: &VerticalRule, left: &HocrWord, right: &HocrWord, page_height: f32) -> bool {
+fn separates_pair(rule: &VerticalRule, left: &HocrWord, right: &HocrWord, frame: RuleFrame<'_>) -> bool {
     left.top == right.top
         && left.height == right.height
         && left.height > 0
         && left.width > 0
         && right.width > 0
-        && rule.x - rule.half_width >= left.left.saturating_add(left.width) as f32
-        && rule.x + rule.half_width <= right.left as f32
-        && rule_covers_row(rule, left, page_height)
+        && rule.covers_gap(f64::from(left.left) + f64::from(left.width), f64::from(right.left))
+        && frame.covers_pair(rule, left, right)
 }
 
 fn same_numeric_row(left: &HocrWord, right: &HocrWord) -> bool {
@@ -188,12 +212,6 @@ fn same_numeric_row(left: &HocrWord, right: &HocrWord) -> bool {
         && right.width > 0
         && crate::table_core::text_is_value(&left.text)
         && crate::table_core::text_is_value(&right.text)
-}
-
-fn rule_covers_row(rule: &VerticalRule, word: &HocrWord, page_height: f32) -> bool {
-    let top = page_height - word.top as f32;
-    let bottom = page_height - word.top.saturating_add(word.height) as f32;
-    rule.bottom <= bottom && rule.top >= top
 }
 
 pub(super) fn reconstruct_region_table(
@@ -207,46 +225,48 @@ pub(super) fn reconstruct_region_table(
     let original =
         super::reconstruct_region_table(region, page_height, page_number, allow_single_column, horizontal_rules)?;
     let rules = page_rules.rules();
+    if rules.is_empty() {
+        return Some(original);
+    }
     let mut work = RuleWork::default();
-    let Some(limit) = column_gap_limit_with_work(region, page_height, rules, &mut work) else {
-        return Some(original);
-    };
-    let left = region.iter().map(|word| word.left).min().unwrap_or(0);
-    let right = region
-        .iter()
-        .map(|word| word.left.saturating_add(word.width))
-        .max()
-        .unwrap_or(0);
-    let gap = super::heuristic_column_gap(region, right.saturating_sub(left) as f32);
-    if gap <= limit {
-        return Some(original);
-    }
-    let corrected = super::reconstruct_region_table_with_column_gap(
-        region,
-        page_height,
-        page_number,
-        allow_single_column,
-        limit,
-        horizontal_rules,
-    )
-    .ok();
-    match corrected {
-        Some(corrected)
-            if same_cell_words(&original.cells, &corrected.cells)
-                && source_boundaries::preserves_source_boundaries(
-                    &original.cells,
-                    &corrected.cells,
-                    region,
-                    rules,
-                    page_height,
-                    &mut work,
-                )
-                .unwrap_or(false) =>
-        {
-            Some(corrected)
+    let attempt = |frame, work: &mut RuleWork| {
+        let limit = column_gap_limit_with_work(region, frame, rules, work)?;
+        let left = region.iter().map(|word| word.left).min().unwrap_or(0);
+        let right = region
+            .iter()
+            .map(|word| word.left.saturating_add(word.width))
+            .max()
+            .unwrap_or(0);
+        let gap = super::heuristic_column_gap(region, right.saturating_sub(left) as f32);
+        if gap <= limit {
+            return None;
         }
-        _ => Some(original),
-    }
+        let corrected = super::reconstruct_region_table_with_column_gap(
+            region,
+            page_height,
+            page_number,
+            allow_single_column,
+            limit,
+            horizontal_rules,
+        )
+        .ok()?;
+        (same_cell_words(&original.cells, &corrected.cells)
+            && source_boundaries::preserves_source_boundaries(
+                &original.cells,
+                &corrected.cells,
+                region,
+                rules,
+                frame,
+                work,
+            )?)
+        .then_some(corrected)
+    };
+    let corrected = attempt(page_height.into(), &mut work).or_else(|| {
+        let exact = page_rules.exact_rows.as_ref()?.frame(page_height)?;
+        let corrected = attempt(exact, &mut work)?;
+        source_boundaries::preserves_old_partitions(&original.cells, &corrected.cells).then_some(corrected)
+    });
+    Some(corrected.unwrap_or(original))
 }
 
 fn same_cell_words(original: &[Vec<String>], corrected: &[Vec<String>]) -> bool {

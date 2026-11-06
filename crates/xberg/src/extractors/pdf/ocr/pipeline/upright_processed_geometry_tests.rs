@@ -115,6 +115,60 @@ fn assert_render_geometry(result: &ExtractedDocument, expected: (u32, u32, u32, 
 }
 
 #[test]
+fn raw_workspace_rebase_transforms_geometry_once_after_a_quarter_turn() {
+    let render = (160, 240);
+    let mut result = fixture(Some((120, 80)));
+    result.raw_ocr_source_frame = Some(crate::types::formats::RawOcrSourceFrame { dimensions: (240, 160) });
+    let quad = |points: [(u32, u32); 4]| OcrBoundingGeometry::Quadrilateral {
+        points: points.into_iter().map(Into::into).collect(),
+    };
+    result.ocr_internal_document.as_mut().unwrap().elements[0].ocr_geometry =
+        Some(quad([(20, 40), (50, 40), (50, 60), (20, 60)]));
+
+    undo_upright_raster_correction(&mut result, 90, 240, 160);
+    assert_eq!(processed_ocr_layout_dimensions(&result.metadata), Some((80, 120)));
+    assert!(super::raw_workspace_geometry::normalize(&mut result, render, true));
+    assert_eq!(processed_ocr_layout_dimensions(&result.metadata), Some(render));
+    assert_geometry(&result, (80, 140, 40, 60));
+    assert_eq!(
+        result.ocr_internal_document.as_ref().unwrap().elements[0].ocr_geometry,
+        Some(quad([(80, 200), (80, 140), (120, 140), (120, 200)]))
+    );
+
+    assert!(!super::raw_workspace_geometry::normalize(&mut result, render, true));
+    assert_geometry(&result, (80, 140, 40, 60));
+    let assembled = super::super::document::build_pipeline_ocr_page_document(
+        result.ocr_internal_document.take(),
+        result.tables,
+        result.ocr_elements.unwrap(),
+        "count 17",
+        1,
+        render,
+        (80.0, 120.0),
+    )
+    .unwrap();
+    let frame = assembled.ocr_coordinate_frame.unwrap();
+    assert_eq!((frame.width, frame.height), render);
+    assert_eq!(
+        assembled.prebuilt_ocr_elements.as_ref().unwrap()[0].geometry,
+        rectangle(80, 140, 40, 60)
+    );
+    assert_eq!(
+        assembled.tables[0].bounding_box,
+        Some(BoundingBox {
+            x0: 40.0,
+            y0: 20.0,
+            x1: 60.0,
+            y1: 50.0,
+        })
+    );
+
+    let mut unrelated = fixture(Some((80, 120)));
+    assert!(!super::raw_workspace_geometry::normalize(&mut unrelated, render, false));
+    assert_geometry(&unrelated, (20, 40, 30, 20));
+}
+
+#[test]
 fn should_map_scaled_ninety_degree_words_to_the_original_table_raster() {
     let mut result = fixture(Some(SCALED_QUARTER_TURN));
     let preprocessing = serde_json::json!({

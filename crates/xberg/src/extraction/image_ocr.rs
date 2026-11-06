@@ -27,6 +27,14 @@
 
 use crate::types::{ExtractedDocument, ExtractedImage};
 
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) mod pdf_gap;
+
 /// One image queued for OCR: its index into `images`, its raw bytes, and the per-image
 /// `OcrConfig` clone (output format/acceleration/security limits applied) to hand the backend.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]

@@ -4,6 +4,8 @@
 //! using xberg_native_pdf (pure Rust). Supports both native text extraction and OCR fallback.
 
 mod extraction;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod khmer_retention;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -276,6 +278,13 @@ fn extract_lopdf_compatibility_data(
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
     extraction: extraction::PdfExtractionPhaseResult,
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    image_gap: Option<crate::extraction::image_ocr::pdf_gap::Placement>,
     bookmark_uris: Vec<crate::types::ExtractedUri>,
     pdf_revisions: Option<Vec<crate::types::DocumentRevision>>,
     diagrams: Vec<crate::types::diagram::DiagramGraph>,
@@ -328,6 +337,9 @@ fn extract_native_blocking(
     #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
         crate::core::config::acceleration::AccelerationConfig,
     >,
+    #[cfg(feature = "layout-detection")] region_text_layout: Option<
+        crate::engine::layout_region_text::RegionTextLayout,
+    >,
 ) -> Result<NativeBlockingOutput> {
     ensure_pdf_not_cancelled(&config)?;
     let passwords = config
@@ -356,29 +368,44 @@ fn extract_native_blocking(
     } else {
         Vec::new()
     };
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut image_gap = None;
     let extraction = extract_all_from_native_document(
         native_document,
         &config,
         &outline_entries,
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        &mut image_gap,
         #[cfg(feature = "layout-detection")]
-        layout_hints.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_images.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_results.as_deref(),
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_acceleration_override.as_ref(),
+        extraction::NativeLayoutInput {
+            hints: layout_hints.as_deref(),
+            images: layout_images.as_deref(),
+            results: layout_results.as_deref(),
+            acceleration: layout_acceleration_override.as_ref(),
+            region_text: region_text_layout.as_ref(),
+        },
     )?;
     ensure_pdf_not_cancelled(&config)?;
 
     Ok(NativeBlockingOutput {
         extraction,
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        image_gap,
         bookmark_uris,
         pdf_revisions,
         diagrams,
@@ -1117,18 +1144,8 @@ fn config_with_layout_acceleration_override(
     std::borrow::Cow::Owned(effective)
 }
 
-#[cfg(all(test, paddle_ocr, feature = "ocr"))]
-async fn run_ocr_with_layout(
-    content: &[u8],
-    config: &ExtractionConfig,
-    path: Option<&std::path::Path>,
-    page_ocr_hints: Option<ocr::PageOcrHints>,
-    #[cfg(feature = "layout-detection")] precomputed_layout_images: Option<Vec<image::RgbImage>>,
-    #[cfg(feature = "layout-detection")] precomputed_layout_detections: Option<Vec<crate::layout::DetectionResult>>,
-    #[cfg(feature = "layout-detection")] precomputed_layout_acceleration_override: Option<
-        crate::core::config::acceleration::AccelerationConfig,
-    >,
-) -> ocr::OcrRunResult<(
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type WholePageOcrOutput = (
     String,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -1142,7 +1159,21 @@ async fn run_ocr_with_layout(
     OcrLayoutGateDecisions,
     Option<crate::types::ProcessingWarning>,
     Vec<crate::types::ProcessingWarning>,
-)> {
+    bool,
+);
+
+#[cfg(all(test, paddle_ocr, feature = "ocr"))]
+async fn run_ocr_with_layout(
+    content: &[u8],
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<ocr::PageOcrHints>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_images: Option<Vec<image::RgbImage>>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_detections: Option<Vec<crate::layout::DetectionResult>>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_acceleration_override: Option<
+        crate::core::config::acceleration::AccelerationConfig,
+    >,
+) -> ocr::OcrRunResult<WholePageOcrOutput> {
     run_ocr_with_layout_pages(
         content,
         config,
@@ -1183,21 +1214,7 @@ async fn run_ocr_with_layout_pages(
     #[cfg(feature = "layout-detection")] precomputed_layout_acceleration_override: Option<
         crate::core::config::acceleration::AccelerationConfig,
     >,
-) -> ocr::OcrRunResult<(
-    String,
-    Vec<crate::types::Table>,
-    Vec<crate::types::OcrElement>,
-    Option<crate::types::internal::InternalDocument>,
-    Vec<crate::types::LlmUsage>,
-    Vec<String>,
-    Option<Vec<crate::types::ExtractedImage>>,
-    Vec<crate::types::Formula>,
-    ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
-    ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-    OcrLayoutGateDecisions,
-    Option<crate::types::ProcessingWarning>,
-    Vec<crate::types::ProcessingWarning>,
-)> {
+) -> ocr::OcrRunResult<WholePageOcrOutput> {
     let PageOcrLayoutContext {
         pages: layout_pages,
         hints: page_ocr_hints,
@@ -1375,6 +1392,7 @@ async fn run_ocr_with_layout_pages(
                 ocr_layout_gate_decisions,
                 layout_warning,
                 layout_glyph_drop_warnings,
+                false,
             ));
         }
 
@@ -1437,22 +1455,26 @@ async fn run_ocr_with_layout_pages(
             ocr_layout_gate_decisions,
             layout_warning,
             layout_glyph_drop_warnings,
+            false,
         ));
     }
 
     let (
-        mut text,
-        _mean_conf,
-        mut ocr_tables,
-        ocr_elements,
-        mut ocr_doc,
-        llm_usage,
-        ocr_pts,
-        ocr_rasters,
-        formulas,
-        preprocessing,
-        ocr_confidence,
-    ) = Box::pin(ocr::extract_with_ocr_with_page_hints(
+        (
+            mut text,
+            _mean_conf,
+            mut ocr_tables,
+            ocr_elements,
+            mut ocr_doc,
+            llm_usage,
+            ocr_pts,
+            ocr_rasters,
+            formulas,
+            preprocessing,
+            ocr_confidence,
+        ),
+        discarded_visible_native_page,
+    ) = Box::pin(ocr::extract_with_ocr_with_page_hints_and_evidence(
         Some(content),
         #[cfg(feature = "layout-detection")]
         ocr_images,
@@ -1490,6 +1512,7 @@ async fn run_ocr_with_layout_pages(
         ocr_layout_gate_decisions,
         layout_warning,
         layout_glyph_drop_warnings,
+        discarded_visible_native_page,
     ))
 }
 
@@ -2488,6 +2511,18 @@ fn whole_document_ocr_hints(
             })
             .native_page_layers = layers;
     }
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        })
+        && let Some([boundary]) = boundaries
+        && boundary.page_number == 1
+        && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
+        && native.contains(unmapped_glyphs::LOST_GLYPH_MARKER)
+    {
+        hints.get_or_insert_with(Default::default).single_native_type0_page = Some(native.into());
+    }
     hints
 }
 
@@ -2727,6 +2762,19 @@ impl PdfExtractor {
 
         let blocking_content = content.to_vec();
         let blocking_config = config.clone();
+        #[cfg(feature = "layout-detection")]
+        let region_text_layout = layout_pages
+            .filter(|pages| pages.region_text.is_some() && crate::engine::layout_region_text::capture_allowed(config))
+            .zip(markdown_layout_detections.as_deref())
+            .map(
+                |(selection, detections)| crate::engine::layout_region_text::RegionTextLayout {
+                    selection: selection.clone(),
+                    detector_classes: detections
+                        .iter()
+                        .map(|page| page.detections.iter().map(|detection| detection.class_name).collect())
+                        .collect(),
+                },
+            );
         let native_output = spawn_pdf_blocking(move || {
             extract_native_blocking(
                 blocking_content,
@@ -2739,6 +2787,8 @@ impl PdfExtractor {
                 markdown_layout_hints,
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_acceleration_override,
+                #[cfg(feature = "layout-detection")]
+                region_text_layout,
             )
         })
         .await?;
@@ -2920,6 +2970,7 @@ impl PdfExtractor {
                 gate_audit,
                 layout_warning,
                 layout_glyph_drop_warnings,
+                _,
             ) = run_ocr_with_layout_pages(
                 content,
                 config,
@@ -3239,13 +3290,25 @@ impl PdfExtractor {
                     // silently suppress page OCR on scanned PDFs, leaving `pages[].content`
                     // empty (#1576). `RunFallbackOnPages` below has never read this field;
                     // this now matches it. ~keep
+                    let hints = whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let khmer_retention =
+                        khmer_retention::KhmerRetention::for_automatic_page(config, &pdf_metadata, &native_text);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let hints = {
+                        let mut hints = hints;
+                        if let Some(retention) = &khmer_retention {
+                            hints.get_or_insert_with(Default::default).khmer_retention = Some(retention.clone());
+                        }
+                        hints
+                    };
                     match run_ocr_with_layout_pages(
                         content,
                         config,
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
-                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
+                            hints,
                         },
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_images.take(),
@@ -3270,6 +3333,7 @@ impl PdfExtractor {
                             gate_audit,
                             layout_warning,
                             layout_glyph_drop_warnings,
+                            discarded_visible_native_page,
                         )) => {
                             if let Some(warning) = layout_warning {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
@@ -3277,17 +3341,43 @@ impl PdfExtractor {
                             for warning in layout_glyph_drop_warnings {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                             }
-                            ocr_layout_gate_audit = gate_audit;
-                            ocr_tables = ocr_tbls;
-                            ocr_elements = ocr_elems;
-                            ocr_internal_doc = ocr_doc;
-                            ocr_llm_usage = llm_usage;
-                            ocr_page_texts = Some(ocr_pts);
-                            ocr_page_rasters = ocr_rstrs;
-                            ocr_formulas = formulas;
-                            ocr_preprocessing_by_page = preprocessing;
-                            ocr_confidence_by_page = page_ocr_confidence;
-                            (ocr_text, ExtractionMethod::Ocr)
+                            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                            let preserve_known_khmer = khmer_retention
+                                .as_ref()
+                                .is_some_and(khmer_retention::KhmerRetention::confirmed);
+                            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                            let preserve_known_khmer = false;
+                            let preserve_native_after_discard = discarded_visible_native_page
+                                && pdf_metadata
+                                    .pdf_specific
+                                    .fabricated_text_pages
+                                    .as_ref()
+                                    .is_some_and(Vec::is_empty)
+                                && pdf_metadata
+                                    .pdf_specific
+                                    .implausible_text_pages
+                                    .as_ref()
+                                    .is_some_and(Vec::is_empty);
+                            if preserve_known_khmer || preserve_native_after_discard {
+                                let (warnings, failures) = ocr_doc
+                                    .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
+                                    .unwrap_or_default();
+                                crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, warnings);
+                                ocr_page_failures.extend(failures);
+                                (native_text, ExtractionMethod::Native)
+                            } else {
+                                ocr_layout_gate_audit = gate_audit;
+                                ocr_tables = ocr_tbls;
+                                ocr_elements = ocr_elems;
+                                ocr_internal_doc = ocr_doc;
+                                ocr_llm_usage = llm_usage;
+                                ocr_page_texts = Some(ocr_pts);
+                                ocr_page_rasters = ocr_rstrs;
+                                ocr_formulas = formulas;
+                                ocr_preprocessing_by_page = preprocessing;
+                                ocr_confidence_by_page = page_ocr_confidence;
+                                (ocr_text, ExtractionMethod::Ocr)
+                            }
                         }
                         Err(failed_run) => {
                             tracing::warn!(
@@ -4110,6 +4200,17 @@ impl PdfExtractor {
             }
         }
 
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        if extraction_method == ExtractionMethod::Native
+            && let Some(placement) = native_output.image_gap
+        {
+            crate::extraction::image_ocr::pdf_gap::publish(placement);
+        }
         Ok(doc)
     }
 

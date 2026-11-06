@@ -15,6 +15,7 @@ const PARTIAL: &[usize] = &[0, 1, 2, 3, 10];
 const SPARSE: &[usize] = &[0, 10];
 const COMPLETE: &[usize] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
+// ~keep Avoid ambiguous adjacent r/n glyphs in the synthetic OCR text.
 const LINES: &[(f32, &str)] = &[
     (135.0, "Heading"),
     (
@@ -32,16 +33,16 @@ const LINES: &[(f32, &str)] = &[
     ),
     (
         469.0,
-        "the afternoon, the keeper inspected a brass compass and repaired a cracked",
+        "at midday, the keeper inspected a brass compass and repaired a cracked",
     ),
     (503.0, "window before supper."),
     (
         625.0,
-        "Across the quiet harbor, fishing boats returned with silver baskets.",
+        "Across the quiet harbor, fishing boats arrived with silver baskets.",
     ),
     (
         659.0,
-        "Neighbors delivered warm bread to the dock and counted lanterns while the",
+        "Neighbors delivered warm bread to the dock and counted lamps while the",
     ),
     (693.0, "evening tide rose gently."),
     (1215.0, "Page 7"),

@@ -28,6 +28,8 @@ pub(crate) mod test_recovery_model;
 pub(crate) mod validation;
 
 pub(crate) use api_pool::tesseract_api_capacity;
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use execution::render_inline_ocr_table_content;
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) use execution::{light_page_foreground_mode, lower_mode_mask_has_text_structure};
 
@@ -47,6 +49,15 @@ pub struct OcrProcessor {
     api_pool: std::sync::Arc<api_pool::TesseractApiPool>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImageOcrPolicy {
+    Default,
+    BoundedInferredUpscale,
+    StandaloneDotLeaderRows,
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    StandaloneSparseRows,
+}
+
 impl OcrProcessor {
     pub(crate) fn new(cache_dir: Option<std::path::PathBuf>) -> Result<Self, OcrError> {
         let cache = OcrCache::new(cache_dir)?;
@@ -62,44 +73,21 @@ impl OcrProcessor {
         self.api_pool.capacity()
     }
 
+    #[cfg(test)]
     pub(crate) fn process_image(
         &self,
         image_bytes: &[u8],
         config: &TesseractConfig,
     ) -> Result<OcrExtractionResult, OcrError> {
-        #[cfg(feature = "otel")]
-        let span = crate::telemetry::spans::ocr_span("tesseract", &config.language);
-        #[cfg(feature = "otel")]
-        let _guard = span.enter();
-        #[cfg(feature = "otel")]
-        let start = Instant::now();
-
-        let result = execution::process_image_with_cache(image_bytes, config, &self.cache, &self.api_pool, None);
-
-        #[cfg(feature = "otel")]
-        {
-            let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
-            crate::telemetry::metrics::get_metrics().ocr_duration_ms.record(
-                duration_ms,
-                &[
-                    opentelemetry::KeyValue::new(crate::telemetry::conventions::OCR_BACKEND, "tesseract"),
-                    opentelemetry::KeyValue::new(crate::telemetry::conventions::OCR_LANGUAGE, config.language.clone()),
-                ],
-            );
-        }
-
-        result
+        self.process_image_with_policy(image_bytes, config, None, ImageOcrPolicy::Default)
     }
 
-    /// Process an image with OCR and respect the output format from ExtractionConfig.
-    ///
-    /// This variant allows specifying an output format (Plain, Markdown, Djot) which
-    /// affects how the OCR result's mime_type is set when markdown output is requested.
-    pub(crate) fn process_image_with_format(
+    pub(crate) fn process_image_with_policy(
         &self,
         image_bytes: &[u8],
         config: &TesseractConfig,
-        output_format: crate::core::config::OutputFormat,
+        output_format: Option<crate::core::config::OutputFormat>,
+        policy: ImageOcrPolicy,
     ) -> Result<OcrExtractionResult, OcrError> {
         #[cfg(feature = "otel")]
         let span = crate::telemetry::spans::ocr_span("tesseract", &config.language);
@@ -108,8 +96,14 @@ impl OcrProcessor {
         #[cfg(feature = "otel")]
         let start = Instant::now();
 
-        let result =
-            execution::process_image_with_cache(image_bytes, config, &self.cache, &self.api_pool, Some(output_format));
+        let result = execution::process_image_with_cache_and_policy(
+            image_bytes,
+            config,
+            &self.cache,
+            &self.api_pool,
+            output_format,
+            policy,
+        );
 
         #[cfg(feature = "otel")]
         {
@@ -290,6 +284,7 @@ mod tests {
                 tables: vec![],
                 ocr_elements: None,
                 internal_document: None,
+                raw_ocr_source_frame: None,
             }),
             error: None,
         };

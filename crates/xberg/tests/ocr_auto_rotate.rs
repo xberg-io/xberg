@@ -67,9 +67,16 @@ fn in_orientation_test_process(case: &str, warm: bool) -> bool {
     let hub = root.path().join("hub");
     fs::create_dir(&hub).expect("empty Hugging Face Hub cache");
     if warm {
+        use sha2::{Digest, Sha256};
+
         let destination = hub.join(MODEL);
         fs::create_dir_all(destination.parent().expect("model cache parent")).expect("model cache directories");
-        fs::copy(model, destination).expect("copy the pinned orientation model into the test cache");
+        let bytes = fs::read(model).expect("read the pinned orientation model");
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            "6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947"
+        );
+        fs::write(destination, bytes).expect("copy the pinned orientation model into the test cache");
     }
 
     let tessdata = root.path().join("tessdata");
@@ -367,6 +374,162 @@ fn implicit_pdf_ocr_recovers_the_complete_rotated_table() {
             .iter()
             .any(|warning| warning.message.contains("recognition noise"))
     );
+}
+
+#[cfg(all(
+    paddle_ocr,
+    feature = "pdf",
+    any(feature = "auto-rotate", feature = "auto-rotate-tract")
+))]
+#[test]
+fn implicit_detached_pdf_ocr_scales_recovered_table_to_page() {
+    if !in_orientation_test_process("implicit_detached_pdf_ocr_scales_recovered_table_to_page", true) {
+        return;
+    }
+    use xberg::ExtractionConfig;
+    use xberg::core::config::{ImageExtractionConfig, PageConfig};
+
+    let rotated = include_bytes!("fixtures/ocr/rotated_financial_table.pdf");
+    let mixed = prepend_native_page(rotated);
+    let config = ExtractionConfig {
+        use_cache: false,
+        images: Some(ImageExtractionConfig {
+            target_dpi: 150,
+            auto_adjust_dpi: false,
+            extract_images: false,
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let extract = |bytes: &[u8], config: &ExtractionConfig| {
+        helpers::extract_bytes_document_blocking(bytes, "application/pdf", config).expect("extract PDF")
+    };
+    let native = extract(
+        &mixed,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    );
+    let whole = extract(
+        rotated,
+        &ExtractionConfig {
+            force_ocr: true,
+            ..config.clone()
+        },
+    );
+    let detached = extract(
+        &mixed,
+        &ExtractionConfig {
+            force_ocr_pages: Some(vec![2]),
+            ..config
+        },
+    );
+
+    assert_detached_table(&native, &whole, &detached);
+}
+
+#[cfg(all(
+    paddle_ocr,
+    feature = "pdf",
+    any(feature = "auto-rotate", feature = "auto-rotate-tract")
+))]
+fn assert_detached_table(
+    native: &xberg::ExtractedDocument,
+    whole: &xberg::ExtractedDocument,
+    detached: &xberg::ExtractedDocument,
+) {
+    use xberg::types::ExtractionMethod;
+
+    let [native_page, raster_page] = native.pages.as_deref().unwrap() else {
+        panic!("two native views")
+    };
+    let [kept, recovered] = detached.pages.as_deref().unwrap() else {
+        panic!("two mixed pages")
+    };
+    assert!(native_page.content.contains("The archive register"));
+    assert!(raster_page.content.trim().is_empty());
+    assert_eq!(kept.content, native_page.content);
+    assert_eq!((kept.page_number, recovered.page_number), (1, 2));
+    assert_eq!(detached.extraction_method, Some(ExtractionMethod::Mixed));
+    let preprocessing = recovered.image_preprocessing.as_ref().expect("detached OCR dimensions");
+    let raster = &preprocessing.original_dimensions;
+    let processed = preprocessing
+        .new_dimensions
+        .as_ref()
+        .expect("OCR must resize the raster");
+    assert_eq!((raster.width, raster.height), (1650, 1276));
+    assert_eq!((processed.width, processed.height), (3300, 2552));
+    let [direct] = whole.tables.as_slice() else {
+        panic!("one whole-page OCR table")
+    };
+    let [table] = detached.tables.as_slice() else {
+        panic!("one detached OCR table")
+    };
+    assert_eq!(table.page_number, 2);
+    assert_eq!(table.cells.len(), 48);
+    assert!(table.cells.iter().all(|row| row.len() == 8));
+    assert_eq!(table.cells, direct.cells);
+    assert_eq!(table.markdown, direct.markdown);
+    assert_eq!(recovered.content.trim(), table.markdown.trim());
+    assert_eq!(
+        table
+            .cells
+            .iter()
+            .flatten()
+            .map(|cell| cell.split_whitespace().count())
+            .sum::<usize>(),
+        FINANCIAL_TABLE_WORDS
+    );
+    assert_rotated_table_box(table.bounding_box.as_ref().expect("detached table geometry"));
+}
+
+#[cfg(all(
+    paddle_ocr,
+    feature = "pdf",
+    any(feature = "auto-rotate", feature = "auto-rotate-tract")
+))]
+fn prepend_native_page(rotated: &[u8]) -> Vec<u8> {
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let mut document = Document::load_mem(rotated).unwrap();
+    assert_eq!(document.get_pages().len(), 1);
+    let pages = document
+        .catalog()
+        .unwrap()
+        .get(b"Pages")
+        .unwrap()
+        .as_reference()
+        .unwrap();
+    let font = document.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut text = String::from("BT /F1 12 Tf 50 720 Td 36 TL ");
+    for _ in 0..8 {
+        text.push_str("(The archive register contains original native material.) Tj T* ");
+    }
+    text.push_str("ET");
+    let contents = document.add_object(Stream::new(dictionary! {}, text.into_bytes()));
+    let page = document.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages, "Contents" => contents,
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    let page_tree = document.get_object_mut(pages).unwrap().as_dict_mut().unwrap();
+    page_tree
+        .get_mut(b"Kids")
+        .unwrap()
+        .as_array_mut()
+        .unwrap()
+        .insert(0, Object::Reference(page));
+    page_tree.set("Count", 2);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
 }
 
 #[cfg(all(feature = "pdf", any(feature = "auto-rotate", feature = "auto-rotate-tract")))]

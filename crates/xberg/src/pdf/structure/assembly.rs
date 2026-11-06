@@ -17,6 +17,9 @@ use crate::types::extraction::BoundingBox;
 use crate::types::internal::{ElementKind, InternalDocument, RelationshipKind, RelationshipTarget};
 use crate::types::internal_builder::InternalDocumentBuilder;
 
+#[path = "assembly/recovered_headers.rs"]
+mod recovered_headers;
+
 /// Assemble an `InternalDocument` from classified paragraphs with tables interleaved.
 ///
 /// Builds a typed `InternalDocument` where each paragraph, heading, code block, formula,
@@ -441,11 +444,11 @@ pub(super) fn reconcile_certified_table_paragraphs(
         by_page.entry(table.page_number).or_default().push((index, table));
     }
     for (number, tables) in by_page {
-        let [(index, table)] = tables.as_slice() else {
+        let Some((index, table)) = certified_cleanup_target(&tables, members) else {
             continue;
         };
         let (Some(runs), Some(page), Some(table_bbox)) = (
-            members.get(index),
+            members.get(&index),
             number.checked_sub(1).and_then(|index| pages.get_mut(index as usize)),
             table.bounding_box,
         ) else {
@@ -455,8 +458,14 @@ pub(super) fn reconcile_certified_table_paragraphs(
         let Some(seen) = surviving_source_members(page) else {
             continue;
         };
-        let singletons = single_residual_members(&seen, &runs.contained);
         let captions: ahash::AHashSet<_> = page.iter().filter_map(|paragraph| paragraph.caption_for).collect();
+        if tables.len() > 1 {
+            if captions.is_empty() && !image_positions.iter().any(|&(page, _)| page == number) {
+                remove_certified_recovered_lines(page, runs, &seen, hyphens);
+            }
+            continue;
+        }
+        let singletons = single_residual_members(&seen, &runs.contained);
         for (index, paragraph) in page.iter_mut().enumerate() {
             if !captions.contains(&index)
                 && let Some(repaired) =
@@ -470,8 +479,111 @@ pub(super) fn reconcile_certified_table_paragraphs(
             if let Some(index) = isolated_painted_orphan(page, &painted, hyphens) {
                 page.remove(index);
             }
+            remove_certified_recovered_lines(page, runs, &seen, hyphens);
+            recovered_headers::order(page, &runs.recovered_tracks, table_bbox);
         }
     }
+}
+
+fn certified_cleanup_target<'a>(
+    tables: &[(usize, &'a crate::types::Table)],
+    members: &ahash::AHashMap<usize, crate::pdf::native::table::source_members::CertifiedRuns>,
+) -> Option<(usize, &'a crate::types::Table)> {
+    match tables {
+        [(index, table)] => Some((*index, table)),
+        [first, second] => [(first, second), (second, first)]
+            .into_iter()
+            .find_map(|(candidate, other)| {
+                let proof = members.get(&candidate.0)?;
+                (proof.replaces_empty_ruled_route
+                    && !members.contains_key(&other.0)
+                    && crate::pdf::native::table::disjoint_table_bounds(candidate.1.bounding_box, other.1.bounding_box))
+                .then_some((candidate.0, candidate.1))
+            }),
+        _ => None,
+    }
+}
+
+fn remove_certified_recovered_lines(
+    page: &mut Vec<PdfParagraph>,
+    runs: &crate::pdf::native::table::source_members::CertifiedRuns,
+    seen: &ahash::AHashMap<SegmentKey, usize>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) {
+    let recovered = runs
+        .recovered_lines
+        .iter()
+        .filter(|key| seen.get(*key) == Some(&1))
+        .collect();
+    remove_recovered_table_lines(page, &recovered, hyphens);
+}
+
+fn remove_recovered_table_lines(
+    page: &mut Vec<PdfParagraph>,
+    recovered: &ahash::AHashSet<&SegmentKey>,
+    hyphens: &super::pipeline::HyphenWitnesses,
+) {
+    if recovered.is_empty() {
+        return;
+    }
+    page.retain_mut(|paragraph| {
+        if !plain_source_paragraph(paragraph) {
+            return true;
+        }
+        let count = paragraph
+            .lines
+            .iter()
+            .rev()
+            .take_while(|line| {
+                !line.segments.is_empty()
+                    && line
+                        .segments
+                        .iter()
+                        .all(|segment| recovered.contains(&SegmentKey::from(segment)))
+            })
+            .count();
+        if count == 0 {
+            return true;
+        }
+        let (original, annotations) = extract_text_and_annotations(paragraph, hyphens);
+        if !annotations.is_empty() {
+            return true;
+        }
+        if count == paragraph.lines.len() {
+            return false;
+        }
+        let mut repaired = paragraph.clone();
+        repaired.lines.truncate(paragraph.lines.len() - count);
+        let (remaining, annotations) = extract_text_and_annotations(&repaired, hyphens);
+        if remaining.is_empty()
+            || !annotations.is_empty()
+            || !original
+                .strip_prefix(&remaining)
+                .is_some_and(|suffix| suffix.starts_with(char::is_whitespace))
+        {
+            return true;
+        }
+        repaired.block_bbox = paragraph_segment_bounds(&repaired);
+        repaired.word_count = PdfParagraph::compute_word_count("", &repaired.lines);
+        *paragraph = repaired;
+        true
+    });
+}
+
+fn paragraph_segment_bounds(paragraph: &PdfParagraph) -> Option<(f32, f32, f32, f32)> {
+    paragraph
+        .lines
+        .iter()
+        .flat_map(|line| &line.segments)
+        .map(|segment| {
+            (
+                segment.x,
+                segment.y,
+                segment.x + segment.width,
+                segment.y + segment.height,
+            )
+        })
+        .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))
 }
 
 fn surviving_source_members(page: &[PdfParagraph]) -> Option<ahash::AHashMap<SegmentKey, usize>> {
@@ -1893,6 +2005,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn recovered_lines_remove_only_certified_plain_suffix_and_preserve_layout_roles() {
+        let body = make_paragraph_at("Fee header", None, 100.);
+        let orphan = make_paragraph_at("Total", None, 80.);
+        let key = SegmentKey::from(&orphan.lines[0].segments[0]);
+        let recovered = ahash::AHashSet::from_iter([&key]);
+        let mut mixed = body.clone();
+        mixed.lines.extend(orphan.lines.clone());
+        let mut heading = orphan.clone();
+        heading.heading_level = Some(2);
+        let mut retained_same_word = orphan;
+        retained_same_word.lines[0].segments[0].x += 4.;
+        let mut paragraphs = vec![mixed, heading, retained_same_word];
+        remove_recovered_table_lines(&mut paragraphs, &recovered, &Default::default());
+        assert_eq!(paragraphs.len(), 3);
+        assert_eq!(
+            extract_text_and_annotations(&paragraphs[0], &Default::default()).0,
+            "Fee header"
+        );
+        assert_eq!(paragraphs[1].heading_level, Some(2));
+        assert_eq!(
+            extract_text_and_annotations(&paragraphs[2], &Default::default()).0,
+            "Total"
+        );
+    }
+
     fn make_paragraph(text: &str, heading_level: Option<u8>) -> PdfParagraph {
         make_paragraph_at(text, heading_level, 700.0)
     }
@@ -1926,6 +2064,104 @@ mod tests {
             block_bbox: None,
             word_count,
         }
+    }
+
+    #[test]
+    fn recovered_company_header_order_requires_a_complete_unassigned_source_band() {
+        let header = |text, x, y, width, bold: bool| {
+            let mut paragraph = make_paragraph_at(text, bold.then_some(2), y);
+            let segment = &mut paragraph.lines[0].segments[0];
+            segment.x = x;
+            segment.y = y;
+            segment.width = width;
+            segment.is_bold = bold;
+            paragraph
+        };
+        let page = vec![
+            header("Name", 10., 80., 10., true),
+            header("Companies:", 10., 100., 135., false),
+            header("Background", 60., 80., 10., true),
+            header("Ownership", 120., 80., 10., true),
+        ];
+        let tracks = [(0., 40.), (50., 100.), (110., 150.)];
+        let table = BoundingBox {
+            x0: 0.,
+            y0: 0.,
+            x1: 150.,
+            y1: 75.,
+        };
+        let first_text = |page: &[PdfParagraph]| page[0].lines[0].segments[0].text.clone();
+        let mut ordered = page.clone();
+        recovered_headers::order(&mut ordered, &tracks, table);
+        assert_eq!(first_text(&ordered), "Companies:");
+        assert_eq!(first_text(&ordered[1..]), "Name");
+        assert_eq!(ordered[1].heading_level, Some(2));
+
+        let mut missing = page.clone();
+        missing.pop();
+        let mut duplicate = page.clone();
+        duplicate[3].lines[0].segments[0].x = 65.;
+        let mut multiline = page.clone();
+        multiline[0].lines.push(page[2].lines[0].clone());
+        let mut outside = page.clone();
+        outside.push(header("Other body text", 10., 120., 40., false));
+        for mut unproved in [missing, duplicate, multiline, outside] {
+            recovered_headers::order(&mut unproved, &tracks, table);
+            assert_eq!(first_text(&unproved), "Name");
+        }
+    }
+
+    #[test]
+    fn a_disjoint_second_table_needs_an_unambiguous_new_ruled_certificate() {
+        use crate::pdf::native::table::source_members::CertifiedRuns;
+        use crate::types::Table;
+
+        let region = |x0, x1| {
+            Some(BoundingBox {
+                x0,
+                y0: 0.0,
+                x1,
+                y1: 10.0,
+            })
+        };
+        let recovered = Table {
+            bounding_box: region(0.0, 10.0),
+            ..Default::default()
+        };
+        let mut proof = ahash::AHashMap::from_iter([(
+            0,
+            CertifiedRuns {
+                replaces_empty_ruled_route: true,
+                ..Default::default()
+            },
+        )]);
+        for (bounds, selected) in [
+            (region(11.0, 20.0), Some(0)),
+            (region(10.0, 20.0), None),
+            (region(5.0, 20.0), None),
+            (region(11.0, f64::INFINITY), None),
+            (region(20.0, 11.0), None),
+            (None, None),
+        ] {
+            let other = Table {
+                bounding_box: bounds,
+                ..Default::default()
+            };
+            let tables = [(1, &other), (0, &recovered)];
+            assert_eq!(
+                certified_cleanup_target(&tables, &proof).map(|(index, _)| index),
+                selected
+            );
+        }
+        let other = Table {
+            bounding_box: region(11.0, 20.0),
+            ..Default::default()
+        };
+        let tables = [(0, &recovered), (1, &other)];
+        proof.insert(1, CertifiedRuns::default());
+        assert!(certified_cleanup_target(&tables, &proof).is_none());
+        proof.clear();
+        assert!(certified_cleanup_target(&tables, &proof).is_none());
     }
 
     #[test]
@@ -1963,6 +2199,9 @@ mod tests {
                 crate::pdf::native::table::source_members::CertifiedRuns {
                     contained: vec![vec![orphan_key.clone(), sibling_key.clone()]],
                     painted_overhangs: Vec::new(),
+                    recovered_lines: Vec::new(),
+                    recovered_tracks: Vec::new(),
+                    replaces_empty_ruled_route: false,
                 },
             )]);
             match case {

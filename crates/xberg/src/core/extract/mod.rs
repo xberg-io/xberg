@@ -11,7 +11,7 @@ use std::sync::LazyLock;
 use crate::Result;
 #[cfg(feature = "url-ingestion")]
 use crate::core::config::UrlExtractionConfig;
-use crate::core::config::{ExtractInput, ExtractionConfig, ExtractionResult};
+use crate::core::config::{ExtractInput, ExtractInputWithOptions, ExtractionConfig, ExtractionResult};
 #[cfg(feature = "url-ingestion")]
 use crawlberg::{CrawlEngine, MapResult};
 
@@ -71,6 +71,54 @@ pub async fn extract_with_external_redaction(
 /// Extract content from multiple bytes or URI inputs.
 pub async fn extract_batch(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> Result<ExtractionResult> {
     DEFAULT_ENGINE.extract_batch(inputs, config).await
+}
+
+/// Extract a batch whose inputs carry additional per-input options.
+pub async fn extract_batch_with_input_options(
+    inputs: Vec<ExtractInputWithOptions>,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
+    DEFAULT_ENGINE.extract_batch_with_input_options(inputs, config).await
+}
+
+/// Extract a batch from a JSON array of per-input objects.
+///
+/// Uses the same fields and semantics as [`ExtractInputWithOptions`]. This is
+/// useful for callers that pass input values through a text-based boundary.
+/// Swift exposes this as a top-level async function.
+///
+/// # Examples
+///
+/// ```swift
+/// import Xberg
+///
+/// let inputs = """
+/// [
+///   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+///   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+/// ]
+/// """
+/// let result = try await extractBatchWithInputOptionsJson(inputs, "{}")
+/// ```
+///
+/// ```csharp
+/// using Xberg;
+///
+/// var inputs = """
+/// [
+///   {"input":{"kind":"uri","uri":"invoice.pdf"},"use_layout_for_markdown":true},
+///   {"input":{"kind":"uri","uri":"notes.pdf"},"use_layout_for_markdown":false}
+/// ]
+/// """;
+/// var result = await XbergConverter.ExtractBatchWithInputOptionsJsonAsync(inputs, new ExtractionConfig());
+/// ```
+pub async fn extract_batch_with_input_options_json(
+    inputs_json: &str,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
+    let inputs = serde_json::from_str(inputs_json)
+        .map_err(|error| crate::XbergError::validation(format!("Invalid batch inputs: {error}")))?;
+    extract_batch_with_input_options(inputs, config).await
 }
 
 /// Discover all pages and sitemaps reachable from `uri` without extracting document content.

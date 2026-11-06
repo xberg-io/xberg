@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 setup() {
+	REAL_PATH="$PATH"
 	bats_load_library xberg-bats
 	xberg_setup
 	REPOSITORY_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
@@ -13,18 +14,30 @@ setup() {
 	REAL_MKTEMP="$(command -v mktemp)"
 	xberg_stub mktemp 'path="$("$REAL_MKTEMP" "$@")"' 'printf "%s/%s\n" "$(cd "${path%/*}" && pwd -P)" "${path##*/}"'
 	mkdir source state bundle
-	unset OTOOL_FAIL_CALL REWRITE_STATUS SIGN_STATUS MACOSX_DEPLOYMENT_TARGET LDD_MISSING LDD_EXTERNAL LDD_STATUS DLOPEN_STATUS PATCH_STATUS
+	unset MACHO_LOAD_COMMANDS MACHO_OUTPUT_CASE OTOOL_FAIL_CALL REWRITE_STATUS REWRITE_NOOP SIGN_STATUS MACOSX_DEPLOYMENT_TARGET LDD_MISSING LDD_EXTERNAL LDD_STATUS DLOPEN_STATUS PATCH_STATUS
 	stub_macho_tools
 	stub_elf_tools
 }
 
 stub_macho_tools() {
+	xberg_stub lipo '[ "$1" = -archs ] || exit 97' 'printf "arm64\n"'
 	xberg_stub otool \
 		'printf "otool %s\n" "$*" >>"$XBERG_TRACE"' \
 		'file="${!#}"; name="${file##*/}"; id="$file"; [ ! -f "$STATE_DIR/$name.id" ] || id="$(cat "$STATE_DIR/$name.id")"' \
+		'if [ "$1" = -arch ]; then case "$2" in all|arm64) shift 2 ;; *) exit 96 ;; esac; fi' \
 		'case "$1" in' \
 		'-D) printf "%s:\n%s\n" "$file" "$id" ;;' \
-		'-l) printf "LC_BUILD_VERSION\nminos 12.0\n" ;;' \
+		'-l) if [ "${MACHO_LOAD_COMMANDS:-false}" != true ]; then printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos 12.0\n"; exit 0; fi' \
+		'    count=0; [ ! -f "$STATE_DIR/otool-count" ] || count="$(cat "$STATE_DIR/otool-count")"; count=$((count+1)); printf "%s\n" "$count" >"$STATE_DIR/otool-count"' \
+		'    [ "$count" != "${OTOOL_FAIL_CALL:-0}" ] || { echo "load-command inspection failed" >&2; exit 9; }' \
+		'    case "${MACHO_OUTPUT_CASE:-}" in' \
+		'      garbage) printf "not a recognized binary\n"; exit 0 ;;' \
+		'      malformed) printf "%s:\nLoad command 0\n cmd LC_LOAD_DYLIB\n cmdsize 72\n name /usr/lib/libSystem.B.dylib (offset bad)\n" "$file"; exit 0 ;;' \
+		'      bad_offset) printf "%s:\nLoad command 0\n cmd LC_LOAD_DYLIB\n cmdsize 72\n name /usr/lib/libSystem.B.dylib (offset 71)\n" "$file"; exit 0 ;;' \
+		'      missing_name) printf "%s:\nLoad command 0\n cmd LC_LOAD_WEAK_DYLIB\n cmdsize 72\n" "$file"; exit 0 ;;' \
+		'    esac' \
+		'    printf "%s:\nLoad command 0\n cmd LC_ID_DYLIB\n cmdsize 1024\n name %s (offset 24)\n" "$file" "$id"' \
+		'    i=0; while IFS= read -r dependency; do i=$((i+1)); cmd=LC_LOAD_DYLIB; if [ "${MACHO_OUTPUT_CASE:-}" = types ]; then [ "$i" != 1 ] || cmd=LC_LOAD_WEAK_DYLIB; [ "$i" != 2 ] || cmd=LC_REEXPORT_DYLIB; fi; printf "Load command %s\n cmd %s\n cmdsize 1024\n name %s (offset 24)\n" "$i" "$cmd" "$dependency"; done <"$STATE_DIR/$name.deps" ;;' \
 		'-L) count=0; [ ! -f "$STATE_DIR/otool-count" ] || count="$(cat "$STATE_DIR/otool-count")"; count=$((count+1)); printf "%s\n" "$count" >"$STATE_DIR/otool-count"' \
 		'    [ "$count" != "${OTOOL_FAIL_CALL:-0}" ] || { echo "load-command inspection failed" >&2; exit 9; }' \
 		'    printf "%s:\n\t%s (compatibility version 1.0.0)\n" "$file" "$id"' \
@@ -34,6 +47,7 @@ stub_macho_tools() {
 		'printf "rewrite %s\n" "$*" >>"$XBERG_TRACE"' \
 		'[ "${REWRITE_STATUS:-0}" = 0 ] || exit "$REWRITE_STATUS"' \
 		'if [ "$1" = -id ]; then printf "%s\n" "$2" >"$STATE_DIR/${3##*/}.id"; exit 0; fi' \
+		'[ "${REWRITE_NOOP:-false}" != true ] || exit 0' \
 		'"$REAL_PYTHON" -c '\''import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace(sys.argv[2]+"\n",sys.argv[3]+"\n"))'\'' "$STATE_DIR/${4##*/}.deps" "$2" "$3"'
 	xberg_stub codesign \
 		'printf "codesign %s\n" "$*" >>"$XBERG_TRACE"' \
@@ -60,10 +74,14 @@ stub_elf_tools() {
 
 prepare_macho() {
 	local name="$1"
+	if [ "$name" = app ]; then
+		export MACHO_LOAD_COMMANDS=true
+	fi
 	printf 'root native bytes\n' >"bundle/$name"
 	printf 'codec native bytes\n' >source/libcodec.dylib
 	printf 'support native bytes\n' >source/libsupport.dylib
-	printf '%s\n' "$SOURCE_DIR/libcodec.dylib" /usr/lib/libSystem.B.dylib >"state/$name.deps"
+	printf '%s\n' "$SOURCE_DIR/libcodec.dylib" /usr/lib/libSystem.B.dylib \
+		/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation >"state/$name.deps"
 	printf '%s\n' "$SOURCE_DIR/libsupport.dylib" >state/libcodec.dylib.deps
 	printf '%s\n' /usr/lib/libSystem.B.dylib >state/libsupport.dylib.deps
 }
@@ -75,11 +93,14 @@ prepare_elf() {
 }
 
 assert_macho_bundle() {
-	local expected_changes="${1:-2}"
+	local expected_changes="${1:-2}" inspection="-L"
+	if [ "${MACHO_LOAD_COMMANDS:-false}" = true ]; then
+		inspection="-arch all -l"
+	fi
 	xberg_assert_file bundle/libcodec.dylib 'codec native bytes'
 	xberg_assert_file bundle/libsupport.dylib 'support native bytes'
 	[ "$(find bundle -type f | wc -l | tr -d '[:space:]')" -eq 3 ]
-	[ "$(grep -c '^otool -L ' "$XBERG_TRACE")" -eq 6 ]
+	[ "$(grep -c "^otool $inspection " "$XBERG_TRACE")" -eq 6 ]
 	[ "$(grep -c '^codesign --verify --strict ' "$XBERG_TRACE")" -eq 3 ]
 	[ "$(grep -c '^rewrite -change ' "$XBERG_TRACE")" -eq "$expected_changes" ]
 }
@@ -91,6 +112,100 @@ assert_macho_bundle() {
 	assert_macho_bundle
 	grep -Fxq '@loader_path/libcodec.dylib' state/app.deps
 	grep -Fxq '@loader_path/libsupport.dylib' state/libcodec.dylib.deps
+}
+
+@test "macOS native closure should ignore a renamed dylib install ID and bundle its actual import" {
+	[ "$(uname -s)" = Darwin ] || skip 'requires Darwin Mach-O tools'
+	export PATH="$REAL_PATH"
+	printf 'int codec(void) { return 42; }\n' >codec.c
+	printf 'extern int codec(void); int entry(void) { return codec(); }\n' >entry.c
+	clang -dynamiclib codec.c -Wl,-install_name,"$SOURCE_DIR/libcodec.dylib" -o source/libcodec.dylib
+	install_id="$SOURCE_DIR/nonexistent/libxberg_nif.dylib"
+	clang -dynamiclib entry.c source/libcodec.dylib -Wl,-install_name,"$install_id" -o bundle/renamed-nif.so
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/renamed-nif.so"
+	xberg_assert_status 0
+	[ -s bundle/libcodec.dylib ]
+	[ ! -e bundle/libxberg_nif.dylib ]
+	otool -L bundle/renamed-nif.so | grep -Fq '@loader_path/libcodec.dylib'
+	codesign --verify --strict bundle/renamed-nif.so
+	rm source/libcodec.dylib
+	python3 -c 'import ctypes, sys; assert ctypes.CDLL(sys.argv[1]).entry() == 42' "$XBERG_WORK/bundle/renamed-nif.so"
+}
+
+@test "macOS native closure discovers imports exclusive to the nonhost Mach-O slice" {
+	[ "$(uname -s)" = Darwin ] || skip 'requires Darwin Mach-O tools'
+	export PATH="$REAL_PATH"
+	host="$(uname -m)"
+	case "$host" in
+	arm64) other=x86_64 ;;
+	x86_64) other=arm64 ;;
+	*) skip 'requires a supported macOS architecture' ;;
+	esac
+	printf 'int codec(void) { return 42; }\n' >codec.c
+	printf 'extern int codec(void); int entry(void) { return codec(); }\n' >other.c
+	printf 'int entry(void) { return 1; }\n' >host.c
+	clang -arch "$other" -dynamiclib codec.c -Wl,-install_name,"$SOURCE_DIR/libcodec.dylib" -o source/libcodec.dylib
+	clang -arch "$other" -dynamiclib other.c source/libcodec.dylib -o nonhost.so
+	clang -arch "$host" -dynamiclib host.c -o host.so
+	lipo -create host.so nonhost.so -output bundle/universal.so
+	otool -arch "$other" -L bundle/universal.so | grep -Fq "$SOURCE_DIR/libcodec.dylib"
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/universal.so"
+	xberg_assert_status 0
+	lipo -archs bundle/universal.so | grep -Eq "($host $other|$other $host)"
+	[ "$(lipo -archs bundle/libcodec.dylib)" = "$other" ]
+	otool -arch "$other" -L bundle/universal.so | grep -Fq '@loader_path/libcodec.dylib'
+	codesign --verify --strict bundle/universal.so
+}
+
+@test "macOS native closure rejects unrecognized and malformed load output before mutation" {
+	prepare_macho app
+	for output_case in garbage malformed bad_offset missing_name; do
+		export MACHO_OUTPUT_CASE="$output_case"
+		run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/app"
+		xberg_assert_status 1
+		xberg_assert_output_contains 'failed to inspect dependencies'
+	done
+	[ "$(grep -Ec '^(rewrite|codesign) ' "$XBERG_TRACE" || true)" -eq 0 ]
+	xberg_assert_file bundle/app 'root native bytes'
+}
+
+@test "macOS native closure keeps spaces in weak and re-exported dependency names" {
+	prepare_macho app
+	export MACHO_OUTPUT_CASE=types
+	mkdir 'source/spaced directory'
+	mv source/libcodec.dylib 'source/spaced directory/libcodec.dylib'
+	printf '%s\n' "$SOURCE_DIR/spaced directory/libcodec.dylib" "$SOURCE_DIR/libsupport.dylib" >state/app.deps
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/app"
+	xberg_assert_status 0
+	assert_macho_bundle 3
+	grep -Fxq '@loader_path/libcodec.dylib' state/app.deps
+	grep -Fxq '@loader_path/libsupport.dylib' state/app.deps
+}
+
+@test "macOS native closure refuses destination basename collisions before mutation" {
+	prepare_macho app
+	mkdir source/other
+	printf 'another Mach-O source\n' >source/other/libcodec.dylib
+	printf 'colliding with root\n' >source/app
+	for collision in "$SOURCE_DIR/other/libcodec.dylib" "$SOURCE_DIR/app"; do
+		printf '%s\n' "$collision" >state/libsupport.dylib.deps
+		run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/app"
+		xberg_assert_status 1
+		xberg_assert_output_contains 'basename collision'
+	done
+	[ "$(grep -Ec '^(rewrite|codesign) ' "$XBERG_TRACE" || true)" -eq 0 ]
+	xberg_assert_file bundle/app 'root native bytes'
+	[ ! -e bundle/libcodec.dylib ]
+}
+
+@test "macOS native closure rejects a bare relative import even when it exists in the working directory" {
+	prepare_macho app
+	printf '%s\n' 'source/libcodec.dylib' >state/app.deps
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/app"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'unsupported dependency path in app: source/libcodec.dylib'
+	[ ! -e bundle/libcodec.dylib ]
+	! grep -q '^rewrite ' "$XBERG_TRACE"
 }
 
 @test "macOS native closure should reject a referenced dependency missing on disk" {
@@ -123,6 +238,16 @@ assert_macho_bundle() {
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/app"
 	xberg_assert_status 1
 	xberg_assert_output_contains 'no valid code signature'
+}
+
+@test "macOS native closure rejects a successful rewrite that leaves an external absolute import" {
+	prepare_macho app
+	export REWRITE_NOOP=true
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-native-closure-macos.sh" "$XBERG_WORK/bundle/app"
+	xberg_assert_status 1
+	xberg_assert_output_contains "unsupported dependency path in app: $SOURCE_DIR/libcodec.dylib"
+	grep -Fxq "$SOURCE_DIR/libcodec.dylib" state/app.deps
+	[ "$(grep -c '^rewrite -change ' "$XBERG_TRACE")" -eq 2 ]
 }
 
 @test "macOS native closure should preserve load-command rewrite failures" {
@@ -186,6 +311,74 @@ assert_macho_bundle() {
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/vendor-macos-node-dylibs.sh" "$XBERG_WORK/bundle"
 	xberg_assert_status 1
 	xberg_assert_output_contains 'targets macOS 12.0, expected 11.0'
+}
+
+@test "macOS deployment inspection should reject a higher non-first slice" {
+	[ "$(uname -s)" = Darwin ] || skip 'requires Darwin Mach-O tools'
+	export PATH="$REAL_PATH"
+	printf 'int entry(void) { return 1; }\n' >entry.c
+	clang -arch x86_64 -mmacosx-version-min=14.0 -dynamiclib entry.c -o x86_64.dylib
+	clang -arch arm64 -mmacosx-version-min=15.0 -dynamiclib entry.c -o arm64.dylib
+	lipo -create x86_64.dylib arm64.dylib -output universal.dylib
+	run "$BASH" -c 'source "$1"; minos_of "$2"' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'different macOS deployment floors'
+}
+
+@test "macOS deployment inspection accepts thin modern and legacy declarations and rejects a missing declaration" {
+	[ "$(uname -s)" = Darwin ] || skip 'requires Darwin Mach-O tools'
+	export PATH="$REAL_PATH"
+	printf 'int entry(void) { return 1; }\n' >entry.c
+	clang -arch arm64 -mmacosx-version-min=14.0 -dynamiclib entry.c -o modern.dylib
+	clang -arch x86_64 -mmacosx-version-min=10.13 -dynamiclib entry.c -o legacy.dylib
+	vtool -remove-build-version macos -output missing.dylib modern.dylib
+	otool -arch x86_64 -l legacy.dylib | grep -F 'cmd LC_VERSION_MIN_MACOSX'
+	run "$BASH" -c 'source "$1"; macho_minos_by_arch "$2" 1' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" modern.dylib
+	xberg_assert_status 0
+	[ "$output" = 'arm64 14.0' ]
+	run "$BASH" -c 'source "$1"; minos_of "$2" 1' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" legacy.dylib
+	xberg_assert_status 0
+	[ "$output" = '10.13' ]
+	run "$BASH" -c 'source "$1"; minos_of "$2"' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" missing.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or invalid macOS deployment floor for slice arm64'
+}
+
+@test "macOS deployment inspection rejects a malformed or non-macOS slice without partial stdout" {
+	xberg_stub lipo 'printf "x86_64 arm64\n"'
+	xberg_stub otool \
+		'[ "$1" = -arch ] && [ "$3" = -l ] || exit 9' \
+		'platform=1; if [ "$2" = arm64 ] && [ "$FLOOR_CASE" = platform ]; then platform=2; fi' \
+		'printf "Load command 0\n cmd LC_BUILD_VERSION\n platform %s\n minos 14.0\n" "$platform"' \
+		'[ "$2" = arm64 ] || exit 0' \
+		'case "$FLOOR_CASE" in' \
+		'  duplicate_platform) printf " platform 1\n" ;;' \
+		'  declaration) printf "Load command 1\n cmd LC_VERSION_MIN_MACOSX\n version 14.0\n" ;;' \
+		'  duplicate_floor) printf " minos 14.0\n" ;;' \
+		'  malformed_cmd) printf "Load command 1\n cmd LC_VERSION_MIN_MACOSX trailing\n version 15.0\n" ;;' \
+		'  duplicate_cmd) printf " cmd LC_UUID\n" ;;' \
+		'  missing_cmd) printf "Load command 1\n cmdsize 32\n" ;;' \
+		'  inspection) exit 9 ;;' \
+		'esac'
+	local case_name
+	for case_name in platform duplicate_platform declaration duplicate_floor malformed_cmd duplicate_cmd missing_cmd inspection; do
+		run env FLOOR_CASE="$case_name" "$BASH" -c 'source "$1"; macho_minos_by_arch "$2" >floors.txt' _ \
+			"$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+		xberg_assert_status 1
+		xberg_assert_output_contains 'slice arm64'
+		[ ! -s floors.txt ]
+	done
+}
+
+@test "macOS deployment inspection checks requested arity and duplicate architectures" {
+	xberg_stub lipo 'printf "x86_64 arm64\n"'
+	run "$BASH" -c 'source "$1"; minos_of "$2" 1' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'unexpected Mach-O slice count'
+	xberg_stub lipo 'printf "arm64 arm64\n"'
+	run "$BASH" -c 'source "$1"; minos_of "$2"' _ "$REPOSITORY_ROOT/scripts/lib/macho.sh" universal.dylib
+	xberg_assert_status 1
+	xberg_assert_output_contains 'invalid or duplicate Mach-O slice arm64'
 }
 
 @test "ELF closure should copy transitive library bytes and set ORIGIN on every bundled artifact" {

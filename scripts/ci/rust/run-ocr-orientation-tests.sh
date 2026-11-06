@@ -12,7 +12,18 @@ log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 cargo test --locked -p xberg --no-default-features --features "${TRACT_FEATURES:?Tract-only features required}" \
   --test ocr_auto_rotate -- implicit_ --color never 2>&1 | tee "$log"
-if ! grep -qF 'test result: ok. 6 passed; 0 failed; 0 ignored;' "$log"; then
-  echo "Expected six executed PDF orientation tests" >&2
+if ! grep -qF 'test result: ok. 7 passed; 0 failed; 0 ignored;' "$log"; then
+  echo "Expected seven executed PDF orientation tests" >&2
+  exit 1
+fi
+
+case_name=implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence
+# The strict two-table certificate is exercised on the direct Tesseract route.
+direct_features=pdf,ocr,auto-rotate-tract,bundle-tessdata-eng,tokio-runtime
+cargo test --locked -p xberg --no-default-features --features "$direct_features" \
+  --test ocr_multitable_orientation_2497 -- --exact "$case_name" --color never 2>&1 | tee "$log"
+if ! grep -qF "test $case_name ... ok" "$log" ||
+  ! grep -qF 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$log"; then
+  echo "Expected the pinned two-table orientation test to execute" >&2
   exit 1
 fi

@@ -276,6 +276,15 @@ pub(crate) fn page_has_lifted_rotation_frame(segments: &[SegmentData], page_heig
 /// shared clamp floor.
 #[cfg(feature = "pdf")]
 pub(crate) fn segments_to_words(segments: &[SegmentData], page_height: f32) -> Vec<HocrWord> {
+    project_segment_words(segments, page_height, None)
+}
+
+#[cfg(feature = "pdf")]
+pub(crate) fn project_segment_words(
+    segments: &[SegmentData],
+    page_height: f32,
+    sources: Option<&mut Vec<Option<usize>>>,
+) -> Vec<HocrWord> {
     let lifts = rotation_lifts_for_page(segments, page_height);
     let per_segment_words: Vec<Vec<HocrWord>> = segments
         .iter()
@@ -284,7 +293,7 @@ pub(crate) fn segments_to_words(segments: &[SegmentData], page_height: f32) -> V
             split_segment_to_words_lifted(seg, page_height, advance_offset, top_offset)
         })
         .collect();
-    merge_touching_segment_boundaries(segments, per_segment_words)
+    merge_touching_segment_boundaries(segments, per_segment_words, sources)
 }
 
 /// Merges a touching word split across two adjacent segments (xberg-io/xberg#1566) into a
@@ -301,7 +310,13 @@ pub(crate) fn segments_to_words(segments: &[SegmentData], page_height: f32) -> V
 fn merge_touching_segment_boundaries(
     segments: &[SegmentData],
     mut per_segment_words: Vec<Vec<HocrWord>>,
+    sources: Option<&mut Vec<Option<usize>>>,
 ) -> Vec<HocrWord> {
+    const MAX_EXACT_SOURCE_WORDS: usize = 16_384;
+    let mut unchanged = sources
+        .as_ref()
+        .filter(|_| per_segment_words.iter().map(Vec::len).sum::<usize>() <= MAX_EXACT_SOURCE_WORDS)
+        .map(|_| vec![true; per_segment_words.len()]);
     for boundary in 0..per_segment_words.len().saturating_sub(1) {
         let is_touching = match (
             per_segment_words[boundary].last(),
@@ -321,6 +336,21 @@ fn merge_touching_segment_boundaries(
         let prev_word = per_segment_words[boundary].pop().expect("checked Some above");
         let next_word = per_segment_words[boundary + 1].remove(0);
         per_segment_words[boundary + 1].insert(0, merge_hocr_words(prev_word, next_word));
+        if let Some(unchanged) = &mut unchanged {
+            unchanged[boundary] = false;
+            unchanged[boundary + 1] = false;
+        }
+    }
+    if let (Some(sources), Some(unchanged)) = (sources, unchanged) {
+        // The terminal word alone can witness its whole unchanged source span.
+        for (index, words) in per_segment_words
+            .iter()
+            .enumerate()
+            .filter(|(_, words)| !words.is_empty())
+        {
+            sources.extend(std::iter::repeat_n(None, words.len() - 1));
+            sources.push(unchanged[index].then_some(index));
+        }
     }
     per_segment_words.into_iter().flatten().collect()
 }

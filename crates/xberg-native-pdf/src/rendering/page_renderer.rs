@@ -215,6 +215,8 @@ impl RenderedImage {
 pub struct PageRenderer {
     options: RenderOptions,
     source_image_budget: Option<image_budget::ImageBudget>,
+    pub(super) reported_source_budget_exceeded: bool,
+    pub(super) text_contrast_probe: Option<super::text_contrast_probe::TextContrastProbe>,
     path_rasterizer: PathRasterizer,
     text_rasterizer: TextRasterizer,
     /// Font cache (name -> FontInfo) for current context
@@ -457,6 +459,8 @@ impl PageRenderer {
         Self {
             options,
             source_image_budget: None,
+            reported_source_budget_exceeded: false,
+            text_contrast_probe: None,
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
             fonts: HashMap::new(),
@@ -577,12 +581,17 @@ impl PageRenderer {
             .map(|(image, _)| image)
     }
 
+    pub(super) fn type0_ink_loss(&self) -> bool {
+        self.text_rasterizer.type0_ink_loss()
+    }
+
     pub(super) fn render_page_with_budget(
         &mut self,
         page_num: usize,
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        self.reported_source_budget_exceeded = false;
         self.source_image_budget = png_budget
             .as_ref()
             .map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
@@ -740,15 +749,14 @@ impl PageRenderer {
         ))
     }
 
-    fn check_source_image_budget(&self) -> Result<()> {
-        match self
-            .source_image_budget
-            .as_ref()
-            .and_then(image_budget::ImageBudget::error)
+    fn check_source_image_budget(&mut self) -> Result<()> {
+        if let Some(budget) = &self.source_image_budget
+            && let Some(error) = budget.error()
         {
-            Some(error) => Err(error),
-            None => Ok(()),
+            self.reported_source_budget_exceeded = budget.exceeded();
+            return Err(error);
         }
+        Ok(())
     }
 
     fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {
@@ -2115,6 +2123,10 @@ impl PageRenderer {
                             let text_coverage = spot_snap.as_ref().and_then(|_| {
                                 self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
                             });
+                            let contrast_samples = self
+                                .text_contrast_probe
+                                .as_mut()
+                                .and_then(|probe| probe.capture(pixmap, text, base_transform));
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
                                 text,
@@ -2146,6 +2158,9 @@ impl PageRenderer {
                                     fill_side: true,
                                 },
                             )?;
+                            if let Some((probe, samples)) = self.text_contrast_probe.as_mut().zip(contrast_samples) {
+                                probe.observe(pixmap, samples);
+                            }
                             adv
                         } else {
                             self.text_rasterizer.measure_text(text, gs, &self.fonts)

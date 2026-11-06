@@ -25,6 +25,9 @@ pub(crate) struct TableSources {
     identity_work: usize,
     members: Vec<Vec<Run>>,
     paint_overhangs: Vec<Run>,
+    recovered_lines: Vec<Run>,
+    recovered_tracks: Vec<(f32, f32)>,
+    replaces_empty_ruled_route: bool,
 }
 
 // ~keep Native cell spans may be synthetic; their sequence/offset fields cannot identify original source members.
@@ -176,13 +179,14 @@ impl Run {
         })
     }
 
-    fn matches(&self, segment: &SegmentData) -> bool {
+    fn matches(&self, segment: &SegmentData, whole_line: bool) -> bool {
         segment.font_size.to_bits() == self.font_size
             && segment.y.to_bits() == self.bounds.bottom.to_bits()
             && segment.rotation_degrees == 0.0
             && segment.baseline_y.to_bits() == segment.y.to_bits()
             && [segment.is_bold, segment.is_italic, segment.is_monospace] == self.style
-            && !segment.text.chars().any(char::is_whitespace)
+            && (!whole_line || segment.assigned_role.is_none())
+            && (whole_line || !segment.text.chars().any(char::is_whitespace))
             && segment.width > 0.0
             && segment.height > 0.0
     }
@@ -205,6 +209,67 @@ fn cell_members(cell: &TableCell, text: &str) -> Option<Vec<Run>> {
             bounds.contains(run.bounds).then_some(run)
         })
         .collect()
+}
+
+fn normalized_spaces(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn recovered_cell_lines(cell: &TableCell, text: &str) -> Option<Vec<Run>> {
+    if cell.rowspan != 1 || cell.colspan != 1 || cell.spans.is_empty() {
+        return None;
+    }
+    let bounds = cell.bbox?;
+    let bounds = Edges::new(bounds.x, bounds.y, bounds.width, bounds.height)?;
+    let sorted = super::sort_spans_in_reading_order(cell.spans.iter().collect());
+    let mut lines = Vec::new();
+    for line in sorted.chunk_by(|a, b| a.bbox.y.to_bits() == b.bbox.y.to_bits()) {
+        let mut combined = Run::capture(line[0])?;
+        combined.text.clone_from(&line[0].text);
+        for span in &line[1..] {
+            let next = Run::capture(span)?;
+            if next.style != combined.style || next.font_size != combined.font_size {
+                return None;
+            }
+            combined.bounds = combined.bounds.union(next.bounds);
+            combined.text.push_str(&span.text);
+        }
+        if !bounds.contains(combined.bounds) {
+            return None;
+        }
+        combined.text = normalized_spaces(&combined.text);
+        lines.push(combined);
+    }
+    let emitted = lines
+        .iter()
+        .map(|line| line.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (emitted == text).then_some(lines)
+}
+
+fn recovered_track_edges(table: &NativeTable) -> Vec<(f32, f32)> {
+    let Some(row) = table.rows.first() else {
+        return Vec::new();
+    };
+    if row.cells.len() != table.col_count
+        || row
+            .cells
+            .windows(2)
+            .any(|pair| !pair[0].spans.is_empty() && !pair[1].spans.is_empty())
+    {
+        return Vec::new();
+    }
+    row.cells
+        .iter()
+        .filter(|cell| !cell.spans.is_empty())
+        .map(|cell| {
+            let bbox = cell.bbox?;
+            (cell.colspan == 1 && bbox.left().is_finite() && bbox.right().is_finite() && bbox.left() < bbox.right())
+                .then_some((bbox.left(), bbox.right()))
+        })
+        .collect::<Option<Vec<_>>>()
+        .unwrap_or_default()
 }
 
 fn paint_overhang(
@@ -234,6 +299,10 @@ pub(super) fn capture(
     let rows: Vec<Vec<_>> = native.rows.iter().map(|row| row.cells.iter().collect()).collect();
     let mut members = Vec::new();
     let mut paint_overhangs = Vec::new();
+    let mut recovered_lines = Vec::new();
+    let recovered = native
+        .bbox
+        .is_some_and(|bounds| ownership.is_some_and(|ownership| ownership.certifies_recovered_rows(bounds)));
     crate::extraction::grid_flatten::resolve_span_grid(
         &rows,
         |cell| cell.colspan,
@@ -241,7 +310,11 @@ pub(super) fn capture(
         |row, col, cell| {
             let text = table.cells.get(row as usize).and_then(|row| row.get(col as usize));
             let Some(text) = text else { return };
-            if let Some(runs) = cell_members(cell, text) {
+            if recovered {
+                if let Some(lines) = recovered_cell_lines(cell, text) {
+                    recovered_lines.extend(lines);
+                }
+            } else if let Some(runs) = cell_members(cell, text) {
                 members.push(runs);
             } else if let Some(run) =
                 ownership.and_then(|ownership| paint_overhang(cell, text, ownership, row as usize, col as usize))
@@ -250,7 +323,7 @@ pub(super) fn capture(
             }
         },
     );
-    (!members.is_empty() || !paint_overhangs.is_empty()).then(|| TableSources {
+    (!members.is_empty() || !paint_overhangs.is_empty() || !recovered_lines.is_empty()).then(|| TableSources {
         page: table.page_number,
         bbox,
         cells: table.cells.clone(),
@@ -258,6 +331,15 @@ pub(super) fn capture(
         identity_work,
         members,
         paint_overhangs,
+        recovered_lines,
+        replaces_empty_ruled_route: native
+            .bbox
+            .is_some_and(|bounds| ownership.is_some_and(|evidence| evidence.certifies_new_ruled_table(bounds))),
+        recovered_tracks: if recovered {
+            recovered_track_edges(native)
+        } else {
+            Vec::new()
+        },
     })
 }
 

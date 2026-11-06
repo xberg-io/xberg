@@ -1199,13 +1199,7 @@ impl OcrConfig {
     /// an engine as an empty language string — which Tesseract would otherwise
     /// try to load as a language pack named `""`, surfacing as a confusing
     /// "Failed to download language pack ''" error.
-    #[cfg(any(
-        feature = "ocr",
-        feature = "ocr-wasm",
-        feature = "ocr-pipeline",
-        paddle_ocr,
-        all(feature = "liter-llm", not(target_arch = "wasm32")),
-    ))]
+    #[cfg(any(feature = "ocr", paddle_ocr, all(feature = "liter-llm", not(target_arch = "wasm32")),))]
     pub(crate) fn effective_languages(&self) -> Vec<String> {
         effective_languages_for(&self.language)
     }
@@ -1510,9 +1504,8 @@ fn default_tesseract_backend() -> String {
 
 /// Default OCR language (Tesseract/ISO 639 naming): English.
 ///
-/// Single source of truth for the empty-language fallback shared by every OCR
-/// backend. Use [`OcrConfig::effective_languages`] rather than this constant
-/// directly when a defaulted language list is needed.
+/// Use the effective language resolver for the active backend when a defaulted
+/// language list is needed.
 pub(crate) const DEFAULT_OCR_LANGUAGE: &str = "eng";
 
 #[cfg(any(

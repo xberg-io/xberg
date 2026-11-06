@@ -191,15 +191,17 @@ pub(crate) fn bounded_unknown_raster_dpi(
 }
 
 fn unknown_raster_dpi(rgb_data: &[u8], width: usize, height: usize, target_dpi: i32) -> f64 {
+    inferred_raster_dpi(rgb_data, width, height, target_dpi).unwrap_or(PDF_POINTS_PER_INCH)
+}
+
+pub(crate) fn inferred_raster_dpi(rgb_data: &[u8], width: usize, height: usize, target_dpi: i32) -> Option<f64> {
     let max_scale = f64::from(target_dpi) / PDF_POINTS_PER_INCH;
     if max_scale <= 1.0 {
-        return PDF_POINTS_PER_INCH;
+        return None;
     }
-    let Some(glyph_height) = super::text_height::median_glyph_height(rgb_data, width, height) else {
-        return PDF_POINTS_PER_INCH;
-    };
+    let glyph_height = super::text_height::median_glyph_height(rgb_data, width, height)?;
     let scale = (TARGET_GLYPH_HEIGHT_PX / glyph_height).clamp(1.0, max_scale);
-    f64::from(target_dpi) / scale
+    Some(f64::from(target_dpi) / scale)
 }
 
 /// The DPI decision both outcomes of `normalize_image_dpi_owned` record in their metadata.

@@ -1,10 +1,19 @@
-#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
+#![cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    any(feature = "bundle-tessdata-eng", all(feature = "tesseract-dynamic", paddle_ocr))
+))]
 
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+#[cfg(feature = "bundle-tessdata-eng")]
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "bundle-tessdata-eng")]
 use std::time::Instant;
-use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, PageConfig, TesseractConfig};
+#[cfg(feature = "bundle-tessdata-eng")]
+use xberg::TesseractConfig;
+use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, PageConfig};
 
 const PDF_SHA256: &str = "a80d659ab1fbf8cbefcd182799d5b2785da94d9ab3fb3d9a024ab4c4c6dc8eb4";
 const DICTIONARY_SHA256: &str = "9f513f1ceadb6a01c5485b7dbdfd5118dc66cd70b59cae2851292112d4066a32";
@@ -68,6 +77,7 @@ async fn run(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
     result.results.remove(0)
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 fn page_metrics(document: &ExtractedDocument, expected: &[Vec<String>]) -> Vec<serde_json::Value> {
     let pages = document.pages.as_ref().expect("requested all per-page outputs");
     assert_eq!(pages.len(), 8);
@@ -100,11 +110,13 @@ fn page_metrics(document: &ExtractedDocument, expected: &[Vec<String>]) -> Vec<s
         .collect()
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 struct RecipeObservation {
     native: ExtractedDocument,
     automatic: ExtractedDocument,
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 async fn observe_recipe() -> RecipeObservation {
     let root = recipe_root();
     read_pinned(&root.join("american-english"), DICTIONARY_SHA256);
@@ -190,12 +202,14 @@ async fn observe_recipe() -> RecipeObservation {
     RecipeObservation { native, automatic }
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 #[tokio::test]
 #[ignore = "requires hash-pinned public recipe; run explicitly with XBERG_2439_RECIPE_ROOT"]
 async fn should_retain_all_native_source_words_in_the_public_scan_first_half_recipe() {
     let _ = observe_recipe().await;
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 #[tokio::test]
 #[ignore = "requires hash-pinned public recipe and real OCR"]
 async fn should_preserve_exact_native_page8_content_and_order_in_the_public_recipe() {
@@ -205,5 +219,69 @@ async fn should_preserve_exact_native_page8_content_and_order_in_the_public_reci
     assert_eq!(
         automatic.content, native.content,
         "page8 must retain complete native content and order"
+    );
+}
+
+#[cfg(all(feature = "tesseract-dynamic", paddle_ocr))]
+#[tokio::test]
+#[ignore = "requires the hash-pinned recipe and Tesseract 5.3.4 system tessdata"]
+async fn should_keep_one_exact_native_recipe_page_when_system_ocr_repeats_its_words() {
+    assert_eq!(xberg_tesseract::TesseractAPI::version(), "5.3.4");
+    let root = recipe_root();
+    read_pinned(&root.join("american-english"), DICTIONARY_SHA256);
+    let bytes = read_pinned(&root.join("generated/scan_first_half.pdf"), PDF_SHA256);
+    let expected = expected_pages(&root);
+    let tessdata = PathBuf::from(
+        std::env::var_os("XBERG_2534_SYSTEM_TESSDATA").expect("expected a system English model directory"),
+    );
+    read_pinned(&tessdata.join("eng.traineddata"), MODEL_SHA256);
+    let config = ExtractionConfig {
+        use_cache: false,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ocr: Some(OcrConfig {
+            tessdata_path: Some(tessdata),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let native = run(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let automatic = run(&bytes, &config).await;
+    assert_eq!(automatic.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    let native = native.pages.unwrap();
+    let source_words: BTreeSet<&str> = expected[7].iter().map(String::as_str).collect();
+    let document_page8_words: Vec<_> = words(&automatic.content)
+        .into_iter()
+        .filter(|word| source_words.contains(word.as_str()))
+        .collect();
+    assert_eq!(document_page8_words, expected[7]);
+    let automatic_pages = automatic.pages.unwrap();
+    assert_eq!(automatic_pages.len(), 8);
+    assert_eq!(words(&native[7].content), expected[7]);
+    assert_eq!(automatic_pages[7].content, native[7].content);
+    assert!(automatic_pages[7].ocr_confidence.is_none());
+    assert!(automatic_pages[..4].iter().all(|page| page.ocr_confidence.is_some()));
+    let mut dictionary_warnings = automatic
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "tesseract")
+        .map(|warning| warning.message.as_ref())
+        .collect::<Vec<_>>();
+    dictionary_warnings.sort_unstable();
+    assert_eq!(
+        dictionary_warnings,
+        [
+            "Tesseract removed 3 OCR line(s) because their dictionary-checkable words were mostly not real words",
+            "Tesseract removed 6 OCR line(s) because their dictionary-checkable words were mostly not real words",
+        ]
     );
 }

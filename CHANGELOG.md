@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(layout): Return source-proven text for selected native PDF layout regions in Rust.** (#2357)
+  `Engine::extract_with_layout_region_text` returns region text in page reading order and omits unproved or redacted text.
+  An explicitly declared crop box is supported when its resolved geometry exactly matches the media box.
+
+- **(engine): Override layout-for-Markdown behavior per batch input.** (#2367)
+  Explicit options take precedence after file overrides; omitted options inherit the batch configuration.
+
 - **(benchmarks): Export local caption graphs and inspect decoder drift with frozen provenance.** (#2336, #2353)
   Verify the six locked runtime distributions before export, plan freezes and diagnostic runs.
   Preserve checked versions, source notices, native companion metadata and no-cache ONNX artifact hashes.
@@ -184,16 +191,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(cli): The macOS CLI ships a libheif built for its own macOS floor.** (#2528)
   The CLI bundled the runner's Homebrew libheif and codecs, which need macOS 15 on Apple Silicon and 14 on Intel; it now builds them from source for macOS 11, as the wheels already do.
+- **(pdf): Place the heading and table from an upright scanned page in PDF points.** (#2497)
+  Applies to single-page detached Tesseract OCR with caching off and plain output with document structure requested.
+  A verified resize preserves the heading and table content and gives both bounds the same bottom-left page origin.
+
+- **(pdf): Recover verified right-column text from supported tall indexed-color scans.** (#2426)
+  Uncached Plain extraction with stock Tesseract can add a complete ordered run while preserving existing text and tables.
+
 - **(ocr): Recover language-only explicit sideways PDF scans with cached Tesseract orientation data.** (#2496)
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
   Recover counterclockwise table rows when native line membership proves the source geometry.
+  Recover a single sideways prose paragraph when native lines prove the complete text and geometry.
   Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
+
+- **(ocr): Correct detached two-table PDF reading order and coordinates.** (#2497)
+  Keep the recognized cells and convert their render bounds to PDF points before returning the tables.
+
+- **(ocr): Remove duplicate dot-leader rows from standalone Tesseract PSM 6 output.** (#2503)
+  Require matching text and geometry while preserving numeric cells, default OCR, and PDF output.
 
 - **(pdf): Preserve complete painted exhibit tables when cells contain decorative text fills.** (#2376)
   Verify source cell contents and suppress only an exactly proven residual duplicate digit.
 
+- **(pdf): Recover painted fee and company tables without dropping adjacent content.** (#2376)
+  Preserve independent tables and remove duplicate row text only when its original source is proven.
+
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
+  Fractional rules can refine existing cells when the original word bounds clear the full painted stroke.
 
 - **(pdf): Keep certified side-by-side panel lines in source order in plain output.** (#2537)
   Preserve complete rows and page boundaries in documents that mix panels with ordinary text.
@@ -201,11 +226,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep only RGB pixels in rendered pages retained during OCR.**
   Preserve raster dimensions and backend PNG bytes while allowing upright scans to fit the default memory budget.
 
+- **(pdf): Keep raised chart legend markers with their labels.** (#2443)
+  Join them only where neighboring source rows prove the association and no layout hints own the page.
+
 - **(pdf): Preserve figure tick labels beside native tables.** (#2443)
   Keep the original label when the adjoining residual digit is already carried by a proven table cell.
 
+- **(pdf): Keep parallel form legends out of synthetic heading blocks.** (#2543)
+  Preserve source reading order and ForceBold rendering.
+
 - **(pdf): Keep separate figure labels out of empty inferred table row spans.** (#2332)
   Require an existing source anchor before borrowing words from covered rows.
+
+- **(pdf): Keep readable native text when automatic OCR cannot see unpainted Type0 glyphs.** (#2533)
+  Require actual page-local render loss and a plain OCR read that omits most native word occurrences.
+
+- **(pdf): Keep mapped Khmer text when automatic English OCR produces only noise.** (#2536)
+  Preserve the native text and record why the direct single-page OCR result was declined.
+
+- **(pdf): Keep a visibly painted title when automatic OCR noise is discarded.** (#2312)
+  The direct Tesseract fallback keeps a verified native title and the original discard warning.
+
+- **(pdf): Preserve one copy of native text when OCR reads the same words.** (#2534)
+  Require an exact match between native words and the Tesseract iterator, including their positions.
+
+- **(ocr): Keep PNG and TIFF retries within the image budget when upscaling known-DPI rasters.** (#2530)
+  Use the finest safe unclamped DPI when the requested upscale exceeds native workspace.
+
+- **(ocr): Recover oversized PNG and TIFF rasters with unknown DPI within the image budget.** (#2530)
+  Fit a reduced raster before estimating its DPI when the original cannot fit that phase.
+  Fit raw PDF page renders that pass the render budget but exceed native OCR workspace.
+  Retry a weak read from a certified full-page JPEG without replacing an existing table.
 
 - **(ocr): Report the actual budget limit when upscaling a JPEG with unknown DPI.** (#2531)
   Check the planned upscale without retrying at a reduced decode that cannot reuse the source DPI estimate.
@@ -279,6 +330,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Recover text on tall scans when an OCR strip contains only blank space.** (#2501)
 
+- **(pdf): Recover OCR rows from tall one-bit grayscale scans.** (#2502)
+  Decode bounded packed rows and verify the recovered lines against the source raster bands.
+  Recover tall RGB scans with a verified full-page draw and three identical channel values at each pixel.
+  Retry certified grayscale JPEG scans in bounded strips after the renderer reports a source-image budget excess.
+  Decode checked PNG predictor rows and black-and-white indexed palettes before certifying strips.
+
 - **(pdf): Keep upper rows first when stacked ruled grids merge.** (#2494)
 
 - **(redaction): Cover terms split by a superscript in HTML headings or font changes in PDF text.** (#2363)
@@ -296,6 +353,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Recover complete tables on sideways PDF scans with a cached orientation model.** (#2314)
   The implicit Tesseract retry accepts a confident complete table and maps it to the PDF page.
+
+- **(ocr): Recover two complete tables on a sideways scan when all words are accounted for.** (#2497)
 
 - **(pdf): Preserve raised numeric suffixes when native glyph edges slightly overlap.** (#2489)
   Keep negative exponents and squared labels with their bases in Markdown.
@@ -329,8 +388,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Preserve letters on images of repeated aligned text.** (#2472)
   Automatic preprocessing can recover dark glyphs on a light background when the glyphs lower the image-wide mean.
 
+- **(ocr): Recover an outlined photo title in Plain PNG extraction, including cache hits.** (#2312)
+  Add a title supported by two distinct source masks while keeping the original OCR text.
+
 - **(ocr): Keep rows together in standalone sparse OCR page text.** (#2432)
   A single accepted table can supply Plain and Djot page rows when it retains every recognized token occurrence.
+  In Plain standalone OCR, recover a rejected grid when its geometry and the original text prove every row.
+
+- **(pdf): Recover a missing prose line in an embedded image with explicit PSM 6.** (#2327)
+  Use the proven source density to resize the retry while keeping the original nested OCR result.
+
+- **(ocr): Recover complete numeric rows in scanned PDF tables.** (#2432)
+  Require matching word inventory and separate, aligned numeric columns when the first table reconstruction fails.
 
 - **(pdf): Keep ruled table rows on the correct side of a section divider.** (#2376)
   Use exact shared row edges when both the original and corrected sections pass native table admission.

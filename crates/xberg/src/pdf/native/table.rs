@@ -17,7 +17,7 @@ use super::NativeDocument;
 use crate::pdf::error::{PdfError, Result};
 use crate::pdf::table_reconstruct::table_to_markdown;
 use crate::types::{BoundingBox, ProcessingWarning, Table};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) mod scripts;
 mod source_columns;
@@ -32,14 +32,18 @@ pub(crate) struct NativeTable {
     pub source_members: Option<source_members::TableSources>,
 }
 
+fn finite_table_bounds(bounds: BoundingBox) -> bool {
+    [bounds.x0, bounds.y0, bounds.x1, bounds.y1]
+        .into_iter()
+        .all(f64::is_finite)
+        && bounds.x0 < bounds.x1
+        && bounds.y0 < bounds.y1
+}
+
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
 fn table_region_key(table: &Table) -> Option<(u32, [u64; 4])> {
-    let bbox = table.bounding_box?;
-    let coordinates = [bbox.x0, bbox.y0, bbox.x1, bbox.y1];
-    if !coordinates.iter().all(|value| value.is_finite()) || bbox.x0 >= bbox.x1 || bbox.y0 >= bbox.y1 {
-        return None;
-    }
-    let bits = coordinates.map(|value| if value == 0.0 { 0 } else { value.to_bits() });
+    let bbox = table.bounding_box.filter(|bounds| finite_table_bounds(*bounds))?;
+    let bits = [bbox.x0, bbox.y0, bbox.x1, bbox.y1].map(|value| if value == 0.0 { 0 } else { value.to_bits() });
     Some((table.page_number, bits))
 }
 
@@ -119,9 +123,51 @@ enum HeuristicTableRejection {
     EmptyMarkdown,
 }
 
+pub(crate) struct RuledTableExtraction {
+    pub(crate) tables: Vec<NativeTable>,
+    pub(crate) warnings: Vec<ProcessingWarning>,
+    pub(crate) recovered_only: HashMap<u32, BoundingBox>,
+}
+
+impl RuledTableExtraction {
+    pub(crate) fn covered_pages(&self) -> HashSet<u32> {
+        self.tables
+            .iter()
+            .map(|entry| entry.table.page_number)
+            .filter(|page| !self.recovered_only.contains_key(page))
+            .collect()
+    }
+
+    pub(crate) fn allows_heuristic_table(&self, table: &Table) -> bool {
+        self.recovered_only
+            .get(&table.page_number)
+            .is_none_or(|ruled| disjoint_table_bounds(table.bounding_box, Some(*ruled)))
+    }
+}
+
+pub(crate) fn disjoint_table_bounds(first: Option<BoundingBox>, second: Option<BoundingBox>) -> bool {
+    let (Some(a), Some(b)) = (first, second) else {
+        return false;
+    };
+    finite_table_bounds(a) && finite_table_bounds(b) && (a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0)
+}
+
+fn empty_or_certified_new_ruled_table(
+    tables: &[xberg_native_pdf::structure::table_extractor::Table],
+    ownership: Option<&xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
+) -> bool {
+    match tables {
+        [] => true,
+        [table] => table
+            .bbox
+            .is_some_and(|bounds| ownership.is_some_and(|evidence| evidence.certifies_new_ruled_table(bounds))),
+        _ => false,
+    }
+}
+
 /// Run both ruled detectors on each page, then keep strict detections first
 /// and append bordered detections outside their regions.
-pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTable>, Vec<ProcessingWarning>)> {
+pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExtraction> {
     use xberg_native_pdf::structure::spatial_table_detector::{TableDetectionConfig, TableStrategy};
 
     let page_count = doc
@@ -147,6 +193,7 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTa
     let mut strict = Vec::new();
     let mut bordered = Vec::new();
     let mut strict_warnings = Vec::new();
+    let mut recovered_only = HashMap::new();
     let mut bordered_warnings = Vec::new();
     for page_idx in 0..page_count {
         let page_number = (page_idx + 1) as u32;
@@ -155,6 +202,11 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTa
             .extract_tables_with_source_ownership(page_idx, [&strict_config, &bordered_config])
         {
             Ok([(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)]) => {
+                let recovered_from_empty =
+                    empty_or_certified_new_ruled_table(&strict_tables, strict_ownership.as_ref())
+                        && empty_or_certified_new_ruled_table(&bordered_tables, bordered_ownership.as_ref());
+                let strict_start = strict.len();
+                let bordered_start = bordered.len();
                 append_page_tables(
                     doc,
                     page_idx,
@@ -171,6 +223,16 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTa
                     &mut bordered,
                     &mut bordered_warnings,
                 );
+                if recovered_from_empty {
+                    let mut page_tables = strict[strict_start..].iter().chain(&bordered[bordered_start..]);
+                    if let Some(first) = page_tables.next()
+                        && let Some(region) = table_region_key(&first.table)
+                        && page_tables.all(|entry| table_region_key(&entry.table) == Some(region))
+                        && let Some(bounds) = first.table.bounding_box
+                    {
+                        recovered_only.insert(page_number, bounds);
+                    }
+                }
             }
             Err(error) => {
                 tracing::warn!(
@@ -185,7 +247,11 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<(Vec<NativeTa
 
     append_bordered_tables(&mut strict, bordered);
     strict_warnings.extend(bordered_warnings);
-    Ok((strict, strict_warnings))
+    Ok(RuledTableExtraction {
+        tables: strict,
+        warnings: strict_warnings,
+        recovered_only,
+    })
 }
 
 fn append_page_tables(
@@ -317,8 +383,6 @@ pub(crate) fn extract_tables_heuristic(
     skip_pages: &HashSet<u32>,
     artifacts: crate::pdf::native::hierarchy::ArtifactRetention,
 ) -> Result<HeuristicTableExtraction> {
-    use crate::pdf::table_reconstruct::{HocrWord, segments_to_words};
-
     let (per_page_segments, used_structure_tree) =
         crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
             PdfError::TextExtractionFailed(format!(
@@ -352,7 +416,13 @@ pub(crate) fn extract_tables_heuristic(
             .fold(0.0_f32, f32::max)
             .max(792.0);
 
-        let words: Vec<HocrWord> = segments_to_words(segments, page_height);
+        let source_frame = source_columns::supports_page_frame(segments);
+        let mut sources = Vec::new();
+        let words = crate::pdf::table_reconstruct::project_segment_words(
+            segments,
+            page_height,
+            source_frame.then_some(&mut sources),
+        );
         if words.len() < 4 {
             continue;
         }
@@ -381,7 +451,8 @@ pub(crate) fn extract_tables_heuristic(
         .ok()
         .unwrap_or_default();
         let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
-        let column_rules = source_columns::PageRules::new(&paths, source_columns::supports_page_frame(segments));
+        let column_rules =
+            source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
 
         let page_tables_start = tables.len();
         tables.extend(reconstruct_page_region_tables(
@@ -4391,7 +4462,7 @@ mod tests {
     fn ruled_detectors_keep_the_two_column_bordered_table() {
         let bytes = build_two_column_bordered_table_pdf();
         let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
-        let (tables, warnings) = extract_ruled_tables(&doc).expect("extract ruled tables");
+        let RuledTableExtraction { tables, warnings, .. } = extract_ruled_tables(&doc).expect("extract ruled tables");
         assert_eq!(tables.len(), 1);
         let table = &tables[0].table;
         assert_eq!(

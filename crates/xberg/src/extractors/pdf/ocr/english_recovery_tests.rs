@@ -78,6 +78,8 @@ async fn qualify(detached: bool) {
                 0,
                 Some(super::DetachedOcrPage {
                     document: &fixture.doc,
+                    #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                    stored_scan: None,
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     orientation_retry: None,
                 }),

@@ -223,7 +223,7 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
         && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn unique_literal_embedding(native: &str, read: &str) -> bool {
+pub(super) fn unique_literal_embedding(native: &str, read: &str) -> bool {
     let native: Vec<_> = native.split_whitespace().collect();
     let read: Vec<_> = read.split_whitespace().collect();
     if read.is_empty() {
@@ -352,20 +352,31 @@ fn unannotated_ocr_text(element: &crate::types::internal::InternalElement) -> bo
 /// internal here: the caller excludes explicit OCR-element/raster requests before using this. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn plain_ocr_page_can_yield_to_native(doc: &crate::types::internal::InternalDocument, read: &str) -> bool {
-    ocr_page_has_only_plain_payload(doc)
-        && doc
-            .elements
-            .iter()
-            .flat_map(|element| element.text.split_whitespace())
-            .eq(read.split_whitespace())
+    ocr_page_has_only_plain_payload(doc) && ocr_elements_follow_text(doc, read)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn ocr_elements_follow_text(doc: &crate::types::internal::InternalDocument, read: &str) -> bool {
+    doc.elements
+        .iter()
+        .flat_map(|element| element.text.split_whitespace())
+        .eq(read.split_whitespace())
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn ocr_page_has_only_plain_payload(doc: &crate::types::internal::InternalDocument) -> bool {
+    ocr_page_has_only_plain_payload_with(doc, |_, _| false)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn ocr_page_has_only_plain_payload_with(
+    doc: &crate::types::internal::InternalDocument,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
     let mut metadata = doc.metadata.clone();
-    metadata
-        .additional
-        .remove(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY);
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
     no_ocr_rich_assets(doc)
         && metadata.is_empty()
         && !doc.elements.is_empty()
@@ -392,6 +403,38 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
                 && ocr.element_config.is_none()
                 && !ocr.auto_rotate
         })
+}
+
+/// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
+    use super::super::unmapped_glyphs::{LOST_GLYPH_MARKER, strip_native_fragment};
+
+    if !native.contains(LOST_GLYPH_MARKER) {
+        return false;
+    }
+    let mut cleaned = native.to_owned();
+    strip_native_fragment(&mut cleaned);
+    if !super::scoring::native_layer_is_clean(&cleaned, thresholds) {
+        return false;
+    }
+
+    let meaningful = |word: &String| word.chars().count() >= thresholds.min_meaningful_word_len;
+    let mut available = ahash::AHashMap::<String, usize>::new();
+    for word in whole_words(read).filter(meaningful) {
+        *available.entry(word).or_default() += 1;
+    }
+    let mut retained = 0usize;
+    let mut total = 0usize;
+    for word in whole_words(&cleaned).filter(meaningful) {
+        total += 1;
+        if let Some(count) = available.get_mut(&word).filter(|count| **count > 0) {
+            *count -= 1;
+            retained += 1;
+        }
+    }
+    total >= thresholds.min_meaningful_words.max(1)
+        && (retained as f64) < total as f64 * MIN_LAYER_WORD_SHARE_READ_BY_OCR
 }
 
 /// Native source rows restored before OCR when complete native-page preservation is unproved. ~keep

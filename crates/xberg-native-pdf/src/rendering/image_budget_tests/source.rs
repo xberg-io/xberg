@@ -109,3 +109,31 @@ pub(super) fn inline_document(jpeg: &[u8], dimension: u32) -> PdfDocument {
         stream("", &content),
     ])
 }
+
+pub(super) fn contrast_title_document(image: &[u8], encoding: &str) -> PdfDocument {
+    from_objects(&[
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /Font << /F 6 0 R >> /XObject << /Im0 5 0 R >> >> >>".to_vec(),
+        stream("", b"q 32 0 0 32 0 0 cm /Im0 Do Q 1 1 1 rg BT /F 18 Tf 1 0 0 1 8 10 Tm (A) Tj ET"),
+        stream(&format!("/Type /XObject /Subtype /Image /Width 32 /Height 32 /ColorSpace /DeviceRGB /BitsPerComponent 8 {encoding}"), image),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec(),
+    ])
+}
+
+pub(super) fn wrap_ascii85(source: &[u8]) -> Vec<u8> {
+    let mut wrapped = Vec::new();
+    for chunk in source.chunks(4) {
+        let mut bytes = [0; 4];
+        bytes[..chunk.len()].copy_from_slice(chunk);
+        let mut value = u32::from_be_bytes(bytes);
+        let mut encoded = [b'!'; 5];
+        for byte in encoded.iter_mut().rev() {
+            *byte += (value % 85) as u8;
+            value /= 85;
+        }
+        wrapped.extend_from_slice(&encoded[..chunk.len() + 1]);
+    }
+    wrapped.extend_from_slice(b"~>");
+    wrapped
+}

@@ -25,6 +25,10 @@ mod markdown;
 pub(crate) use markdown::strip_embedded_gfm_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod hidden_layer;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use hidden_layer::embedded_gap_placement;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod native_word_coverage;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod orientation_retry;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -110,8 +114,8 @@ pub(crate) use pipeline::{
 pub(crate) use pipeline::extract_with_ocr;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use pipeline::{
-    OcrRunResult, PageOcrHints, apply_numeric_repair_to_whole_document_ocr, extract_with_ocr_with_page_hints,
-    numeric_repair_enabled, run_ocr_pipeline,
+    OcrRunResult, PageOcrHints, apply_numeric_repair_to_whole_document_ocr,
+    extract_with_ocr_with_page_hints_and_evidence, numeric_repair_enabled, run_ocr_pipeline,
 };
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -144,3 +148,7 @@ mod combined_rotation_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 mod batch_metadata_tests;
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+#[allow(unused_imports)]
+pub(crate) use pipeline::extract_with_ocr_with_page_hints;

@@ -50,3 +50,23 @@ blake3 = "aa22e213c162ef00a18629983627f7a93c7f7d727a1374d7a74d478bb16a87c6"
 number = 9
 status = "accepted"
 blake3 = "532d2a2120cfc797b323eb4d4cc8291010eba74b853345cee97c50362598127b"
+
+[adrs."adrs/0010-reuse-immutable-windows-wheels-for-isolated-qualification.md"]
+number = 10
+status = "accepted"
+blake3 = "883a47bbefced500646a92c038565525a1e80fe3765cff4f2e3560cbe7f58d0e"
+
+[adrs."adrs/0011-carry-per-input-pdf-layout-options-in-an-additive-batch-input.md"]
+number = 11
+status = "accepted"
+blake3 = "cd5f2a0adc80f8c9df66b56d71c9b194f6431119f18628b1730c34b5b92f3890"
+
+[adrs."adrs/0012-expose-source-proven-pdf-layout-text-through-an-opt-in-rust-result.md"]
+number = 12
+status = "accepted"
+blake3 = "b13c4f6cd88062c5ae8f06056af271258b7c143a735b72a104ba392c29dc4415"
+
+[adrs."adrs/0013-scope-pdf-image-placement-evidence-to-one-extraction.md"]
+number = 13
+status = "accepted"
+blake3 = "9646553cc062e0821b6444652344d175e4b2823136f3b389925b372412622d68"

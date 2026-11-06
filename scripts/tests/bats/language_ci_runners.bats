@@ -20,7 +20,7 @@ setup() {
 	dd if=/dev/zero of="$REPO_ROOT/target/tessdata/osd.traineddata" bs=100000 count=1 2>/dev/null
 	export RUNNER_OS=fixture GITHUB_WORKSPACE="$REPO_ROOT" TMPDIR="$XBERG_WORK/tmp"
 	unset BUNDLE_PATH BUNDLE_GEMFILE PIP_STATUS PYTHON_STATUS BUNDLE_STATUS VENDOR_STATUS WASM_STATUS CC_STATUS POSIX_STATUS \
-		RUST_MIN_STACK CARGO_FAILURE_MATCH NODE_PATH RUSTFLAGS CARGO_ENCODED_RUSTFLAGS XBERG_PDFIUM_PREBUILT
+		RUST_MIN_STACK CARGO_FAILURE_MATCH JPEG_EMPTY_LIST NODE_PATH RUSTFLAGS CARGO_ENCODED_RUSTFLAGS XBERG_PDFIUM_PREBUILT
 	xberg_stub_curl_offline
 	xberg_stub pip 'printf "pip %s\n" "$*" >>"$XBERG_TRACE"' 'exit "${PIP_STATUS:-0}"'
 	xberg_stub python 'printf "python %s\n" "$*" >>"$XBERG_TRACE"' 'exit "${PYTHON_STATUS:-0}"'
@@ -32,7 +32,14 @@ setup() {
 		'if [ "$1" = metadata ]; then cat "$METADATA_FIXTURE"; exit 0; fi' \
 		'case "$*" in *"${CARGO_FAILURE_MATCH:-__never__}"*) exit 17 ;; esac' \
 		'if [ "$1" = test ]; then printf "live=%s stack=%s backtrace=%s\n" "${XBERG_SKIP_LIVE_HF:-}" "${RUST_MIN_STACK:-}" "${RUST_BACKTRACE:-}" >>"$XBERG_WORK/cargo-env"; fi' \
-		'printf "test result: ok. 1 passed; 0 failed; 0 ignored;\n"'
+		'tests=1' \
+		'case "$*" in' \
+		'  *english_recovery_tests::small_english_*|*english_recovery_tests::large::large_english_*) tests=2 ;;' \
+		'  *encoded_pipeline::builtin_pipeline_png_*) tests=3 ;;' \
+		'esac' \
+		'if [[ " $* " == *" --list "* ]]; then' \
+		'  for ((i = 1; i <= tests && ! ${JPEG_EMPTY_LIST:-0}; i++)); do printf "fixture_%s: test\n" "$i"; done' \
+		'else printf "test result: ok. %s passed; 0 failed; 0 ignored;\n" "$tests"; fi'
 	xberg_stub bundle \
 		'printf "bundle %s\n" "$*" >>"$XBERG_TRACE"' \
 		'if [ "$1" = exec ]; then printf "jobs=%s backtrace=%s verbose=%s ld=%s\n" "$CARGO_BUILD_JOBS" "$RUST_BACKTRACE" "$RB_SYS_VERBOSE" "${LD_LIBRARY_PATH:-}" >>"$XBERG_TRACE"; fi' \
@@ -195,10 +202,12 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	export TEST_OS=Darwin TEST_ARCH=arm64 RUST_MIN_STACK=33554432
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 5 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 15 ]
 	grep -Fxq 'cargo clean -p xberg' "$XBERG_TRACE"
 	grep -Fxq 'mise run rust:clean' "$XBERG_TRACE"
+	[ "$(grep -c '^live=1 stack=33554432 backtrace=' "$XBERG_WORK/cargo-env")" -eq 15 ]
 	[ "$(grep -c '^live=1 stack=33554432 backtrace=full$' "$XBERG_WORK/cargo-env")" -eq 5 ]
+	xberg_assert_output_contains 'JPEG recovery model tests expected 9, passed 9'
 	grep -Fq -- '--features full,formula-recognition,bundle-tessdata-eng --all-targets --verbose' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-candle-ocr --features trocr,paddleocr-vl,glm-ocr,deepseek-ocr' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-gliner --features candle,ort-dynamic' "$XBERG_TRACE"
@@ -209,7 +218,7 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	export TEST_OS=Linux TEST_ARCH=aarch64
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 4 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 14 ]
 	grep -Fq -- '--features full-no-heic,heic,formula-recognition,bundle-tessdata-eng' "$XBERG_TRACE"
 	grep -Fq -- '--exclude xberg-ffi --exclude xberg-php --exclude xberg-dart --exclude xberg-swift' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-gliner --features ort-dynamic' "$XBERG_TRACE"
@@ -225,6 +234,15 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 1 ]
 	refute_trace_pattern '^cargo clean '
 	[[ "$output" != *'=== Tests complete ==='* ]]
+}
+
+@test "Rust unit runner should reject a JPEG filter that collects no tests" {
+	export JPEG_EMPTY_LIST=1
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains "expected 2 collected tests, observed 0"
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 2 ]
+	refute_trace_pattern '^cargo clean '
 }
 
 prepare_chunk_metadata() {
@@ -252,7 +270,7 @@ prepare_chunk_metadata() {
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'integration-test targets: 2 (chunks of 1)'
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 7 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 17 ]
 	[ "$(grep -c -- '--test first-case --verbose' "$XBERG_TRACE")" -eq 1 ]
 	[ "$(grep -c -- '--test second_case --verbose' "$XBERG_TRACE")" -eq 1 ]
 	[ ! -e "$REPO_ROOT/target/debug/deps/first_case-abc123" ]

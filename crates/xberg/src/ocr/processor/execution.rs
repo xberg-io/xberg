@@ -6,6 +6,11 @@
 #[path = "execution/recognition_orientation.rs"]
 mod recognition_orientation;
 
+#[cfg(feature = "pdf")]
+#[path = "execution/full_scan_table.rs"]
+mod full_scan_table;
+
+use super::ImageOcrPolicy;
 use super::api_pool::TesseractApiPool;
 use super::config::apply_tesseract_variables;
 use super::dictionary::WordDictionary;
@@ -705,6 +710,16 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         Err(_) => return String::new(),
     };
 
+    render_inline_ocr_table_content(&words, tables, None)
+}
+
+type InlineOcrOwner<'a> = &'a mut dyn FnMut(std::ops::Range<usize>, Option<(u32, u32)>);
+
+pub(crate) fn render_inline_ocr_table_content(
+    words: &[HocrWord],
+    tables: &[OcrTable],
+    mut observe: Option<InlineOcrOwner<'_>>,
+) -> String {
     if words.is_empty() {
         return String::new();
     }
@@ -712,7 +727,7 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
     let table_bboxes: Vec<_> = tables.iter().filter_map(|t| t.bounding_box.as_ref()).collect();
 
     let mut non_table_words = Vec::new();
-    for word in &words {
+    for word in words {
         let in_table = table_bboxes.iter().any(|bbox| {
             let word_cx = word.left + word.width / 2;
             let word_cy = word.top + word.height / 2;
@@ -802,8 +817,16 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
     }
 
     enum ContentElement<'a> {
-        Paragraph { y: u32, text: String },
-        Table { y: u32, markdown: &'a str },
+        Paragraph {
+            y: u32,
+            text: String,
+            lines: std::ops::Range<usize>,
+        },
+        Table {
+            y: u32,
+            markdown: &'a str,
+            bottom: Option<u32>,
+        },
     }
 
     let mut elements: Vec<ContentElement> = Vec::new();
@@ -821,6 +844,7 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
             elements.push(ContentElement::Paragraph {
                 y: first_y,
                 text: para.text.clone(),
+                lines: line_idx..line_idx + line_count,
             });
             line_idx += line_count;
             para_idx += 1;
@@ -832,11 +856,13 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         if let Some(ref bbox) = table.bounding_box {
             elements.push(ContentElement::Table {
                 y: bbox.top,
+                bottom: Some(bbox.bottom),
                 markdown: &table.markdown,
             });
         } else {
             elements.push(ContentElement::Table {
                 y: u32::MAX,
+                bottom: None,
                 markdown: &table.markdown,
             });
         }
@@ -860,7 +886,22 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         if !output.is_empty() {
             output.push_str("\n\n");
         }
+        let start = output.len();
         output.push_str(trimmed);
+        if let Some(observer) = observe.as_mut() {
+            let band = match elem {
+                ContentElement::Paragraph { lines: owned, .. } => lines.get(owned.clone()).and_then(|owned_lines| {
+                    let mut words = owned_lines.iter().flat_map(|line| line.words.iter());
+                    let first = words.next()?;
+                    words.try_fold(
+                        (first.top, first.top.checked_add(first.height)?),
+                        |(top, bottom), word| Some((top.min(word.top), bottom.max(word.top.checked_add(word.height)?))),
+                    )
+                }),
+                ContentElement::Table { y, bottom, .. } => bottom.map(|bottom| (*y, bottom)),
+            };
+            observer(start..output.len(), band);
+        }
     }
 
     output
@@ -937,6 +978,7 @@ fn prove_fragmented_table_rows<'a>(
     cells: &[Vec<String>],
     row_threshold: f64,
     budget: usize,
+    allow_dot_leader: bool,
 ) -> Option<Vec<&'a HocrWord>> {
     if cells.is_empty() || words.len() > MAX_FRAGMENTED_HOCR_WORDS {
         return None;
@@ -972,22 +1014,71 @@ fn prove_fragmented_table_rows<'a>(
     for row in &mut rows {
         sort_ocr_line_word_refs(row);
     }
-    // ~keep A matching window can omit a caption, but ambiguous matches cannot claim any words.
+    let matched = unique_table_row_window(&rows, cells, false).or_else(|| {
+        (allow_dot_leader && comparison_bytes.saturating_mul(alignments).saturating_mul(2) <= budget)
+            .then(|| unique_table_row_window(&rows, cells, true))
+            .flatten()
+    })?;
+    Some(matched.iter().flatten().copied().collect())
+}
+
+// ~keep A matching window can omit a caption, but ambiguous matches cannot claim any words.
+fn unique_table_row_window<'a, 'word>(
+    rows: &'a [Vec<&'word HocrWord>],
+    cells: &[Vec<String>],
+    allow_dot_leader: bool,
+) -> Option<&'a [Vec<&'word HocrWord>]> {
     let mut matches = rows.windows(cells.len()).filter(|window| {
         window.iter().zip(cells).all(|(row, cells)| {
             !row.is_empty()
                 && row.windows(2).all(|pair| pair[0].left != pair[1].left)
-                && row
+                && (row
                     .iter()
                     .flat_map(|word| word.text.split_whitespace())
                     .eq(cells.iter().flat_map(|cell| cell.split_whitespace()))
+                    || allow_dot_leader && row_has_only_extra_dot_leader(row, cells))
         })
     });
     let matched = matches.next()?;
-    matches
-        .next()
-        .is_none()
-        .then(|| matched.iter().flatten().copied().collect())
+    matches.next().is_none().then_some(matched)
+}
+
+fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
+    let [label, values @ ..] = cells else {
+        return false;
+    };
+    let label_words = label.split_whitespace();
+    let split = label_words.clone().count();
+    if split == 0
+        || values.len() < 2
+        || row.len() != split + 1 + values.len()
+        || !label_words.clone().all(|word| word.chars().all(char::is_alphabetic))
+        || !row[..split].iter().map(|word| word.text.as_str()).eq(label_words)
+        || !row[split + 1..].iter().zip(values).all(|(word, value)| {
+            word.text == *value
+                && value.bytes().any(|byte| byte.is_ascii_digit())
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || b",.()+-".contains(&byte))
+        })
+    {
+        return false;
+    }
+    let [left, dots, right] = &row[split - 1..=split + 1] else {
+        return false;
+    };
+    const MIN_DOT_LEADER_LENGTH: usize = 3;
+    dots.text.len() >= MIN_DOT_LEADER_LENGTH
+        && dots.text.bytes().all(|byte| byte == b'.')
+        && dots.width > left.height.max(right.height)
+        && left.left.saturating_add(left.width) < dots.left
+        && dots.left.saturating_add(dots.width) < right.left
+        && dots.top >= left.top.max(right.top)
+        && dots.top.saturating_add(dots.height)
+            <= left
+                .top
+                .saturating_add(left.height)
+                .min(right.top.saturating_add(right.height))
 }
 
 fn reconcile_fragmented_hocr_table_rows(
@@ -997,6 +1088,7 @@ fn reconcile_fragmented_hocr_table_rows(
     tsv: &str,
     config: &TesseractConfig,
     limits: &SecurityLimits,
+    allow_dot_leader: bool,
 ) -> Option<InternalDocument> {
     let [table] = tables else { return None };
     let budget = fragmented_hocr_budget(hocr, tsv, limits)?;
@@ -1008,7 +1100,14 @@ fn reconcile_fragmented_hocr_table_rows(
         return None;
     }
     let mut words = extract_words_from_tsv(tsv, 0.0).ok()?;
-    let proved = prove_fragmented_table_rows(&mut words, bbox, &table.cells, config.table_row_threshold_ratio, budget)?;
+    let proved = prove_fragmented_table_rows(
+        &mut words,
+        bbox,
+        &table.cells,
+        config.table_row_threshold_ratio,
+        budget,
+        allow_dot_leader,
+    )?;
     let mut reconciled = parse_hocr_without_proved_table_fragments(hocr, config.page_number, proved);
     let words = |doc: &InternalDocument| {
         doc.elements
@@ -1096,6 +1195,7 @@ mod reduced_jpeg_dpi_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod reduced_jpeg_memory_tests;
 
+mod budgeted_downscale;
 #[cfg(test)]
 mod native_resize_admission_tests;
 #[cfg(test)]
@@ -1105,6 +1205,7 @@ mod dpi_workspace;
 mod native_image_budget;
 
 mod encoded_image;
+#[cfg(test)]
 use encoded_image::prepare_encoded_ocr_image;
 
 /// The preprocessing that OCR applies to this raster, or `None` when the raster passes through
@@ -1145,6 +1246,7 @@ struct PreparedOcrImage {
     height: u32,
     source_dpi: i32,
     apply_pix_preprocessing: bool,
+    raw_ocr_source_frame: Option<crate::types::formats::RawOcrSourceFrame>,
     preprocessing: Option<crate::types::ImagePreprocessingConfig>,
     image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
 }
@@ -1208,6 +1310,7 @@ fn prepare_decided_ocr_image(
             // says it is; 72 remains the assumption only when nobody knows.
             source_dpi: known_source_dpi.map_or(RAW_IMAGE_SOURCE_DPI, |dpi| dpi.round() as i32),
             apply_pix_preprocessing: false,
+            raw_ocr_source_frame: None,
             preprocessing: None,
             image_preprocessing: None,
         };
@@ -1546,6 +1649,7 @@ fn prepare_preprocessed_ocr_image(
                 height: normalized_height,
                 source_dpi,
                 apply_pix_preprocessing: true,
+                raw_ocr_source_frame: None,
                 preprocessing: Some(preprocessing.clone()),
                 image_preprocessing: Some(result.metadata),
             }
@@ -1560,6 +1664,7 @@ fn prepare_preprocessed_ocr_image(
                 // one. The 300 fallback is a guess for when there is nothing better.
                 source_dpi: known_source_dpi.map_or(PREPROCESSING_FALLBACK_SOURCE_DPI, |dpi| dpi.round() as i32),
                 apply_pix_preprocessing: true,
+                raw_ocr_source_frame: None,
                 preprocessing: Some(preprocessing.clone()),
                 image_preprocessing: None,
             }
@@ -2032,6 +2137,7 @@ pub(super) fn perform_ocr(
     api_pool: &Arc<TesseractApiPool>,
     extraction_config: Option<&ExtractionConfig>,
     models: &ModelContext,
+    policy: ImageOcrPolicy,
 ) -> Result<OcrExtractionResult, OcrError> {
     let ci_debug_enabled = env::var_os("XBERG_CI_DEBUG").is_some();
     log_ci_debug(ci_debug_enabled, "perform_ocr:start", || {
@@ -2046,9 +2152,15 @@ pub(super) fn perform_ocr(
 
     let security_limits = security_limits_for_ocr(config, extraction_config);
     let images_config = extraction_config.and_then(|extraction_config| extraction_config.images.as_ref());
-    let prepared_image =
-        prepare_encoded_ocr_image(image_bytes, &security_limits, config, images_config, ci_debug_enabled)
-            .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
+    let prepared_image = encoded_image::prepare_with_dpi_policy(
+        image_bytes,
+        &security_limits,
+        config,
+        images_config,
+        ci_debug_enabled,
+        policy == ImageOcrPolicy::BoundedInferredUpscale,
+    )
+    .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut image_data = prepared_image.data;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
@@ -2056,6 +2168,7 @@ pub(super) fn perform_ocr(
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut height = prepared_image.height;
     let source_dpi = prepared_image.source_dpi;
+    let raw_ocr_source_frame = prepared_image.raw_ocr_source_frame;
     let preprocessing = prepared_image.preprocessing;
     let image_preprocessing = prepared_image.image_preprocessing;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
@@ -2248,7 +2361,7 @@ pub(super) fn perform_ocr(
         if raw_peak.is_some_and(|peak| peak > security_limits.max_content_size as u64) {
             return Err(OcrError::ImageProcessingFailed(format!(
                 "OCR raw image workspace exceeds security_limits.max_content_size ({} bytes). \
-                 Raise security_limits.max_content_size or lower target_dpi",
+                 Raise security_limits.max_content_size",
                 security_limits.max_content_size,
             )));
         }
@@ -2546,6 +2659,10 @@ pub(super) fn perform_ocr(
 
     let mut tables = Vec::new();
     let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    let mut standalone_claimed = false;
+    #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
+    let standalone_claimed = false;
 
     if config.enable_table_detection {
         let tsv_data = tsv_data_for_tables.as_ref().unwrap();
@@ -2565,6 +2682,18 @@ pub(super) fn perform_ocr(
         } else {
             table_regions(&words)
         };
+        #[cfg(feature = "pdf")]
+        let can_prove_scan_grid = config.known_full_page_scan
+            && regions.len() == 1
+            && dictionary_filtered_line_count == 0
+            && hocr_for_tables.is_some()
+            && full_scan_table::uses_default_table_thresholds(config);
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        let can_prove_sparse_grid = policy == ImageOcrPolicy::StandaloneSparseRows
+            && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+            && regions.len() == 1
+            && dictionary_filtered_line_count == 0
+            && full_scan_table::uses_default_table_thresholds(config);
         tables.extend(oriented.into_iter().flatten());
         for (region_index, mut region) in regions.into_iter().enumerate() {
             if region.words.len() < MIN_TABLE_CANDIDATE_WORDS {
@@ -2672,7 +2801,25 @@ pub(super) fn perform_ocr(
             }
 
             #[cfg(feature = "pdf")]
-            let cleaned = post_process_table(table, false, false);
+            let cleaned = post_process_table(table, false, false).or_else(|| {
+                let bbox = region.bounding_box();
+                #[cfg(not(target_arch = "wasm32"))]
+                if can_prove_sparse_grid {
+                    let cells = full_scan_table::recover_standalone(
+                        tsv_data,
+                        &content,
+                        &bbox,
+                        &security_limits,
+                        hocr_for_tables.as_deref()?,
+                        hocr_document.as_ref()?,
+                    )?;
+                    standalone_claimed = true;
+                    return Some(cells);
+                }
+                can_prove_scan_grid
+                    .then(|| full_scan_table::recover(tsv_data, &content, &bbox, &security_limits))
+                    .flatten()
+            });
             #[cfg(not(feature = "pdf"))]
             let cleaned = Some(table);
             let Some(cleaned) = cleaned else {
@@ -2741,7 +2888,10 @@ pub(super) fn perform_ocr(
             hocr_document = Some(restored.document);
         }
     }
-    if let Some(document) = hocr_document.as_mut() {
+    if let Some(document) = hocr_document.as_mut().filter(|_| standalone_claimed) {
+        document.elements.clear();
+        document.ocr_text_claimed_by_tables = true;
+    } else if let Some(document) = hocr_document.as_mut() {
         // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
         let reconciled = hocr_for_tables
             .as_deref()
@@ -2750,7 +2900,15 @@ pub(super) fn perform_ocr(
                 tsv_data_for_tables
                     .as_deref()
                     .and_then(|tsv| {
-                        reconcile_fragmented_hocr_table_rows(hocr, document, &tables, tsv, config, &security_limits)
+                        reconcile_fragmented_hocr_table_rows(
+                            hocr,
+                            document,
+                            &tables,
+                            tsv,
+                            config,
+                            &security_limits,
+                            policy == ImageOcrPolicy::StandaloneDotLeaderRows,
+                        )
                     })
                     .or_else(|| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number))
             });
@@ -2797,6 +2955,7 @@ pub(super) fn perform_ocr(
         tables,
         ocr_elements,
         internal_document: hocr_document,
+        raw_ocr_source_frame,
     })
 }
 
@@ -2870,12 +3029,30 @@ pub(super) fn process_image_with_cache(
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
 ) -> Result<OcrExtractionResult, OcrError> {
+    process_image_with_cache_and_policy(
+        image_bytes,
+        config,
+        cache,
+        api_pool,
+        output_format,
+        ImageOcrPolicy::Default,
+    )
+}
+
+pub(super) fn process_image_with_cache_and_policy(
+    image_bytes: &[u8],
+    config: &TesseractConfig,
+    cache: &OcrCache,
+    api_pool: &Arc<TesseractApiPool>,
+    output_format: Option<crate::core::config::OutputFormat>,
+    policy: ImageOcrPolicy,
+) -> Result<OcrExtractionResult, OcrError> {
     config.validate().map_err(OcrError::InvalidConfiguration)?;
 
     let resolved = resolve_config_language(config)?;
     let config = resolved.as_ref().unwrap_or(config);
 
-    process_image_resolved(image_bytes, config, cache, api_pool, output_format)
+    process_image_resolved(image_bytes, config, cache, api_pool, output_format, policy)
 }
 
 /// Inner implementation operating on an already-resolved config.
@@ -2889,12 +3066,20 @@ fn process_image_resolved(
     cache: &OcrCache,
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
+    policy: ImageOcrPolicy,
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
     // Share one resolved model revision between cached output and its native handle. ~keep
     let models = ModelContext::resolve(config)?;
-    let config_str = models.result_key(config);
+    let mut config_str = models.result_key(config);
+    config_str.push_str(match policy {
+        ImageOcrPolicy::Default => "",
+        ImageOcrPolicy::BoundedInferredUpscale => ":bounded-inferred-upscale",
+        ImageOcrPolicy::StandaloneDotLeaderRows => ":standalone-dot-leader-rows",
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        ImageOcrPolicy::StandaloneSparseRows => ":standalone-sparse-rows",
+    });
 
     // `output_format` is part of the cache identity: it selects the renderer and
     // therefore the `content` and `mime_type` of the result. Omitting it served a
@@ -2917,7 +3102,14 @@ fn process_image_resolved(
         ..Default::default()
     });
 
-    let result = perform_ocr(image_bytes, config, api_pool, extraction_config.as_ref(), &models)?;
+    let result = perform_ocr(
+        image_bytes,
+        config,
+        api_pool,
+        extraction_config.as_ref(),
+        &models,
+        policy,
+    )?;
 
     if config.use_cache
         && let Some(Err(e)) = models.if_current(|| {
@@ -2993,7 +3185,7 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None) {
+                match process_image_resolved(&image_bytes, config, cache, api_pool, None, ImageOcrPolicy::Default) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -3028,7 +3220,7 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None) {
+                match process_image_resolved(&image_bytes, config, cache, api_pool, None, ImageOcrPolicy::Default) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -3764,6 +3956,50 @@ mod tests {
         assert_eq!(ratio, 0.0, "the failed lookup must not count as invalid");
     }
 
+    fn positioned_dot_leader_row() -> [HocrWord; 5] {
+        [
+            word_at(10, 30, 22, 10, "Signal"),
+            word_at(35, 30, 24, 10, "timing"),
+            word_at(65, 37, 29, 2, "........"),
+            word_at(101, 30, 11, 10, "-64"),
+            word_at(130, 30, 26, 10, "143.92"),
+        ]
+    }
+
+    #[test]
+    fn dot_leader_requires_literal_anchors_and_isolated_geometry() {
+        let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
+        let accepts = |words: &[HocrWord; 5]| row_has_only_extra_dot_leader(&words.each_ref(), &cells);
+        let words = positioned_dot_leader_row();
+        assert!(accepts(&words));
+        for (index, token) in [(0, "Signals"), (2, ".."), (2, "...7"), (3, "64"), (4, "14392")] {
+            let mut changed = words.clone();
+            changed[index].text = token.to_owned();
+            assert!(!accepts(&changed), "must preserve source token {token:?}");
+        }
+        for (left, top, width) in [(58, 37, 29), (65, 41, 29), (95, 37, 29), (65, 37, 8)] {
+            let mut changed = words.clone();
+            changed[2].left = left;
+            changed[2].top = top;
+            changed[2].width = width;
+            assert!(!accepts(&changed), "must reject leader box {left},{top},{width}");
+        }
+    }
+
+    #[test]
+    fn dot_leader_proof_refuses_to_choose_one_of_two_identical_physical_rows() {
+        let first = positioned_dot_leader_row();
+        let mut second = positioned_dot_leader_row();
+        for word in &mut second {
+            word.top += 25;
+        }
+        let rows = [first.iter().collect::<Vec<_>>(), second.iter().collect()];
+        let cells = vec![["Signal timing", "-64", "143.92"].map(str::to_owned).to_vec()];
+        assert!(unique_table_row_window(&rows[..1], &cells, false).is_none());
+        assert!(unique_table_row_window(&rows[..1], &cells, true).is_some());
+        assert!(unique_table_row_window(&rows, &cells, true).is_none());
+    }
+
     #[test]
     fn repeated_rows_beyond_alignment_budget_leave_hocr_unclaimed() {
         let mut words: Vec<_> = (0..64)
@@ -3777,7 +4013,7 @@ mod tests {
             x1: 25.0,
             y1: 1280.0,
         };
-        assert!(prove_fragmented_table_rows(&mut words, bbox, &cells, 0.5, usize::MAX).is_none());
+        assert!(prove_fragmented_table_rows(&mut words, bbox, &cells, 0.5, usize::MAX, false).is_none());
     }
 
     #[test]
@@ -3822,6 +4058,7 @@ mod tests {
             &tsv,
             &config,
             &limits,
+            false,
         )
         .expect("the exact visual rows are split into hOCR fragments");
         assert_eq!(reconciled.elements.len(), 1);
@@ -3850,14 +4087,17 @@ mod tests {
                     std::slice::from_ref(&table),
                     &tsv,
                     &config,
-                    &limits
+                    &limits,
+                    false,
                 )
                 .is_none()
             );
         }
 
         table.cells[1][1].clear();
-        assert!(reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config, &limits).is_none());
+        assert!(
+            reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config, &limits, false).is_none()
+        );
     }
 
     fn word_at(left: u32, top: u32, width: u32, height: u32, text: &str) -> crate::table_core::HocrWord {
@@ -4990,6 +5230,7 @@ mod tests {
             tables: Vec::new(),
             ocr_elements: None,
             internal_document: None,
+            raw_ocr_source_frame: None,
         };
         cache
             .set_cached_result(&image_hash, "tesseract", &config_str, None, &marker)
@@ -5116,6 +5357,51 @@ mod tests {
             "two calls resolving to the same tessdata directory must share one cache entry, \
              not write a second"
         );
+    }
+
+    #[test]
+    fn standalone_dot_leader_rows_keep_separate_cold_and_warm_cache_results() {
+        let dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(dir.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!("../../../tests/fixtures/ocr_dot_leader_2503/20.png");
+        let config = TesseractConfig {
+            psm: crate::ocr::types::PSMMode::SingleBlock as u8,
+            use_cache: true,
+            ..Default::default()
+        };
+        let extract = |policy| {
+            process_image_with_cache_and_policy(
+                image,
+                &config,
+                &cache,
+                &pool,
+                Some(crate::core::config::OutputFormat::Plain),
+                policy,
+            )
+            .unwrap()
+        };
+        let default_cold = extract(ImageOcrPolicy::Default);
+        let standalone_cold = extract(ImageOcrPolicy::StandaloneDotLeaderRows);
+        let duplicate = "Signal timing .......... 64 389,542 143.92";
+        let duplicate_in_document = |result: &OcrExtractionResult| {
+            result
+                .internal_document
+                .as_ref()
+                .unwrap()
+                .elements
+                .iter()
+                .flat_map(|element| element.text.lines())
+                .any(|line| line == duplicate)
+        };
+        assert!(duplicate_in_document(&default_cold));
+        assert!(!duplicate_in_document(&standalone_cold));
+        assert_eq!(cache.get_stats().unwrap().total_files, 2);
+        let default_warm = extract(ImageOcrPolicy::Default);
+        let standalone_warm = extract(ImageOcrPolicy::StandaloneDotLeaderRows);
+        assert!(duplicate_in_document(&default_warm));
+        assert!(!duplicate_in_document(&standalone_warm));
+        assert_eq!(cache.get_stats().unwrap().total_files, 2);
     }
 
     #[test]

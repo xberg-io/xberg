@@ -77,6 +77,29 @@ for the request and enables layout processing for the selected pages. URI inputs
 custom extractors that cannot honor the selection return an explicit error. The existing
 `LayoutDetectionConfig` has no `pages` field; pass the list to this function.
 
+Rust callers can use `Engine::extract_with_layout_region_text` to get the text
+of proven regions on selected, upright native PDF pages. Each item contains a
+one-based page number, the detector label, the region bounds in PDF points,
+and a verbatim slice of the returned page text, in reading order.
+
+```rust
+use xberg::{ExtractInput, ExtractionConfig, engine::Engine};
+
+async fn print_regions(pdf_bytes: Vec<u8>) -> xberg::Result<()> {
+    let input = ExtractInput::from_bytes(pdf_bytes, "application/pdf", None);
+    let result = Engine::new_default()
+        .extract_with_layout_region_text(input, &ExtractionConfig::default(), vec![3, 7])
+        .await?;
+    for item in result.regions {
+        println!("page {} [{}]: {}", item.page_number, item.region.class_name, item.text);
+    }
+    Ok(())
+}
+```
+
+The ordinary extraction is available as `result.extraction`. Regions without a
+proven match are omitted. Redaction requests suppress the region text.
+
 ## Configuration
 
 <Tabs syncKey="lang">

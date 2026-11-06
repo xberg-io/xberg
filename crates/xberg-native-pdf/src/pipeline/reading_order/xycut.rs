@@ -261,7 +261,7 @@ const MAX_PARTITION_DEPTH: u32 = 64;
 // GH#1808: visual-line y-tolerance for the full-width-line peel and the whole-line
 // partition assignment. Matches `find_heading_runs`'s own `same_line` tolerance rather than
 // introducing a second answer to "are these two spans on the same line".
-const XYCUT_LINE_Y_TOLERANCE_PTS: f32 = 1.0;
+pub(super) const XYCUT_LINE_Y_TOLERANCE_PTS: f32 = 1.0;
 // A line whose inked extent reaches this fraction of the region's own width is full-width
 // furniture (a legend, a running header, a caption) rather than column content -- no real
 // two-column body line's own width can reach here, since a column is bounded by the page
@@ -770,6 +770,16 @@ impl XYCutStrategy {
                     distinct_lines.insert(spans[i].bbox.top().round() as i32);
                 }
                 if distinct_lines.len() < 2 {
+                    return None;
+                }
+                // Parallel legend entries are independent rows even if the font marks every entry bold.
+                if super::xycut_legend::is_paired_definition_run(
+                    spans,
+                    &order,
+                    &span_indices,
+                    column_gutter,
+                    heading_size_floor,
+                ) {
                     return None;
                 }
                 Some(HeadingRun {
@@ -3347,6 +3357,71 @@ mod tests {
         let mut s = make_span_text(x, y, width, font_size, text, font_size);
         s.font_weight = FontWeight::Bold;
         s
+    }
+
+    fn paired_legend_spans() -> Vec<TextSpan> {
+        vec![
+            make_bold_span(77.0, 59.3, 87.0, "RL = Reporting Limit", 9.4),
+            make_bold_span(325.0, 59.3, 213.0, "B = Found in the blank", 9.4),
+            make_bold_span(77.0, 48.0, 175.0, "E = Exceeds calibration range", 9.4),
+            make_bold_span(325.0, 48.0, 199.0, "N = Presumptive evidence", 9.4),
+        ]
+    }
+
+    #[test]
+    fn should_not_collapse_parallel_legend_definitions_into_a_heading() {
+        let spans = paired_legend_spans();
+        let runs = XYCutStrategy::new().find_heading_runs(&spans, Some(280.0));
+        assert!(
+            runs.is_empty(),
+            "each legend definition is a separate source entry: {runs:?}"
+        );
+    }
+
+    #[test]
+    fn should_keep_heading_synthesis_without_a_complete_parallel_legend() {
+        let has_left_run = |spans: &[TextSpan]| {
+            XYCutStrategy::new()
+                .find_heading_runs(spans, Some(280.0))
+                .iter()
+                .any(|run| run.span_indices == [0, 2])
+        };
+        let mut missing_pair = paired_legend_spans();
+        missing_pair.pop();
+        assert!(has_left_run(&missing_pair));
+
+        let mut wrapped_heading = paired_legend_spans();
+        wrapped_heading[0].text = "Calibration and".into();
+        wrapped_heading[2].text = "Reporting Limits".into();
+        assert!(has_left_run(&wrapped_heading));
+
+        let mut formulas = paired_legend_spans();
+        formulas[0].text = "A = sin x + cos y".into();
+        formulas[2].text = "D = tan x + cot y".into();
+        assert!(has_left_run(&formulas));
+
+        let mut unaligned_right_track = paired_legend_spans();
+        unaligned_right_track[3].bbox.x += 24.0;
+        assert!(has_left_run(&unaligned_right_track));
+    }
+
+    #[test]
+    fn should_keep_heading_synthesis_when_right_entry_ownership_is_ambiguous() {
+        let has_left_run = |spans: &[TextSpan]| {
+            XYCutStrategy::new()
+                .find_heading_runs(spans, Some(280.0))
+                .iter()
+                .any(|run| run.span_indices == [0, 2])
+        };
+        let mut duplicate_pair = paired_legend_spans();
+        duplicate_pair.push(make_bold_span(350.0, 59.3, 150.0, "D = Duplicate entry", 9.4));
+        assert!(has_left_run(&duplicate_pair));
+
+        let mut shared_pair = paired_legend_spans();
+        shared_pair.pop();
+        shared_pair[1].bbox.y = 58.5;
+        shared_pair[2].bbox.y = 57.7;
+        assert!(has_left_run(&shared_pair));
     }
 
     /// fix-543 unit: `find_heading_runs` must detect a 2-line bold

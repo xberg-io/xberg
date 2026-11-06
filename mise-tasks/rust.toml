@@ -60,8 +60,13 @@ run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usag
 ["rust:test:explicit-sideways"]
 description = "Qualify explicit sideways OCR with pinned offline model artifacts"
 depends = ["os:require linux darwin"]
-usage = 'arg "<profile>" help="Use warm for eleven controls or native for five classifier-free controls"'
+usage = 'arg "<profile>" help="Use warm for thirteen controls or native for seven classifier-free controls"'
 run = 'bash scripts/ci/rust/run-explicit-sideways-tests.sh "$usage_profile"'
+
+["rust:test:khmer-native-retention"]
+description = "Qualify native Khmer preservation with the direct English OCR backend"
+depends = ["os:require linux darwin"]
+run = "bash scripts/ci/rust/run-khmer-native-retention-test.sh"
 
 ["rust:test:mime"]
 description = "Verify MIME declaration handling without tree-sitter"

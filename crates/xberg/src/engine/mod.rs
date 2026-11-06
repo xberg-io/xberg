@@ -15,11 +15,16 @@ use crate::Result;
 use crate::core::config::ExtractInputKind;
 #[cfg(feature = "redaction")]
 use crate::core::config::{ExternalRedactionFinding, RedactionOffsetEncoding};
-use crate::core::config::{ExtractInput, ExtractionConfig, ExtractionResult};
+use crate::core::config::{ExtractInput, ExtractInputWithOptions, ExtractionConfig, ExtractionResult};
 
 #[cfg(all(feature = "url-ingestion", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod crawl_handle;
 mod extract_impl;
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+pub(crate) mod layout_region_text;
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+pub use layout_region_text::{LayoutRegionText, LayoutRegionTextExtraction};
 pub mod seams;
 
 /// Generic, MIT-clean structured-extraction mechanism (rasterize, chunk, schema,
@@ -111,6 +116,36 @@ impl Engine {
         pages: Vec<u32>,
     ) -> Result<ExtractionResult> {
         let selection = crate::core::layout_pages::LayoutPageSelection::new(pages);
+        self.extract_with_layout_selection(input, config, &selection).await
+    }
+
+    /// Extract one PDF bytes input and collect source-proven text for explicitly selected layout pages.
+    ///
+    /// This enables page extraction and native layout reading order, and bypasses both caches.
+    /// Unsupported pages, unproved regions and redaction requests yield no region text.
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    #[cfg_attr(alef, alef(skip))]
+    pub async fn extract_with_layout_region_text(
+        &self,
+        input: ExtractInput,
+        config: &ExtractionConfig,
+        pages: Vec<u32>,
+    ) -> Result<LayoutRegionTextExtraction> {
+        let mut selection = crate::core::layout_pages::LayoutPageSelection::new(pages);
+        let pending: layout_region_text::RegionTextCollector = Default::default();
+        selection.region_text = Some(Arc::clone(&pending));
+        let extraction = self.extract_with_layout_selection(input, config, &selection).await?;
+        let pending = std::mem::take(&mut *pending.lock());
+        Ok(layout_region_text::finish(extraction, pending))
+    }
+
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    async fn extract_with_layout_selection(
+        &self,
+        input: ExtractInput,
+        config: &ExtractionConfig,
+        selection: &crate::core::layout_pages::LayoutPageSelection,
+    ) -> Result<ExtractionResult> {
         // ~keep The native PDF future is large; erase it before progress/public wrappers embed its state.
         #[cfg(not(target_arch = "wasm32"))]
         let operation: std::pin::Pin<
@@ -119,11 +154,11 @@ impl Engine {
             &self.inner,
             input,
             config,
-            &selection,
+            selection,
         ));
         #[cfg(target_arch = "wasm32")]
         let operation: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + '_>> = Box::pin(
-            extract_impl::extract_with_layout_pages(&self.inner, input, config, &selection),
+            extract_impl::extract_with_layout_pages(&self.inner, input, config, selection),
         );
         #[cfg(feature = "tokio-runtime")]
         return seams::scope_progress(Arc::clone(&self.inner.progress), None, operation).await;
@@ -212,6 +247,23 @@ impl Engine {
     pub async fn extract_batch(
         &self,
         inputs: Vec<ExtractInput>,
+        config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
+        self.extract_batch_inputs(inputs, config).await
+    }
+
+    /// Extract a batch whose inputs carry additional per-input options.
+    pub async fn extract_batch_with_input_options(
+        &self,
+        inputs: Vec<ExtractInputWithOptions>,
+        config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
+        self.extract_batch_inputs(inputs, config).await
+    }
+
+    async fn extract_batch_inputs<I: extract_impl::BatchInputRef>(
+        &self,
+        inputs: Vec<I>,
         config: &ExtractionConfig,
     ) -> Result<ExtractionResult> {
         #[cfg(feature = "tokio-runtime")]

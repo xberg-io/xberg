@@ -5,8 +5,8 @@
 
 use crate::Result;
 use crate::core::config::OcrConfig;
-use crate::ocr::processor::OcrProcessor;
 use crate::ocr::processor::validation::TessdataEnv;
+use crate::ocr::processor::{ImageOcrPolicy, OcrProcessor};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use ahash::AHashMap;
@@ -27,6 +27,103 @@ const USE_CACHE_BACKEND_OPTION: &str = "use_cache";
 /// the override alone (GH#1857's fix) let two calls under different environments, or for different
 /// languages, collide. GH#1891. ~keep
 type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>);
+
+#[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) mod orientation_evidence {
+    use super::WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY;
+    use crate::types::{OcrElement, OcrElementLevel, OcrExtractionResult};
+
+    #[derive(Clone, Copy)]
+    pub(crate) enum Capture {
+        Primary,
+        TwoTableCandidate,
+    }
+
+    tokio::task_local! {
+        pub(crate) static CAPTURE: Capture;
+    }
+
+    pub(crate) const MAX_WORDS: usize = 1024;
+    pub(crate) const MAX_BYTES: usize = 128 * 1024;
+
+    pub(super) fn take(result: &mut OcrExtractionResult, limit: usize) -> Option<Vec<OcrElement>> {
+        let mut evidence = result.ocr_elements.take()?;
+        if result
+            .metadata
+            .get(WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY)
+            .is_some_and(|count| count.as_u64() != Some(0))
+            || evidence.len() > MAX_WORDS
+            || evidence.capacity() > MAX_WORDS * 2
+            || evidence
+                .iter()
+                .try_fold(0usize, |sum, item| sum.checked_add(item.text.len()))
+                .is_none_or(|bytes| bytes > MAX_BYTES.min(limit))
+        {
+            return None;
+        }
+        evidence.retain(|item| item.level == OcrElementLevel::Word);
+        (!evidence.is_empty()).then_some(evidence)
+    }
+
+    pub(super) fn captures(result: &OcrExtractionResult, mode: Capture) -> bool {
+        matches!(mode, Capture::Primary) || result.tables.len() == 2
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn read(words: Vec<OcrElement>) -> OcrExtractionResult {
+            OcrExtractionResult {
+                ocr_elements: Some(words),
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn bounded_orientation_retry_capture_moves_only_complete_owned_evidence() {
+            let word = OcrElement {
+                text: "49".into(),
+                level: OcrElementLevel::Word,
+                ..Default::default()
+            };
+            for skipped in [None, Some(0), Some(1)] {
+                let mut result = read(vec![word.clone()]);
+                let pointer = result.ocr_elements.as_ref().unwrap().as_ptr();
+                if let Some(skipped) = skipped {
+                    result
+                        .metadata
+                        .insert(WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY.into(), skipped.into());
+                }
+                let captured = take(&mut result, MAX_BYTES);
+                assert!(result.ocr_elements.is_none());
+                assert_eq!(
+                    captured.as_ref().map(Vec::as_ptr),
+                    if skipped == Some(1) { None } else { Some(pointer) }
+                );
+            }
+            assert!(take(&mut read(vec![word.clone(); MAX_WORDS + 1]), MAX_BYTES).is_none());
+            assert!(take(&mut read(vec![word]), 1).is_none());
+        }
+    }
+}
+
+fn select_byte_read_elements(
+    result: &mut crate::types::OcrExtractionResult,
+    config: &OcrConfig,
+) -> Option<Vec<crate::types::OcrElement>> {
+    #[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
+    if let Ok(mode) = orientation_evidence::CAPTURE.try_with(|mode| *mode)
+        && orientation_evidence::captures(result, mode)
+    {
+        let limit = config
+            .security_limits
+            .as_ref()
+            .map_or(usize::MAX, |limits| limits.max_content_size);
+        return orientation_evidence::take(result, limit);
+    }
+    select_output_ocr_elements(result.ocr_elements.take(), config)
+}
 
 fn select_output_ocr_elements(
     elements: Option<Vec<crate::types::OcrElement>>,
@@ -399,14 +496,47 @@ impl Plugin for TesseractBackend {
     }
 }
 
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-impl OcrBackend for TesseractBackend {
-    async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
-        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+impl TesseractBackend {
+    pub(crate) async fn process_image_with_dpi_policy(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        allow_bounded_inferred_upscale: bool,
+    ) -> Result<ExtractedDocument> {
+        let policy = if allow_bounded_inferred_upscale {
+            ImageOcrPolicy::BoundedInferredUpscale
+        } else {
+            ImageOcrPolicy::Default
+        };
+        self.process_image_with_policy(image_bytes, config, policy).await
     }
 
-    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) async fn process_standalone_psm6_image(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneDotLeaderRows)
+            .await
+    }
+
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) async fn process_standalone_sparse_image(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows)
+            .await
+    }
+
+    async fn process_image_with_policy(
+        &self,
+        image_bytes: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        policy: ImageOcrPolicy,
+    ) -> Result<ExtractedDocument> {
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -422,18 +552,31 @@ impl OcrBackend for TesseractBackend {
                 source: None,
             })?;
 
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let geometry = crate::ocr::preprocessing::geometry_evidence::GeometryEvidence::requested();
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match output_format {
-                Some(fmt) => processor.process_image_with_format(image_bytes.as_slice(), &tess_config_clone, fmt),
-                None => processor.process_image(image_bytes.as_slice(), &tess_config_clone),
-            }))
-            .unwrap_or_else(|_| {
-                Err(crate::ocr::error::OcrError::ProcessingFailed(
-                    "Tesseract/Leptonica foreign exception caught".to_string(),
-                ))
-            })
+            let run = || {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    processor.process_image_with_policy(
+                        image_bytes.as_slice(),
+                        &tess_config_clone,
+                        output_format,
+                        policy,
+                    )
+                }))
+                .unwrap_or_else(|_| {
+                    Err(crate::ocr::error::OcrError::ProcessingFailed(
+                        "Tesseract/Leptonica foreign exception caught".to_string(),
+                    ))
+                })
+            };
+            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Some(geometry) = geometry {
+                return geometry.on_worker(run);
+            }
+            run()
         };
         #[cfg(not(target_arch = "wasm32"))]
         let ocr_result = tokio::task::spawn_blocking(crate::core::extractor::cacheability::blocking(operation))
@@ -461,8 +604,8 @@ impl OcrBackend for TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
+        let ocr_elements = select_byte_read_elements(&mut ocr_result, config);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
-        let ocr_elements = select_output_ocr_elements(ocr_result.ocr_elements.take(), config);
 
         let mut additional = AHashMap::new();
         for (key, value) in ocr_result.metadata {
@@ -499,9 +642,22 @@ impl OcrBackend for TesseractBackend {
                 .collect(),
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
+            raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
             processing_warnings,
             ..Default::default()
         })
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+impl OcrBackend for TesseractBackend {
+    async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
+        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+    }
+
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+        self.process_image_with_dpi_policy(image_bytes, config, false).await
     }
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
@@ -598,6 +754,7 @@ impl OcrBackend for TesseractBackend {
                 .collect(),
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
+            raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
             processing_warnings,
             ..Default::default()
         })
