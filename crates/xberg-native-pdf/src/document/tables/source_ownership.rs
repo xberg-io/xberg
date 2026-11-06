@@ -101,8 +101,10 @@ impl PdfDocument {
             let mut wide_ownership = None;
             tables.retain(|table| {
                 is_public_ruled_table(table) || {
-                    wide_ownership = wide_ruled_ownership(table, config, &spans, &lines, page_bounds());
-                    wide_ownership.is_some()
+                    let certified = wide_ruled_ownership(table, config, &spans, &lines, page_bounds);
+                    let admitted = certified.is_some();
+                    wide_ownership = certified.or(wide_ownership.take());
+                    admitted
                 }
             });
             let ownership = wide_ownership.or(ownership).filter(|_| tables.len() == 1);
@@ -130,11 +132,11 @@ fn wide_ruled_ownership(
     config: &TableDetectionConfig,
     spans: &[crate::layout::TextSpan],
     lines: &[crate::elements::PathContent],
-    page: Option<crate::geometry::Rect>,
+    page_bounds: impl FnOnce() -> Option<crate::geometry::Rect>,
 ) -> Option<PaintedCellOwnership> {
     if !is_line_only(config)
         || table.col_count > config.max_table_columns
-        || !within_page(table, page)
+        || !within_page(table, page_bounds())
         || looks_like_prose_table(table)
     {
         return None;
