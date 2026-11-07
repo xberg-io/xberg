@@ -23,20 +23,41 @@ impl PdfDocument {
             return Ok(Vec::new());
         }
         let mut has_curve = false;
+        let mut page_resources = None;
         let supported = visit_complete_content_stream(&content, operator_limit, |op| {
             has_curve |= matches!(
                 op,
                 Operator::CurveTo { .. } | Operator::CurveToV { .. } | Operator::CurveToY { .. }
             );
-            !matches!(
-                op,
-                Operator::Do { .. } | Operator::InlineImage { .. } | Operator::ClipNonZero | Operator::ClipEvenOdd
-            )
+            match op {
+                // An image paints no path, so the page-local paths stay complete; a form may hold paths. ~keep
+                Operator::Do { name } => {
+                    page_resources
+                        .get_or_insert_with(|| self.get_page_resources(page_index).ok())
+                        .as_ref()
+                        .is_some_and(|resources| self.is_image_xobject(resources, &name))
+                }
+                Operator::InlineImage { .. } | Operator::ClipNonZero | Operator::ClipEvenOdd => false,
+                _ => true,
+            }
         });
         if !matches!(supported, Ok(true)) || !has_curve {
             return Ok(Vec::new());
         }
         self.extract_paths(page_index)
+    }
+
+    fn is_image_xobject(&self, resources: &crate::object::Object, name: &str) -> bool {
+        let xobject = resources
+            .as_dict()
+            .and_then(|resources| resources.get("XObject"))
+            .and_then(|xobjects| self.deref_object(xobjects))
+            .and_then(|xobjects| xobjects.as_dict()?.get(name).and_then(|entry| self.deref_object(entry)));
+        matches!(
+            xobject,
+            Some(crate::object::Object::Stream { ref dict, .. })
+                if dict.get("Subtype").and_then(|subtype| subtype.as_name()) == Some("Image")
+        )
     }
 
     /// Extract path (vector graphics) content from a page.

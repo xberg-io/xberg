@@ -180,6 +180,71 @@ async fn auto_ocr_recovers_outlined_rows_past_the_seven_row_paint_budget() {
     }
 }
 
+/// The five outlined rows with a picture XObject of the given subtype painted below them.
+fn outlined_rows_beside_xobject(subtype: &str) -> Vec<u8> {
+    use lopdf::{Object, Stream, dictionary};
+
+    let mut pdf = lopdf::Document::load_mem(OUTLINED).expect("load outlined prose fixture");
+    let page = pdf.get_pages()[&1];
+    let mut dict = dictionary! { "Type" => "XObject", "Subtype" => subtype };
+    let body = if subtype == "Image" {
+        dict.set("Width", 2);
+        dict.set("Height", 2);
+        dict.set("ColorSpace", "DeviceGray");
+        dict.set("BitsPerComponent", 8);
+        vec![90, 160, 160, 90]
+    } else {
+        dict.set("BBox", vec![0.into(), 0.into(), 1.into(), 1.into()]);
+        b"0 0 1 1 re f".to_vec()
+    };
+    let picture = Stream::new(dict, body);
+    let picture = pdf.add_object(picture);
+    let resources = pdf
+        .get_object_mut(page)
+        .and_then(Object::as_dict_mut)
+        .and_then(|page| page.get_mut(b"Resources"))
+        .and_then(Object::as_dict_mut)
+        .expect("inline page resources");
+    resources.set("XObject", dictionary! { "Im1" => picture });
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).expect("one content stream");
+    let content = String::from_utf8(pdf.get_page_content(page)).expect("ASCII PDF drawing commands");
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(format!("q 300 0 0 150 156 300 cm /Im1 Do Q\n{content}").into_bytes());
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).expect("serialize outlined page with a picture");
+    bytes
+}
+
+#[tokio::test]
+async fn auto_ocr_recovers_outlined_rows_beside_a_picture() {
+    let bytes = outlined_rows_beside_xobject("Image");
+    let document = read(&bytes, false, None).await;
+    assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    for line in std::iter::once(HEADER).chain(PROSE).chain(std::iter::once("Page 7")) {
+        assert!(
+            document.content.contains(line),
+            "missing {line:?} in {:?}",
+            document.content
+        );
+    }
+}
+
+#[test]
+fn vector_inventory_abstains_at_a_form_xobject() {
+    let paths = |subtype| {
+        xberg_native_pdf::PdfDocument::from_bytes(outlined_rows_beside_xobject(subtype))
+            .expect("load outlined page with an XObject")
+            .extract_bounded_page_local_paths(0, usize::MAX, usize::MAX)
+            .unwrap()
+            .len()
+    };
+    assert_eq!(paths("Image"), 1, "an image XObject leaves the page-local outline readable");
+    assert_eq!(paths("Form"), 0, "a form XObject can hold paths the page stream does not show");
+}
+
 #[test]
 fn vector_inventory_abstains_before_materializing_out_of_budget_paths() {
     let pdf = xberg_native_pdf::PdfDocument::from_bytes(OUTLINED.to_vec()).expect("load outlined prose fixture");

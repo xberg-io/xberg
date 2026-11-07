@@ -202,6 +202,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The outlined-prose check refused a page that painted more than about seven rows of outlined text.
   Such a page kept only its native header and footer. The check now accepts a full page of outlined rows.
   The recovered words still pass through the merge that keeps every native word.
+- **(pdf): Recover a page of outlined prose that also paints a picture.** (GH#2313)
+  The outlined-prose check refused any page that drew an image or a form object.
+  A picture holds no outlined text, so the check now reads past an image. It still refuses a page with a form object.
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
