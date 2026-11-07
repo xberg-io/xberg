@@ -1,6 +1,5 @@
 use super::{
-    MAX_FRAGMENTED_HOCR_INPUT_BYTES, SecurityLimits, Track, Word, alphabetic, bounded_words, disjoint_rows,
-    literal_number, plain_ocr_fragment,
+    MAX_FRAGMENTED_HOCR_INPUT_BYTES, SecurityLimits, Track, Word, bounded_words, disjoint_rows, plain_ocr_fragment,
 };
 use crate::ocr::hocr_parser::hocr_matches_all_proved_table_fragments;
 use crate::table_core::HocrWord;
@@ -142,11 +141,7 @@ fn build_leader_grid(
     mut proves_dots: impl FnMut(&HocrWord, u32) -> Option<()>,
 ) -> Option<Vec<Vec<String>>> {
     let (header, body) = rows.split_first()?;
-    if header.len() < 4
-        || body.len() < 3
-        || rows.len().checked_mul(header.len())? > max_cells
-        || !header.iter().all(|(_, word)| alphabetic(&word.text))
-    {
+    if header.len() < 4 || body.len() < 3 || rows.len().checked_mul(header.len())? > max_cells {
         return None;
     }
     let mut tracks: Vec<_> = header.iter().map(|(_, word)| Track::new(horizontal(word))).collect();
@@ -164,10 +159,7 @@ fn build_leader_grid(
         let [(_, label), (_, leader), values @ ..] = &**row else {
             return None;
         };
-        if values.len() != tracks.len() - 1
-            || !values.iter().all(|(_, word)| literal_number(&word.text))
-            || !label.text.split_whitespace().all(alphabetic)
-        {
+        if values.len() != tracks.len() - 1 {
             return None;
         }
         tracks[0].admit(horizontal(label))?;
@@ -348,6 +340,63 @@ mod tests {
         });
         assert!(grid.is_some());
         heights
+    }
+
+    fn leader_grid(header: [&str; 4], label: &str, values: [&str; 3], proved: bool) -> Option<Vec<Vec<String>>> {
+        let mut rows: Vec<Vec<Word>> = vec![
+            header
+                .iter()
+                .enumerate()
+                .map(|(index, text)| word(text, index as u32 * 100, 40, 20))
+                .collect(),
+        ];
+        rows.extend((0..3).map(|_| {
+            let mut row = vec![word(label, 0, 40, 20), word("...", 60, 30, 5)];
+            row.extend(
+                values
+                    .iter()
+                    .enumerate()
+                    .map(|(index, text)| word(text, (index as u32 + 1) * 100, 30, 20)),
+            );
+            row
+        }));
+        let rows: Vec<&mut [Word]> = rows.iter_mut().map(Vec::as_mut_slice).collect();
+        build_leader_grid(&rows, 100, |_, _| proved.then_some(()))
+    }
+
+    #[test]
+    fn leader_rows_follow_proved_geometry_not_label_letters_or_value_digits() {
+        for (header, label, values) in [
+            (["Item", "Count", "Budget", "Change"], "Tree", ["10", "20", "30"]),
+            (["No.", "Qty", "$", "%"], "4(b) net", ["$1,010", "3.2%", "-7"]),
+            (["Item", "Count", "Budget", "Change"], "Tree", ["n/a", "yes", "none"]),
+        ] {
+            let grid = leader_grid(header, label, values, true).unwrap_or_else(|| panic!("{header:?} {label:?}"));
+            assert_eq!(grid.len(), 4);
+            assert_eq!(grid[1], [label, values[0], values[1], values[2]]);
+            assert!(leader_grid(header, label, values, false).is_none(), "unproved leader");
+        }
+    }
+
+    #[test]
+    fn leader_rows_refuse_values_outside_their_header_columns() {
+        let mut rows: Vec<Vec<Word>> = vec![vec![
+            word("A", 0, 40, 20),
+            word("B", 100, 40, 20),
+            word("C", 200, 40, 20),
+            word("D", 300, 40, 20),
+        ]];
+        rows.extend((0..3).map(|_| {
+            vec![
+                word("x", 0, 40, 20),
+                word("...", 60, 30, 5),
+                word("1", 100, 30, 20),
+                word("2", 200, 30, 20),
+                word("3", 340, 30, 20),
+            ]
+        }));
+        let rows: Vec<&mut [Word]> = rows.iter_mut().map(Vec::as_mut_slice).collect();
+        assert!(build_leader_grid(&rows, 100, |_, _| Some(())).is_none());
     }
 
     #[test]
