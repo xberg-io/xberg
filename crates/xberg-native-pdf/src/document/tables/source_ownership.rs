@@ -150,6 +150,7 @@ fn recover_wide_source_table(
     lines: &[crate::elements::PathContent],
     page_bounds: impl FnOnce() -> Option<crate::geometry::Rect>,
 ) -> Option<RuledSourceTables> {
+    // The last two checks are cost gates: recovery runs on every page whose ruled routes are empty. ~keep
     if !is_line_only(config)
         || config.max_table_columns != DEFAULT_MAX_TABLE_COLUMNS
         || !source_spanned_work_fits(spans, lines)

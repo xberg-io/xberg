@@ -90,3 +90,47 @@ fn a_source_word_inside_the_table_that_no_cell_claims_is_not_certified() {
     grid.spans.push(stray);
     assert!(!certified(&grid));
 }
+
+#[test]
+fn a_closed_cell_needs_every_vertical_rule_painted() {
+    let vertical = fixture::grid()
+        .paths
+        .iter()
+        .enumerate()
+        .filter(|(_, path)| path.is_vertical_line(1.0))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    assert!(vertical.len() > fixture::COLUMNS);
+    for index in vertical {
+        let mut grid = fixture::grid();
+        grid.paths.remove(index);
+        assert!(
+            !certified(&grid),
+            "table certified without the vertical rule at path {index}"
+        );
+    }
+}
+
+#[test]
+fn a_rule_inside_a_merged_cell_is_not_certified() {
+    let mut grid = fixture::grid();
+    grid.paths.push(PathContent::line(60.0, 20.0, 60.0, 40.0));
+    assert!(!certified(&grid));
+}
+
+#[test]
+fn only_sixteen_to_eighteen_columns_are_certified() {
+    for (columns, expected) in [(15, false), (16, true), (18, true), (19, false)] {
+        assert_eq!(
+            certified(&fixture::grid_with_columns(columns)),
+            expected,
+            "{columns} columns"
+        );
+    }
+}
+
+#[test]
+fn a_middle_row_needs_two_merged_cells() {
+    assert!(certified(&fixture::grid_with_merged(&[1, 8, 6, 1])));
+    assert!(!certified(&fixture::grid_with_merged(&[1, 14, 1])));
+}

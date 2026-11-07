@@ -146,6 +146,14 @@ fn recovery_declines_a_prose_shaped_table() {
     for span in &mut grid.spans {
         span.text = "word".to_string();
     }
+    let mut retry = default_line_config();
+    retry.max_table_columns = MAX_SOURCE_SPANNED_COLUMNS;
+    let tables = detect_tables_without_painted_recovery(&grid.spans, &grid.paths, &retry);
+    let [table] = tables.as_slice() else {
+        panic!("the detector must find the one table for the prose check to be what declines");
+    };
+    assert_eq!(table.col_count, fixture::COLUMNS);
+    assert!(looks_like_prose_table(table));
     assert!(!recovered(&default_line_config(), &grid, Some(PAGE)));
 }
 
