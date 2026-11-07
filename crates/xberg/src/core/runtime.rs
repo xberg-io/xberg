@@ -101,16 +101,7 @@ pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime
 /// the same size, while the extraction poll chain needs more. Dropping the returned future aborts the task,
 /// so cancellation still stops the work. A panic in the task resumes unwinding in the caller, and the task
 /// does not inherit the caller's task-locals, so the future must establish any it needs.
-#[cfg(all(
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32"),
-    any(
-        feature = "embeddings",
-        feature = "static-embeddings",
-        feature = "reranker",
-        feature = "redaction"
-    )
-))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32"), feature = "redaction"))]
 pub(crate) async fn run_on_large_stack<T, F>(future: F) -> crate::Result<T>
 where
     T: Send + 'static,
@@ -134,17 +125,7 @@ where
     }
 }
 
-#[cfg(all(
-    test,
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32"),
-    any(
-        feature = "embeddings",
-        feature = "static-embeddings",
-        feature = "reranker",
-        feature = "redaction"
-    )
-))]
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32"), feature = "redaction"))]
 mod large_stack_tests {
     use super::run_on_large_stack;
     use std::sync::Arc;
