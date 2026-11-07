@@ -1,6 +1,5 @@
 //! Which configurations may use source-image strips, and the warning for a tall page that did not.
 
-use super::MAX_TILE_SIDE;
 use super::MIN_STANDARD_SOURCE_DPI;
 use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat};
 use crate::types::{ExtractedDocument, ProcessingWarning};
@@ -8,15 +7,16 @@ use std::borrow::Cow;
 use xberg_native_pdf::PdfDocument;
 
 pub(in super::super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> bool {
+    #[cfg(feature = "layout-detection")]
+    if config.layout.is_some() {
+        return false;
+    }
     unsupported_reason(config, ocr).is_none()
 }
 
-/// Names the first configuration choice that keeps strip recovery from running.
+/// Names the first configuration choice that keeps strip recovery from running. Callers
+/// that report it have already excluded layout detection and stored scans.
 pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrConfig) -> Option<&'static str> {
-    #[cfg(feature = "layout-detection")]
-    if config.layout.is_some() {
-        return Some("layout detection is enabled");
-    }
     if !matches!(config.output_format, OutputFormat::Plain | OutputFormat::Markdown) {
         return Some("the output format is not plain text or Markdown");
     }
@@ -37,7 +37,7 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
     {
         return Some("OCR preprocessing, element, pipeline or rotation options are set");
     }
-    if ocr.language != ["eng"] {
+    if ocr.effective_tesseract_language().as_slice() != ["eng"] {
         return Some("the OCR language is not English only");
     }
     if !ocr.backend_options.as_ref().is_none_or(|options| {
@@ -50,31 +50,71 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
     None
 }
 
-/// Tells the caller that a page too tall for the OCR raster kept its downscaled read.
+/// Strips are joined as plain paragraphs, so a Markdown caller must be told no structure was rebuilt.
+pub(in super::super) fn note_flat_structure(result: &mut ExtractedDocument, config: &ExtractionConfig, page: usize) {
+    if config.output_format == OutputFormat::Markdown {
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("ocr"),
+            message: Cow::Owned(format!(
+                "Page {} was recovered from source-image strips as plain text; Markdown structure such as headings \
+                 and paragraph breaks was not rebuilt.",
+                page + 1
+            )),
+        });
+    }
+}
+
+/// Why a tall page kept the read made from its downscaled render.
+pub(in super::super) enum Unrecovered {
+    Config(&'static str),
+    TablesOrFormulas,
+    Uncertified,
+    Rejected,
+}
+
+/// Tells the caller that a page read from a render shrunk below the standard scan density kept
+/// that read. `raster_height` is the pixel height of the render the page was read from.
 pub(in super::super) fn note_unrecovered(
     original: &mut ExtractedDocument,
     ocr: &OcrConfig,
     (document, page): (&PdfDocument, usize),
-    reason: &str,
+    raster_height: u32,
+    why: Unrecovered,
 ) {
-    let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     let (_, page_height) = super::super::rendering::page_dimensions_pt(document, page);
-    let noise = super::super::scoring::ocr_recognition_noise_decision(
-        &original.content,
-        &thresholds,
-        crate::plugins::ConfidenceSemantics::Legibility { scale_max: 100.0 },
-        super::super::mean_text_conf_of(&original.metadata.additional),
-    );
-    if page_height <= MAX_TILE_SIDE as f32 * 72.0 / MIN_STANDARD_SOURCE_DPI as f32
-        || !(noise.low_confidence || noise.fragmented_noise)
-    {
+    let render_dpi = f64::from(raster_height) * 72.0 / f64::from(page_height.max(1.0));
+    if render_dpi >= MIN_STANDARD_SOURCE_DPI * 0.98 {
         return;
+    }
+    let reason = match why {
+        Unrecovered::Config(reason) => reason,
+        Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
+        Unrecovered::Uncertified => {
+            "the page is not one scan image in a supported encoding and density within the memory limit, \
+             or a strip did not read as its source lines"
+        }
+        Unrecovered::Rejected => "the strips were read but were not better than the downscaled read",
+    };
+    if matches!(
+        why,
+        Unrecovered::Config(_) | Unrecovered::Uncertified | Unrecovered::Rejected
+    ) {
+        let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
+        let noise = super::super::scoring::ocr_recognition_noise_decision(
+            &original.content,
+            &thresholds,
+            crate::plugins::ConfidenceSemantics::Legibility { scale_max: 100.0 },
+            super::super::mean_text_conf_of(&original.metadata.additional),
+        );
+        if !(noise.low_confidence || noise.fragmented_noise) {
+            return;
+        }
     }
     original.processing_warnings.push(ProcessingWarning {
         source: Cow::Borrowed("ocr"),
         message: Cow::Owned(format!(
-            "Page {} is too tall for one OCR raster and its source-image strips were not used: {reason}. \
-             The text is from the downscaled page and may be incomplete.",
+            "Page {} was read from a render downscaled to {render_dpi:.0} DPI and its source-image strips \
+             were not used: {reason}. The text may be incomplete.",
             page + 1
         )),
     });
@@ -116,6 +156,15 @@ mod tests {
             ..ocr.clone()
         };
         assert!(allowed(&ExtractionConfig::default(), &german).is_some_and(|reason| reason.contains("language")));
+        let mut tesseract_language = ocr.clone();
+        tesseract_language.tesseract_config = Some(crate::types::TesseractConfig {
+            language: vec!["deu".into()],
+            ..Default::default()
+        });
+        assert!(
+            allowed(&ExtractionConfig::default(), &tesseract_language)
+                .is_some_and(|reason| reason.contains("language"))
+        );
         let mut preprocessed = ocr.clone();
         preprocessed.tesseract_config = Some(crate::types::TesseractConfig {
             preprocessing: Some(Default::default()),

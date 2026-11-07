@@ -1,7 +1,7 @@
 //! Exact, budgeted decoding of grayscale-equivalent source samples.
 
 use super::super::hidden_layer::{decode_exact_flate, image_predictor};
-use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE};
+use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI};
 use xberg_native_pdf::decoders::{DecodeParams, decode_predictor};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
@@ -144,11 +144,21 @@ pub(super) fn source_frame(
     Some((width, height, dpi))
 }
 
-pub(super) fn source_density_allowed(dpi: f64) -> bool {
-    const MIN_CERTIFIED_SOURCE_DPI: f64 = 120.0;
+pub(super) fn source_density_allowed(dpi: f64, packing: Option<GrayPacking>) -> bool {
+    const MIN_LOW_DENSITY_SOURCE_DPI: f64 = 120.0;
     const MAX_SOURCE_DPI: f64 = 300.0;
 
-    (MIN_CERTIFIED_SOURCE_DPI..=MAX_SOURCE_DPI).contains(&dpi)
+    // Rendered at 120 DPI, bilevel, neutral RGB and JPEG text did not read back as its source
+    // words, so those keep the standard floor. ~keep
+    let minimum = if matches!(
+        packing,
+        Some(GrayPacking::Byte | GrayPacking::PngPredictor(_) | GrayPacking::Indexed(_))
+    ) {
+        MIN_LOW_DENSITY_SOURCE_DPI
+    } else {
+        MIN_STANDARD_SOURCE_DPI
+    };
+    (minimum..=MAX_SOURCE_DPI).contains(&dpi)
 }
 
 #[cfg(test)]
@@ -165,12 +175,22 @@ mod tests {
     }
 
     #[test]
-    fn source_density_is_bounded_for_every_packing() {
-        assert!(source_density_allowed(120.0));
-        assert!(!source_density_allowed(119.99));
-        assert!(source_density_allowed(150.0));
-        assert!(source_density_allowed(300.0));
-        assert!(!source_density_allowed(300.01));
+    fn lower_source_density_is_limited_to_the_packings_that_read_back_exactly_at_120_dpi() {
+        let cases = [
+            (None, false),
+            (Some(GrayPacking::Byte), true),
+            (Some(GrayPacking::Bilevel), false),
+            (Some(GrayPacking::NeutralRgb), false),
+            (Some(GrayPacking::Indexed([0, 255])), true),
+            (Some(GrayPacking::PngPredictor(12)), true),
+        ];
+        for (packing, supports_lower_density) in cases {
+            assert_eq!(source_density_allowed(120.0, packing), supports_lower_density);
+            assert!(!source_density_allowed(119.99, packing));
+            assert!(source_density_allowed(150.0, packing));
+            assert!(source_density_allowed(300.0, packing));
+            assert!(!source_density_allowed(300.01, packing));
+        }
     }
 
     #[test]

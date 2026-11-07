@@ -19,7 +19,7 @@ use xberg_native_pdf::object::Object;
 
 pub(super) mod augmentation;
 mod policy;
-pub(super) use policy::{note_unrecovered, supports, unsupported_reason};
+pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports, unsupported_reason};
 mod gray_jpeg;
 mod indexed;
 mod ordered;
@@ -104,7 +104,9 @@ pub(super) async fn try_replace(
     (document, page): (&PdfDocument, usize),
     (_, png, width, height): &super::rendering::EncodedPage,
 ) -> crate::Result<bool> {
+    let source = (document, page);
     if !original.tables.is_empty() || !original.formulas.is_empty() {
+        note_unrecovered(original, ocr, source, *height, Unrecovered::TablesOrFormulas);
         return Ok(false);
     }
     let Some(quality) = RecognitionQuality::from_result(original) else {
@@ -112,18 +114,18 @@ pub(super) async fn try_replace(
     };
     let attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
-    if let Some((recovered, strips)) = recover(attempt, backend, ocr).await?
-        && should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds)
-    {
-        apply_recovery(original, recovered, page, strips);
-        return Ok(true);
-    }
-    note_unrecovered(
-        original,
-        ocr,
-        (document, page),
-        "the scan is not a single certifiable image, or its strips did not read as the complete page",
-    );
+    let why = match recover(attempt, backend, ocr).await? {
+        Some((recovered, strips))
+            if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
+        {
+            apply_recovery(original, recovered, page, strips);
+            note_flat_structure(original, config, page);
+            return Ok(true);
+        }
+        Some(_) => Unrecovered::Rejected,
+        None => Unrecovered::Uncertified,
+    };
+    note_unrecovered(original, ocr, source, *height, why);
     Ok(false)
 }
 
@@ -463,7 +465,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         (Some(_), "FlateDecode") => Some(flate_packing(&dict, width, unfiltered_paint)?),
         _ => return None,
     };
-    if !source_density_allowed(dpi) {
+    if !source_density_allowed(dpi, packing) {
         return None;
     }
     let (samples, retained_bytes) = if let Some(packing) = packing {
@@ -682,8 +684,9 @@ impl TextAccumulator {
             return false;
         }
         self.psm = Some(quality.psm);
+        // A strip boundary is a blank band, so the blocks on either side stay separate paragraphs. ~keep
         if !self.text.is_empty() {
-            self.text.push('\n');
+            self.text.push_str("\n\n");
         }
         self.text.push_str(text);
         self.words = total_words;
@@ -786,7 +789,7 @@ mod tests {
         ));
         apply_recovery(&mut original, recovered, 1, 2);
 
-        assert_eq!(original.content, "The clean original\nhas more words");
+        assert_eq!(original.content, "The clean original\n\nhas more words");
         assert_eq!(original.mime_type, "application/pdf");
         assert_eq!(original.metadata.extraction_duration_ms, Some(21));
         assert_eq!(original.metadata.additional["psm"], "11");

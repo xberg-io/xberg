@@ -255,7 +255,11 @@ fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
 }
 
 fn assert_exact_tall_source_text(source: &[u8]) {
-    let document = extract(source, &extraction_config());
+    assert_exact_tall_source_text_with(source, &extraction_config());
+}
+
+fn assert_exact_tall_source_text_with(source: &[u8], config: &ExtractionConfig) {
+    let document = extract(source, config);
     assert_image_text(&document, true);
     assert!(document.content.split_whitespace().eq(ORACLE.split_whitespace()));
     let pages = document.pages.as_ref().unwrap();
@@ -343,7 +347,6 @@ fn tall_inverted_indexed_scan_recovers_all_source_words_in_order() {
     assert_exact_tall_source_text(source);
 }
 
-const LOWER_DENSITY: (u32, u32) = (765, 7200);
 const BELOW_FLOOR_DENSITY: (u32, u32) = (918, 8640);
 
 fn configured(extra: serde_json::Value) -> ExtractionConfig {
@@ -360,16 +363,35 @@ fn configured(extra: serde_json::Value) -> ExtractionConfig {
     serde_json::from_value(value).expect("merged configuration")
 }
 
+macro_rules! fixture_120 {
+    ($name:literal) => {
+        include_bytes!(concat!("../../../fixtures/repros/tall-scan-strips/", $name)).as_slice()
+    };
+}
+
 #[test]
-fn tall_scans_at_the_density_floor_recover_in_every_certified_encoding() {
+fn indexed_scan_rendered_at_120_dpi_recovers_every_source_word() {
+    assert_exact_tall_source_text(fixture_120!("indexed-120.pdf"));
+}
+
+#[test]
+fn bilevel_rgb_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
     for source in [
-        NEUTRAL_RGB,
-        TALL_JPEG,
-        include_bytes!("../../../fixtures/repros/tall-scan-strips/indexed-inverted.pdf"),
+        fixture_120!("bilevel-120.pdf"),
+        fixture_120!("neutral-rgb-120.pdf"),
+        fixture_120!("jpeg-120.pdf"),
     ] {
-        assert_exact_tall_source_text(&lower_density(source, LOWER_DENSITY));
+        let document = extract(source, &extraction_config());
+        assert!(!strip_warning(&document));
+        assert!(
+            document
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains("source-image strips were not used")),
+            "{:?}",
+            document.processing_warnings
+        );
     }
-    assert_bilevel_text(&extract(&lower_density(BILEVEL, LOWER_DENSITY), &extraction_config()));
 }
 
 #[test]
@@ -392,9 +414,64 @@ fn tall_scans_below_the_density_floor_say_recovery_was_not_used() {
 fn markdown_output_recovers_the_tall_scan_in_every_certified_encoding() {
     let config = configured(serde_json::json!({"output_format": "markdown"}));
     for source in [TALL, NEUTRAL_RGB, TALL_JPEG, TALL_PREDICTOR] {
-        let document = extract(source, &config);
-        assert_image_text(&document, true);
+        assert_exact_tall_source_text_with(source, &config);
     }
+}
+
+#[test]
+fn strips_join_as_separate_paragraphs_and_markdown_reports_flat_text() {
+    let plain = extract(TALL, &extraction_config());
+    assert!(strip_warning(&plain));
+    assert_eq!(plain.content.split("\n\n").count(), 40, "{:?}", plain.content);
+    let markdown = extract(TALL, &configured(serde_json::json!({"output_format": "markdown"})));
+    assert!(strip_warning(&markdown));
+    assert!(
+        markdown
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("Markdown structure")),
+        "{:?}",
+        markdown.processing_warnings
+    );
+    assert!(
+        !plain
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("Markdown structure"))
+    );
+}
+
+#[test]
+fn markdown_output_with_an_uncertifiable_jpeg_keeps_the_typed_render_refusal() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "use_cache": false,
+        "output_format": "markdown",
+        "ocr": {"backend": "tesseract", "language": ["eng"]},
+    }))
+    .expect("Markdown configuration");
+    let below_floor = lower_density(TALL_JPEG, BELOW_FLOOR_DENSITY);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let error = runtime
+        .block_on(extract_public(
+            ExtractInput::from_bytes(below_floor, "application/pdf", None),
+            &config,
+        ))
+        .expect_err("a JPEG below the density floor cannot be certified");
+    let xberg::XbergError::Parsing {
+        source: Some(source), ..
+    } = error
+    else {
+        panic!("expected the typed render refusal, got {error:?}");
+    };
+    let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
+        source
+            .source()
+            .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
+    });
+    assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
 }
 
 #[test]

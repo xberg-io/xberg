@@ -1885,12 +1885,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     } else if let Some(reason) = tall_source_unsupported
                         && correction_degrees == 0
                         && let Ok(extraction_result) = &mut result
+                        && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
                     {
                         super::tall_source::note_unrecovered(
                             extraction_result,
                             &ocr_config_resolved,
                             (&render_doc, page_idx),
-                            reason,
+                            raster.3,
+                            super::tall_source::Unrecovered::Config(reason),
                         );
                     }
                     result
@@ -4437,7 +4439,13 @@ pub(super) async fn extract_with_ocr_for_page(
                             .map(|(pdf, _, _)| (pdf, page_idx))
                             .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
                     {
-                        super::tall_source::note_unrecovered(document, base_ocr_config, source, reason);
+                        super::tall_source::note_unrecovered(
+                            document,
+                            base_ocr_config,
+                            source,
+                            encoded_batch[page_idx - batch_start].3,
+                            super::tall_source::Unrecovered::Config(reason),
+                        );
                     }
                     ocr_result
                 };
