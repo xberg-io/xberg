@@ -1,6 +1,6 @@
-use super::certify_figure_caption;
+use super::{Rect, SourceElement, certify_figure_caption, certify_figure_caption_rows, follows_wrapped_caption_shape};
 use crate::extractors::security::SecurityLimits;
-use crate::types::formats::OcrTable;
+use crate::types::formats::{OcrTable, OcrTableBoundingBox};
 use crate::types::{OcrBoundingGeometry, OcrElement, OcrElementLevel};
 
 const FRAME: (u32, u32) = (2586, 3346);
@@ -298,4 +298,167 @@ fn keeps_a_cell_boundary_without_a_whole_word_crossing_its_gap() {
     assert_eq!((*left, *left + *width), (572, 750));
     *width = 620 - *left;
     assert!(!accepts(&source));
+}
+
+fn shift_left_edge(source: &mut Source, lines: &[usize], delta: u32) {
+    let mut current = None;
+    let mut first_word = false;
+    for element in &mut source.elements {
+        let shift = match element.level {
+            OcrElementLevel::Line => {
+                current = Some(current.map_or(0, |index| index + 1));
+                first_word = true;
+                lines.contains(&current.unwrap())
+            }
+            OcrElementLevel::Word => {
+                std::mem::take(&mut first_word) && current.is_some_and(|index| lines.contains(&index))
+            }
+            _ => false,
+        };
+        if shift {
+            let OcrBoundingGeometry::Rectangle { left, width, .. } = &mut element.geometry else {
+                panic!("axis-aligned source geometry");
+            };
+            *left += delta;
+            *width -= delta;
+        }
+    }
+}
+
+#[test]
+fn refuses_middle_lines_that_start_beyond_the_margin_tolerance() {
+    let line_height = 39;
+    let tolerance = line_height / 6;
+    // The first and second lines already differ by 1 px, so delta + 1 is the measured offset.
+    let within = tolerance - 1;
+    let mut source = source();
+    shift_left_edge(&mut source, &[1, 2, 3], within);
+    assert!(accepts(&source), "middle lines offset by exactly the tolerance");
+    for delta in [tolerance, line_height] {
+        let mut source = self::source();
+        shift_left_edge(&mut source, &[1, 2, 3], delta);
+        assert!(!accepts(&source), "middle lines {delta} px further right are ragged");
+    }
+}
+
+fn synthetic_line(left: u32, top: u32, right: u32, height: u32) -> SourceElement<'static> {
+    SourceElement {
+        text: "",
+        bounds: Rect {
+            left,
+            top,
+            right,
+            bottom: top + height,
+        },
+    }
+}
+
+#[test]
+fn margin_tolerance_never_drops_below_one_pixel_on_small_rasters() {
+    let block = |last_left| {
+        vec![
+            synthetic_line(10, 0, 100, 5),
+            synthetic_line(11, 6, 100, 5),
+            synthetic_line(10, 12, 99, 5),
+            synthetic_line(last_left, 18, 40, 5),
+        ]
+    };
+    assert!(
+        follows_wrapped_caption_shape(&block(11)),
+        "1 px off the margin on a 5 px line"
+    );
+    assert!(
+        !follows_wrapped_caption_shape(&block(12)),
+        "2 px off the margin on a 5 px line"
+    );
+}
+
+#[test]
+fn one_short_line_does_not_shrink_the_margin_tolerance_of_the_block() {
+    let block = vec![
+        synthetic_line(100, 0, 1000, 60),
+        synthetic_line(108, 65, 1000, 12),
+        synthetic_line(100, 80, 1000, 60),
+        synthetic_line(100, 145, 400, 60),
+    ];
+    assert!(
+        follows_wrapped_caption_shape(&block),
+        "8 px is within a sixth of the 60 px median line"
+    );
+}
+
+struct Synthetic {
+    cells: Vec<Vec<String>>,
+    elements: Vec<OcrElement>,
+}
+
+fn synthetic_block(last_line: &[(&'static str, u32, u32)]) -> Synthetic {
+    let rows: [(&[(&str, u32, u32)], usize); 4] = [
+        (&[("a", 100, 300), ("b", 310, 660), ("c", 680, 1000)], 2),
+        (
+            &[("x", 100, 400), ("y", 410, 640), ("z", 650, 760), ("t", 770, 1000)],
+            0,
+        ),
+        (&[("a", 100, 300), ("b", 310, 720), ("c", 740, 1000)], 2),
+        (last_line, 0),
+    ];
+    let mut cells = Vec::new();
+    let mut elements = Vec::new();
+    let element = |text: &str, level, left: u32, top: u32, right: u32| OcrElement {
+        text: text.to_owned(),
+        geometry: OcrBoundingGeometry::Rectangle {
+            left,
+            top,
+            width: right - left,
+            height: 40,
+        },
+        level,
+        page_number: 1,
+        ..OcrElement::default()
+    };
+    for (index, (words, split)) in rows.iter().enumerate() {
+        let top = 100 + index as u32 * 50;
+        let text = words.iter().map(|word| word.0).collect::<Vec<_>>().join(" ");
+        let (left, right) = (words[0].1, words[words.len() - 1].2);
+        elements.push(element(&text, OcrElementLevel::Line, left, top, right));
+        for &(word, l, r) in *words {
+            elements.push(element(word, OcrElementLevel::Word, l, top, r));
+        }
+        let texts: Vec<&str> = words.iter().map(|word| word.0).collect();
+        cells.push(if *split == 0 {
+            vec![texts.join(" "), String::new()]
+        } else {
+            vec![texts[..*split].join(" "), texts[*split..].join(" ")]
+        });
+    }
+    Synthetic { cells, elements }
+}
+
+fn certifies(block: &Synthetic) -> bool {
+    let bounds = OcrTableBoundingBox {
+        left: 100,
+        top: 100,
+        right: 1000,
+        bottom: 290,
+    };
+    certify_figure_caption_rows(
+        &block.cells,
+        1,
+        bounds,
+        &block.elements,
+        (1200, 400),
+        &SecurityLimits::default(),
+    )
+    .is_some()
+}
+
+#[test]
+fn refuses_a_two_column_block_whose_last_line_is_justified_to_the_full_width() {
+    let ragged_last = synthetic_block(&[("p", 100, 400)]);
+    assert!(
+        certifies(&ragged_last),
+        "the same block with a short last line is a wrapped caption"
+    );
+    let justified_last = synthetic_block(&[("p", 100, 500), ("q", 510, 1000)]);
+    assert!(!certifies(&justified_last));
 }

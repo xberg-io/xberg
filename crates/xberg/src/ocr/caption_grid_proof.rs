@@ -16,6 +16,7 @@ const MIN_LINES: usize = 4;
 const MAX_LINES: usize = 12;
 const MAX_COLUMNS: usize = 6;
 const MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR: u32 = 6;
+const MARGIN_TOLERANCE_MIN_PX: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Rect {
@@ -151,12 +152,12 @@ fn follows_wrapped_caption_shape(lines: &[SourceElement<'_>]) -> bool {
     let [first, middle @ .., last] = lines else {
         return false;
     };
-    let line_height = lines
-        .iter()
-        .map(|line| line.bounds.bottom - line.bounds.top)
-        .min()
-        .unwrap_or_default();
-    let margin_tolerance = line_height / MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR;
+    // Median, not minimum: one short line without ascenders must not shrink the tolerance
+    // for the whole block. The floor keeps small rasters at least as lenient as a fixed pixel.
+    let mut heights: Vec<u32> = lines.iter().map(|line| line.bounds.bottom - line.bounds.top).collect();
+    heights.sort_unstable();
+    let margin_tolerance =
+        (heights[heights.len() / 2] / MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR).max(MARGIN_TOLERANCE_MIN_PX);
     let first_width = first.bounds.right - first.bounds.left;
     let last_width = last.bounds.right - last.bounds.left;
     last_width <= first_width / 2
