@@ -257,8 +257,6 @@ fn type0_space_after_a_glyph_of_one_letter_stays_in_spans_and_chars() {
     assert_eq!(char_text(&mut chars, stream), "de ne");
 }
 
-/// The glyph-name fallback for a ToUnicode value of U+0000 is for simple fonts. A Type0 code keeps the
-/// replacement character even when a name exists for its low byte.
 /// A Type0 code that yields two letters has two widths, so the widths stay as long as the text.
 #[test]
 fn type0_ligature_code_has_one_width_for_each_letter() {
@@ -292,6 +290,8 @@ fn type0_ligature_code_in_a_string_array_has_one_width_for_each_letter() {
     );
 }
 
+/// The glyph-name fallback for a ToUnicode value of U+0000 is for simple fonts. A Type0 code keeps the
+/// replacement character even when a name exists for its low byte.
 #[test]
 fn type0_to_unicode_zero_ignores_the_glyph_name() {
     let mut font = type0_ligature_font("0000");
@@ -358,4 +358,94 @@ fn ligature_presentation_form_spreads_its_advance_over_its_letters() {
         span_text(&mut extractor, b"BT /F1 10 Tf 72 700 Td (de\\200ne) Tj ET"),
         "define"
     );
+}
+
+/// A ligature drawn by `Tj` and a space drawn by the `TJ` that follows it: the two operators read the
+/// space the same way, in the spans and in the characters.
+#[test]
+fn ligature_in_tj_then_pulled_back_space_in_tj_array_drops_in_spans_and_chars() {
+    let stream: &[u8] = b"BT /F1 10 Tf 72 700 Td (de\\200) Tj [240 ( ne)] TJ ET";
+    let mut spans = extractor_with(ligature_font("00660069", None));
+    let mut chars = extractor_with(ligature_font("00660069", None));
+    assert_eq!(span_text(&mut spans, stream), "define", "spans");
+    assert_eq!(char_text(&mut chars, stream), "define", "chars");
+}
+
+#[test]
+fn type0_ligature_in_tj_then_pulled_back_space_in_tj_array_drops_in_spans_and_chars() {
+    let stream: &[u8] = b"BT /F1 10 Tf 72 700 Td <000100020003> Tj [240 <0020 0004 0002>] TJ ET";
+    let mut spans = extractor_with(type0_ligature_font("00660069"));
+    let mut chars = extractor_with(type0_ligature_font("00660069"));
+    assert_eq!(span_text(&mut spans, stream), "define", "spans");
+    assert_eq!(char_text(&mut chars, stream), "define", "chars");
+}
+
+/// A glyph of one letter drawn by `Tj` keeps the space that a `TJ` pull-back leaves, and a letter drawn
+/// after the ligature clears the ligature, so the pull-back that follows it keeps its space.
+#[test]
+fn tj_glyph_that_is_not_a_ligature_keeps_the_space_in_a_following_tj_array() {
+    for stream in [
+        &b"BT /F1 10 Tf 72 700 Td (ab) Tj [240 ( cd)] TJ ET"[..],
+        &b"BT /F1 10 Tf 72 700 Td (de\\200) Tj (xy) Tj [240 ( ne)] TJ ET"[..],
+    ] {
+        let mut spans = extractor_with(ligature_font("00660069", None));
+        let mut chars = extractor_with(ligature_font("00660069", None));
+        let (s, c) = (span_text(&mut spans, stream), char_text(&mut chars, stream));
+        assert_eq!(s, c, "spans and chars agree");
+        assert!(s.contains(' '), "{s:?}");
+    }
+}
+
+/// A Type0 code that yields two letters has two widths in vertical writing too.
+#[test]
+fn type0_vertical_ligature_code_has_one_width_for_each_letter() {
+    for stream in [
+        &b"BT /F1 10 Tf 72 700 Td <000100020003> Tj ET"[..],
+        &b"BT /F1 10 Tf 72 700 Td [<000100020003>] TJ ET"[..],
+    ] {
+        let mut font = type0_ligature_font("FB01");
+        font.wmode = 1;
+        let mut extractor = extractor_with(font);
+        let spans = extractor.extract_text_spans(stream).unwrap();
+        let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+        let widths: usize = spans.iter().map(|s| s.char_widths.len()).sum();
+        assert_eq!(text, "defi");
+        assert_eq!(widths, text.chars().count(), "{stream:?}");
+    }
+}
+
+/// The character path: a space that the pull-back left in place ends the ligature, so a second space
+/// that starts inside the first one is not taken for one inside a ligature box. At 100 units the two
+/// spaces lie 15 units apart, far enough to both stay after the removal of overlapping characters.
+#[test]
+fn kept_space_ends_the_ligature_for_the_next_space_in_chars() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    assert_eq!(
+        char_text(
+            &mut extractor,
+            b"BT /F1 100 Tf 72 700 Td [(de\\200) 150 ( ) 400 ( ) (ne)] TJ ET"
+        ),
+        "defi  ne"
+    );
+}
+
+/// A Type0 pull-back of 60% leaves part of the space between the words, as it does for a simple font.
+#[test]
+fn type0_partial_pullback_keeps_the_space_in_spans_and_chars() {
+    let stream: &[u8] = b"BT /F1 10 Tf 72 700 Td [<000100020003> 150 <0020 0004 0002>] TJ ET";
+    let mut spans = extractor_with(type0_ligature_font("00660069"));
+    let mut chars = extractor_with(type0_ligature_font("00660069"));
+    assert_eq!(span_text(&mut spans, stream), "defi ne", "spans");
+    assert_eq!(char_text(&mut chars, stream), "defi ne", "chars");
+}
+
+/// Character spacing widens the space to 4.5 units, so a pull-back of 2.26 units covers about half of
+/// it and the space keeps its room, in both paths.
+#[test]
+fn char_spacing_widens_the_space_so_a_pullback_of_226_keeps_it() {
+    let stream: &[u8] = b"BT /F1 10 Tf 2 Tc 72 700 Td [(de\\200) 226 ( ne)] TJ ET";
+    let mut spans = extractor_with(ligature_font("00660069", None));
+    let mut chars = extractor_with(ligature_font("00660069", None));
+    assert_eq!(span_text(&mut spans, stream), "defi ne", "spans");
+    assert_eq!(char_text(&mut chars, stream), "defi ne", "chars");
 }

@@ -161,9 +161,18 @@ impl<'doc> TextExtractor<'doc> {
         // onto it and the eventual flush emits the combined run at that stale x. The
         // reading-order sort then splices it in beside whatever sits near that stale position,
         // scrambling the line (GH#1544). ~keep
+        //
+        // A ligature that ends the open run stays open: a space in this array that the pull-back
+        // puts inside the ligature box is dropped only when the ligature is in the same buffer.
+        // The run is still contiguous with the array, so the array continues it from its origin. ~keep
+        let carried = if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
+            self.tj_span_buffer.take_if(|b| b.ligature_tail && !b.is_empty())
+        } else {
+            None
+        };
         self.flush_tj_span_buffer()?;
         match self.word_boundary_mode {
-            WordBoundaryMode::Tiebreaker => self.process_tj_array_tiebreaker(array),
+            WordBoundaryMode::Tiebreaker => self.process_tj_array_tiebreaker(array, carried),
             WordBoundaryMode::Primary => self.process_tj_array_primary(array),
         }
     }
@@ -188,7 +197,7 @@ impl<'doc> TextExtractor<'doc> {
     /// This method buffers consecutive strings into a single span, only breaking on:
     /// - Large negative offsets (indicating word boundaries)
     /// - End of TJ array
-    fn process_tj_array_tiebreaker(&mut self, array: &[TextElement]) -> Result<()> {
+    fn process_tj_array_tiebreaker(&mut self, array: &[TextElement], carried: Option<TjBuffer>) -> Result<()> {
         // Character-level tracking for word boundary detection
         // Collect detailed character information during TJ array processing
         // Per ISO 32000-1:2008 Section 9.4.4, character-level data improves accuracy ~keep
@@ -203,12 +212,14 @@ impl<'doc> TextExtractor<'doc> {
         let char_space = self.state_stack.current().char_space;
         let word_space = self.state_stack.current().word_space;
 
-        let mut buffer = TjBuffer::new_with_provenance_cache(
-            self.state_stack.current(),
-            self.current_mcid,
-            self.cached_current_font.clone(),
-            &self.font_provenance_cache,
-        );
+        let mut buffer = carried.unwrap_or_else(|| {
+            TjBuffer::new_with_provenance_cache(
+                self.state_stack.current(),
+                self.current_mcid,
+                self.cached_current_font.clone(),
+                &self.font_provenance_cache,
+            )
+        });
         let mut _element_count = 0;
 
         for (idx, element) in array.iter().enumerate() {
@@ -437,7 +448,7 @@ impl<'doc> TextExtractor<'doc> {
     /// 6. Marks spans with primary_detected flag
     fn process_tj_array_primary(&mut self, array: &[TextElement]) -> Result<()> {
         if self.tj_character_array.is_empty() {
-            return self.process_tj_array_tiebreaker(array);
+            return self.process_tj_array_tiebreaker(array, None);
         }
 
         // Mark pattern contexts BEFORE boundary detection
@@ -455,7 +466,7 @@ impl<'doc> TextExtractor<'doc> {
         let boundaries = detector.detect_word_boundaries(&self.tj_character_array, &context);
 
         if boundaries.is_empty() {
-            return self.process_tj_array_tiebreaker(array);
+            return self.process_tj_array_tiebreaker(array, None);
         }
 
         self.apply_ligature_decisions()?;

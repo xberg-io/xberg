@@ -184,6 +184,8 @@ impl<'doc> TextExtractor<'doc> {
                                 buffer.char_widths.push(per_char);
                             }
                         }
+                        buffer.pullback = 0.0;
+                        buffer.ligature_tail = false;
                         // Fall through to the matrix update at the
                         // bottom of the function via `w_sum`. Vertical
                         // mode flips the axis inside the helper. ~keep
@@ -198,6 +200,7 @@ impl<'doc> TextExtractor<'doc> {
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
+                    buffer.pullback = 0.0;
                     if c != '\0' {
                         buffer.unicode.push(c);
                     } else {
@@ -228,6 +231,7 @@ impl<'doc> TextExtractor<'doc> {
                     }
                     w_sum += w;
                     let chars_added = buffer.unicode.len() - len_before;
+                    buffer.ligature_tail = chars_added > 1;
                     if chars_added == 1 {
                         buffer.char_widths.push(w);
                     } else if chars_added > 1 {
@@ -257,12 +261,10 @@ impl<'doc> TextExtractor<'doc> {
                     }
                     w_sum += w;
                     // One width for each output letter, as in the string-array path. ~keep
-                    let letter_count = font
-                        .char_to_unicode(code as u32)
-                        .map_or(1, |s| s.chars().count().max(1));
-                    for _ in 0..letter_count {
-                        buffer.char_widths.push(w / letter_count as f32);
-                    }
+                    let letter_count = letter_count_of(font, code as u32);
+                    buffer.pullback = 0.0;
+                    buffer.ligature_tail = letter_count > 1;
+                    buffer.push_letter_widths(letter_count, w);
                 }
                 w_sum
             } else {
@@ -285,7 +287,7 @@ impl<'doc> TextExtractor<'doc> {
                         w += word_space;
                     }
                     w_sum += w;
-                    buffer.char_widths.push(w);
+                    buffer.push_letter_widths(letter_count_of(font, code as u32), w);
                 }
                 w_sum
             }
@@ -500,11 +502,7 @@ impl<'doc> TextExtractor<'doc> {
                     buffer.ligature_tail = letter_count > 1;
                     offset += nbytes;
                     w_sum += w;
-                    // One width for each output letter, so a code that yields two letters keeps the
-                    // lengths of `char_widths` and the text equal. ~keep
-                    for _ in 0..letter_count {
-                        buffer.char_widths.push(w / letter_count as f32);
-                    }
+                    buffer.push_letter_widths(letter_count, w);
                 }
                 buffer.append(&text[kept_from..])?;
                 w_sum
@@ -525,7 +523,7 @@ impl<'doc> TextExtractor<'doc> {
                         w += word_space;
                     }
                     w_sum += w;
-                    buffer.char_widths.push(w);
+                    buffer.push_letter_widths(letter_count_of(font, code as u32), w);
                 }
                 w_sum
             }
@@ -1095,4 +1093,9 @@ impl<'doc> TextExtractor<'doc> {
 
         Ok(())
     }
+}
+
+/// How many letters a Type0 code yields, at least one. ~keep
+fn letter_count_of(font: &FontInfo, code: u32) -> usize {
+    font.char_to_unicode(code).map_or(1, |s| s.chars().count().max(1))
 }

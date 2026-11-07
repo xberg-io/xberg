@@ -1855,9 +1855,9 @@ struct TjBuffer {
 }
 
 /// The share of a space glyph that must lie inside the previous glyph's box before the space
-/// takes no room. The value is chosen, not inherited: the ligature joins seen in real documents pull
-/// the pen back by the whole space (a gap of 0.008 em at most), and a pull-back of half the space
-/// leaves a word gap, so the line sits near the full width. Tests pin 60% (kept) and 96% (dropped). ~keep
+/// takes no room. The value is chosen, not measured: a producer that joins a ligature pulls the pen
+/// back by the whole space, and a pull-back of half the space leaves a word gap. Tests pin 60% (kept)
+/// and 96% (dropped). ~keep
 const ROOMLESS_SPACE_OVERLAP: f32 = 0.9;
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
@@ -2005,6 +2005,13 @@ impl TjBuffer {
         *last += width;
         self.pullback = (self.pullback - width).max(0.0);
         true
+    }
+
+    /// Push one width for each output letter of a code, so `char_widths` and the text stay equal in length.
+    fn push_letter_widths(&mut self, letter_count: usize, width: f32) {
+        for _ in 0..letter_count {
+            self.char_widths.push(width / letter_count as f32);
+        }
     }
 
     /// Check if the buffer is empty.
