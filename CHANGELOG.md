@@ -472,6 +472,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover verified embedded PDF prose with caching enabled.** (#2327)
   Preserve the primary cache identity and bypass the cache for the private source-DPI retry.
 
+- **(pdf): Recover a missing embedded prose line on any page of a multi-page PDF.** (#2327)
+  The source-DPI retry was limited to single-page documents; it now follows the page that holds the single last-painted picture.
+
 - **(pdf): Recover full-page grayscale raster prose beside visible native stubs.** (#2313)
   Bound the source paint audit and keep the native lines in order.
 
