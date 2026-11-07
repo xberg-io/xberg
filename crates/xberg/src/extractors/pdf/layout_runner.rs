@@ -350,6 +350,19 @@ tokio::task_local! {
     pub(super) static TEST_SELECTED_PAGE_DETECTIONS: crate::layout::DetectionResult;
 }
 
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
+pub(crate) fn inherit_test_selected_page_detections<F: std::future::Future>(
+    future: F,
+) -> impl std::future::Future<Output = F::Output> {
+    let detection = TEST_SELECTED_PAGE_DETECTIONS.try_with(Clone::clone).ok();
+    async move {
+        match detection {
+            Some(detection) => TEST_SELECTED_PAGE_DETECTIONS.scope(detection, future).await,
+            None => future.await,
+        }
+    }
+}
+
 #[cfg(all(test, feature = "pdf", feature = "layout-detection"))]
 fn test_selected_page_layout(
     selection: &crate::core::layout_pages::LayoutPageSelection,

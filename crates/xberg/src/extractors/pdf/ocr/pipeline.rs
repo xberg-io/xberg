@@ -1143,7 +1143,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             config.images.as_ref(),
         );
         raster_dpis.extend(batch_raster_dpis);
+        let mut budget_refused: Vec<(usize, crate::XbergError)> = Vec::new();
         for (page_idx, error) in render_failures {
+            if render_refused_by_source_image_budget(&error) {
+                budget_refused.push((page_idx, error));
+                continue;
+            }
             let recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
             push_mixed_ocr_page_failure_warning(
                 &mut accumulated_warnings,
@@ -1161,6 +1166,112 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         // most `batch_size`, the resolved worker budget) via a `JoinSet`, mirroring the
         // concurrency shape of the single-backend path below.
         if let Some(ref pipeline) = effective_pipeline {
+            for (page_idx, error) in std::mem::take(&mut budget_refused) {
+                let backend = crate::plugins::registry::get_ocr_backend_registry()
+                    .read()
+                    .get(&ocr_config_owned.backend)
+                    .ok();
+                let recovery = match backend {
+                    Some(backend) => {
+                        recover_page_text_from_image_xobjects(
+                            &backend,
+                            &render_doc,
+                            page_idx,
+                            page_rotations.len(),
+                            &ocr_config_owned,
+                            XObjectRecoveryContext {
+                                budget: &mut xobject_recovery_budget,
+                                blank_raster_warnings: Some(&mut accumulated_warnings),
+                                no_admitted_images: None,
+                                stored_jpegs: None,
+                                cancel_token: config.cancel_token.as_ref(),
+                                use_proven_source_dpi: true,
+                            },
+                        )
+                        .await?
+                    }
+                    None => None,
+                };
+                let page_number = (page_idx + 1) as u32;
+                let mut recovered = false;
+                let mut retry_causes = Vec::new();
+                if let Some(XObjectRecoveryOutcome {
+                    text,
+                    text_outside_tables,
+                    attempted,
+                    images,
+                    mut llm_usage,
+                    tables,
+                    mut formulas,
+                    image_preprocessing,
+                    failure_causes,
+                    used_proven_source_dpi,
+                }) = recovery
+                {
+                    retry_causes = failure_causes;
+                    let text = if used_proven_source_dpi && proven_read_is_noise(&text, &ocr_output_thresholds) {
+                        retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+                        String::new()
+                    } else {
+                        text
+                    };
+                    recovered = should_adopt_xobject_retry_text("", &text) || !tables.is_empty();
+                    if should_adopt_xobject_retry_text("", &text) {
+                        structured_ocr_pages.insert(
+                            page_number,
+                            super::document::flat_ocr_page_document(&text_outside_tables),
+                        );
+                        ocr_results.insert(page_number, text);
+                    }
+                    if !tables.is_empty() {
+                        let current_text = ocr_results.get(&page_number).map_or("", String::as_str);
+                        let page_doc = structured_ocr_pages
+                            .entry(page_number)
+                            .or_insert_with(|| super::document::flat_ocr_page_document(current_text));
+                        super::document::attach_page_ocr_payload(page_doc, tables, Vec::new(), page_number);
+                        if !ocr_results.contains_key(&page_number) {
+                            table_only_xobject_recovery_pages.insert(page_number);
+                        }
+                    }
+                    accumulated_llm_usage.append(&mut llm_usage);
+                    accumulated_formulas.append(&mut formulas);
+                    if let Some(metadata) = image_preprocessing {
+                        preprocessing_by_page.insert(page_number, metadata);
+                    }
+                    if capture_rasters {
+                        captured_rasters.extend(images);
+                    }
+                    accumulated_warnings.push(xobject_fallback_warning(page_idx, attempted, true));
+                }
+                if recovered {
+                    accumulated_warnings.push(crate::types::ProcessingWarning {
+                        source: std::borrow::Cow::Borrowed("ocr"),
+                        message: std::borrow::Cow::Owned(format!(
+                            "OCR of page {page_number} failed ({error}); its content was recovered from the page's \
+                             embedded image XObjects instead."
+                        )),
+                    });
+                    merge_ocr_page_failures(
+                        &mut page_failures,
+                        vec![crate::types::OcrPageFailure {
+                            page: page_number,
+                            error: error.to_string(),
+                            recovered: true,
+                        }],
+                    );
+                } else {
+                    let error = with_retry_causes(error, &retry_causes);
+                    let native_recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
+                    push_mixed_ocr_page_failure_warning(
+                        &mut accumulated_warnings,
+                        &mut page_failures,
+                        page_idx,
+                        &error,
+                        native_recovered,
+                    );
+                    failed_page_errors.insert(page_idx, error);
+                }
+            }
             let page_images = share_rendered_page_images(page_images);
             // on wasm32 (no OS threads, and extractor/backend futures are `!Send` there —
             // see the matching gate on the single-backend path below). Falls back to the
@@ -1330,6 +1441,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
+                    let ocr_frame_px = preprocessing.values().next().and_then(processed_frame_px);
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
@@ -1363,7 +1475,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // single-backend route; `build_pipeline_ocr_page_document` applies it.
                     let raster_size_px = page_dims.unwrap_or((0, 0));
                     if !paragraphs_in_points {
-                        ocr_raster_by_page.insert(page_number, raster_size_px);
+                        ocr_raster_by_page.insert(page_number, ocr_frame_px.unwrap_or(raster_size_px));
                     }
                     let page_size_pt = page_dimensions_pt(&render_doc, page_idx);
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -1499,6 +1611,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
+                    let ocr_frame_px = preprocessing.values().next().and_then(processed_frame_px);
                     if let Some(metadata) = preprocessing.into_values().next() {
                         preprocessing_by_page.insert(page_number, metadata);
                     }
@@ -1521,7 +1634,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                     let page_text = page_texts.into_iter().next().unwrap_or(text);
                     if !paragraphs_in_points {
-                        ocr_raster_by_page.insert(page_number, (image.width(), image.height()));
+                        ocr_raster_by_page.insert(page_number, ocr_frame_px.unwrap_or((image.width(), image.height())));
                     }
                     if let Some(mut d) = build_pipeline_ocr_page_document(
                         doc,
@@ -1650,6 +1763,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         drop(page_images);
         // A page whose backend call failed waits here for the embedded-image retry below.
         let mut failed_pages: ahash::AHashMap<usize, crate::XbergError> = ahash::AHashMap::new();
+        let budget_refused_pages: Vec<usize> = budget_refused.iter().map(|(page_idx, _)| *page_idx).collect();
+        failed_pages.extend(budget_refused);
 
         // `tokio::task::JoinSet::spawn` requires `Send` futures, but extractor/backend futures
         // are `!Send` on wasm32 (async_trait(?Send), see plugins/extractor/trait.rs) — and
@@ -2008,11 +2123,24 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         // A page whose OCR came back blank or failed is retried on its embedded image XObjects,
         // as the whole-document route does (#1355, #1444). The pipeline branch above gets the
         // same retry inside each stage, from the document it hands the runner (#1912).
-        for (page_idx, png, _, _) in encoded.iter().filter(|_| !probing_hidden_layer) {
+        // A page whose source image the render budget refused has no raster to inspect: its embedded
+        // images are the only place the text can come from. ~keep
+        let retry_pages = encoded
+            .iter()
+            .map(|(page_idx, png, _, _)| (page_idx, Some(png.as_slice())))
+            .chain(budget_refused_pages.iter().map(|page_idx| (page_idx, None)))
+            .filter(|_| !probing_hidden_layer);
+        for (page_idx, png) in retry_pages {
             let page_number = (page_idx + 1) as u32;
             let failure = failed_pages.remove(page_idx);
             let page_text = ocr_results.get(&page_number).map_or("", String::as_str);
-            let trigger = page_needs_xobject_fallback(page_text, png, security_limits);
+            let trigger = match png {
+                Some(png) => page_needs_xobject_fallback(page_text, png, security_limits),
+                None => super::rendering::XObjectFallbackTrigger {
+                    needs_fallback: true,
+                    draw_failed: true,
+                },
+            };
             let recovery = if trigger.needs_fallback {
                 recover_page_text_from_image_xobjects(
                     backend,
@@ -2026,6 +2154,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         no_admitted_images: None,
                         stored_jpegs: None,
                         cancel_token: config.cancel_token.as_ref(),
+                        use_proven_source_dpi: true,
                     },
                 )
                 .await?
@@ -2033,6 +2162,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 None
             };
             let mut recovered = false;
+            let mut retry_causes = Vec::new();
             if let Some(XObjectRecoveryOutcome {
                 text,
                 text_outside_tables,
@@ -2042,8 +2172,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 tables,
                 mut formulas,
                 image_preprocessing,
+                failure_causes,
+                used_proven_source_dpi,
             }) = recovery
             {
+                retry_causes = failure_causes;
+                let text = if used_proven_source_dpi && proven_read_is_noise(&text, &ocr_output_thresholds) {
+                    retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+                    String::new()
+                } else {
+                    text
+                };
                 let recovered_tables = !tables.is_empty();
                 let recovered_text_is_empty = text.trim().is_empty();
                 if should_adopt_xobject_retry_text(page_text, &text) {
@@ -2094,6 +2233,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if let Some(error) = failure {
                 if !recovered {
+                    let error = with_retry_causes(error, &retry_causes);
                     let native_recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
                     push_mixed_ocr_page_failure_warning(
                         &mut accumulated_warnings,
@@ -2631,11 +2771,31 @@ fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (Str
     (text, boundaries)
 }
 
+/// Whether the render budget alone lowers the DPI the page is rendered at, by the same plan
+/// the render uses. An unbounded page gains nothing from the single-backend route, so it is
+/// decided before any OCR runs; a page the plan misses only loses the recovery. ~keep
+#[cfg(all(
+    paddle_ocr,
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn render_budget_bounds_first_page(document: &xberg_native_pdf::PdfDocument, config: &ExtractionConfig) -> bool {
+    let default_limits = crate::extractors::security::SecurityLimits::default();
+    let limits = config.security_limits.as_ref().unwrap_or(&default_limits);
+    let (requested, planned) =
+        crate::image::dpi::planned_pdf_ocr_render_dpi(document, 0, config.images.as_ref(), limits);
+    planned < requested
+}
+
 /// Reads a one-page PDF on the single-backend route and keeps the result when the first stage
 /// of the synthesized classical pipeline would have accepted it, so that route's source-image
-/// recoveries and budgeted upscale apply. A page below the pipeline's quality threshold, or one
+/// recoveries and budgeted scaling apply. A page below the pipeline's quality threshold, or one
 /// the single-backend route fails, returns `None` and takes the per-page route with its
-/// automatic fallback stage.
+/// automatic fallback stage. So does a read whose scale the budget did not bound: it gains
+/// nothing from this route, and the per-page route carries the frame metadata and point
+/// placement of detached rasters that this one does not.
 #[cfg(all(
     paddle_ocr,
     feature = "ocr",
@@ -2650,9 +2810,12 @@ pub(crate) async fn accepted_single_page_first_pass(
     page_ocr_hints: Option<PageOcrHints>,
     thresholds: &crate::core::config::OcrQualityThresholds,
 ) -> Option<(WholeDirectOcrOutput, bool)> {
-    let Ok((_, 1, _)) = open_pdf_for_page_ocr(content) else {
+    let Ok((document, 1, _)) = open_pdf_for_page_ocr(content) else {
         return None;
     };
+    if !render_budget_bounds_first_page(&document, config) {
+        return None;
+    }
     let output = Box::pin(extract_with_ocr_with_page_hints_and_evidence(
         Some(content),
         None,
@@ -2664,6 +2827,14 @@ pub(crate) async fn accepted_single_page_first_pass(
     ))
     .await
     .ok()?;
+    let budget_bounded = output
+        .0
+        .9
+        .values()
+        .any(|metadata| metadata.final_dpi < metadata.target_dpi);
+    if !budget_bounded {
+        return None;
+    }
     let score = pipeline_stage_score(compute_quality_score(&output.0.0, thresholds), output.0.1);
     (score >= thresholds.pipeline_min_quality).then_some(output)
 }
@@ -4706,6 +4877,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             no_admitted_images: can_prove_no_admitted_images.then_some(&mut no_admitted_images),
                             stored_jpegs: None,
                             cancel_token: config.cancel_token.as_ref(),
+                            use_proven_source_dpi: false,
                         },
                     )
                     .await?
@@ -4719,6 +4891,8 @@ pub(super) async fn extract_with_ocr_for_page(
                         mut tables,
                         mut formulas,
                         image_preprocessing,
+                        failure_causes: _,
+                        used_proven_source_dpi: _,
                     } = recovery;
                     let recovered_tables = !tables.is_empty();
                     let recovered_payload = !text.trim().is_empty() || recovered_tables || !formulas.is_empty();
@@ -6262,6 +6436,9 @@ pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) no_admitted_images: Option<&'a mut bool>,
     pub(super) stored_jpegs: Option<&'a mut crate::pdf::native::images::StoredJpegRecoveryBudget>,
     pub(super) cancel_token: Option<&'a crate::cancellation::CancellationToken>,
+    /// Hand the backend the resolution a page-covering image's placement proves. Off, the
+    /// backend estimates it as before.
+    pub(super) use_proven_source_dpi: bool,
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -6276,6 +6453,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             no_admitted_images: None,
             stored_jpegs: None,
             cancel_token,
+            use_proven_source_dpi: false,
         }
     }
 
@@ -6852,6 +7030,14 @@ pub(super) struct RunPageParagraphs {
     pub(super) detached_ocr_scale: Option<(f32, f32)>,
 }
 
+/// The pixel frame the OCR paragraphs of a page are in when preprocessing resampled the render
+/// before recognition: the resampled dimensions, not the render's. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn processed_frame_px(metadata: &crate::types::ImagePreprocessingMetadata) -> Option<(u32, u32)> {
+    let resized = metadata.new_dimensions?;
+    Some((u32::try_from(resized.width).ok()?, u32::try_from(resized.height).ok()?))
+}
+
 /// The factor per axis from the raster a page of a whole-document run was read from to PDF
 /// points, the same conversion the mixed route applies to its pipeline pages. `None` when the
 /// run rendered no PDF page or the raster is empty. ~keep
@@ -7027,6 +7213,50 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
         }
     }
     resolved
+}
+/// Why a retry read made at a placement-proven resolution was not adopted.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
+
+/// Whether text read at a proven resolution is recognition noise. The proven resolution lets the
+/// backend read an image the budget refused, but a dimension clamp can still shrink it until
+/// the glyphs are illegible, and only the output shows that.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn proven_read_is_noise(text: &str, thresholds: &crate::core::config::OcrQualityThresholds) -> bool {
+    super::scoring::is_ocr_recognition_noise(text, thresholds)
+}
+
+/// Most image causes a page error names before summarizing the rest.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+const RETRY_CAUSES_SHOWN: usize = 3;
+
+/// The error of a page whose embedded-image retry also recovered nothing, naming why each image
+/// failed. The typed source stays, so callers still match on the original cause.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn with_retry_causes(error: crate::XbergError, causes: &[String]) -> crate::XbergError {
+    match error {
+        crate::XbergError::Parsing { message, source } if !causes.is_empty() => {
+            let mut named = causes.iter().take(RETRY_CAUSES_SHOWN).cloned().collect::<Vec<_>>();
+            if causes.len() > RETRY_CAUSES_SHOWN {
+                named.push(format!("+{} more", causes.len() - RETRY_CAUSES_SHOWN));
+            }
+            crate::XbergError::Parsing {
+                message: format!(
+                    "{message}; embedded-image retry recovered no text ({})",
+                    named.join("; ")
+                ),
+                source,
+            }
+        }
+        other => other,
+    }
+}
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn render_refused_by_source_image_budget(error: &crate::XbergError) -> bool {
+    use std::error::Error as _;
+    error
+        .source()
+        .is_some_and(|source| source.is::<super::rendering::SourceImageBudgetExceeded>())
 }
 /// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
 /// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.
@@ -8153,6 +8383,22 @@ mod raw_workspace_geometry;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/raster_budget_tests.rs"]
 mod raster_budget_tests;
+
+#[cfg(all(
+    test,
+    paddle_ocr,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
+))]
+#[path = "pipeline/first_pass_route_tests.rs"]
+mod first_pass_route_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/budget_refusal_tests.rs"]
+mod budget_refusal_tests;
 
 #[cfg(all(
     test,

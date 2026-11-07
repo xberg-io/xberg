@@ -24,7 +24,7 @@ on:
 
 concurrency:
   group: ci-e2e-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -148,8 +148,9 @@ jobs:
     env:
       # uv must use the interpreter mise installed, not download its own. ~keep
       UV_PYTHON_PREFERENCE: only-system
-      # ~keep Gradle's nested JNI fat-LTO build exceeds the ARM runner's 16 GB (#2163).
-      CARGO_PROFILE_RELEASE_LTO: ${{ matrix.lang == 'kotlin-android' && 'thin' || 'fat' }}
+      # ~keep Gradle's nested JNI fat-LTO build exceeds the ARM runner's 16 GB (#2163). Swift's
+      # in-tree release build is SIGTERMed about 40 minutes into the same fat-LTO link.
+      CARGO_PROFILE_RELEASE_LTO: ${{ (matrix.lang == 'kotlin-android' || matrix.lang == 'swift') && 'thin' || 'fat' }}
     strategy:
       fail-fast: false
       matrix:

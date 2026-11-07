@@ -19,6 +19,12 @@ fn corpus(relative: &str) -> PathBuf {
 
 /// Extract a corpus PDF and return `(scanned_confidence, scanned_pages)`.
 async fn scan_metadata(relative: &str, config: &ExtractionConfig) -> (Option<f32>, Option<Vec<u32>>) {
+    let (confidence, pages, _) = scan_document(relative, config).await;
+    (confidence, pages)
+}
+
+/// Like [`scan_metadata`], with the extracted text.
+async fn scan_document(relative: &str, config: &ExtractionConfig) -> (Option<f32>, Option<Vec<u32>>, String) {
     let input = ExtractInput::from_uri(corpus(relative).to_string_lossy().into_owned());
     let result = xberg::extract(input, config)
         .await
@@ -31,7 +37,11 @@ async fn scan_metadata(relative: &str, config: &ExtractionConfig) -> (Option<f32
         .unwrap_or_else(|| panic!("{relative}: no result"));
 
     match &document.metadata.format {
-        Some(FormatMetadata::Pdf(pdf)) => (pdf.scanned_confidence, pdf.scanned_pages.clone()),
+        Some(FormatMetadata::Pdf(pdf)) => (
+            pdf.scanned_confidence,
+            pdf.scanned_pages.clone(),
+            document.content.clone(),
+        ),
         other => panic!("expected PDF metadata for {relative}, got {other:?}"),
     }
 }
@@ -46,8 +56,13 @@ async fn scanned_fixtures_report_high_confidence() {
         "pdf_scanned/nougat_009_scanned.pdf",
         "pdf_scanned/nougat_010_scanned.pdf",
     ] {
-        let (confidence, pages) = scan_metadata(fixture, &config).await;
+        let (confidence, pages, content) = scan_document(fixture, &config).await;
         let confidence = confidence.unwrap_or_else(|| panic!("{fixture}: no scanned_confidence"));
+        assert!(
+            content.split_whitespace().count() > 50,
+            "{fixture}: a scan must come back with its text, got {} chars",
+            content.len()
+        );
 
         assert!(
             f64::from(confidence) >= DEFAULT_SCANNED_MIN_CONFIDENCE,
