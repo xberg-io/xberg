@@ -26,6 +26,7 @@ const MAX_NATIVE_TEXT_BYTES: usize = 64 * 1024;
 const MAX_RESAMPLED_PIXELS: u64 = 8 * 1024 * 1024;
 
 pub(crate) struct Placement {
+    page: u32,
     bytes: bytes::Bytes,
     dimensions: (u32, u32),
     scaled: (u32, u32),
@@ -35,6 +36,7 @@ pub(crate) struct Placement {
 impl Placement {
     pub(crate) fn new(
         image: &ExtractedImage,
+        page: u32,
         dimensions: (u32, u32),
         dpi: f64,
         limits: &SecurityLimits,
@@ -61,6 +63,7 @@ impl Placement {
         crate::extraction::image_decode::validate_image_live_bytes(scaled.0, scaled.1, retained, workspace, limits)
             .ok()?;
         Some(Self {
+            page,
             bytes: image.data.clone(),
             dimensions,
             scaled,
@@ -68,8 +71,12 @@ impl Placement {
         })
     }
 
+    pub(crate) fn page(&self) -> u32 {
+        self.page
+    }
+
     pub(crate) fn matches(&self, image: &ExtractedImage) -> bool {
-        image.page_number == Some(1)
+        image.page_number == Some(self.page)
             && image.image_index == 0
             && image.data.len() == self.bytes.len()
             && image.data.as_ptr() == self.bytes.as_ptr()
@@ -266,17 +273,20 @@ pub(crate) fn native_anchor_text(
         .elements
         .iter()
         .filter(|element| element.image_ocr_text_anchor_index() == Some(0));
-    if anchors.next()?.page != Some(1) || anchors.next().is_some() {
+    if anchors.next()?.page != Some(placement.page) || anchors.next().is_some() {
         return None;
     }
-    doc.elements.iter().try_fold(String::new(), |mut native, element| {
-        if native.len().checked_add(element.text.len())?.checked_add(1)? > MAX_NATIVE_TEXT_BYTES {
-            return None;
-        }
-        native.push_str(&element.text);
-        native.push('\n');
-        Some(native)
-    })
+    doc.elements
+        .iter()
+        .filter(|element| element.page.is_none_or(|page| page == placement.page))
+        .try_fold(String::new(), |mut native, element| {
+            if native.len().checked_add(element.text.len())?.checked_add(1)? > MAX_NATIVE_TEXT_BYTES {
+                return None;
+            }
+            native.push_str(&element.text);
+            native.push('\n');
+            Some(native)
+        })
 }
 
 #[cfg(test)]
@@ -285,6 +295,7 @@ mod tests {
 
     fn evidence(bytes: &'static [u8]) -> Placement {
         Placement {
+            page: 1,
             bytes: bytes::Bytes::from_static(bytes),
             dimensions: (1, 1),
             scaled: (2, 2),
