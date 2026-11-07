@@ -419,8 +419,8 @@ pub struct TextInkRasters {
     pub without_glyphs: Vec<u8>,
 }
 
-/// Internal Core bridge. `None` when `cancelled` fired between renders. Where the two rasters differ, glyph paints made the pixel; where
-/// `without_glyphs` varies, something other than glyphs did.
+/// Internal Core bridge. `None` when `cancelled` fired between renders. Where the two rasters differ,
+/// glyph paints made the pixel; where `without_glyphs` varies, something other than glyphs did.
 #[doc(hidden)]
 pub fn render_text_ink_rasters(
     doc: &crate::document::PdfDocument,

@@ -293,7 +293,16 @@ mod tests {
             "Residents may send written comments before the end of the month.",
             "The treasurer reported that the reserve fund remained steady this year.",
         ];
-        const LAYER: &str = "mov eax, ebx\ncall puts\nThe committee met on Tuesday to review the plans for the library.\nMembers asked about the schedule, budget, and planned parking.\nThe architect said work would start after the winter season ends.\nA vote is planned for the next regular meeting of the council.\nResidents may send written comments before the end of the month.\nThe treasurer reported that the reserve fund remained steady this year.";
+        const LAYER: &str = concat!(
+            "mov eax, ebx\n",
+            "call puts\n",
+            "The committee met on Tuesday to review the plans for the library.\n",
+            "Members asked about the schedule, budget, and planned parking.\n",
+            "The architect said work would start after the winter season ends.\n",
+            "A vote is planned for the next regular meeting of the council.\n",
+            "Residents may send written comments before the end of the month.\n",
+            "The treasurer reported that the reserve fund remained steady this year.",
+        );
 
         fn pdf_with(extra_content: &str) -> PdfDocument {
             pdf_between("", extra_content)
@@ -308,7 +317,8 @@ mod tests {
                 .map(|(at, line)| format!("BT /F1 12 Tf 72 {} Td ({line}) Tj ET\n", 640 - 20 * at))
                 .collect();
             let content = format!(
-                "{under_text}\nBT /F1 12 Tf 72 700 Td (mov eax, ebx) Tj ET\nBT /F1 12 Tf 72 680 Td (call puts) Tj ET\n{prose}\n{over_text}"
+                "{under_text}\nBT /F1 12 Tf 72 700 Td (mov eax, ebx) Tj ET\n\
+                 BT /F1 12 Tf 72 680 Td (call puts) Tj ET\n{prose}\n{over_text}"
             );
             let mut document = Document::with_version("1.5");
             let pages_id = document.new_object_id();
@@ -518,6 +528,39 @@ call puts",
                 &LAYER.replace("budget", "bud\u{E000}et"),
                 &read_of(words)
             ));
+        }
+
+        fn read_matching_ink(pdf: &PdfDocument) -> ExtractedDocument {
+            let words = native_word_boxes(pdf)
+                .iter()
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
+            read_of(words)
+        }
+
+        /// `layer` with each word for which `wrong(index)` holds replaced by one the page never shows.
+        fn layer_with_words_wrong(wrong: impl Fn(usize) -> bool) -> String {
+            LAYER
+                .split(' ')
+                .enumerate()
+                .map(|(at, word)| if wrong(at) { "zzzz" } else { word })
+                .collect::<Vec<_>>()
+                .join(" ")
+        }
+
+        #[test]
+        fn should_prefer_a_plausibly_wrong_native_layer_that_the_read_still_half_confirms() {
+            let pdf = pdf_with("");
+            let read = read_matching_ink(&pdf);
+            assert!(ink_owned(&pdf, &layer_with_words_wrong(|at| at % 5 == 0), &read));
+            assert!(ink_owned(&pdf, &layer_with_words_wrong(|at| at % 3 == 0), &read));
+        }
+
+        #[test]
+        fn should_not_prefer_a_native_layer_the_read_does_not_confirm() {
+            let pdf = pdf_with("");
+            let read = read_matching_ink(&pdf);
+            assert!(!ink_owned(&pdf, &layer_with_words_wrong(|_| true), &read));
         }
 
         #[test]
