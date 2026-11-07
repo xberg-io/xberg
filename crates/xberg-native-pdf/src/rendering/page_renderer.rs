@@ -136,8 +136,9 @@ pub struct RenderOptions {
     /// exact. Not part of the public API; set via `render_page_fit` only.
     pub(crate) scale_override: Option<f32>,
     /// Paint invisible text (render mode 3) in pure red instead of omitting it, so a caller can
-    /// read the hidden layer's glyph silhouettes off the raster (default: false).
-    pub reveal_invisible_text: bool,
+    /// read the hidden layer's glyph silhouettes off the raster. Reached through
+    /// `render_revealed_layer`.
+    pub(crate) reveal_invisible_text: bool,
 }
 
 impl Default for RenderOptions {
