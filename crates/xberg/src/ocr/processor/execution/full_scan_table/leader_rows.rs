@@ -4,7 +4,7 @@ use super::{
 };
 use crate::ocr::hocr_parser::hocr_matches_all_proved_table_fragments;
 use crate::table_core::HocrWord;
-use crate::types::{OcrTableBoundingBox, internal::InternalDocument};
+use crate::types::{ImagePreprocessingConfig, OcrTableBoundingBox, internal::InternalDocument};
 use std::collections::HashSet;
 use std::ops::Range;
 use xberg_tesseract::Pix;
@@ -14,25 +14,35 @@ const MAX_LEADER_CROP_PIXELS: usize = 32_768;
 const DOT_TO_TEXT_HEIGHT_DIVISOR: usize = 3;
 const MAX_DOT_ASPECT_RATIO: (usize, usize) = (3, 2);
 
-// Reuse the actual deskewed recognition frame, retaining only a bounded 1-bpp Pix. ~keep
+// Reuse the actual deskewed recognition frame; the retained 1-bpp Pix is the one preprocessing
+// already allocated, so only the proof crops are added to the peak of the preprocessing that
+// produced it. An unmodelled policy has no known peak and declines. ~keep
 pub(in crate::ocr::processor::execution) fn can_hold_leader_raster(
     raster: &Pix,
     (width, height): (u32, u32),
     encoded_bytes: usize,
+    preprocessing: Option<&ImagePreprocessingConfig>,
     limits: &SecurityLimits,
 ) -> bool {
-    if raster.depth() != 1
-        || u32::try_from(raster.width()).ok() != Some(width)
-        || u32::try_from(raster.height()).ok() != Some(height)
-    {
-        return false;
-    }
-    let bitmap = u64::from(width.div_ceil(32)) * 4 * u64::from(height);
-    let extra = bitmap.saturating_add(MAX_LEADER_CROP_PIXELS as u64 * 2);
-    super::super::native_image_budget::known_phase_peak(width, height, encoded_bytes, None)
-        .ok()
-        .flatten()
-        .is_some_and(|peak| peak.saturating_add(extra) <= limits.max_content_size as u64)
+    raster.depth() == 1
+        && u32::try_from(raster.width()).ok() == Some(width)
+        && u32::try_from(raster.height()).ok() == Some(height)
+        && leader_budget_fits(width, height, encoded_bytes, preprocessing, limits.max_content_size)
+}
+
+fn leader_budget_fits(
+    width: u32,
+    height: u32,
+    encoded_bytes: usize,
+    preprocessing: Option<&ImagePreprocessingConfig>,
+    max_content_size: usize,
+) -> bool {
+    preprocessing.is_some_and(|options| {
+        super::super::native_image_budget::known_phase_peak(width, height, encoded_bytes, Some(options))
+            .ok()
+            .flatten()
+            .is_some_and(|peak| peak.saturating_add(MAX_LEADER_CROP_PIXELS as u64 * 2) <= max_content_size as u64)
+    })
 }
 
 // Runs only after the stock recovery declines a known full-page sparse-text scan. A wider gate
@@ -368,6 +378,41 @@ mod tests {
             }
         }
         assert!(!regular_dot_runs(&hyphens, 80, 27));
+    }
+
+    #[test]
+    fn leader_budget_charges_the_applied_binarization_not_the_raw_path() {
+        let options = ImagePreprocessingConfig::default();
+        let (width, height) = (2550, 3300);
+        let applied =
+            super::super::super::native_image_budget::known_phase_peak(width, height, 227_360, Some(&options))
+                .unwrap()
+                .unwrap();
+        let raw = super::super::super::native_image_budget::known_phase_peak(width, height, 227_360, None)
+            .unwrap()
+            .unwrap();
+        assert!(applied < raw);
+        let crops = MAX_LEADER_CROP_PIXELS as u64 * 2;
+        let exact = (applied + crops) as usize;
+        assert!(leader_budget_fits(width, height, 227_360, Some(&options), exact));
+        assert!(!leader_budget_fits(width, height, 227_360, Some(&options), exact - 1));
+    }
+
+    #[test]
+    fn leader_budget_declines_an_unmodelled_preprocessing_policy() {
+        let unmodelled = ImagePreprocessingConfig {
+            denoise: true,
+            ..Default::default()
+        };
+        assert!(!leader_budget_fits(100, 100, 1000, Some(&unmodelled), usize::MAX));
+        assert!(!leader_budget_fits(100, 100, 1000, None, usize::MAX));
+        assert!(leader_budget_fits(
+            100,
+            100,
+            1000,
+            Some(&ImagePreprocessingConfig::default()),
+            usize::MAX
+        ));
     }
 
     #[test]

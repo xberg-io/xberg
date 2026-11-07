@@ -2388,7 +2388,13 @@ pub(super) fn perform_ocr(
             && config.enable_table_detection
             && config.output_format == "markdown"
             && full_scan_table::uses_default_table_thresholds(config)
-            && full_scan_table::can_hold_leader_raster(pix, (width, height), image_bytes.len(), &security_limits)
+            && full_scan_table::can_hold_leader_raster(
+                pix,
+                (width, height),
+                image_bytes.len(),
+                preprocessing.as_ref(),
+                &security_limits,
+            )
     });
     #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
     drop(processed_pix);
