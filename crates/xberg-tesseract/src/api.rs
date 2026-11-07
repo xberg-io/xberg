@@ -229,10 +229,15 @@ impl TesseractAPI {
     /// pool — so the exit cleanup can release its dictionary references. Call
     /// [`Self::mark_in_use`] before the next thread takes the engine.
     ///
-    /// This method is for engine pools, not for general use. If a thread still uses the
-    /// engine, the exit cleanup frees the engine under that thread and the process crashes.
+    /// # Safety
+    ///
+    /// No thread may use this engine, or start to use it, until the caller calls
+    /// [`Self::mark_in_use`] and it returns `Ok`. The exit cleanup frees an idle engine
+    /// at any time, so a thread that still uses the engine then uses freed memory.
+    ///
+    /// This method is for engine pools, not for general use.
     #[doc(hidden)]
-    pub fn mark_idle(&self) {
+    pub unsafe fn mark_idle(&self) {
         if let Ok(handle) = self.handle.lock() {
             let _ = set_engine_idle(*handle, self.generation, true);
         }
@@ -2244,7 +2249,8 @@ mod live_engine_tests {
         let busy_addr = *busy.handle.lock().unwrap() as usize;
         let idle_addr = *idle.handle.lock().unwrap() as usize;
         assert!(!idle.is_idle(), "a new engine counts as in use");
-        idle.mark_idle();
+        // SAFETY: the test owns the engine and no other thread uses it.
+        unsafe { idle.mark_idle() };
         assert!(idle.is_idle());
 
         finalize_idle_engines();
@@ -2265,7 +2271,8 @@ mod live_engine_tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let api = TesseractAPI::new().expect("create engine");
-        api.mark_idle();
+        // SAFETY: the test owns the engine and no other thread uses it.
+        unsafe { api.mark_idle() };
         finalize_idle_engines();
         assert!(matches!(api.mark_in_use(), Err(TesseractError::NullPointerError)));
     }
@@ -2283,6 +2290,7 @@ mod live_engine_tests {
     }
 
     const POISON_CHILD_ENV: &str = "XBERG_TESSERACT_POISON_CHILD";
+    const POISON_CHILD_DONE: &str = "poison checks done";
 
     /// Poisons the registry of the process that runs it, and never repairs it. Only the
     /// child process of the next test sets `POISON_CHILD_ENV`, so no other test shares a
@@ -2293,7 +2301,8 @@ mod live_engine_tests {
             return;
         }
         let api = TesseractAPI::new().expect("create engine");
-        api.mark_idle();
+        // SAFETY: the test owns the engine and no other thread uses it.
+        unsafe { api.mark_idle() };
         let poisoner = std::thread::spawn(|| {
             let _held = LIVE_ENGINES.lock().unwrap();
             panic!("poison the registry on purpose");
@@ -2310,6 +2319,7 @@ mod live_engine_tests {
             !api.is_idle(),
             "an engine on a poisoned registry does not count as idle"
         );
+        println!("{POISON_CHILD_DONE}");
     }
 
     #[test]
@@ -2318,14 +2328,14 @@ mod live_engine_tests {
         let module = module_path!().split_once("::").map_or("", |(_, rest)| rest);
         let child = format!("{module}::poisoned_registry_child");
         let output = std::process::Command::new(std::env::current_exe().expect("test binary path"))
-            .args(["--exact", child.as_str(), "--test-threads=1"])
+            .args(["--exact", child.as_str(), "--test-threads=1", "--nocapture"])
             .env(POISON_CHILD_ENV, "1")
             .output()
             .expect("run the child process");
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
-            output.status.success() && stdout.contains("1 passed"),
-            "child failed: {stdout}{}",
+            output.status.success() && stdout.contains(POISON_CHILD_DONE),
+            "child did not run its poison checks to the end: {stdout}{}",
             String::from_utf8_lossy(&output.stderr)
         );
     }
@@ -2336,7 +2346,8 @@ mod live_engine_tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let api = TesseractAPI::new().expect("create engine");
-        api.mark_idle();
+        // SAFETY: the test owns the engine and no other thread uses it.
+        unsafe { api.mark_idle() };
         assert!(api.is_idle());
         let addr = *api.handle.lock().unwrap() as usize;
         let reissue = |generation: u64| {
@@ -2390,7 +2401,8 @@ mod live_engine_tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let api = TesseractAPI::new().expect("create engine");
         let addr = *api.handle.lock().unwrap() as usize;
-        api.mark_idle();
+        // SAFETY: the test owns the engine and no other thread uses it.
+        unsafe { api.mark_idle() };
         api.mark_in_use().expect("a live engine can be taken back");
         finalize_idle_engines();
         assert!(is_registered(addr));

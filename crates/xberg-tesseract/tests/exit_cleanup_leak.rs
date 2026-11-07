@@ -40,7 +40,8 @@ fn run_child(park_as_idle: bool) -> ! {
     api.set_image(&page, 200, 100, 3, 200 * 3).expect("set image");
     api.recognize().expect("recognize");
     if park_as_idle {
-        api.mark_idle();
+        // SAFETY: this child process runs no other thread that uses the engine.
+        unsafe { api.mark_idle() };
     }
     unsafe { libc::exit(0) }
 }

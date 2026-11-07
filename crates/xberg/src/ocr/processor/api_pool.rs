@@ -255,9 +255,17 @@ struct PooledTesseractApi {
 
 impl PooledTesseractApi {
     /// Lets the process-exit cleanup free the primary and every secondary handle.
-    fn mark_idle(&self) {
-        self.primary.mark_idle();
-        self.secondary.initialized().for_each(TesseractAPI::mark_idle);
+    ///
+    /// # Safety
+    ///
+    /// No thread may use any handle until `mark_in_use` returns `Ok`.
+    #[allow(unsafe_code)]
+    unsafe fn mark_idle(&self) {
+        // SAFETY: the caller guarantees that no thread uses the handles.
+        unsafe {
+            self.primary.mark_idle();
+            self.secondary.initialized().for_each(|api| api.mark_idle());
+        }
     }
 
     /// Makes the process-exit cleanup skip the primary and every secondary handle, which
@@ -367,7 +375,12 @@ impl Drop for TesseractApiLease {
         self.inner
             .release_for_models(&self.models, |api| match api.primary.clear() {
                 Ok(()) => {
-                    api.mark_idle();
+                    // SAFETY: the lease ends here, so no thread holds the handles. The pool
+                    // calls `mark_in_use` before it hands them out again.
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        api.mark_idle();
+                    }
                     true
                 }
                 Err(error) => {
