@@ -1400,6 +1400,7 @@ fn sparse_table_page_text(
         || !image.text.is_empty()
         || !doc.images.is_empty()
         || !matches!(element.kind, ElementKind::Table { table_index: 0 })
+        // Markdown is absent on purpose: its page text is the pipe table itself, so there is no row transcript to keep. ~keep
         || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot)
         || mime_type.to_lowercase().contains("tiff")
         || doc
