@@ -20,11 +20,9 @@ pub(super) fn complete_region(
     let tokens = words.iter().map(|word| word.text.as_str());
     if !tokens.clone().eq(candidate.content.split_whitespace())
         || !tokens.eq(paragraph.text.split_whitespace())
-        || !words.iter().all(|word| {
-            word.confidence.recognition * 100.0 >= thresholds.min_ocr_mean_confidence
-                && word.text.chars().count() >= 2
-                && word.text.chars().all(char::is_alphabetic)
-        })
+        || !words
+            .iter()
+            .all(|word| word.confidence.recognition * 100.0 >= thresholds.min_ocr_mean_confidence)
     {
         return None;
     }
@@ -81,7 +79,47 @@ fn line_lengths(paragraph: &str, keys: &[Option<usize>]) -> Option<Vec<usize>> {
     .then_some(counts)
 }
 
+/// Text-sized evidence for a region, all measured in the upright frame.
+/// - The median line thickness must reach a page-relative floor, so uniformly tiny boxes (dust, grain) fail.
+/// - A box thinner than a third of the median is a mark (`-`, `.`, `•`); a few are tolerated, a share is not.
+/// - Most boxes must be at least as long as they are thick, as words are and isolated strokes (`l I |`) are not.
+/// - Most tokens must carry a letter, so a grid of digits or marks is not read as prose.
+///
+/// A region whose majority is a large heading font sets the median and thins the body words, so it is refused.
+/// ~keep
+fn text_sized(words: &[HocrWord], dimensions: (u32, u32), angle: u16) -> bool {
+    const FLOOR_DIVISOR: u32 = 300;
+    const THIN_SHARE: usize = 8;
+    let Some(projected) = words
+        .iter()
+        .map(|word| project_word(word, dimensions, angle))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    let mut thickness: Vec<u32> = projected.iter().map(|word| word.height).collect();
+    thickness.sort_unstable();
+    let Some(&median) = thickness.get(thickness.len() / 2) else {
+        return false;
+    };
+    let floor = (dimensions.0.max(dimensions.1) / FLOOR_DIVISOR).max(1);
+    let count = projected.len();
+    let thin = projected
+        .iter()
+        .filter(|word| word.height.saturating_mul(3) < median)
+        .count();
+    let stroke = projected.iter().filter(|word| word.width < word.height).count();
+    let lettered = words
+        .iter()
+        .filter(|word| word.text.chars().any(char::is_alphabetic))
+        .count();
+    median >= floor && thin * THIN_SHARE < count && stroke * 2 <= count && lettered * 2 >= count
+}
+
 fn coherent_frame(words: &[HocrWord], groups: &[usize], dimensions: (u32, u32), angle: u16) -> bool {
+    if !text_sized(words, dimensions, angle) {
+        return false;
+    }
     let mut start = 0;
     let mut previous: Option<(u32, u32, u32)> = None;
     for &length in groups {
@@ -130,12 +168,16 @@ mod tests {
     use crate::types::{OcrBoundingGeometry, OcrConfidence};
 
     fn word(text: &str, left: u32, top: u32) -> OcrElement {
+        word_of_width(text, left, top, 9)
+    }
+
+    fn word_of_width(text: &str, left: u32, top: u32, width: u32) -> OcrElement {
         OcrElement::new(
             text,
             OcrBoundingGeometry::Rectangle {
                 left: top,
                 top: 200 - left - 12,
-                width: 9,
+                width,
                 height: 12,
             },
             OcrConfidence {
@@ -168,13 +210,18 @@ mod tests {
     }
 
     fn candidate() -> ExtractedDocument {
-        let text = "Complete first\nClear second\nending";
+        candidate_with(["Complete", "first", "Clear", "second", "ending"], [9; 5])
+    }
+
+    fn candidate_with(words: [&str; 5], widths: [u32; 5]) -> ExtractedDocument {
+        let text = format!("{} {}\n{} {}\n{}", words[0], words[1], words[2], words[3], words[4]);
+        let text = text.as_str();
         let elements = crate::ocr::conversion::tesseract_elements_with_lines(vec![
-            (0, word("Complete", 15, 40)),
-            (0, word("first", 30, 40)),
-            (1, word("Clear", 15, 53)),
-            (1, word("second", 30, 53)),
-            (2, word("ending", 15, 67)),
+            (0, word_of_width(words[0], 15, 40, widths[0])),
+            (0, word_of_width(words[1], 30, 40, widths[1])),
+            (1, word_of_width(words[2], 15, 53, widths[2])),
+            (1, word_of_width(words[3], 30, 53, widths[3])),
+            (2, word_of_width(words[4], 15, 67, widths[4])),
         ]);
         let mut candidate = result(elements, text, 5);
         let mut paragraph = InternalElement::text(
@@ -245,5 +292,142 @@ mod tests {
         let mut invalid = candidate;
         invalid.content.push_str(" speckle");
         assert!(!selected(&original, &invalid, true), "unowned rendered token");
+    }
+
+    #[test]
+    fn prose_admission_follows_word_boxes_not_word_letters() {
+        for words in [
+            ["Complete", "first", "Clear", "second", "ending"],
+            ["Total,", "3.5", "a", "no.", "O'Neil-2"],
+        ] {
+            let candidate = candidate_with(words, [9; 5]);
+            let original = result(vec![word(words[2], 15, 53)], words[2], 1);
+            assert!(selected(&original, &candidate, true), "{words:?}");
+        }
+    }
+
+    fn upright_words(tokens: &[(&str, u32, u32)]) -> Vec<HocrWord> {
+        tokens
+            .iter()
+            .map(|&(text, thickness, length)| HocrWord {
+                text: text.into(),
+                left: 10,
+                top: 10,
+                width: thickness,
+                height: length,
+                confidence: 95.0,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn prose_refuses_a_token_whose_box_is_not_text_sized() {
+        let original = result(vec![word("Clear", 15, 53)], "Clear", 1);
+        let thresholds = OcrQualityThresholds::default();
+        let sized = |candidate: &ExtractedDocument| {
+            let words = checked_words(candidate).unwrap();
+            let paragraph = &candidate.ocr_internal_document.as_ref().unwrap().elements[0];
+            let bbox = paragraph_region(paragraph, &original, &words).unwrap();
+            let words: Vec<_> = words.iter().map(|word| iterator_word(word, bbox).unwrap()).collect();
+            [90, 270].into_iter().any(|angle| text_sized(&words, (200, 200), angle))
+        };
+        let accepted = candidate_with(["Complete", "first", "Clear", "second", "ending"], [9; 5]);
+        assert!(sized(&accepted) && complete_region(&original, &accepted, (200, 200), &thresholds).is_some());
+        for tiny in [",", "x"] {
+            let candidate = candidate_with(["Complete", "first", "Clear", tiny, "ending"], [9, 9, 9, 2, 9]);
+            assert!(!sized(&candidate), "{tiny:?} must fail text_sized itself");
+            assert!(!selected(&original, &candidate, true), "{tiny:?}");
+        }
+    }
+
+    #[test]
+    fn thin_box_boundary_is_a_third_of_the_median() {
+        let words = |thin: u32| {
+            let mut tokens = vec![("end", thin, 20)];
+            tokens.extend(["alpha", "beta", "gamma", "delta"].map(|t| (t, 9, 20)));
+            upright_words(&tokens)
+        };
+        assert!(text_sized(&words(9), (200, 200), 90), "full-size reference");
+        assert!(
+            text_sized(&words(3), (200, 200), 90),
+            "exactly a third of 9 is still a word"
+        );
+        assert!(
+            !text_sized(&words(2), (200, 200), 90),
+            "below a third of 9 is a mark, and one in five is a share"
+        );
+    }
+
+    #[test]
+    fn a_few_thin_punctuation_tokens_do_not_refuse_a_real_paragraph() {
+        let mut tokens = vec![("Between", 9, 40), ("10", 9, 20), ("\u{2013}", 2, 12), ("20", 9, 20)];
+        tokens.extend(["units", "were", "counted", "in", "each", "of", "the", "rows"].map(|t| (t, 9, 30)));
+        assert!(
+            text_sized(&upright_words(&tokens), (200, 200), 90),
+            "one dash in twelve tokens"
+        );
+        tokens.extend([("-", 2, 12), ("\u{2022}", 2, 12), (".", 2, 12)]);
+        assert!(
+            !text_sized(&upright_words(&tokens), (200, 200), 90),
+            "a share of marks is not prose"
+        );
+    }
+
+    #[test]
+    fn a_dominant_heading_size_sets_the_median_and_refuses_small_body_words() {
+        let heading = [
+            ("Annual", 30, 90),
+            ("Report", 30, 90),
+            ("Summary", 30, 90),
+            ("Plan", 30, 90),
+        ];
+        let body = [("with", 6, 20), ("notes", 6, 20), ("below", 6, 20)];
+        let mixed: Vec<_> = heading.into_iter().chain(body).collect();
+        assert!(!text_sized(&upright_words(&mixed), (200, 200), 90));
+        assert!(text_sized(&upright_words(&heading), (200, 200), 90));
+    }
+
+    #[test]
+    fn uniformly_tiny_or_stroke_like_reads_are_refused() {
+        let grain = [
+            ("a", 4, 5),
+            ("an", 4, 6),
+            ("on", 4, 6),
+            ("it", 4, 5),
+            ("so", 4, 6),
+            ("up", 4, 6),
+        ];
+        assert!(
+            !text_sized(&upright_words(&grain), (3000, 3000), 90),
+            "below the page floor"
+        );
+        assert!(
+            text_sized(&upright_words(&grain), (1200, 1200), 90),
+            "same boxes on a small page"
+        );
+        let strokes = [
+            ("l", 12, 5),
+            ("I", 12, 5),
+            ("|", 12, 4),
+            ("i", 12, 5),
+            (",", 12, 4),
+            ("l", 12, 5),
+        ];
+        assert!(
+            !text_sized(&upright_words(&strokes), (3000, 3000), 90),
+            "isolated strokes"
+        );
+        let digits = [
+            ("10", 12, 20),
+            ("20", 12, 20),
+            ("30", 12, 20),
+            ("40", 12, 20),
+            ("5.5", 12, 24),
+        ];
+        assert!(
+            !text_sized(&upright_words(&digits), (3000, 3000), 90),
+            "a grid of numbers"
+        );
+        assert!(!text_sized(&[], (3000, 3000), 90), "no words");
     }
 }
