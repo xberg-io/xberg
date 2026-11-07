@@ -2771,6 +2771,24 @@ fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (Str
     (text, boundaries)
 }
 
+/// Whether the render budget alone lowers the DPI the page is rendered at, by the same plan
+/// the render uses. An unbounded page gains nothing from the single-backend route, so it is
+/// decided before any OCR runs; a page the plan misses only loses the recovery. ~keep
+#[cfg(all(
+    paddle_ocr,
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn render_budget_bounds_first_page(document: &xberg_native_pdf::PdfDocument, config: &ExtractionConfig) -> bool {
+    let default_limits = crate::extractors::security::SecurityLimits::default();
+    let limits = config.security_limits.as_ref().unwrap_or(&default_limits);
+    let (requested, planned) =
+        crate::image::dpi::planned_pdf_ocr_render_dpi(document, 0, config.images.as_ref(), limits);
+    planned < requested
+}
+
 /// Reads a one-page PDF on the single-backend route and keeps the result when the first stage
 /// of the synthesized classical pipeline would have accepted it, so that route's source-image
 /// recoveries and budgeted scaling apply. A page below the pipeline's quality threshold, or one
@@ -2792,9 +2810,12 @@ pub(crate) async fn accepted_single_page_first_pass(
     page_ocr_hints: Option<PageOcrHints>,
     thresholds: &crate::core::config::OcrQualityThresholds,
 ) -> Option<(WholeDirectOcrOutput, bool)> {
-    let Ok((_, 1, _)) = open_pdf_for_page_ocr(content) else {
+    let Ok((document, 1, _)) = open_pdf_for_page_ocr(content) else {
         return None;
     };
+    if !render_budget_bounds_first_page(&document, config) {
+        return None;
+    }
     let output = Box::pin(extract_with_ocr_with_page_hints_and_evidence(
         Some(content),
         None,
@@ -8362,6 +8383,18 @@ mod raw_workspace_geometry;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/raster_budget_tests.rs"]
 mod raster_budget_tests;
+
+#[cfg(all(
+    test,
+    paddle_ocr,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
+))]
+#[path = "pipeline/first_pass_route_tests.rs"]
+mod first_pass_route_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
