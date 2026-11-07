@@ -2381,6 +2381,22 @@ pub(super) fn perform_ocr(
         )
         .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set image: {error}")))?;
     }
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    let leader_raster = processed_pix.filter(|pix| {
+        config.known_full_page_scan
+            && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+            && config.enable_table_detection
+            && config.output_format == "markdown"
+            && full_scan_table::uses_default_table_thresholds(config)
+            && full_scan_table::can_hold_leader_raster(
+                pix,
+                (width, height),
+                image_bytes.len(),
+                preprocessing.as_ref(),
+                &security_limits,
+            )
+    });
+    #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
     drop(processed_pix);
 
     api.set_source_resolution(source_dpi)
@@ -2673,9 +2689,9 @@ pub(super) fn perform_ocr(
     let mut tables = Vec::new();
     let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    let mut standalone_claimed = false;
+    let mut fully_claimed = false;
     #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
-    let standalone_claimed = false;
+    let fully_claimed = false;
 
     if config.enable_table_detection {
         let tsv_data = tsv_data_for_tables.as_ref().unwrap();
@@ -2832,15 +2848,33 @@ pub(super) fn perform_ocr(
                                 cleaned.as_deref(),
                             )
                         });
-                    standalone_claimed |= recovered.is_some();
+                    fully_claimed |= recovered.is_some();
                     recovered.or(cleaned)
                 } else {
                     cleaned
                 };
                 cleaned.or_else(|| {
-                    can_prove_scan_grid
-                        .then(|| full_scan_table::recover(tsv_data, &content, &bbox, &security_limits))
-                        .flatten()
+                    if !can_prove_scan_grid {
+                        return None;
+                    }
+                    let stock = full_scan_table::recover(tsv_data, &content, &bbox, &security_limits);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if stock.is_none()
+                        && let Some(raster) = leader_raster.as_ref()
+                        && let Some(source) = hocr_for_tables.as_deref().zip(hocr_document.as_ref())
+                        && let Some(cells) = full_scan_table::recover_dot_leader_rows(
+                            tsv_data,
+                            &content,
+                            &bbox,
+                            &security_limits,
+                            source,
+                            raster,
+                        )
+                    {
+                        fully_claimed = true;
+                        return Some(cells);
+                    }
+                    stock
                 })
             };
             #[cfg(not(feature = "pdf"))]
@@ -2892,6 +2926,9 @@ pub(super) fn perform_ocr(
         }
     }
 
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    drop(leader_raster);
+
     // Restore supported lines before paragraphs are flattened or claimed by accepted tables. ~keep
     if let Some(hocr) = hocr_for_tables.as_deref().filter(|_| !rejected_regions.is_empty()) {
         let restored =
@@ -2911,7 +2948,7 @@ pub(super) fn perform_ocr(
             hocr_document = Some(restored.document);
         }
     }
-    if let Some(document) = hocr_document.as_mut().filter(|_| standalone_claimed) {
+    if let Some(document) = hocr_document.as_mut().filter(|_| fully_claimed) {
         document.elements.clear();
         document.ocr_text_claimed_by_tables = true;
     } else if let Some(document) = hocr_document.as_mut() {

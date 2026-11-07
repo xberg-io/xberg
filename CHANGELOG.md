@@ -244,6 +244,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Correct detached two-table PDF reading order and coordinates.** (#2497)
   Keep the recognized cells and convert their render bounds to PDF points before returning the tables.
 
+- **(ocr): Keep source-proven dot-leader scan rows together in Auto OCR.** (Refs #2503)
+  A page-wide scan table whose leader runs are confirmed as regular dots in the recognition raster is returned as one table with every label and value kept and the leader dots left out.
+
 - **(ocr): Remove duplicate dot-leader rows from standalone Tesseract PSM 6 output.** (#2503)
   Require matching text and geometry while preserving numeric cells, default OCR, and PDF output.
 
