@@ -2721,7 +2721,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     crate::core::diagnostics::warning(
                         "ocr",
                         format!(
-                            "Page {page} retained native text with {lost} glyphs lost; its OCR read only re-read glyph ink the native text paints."
+                            "Page {page} retained native text; {lost} glyphs have no Unicode value and its OCR read did not recover them, only re-read glyph ink the native text paints."
                         ),
                     ),
                 );
@@ -3475,7 +3475,7 @@ pub(super) struct OcrReadEvidence {
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 fn lost_glyph_ocr_rejection(lost: usize) -> FailedOcrRun {
     crate::XbergError::Ocr {
-        message: format!("Page 1 OCR read only re-read glyph ink that the native text paints; {lost} glyphs are lost"),
+        message: format!("Page 1 OCR read did not recover the {lost} glyphs without a Unicode value; it only re-read glyph ink that the native text paints"),
         source: None,
     }
     .into()

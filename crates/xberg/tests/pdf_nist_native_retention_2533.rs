@@ -81,6 +81,15 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
         );
         assert!(!automatic.content.contains(char::REPLACEMENT_CHARACTER), "{format:?}");
         assert_eq!(automatic.content, native.content, "{format:?}");
+        for fragment in ["did not recover the 8 glyphs", "have no Unicode value"] {
+            assert!(
+                automatic
+                    .processing_warnings
+                    .iter()
+                    .any(|warning| warning.message.contains(fragment)),
+                "{format:?}: a warning names the lost glyphs ({fragment:?})"
+            );
+        }
         for (projection, content) in [
             ("document", &automatic.content),
             ("page", &automatic.pages.as_ref().unwrap()[0].content),
