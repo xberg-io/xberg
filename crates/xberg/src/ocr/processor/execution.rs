@@ -32,9 +32,9 @@ use crate::ocr::hocr_parser::{
     parse_hocr_to_internal_document_with_page_offset_and_stats, parse_hocr_without_claimed_table_rows,
     parse_hocr_without_proved_table_fragments,
 };
+use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
 use crate::ocr::preprocessing::should_invert_for_polarity;
-use crate::ocr::preprocessing::{NEUTRAL_CHANNEL_SPREAD, preprocess_pix};
 use crate::ocr::table::has_table_grid;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
@@ -1185,6 +1185,10 @@ const CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD: usize = 8;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_NUMERATOR: usize = 3;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_DENOMINATOR: usize = 4;
 const CLEAN_PAGE_TEXT_COMPONENT_MIN_NARROW_ASPECT_RATIO: usize = 3;
+/// Largest spread between the RGB channels of dark ink that still counts as neutral: black, slate, brown-black. ~keep
+/// Coloured graphics have ink far above it; scan noise on black stays below it. The photo-title check keeps its own
+/// limit: it asks whether a background is near white, not what hue the ink has.
+const INK_NEUTRAL_CHANNEL_SPREAD: u8 = 40;
 /// Maximum value of an 8-bit RGB channel.
 const RGB_CHANNEL_MAX: f64 = u8::MAX as f64;
 /// Number of channels in an RGB pixel.
@@ -1358,7 +1362,7 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             let bin = ((pixel_channel_sum + 1) / RGB_CHANNEL_COUNT as u16) as usize;
             foreground_histogram[bin] += 1;
             let spread = pixel[0].max(pixel[1]).max(pixel[2]) - pixel[0].min(pixel[1]).min(pixel[2]);
-            coloured_histogram[bin] += usize::from(spread > NEUTRAL_CHANNEL_SPREAD);
+            coloured_histogram[bin] += usize::from(spread > INK_NEUTRAL_CHANNEL_SPREAD);
         }
     }
     let pixel_count_f64 = pixel_count as f64;
@@ -6312,18 +6316,28 @@ mod tests {
     }
 
     #[test]
-    fn ink_at_the_neutral_spread_is_preprocessed_and_one_step_beyond_keeps_raw_pixels() {
+    fn ink_up_to_the_neutral_spread_is_preprocessed_and_one_step_beyond_keeps_raw_pixels() {
         let side = RING_GRID_SIDE as u32;
         assert_eq!(
-            NEUTRAL_CHANNEL_SPREAD, 8,
-            "the boundary below is written for a spread of 8"
+            INK_NEUTRAL_CHANNEL_SPREAD, 40,
+            "the boundary below is written for a spread of 40"
         );
-        let at_limit = ring_grid_raster([0, 0, 8], GRID_OUTLINE);
-        let beyond = ring_grid_raster([0, 0, 9], GRID_OUTLINE);
-        assert_dark_mean(&at_limit);
-        assert_dark_mean(&beyond);
-        assert!(should_apply_default_preprocessing(&at_limit, side, side));
-        assert!(!should_apply_default_preprocessing(&beyond, side, side));
+        for spread in [0, 8, 9, 20, 40] {
+            let ink = ring_grid_raster([0, 0, spread], GRID_OUTLINE);
+            assert_dark_mean(&ink);
+            assert!(
+                should_apply_default_preprocessing(&ink, side, side),
+                "ink at spread {spread} is neutral and must be preprocessed"
+            );
+        }
+        for spread in [41, 60] {
+            let ink = ring_grid_raster([0, 0, spread], GRID_OUTLINE);
+            assert_dark_mean(&ink);
+            assert!(
+                !should_apply_default_preprocessing(&ink, side, side),
+                "ink at spread {spread} is coloured and must keep its raw pixels"
+            );
+        }
     }
 
     /// Rings in a 10 by 10 grid; the first `coloured_rings` are coloured ink and the rest are neutral. ~keep
@@ -6469,6 +6483,48 @@ mod tests {
         let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
         assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
         assert!(result.metadata.image_preprocessing.is_some());
+    }
+
+    /// The repeated-line raster with the black glyph pixels recoloured to `ink`; the white paper is unchanged. ~keep
+    fn inked_lines(ink: [u8; 3]) -> Option<image::RgbImage> {
+        let mut raster = repeated_line_raster(REPEATED_LINE_COUNT, false)?;
+        for pixel in raster.pixels_mut() {
+            let paper = u16::from(pixel.0[0]);
+            for (channel, ink) in pixel.0.iter_mut().zip(ink) {
+                *channel = ((u16::from(ink) * (255 - paper) + 255 * paper) / 255) as u8;
+            }
+        }
+        Some(raster)
+    }
+
+    #[test]
+    fn dense_slate_and_tinted_black_text_with_a_dark_mean_is_preprocessed() {
+        for ink in [[20, 28, 40], [0, 0, 40]] {
+            let Some(raster) = inked_lines(ink) else {
+                return;
+            };
+            assert_dark_mean(raster.as_raw());
+            assert!(
+                should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+                "ink {ink:?} is neutral and must be preprocessed"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn dense_slate_and_tinted_black_text_reads_every_line() {
+        for ink in [[20, 28, 40], [0, 0, 40]] {
+            let Some(raster) = inked_lines(ink) else {
+                return;
+            };
+            assert_dark_mean(raster.as_raw());
+            let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+            assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+            assert!(
+                result.metadata.image_preprocessing.is_some(),
+                "ink {ink:?} must take the default preprocessing"
+            );
+        }
     }
 
     #[test]
