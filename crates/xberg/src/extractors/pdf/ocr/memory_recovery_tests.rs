@@ -165,7 +165,7 @@ fn embedded_image_pdf_with_copies(copies: usize) -> Vec<u8> {
     let content = document.add_object(Stream::new(dictionary! {}, paint.into_bytes()));
     let page = document.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(72), Object::Integer(72)],
-        "Rotate" => 90, "Contents" => content, "Resources" => dictionary! { "XObject" => xobjects },
+        "Contents" => content, "Resources" => dictionary! { "XObject" => xobjects },
     });
     document.objects.insert(
         pages,
@@ -606,8 +606,23 @@ async fn assert_detached_image_preserves_source_identity(bytes: Vec<u8>, expecte
 
 #[tokio::test]
 #[serial_test::serial]
-async fn detached_recovery_preserves_the_source_index_after_an_unsupported_first_image() {
-    assert_detached_image_preserves_source_identity(embedded_jpeg_after_unsupported_image_on_second_page(), 1).await;
+async fn detached_recovery_refuses_a_page_whose_first_image_is_unsupported() {
+    let (_guard, calls) = register_backend();
+    let doc =
+        xberg_native_pdf::PdfDocument::from_bytes(embedded_jpeg_after_unsupported_image_on_second_page()).unwrap();
+    assert_eq!(doc.page_image_handles(1).unwrap().len(), 2);
+    let error = run_case_with_image_capture(None, Some(&doc), 1, true)
+        .await
+        .err()
+        .expect("recovering only the readable image would present a partial page as complete")
+        .error
+        .to_string();
+    assert!(error.contains("live image-processing bytes"), "{error}");
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "no image of an uncertified page reaches OCR"
+    );
 }
 
 #[tokio::test]
@@ -761,33 +776,47 @@ async fn cancelled_whole_document_recovery_does_not_call_the_backend() {
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
-async fn assert_recovery_stops_after_first_of_two_jpegs(detached: bool) {
-    let token = crate::cancellation::CancellationToken::new();
+fn two_jpeg_page_backend(
+    cancel_during_recovery: Option<(crate::cancellation::CancellationToken, bool)>,
+) -> (BackendGuard, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     crate::plugins::register_ocr_backend(Arc::new(RecoveryBackend {
         calls: calls.clone(),
-        cancel_during_recovery: Some((token.clone(), true)),
+        cancel_during_recovery,
         observed_content_cap: None,
     }))
     .unwrap();
-    let _guard = BackendGuard;
-    let pdf = embedded_image_pdf_with_copies(2);
-    let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf.clone()).unwrap();
+    (BackendGuard, calls)
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn recovery_stops_after_first_of_two_jpegs_on_cancellation() {
+    let token = crate::cancellation::CancellationToken::new();
+    let (_guard, calls) = two_jpeg_page_backend(Some((token.clone(), true)));
+    let doc = xberg_native_pdf::PdfDocument::from_bytes(embedded_image_pdf_with_copies(2)).unwrap();
     let handles = doc.page_image_handles(0).unwrap();
     assert_eq!(
         handles.iter().map(|image| image.paint_order).collect::<Vec<_>>(),
         [0, 1]
     );
-    let config = ExtractionConfig {
-        cancel_token: Some(token.clone()),
-        ..Default::default()
-    };
-    let ocr = OcrConfig::default();
-    let result = if detached {
-        recover_pipeline_page_from_image_xobjects(&doc, 0, &config, &ocr, BACKEND).await
-    } else {
-        recover_pipeline_document_from_image_xobjects(Some(&pdf), &config, &ocr, BACKEND).await
-    };
+    let fallback_images =
+        crate::pdf::native::images::page_ocr_fallback_image_bytes_with_limits(&doc, 0, &SecurityLimits::default());
+    assert_eq!(fallback_images.len(), 2);
+    let backend = crate::plugins::registry::get_ocr_backend_registry()
+        .read()
+        .get(BACKEND)
+        .unwrap();
+    let mut budget = crate::extractors::security::SecurityBudget::from_config(&ExtractionConfig::default());
+    let result = super::super::rendering::recover_image_xobjects(
+        &backend,
+        &fallback_images,
+        0,
+        1,
+        &OcrConfig::default(),
+        XObjectRecoveryContext::with_budget(&mut budget, Some(&token)),
+    )
+    .await;
     assert!(token.is_cancelled());
     assert!(matches!(result, Err(crate::XbergError::Cancelled)));
     assert_eq!(
@@ -799,14 +828,25 @@ async fn assert_recovery_stops_after_first_of_two_jpegs(detached: bool) {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn detached_recovery_stops_after_first_of_two_jpegs_on_cancellation() {
-    assert_recovery_stops_after_first_of_two_jpegs(true).await;
-}
-
-#[tokio::test]
-#[serial_test::serial]
-async fn whole_document_recovery_stops_after_first_of_two_jpegs_on_cancellation() {
-    assert_recovery_stops_after_first_of_two_jpegs(false).await;
+async fn page_with_two_stored_jpegs_is_not_recovered_as_a_complete_page() {
+    let (_guard, calls) = two_jpeg_page_backend(None);
+    let pdf = embedded_image_pdf_with_copies(2);
+    let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf.clone()).unwrap();
+    let config = ExtractionConfig::default();
+    let ocr = OcrConfig::default();
+    assert!(
+        recover_pipeline_page_from_image_xobjects(&doc, 0, &config, &ocr, BACKEND)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        recover_pipeline_document_from_image_xobjects(Some(&pdf), &config, &ocr, BACKEND)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 #[path = "stored_jpeg_recovery_tests.rs"]

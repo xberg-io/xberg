@@ -399,9 +399,10 @@ fn render_page_capturing_glyph_drops<T>(
 /// after assembling a document's `processing_warnings`, so every PDF
 /// extraction that renders at least one page picks up any captured
 /// glyph-drop warnings for free. ~keep: that drain only ever observes
-/// warnings from render calls that happened on the *same OS thread* before it
-/// ran, because [`ENGINE_PENDING_WARNINGS`] is thread-local. OCR page
-/// rendering runs inline on the extracting task's thread, so it is covered.
+/// warnings from render calls polled as part of the extracting task, because
+/// [`ENGINE_PENDING_WARNINGS`] is thread-local and [`with_task_render_warnings`]
+/// carries it between workers. OCR page rendering runs inline on that task, so
+/// it is covered.
 /// Layout-detection rasterization runs inside `tokio::task::spawn_blocking`,
 /// which always executes on a different OS thread, so this function alone
 /// would never see those warnings. As of #353,
@@ -422,6 +423,38 @@ pub fn take_xberg_native_pdf_render_warnings() -> Vec<ProcessingWarning> {
 #[allow(dead_code)]
 pub(crate) fn record_render_warning(warning: ProcessingWarning) {
     ENGINE_PENDING_WARNINGS.with(|pending| push_warning_deduped(&mut pending.borrow_mut(), warning));
+}
+
+/// Keep the warnings `future` records with `future` instead of with the thread polling it.
+///
+/// [`ENGINE_PENDING_WARNINGS`] is thread-local, but an extraction renders, awaits OCR and drains
+/// afterwards, and a multi-thread runtime can resume it on another worker. So each poll installs
+/// the task's warnings and puts the worker's own back on the way out, which also stops two
+/// extractions sharing a worker from draining each other's warnings.
+pub(crate) async fn with_task_render_warnings<F: std::future::Future>(future: F) -> F::Output {
+    struct RestoreWorkerWarnings<'a> {
+        task: &'a mut Vec<ProcessingWarning>,
+        worker: Vec<ProcessingWarning>,
+    }
+
+    impl Drop for RestoreWorkerWarnings<'_> {
+        fn drop(&mut self) {
+            let worker = std::mem::take(&mut self.worker);
+            *self.task = ENGINE_PENDING_WARNINGS.with(|pending| pending.replace(worker));
+        }
+    }
+
+    let mut future = std::pin::pin!(future);
+    let mut task = Vec::new();
+    std::future::poll_fn(move |context| {
+        let worker = ENGINE_PENDING_WARNINGS.with(|pending| pending.replace(std::mem::take(&mut task)));
+        let _restore = RestoreWorkerWarnings {
+            task: &mut task,
+            worker,
+        };
+        future.as_mut().poll(context)
+    })
+    .await
 }
 
 /// Capture this synchronous render's warnings without leaving them on a worker that
@@ -1060,7 +1093,10 @@ impl OcrRasterDpi {
     }
 }
 
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+#[cfg(any(
+    feature = "layout-detection",
+    all(test, any(feature = "ocr", feature = "ocr-pipeline"))
+))]
 pub(crate) fn render_pdf_ocr_page_with_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
@@ -1978,6 +2014,98 @@ mod tests {
         assert!(
             !is_pdf_engine_target("xberg::extractors::pdf"),
             "xberg's own records must not be captured"
+        );
+    }
+
+    /// Polls `future` once on a fresh OS thread, as a multi-thread runtime does when a task
+    /// resumes on another worker. Thread-local state left by an earlier poll is not visible.
+    fn poll_on_new_thread<F: std::future::Future + Send>(future: std::pin::Pin<&mut F>) -> std::task::Poll<F::Output>
+    where
+        F::Output: Send,
+    {
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| future.poll(&mut std::task::Context::from_waker(std::task::Waker::noop())))
+                .join()
+                .expect("the polled future must not panic")
+        })
+    }
+
+    fn pending_once() -> impl std::future::Future<Output = ()> + Send {
+        let mut polled = false;
+        std::future::poll_fn(move |_| {
+            if std::mem::replace(&mut polled, true) {
+                std::task::Poll::Ready(())
+            } else {
+                std::task::Poll::Pending
+            }
+        })
+    }
+
+    fn plain_warning(message: &str) -> ProcessingWarning {
+        warning(PDF_RENDER_WARNING_SOURCE, message.to_string())
+    }
+
+    /// The extractor drains after awaiting OCR, and a multi-thread runtime can resume it on
+    /// another worker. The render warnings must arrive anyway, so this polls each half of the
+    /// extraction on its own thread rather than hoping a runtime migrates the task.
+    #[test]
+    fn render_warnings_follow_the_task_to_another_thread() {
+        let mut extraction = Box::pin(with_task_render_warnings(async {
+            record_render_warning(plain_warning("rendered before the await"));
+            pending_once().await;
+            take_xberg_native_pdf_render_warnings()
+        }));
+
+        assert!(poll_on_new_thread(extraction.as_mut()).is_pending());
+        let std::task::Poll::Ready(warnings) = poll_on_new_thread(extraction.as_mut()) else {
+            panic!("the extraction must finish on its second poll");
+        };
+
+        assert_eq!(
+            warnings.iter().map(|warning| &*warning.message).collect::<Vec<_>>(),
+            ["rendered before the await"]
+        );
+    }
+
+    /// Two extractions can share a worker while one awaits OCR, so neither may drain the
+    /// other's warnings, and whatever the worker already held must survive both.
+    #[test]
+    fn render_warnings_stay_with_their_task_on_a_shared_thread() {
+        let _ = take_xberg_native_pdf_render_warnings();
+        record_render_warning(plain_warning("held by the worker"));
+        let context = &mut std::task::Context::from_waker(std::task::Waker::noop());
+
+        let mut suspended = Box::pin(with_task_render_warnings(async {
+            record_render_warning(plain_warning("from the suspended task"));
+            pending_once().await;
+            take_xberg_native_pdf_render_warnings()
+        }));
+        assert!(suspended.as_mut().poll(context).is_pending());
+
+        let mut other = Box::pin(with_task_render_warnings(async {
+            take_xberg_native_pdf_render_warnings()
+        }));
+        let std::task::Poll::Ready(other_warnings) = other.as_mut().poll(context) else {
+            panic!("a task with no await must finish on its first poll");
+        };
+        assert!(
+            other_warnings.is_empty(),
+            "drained another task's warnings: {other_warnings:?}"
+        );
+
+        let std::task::Poll::Ready(suspended_warnings) = suspended.as_mut().poll(context) else {
+            panic!("the extraction must finish on its second poll");
+        };
+        assert_eq!(suspended_warnings.len(), 1, "got {suspended_warnings:?}");
+
+        let worker_warnings = take_xberg_native_pdf_render_warnings();
+        assert_eq!(
+            worker_warnings
+                .iter()
+                .map(|warning| &*warning.message)
+                .collect::<Vec<_>>(),
+            ["held by the worker"]
         );
     }
 

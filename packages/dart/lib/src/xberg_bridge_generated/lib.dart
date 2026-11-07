@@ -57,6 +57,7 @@ Future<ExtractionResult> extractBatchWithInputOptions({
 ///
 /// Uses the same fields and semantics as `ExtractInputWithOptions`. This is
 /// useful for callers that pass input values through a text-based boundary.
+/// Swift exposes this as a top-level async function.
 Future<ExtractionResult> extractBatchWithInputOptionsJson({
   required String inputsJson,
   required ExtractionConfig config,

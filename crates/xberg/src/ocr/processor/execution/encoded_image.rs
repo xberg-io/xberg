@@ -55,7 +55,9 @@ pub(super) fn prepare_with_dpi_policy(
         config,
         images,
         ci_debug_enabled,
-        allow_bounded_inferred_upscale,
+        // A caller-selected preprocessing policy keeps its requested raster budget; a policy
+        // the engine chose may fall back to the largest upscale that fits. ~keep
+        allow_bounded_inferred_upscale: allow_bounded_inferred_upscale || config.preprocessing.is_none(),
     };
     let mut assessment = Assessment {
         policy: config

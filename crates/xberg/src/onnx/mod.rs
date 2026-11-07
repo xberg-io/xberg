@@ -14,15 +14,21 @@
 //! regardless of the caller.
 //!
 
+#[cfg(onnx_retrieval)]
 use crate::core::config::DownloadProgress;
-use std::path::{Path, PathBuf};
+#[cfg(any(test, onnx_retrieval))]
+use std::path::Path;
+#[cfg(onnx_retrieval)]
+use std::path::PathBuf;
 
+#[cfg(onnx_retrieval)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OnnxAccelerationCacheKey {
     provider: crate::core::config::acceleration::ExecutionProviderType,
     device_id: u32,
 }
 
+#[cfg(onnx_retrieval)]
 impl OnnxAccelerationCacheKey {
     pub(crate) fn new(acceleration: Option<&crate::core::config::acceleration::AccelerationConfig>) -> Self {
         let provider = crate::ort_discovery::resolve_execution_provider(acceleration);
@@ -110,6 +116,7 @@ fn ort_missing_or(err: ErrCtor, msg: String) -> crate::XbergError {
 ///
 /// `special_tokens` and `tokenizer_config` may be empty paths when the repo does
 /// not ship those optional files; [`load_tokenizer`] handles the empty case.
+#[cfg(onnx_retrieval)]
 pub(crate) struct DownloadedModel {
     pub model: PathBuf,
     pub tokenizer: PathBuf,
@@ -139,6 +146,7 @@ pub(crate) struct DownloadedModel {
 /// `progress` carries the capability config's `show_download_progress` setting down to the
 /// Hugging Face client, so every file this helper fetches honours it (#279).
 #[allow(clippy::too_many_arguments)]
+#[cfg(onnx_retrieval)]
 pub(crate) fn download_model_files(
     repo_name: &str,
     model_file: &str,
@@ -180,6 +188,7 @@ pub(crate) fn download_model_files(
 ///
 /// Returns the local cache path plus the repo-relative path that actually
 /// resolved, so the caller can look that path up in the sha256 manifest.
+#[cfg(onnx_retrieval)]
 fn fetch_companion(
     repo_name: &str,
     model_dir: Option<&str>,
@@ -220,6 +229,7 @@ fn fetch_companion(
 /// Fetch optional tokenizer metadata without weakening a preset manifest.
 /// Missing, unpinned metadata is allowed; once a preset pins either candidate,
 /// every resolution or integrity error is fatal.
+#[cfg(onnx_retrieval)]
 fn fetch_optional_companion(
     repo_name: &str,
     model_dir: Option<&str>,
@@ -254,6 +264,7 @@ fn fetch_optional_companion(
 /// Return a pinned checksum for a preset artifact. Custom repositories have no
 /// manifest and remain caller-managed; a non-empty preset manifest must list
 /// every artifact Xberg resolves.
+#[cfg(any(test, onnx_retrieval))]
 fn manifest_checksum<'a>(manifest: &'a [(String, String)], repo_path: &str) -> Result<Option<&'a str>, String> {
     match manifest.iter().find(|(path, _)| path == repo_path) {
         Some((_, sha256)) => Ok(Some(sha256.as_str())),
@@ -268,6 +279,7 @@ fn manifest_checksum<'a>(manifest: &'a [(String, String)], repo_path: &str) -> R
 /// `local` must hash to the pinned value. Custom repos use an empty manifest and
 /// remain caller-managed. An empty `repo_path` (an optional companion that was
 /// not downloaded) is a no-op.
+#[cfg(any(test, onnx_retrieval))]
 fn verify_downloaded(manifest: &[(String, String)], repo_path: &str, local: &Path, err: ErrCtor) -> crate::Result<()> {
     if repo_path.is_empty() {
         return Ok(());
@@ -280,6 +292,7 @@ fn verify_downloaded(manifest: &[(String, String)], repo_path: &str, local: &Pat
     Ok(())
 }
 
+#[cfg(any(test, onnx_retrieval))]
 fn model_file_manifest(
     manifest: Option<&str>,
     model_file: &str,
@@ -303,6 +316,7 @@ fn model_file_manifest(
 mod manifest_preflight_tests;
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(onnx_retrieval)]
 fn download_model_files_inner(
     repo_name: &str,
     model_file: &str,
@@ -414,6 +428,7 @@ fn download_model_files_inner(
 /// from `tokenizer_config.json` (both optional, sensible defaults applied), then
 /// merges any special tokens declared in `special_tokens_map.json`. `max_length`
 /// is capped at the model's declared maximum.
+#[cfg(onnx_retrieval)]
 pub(crate) fn load_tokenizer(
     files: &DownloadedModel,
     max_length: usize,
@@ -577,6 +592,7 @@ fn intra_thread_count(options: &OrtSessionOptions) -> usize {
 /// The build runs inside `catch_unwind` because ORT can panic on a missing or
 /// incompatible native library; such failures map to
 /// [`crate::XbergError::MissingDependency`].
+#[cfg(onnx_retrieval)]
 pub(crate) fn build_session(
     model_path: &Path,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
@@ -587,7 +603,7 @@ pub(crate) fn build_session(
 
 /// [`build_session`] with explicit options and a caller-supplied commit step
 /// (file or memory), so tests never touch the process-global options.
-fn build_session_with(
+pub(crate) fn build_session_with(
     options: &OrtSessionOptions,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     err: ErrCtor,

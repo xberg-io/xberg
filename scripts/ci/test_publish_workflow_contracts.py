@@ -545,7 +545,7 @@ def test_rust_ci_enables_bundled_oem_regressions_on_every_platform() -> None:
             assert result.returncode == 0, result.stderr
             features = set(result.stdout.splitlines()[-1].split(","))
             base = {"full-no-heic", "heic"} if (system, machine) == ("Linux", "aarch64") else {"full"}
-            assert features == base | {"formula-recognition", "bundle-tessdata-eng"}, (
+            assert features == base | {"formula-recognition", "classification-onnx", "bundle-tessdata-eng"}, (
                 system,
                 machine,
                 variable,
@@ -723,14 +723,14 @@ def test_swift_package_build_preserves_selective_callback_symbol_lookup() -> Non
     assert error_message == "Swift package must disable host extension lookup"
 
 
-def test_kotlin_e2e_native_build_uses_thin_lto() -> None:
+def test_memory_heavy_e2e_native_builds_use_thin_lto() -> None:
     workflow = (WORKFLOW.parent / "ci-e2e.yaml").read_text()
     job = job_block(workflow, "e2e-tests")
     environment = re.search(r"(?ms)^    env:\n(.*?)(?=^    \S)", job)
     assert environment is not None, "e2e job does not configure the nested JNI Cargo build"
     setting = re.search(r"CARGO_PROFILE_RELEASE_LTO: \$\{\{ (.*?) \}\}", environment[1])
     assert setting is not None, "nested JNI build inherits memory-intensive fat LTO"
-    for language, expected in (("kotlin-android", "thin"), ("java", "fat"), ("swift", "fat")):
+    for language, expected in (("kotlin-android", "thin"), ("swift", "thin"), ("java", "fat")):
         assert evaluate_expression(setting[1], {"matrix": {"lang": language}}) == expected
 
 
