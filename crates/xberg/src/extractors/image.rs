@@ -1400,6 +1400,7 @@ fn sparse_table_page_text(
         || !image.text.is_empty()
         || !doc.images.is_empty()
         || !matches!(element.kind, ElementKind::Table { table_index: 0 })
+        // Markdown is absent on purpose: its page text is the pipe table itself (when should_adopt_table_rebuild accepts the rebuild), so there is no row transcript to keep. ~keep
         || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot)
         || mime_type.to_lowercase().contains("tiff")
         || doc
@@ -2581,8 +2582,12 @@ fn allows_standalone_sparse_rows(
     if config.layout.is_some() {
         return false;
     }
-    config.output_format == crate::core::config::OutputFormat::Plain
-        && !config.include_document_structure
+    matches!(
+        config.output_format,
+        crate::core::config::OutputFormat::Plain
+            | crate::core::config::OutputFormat::Markdown
+            | crate::core::config::OutputFormat::Djot
+    ) && !config.include_document_structure
         && !["image/tiff", "image/x-tiff"]
             .iter()
             .any(|alias| mime_type.eq_ignore_ascii_case(alias))
@@ -4282,6 +4287,32 @@ mod tests {
             assert!(
                 !super::allows_standalone_sparse_rows(&config, &ocr, mime_type),
                 "{mime_type}"
+            );
+        }
+    }
+
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn standalone_sparse_rows_are_admitted_for_plain_markdown_and_djot_only() {
+        use crate::core::config::OutputFormat;
+        let ocr = crate::core::config::OcrConfig::default();
+        for (output_format, admitted) in [
+            (OutputFormat::Plain, true),
+            (OutputFormat::Markdown, true),
+            (OutputFormat::Djot, true),
+            (OutputFormat::Html, false),
+            (OutputFormat::Json, false),
+            (OutputFormat::DocTags, false),
+            (OutputFormat::Custom("custom".into()), false),
+        ] {
+            let config = crate::core::config::ExtractionConfig {
+                output_format: output_format.clone(),
+                ..Default::default()
+            };
+            assert_eq!(
+                super::allows_standalone_sparse_rows(&config, &ocr, "image/png"),
+                admitted,
+                "{output_format:?}"
             );
         }
     }
