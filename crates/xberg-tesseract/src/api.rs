@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Unique temporary directory removed on drop; holds the text renderer's output for
@@ -113,6 +114,9 @@ pub struct TesseractConfiguration {
 pub struct TesseractAPI {
     /// Handle to the Tesseract engine.
     pub handle: Arc<Mutex<*mut c_void>>,
+    /// Identifies this engine in the live-engine registry. A later engine can get the same
+    /// handle address after the exit cleanup freed this one, but never the same generation.
+    generation: u64,
     config: Arc<Mutex<TesseractConfiguration>>,
 }
 
@@ -205,15 +209,66 @@ impl TesseractAPI {
         if handle.is_null() {
             return Err(TesseractError::NullPointerError);
         }
-        register_engine(handle);
+        let generation = register_engine(handle);
         Ok(TesseractAPI {
             handle: Arc::new(Mutex::new(handle)),
+            generation,
             config: Arc::new(Mutex::new(TesseractConfiguration {
                 datapath: String::new(),
                 language: String::new(),
                 variables: HashMap::new(),
             })),
         })
+    }
+
+    /// Allows the process-exit cleanup to free this engine.
+    ///
+    /// A new engine counts as in use, and the exit cleanup skips it. A caller that never
+    /// calls this method gets tesseract's leak report on stderr at exit, not a crash.
+    /// Call this when no thread holds the engine — for example when it returns to an idle
+    /// pool — so the exit cleanup can release its dictionary references. Call
+    /// [`Self::mark_in_use`] before the next thread takes the engine.
+    ///
+    /// This method is for engine pools, not for general use. If a thread still uses the
+    /// engine, the exit cleanup frees the engine under that thread and the process crashes.
+    #[doc(hidden)]
+    pub fn mark_idle(&self) {
+        if let Ok(handle) = self.handle.lock() {
+            let _ = set_engine_idle(*handle, self.generation, true);
+        }
+    }
+
+    /// Marks this engine as held by a thread, so the process-exit cleanup skips it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TesseractError::NullPointerError`] when the process-exit cleanup already
+    /// freed the engine. The caller must not use the engine then. Returns
+    /// [`TesseractError::MutexLockError`] when a panic poisoned the engine registry.
+    #[doc(hidden)]
+    pub fn mark_in_use(&self) -> Result<()> {
+        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        match set_engine_idle(*handle, self.generation, false) {
+            Some(true) => Ok(()),
+            Some(false) => Err(TesseractError::NullPointerError),
+            None => Err(TesseractError::MutexLockError),
+        }
+    }
+
+    /// Returns `true` when the process-exit cleanup may free this engine.
+    #[doc(hidden)]
+    pub fn is_idle(&self) -> bool {
+        let Ok(handle) = self.handle.lock() else {
+            return false;
+        };
+        LIVE_ENGINES
+            .lock()
+            .map(|live| {
+                live.iter().any(|engine| {
+                    engine.addr == *handle as usize && engine.generation == self.generation && engine.idle
+                })
+            })
+            .unwrap_or(false)
     }
 
     /// Gets the version of the Tesseract engine.
@@ -1778,7 +1833,7 @@ impl Drop for TesseractAPI {
     fn drop(&mut self) {
         if let Ok(handle) = self.handle.lock() {
             unsafe {
-                if !(*handle).is_null() && unregister_engine(*handle) {
+                if !(*handle).is_null() && unregister_engine(*handle, self.generation) {
                     TessBaseAPIEnd(*handle);
                     TessBaseAPIDelete(*handle);
                 }
@@ -1806,11 +1861,14 @@ impl Clone for TesseractAPI {
             });
 
         let new_handle = unsafe { TessBaseAPICreate() };
-        if !new_handle.is_null() {
-            register_engine(new_handle);
-        }
+        let generation = if new_handle.is_null() {
+            0
+        } else {
+            register_engine(new_handle)
+        };
         let new_api = TesseractAPI {
             handle: Arc::new(Mutex::new(new_handle)),
+            generation,
             config: Arc::new(Mutex::new(config.clone())),
         };
 
@@ -1824,30 +1882,62 @@ impl Clone for TesseractAPI {
     }
 }
 
-/// Addresses of live Tesseract engine handles (`TessBaseAPICreate` pointers, held as
-/// `usize`).
-///
-/// A per-thread engine cache in the extraction pipeline keeps an initialized engine so
-/// tessdata isn't reloaded per image. When the process exits through C `exit()` — as an
-/// embedded extension does at interpreter shutdown — Rust does not run thread-local
-/// destructors, so those cached engines never `Drop` and never call `TessBaseAPIEnd`.
-/// Their shared dictionary DAWG references then stay in tesseract's process-global
-/// `DawgCache`, whose C++ static destructor reports them as leaks. Tracking live handles
-/// lets the `atexit` handler `End` them first, so the cache is empty at teardown.
-static LIVE_ENGINES: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+/// One live Tesseract engine, as the process-exit cleanup sees it.
+struct LiveEngine {
+    /// The `TessBaseAPICreate` pointer, held as `usize`.
+    addr: usize,
+    /// Unique per registration. The allocator can hand out the address of a freed engine
+    /// again, so a stale owner must match on the generation too, or it would act on the
+    /// new engine at that address.
+    generation: u64,
+    /// `true` once the owner has declared that no thread holds the engine. The exit
+    /// cleanup frees only idle engines.
+    idle: bool,
+}
 
-/// Records a freshly created engine handle as live.
-fn register_engine(handle: *mut c_void) {
-    if let Ok(mut live) = LIVE_ENGINES.lock() {
-        live.push(handle as usize);
+/// Live Tesseract engine handles.
+///
+/// A pool of initialized engines keeps tessdata from loading per image. When the
+/// process exits through C `exit()` — as an embedded extension does at interpreter
+/// shutdown — Rust does not drop that pool, so its engines never call `TessBaseAPIEnd`.
+/// Their shared dictionary DAWG references then stay in tesseract's process-global
+/// `DawgCache`, whose C++ static destructor reports them as leaks. The `atexit` handler
+/// `End`s the idle engines first, so the cache is empty at teardown.
+///
+/// A new engine is in use: `exit()` can run on any thread while another thread still
+/// recognizes with an engine, and freeing that engine under the thread crashes the
+/// process. The owner calls [`TesseractAPI::mark_idle`] when it parks the engine and
+/// [`TesseractAPI::mark_in_use`] when it takes the engine again. The handler skips an
+/// engine in use and does not wait for it. C++ static destructors still run while a busy
+/// worker continues, so the exit window is narrowed, not closed.
+static LIVE_ENGINES: Mutex<Vec<LiveEngine>> = Mutex::new(Vec::new());
+
+/// Records a freshly created engine handle as live and in use. Returns its generation,
+/// or 0 when the registry lock is poisoned: no live entry carries generation 0.
+fn register_engine(handle: *mut c_void) -> u64 {
+    static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+    let generation = NEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
+    match LIVE_ENGINES.lock() {
+        Ok(mut live) => {
+            live.push(LiveEngine {
+                addr: handle as usize,
+                generation,
+                idle: false,
+            });
+            generation
+        }
+        Err(_) => 0,
     }
 }
 
-/// Removes `handle` from the live set. Returns `true` if it was present — meaning the
-/// caller now owns finalizing it; `false` means the process-exit cleanup already did.
-fn unregister_engine(handle: *mut c_void) -> bool {
+/// Removes the engine `handle` of this `generation` from the live set. Returns `true` if
+/// it was present — meaning the caller now owns finalizing it; `false` means the
+/// process-exit cleanup already did, even when a newer engine now has the same address.
+fn unregister_engine(handle: *mut c_void, generation: u64) -> bool {
     if let Ok(mut live) = LIVE_ENGINES.lock()
-        && let Some(pos) = live.iter().position(|&h| h == handle as usize)
+        && let Some(pos) = live
+            .iter()
+            .position(|engine| engine.addr == handle as usize && engine.generation == generation)
     {
         live.swap_remove(pos);
         return true;
@@ -1855,22 +1945,48 @@ fn unregister_engine(handle: *mut c_void) -> bool {
     false
 }
 
-/// Finalizes every still-live engine: `End` (releases its DAWG refs) then `Delete`.
-/// Draining under the lock keeps finalization exactly-once against a concurrent `Drop`.
-fn finalize_live_engines() {
-    let handles: Vec<usize> = match LIVE_ENGINES.lock() {
-        Ok(mut live) => std::mem::take(&mut *live),
-        Err(_) => return,
+/// Sets the idle flag of a live engine. Returns `Some(false)` when the engine is not live,
+/// because the process-exit cleanup already freed it. A newer engine at the same address
+/// does not count. Returns `None` when a panic poisoned the registry lock.
+fn set_engine_idle(handle: *mut c_void, generation: u64, idle: bool) -> Option<bool> {
+    let Ok(mut live) = LIVE_ENGINES.lock() else {
+        return None;
     };
-    for h in handles {
-        let handle = h as *mut c_void;
+    match live
+        .iter_mut()
+        .find(|engine| engine.addr == handle as usize && engine.generation == generation)
+    {
+        Some(engine) => {
+            engine.idle = idle;
+            Some(true)
+        }
+        None => Some(false),
+    }
+}
+
+/// Finalizes every idle engine: `End` (releases its DAWG refs) then `Delete`. An engine
+/// in use stays registered and is not touched.
+///
+/// The registry lock is held across the frees. [`set_engine_idle`] takes the same lock,
+/// so an owner cannot take back an engine that this function is freeing, and a taker
+/// that arrives later finds the engine gone and gets an error instead of a freed handle.
+fn finalize_idle_engines() {
+    let Ok(mut live) = LIVE_ENGINES.lock() else {
+        return;
+    };
+    live.retain(|engine| {
+        if !engine.idle {
+            return true;
+        }
+        let handle = engine.addr as *mut c_void;
         if !handle.is_null() {
             unsafe {
                 TessBaseAPIEnd(handle);
                 TessBaseAPIDelete(handle);
             }
         }
-    }
+        false
+    });
 }
 
 static TESSERACT_CLEANUP: OnceLock<()> = OnceLock::new();
@@ -1879,10 +1995,15 @@ unsafe extern "C" {
     fn atexit(f: extern "C" fn()) -> c_int;
 }
 
-/// Process-exit handler: finalize every engine whose owner never ran `Drop`, so
-/// tesseract's global `DawgCache` static destructor finds an empty cache.
+/// Process-exit handler: finalize every idle engine whose owner never ran `Drop`, so
+/// tesseract's global `DawgCache` static destructor finds an empty cache. An engine in
+/// use is skipped, not waited for: the process exits without delay.
+///
+/// This handler takes the registry mutex and calls into C++. It is safe as an `atexit`
+/// hook only. Never call it, or `exit()`, from a signal handler: it can deadlock on the
+/// mutex the interrupted thread holds.
 extern "C" fn tesseract_atexit_cleanup() {
-    finalize_live_engines();
+    finalize_idle_engines();
 }
 
 /// Registers [`tesseract_atexit_cleanup`] once.
@@ -2074,12 +2195,19 @@ mod shim {
 mod live_engine_tests {
     use super::*;
 
+    /// The tests that call the exit cleanup free every idle engine in the process, so they
+    /// run one at a time.
+    static EXIT_CLEANUP_TESTS: Mutex<()> = Mutex::new(());
+
     fn is_registered(handle: usize) -> bool {
-        LIVE_ENGINES.lock().unwrap().contains(&handle)
+        LIVE_ENGINES.lock().unwrap().iter().any(|engine| engine.addr == handle)
     }
 
     #[test]
     fn engine_registered_on_create_and_released_on_drop() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let api = TesseractAPI::new().expect("create engine");
         let addr = *api.handle.lock().unwrap() as usize;
         assert!(is_registered(addr), "a new engine should be tracked as live");
@@ -2107,15 +2235,126 @@ mod live_engine_tests {
     }
 
     #[test]
+    fn exit_cleanup_frees_an_idle_engine_and_skips_an_engine_in_use() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let busy = TesseractAPI::new().expect("create engine");
+        let idle = TesseractAPI::new().expect("create engine");
+        let busy_addr = *busy.handle.lock().unwrap() as usize;
+        let idle_addr = *idle.handle.lock().unwrap() as usize;
+        assert!(!idle.is_idle(), "a new engine counts as in use");
+        idle.mark_idle();
+        assert!(idle.is_idle());
+
+        finalize_idle_engines();
+
+        assert!(is_registered(busy_addr), "the cleanup must not free an engine in use");
+        assert!(!is_registered(idle_addr), "the cleanup must free an idle engine");
+        drop(idle);
+        drop(busy);
+        assert!(
+            !is_registered(busy_addr),
+            "the owner still frees an engine the cleanup skipped"
+        );
+    }
+
+    #[test]
+    fn taking_an_engine_back_fails_once_the_exit_cleanup_freed_it() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let api = TesseractAPI::new().expect("create engine");
+        api.mark_idle();
+        finalize_idle_engines();
+        assert!(matches!(api.mark_in_use(), Err(TesseractError::NullPointerError)));
+    }
+
+    /// Removes a made-up engine from the registry when the test ends, even by a failed
+    /// assertion, so the exit cleanup never tries to free it.
+    struct ForgetFakeEngine(usize);
+
+    impl Drop for ForgetFakeEngine {
+        fn drop(&mut self) {
+            if let Ok(mut live) = LIVE_ENGINES.lock() {
+                live.retain(|engine| engine.addr != self.0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_poisoned_registry_is_reported_and_not_read_as_a_freed_engine() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let poisoner = std::thread::spawn(|| {
+            let _held = LIVE_ENGINES.lock().unwrap();
+            panic!("poison the registry on purpose");
+        });
+        assert!(poisoner.join().is_err());
+        // ~keep: a made-up address; the lookup fails on the lock before it reads the list.
+        let outcome = set_engine_idle(0x7100_usize as *mut c_void, 1, false);
+        LIVE_ENGINES.clear_poison();
+        assert_eq!(outcome, None, "a poisoned registry is not the same as a freed engine");
+    }
+
+    #[test]
+    fn a_stale_owner_cannot_reach_a_newer_engine_at_the_same_address() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // ~keep: a made-up address; nothing here calls into tesseract with it.
+        let address = 0x7000_usize as *mut c_void;
+        let _forget = ForgetFakeEngine(address as usize);
+        let stale = register_engine(address);
+        assert!(unregister_engine(address, stale), "the cleanup freed the first engine");
+        let newer = register_engine(address);
+        assert_ne!(stale, newer);
+
+        assert!(
+            set_engine_idle(address, stale, true) == Some(false),
+            "the stale owner must not flag the newer engine idle"
+        );
+        assert!(
+            !unregister_engine(address, stale),
+            "the stale owner must not free the newer engine"
+        );
+        assert!(
+            LIVE_ENGINES
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|engine| engine.generation == newer && !engine.idle),
+            "the newer engine stays registered and in use"
+        );
+        assert_eq!(set_engine_idle(address, newer, true), Some(true));
+        assert!(unregister_engine(address, newer));
+    }
+
+    #[test]
+    fn taking_an_idle_engine_back_makes_the_exit_cleanup_skip_it() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let api = TesseractAPI::new().expect("create engine");
+        let addr = *api.handle.lock().unwrap() as usize;
+        api.mark_idle();
+        api.mark_in_use().expect("a live engine can be taken back");
+        finalize_idle_engines();
+        assert!(is_registered(addr));
+    }
+
+    #[test]
     fn forgotten_engine_stays_registered_for_exit_cleanup() {
         let api = TesseractAPI::new().expect("create engine");
         let addr = *api.handle.lock().unwrap() as usize;
+        let generation = api.generation;
         std::mem::forget(api);
         assert!(
             is_registered(addr),
             "a forgotten engine must stay registered so the exit cleanup can End it"
         );
-        assert!(unregister_engine(addr as *mut c_void));
+        assert!(unregister_engine(addr as *mut c_void, generation));
         unsafe {
             TessBaseAPIEnd(addr as *mut c_void);
             TessBaseAPIDelete(addr as *mut c_void);
