@@ -15,6 +15,8 @@ const MAX_EVIDENCE_BYTES: usize = 512 * 1024;
 const MIN_LINES: usize = 4;
 const MAX_LINES: usize = 12;
 const MAX_COLUMNS: usize = 6;
+// A sixth of a line is a judgement call, not a derived bound. Too small refuses a real caption,
+// which only keeps the table, so it errs narrow; the paint proof still has to accept the block. ~keep
 const MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR: u32 = 6;
 const MARGIN_TOLERANCE_MIN_PX: u32 = 1;
 
@@ -156,8 +158,8 @@ fn follows_wrapped_caption_shape(lines: &[SourceElement<'_>]) -> bool {
     // for the whole block. The floor keeps small rasters at least as lenient as a fixed pixel.
     let mut heights: Vec<u32> = lines.iter().map(|line| line.bounds.bottom - line.bounds.top).collect();
     heights.sort_unstable();
-    let margin_tolerance =
-        (heights[heights.len() / 2] / MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR).max(MARGIN_TOLERANCE_MIN_PX);
+    let median_height = heights[(heights.len() - 1) / 2];
+    let margin_tolerance = (median_height / MARGIN_TOLERANCE_LINE_HEIGHT_DIVISOR).max(MARGIN_TOLERANCE_MIN_PX);
     let first_width = first.bounds.right - first.bounds.left;
     let last_width = last.bounds.right - last.bounds.left;
     last_width <= first_width / 2
