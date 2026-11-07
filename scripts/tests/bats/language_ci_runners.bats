@@ -208,7 +208,7 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	[ "$(grep -c '^live=1 stack=33554432 backtrace=' "$XBERG_WORK/cargo-env")" -eq 15 ]
 	[ "$(grep -c '^live=1 stack=33554432 backtrace=full$' "$XBERG_WORK/cargo-env")" -eq 5 ]
 	xberg_assert_output_contains 'JPEG recovery model tests expected 9, passed 9'
-	grep -Fq -- '--features full,formula-recognition,bundle-tessdata-eng --all-targets --verbose' "$XBERG_TRACE"
+	grep -Fq -- '--features full,formula-recognition,classification-onnx,bundle-tessdata-eng --all-targets --verbose' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-candle-ocr --features trocr,paddleocr-vl,glm-ocr,deepseek-ocr' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-gliner --features candle,ort-dynamic' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-libheif --all-targets' "$XBERG_TRACE"
@@ -223,7 +223,7 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'integration-test targets: 2 (chunks of 1)'
 	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 16 ]
-	local features='full-no-heic,heic,formula-recognition,bundle-tessdata-eng'
+	local features='full-no-heic,heic,formula-recognition,classification-onnx,bundle-tessdata-eng'
 	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --lib --benches --verbose" "$XBERG_TRACE"
 	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --test first-case --verbose" "$XBERG_TRACE"
 	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --test second_case --verbose" "$XBERG_TRACE"
