@@ -5078,6 +5078,9 @@ struct TableCoverage {
     row_words: Vec<ahash::AHashSet<String>>,
     /// Every whitespace-separated word of every cell, normalized.
     words: ahash::AHashSet<String>,
+    /// Each cell's glyphs, concatenated and kept apart, so a run is tested against one cell and
+    /// never across the seam of two.
+    cells: Vec<String>,
 }
 
 /// Normalized length, in characters, at which [`TableCoverage::carries`] stops matching a segment against the
@@ -5093,7 +5096,13 @@ impl TableCoverage {
         let mut row_texts = Vec::new();
         let mut row_words = Vec::new();
         let mut words = ahash::AHashSet::new();
+        let mut cells = Vec::new();
         for row in rows {
+            cells.extend(
+                row.iter()
+                    .map(|cell| normalize_for_table_coverage(cell))
+                    .filter(|cell| !cell.is_empty()),
+            );
             row_texts.push(
                 row.iter()
                     .map(|cell| normalize_for_table_coverage(cell))
@@ -5114,12 +5123,13 @@ impl TableCoverage {
             rows: row_texts,
             row_words,
             words,
+            cells,
         }
     }
 
     /// Whether the grid represents `text`. A run shorter than [`MIN_CROSS_CELL_RUN_GLYPHS`] is
-    /// carried when every word is a whole cell word anywhere in the table; a longer one when one
-    /// row holds it, either as a run inside that row's cells or as every word a whole cell word of
+    /// carried when every word is a whole cell word anywhere in the table or one cell holds it; a
+    /// longer one when one row holds it, either as a run inside that row's cells or as every word a whole cell word of
     /// that row. A run is not matched against the whole table's concatenated glyphs, which lets
     /// digits straddling unrelated cells stand in for it.
     fn carries(&self, text: &str) -> bool {
@@ -5133,7 +5143,10 @@ impl TableCoverage {
             .filter(|word| !word.is_empty())
             .collect();
         if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
-            return text_words.iter().all(|word| self.words.contains(word));
+            // A marker or a sign splits one printed cell into several segments while the grid holds
+            // it whole, so a piece inside one cell is that cell's text. ~keep
+            return text_words.iter().all(|word| self.words.contains(word))
+                || self.cells.iter().any(|cell| cell.contains(&normalized));
         }
         self.rows.iter().any(|row| row.contains(&normalized))
             || self

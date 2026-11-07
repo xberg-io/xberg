@@ -198,6 +198,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Table rows are no longer repeated as prose when a marker or sign splits a cell.** (#2443)
+  A short run inside one table cell, such as a superscript citation or either side of a multiplication sign, is now treated as that cell's text instead of being emitted a second time beside the table.
+
 - **(pdf): Rules that belong to another section no longer split a ruled band into columns.** (#2443)
   A column rule lying wholly beyond the ruled rows is no longer projected across them when other rules run through them, so a list column beside a section divider is not read as a two-column table that swallows the page heading.
 

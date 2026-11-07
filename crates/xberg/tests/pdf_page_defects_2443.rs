@@ -62,3 +62,24 @@ async fn should_keep_a_three_column_list_beside_a_section_divider_out_of_a_table
         document.tables
     );
 }
+
+#[tokio::test]
+async fn should_not_repeat_table_rows_whose_cells_a_marker_or_sign_split() {
+    let document = extract_page(
+        "arxiv-2403.02163v1-p2",
+        "5844dbd6a8f7d58cdbd1978618238bfa5247b8c68f7d0506e350f264a1a25898",
+    )
+    .await;
+    let repeated: Vec<&str> = document
+        .content
+        .lines()
+        .filter(|line| !line.starts_with('|'))
+        .filter(|line| ["PICCOLO", "KUMC", "SUN", "UAH"].iter().any(|row| line.contains(row)))
+        .filter(|line| !line.starts_with("**Table"))
+        .collect();
+    assert!(
+        repeated.is_empty(),
+        "table rows were emitted again as prose: {repeated:?}\n{}",
+        document.content
+    );
+}

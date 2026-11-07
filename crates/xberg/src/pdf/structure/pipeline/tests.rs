@@ -2884,6 +2884,38 @@ fn a_short_run_is_not_carried_by_digits_straddling_two_cells() {
     );
 }
 
+/// A superscript marker or a multiplication sign splits one printed cell into separate segments,
+/// while the grid holds the cell whole. Each piece is a short run inside one cell, so it is the
+/// grid's text, not a second copy to emit as prose.
+#[test]
+fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
+    let coverage = vec![TableCoverage::from_rows(
+        crate::types::BoundingBox {
+            x0: 30.0,
+            y0: 300.0,
+            x1: 560.0,
+            y1: 400.0,
+        },
+        [
+            vec!["PICCOLO21", "854\u{d7}480 and 1920\u{d7}1080"],
+            vec!["KUMC22", "various"],
+        ],
+    )];
+    let segments = vec![
+        column_seg("PICCOLO", 40.0, 40.0, 380.0),
+        column_seg("21", 82.0, 6.0, 383.0),
+        column_seg("854", 300.0, 14.0, 380.0),
+        column_seg("480", 318.0, 14.0, 380.0),
+        column_seg("22", 82.0, 6.0, 363.0),
+        column_seg("0001", 40.0, 20.0, 350.0),
+    ];
+    let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+        .into_iter()
+        .map(|seg| seg.text)
+        .collect();
+    assert_eq!(kept, vec!["0001".to_string()], "only the run no cell holds survives");
+}
+
 /// A form's line-item cells: every word of the printed instruction on lines 43 and 44 of IRS
 /// Form 8829 occurs in them, but no row holds the instruction, as a run or as its words.
 fn form_line_coverage() -> Vec<TableCoverage> {
