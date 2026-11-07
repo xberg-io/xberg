@@ -187,6 +187,7 @@ fn probe_standard_image(
 }
 
 #[cfg(any(
+    all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")),
     all(feature = "liter-llm", not(target_arch = "wasm32")),
     feature = "candle-trocr",
     feature = "candle-paddleocr-vl",

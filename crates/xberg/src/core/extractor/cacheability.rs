@@ -126,13 +126,18 @@ pub(crate) async fn scope<F: Future>(future: F) -> F::Output {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn inherit<F: Future>(future: F) -> impl Future<Output = F::Output> {
+    use tracing::instrument::WithSubscriber;
+
     let context = current();
+    // A spawned task runs on a worker with no thread-local dispatcher, so a caller scoped with
+    // `with_default` / `set_default` would lose the spans of every spawned batch or OCR task.
     async move {
         match context {
             Some(context) => ASYNC_CONTEXT.scope(context, future).await,
             None => future.await,
         }
     }
+    .with_current_subscriber()
 }
 
 #[cfg(any(

@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ocr): Read a scan's embedded JPEG at the resolution its placement proves.** (#2530)
+  When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Unproven placements keep the previous behavior, a read the recognition-noise check rejects keeps the original refusal, and a retry that still recovers nothing reports why each image failed beside the original error.
+
+- **(classification): Add an experimental Rust API for CPU ONNX NLI.** (#2335)
+  Prepare pinned model artifacts explicitly; classification preserves model identity, bounded execution and cancellation.
+
 - **(layout): Return source-proven text for selected native PDF layout regions in Rust.** (#2357)
   `Engine::extract_with_layout_region_text` returns region text in page reading order and omits unproved or redacted text.
   An explicitly declared crop box is supported when its resolved geometry exactly matches the media box.
@@ -193,6 +199,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
+
+- **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
+  `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
+
+- **(ocr): Place mixed-route OCR lines in the resampled frame when matching them to native text.**
+  OCR paragraphs are in the frame preprocessing resampled the render to, but the page-text merge scaled them by the render's size, so every OCR box was twice its true size at a 150 to 300 DPI resample, owned no native line and the native lines were prepended a second time (#2313).
+
+- **(redaction): Run external-redaction extraction on the shared 16 MiB runtime.**
+  The poll chain of `extract_with_external_redaction` needs about 2.2 MB, which overflowed the roughly 2 MB host thread of an FFI caller such as the JVM and crashed the process. Dropping the call still cancels the work.
 
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
