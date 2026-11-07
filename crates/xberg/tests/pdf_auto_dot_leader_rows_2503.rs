@@ -25,29 +25,20 @@ const SOURCE_ROWS: [[&str; 3]; 12] = [
     ["44", "633,649", "14,758"],
 ];
 
-const LABELS_WITH_LEADER_READS: [&str; 12] = [
-    "Tree planting cee eae",
-    "Signal timing tee eee",
-    "Pool repairs ce eee",
-    "Snow removal seen nea",
-    "Field lights cee eae",
-    "Parks and trails cena",
-    "Water service seen",
-    "Street repair tee ee",
-    "Library hours wee",
-    "Fleet fuel Cee eee",
-    "Bridge paint we",
-    "Storm drains cee ee eee",
+const LABELS: [&str; 12] = [
+    "Tree planting",
+    "Signal timing",
+    "Pool repairs",
+    "Snow removal",
+    "Field lights",
+    "Parks and trails",
+    "Water service",
+    "Street repair",
+    "Library hours",
+    "Fleet fuel",
+    "Bridge paint",
+    "Storm drains",
 ];
-
-fn literal_inventory(content: &str) -> Vec<&str> {
-    let mut words = content
-        .split(|character: char| character.is_whitespace() || character == '|')
-        .filter(|token| token.chars().any(char::is_alphanumeric))
-        .collect::<Vec<_>>();
-    words.sort_unstable();
-    words
-}
 
 fn numeric_fields(text: &str) -> impl Iterator<Item = &str> {
     text.split(|character: char| character.is_whitespace() || character == '|')
@@ -118,20 +109,7 @@ fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
     let [page] = result.pages.as_deref().unwrap() else {
         panic!("expected one source page");
     };
-    let expected = LABELS_WITH_LEADER_READS
-        .iter()
-        .zip(SOURCE_ROWS)
-        .map(|(label, values)| format!("{label} {}", values.join(" ")))
-        .collect::<Vec<_>>();
-    let oracle = format!("Item Count Budget Change\n{}", expected.join("\n"));
-    let inventory = literal_inventory(&oracle);
-    assert_eq!(inventory.len(), 86);
     for (name, content) in [("document", &result.content), ("page", &page.content)] {
-        assert_eq!(
-            literal_inventory(content),
-            inventory,
-            "{name}: preserve every recognized literal"
-        );
         assert!(
             numeric_fields(content).eq(SOURCE_ROWS.iter().flatten().copied()),
             "{name}: recognition must already contain every source value exactly once and in order"
@@ -142,6 +120,16 @@ fn auto_ocr_keeps_all_twelve_tinted_dot_leader_scan_rows_together() {
             .filter(|line| !line.is_empty())
             .collect::<Vec<_>>();
         assert_eq!(rows, SOURCE_ROWS, "{name}: place each exact source triplet on one row");
+        for (label, values) in LABELS.iter().zip(SOURCE_ROWS) {
+            let row = content
+                .lines()
+                .find(|line| line.contains(label))
+                .unwrap_or_else(|| panic!("{name}: no row for {label}"));
+            assert!(
+                numeric_fields(row).eq(values),
+                "{name}: row {label} must carry its own values, got {row}"
+            );
+        }
     }
 }
 

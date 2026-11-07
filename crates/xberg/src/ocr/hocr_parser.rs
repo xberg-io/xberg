@@ -2272,6 +2272,35 @@ mod tests {
         assert!(!hocr_matches_all_proved_table_fragments(hocr, 1, vec![&unmatched]));
     }
 
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn proved_fragments_do_not_claim_a_line_with_an_unproved_word() {
+        let hocr = r#"<div class="ocr_page" title="ppageno 0">
+          <p class="ocr_par"><span class="ocr_line" title="bbox 10 20 70 40">
+            <span class="ocrx_word" title="bbox 10 20 30 40; x_wconf 90">One</span>
+            <span class="ocrx_word" title="bbox 40 20 70 40; x_wconf 90">Two</span>
+          </span></p>
+        </div>"#;
+        let one = HocrWord {
+            text: "One".to_owned(),
+            left: 10,
+            top: 20,
+            width: 20,
+            height: 20,
+            confidence: 90.0,
+        };
+        let two = HocrWord {
+            text: "Two".to_owned(),
+            left: 40,
+            top: 20,
+            width: 30,
+            height: 20,
+            confidence: 90.0,
+        };
+        assert!(hocr_matches_all_proved_table_fragments(hocr, 1, vec![&one, &two]));
+        assert!(!hocr_matches_all_proved_table_fragments(hocr, 1, vec![&one]));
+    }
+
     #[test]
     fn claimed_row_does_not_affect_retained_line_geometry_or_style() {
         let hocr = r#"<div class="ocr_page" title="ppageno 0">

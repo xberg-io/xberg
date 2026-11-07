@@ -35,6 +35,9 @@ pub(in crate::ocr::processor::execution) fn can_hold_leader_raster(
         .is_some_and(|peak| peak.saturating_add(extra) <= limits.max_content_size as u64)
 }
 
+// Runs only after the stock recovery declines a known full-page sparse-text scan. A wider gate
+// would let a text column pass for a leader, so every leader must also be proved as dots on the
+// raster and every word must match an hOCR occurrence exactly. ~keep
 pub(in crate::ocr::processor::execution) fn recover_dot_leader_rows(
     tsv: &str,
     content: &str,
