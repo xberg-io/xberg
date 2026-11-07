@@ -518,3 +518,32 @@ mod input_checks {
         assert_eq!(failures, vec!["b.pdf: no output"]);
     }
 }
+
+#[test]
+fn regression_page_keeps_raised_note_marker_in_its_sentence_beside_other_columns() {
+    assert_regression_page_has_script(
+        "fr-2026-08190-hcbs-p2.pdf",
+        "Medicaid Director Letter \\# 22–003<sup>2</sup> to release the first official version",
+    );
+}
+
+#[test]
+fn regression_page_keeps_ordinal_suffixes_in_the_author_line() {
+    assert_regression_page_has_script(
+        "arxiv-2403.01153v1-p1.pdf",
+        "1st Zhiyuan He, 2nd Ke Deng, 3rd Jiangchao Gong,",
+    );
+}
+
+#[test]
+fn regression_page_keeps_stacked_scripts_in_the_table_caption() {
+    assert_regression_page_has_script(
+        "arxiv-2312.13591v2-p5.pdf",
+        "in Σ~c~ D , Ξ~c~ D and Σ~c~ D , Ξ~c~ D sys-",
+    );
+}
+
+#[test]
+fn regression_page_keeps_a_lone_squared_marker_in_a_display_formula() {
+    assert_regression_page_has_script("gutenberg-33283-p27.pdf", "d<sup>2</sup>y");
+}

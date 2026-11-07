@@ -360,7 +360,7 @@ impl PdfDocument {
             self.extract_spans_raw_filtered(page_index, excluded_layers, excluded_inks)?
         };
 
-        self.order_extracted_spans(page_index, reading_order, spans)
+        self.order_extracted_spans(page_index, reading_order, spans, false)
     }
 
     fn order_extracted_spans(
@@ -368,6 +368,7 @@ impl PdfDocument {
         page_index: usize,
         reading_order: ReadingOrder,
         mut spans: Vec<crate::layout::TextSpan>,
+        order_scripts_on_base_rows: bool,
     ) -> Result<Vec<crate::layout::TextSpan>> {
         // Drop text lying entirely off the MediaBox - a doc that reuses one big
         // Form XObject across pages relies on the `W n` clip to hide the off-page
@@ -385,6 +386,20 @@ impl PdfDocument {
         self.drop_offpage_spans(page_index, &mut spans);
 
         match reading_order {
+            ReadingOrder::TopToBottom if order_scripts_on_base_rows => {
+                // Rows are formed on the base baseline of a raised marker, so a marker is not
+                // sorted into a neighbouring column's row. The spans keep their own baselines
+                // and their stream `sequence`; only the sort key differs. ~keep
+                let keys = crate::extractors::text::script_ordering_baselines(&spans);
+                let mut keyed: Vec<(f32, crate::layout::TextSpan)> = keys.into_iter().zip(spans).collect();
+                crate::utils::sort_by_visual_rows(
+                    &mut keyed,
+                    |(key, _)| *key,
+                    |(_, span)| span.bbox.x,
+                    |(_, span)| span.font_size.max(span.bbox.height),
+                );
+                spans = keyed.into_iter().map(|(_, span)| span).collect();
+            }
             ReadingOrder::TopToBottom => {
                 crate::utils::sort_by_visual_rows(
                     &mut spans,
@@ -650,7 +665,10 @@ impl PdfDocument {
     /// [`Self::extract_page_text_with_options`]. Superscript baselines are
     /// restored after the extractor's sorting pass, before deduplication and
     /// merging, so structure consumers can retain script annotations. Explicit
-    /// text rise remains in [`crate::layout::TextSpan::text_rise`].
+    /// text rise remains in [`crate::layout::TextSpan::text_rise`]. With
+    /// [`ReadingOrder::TopToBottom`] rows are formed on the base baseline of a
+    /// raised marker (see [`crate::extractors::text::script_ordering_baselines`]);
+    /// the spans keep their own baselines and `sequence`.
     ///
     /// # Errors
     /// Returns an error when the page, fonts or content cannot be decoded.
@@ -666,7 +684,7 @@ impl PdfDocument {
             HashSet::new(),
             ScriptGeometry::Preserve,
         )?;
-        let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
+        let spans = self.order_extracted_spans(page_index, reading_order, spans, true)?;
         let chars = spans.iter().flat_map(|span| span.to_chars()).collect();
         let media_box = self.get_page_media_box(page_index)?;
         Ok(crate::layout::PageText {

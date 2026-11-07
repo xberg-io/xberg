@@ -8080,3 +8080,50 @@ mod table_header_metadata_tests {
         assert_eq!(markdown, "| A1 | B1 |\n| --- | --- |\n| A2 | B2 |\n");
     }
 }
+
+fn sized_seg(text: &str, x: f32, y: f32, width: f32, font_size: f32) -> SegmentData {
+    let mut segment = seg_at(text, x, y, font_size, false);
+    segment.width = width;
+    segment
+}
+
+fn paragraph_count(segments: Vec<SegmentData>) -> usize {
+    blocks_to_paragraphs(segments, &[], &[]).len()
+}
+
+#[test]
+fn raised_marker_up_to_half_an_em_stays_in_its_paragraph() {
+    let segments = vec![
+        sized_seg("Total", 10.0, 700.0, 30.0, 10.0),
+        sized_seg("3", 40.5, 704.4, 3.0, 6.0),
+        sized_seg("amounts shown", 44.0, 700.0, 60.0, 10.0),
+    ];
+    assert_eq!(paragraph_count(segments), 1);
+}
+
+#[test]
+fn deck_line_below_a_large_title_is_not_a_script_of_the_title() {
+    let segments = vec![
+        sized_seg("Annual Report", 10.0, 700.0, 200.0, 40.0),
+        sized_seg("A short summary of the year", 10.0, 682.0, 150.0, 12.0),
+    ];
+    assert_eq!(paragraph_count(segments), 2);
+}
+
+#[test]
+fn first_line_beside_a_drop_cap_is_not_a_script_of_the_cap() {
+    let segments = vec![
+        sized_seg("T", 10.0, 700.0, 25.0, 40.0),
+        sized_seg("he quick brown fox jumps", 38.0, 685.5, 130.0, 12.0),
+    ];
+    assert_eq!(paragraph_count(segments), 2);
+}
+
+#[test]
+fn raised_marker_that_leads_a_line_stays_its_own_paragraph() {
+    let segments = vec![
+        sized_seg("1", 90.0, 704.5, 4.0, 8.0),
+        sized_seg("University", 95.0, 700.0, 70.0, 12.0),
+    ];
+    assert_eq!(paragraph_count(segments), 2);
+}

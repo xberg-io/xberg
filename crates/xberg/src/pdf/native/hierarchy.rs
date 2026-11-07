@@ -43,13 +43,13 @@ const TWO_UP_ROW_GRID_TOLERANCE_PTS: f32 = 0.5;
 // cells wrap to two or three lines still pairs a half or a third. ~keep
 const MAX_TWO_UP_ROW_PAIRING_FRACTION: f32 = 0.25;
 const INLINE_SCRIPT_LOOKBACK: usize = 8;
-const INLINE_SCRIPT_MIN_FONT_RATIO: f32 = 0.5;
-const INLINE_SCRIPT_MAX_FONT_RATIO: f32 = 0.8;
-const INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM: f32 = 0.08;
-const INLINE_SCRIPT_MAX_BASELINE_SHIFT_EM: f32 = 0.35;
-const INLINE_SCRIPT_MAX_SUFFIX_GAP_EM: f32 = 0.12;
+const INLINE_SCRIPT_MIN_FONT_RATIO: f32 = xberg_native_pdf::extractors::text::SCRIPT_MIN_FONT_RATIO;
+const INLINE_SCRIPT_MAX_FONT_RATIO: f32 = xberg_native_pdf::extractors::text::SCRIPT_MAX_FONT_RATIO;
+const INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM: f32 = xberg_native_pdf::extractors::text::SCRIPT_MIN_SHIFT_EM;
+const INLINE_SCRIPT_MAX_BASELINE_SHIFT_EM: f32 = xberg_native_pdf::extractors::text::SCRIPT_MAX_SHIFT_EM;
+const INLINE_SCRIPT_MAX_SUFFIX_GAP_EM: f32 = xberg_native_pdf::extractors::text::SCRIPT_MAX_SUFFIX_GAP_EM;
 const INLINE_SCRIPT_SAME_BASELINE_TOLERANCE_EM: f32 = 0.02;
-const INLINE_SCRIPT_MAX_CHARS: usize = 4;
+const INLINE_SCRIPT_MAX_CHARS: usize = xberg_native_pdf::extractors::text::SCRIPT_MARKER_MAX_CHARS;
 const INLINE_SCRIPT_MIN_WIDTH_COVERAGE: f32 = 0.7;
 const INLINE_SCRIPT_MAX_WIDTH_COVERAGE: f32 = 1.3;
 // Centered operators can cross baseline bands; compare centers at the structure path's half-point inline precision. ~keep
@@ -1057,6 +1057,8 @@ fn extract_final_spans_from_page_with_primes(
     }
     let used_structure_order = apply_rtl_structure_order(doc, page_index, &mut page_text_data.spans);
     if !used_structure_order {
+        let displaced_markers =
+            (script_geometry == ScriptGeometry::Preserve).then(|| displaced_script_markers(&page_text_data.spans));
         reorder_page_reading_order(
             &mut page_text_data.spans,
             page_text_data.page_width,
@@ -1064,8 +1066,90 @@ fn extract_final_spans_from_page_with_primes(
             page_index,
         );
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
+        if let Some(markers) = displaced_markers {
+            place_markers_after_bases(&mut page_text_data.spans, &markers);
+        }
     }
     Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
+}
+
+type MarkerIdentity = (usize, u32, u32, u32, String);
+
+fn marker_identity(span: &xberg_native_pdf::layout::TextSpan) -> MarkerIdentity {
+    (
+        span.sequence,
+        span.bbox.x.to_bits(),
+        span.bbox.y.to_bits(),
+        span.font_size.to_bits(),
+        span.text.clone(),
+    )
+}
+
+/// Row ordering keys on `bbox.y`, so the page-level reorders can sort a raised marker into a
+/// neighbouring column's row, away from its base. The genuine markers (`script_ordering_baselines`)
+/// are recorded with their base baseline, by content because the reorders read `sequence`. The
+/// reorders themselves run on the raw geometry, so nothing they decide about a page changes. ~keep
+fn displaced_script_markers(spans: &[xberg_native_pdf::layout::TextSpan]) -> HashMap<MarkerIdentity, f32> {
+    let keys = xberg_native_pdf::extractors::text::script_ordering_baselines(spans);
+    let mut markers: HashMap<MarkerIdentity, f32> = HashMap::new();
+    for (span, key) in spans.iter().zip(keys) {
+        if key.to_bits() != span.bbox.y.to_bits() {
+            markers.insert(marker_identity(span), key);
+        }
+    }
+    markers
+}
+
+/// Move each recorded marker to directly after the span it hangs from: a larger span on its base
+/// baseline that ends where the marker starts. Markers of one base keep their left-to-right order.
+/// A marker without such a base stays where the reorder put it.
+fn place_markers_after_bases(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    markers: &HashMap<MarkerIdentity, f32>,
+) {
+    if markers.is_empty() {
+        return;
+    }
+    let mut moved: Vec<(xberg_native_pdf::layout::TextSpan, f32)> = Vec::new();
+    let mut kept = Vec::with_capacity(spans.len());
+    let mut origin: Vec<usize> = Vec::new();
+    for (index, span) in spans.drain(..).enumerate() {
+        match markers.get(&marker_identity(&span)) {
+            Some(&baseline) => {
+                origin.push(index);
+                moved.push((span, baseline));
+            }
+            None => kept.push(span),
+        }
+    }
+    let base_of =
+        |marker: &xberg_native_pdf::layout::TextSpan, baseline: f32, pool: &[xberg_native_pdf::layout::TextSpan]| {
+            pool.iter().position(|base| {
+                let gap = marker.bbox.x - base.bbox.right();
+                base.bbox.y.to_bits() == baseline.to_bits()
+                    && base.font_size > marker.font_size / INLINE_SCRIPT_MAX_FONT_RATIO
+                    && (-base.font_size * 0.25..=base.font_size).contains(&gap)
+            })
+        };
+    let mut after_base: Vec<(usize, xberg_native_pdf::layout::TextSpan)> = Vec::new();
+    let mut unplaced: Vec<(usize, xberg_native_pdf::layout::TextSpan)> = Vec::new();
+    for ((marker, baseline), index) in moved.into_iter().zip(origin) {
+        match base_of(&marker, baseline, &kept) {
+            Some(base) => after_base.push((base, marker)),
+            None => unplaced.push((index, marker)),
+        }
+    }
+    after_base.sort_by(|(left_base, left), (right_base, right)| {
+        right_base.cmp(left_base).then(right.bbox.x.total_cmp(&left.bbox.x))
+    });
+    for (base, marker) in after_base {
+        kept.insert(base + 1, marker);
+    }
+    unplaced.sort_by_key(|(index, _)| *index);
+    for (index, marker) in unplaced {
+        kept.insert(index.min(kept.len()), marker);
+    }
+    *spans = kept;
 }
 
 fn project_final_spans(
@@ -1757,6 +1841,128 @@ mod tests {
                 "wrong logical order for {fixture}: {text:?}"
             );
         }
+    }
+
+    fn scripted_span(text: &str, x: f32, y: f32, width: f32, font_size: f32) -> TextSpan {
+        TextSpan {
+            text: text.to_string(),
+            bbox: Rect::new(x, y, width, font_size),
+            font_size,
+            ..TextSpan::default()
+        }
+    }
+
+    fn marker_beside_foreign_column() -> Vec<TextSpan> {
+        vec![
+            scripted_span("Total", 50.0, 700.0, 30.0, 10.0),
+            scripted_span("3", 80.5, 704.4, 3.0, 6.0),
+            scripted_span("Right column text", 340.0, 704.0, 90.0, 10.0),
+        ]
+    }
+
+    #[test]
+    fn script_ordering_moves_a_marker_that_shares_its_row_with_another_column() {
+        let spans = marker_beside_foreign_column();
+        let keys = xberg_native_pdf::extractors::text::script_ordering_baselines(&spans);
+        assert_eq!(keys, vec![700.0, 700.0, 704.0]);
+    }
+
+    #[test]
+    fn script_ordering_leaves_a_short_word_beside_a_gutter_where_it_is() {
+        let spans = vec![
+            scripted_span("Left column text", 50.0, 700.0, 90.0, 10.0),
+            scripted_span("of", 300.0, 703.5, 8.0, 8.0),
+            scripted_span("Right column text", 340.0, 703.0, 90.0, 10.0),
+        ];
+        let keys = xberg_native_pdf::extractors::text::script_ordering_baselines(&spans);
+        assert_eq!(keys, vec![700.0, 703.5, 703.0]);
+    }
+
+    #[test]
+    fn script_ordering_leaves_a_longer_word_raised_beside_a_base_where_it_is() {
+        let spans = vec![
+            scripted_span("Total", 50.0, 700.0, 30.0, 10.0),
+            scripted_span("which", 80.5, 703.5, 20.0, 6.0),
+            scripted_span("Right column text", 340.0, 703.0, 90.0, 10.0),
+        ];
+        let moved = xberg_native_pdf::extractors::text::script_ordering_baselines(&spans);
+        assert_eq!(moved, vec![700.0, 703.5, 703.0]);
+    }
+
+    #[test]
+    fn script_ordering_scales_to_a_page_of_many_spans() {
+        let mut spans = Vec::new();
+        for row in 0..400 {
+            let y = 780.0 - row as f32 * 1.9;
+            for word in 0..60 {
+                let x = word as f32 * 9.5;
+                spans.push(scripted_span("word", x, y, 8.0, 10.0));
+                if word % 7 == 0 {
+                    spans.push(scripted_span("1", x + 8.2, y + 3.0, 2.0, 6.0));
+                }
+            }
+        }
+        let started = std::time::Instant::now();
+        let keys = xberg_native_pdf::extractors::text::script_ordering_baselines(&spans);
+        assert_eq!(keys.len(), spans.len());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{} spans took {:?}",
+            spans.len(),
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn script_ordering_leaves_a_marker_alone_in_its_row_where_it_is() {
+        let mut spans = marker_beside_foreign_column();
+        spans.pop();
+        let keys = xberg_native_pdf::extractors::text::script_ordering_baselines(&spans);
+        assert_eq!(keys, vec![700.0, 704.4]);
+    }
+
+    fn texts(spans: &[TextSpan]) -> Vec<&str> {
+        spans.iter().map(|span| span.text.as_str()).collect()
+    }
+
+    #[test]
+    fn displaced_markers_are_placed_after_their_base_without_touching_baselines() {
+        let spans = marker_beside_foreign_column();
+        let markers = super::displaced_script_markers(&spans);
+        let mut reordered = vec![spans[1].clone(), spans[2].clone(), spans[0].clone()];
+        super::place_markers_after_bases(&mut reordered, &markers);
+        assert_eq!(texts(&reordered), ["Right column text", "Total", "3"]);
+        assert_eq!(reordered[2].bbox.y, 704.4);
+    }
+
+    #[test]
+    fn repeated_identical_markers_are_all_placed_after_their_base() {
+        let mut spans = marker_beside_foreign_column();
+        spans.insert(2, spans[1].clone());
+        let markers = super::displaced_script_markers(&spans);
+        let mut reordered = vec![spans[1].clone(), spans[3].clone(), spans[2].clone(), spans[0].clone()];
+        super::place_markers_after_bases(&mut reordered, &markers);
+        assert_eq!(texts(&reordered), ["Right column text", "Total", "3", "3"]);
+    }
+
+    #[test]
+    fn several_markers_of_one_base_keep_their_left_to_right_order() {
+        let mut spans = marker_beside_foreign_column();
+        spans.insert(2, scripted_span("4", 84.0, 704.4, 3.0, 6.0));
+        let markers = super::displaced_script_markers(&spans);
+        assert_eq!(markers.len(), 2);
+        let mut reordered = vec![spans[2].clone(), spans[1].clone(), spans[3].clone(), spans[0].clone()];
+        super::place_markers_after_bases(&mut reordered, &markers);
+        assert_eq!(texts(&reordered), ["Right column text", "Total", "3", "4"]);
+    }
+
+    #[test]
+    fn a_marker_without_a_base_stays_where_the_reorder_put_it() {
+        let spans = marker_beside_foreign_column();
+        let markers = super::displaced_script_markers(&spans);
+        let mut reordered = vec![spans[1].clone(), spans[2].clone()];
+        super::place_markers_after_bases(&mut reordered, &markers);
+        assert_eq!(texts(&reordered), ["3", "Right column text"]);
     }
 
     fn text_span(text: &str, x: f32, y: f32, width: f32) -> TextSpan {

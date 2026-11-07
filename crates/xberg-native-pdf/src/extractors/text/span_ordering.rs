@@ -137,48 +137,7 @@ impl<'doc> TextExtractor<'doc> {
     ///   font_size beyond (the position a superscript would
     ///   appear when typeset directly after the base).
     pub(super) fn snap_superscript_baselines(&mut self) {
-        let n = self.spans.len();
-        if n < 2 {
-            return;
-        }
-
-        // Snapshot the read-side fields we need so the borrow checker
-        // lets us mutate `self.spans[i].bbox.y` inside the loop. ~keep
-        let snapshot: Vec<(f32, f32, f32, f32)> = self
-            .spans
-            .iter()
-            .map(|s| (s.bbox.x, s.bbox.y, s.bbox.width, s.font_size))
-            .collect();
-
-        // A valid base candidate `j` always has `y_offset = sy - by` in
-        // `[0, bfs*0.5]` (see the gates below), so `by` lies in
-        // `[sy - bfs*0.5, sy] ⊆ [sy - max_fs*0.5, sy]`. Sort span indices by
-        // Y once and, per candidate, binary-search that Y-window instead of
-        // rescanning all spans — this turns the previous O(n²) double loop
-        // (which hung for >30 s on archive.org / Google-Books pages whose
-        // invisible hOCR layer emits thousands of spans) into roughly
-        // O(n log n + n·window). The window is a strict superset of the
-        // acceptable bases, so the result is identical to the full scan. ~keep
-        let max_fs = snapshot.iter().map(|s| s.3).fold(0.0f32, f32::max);
-        let max_half_em = max_fs * 0.5;
-        let mut by_order: Vec<usize> = (0..n).collect();
-        by_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(snapshot[a].1, snapshot[b].1));
-        let ys_sorted: Vec<f32> = by_order.iter().map(|&idx| snapshot[idx].1).collect();
-
-        let search = SnapBaseSearch {
-            snapshot: &snapshot,
-            by_order: &by_order,
-            ys_sorted: &ys_sorted,
-            max_half_em,
-        };
-        for i in 0..n {
-            if snapshot[i].3 <= 0.0 {
-                continue;
-            }
-            if let Some(by) = search.base_y_for(i) {
-                self.spans[i].bbox.y = by;
-            }
-        }
+        snap_spans_to_base_baselines(&mut self.spans);
     }
 
     /// Sort extracted text spans by reading order (top-to-bottom, left-to-right).
@@ -739,6 +698,202 @@ impl<'doc> TextExtractor<'doc> {
         }
         None
     }
+}
+
+/// The base baseline each span would snap onto, `None` where it has no base (see
+/// [`TextExtractor::snap_superscript_baselines`] for the geometry).
+fn snapped_base_baselines(spans: &[TextSpan]) -> Vec<Option<f32>> {
+    let n = spans.len();
+    let mut baselines = vec![None; n];
+    if n < 2 {
+        return baselines;
+    }
+
+    // Snapshot the read-side fields we need so the borrow checker
+    // lets us mutate `spans[i].bbox.y` inside the loop. ~keep
+    let snapshot: Vec<(f32, f32, f32, f32)> = spans
+        .iter()
+        .map(|s| (s.bbox.x, s.bbox.y, s.bbox.width, s.font_size))
+        .collect();
+
+    // A valid base candidate `j` always has `y_offset = sy - by` in
+    // `[0, bfs*0.5]` (see the gates below), so `by` lies in
+    // `[sy - bfs*0.5, sy] ⊆ [sy - max_fs*0.5, sy]`. Sort span indices by
+    // Y once and, per candidate, binary-search that Y-window instead of
+    // rescanning all spans — this turns the previous O(n²) double loop
+    // (which hung for >30 s on archive.org / Google-Books pages whose
+    // invisible hOCR layer emits thousands of spans) into roughly
+    // O(n log n + n·window). The window is a strict superset of the
+    // acceptable bases, so the result is identical to the full scan. ~keep
+    let max_fs = snapshot.iter().map(|s| s.3).fold(0.0f32, f32::max);
+    let max_half_em = max_fs * 0.5;
+    let mut by_order: Vec<usize> = (0..n).collect();
+    by_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(snapshot[a].1, snapshot[b].1));
+    let ys_sorted: Vec<f32> = by_order.iter().map(|&idx| snapshot[idx].1).collect();
+
+    let search = SnapBaseSearch {
+        snapshot: &snapshot,
+        by_order: &by_order,
+        ys_sorted: &ys_sorted,
+        max_half_em,
+    };
+    for i in 0..n {
+        if snapshot[i].3 <= 0.0 {
+            continue;
+        }
+        baselines[i] = search.base_y_for(i);
+    }
+    baselines
+}
+
+/// Snap each super/subscript candidate in `spans` onto its base's baseline (see
+/// [`TextExtractor::snap_superscript_baselines`]).
+pub fn snap_spans_to_base_baselines(spans: &mut [TextSpan]) {
+    let baselines = snapped_base_baselines(spans);
+    for (span, baseline) in spans.iter_mut().zip(baselines) {
+        if let Some(baseline) = baseline {
+            span.bbox.y = baseline;
+        }
+    }
+}
+
+/// Longest run of characters a script marker has (`1`, `5,6†`, `nd`).
+pub const SCRIPT_MARKER_MAX_CHARS: usize = 4;
+/// Smallest script-to-base font size ratio of a script.
+pub const SCRIPT_MIN_FONT_RATIO: f32 = 0.5;
+/// Largest script-to-base font size ratio of a script.
+pub const SCRIPT_MAX_FONT_RATIO: f32 = 0.8;
+/// Smallest baseline shift, in base ems, that the inline-script attachment accepts.
+pub const SCRIPT_MIN_SHIFT_EM: f32 = 0.08;
+/// Largest baseline shift, in base ems, that the inline-script attachment accepts.
+pub const SCRIPT_MAX_SHIFT_EM: f32 = 0.35;
+/// Largest gap, in base ems, between a base and an abutting script.
+pub const SCRIPT_MAX_SUFFIX_GAP_EM: f32 = 0.12;
+
+const STACKED_SIZE_DRIFT: f32 = 0.15;
+const STACKED_BASE_OVERHANG_EM: f32 = 0.25;
+const ROW_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
+
+fn is_script_marker(span: &TextSpan) -> bool {
+    let char_count = span.text.chars().count();
+    (1..=SCRIPT_MARKER_MAX_CHARS).contains(&char_count)
+        && span.text.chars().any(|ch| ch != ',')
+        && span
+            .text
+            .chars()
+            .all(|ch| ch.is_alphanumeric() || matches!(ch, ',' | '*' | '†' | '‡' | '+' | '-' | '−'))
+}
+
+fn row_scale(span: &TextSpan) -> f32 {
+    span.font_size.max(span.bbox.height)
+}
+
+/// Span indices sorted by baseline, for windowed neighbour scans.
+struct BaselineIndex<'a> {
+    spans: &'a [TextSpan],
+    by_y: Vec<usize>,
+    ys: Vec<f32>,
+}
+
+impl<'a> BaselineIndex<'a> {
+    fn new(spans: &'a [TextSpan]) -> Self {
+        let mut by_y: Vec<usize> = (0..spans.len()).collect();
+        by_y.sort_by(|&a, &b| spans[a].bbox.y.total_cmp(&spans[b].bbox.y));
+        let ys = by_y.iter().map(|&index| spans[index].bbox.y).collect();
+        Self { spans, by_y, ys }
+    }
+
+    /// Indices whose baseline lies in `[low, high]`.
+    fn within(&self, low: f32, high: f32) -> &[usize] {
+        let start = self.ys.partition_point(|&y| y < low);
+        let end = self.ys.partition_point(|&y| y <= high);
+        &self.by_y[start..end.max(start)]
+    }
+}
+
+/// Whether another span lies in the same visual row as `index`, by the row rule the reading-order
+/// sort applies. A marker alone in its row is ordered directly before its base's row, still
+/// adjacent to it; only a row shared with other spans carries the marker away from its base.
+fn shares_row(index_of: &BaselineIndex<'_>, index: usize, max_scale: f32) -> bool {
+    let marker = &index_of.spans[index];
+    let window = row_scale(marker).max(max_scale) * ROW_TOLERANCE_SCALE_FACTOR;
+    index_of
+        .within(marker.bbox.y - window, marker.bbox.y + window)
+        .iter()
+        .any(|&other| {
+            let span = &index_of.spans[other];
+            other != index
+                && (span.bbox.y - marker.bbox.y).abs()
+                    <= row_scale(span).max(row_scale(marker)) * ROW_TOLERANCE_SCALE_FACTOR
+        })
+}
+
+/// A raised script with a lowered one under the same stretch of a larger base between them: the
+/// two read as one stacked pair, and snapping only the raised half would send it into the base's
+/// row while the lowered half stays out.
+fn is_stacked(index_of: &BaselineIndex<'_>, index: usize, max_font: f32) -> bool {
+    let raised = &index_of.spans[index];
+    index_of
+        .within(raised.bbox.y - max_font, raised.bbox.y)
+        .iter()
+        .any(|&base_index| {
+            let base = &index_of.spans[base_index];
+            let overhang = raised.bbox.x - base.bbox.right();
+            base.bbox.y < raised.bbox.y
+                && base.font_size > raised.font_size / SCRIPT_MAX_FONT_RATIO
+                && (-base.font_size * STACKED_BASE_OVERHANG_EM..=base.font_size.max(raised.font_size))
+                    .contains(&overhang)
+                && index_of
+                    .within(base.bbox.y - base.font_size * SCRIPT_MAX_SHIFT_EM, base.bbox.y)
+                    .iter()
+                    .any(|&lowered_index| {
+                        let lowered = &index_of.spans[lowered_index];
+                        lowered.bbox.y < base.bbox.y
+                            && is_script_marker(lowered)
+                            && (lowered.font_size / raised.font_size - 1.0).abs() <= STACKED_SIZE_DRIFT
+                            && lowered.bbox.x < raised.bbox.right()
+                            && lowered.bbox.right() > raised.bbox.x
+                    })
+        })
+}
+
+/// The baseline each span is ordered on when rows are formed: the base baseline for a genuine raised
+/// script marker, the span's own baseline for everything else.
+///
+/// A row sort keyed on the raw baseline sorts a raised marker into whichever row its own height
+/// falls in, which can be a neighbouring column's row rather than its base's. Only a marker-sized
+/// span the extractor's snap moves by at least the smallest script shift counts, and only when it
+/// shares its row with other spans and is not half of a raised-over-lowered stack. Callers order on these keys and keep the spans' own baselines.
+pub fn script_ordering_baselines(spans: &[TextSpan]) -> Vec<f32> {
+    let mut keys: Vec<f32> = spans.iter().map(|span| span.bbox.y).collect();
+    if spans.len() < 2 || !keys.iter().all(|y| y.is_finite()) {
+        return keys;
+    }
+    let snapped = snapped_base_baselines(spans);
+    let moved: Vec<usize> = (0..spans.len())
+        .filter(|&index| {
+            let span = &spans[index];
+            snapped[index].is_some_and(|baseline| {
+                let smallest_shift = SCRIPT_MIN_SHIFT_EM * span.font_size / SCRIPT_MAX_FONT_RATIO;
+                is_script_marker(span) && (baseline - span.bbox.y).abs() >= smallest_shift
+            })
+        })
+        .collect();
+    if moved.is_empty() {
+        return keys;
+    }
+    let index_of = BaselineIndex::new(spans);
+    let max_scale = spans.iter().map(row_scale).fold(0.0, f32::max);
+    let max_font = spans.iter().map(|span| span.font_size).fold(0.0, f32::max);
+    for index in moved {
+        let Some(baseline) = snapped[index] else {
+            continue;
+        };
+        if shares_row(&index_of, index, max_scale) && !is_stacked(&index_of, index, max_font) {
+            keys[index] = baseline;
+        }
+    }
+    keys
 }
 
 /// Y-sorted view of the span geometry `snap_superscript_baselines` searches.
