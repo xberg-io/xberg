@@ -209,14 +209,21 @@ fn row_threshold(config: &OcrConfig) -> f64 {
     )
 }
 
-/// Tokens of the recognition-orientation read, kept as independent witness text for a half-turn.
+/// Words of a read with Markdown table syntax removed: cell pipes and the `---`/`:--:` rule row are
+/// layout, not text, so a table read and a plain read of the same words agree.
+fn agreement_tokens(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|c: char| c.is_whitespace() || c == '|')
+        .filter(|token| !token.is_empty() && !token.chars().all(|c| c == '-' || c == ':'))
+}
+
+/// Tokens of the recognition-orientation read, kept as witness text for a half-turn. Both reads use
+/// the same engine and pixels; the witness is the first read of the unrotated raster, not an
+/// independent engine.
 pub(super) fn witness_tokens(candidate: &ExtractedDocument) -> Vec<String> {
     if candidate.content.len() > MAX_CERTIFICATE_TEXT_BYTES {
         return Vec::new();
     }
-    candidate
-        .content
-        .split_whitespace()
+    agreement_tokens(&candidate.content)
         .take(MAX_CERTIFICATE_WORDS + 1)
         .map(str::to_owned)
         .collect()
@@ -238,7 +245,7 @@ pub(super) fn within_certificate_limits(result: &ExtractedDocument) -> bool {
 /// block rotated 180 degrees. On an inverted page the primary's confident words are upside-down
 /// readings, so they cannot be required in the replacement. Instead the replacement must be a
 /// complete table whose every iterator word sits in exactly one cell, and the recognition-orientation
-/// read (an independent read of the unrotated pixels) must agree with most of its tokens. Geometry is
+/// read of the unrotated pixels (same engine, same pixels) must agree with most of its tokens. Geometry is
 /// mirrored back into the caller's frame. ~keep
 pub(super) fn select_half_turned(
     original: ExtractedDocument,
@@ -264,7 +271,7 @@ pub(super) fn select_half_turned(
 /// More than half of the witness tokens occur in the text, each occurrence used once.
 fn corroborates(witness: &[String], text: &str) -> bool {
     let mut inventory = HashMap::new();
-    for token in text.split_whitespace() {
+    for token in agreement_tokens(text) {
         *inventory.entry(token).or_insert(0usize) += 1;
     }
     let agreed = witness
