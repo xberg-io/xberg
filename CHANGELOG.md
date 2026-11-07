@@ -202,6 +202,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
+  The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.
+
+- **(pdf): Table rows are no longer repeated as prose when a marker or sign splits a cell.** (#2443)
+  A short run inside one table cell, such as a superscript citation or either side of a multiplication sign, is now treated as that cell's text instead of being emitted a second time beside the table.
+
+- **(pdf): Rules that belong to another section no longer split a ruled band into columns.** (#2443)
+  A column rule lying wholly beyond the ruled rows is no longer projected across them when other rules run through them, so a list column beside a section divider is not read as a two-column table that swallows the page heading.
+
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
   This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.
