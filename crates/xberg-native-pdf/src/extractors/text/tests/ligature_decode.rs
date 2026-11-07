@@ -3,6 +3,8 @@
 
 use super::super::*;
 use super::extraction_and_rotation::create_test_font;
+use crate::fonts::Encoding;
+use std::collections::HashMap;
 
 const LIGATURE_CODE: u32 = 0x80;
 
@@ -106,19 +108,212 @@ fn space_after_a_pulled_back_glyph_that_is_not_a_ligature_stays_in_chars() {
     assert_eq!(char_text(&mut extractor, PULLED_BACK_SPACE), "ab cd");
 }
 
+/// A kern before a space of 2.5 units. 120 units (48%) and 150 units (60%) leave part of the space
+/// between the words, so it stays; 240 units (96%) puts the space inside the ligature box.
+fn kern_stream(kern: u32) -> Vec<u8> {
+    format!("BT /F1 10 Tf 72 700 Td [(de\\200) {kern} ( ne)] TJ ET").into_bytes()
+}
+
 #[test]
-fn small_kern_before_a_space_keeps_the_space_in_spans() {
+fn partial_pullback_keeps_the_space_in_spans_and_chars() {
+    for kern in [120, 150] {
+        let mut spans = extractor_with(ligature_font("00660069", None));
+        let mut chars = extractor_with(ligature_font("00660069", None));
+        assert_eq!(
+            span_text(&mut spans, &kern_stream(kern)),
+            "defi ne",
+            "spans, kern {kern}"
+        );
+        assert_eq!(
+            char_text(&mut chars, &kern_stream(kern)),
+            "defi ne",
+            "chars, kern {kern}"
+        );
+    }
+}
+
+#[test]
+fn near_full_pullback_drops_the_space_in_spans_and_chars() {
+    let mut spans = extractor_with(ligature_font("00660069", None));
+    let mut chars = extractor_with(ligature_font("00660069", None));
+    assert_eq!(span_text(&mut spans, &kern_stream(240)), "define");
+    assert_eq!(char_text(&mut chars, &kern_stream(240)), "define");
+}
+
+/// A pull-back that belongs to a glyph before the ligature does not reach a space after the ligature.
+#[test]
+fn pullback_before_a_ligature_does_not_reach_the_space_after_it() {
     let mut extractor = extractor_with(ligature_font("00660069", None));
     assert_eq!(
-        span_text(&mut extractor, b"BT /F1 10 Tf 72 700 Td [(ab) 5 ( cd)] TJ ET"),
-        "ab cd"
+        span_text(&mut extractor, b"BT /F1 10 Tf 72 700 Td [(a) 250 (\\200 ne)] TJ ET"),
+        "afi ne"
     );
+}
+
+/// The absorbed space gives its width to the glyph before it: the six letters of "define" are 5 units
+/// each in `char_widths` (the ligature 10, pulled back by 2.5, plus the space 2.5), and the text matrix
+/// ends where the glyphs end (72 + 30).
+#[test]
+fn absorbed_space_width_stays_in_the_glyph_widths_and_the_matrix() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    let spans = extractor
+        .extract_text_spans(b"BT /F1 10 Tf 72 700 Td [(de\\200) 250 ( ne)] TJ")
+        .unwrap();
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0].text, "define");
+    let widths = &spans[0].char_widths;
+    assert_eq!(widths.len(), 6);
+    for w in widths {
+        assert!((w - 5.0).abs() < 0.01, "{widths:?}");
+    }
+    let end = extractor.state_stack.current().text_matrix.e;
+    assert!((end - 102.0).abs() < 0.01, "{end}");
+}
+
+/// The char path looks at the baseline: a space on another line is no word break to drop, however its x
+/// compares with the ligature before it.
+#[test]
+fn space_on_another_baseline_stays_in_chars() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    assert_eq!(
+        char_text(
+            &mut extractor,
+            b"BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 1 89.5 690 Tm ( ne) Tj ET"
+        ),
+        "defi ne"
+    );
+}
+
+/// Text turned by 180 degrees runs towards smaller x, which reads as an overlap with the previous glyph
+/// unless the rotation is checked. The characters come back in reading order of the page, so the test
+/// counts them: seven characters, one of them the space.
+#[test]
+fn space_in_rotated_text_stays_in_chars() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    let text = char_text(&mut extractor, b"BT /F1 10 Tf -1 0 0 -1 300 700 Tm (de\\200 ne) Tj ET");
+    assert_eq!(text.chars().count(), 7, "{text:?}");
+    assert_eq!(text.chars().filter(|c| *c == ' ').count(), 1, "{text:?}");
+}
+
+/// The rotation of the glyph before the space and the rotation of the space itself are each checked: a
+/// ligature turned by 180 degrees and an upright space that lies over it keep the space, and so does an
+/// upright ligature with a turned space over it. Three characters each: two letters and the space.
+#[test]
+fn space_next_to_a_turned_ligature_stays_in_chars() {
+    let mut turned_first = extractor_with(ligature_font("00660069", None));
+    let text = char_text(
+        &mut turned_first,
+        b"BT /F1 10 Tf -1 0 0 -1 300 700 Tm (\\200) Tj 1 0 0 1 297 700 Tm ( ) Tj ET",
+    );
+    assert_eq!(text.chars().count(), 3, "{text:?}");
+    let mut turned_second = extractor_with(ligature_font("00660069", None));
+    let text = char_text(
+        &mut turned_second,
+        b"BT /F1 10 Tf 1 0 0 1 280 700 Tm (\\200) Tj -1 0 0 -1 281 700 Tm ( ) Tj ET",
+    );
+    assert_eq!(text.chars().count(), 3, "{text:?}");
+}
+
+/// A Type0 font: two-byte codes, 1 = d, 2 = e, 3 = the ligature (one em), 4 = n, 0x20 = space (a quarter em).
+fn type0_ligature_font(ligature_target: &str) -> FontInfo {
+    let mut font = create_test_font();
+    font.subtype = "Type0".to_string();
+    font.encoding = Encoding::Identity;
+    font.cid_widths = Some(HashMap::from([
+        (1, 500.0),
+        (2, 500.0),
+        (3, 1000.0),
+        (4, 500.0),
+        (0x20, 250.0),
+    ]));
+    let body = format!(
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /X def /CMapType 2 def\n\
+         1 begincodespacerange <0000> <FFFF> endcodespacerange\n5 beginbfchar\n<0001> <0064>\n<0002> <0065>\n\
+         <0003> <{ligature_target}>\n<0004> <006E>\n<0020> <0020>\nendbfchar\n\
+         endcmap CMapName currentdict /CMap defineresource pop end end\n"
+    );
+    font.to_unicode = Some(crate::fonts::LazyCMap::new(body.into_bytes()));
+    font
+}
+
+const TYPE0_OVERLAP_SPACE: &[u8] = b"BT /F1 10 Tf 72 700 Td [<000100020003> 250 <0020 0004 0002>] TJ ET";
+
+/// The two paths read one string the same way for a Type0 font: the space that takes no room is gone
+/// from the spans and from the characters.
+#[test]
+fn type0_space_glyph_inside_the_ligature_box_drops_in_spans_and_chars() {
+    let mut spans = extractor_with(type0_ligature_font("00660069"));
+    let mut chars = extractor_with(type0_ligature_font("00660069"));
+    assert_eq!(span_text(&mut spans, TYPE0_OVERLAP_SPACE), "define");
+    assert_eq!(char_text(&mut chars, TYPE0_OVERLAP_SPACE), "define");
+}
+
+#[test]
+fn type0_space_after_a_glyph_of_one_letter_stays_in_spans_and_chars() {
+    let stream: &[u8] = b"BT /F1 10 Tf 72 700 Td [<00010002> 250 <0020 0004 0002>] TJ ET";
+    let mut spans = extractor_with(type0_ligature_font("00660069"));
+    let mut chars = extractor_with(type0_ligature_font("00660069"));
+    assert_eq!(span_text(&mut spans, stream), "de ne");
+    assert_eq!(char_text(&mut chars, stream), "de ne");
+}
+
+/// The glyph-name fallback for a ToUnicode value of U+0000 is for simple fonts. A Type0 code keeps the
+/// replacement character even when a name exists for its low byte.
+/// A Type0 code that yields two letters has two widths, so the widths stay as long as the text.
+#[test]
+fn type0_ligature_code_has_one_width_for_each_letter() {
+    let font = type0_ligature_font("FB01");
+    let letters = font.char_to_unicode(3);
+    let mut extractor = extractor_with(font);
+    let spans = extractor
+        .extract_text_spans(b"BT /F1 10 Tf 72 700 Td <000100020003> Tj ET")
+        .unwrap();
+    assert_eq!(spans[0].text, "defi");
+    assert_eq!(spans[0].char_widths.len(), 4, "{letters:?} {:?}", spans[0].char_widths);
+    assert!(
+        (spans[0].char_widths[3] - 5.0).abs() < 0.01,
+        "{:?}",
+        spans[0].char_widths
+    );
+}
+
+#[test]
+fn type0_ligature_code_in_a_string_array_has_one_width_for_each_letter() {
+    let mut extractor = extractor_with(type0_ligature_font("FB01"));
+    let spans = extractor
+        .extract_text_spans(b"BT /F1 10 Tf 72 700 Td [<000100020003>] TJ ET")
+        .unwrap();
+    assert_eq!(spans[0].text, "defi");
+    assert_eq!(spans[0].char_widths.len(), 4, "{:?}", spans[0].char_widths);
+    assert!(
+        (spans[0].char_widths[3] - 5.0).abs() < 0.01,
+        "{:?}",
+        spans[0].char_widths
+    );
+}
+
+#[test]
+fn type0_to_unicode_zero_ignores_the_glyph_name() {
+    let mut font = type0_ligature_font("0000");
+    font.diff_glyph_names.insert(3, "fi".to_string());
+    assert_eq!(font.char_to_unicode(3).as_deref(), Some("\u{FFFD}"));
 }
 
 #[test]
 fn to_unicode_zero_is_a_miss_and_the_glyph_name_decides() {
     let font = ligature_font("0000", Some("fi"));
     assert_eq!(font.char_to_unicode(LIGATURE_CODE).as_deref(), Some("fi"));
+}
+
+/// The name that the embedded program gives to the code taken as a glyph index is not the font's own
+/// name for the code: it must not turn a broken mapping into a letter.
+#[test]
+fn to_unicode_zero_ignores_the_embedded_program_name() {
+    let font = ligature_font("0000", None);
+    let mut names = vec![None; 0x81];
+    names[LIGATURE_CODE as usize] = Some("fi".to_string());
+    font.embedded_glyph_names.set(Some(names)).unwrap();
+    assert_eq!(font.char_to_unicode(LIGATURE_CODE).as_deref(), Some("\u{FFFD}"));
 }
 
 #[test]

@@ -4389,12 +4389,14 @@ impl FontInfo {
                         return Some("\u{FFFD}".to_string());
                     }
                     if is_c0_control {
-                        // A C0 value is a miss: the glyph name of the font decides. ~keep
+                        // A C0 value is a miss: the /Differences name of the font decides. The embedded
+                        // program's name for the code is not used, because it can treat the code as a GID. ~keep
                         if self.subtype != "Type0"
                             && char_code <= 0xFF
                             && let Some(named) = self
-                                .glyph_name_for_code(char_code)
-                                .and_then(glyph_name_to_unicode_string)
+                                .diff_glyph_names
+                                .get(&(char_code as u8))
+                                .and_then(|name| glyph_name_to_unicode_string(name))
                         {
                             return Some(named);
                         }
