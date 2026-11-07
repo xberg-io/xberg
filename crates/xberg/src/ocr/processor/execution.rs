@@ -6314,8 +6314,12 @@ mod tests {
     #[test]
     fn ink_at_the_neutral_spread_is_preprocessed_and_one_step_beyond_keeps_raw_pixels() {
         let side = RING_GRID_SIDE as u32;
-        let at_limit = ring_grid_raster([0, 0, NEUTRAL_CHANNEL_SPREAD], GRID_OUTLINE);
-        let beyond = ring_grid_raster([0, 0, NEUTRAL_CHANNEL_SPREAD + 1], GRID_OUTLINE);
+        assert_eq!(
+            NEUTRAL_CHANNEL_SPREAD, 8,
+            "the boundary below is written for a spread of 8"
+        );
+        let at_limit = ring_grid_raster([0, 0, 8], GRID_OUTLINE);
+        let beyond = ring_grid_raster([0, 0, 9], GRID_OUTLINE);
         assert_dark_mean(&at_limit);
         assert_dark_mean(&beyond);
         assert!(should_apply_default_preprocessing(&at_limit, side, side));
@@ -6398,6 +6402,73 @@ mod tests {
             should_apply_default_preprocessing(&sparse, side, side),
             "a bright mean with strong contrast decides before the ink is measured"
         );
+    }
+
+    const PALE_TINT: [u16; 3] = [200, 220, 255];
+
+    /// Share of the pixels that are not light, which is what the 80 percent light-pixel gate reads.
+    fn foreground_share(rgb: &[u8]) -> f64 {
+        let foreground = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .count();
+        foreground as f64 / (rgb.len() / RGB_CHANNEL_COUNT) as f64
+    }
+
+    /// The repeated-line raster with a pale blue tint over the top `band` rows of every line, like shaded
+    /// form fields. The glyphs keep their pixels; only the white paper takes the tint. ~keep
+    fn tinted_field_lines(band: u32) -> Option<image::RgbImage> {
+        let mut raster = repeated_line_raster(REPEATED_LINE_COUNT, false)?;
+        for (y, row) in raster.enumerate_rows_mut() {
+            if y % REPEATED_LINE_PITCH >= band {
+                continue;
+            }
+            for (_, _, pixel) in row {
+                for (channel, tint) in pixel.0.iter_mut().zip(PALE_TINT) {
+                    *channel = (u16::from(*channel) * tint / 255) as u8;
+                }
+            }
+        }
+        Some(raster)
+    }
+
+    /// The widest tint that still leaves the page 80 percent light, so the page reaches the ink check. ~keep
+    fn pale_tinted_field_lines() -> Option<(image::RgbImage, f64)> {
+        let plain = foreground_share(repeated_line_raster(REPEATED_LINE_COUNT, false)?.as_raw());
+        (1..REPEATED_LINE_PITCH).rev().find_map(|band| {
+            let raster = tinted_field_lines(band)?;
+            let share = foreground_share(raster.as_raw());
+            (share <= 1.0 - CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD - 0.01).then_some((raster, share - plain))
+        })
+    }
+
+    #[test]
+    fn dense_black_text_with_pale_tinted_fields_is_preprocessed() {
+        let Some((raster, tint_share)) = pale_tinted_field_lines() else {
+            return;
+        };
+        assert!(
+            tint_share > 0.02,
+            "the tint must cover a real share of the page: {tint_share}"
+        );
+        assert_dark_mean(raster.as_raw());
+        assert!(should_apply_default_preprocessing(
+            raster.as_raw(),
+            raster.width(),
+            raster.height()
+        ));
+    }
+
+    #[tokio::test]
+    async fn dense_black_text_with_pale_tinted_fields_keeps_every_word() {
+        let Some((raster, _)) = pale_tinted_field_lines() else {
+            return;
+        };
+        let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+        assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+        assert!(result.metadata.image_preprocessing.is_some());
     }
 
     #[test]
