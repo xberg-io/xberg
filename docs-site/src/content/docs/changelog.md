@@ -204,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (#2616).**
+  The hOCR row claim no longer requires an all-letter label and digit-only values; a value such as "$1,010" or "3.2%" or a label with a digit now keeps its one claimed row. The row's words must still equal the table cells and the leader must still sit alone between the label and the first value.
+
 - **(ocr): Admit a sideways prose region by its word boxes, not by word letters (#2616).**
   The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. A word box thinner than a third of the region's median line thickness, measured in the upright frame, still refuses the region.
 
