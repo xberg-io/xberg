@@ -200,6 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
+- **(ocr): Keep the raw pixels of coloured graphics that have a dark mean.** (#2475)
+  Automatic preprocessing for dense dark glyphs now applies only when most dark pixels are neutral ink.
+  Embedded coloured graphics keep every word that the raw image yields.
 
 - **(ocr): Place mixed-route OCR lines in the resampled frame when matching them to native text.**
   OCR paragraphs are in the frame preprocessing resampled the render to, but the page-text merge scaled them by the render's size, so every OCR box was twice its true size at a 150 to 300 DPI resample, owned no native line and the native lines were prepended a second time (#2313).
