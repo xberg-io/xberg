@@ -1899,6 +1899,42 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         continue;
                     }
                 };
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if correction_degrees == 0
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && let Some(layer) = native_coverage_layers
+                        .filter(|_| super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32))
+                        .and_then(|layers| layers.get(&((page_idx + 1) as u32)))
+                    && crate::plugins::registry::get_ocr_backend_registry()
+                        .read()
+                        .is_builtin_tesseract(backend)
+                {
+                    let page_number = (page_idx + 1) as u32;
+                    if super::native_word_coverage::covers_complete_native_page(
+                        render_doc.as_ref(),
+                        page_idx,
+                        layer,
+                        &extraction_result,
+                    ) {
+                        native_words_covered_pages.insert(page_number);
+                    } else if super::native_word_coverage::native_text_paints_all_read_ink(
+                        render_doc.as_ref(),
+                        page_idx,
+                        layer,
+                        &extraction_result,
+                        super::native_word_coverage::InkProofLimits {
+                            thresholds: &config
+                                .ocr
+                                .as_ref()
+                                .and_then(|ocr| ocr.quality_thresholds.clone())
+                                .unwrap_or_default(),
+                            max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                            cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                        },
+                    ) {
+                        native_ink_owned_pages.insert(page_number);
+                    }
+                }
                 crate::extraction::derive::adopt_public_ocr_document(
                     &mut extraction_result,
                     config.security_limits.as_ref().unwrap_or(&Default::default()),
