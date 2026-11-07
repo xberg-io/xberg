@@ -2381,6 +2381,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
+    let proof_enabled = !probing_hidden_layer;
+    #[cfg(feature = "layout-detection")]
+    let proof_enabled = proof_enabled && resolved_layout_inputs.is_none();
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    let mut proof_budget = super::layer_ink_proof::ProofBudget::new(super::hidden_layer::preview_byte_limit(config));
     if let Some(layers) = page_layers.as_ref() {
         let mut geometry = MergeGeometrySession::new(content, config);
         for (page_number, text) in &mut accepted_replacements {
@@ -2394,14 +2399,32 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 None => Some((1.0, 1.0)),
             };
-            let boxes = layers.get(page_number).and_then(|layer| {
-                if noise_verdict_pages.contains(page_number)
-                    || !super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds)
-                {
-                    return None;
-                }
-                geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
+            let confirmed = layers.get(page_number).is_some_and(|layer| {
+                !noise_verdict_pages.contains(page_number)
+                    && super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds)
             });
+            // The proof compares the layer with the scan and reads no OCR backend's output, so it
+            // does not wait for the preservation conditions that need a single backend. ~keep
+            #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            let raster_proven = proof_enabled
+                && !confirmed
+                && !noise_verdict_pages.contains(page_number)
+                && super::document::native_preservation_is_automatic(config, *page_number)
+                && layers.get(page_number).is_some_and(|layer| {
+                    super::document::layer_lines_absent_from_ocr(layer, text).is_some()
+                        && super::layer_ink_proof::hidden_layer_matches_scan(
+                            &render_doc,
+                            (*page_number as usize).saturating_sub(1),
+                            layer,
+                            &mut proof_budget,
+                            || geometry.cancelled(),
+                        )
+                });
+            #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+            let raster_proven = false;
+            let boxes = (confirmed || raster_proven)
+                .then(|| geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale))
+                .flatten();
             if native_preservation_enabled
                 && super::document::native_preservation_is_automatic(config, *page_number)
                 && !noise_verdict_pages.contains(page_number)
@@ -2415,10 +2438,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 complete_native_pages.insert(*page_number);
             }
             if let Some(layer) = layers.get(page_number)
-                && let Some(mut first) = super::document::layer_lines_to_put_first(
+                && let Some(mut first) = super::document::layer_lines_to_put_first_with_proof(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
+                    raster_proven,
                     &ocr_output_thresholds,
                     boxes.as_ref(),
                 )
@@ -6942,7 +6966,7 @@ fn with_run_layers_first(
     config: &ExtractionConfig,
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
-        let boxes = run_merge_geometry(&layers, &run, &page_texts, config);
+        let (boxes, raster_proven) = run_merge_geometry(&layers, &run, &page_texts, config);
         let lost = super::document::put_layers_first_in_run(
             &mut text,
             &mut page_texts,
@@ -6950,6 +6974,7 @@ fn with_run_layers_first(
             super::document::PageLayers {
                 lines: &layers,
                 boxes: &boxes,
+                raster_proven: &raster_proven,
             },
             run.verdicts,
             run.page_index_offset,
@@ -6969,8 +6994,12 @@ fn run_merge_geometry(
     run: &RunLayerSources<'_>,
     page_texts: &[String],
     config: &ExtractionConfig,
-) -> ahash::AHashMap<u32, super::document::PageLineBoxes> {
+) -> (
+    ahash::AHashMap<u32, super::document::PageLineBoxes>,
+    ahash::AHashSet<u32>,
+) {
     let mut boxes = ahash::AHashMap::new();
+    let mut proven = ahash::AHashSet::new();
     let mut geometry = run.content.map(|content| MergeGeometrySession::new(content, config));
     let thresholds = config
         .ocr
@@ -6995,7 +7024,15 @@ fn run_merge_geometry(
             continue;
         };
         if !super::document::ocr_confirms_layer(layer, read, &thresholds) {
-            continue;
+            let automatic = super::document::native_preservation_is_automatic(config, page_number);
+            if !automatic
+                || !geometry
+                    .as_mut()
+                    .is_some_and(|g| g.raster_proof(page_number, layer, read))
+            {
+                continue;
+            }
+            proven.insert(page_number);
         }
         // Per-page OCR frames are optional; unknown frames cannot authorize removal. ~keep
         if let Some(geometry) = geometry.as_mut()
@@ -7004,7 +7041,7 @@ fn run_merge_geometry(
             boxes.insert(page_number, page_boxes);
         }
     }
-    boxes
+    (boxes, proven)
 }
 
 /// What a whole-document run gives the layer merge beside its text: the noise verdicts, the
@@ -7072,6 +7109,8 @@ struct MergeGeometrySession<'a> {
     config: &'a ExtractionConfig,
     #[cfg(feature = "pdf")]
     document: Option<Option<crate::pdf::native::NativeDocument>>,
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    proof_budget: Option<super::layer_ink_proof::ProofBudget>,
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -7100,7 +7139,42 @@ impl<'a> MergeGeometrySession<'a> {
             config,
             #[cfg(feature = "pdf")]
             document: None,
+            #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            proof_budget: None,
         }
+    }
+
+    /// Whether the page's unconfirmed layer lies on the scan's ink. Renders only when the layer
+    /// holds a row the OCR text lacks, since only then does a proof change the page. ~keep
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    fn raster_proof(&mut self, page_number: u32, layer: &str, read: &str) -> bool {
+        if self.cancelled() || super::document::layer_lines_absent_from_ocr(layer, read).is_none() {
+            return false;
+        }
+        let (content, config) = (self.content, self.config);
+        let Some(document) = self
+            .document
+            .get_or_insert_with(|| open_merge_geometry_document(content, config))
+            .as_ref()
+        else {
+            return false;
+        };
+        let budget = self.proof_budget.get_or_insert_with(|| {
+            super::layer_ink_proof::ProofBudget::new(super::hidden_layer::preview_byte_limit(config))
+        });
+        let cancel = || config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled());
+        super::layer_ink_proof::hidden_layer_matches_scan(
+            &document.doc,
+            (page_number as usize).saturating_sub(1),
+            layer,
+            budget,
+            cancel,
+        )
+    }
+
+    #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+    fn raster_proof(&mut self, _page_number: u32, _layer: &str, _read: &str) -> bool {
+        false
     }
 
     fn cancelled(&self) -> bool {

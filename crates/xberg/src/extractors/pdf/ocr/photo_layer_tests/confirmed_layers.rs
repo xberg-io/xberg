@@ -133,6 +133,7 @@ fn should_not_put_a_layer_on_a_page_the_noise_gate_discarded() {
         super::super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[verdict(0, true), verdict(1, false)],
         0,
@@ -371,6 +372,7 @@ fn should_put_a_confirmed_layer_first_on_a_page_of_a_whole_document_run() {
         super::super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[],
         0,
@@ -411,6 +413,7 @@ fn should_not_put_a_confirmed_layer_on_a_page_the_noise_gate_discarded() {
         super::super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[discarded],
         0,
@@ -472,6 +475,7 @@ fn should_confirm_a_number_only_layer_against_the_ocr_text() {
         super::super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[],
         0,

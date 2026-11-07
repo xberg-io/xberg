@@ -570,3 +570,20 @@ fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() 
         &thresholds
     ));
 }
+
+#[test]
+fn a_layer_no_read_confirms_comes_first_only_with_raster_proof() {
+    use super::super::document::layer_lines_to_put_first_with_proof;
+    use crate::core::config::OcrQualityThresholds;
+
+    let layer = "ប០ប";
+    let read = "VOU\n\nThe office keeps the current monthly service records.";
+    let thresholds = OcrQualityThresholds::default();
+    assert!(layer_lines_to_put_first_with_proof(layer, read, false, false, &thresholds, None).is_none());
+    let first = layer_lines_to_put_first_with_proof(layer, read, false, true, &thresholds, None).unwrap();
+    assert_eq!(first.lines, layer);
+    assert!(
+        layer_lines_to_put_first_with_proof(layer, "ប០ប\n\nVOU", false, true, &thresholds, None).is_none(),
+        "a row the read already holds is not restored"
+    );
+}

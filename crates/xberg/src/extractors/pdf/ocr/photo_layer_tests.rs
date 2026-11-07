@@ -166,6 +166,7 @@ fn should_put_the_layer_first_on_the_noise_page_of_a_whole_document_run_only() {
         super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[verdict(1, false), verdict(2, true)],
         0,
@@ -586,6 +587,7 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[verdict(0), verdict(1)],
         0,
@@ -613,6 +615,7 @@ fn should_put_the_layer_on_the_later_of_two_identical_ocr_pages() {
         super::document::PageLayers {
             lines: &layers,
             boxes: &ahash::AHashMap::default(),
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[verdict(1)],
         0,
@@ -915,6 +918,7 @@ fn merge_at_rows(layer: &[&str], ocr: &str, ocr_rows: &[usize]) -> String {
         super::document::PageLayers {
             lines: &layers,
             boxes: &boxes,
+            raster_proven: &ahash::AHashSet::default(),
         },
         &[],
         0,

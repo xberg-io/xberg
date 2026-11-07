@@ -408,6 +408,66 @@ pub fn render_png_page_with_budget_evidence(
     render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(budget))
 }
 
+/// One page rendered as drawn, with a mask of the pixels that invisible (render mode 3) glyphs
+/// cover.
+#[doc(hidden)]
+pub struct RevealedLayerRaster {
+    pub width: u32,
+    pub height: u32,
+    /// Row-major luminance of the page as drawn, top-left origin.
+    pub luminance: Vec<u8>,
+    /// Row-major; true where an invisible glyph covers at least half the pixel.
+    pub revealed: Vec<bool>,
+}
+
+/// Internal Core bridge. `None` when `cancelled` fired between renders. The second render paints
+/// render mode 3 text in pure red; a pixel whose red excess rose by half its range is revealed.
+#[doc(hidden)]
+pub fn render_revealed_layer(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+    cancelled: impl Fn() -> bool,
+) -> Result<Option<RevealedLayerRaster>> {
+    const MIN_RED_EXCESS_RISE: i16 = 128;
+    let render = |reveal: bool| -> Result<(u32, u32, Vec<[u8; 4]>)> {
+        let budget = page_renderer::PngRenderBudget {
+            max_working_bytes,
+            minimum_dpi: dpi,
+        };
+        let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
+        let mut options = RenderOptions::with_dpi(dpi).as_raw();
+        options.reveal_invisible_text = reveal;
+        let (image, _) = PageRenderer::new(options).render_page_with_budget(page_num, doc, Some(budget))?;
+        Ok((image.width, image.height, image.data.as_chunks::<4>().0.to_vec()))
+    };
+    if cancelled() {
+        return Ok(None);
+    }
+    let (width, height, drawn) = render(false)?;
+    if cancelled() {
+        return Ok(None);
+    }
+    let (revealed_width, revealed_height, revealed) = render(true)?;
+    if (width, height) != (revealed_width, revealed_height) {
+        return Err(crate::Error::InvalidOperation(
+            "revealed render differs in size from the drawn render".to_string(),
+        ));
+    }
+    let excess = |pixel: &[u8; 4]| i16::from(pixel[0]) - i16::from(pixel[1]);
+    Ok(Some(RevealedLayerRaster {
+        width,
+        height,
+        luminance: drawn.iter().map(text_contrast_probe::luminance).collect(),
+        revealed: drawn
+            .iter()
+            .zip(&revealed)
+            .map(|(before, after)| excess(after) - excess(before) >= MIN_RED_EXCESS_RISE)
+            .collect(),
+    }))
+}
+
 /// Check for actual pixel contrast in each glyph region of an audited literal text show.
 #[doc(hidden)]
 pub fn exact_text_show_has_contrast(
