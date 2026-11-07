@@ -686,6 +686,35 @@ fn gridlines_are_dropped_but_a_genuine_edge_beside_them_survives() {
     assert_eq!(graph.edges[0].stroke.as_deref(), Some("#333333"));
 }
 
+fn dashed_connector(start: (f32, f32), end: (f32, f32), stroke: &str) -> Connector {
+    Connector {
+        dashed: true,
+        ..styled_connector(start, end, stroke)
+    }
+}
+
+#[test]
+fn a_regular_grid_mixing_dashed_and_solid_lines_is_one_family() {
+    let lines = vec![
+        dashed_connector((120.0, 300.0), (620.0, 300.0), "#cccccc"),
+        styled_connector((120.0, 260.0), (620.0, 260.0), "#cccccc"),
+        dashed_connector((120.0, 220.0), (620.0, 220.0), "#cccccc"),
+        styled_connector((120.0, 180.0), (620.0, 180.0), "#cccccc"),
+    ];
+    assert_eq!(matching::find_gridlines(&lines, 5.0), [true; 4]);
+}
+
+#[test]
+fn a_regular_dashed_grid_is_found_beside_an_irregular_solid_line_of_its_colour() {
+    let lines = vec![
+        dashed_connector((120.0, 300.0), (620.0, 300.0), "#cccccc"),
+        dashed_connector((120.0, 220.0), (620.0, 220.0), "#cccccc"),
+        dashed_connector((120.0, 140.0), (620.0, 140.0), "#cccccc"),
+        styled_connector((120.0, 190.0), (400.0, 190.0), "#cccccc"),
+    ];
+    assert_eq!(matching::find_gridlines(&lines, 5.0), [true, true, true, false]);
+}
+
 /// A straight top-to-bottom chain of linked shapes is the case a naive
 /// "regularly spaced, same-direction, same-style strokes" rule would
 /// wrongly condemn: consecutive edges in a vertical flowchart are

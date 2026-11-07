@@ -15,6 +15,7 @@ mod filled_cells;
 mod header_bands;
 mod painted_double_rule_grid;
 mod source_headers;
+mod source_spanned_rows;
 
 /// Disjoint-set (union-find) with path compression.
 struct UnionFind {
@@ -118,6 +119,9 @@ pub struct TableDetectionConfig {
     pub text_fallback: bool,
 }
 
+/// Column cap of the default and bordered detection configurations.
+pub const DEFAULT_MAX_TABLE_COLUMNS: usize = 15;
+
 impl Default for TableDetectionConfig {
     fn default() -> Self {
         Self {
@@ -129,7 +133,7 @@ impl Default for TableDetectionConfig {
             min_table_cells: 4,
             min_table_columns: 2,
             regular_row_ratio: 0.3,
-            max_table_columns: 15,
+            max_table_columns: DEFAULT_MAX_TABLE_COLUMNS,
             column_merge_threshold: 25.0,
             v_split_gap: 20.0,
             text_fallback: true,
@@ -3170,7 +3174,14 @@ fn detect_intersections(
             evidence.bounds = table.bbox;
             return vec![table];
         }
-        let mut sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        let mut sub_tables = finalize_intersection_tables(
+            table_rows,
+            &row_cell_span_indices,
+            spans,
+            config,
+            *num_cols,
+            cells_are_intersections.then_some(lines),
+        );
         if cells_are_intersections
             && let Some(evidence) = recovery.as_deref_mut()
             && !sub_tables.iter().any(Table::is_real_grid)
@@ -3726,18 +3737,23 @@ fn finalize_intersection_tables(
     spans: &[TextSpan],
     config: &TableDetectionConfig,
     num_cols: usize,
+    source_header_paths: Option<&[crate::elements::PathContent]>,
 ) -> Vec<Table> {
     let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_split", || {
         header_source_diagnostic::rows(&table_rows)
     });
-
     strip_form_numbering_artifacts(&mut table_rows);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_stripped", || {
         header_source_diagnostic::rows(&table_rows)
     });
+    if let Some(paths) = source_header_paths {
+        for segment in table_rows.split_mut(|row| row.cells.iter().all(|cell| cell.text.is_empty())) {
+            source_headers::retain_grouped_leaf_header(segment, paths, num_cols);
+        }
+    }
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();
@@ -4689,6 +4705,27 @@ impl PaintedCellOwnership {
                 .is_some_and(|word| *word == Some(bounds))
     }
 }
+
+pub(crate) fn certify_source_spanned_wide_table(
+    table: &Table,
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+) -> Option<PaintedCellOwnership> {
+    let bounds = source_spanned_rows::certify(table, spans, lines)?;
+    Some(PaintedCellOwnership {
+        columns: table.col_count,
+        words: Vec::new(),
+        recovered_bounds: Some(bounds),
+        double_rule: false,
+        replaces_empty_ruled_route: false,
+    })
+}
+
+#[cfg(test)]
+pub(crate) use source_spanned_rows::fixture as source_spanned_fixture;
+pub(crate) use source_spanned_rows::{
+    MAX_SOURCE_SPANNED_COLUMNS, is_dark_on_white, source_spanned_rules_present, source_spanned_work_fits,
+};
 
 /// Detect tables using vector lines and text spans (main entry point for hybrid detection).
 pub fn detect_tables_with_lines(
@@ -10744,7 +10781,7 @@ mod tests {
         assert_eq!(split_only[0].cells[0].text, "5");
         assert_eq!(split_only[0].cells[1].text, "");
 
-        let tables = finalize_intersection_tables(vec![row], &row_cell_span_indices, &spans, &config, 2);
+        let tables = finalize_intersection_tables(vec![row], &row_cell_span_indices, &spans, &config, 2, None);
 
         assert_eq!(tables.len(), 1, "the two evidenced data rows must still form one table");
         let surviving_rows: Vec<Vec<&str>> = tables[0]
