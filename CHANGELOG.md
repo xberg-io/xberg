@@ -202,6 +202,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Give an explicitly rotated table in-page bounds on the per-page route.** (#2497)
+  An explicit `auto_rotate` read on the per-page route kept its table box in the upscaled OCR frame, so the box was twice as large as the page; it is now scaled to the render frame.
+
+- **(ocr): Recover an implicitly rotated table together with a heading or prose.** (#2497)
+  A sideways read of one table is accepted with text above or below it when every outside word is a separate Tesseract word lying wholly above or below the table and their row-by-row order is the returned text.
+
+- **(ocr): Recover more tall scans: Indexed scans at 120 DPI, Markdown output and an explicit Tesseract page mode, and report when strips were not used.** (#2502)
+  Indexed sources down to 120 DPI use source-image strips, each of which must match its source ink rows; bilevel, neutral RGB and JPEG scans rendered at 120 DPI did not read back as their source words and keep the 150 DPI floor. A Tesseract page mode such as PSM 3 no longer turns recovery off, and Markdown output recovers the words as plain paragraphs with a warning that no Markdown structure was rebuilt. Strips now join as separate paragraphs. A page read from a render downscaled below 150 DPI carries a warning that names why its strips were not used.
+
 - **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
   A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
 
