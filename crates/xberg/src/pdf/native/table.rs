@@ -168,7 +168,9 @@ fn empty_or_certified_new_ruled_table(
 /// Run both ruled detectors on each page, then keep strict detections first
 /// and append bordered detections outside their regions.
 pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExtraction> {
-    use xberg_native_pdf::structure::spatial_table_detector::{TableDetectionConfig, TableStrategy};
+    use xberg_native_pdf::structure::spatial_table_detector::{
+        DEFAULT_MAX_TABLE_COLUMNS, TableDetectionConfig, TableStrategy,
+    };
 
     let page_count = doc
         .doc
@@ -184,7 +186,7 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
         min_table_cells: 4,
         min_table_columns: 2,
         regular_row_ratio: 0.5,
-        max_table_columns: 15,
+        max_table_columns: DEFAULT_MAX_TABLE_COLUMNS,
         column_merge_threshold: 12.0,
         v_split_gap: 4.0,
         text_fallback: false,
@@ -199,7 +201,7 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
         let page_number = (page_idx + 1) as u32;
         match doc
             .doc
-            .extract_tables_with_source_ownership(page_idx, [&strict_config, &bordered_config])
+            .extract_tables_with_wide_source_recovery(page_idx, [&strict_config, &bordered_config])
         {
             Ok([(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)]) => {
                 let recovered_from_empty =

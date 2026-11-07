@@ -445,7 +445,7 @@ pub fn render_text_ink_rasters(
             .as_chunks::<4>()
             .0
             .iter()
-            .map(|pixel| text_contrast_probe::luminance(pixel))
+            .map(text_contrast_probe::luminance)
             .collect();
         Ok((image.width, image.height, luminance))
     };

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
+  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
+  The gate is not yet wired into the release workflow because the PHP macOS build still needs a single-file codec design.
+
 - **(ocr): Read a scan's embedded JPEG at the resolution its placement proves.** (#2530)
   When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Unproven placements keep the previous behavior, a read the recognition-noise check rejects keeps the original refusal, and a retry that still recovers nothing reports why each image failed beside the original error.
 
@@ -200,6 +204,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
+  A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
+  This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.
+
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
 
@@ -208,6 +216,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(redaction): Run external-redaction extraction on the shared 16 MiB runtime.**
   The poll chain of `extract_with_external_redaction` needs about 2.2 MB, which overflowed the roughly 2 MB host thread of an FFI caller such as the JVM and crashed the process. Dropping the call still cancels the work.
+
+- **(ocr): Keep certified table rows on one line in Markdown and Djot output of a standalone image.** (#2432)
+  The sparse-row recovery that already served Plain output now also serves Markdown and Djot; the recognized words and amounts are unchanged.
 
 - **(pdf): Return a native page's text once when automatic OCR only re-reads its ink.** (#2534)
   When every word Tesseract read lies on a native text line, shows glyph ink and sits on a background that only glyphs vary, the native page replaces the read even where the words differ.
@@ -234,10 +245,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
   Recover counterclockwise table rows when native line membership proves the source geometry.
   Recover a single sideways prose paragraph when native lines prove the complete text and geometry.
+  Recover an upside-down table by reading the half-turned raster once Tesseract reports every text block rotated 180 degrees, returning geometry in the original frame.
   Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
 
 - **(ocr): Correct detached two-table PDF reading order and coordinates.** (#2497)
   Keep the recognized cells and convert their render bounds to PDF points before returning the tables.
+
+- **(ocr): Keep source-proven dot-leader scan rows together in Auto OCR.** (Refs #2503)
+  A page-wide scan table whose leader runs are confirmed as regular dots in the recognition raster is returned as one table with every label and value kept and the leader dots left out.
 
 - **(ocr): Remove duplicate dot-leader rows from standalone Tesseract PSM 6 output.** (#2503)
   Require matching text and geometry while preserving numeric cells, default OCR, and PDF output.
@@ -251,6 +266,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
   Fractional rules can refine existing cells when the original word bounds clear the full painted stroke.
+
+- **(pdf): Admit fully source-ruled wide tables with merged index cells.** (#2376)
+  Certify 16-18 column grids only when every cell, merged span and word is proven by plain painted rules on the page.
 
 - **(pdf): Keep certified side-by-side panel lines in source order in plain output.** (#2537)
   Preserve complete rows and page boundaries in documents that mix panels with ordinary text.
@@ -313,6 +331,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Retain independently shaded source table headers and ruled cell boundaries.** (#2332)
   Keep nested text backgrounds from creating extra columns while preserving separate table records.
+
+- **(pdf): Preserve source-proven grouped leaf headers in ruled tables.** (#2332)
+  Two bold group bands over a bold leaf band stay header rows only when dark solid rules, which may be split into collinear segments, underline both. Path extraction now records the `d` dash pattern on stroked paths, so dashed rules are told apart from solid ones; a dash or transparency set through an ExtGState (`gs`) is not yet seen. A grid whose body rows are ruled in the same colour and weight as the leaf rule keeps no header from this path, and gridline detection in recovered diagrams groups lines by colour as well as by colour and dash style.
 
 
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
