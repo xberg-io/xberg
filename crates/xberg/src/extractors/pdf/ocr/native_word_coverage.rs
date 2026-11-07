@@ -146,6 +146,16 @@ pub(super) fn native_text_paints_all_read_ink(
     let Some(placed) = read_on_native_lines(&read_boxes, &lines) else {
         return false;
     };
+    // The words are the unit because a lost glyph spoils the word it stands in, and a reader
+    // takes the page in by words: with more holes than words, most words are holed, and the
+    // intact native text no longer carries the page the read would replace. ~keep
+    let solid_native_words = native_words
+        .iter()
+        .filter(|(text, _)| !alnum_key(text).is_empty())
+        .count();
+    if lost > solid_native_words {
+        return false;
+    }
     let Ok(Some(rasters)) = xberg_native_pdf::rendering::render_text_ink_rasters(
         pdf,
         page_index,
@@ -155,12 +165,7 @@ pub(super) fn native_text_paints_all_read_ink(
     ) else {
         return false;
     };
-    let solid_native_words = native_words
-        .iter()
-        .filter(|(text, _)| !alnum_key(text).is_empty())
-        .count();
-    lost <= solid_native_words
-        && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
         && ink_is_glyph_ink(&rasters, media, &placed, &native_words)
 }
 
@@ -342,7 +347,7 @@ impl<'a> LostGlyphKind<'a> {
 }
 
 /// The fewest places of a kind that can show a pattern. One or two places of a font and size say
-/// nothing about a glyph code, so such kinds cannot decide a page against larger kinds.
+/// nothing about a glyph code, so such kinds decide a page only together.
 const MIN_KIND_PLACES: usize = 3;
 
 /// Whether the read recovers the glyphs the native text lost. A missing Unicode mapping belongs to
@@ -354,8 +359,11 @@ const MIN_KIND_PLACES: usize = 3;
 /// because keeping the native text would then discard characters the read supplied. Kinds are
 /// judged one by one, never by a tally over the page: a kind of `MIN_KIND_PLACES` or more that the
 /// read recovers is text the native layer lacks, and no number of unread symbols elsewhere
-/// outweighs it. Kinds of fewer places cannot show a pattern; they decide the page only when no
-/// larger kind exists, by their own places together. ~keep
+/// outweighs it. Kinds of fewer places cannot show a pattern one by one, and one code can split
+/// into several of them when its boxes differ in size or advance by a step; they are pooled, and
+/// the pool decides the page when it holds `MIN_KIND_PLACES` places or more, or when no larger
+/// kind exists. A lone read letter among many unread symbols is a pool of one and decides
+/// nothing. ~keep
 fn lost_glyphs_recovered_by_read(
     lost_words: &[&xberg_native_pdf::layout::Word],
     is_read_as_text_at: impl Fn(&LineBox) -> bool,
@@ -374,12 +382,12 @@ fn lost_glyphs_recovered_by_read(
     }
     let recovered = |&&(places, read): &&(usize, usize)| read * 2 >= places;
     let (large, small): (Vec<_>, Vec<_>) = kinds.values().partition(|(places, _)| *places >= MIN_KIND_PLACES);
-    if !large.is_empty() {
-        return large.iter().any(recovered);
+    if large.iter().any(recovered) {
+        return true;
     }
     let places: usize = small.iter().map(|(places, _)| places).sum();
     let read: usize = small.iter().map(|(_, read)| read).sum();
-    places > 0 && read * 2 >= places
+    (large.is_empty() || places >= MIN_KIND_PLACES) && places > 0 && read * 2 >= places
 }
 
 /// `None` when the word holds a mark that is not a glyph; otherwise whether glyph ink shows in it.

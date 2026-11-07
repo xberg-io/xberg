@@ -89,7 +89,7 @@ mod ink_ownership {
         });
         let cmap = b"begincmap /CMapName /Probe def /CMapType 2 def \
             1 begincodespacerange <0000> <FFFF> endcodespacerange \
-            2 beginbfchar <0041> <0041> <0044> <0000> endbfchar endcmap";
+            5 beginbfchar <0041> <0041> <0044> <0000> <0063> <0063> <0061> <0061> <0066> <0066> endbfchar endcmap";
         let unicode_id = document.add_object(Stream::new(dictionary! {}, cmap.to_vec()));
         let program = include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -577,6 +577,62 @@ call puts",
             .collect();
         words.push(iterator_word("ghost", gap));
         assert!(!ink_owned(&pdf, LAYER, &read_of(words)));
+    }
+
+    #[test]
+    fn should_take_the_read_that_recovers_heading_glyphs_whose_sizes_differ_beside_unread_symbols() {
+        let heading = (0..6).map(|at| (590, 780 - 24 * at, 18 + at));
+        let symbols = (0..3).map(|at| (40, 760 - 30 * at, 12));
+        let lost: Vec<_> = heading.chain(symbols).collect();
+        let (pdf, layer, read) = lost_glyph_page_where(&lost, |at| at < 6);
+        assert!(!ink_owned(&pdf, &layer, &read));
+    }
+
+    #[test]
+    fn should_keep_native_text_when_only_a_few_fragmented_glyphs_are_read_among_unread_ones() {
+        let heading = (0..6).map(|at| (590, 780 - 24 * at, 18 + at));
+        let symbols = (0..3).map(|at| (40, 760 - 30 * at, 12));
+        let lost: Vec<_> = heading.chain(symbols).collect();
+        let (pdf, layer, read) = lost_glyph_page_where(&lost, |at| at == 0);
+        assert!(ink_owned(&pdf, &layer, &read));
+    }
+
+    #[test]
+    fn should_take_the_read_over_a_word_that_holds_a_lost_glyph_even_when_the_read_drops_it() {
+        let pdf = pdf_with_lost_glyphs("", "BT /F2 12 Tf 300 500 Td <0063006100660044> Tj ET", &[]);
+        let boxes = native_word_boxes(&pdf);
+        assert!(boxes.iter().any(|(text, _)| text == "caf\u{FFFD}"), "{boxes:?}");
+        let words = boxes
+            .iter()
+            .map(|(text, placed)| iterator_word(if text.contains('\u{FFFD}') { "caf" } else { text }, *placed))
+            .collect();
+        let layer = format!("{LAYER}\ncaf\u{FFFD}");
+        assert!(!ink_owned(&pdf, &layer, &read_of(words)));
+    }
+
+    fn solid_words_of_prose_page() -> usize {
+        native_word_boxes(&pdf_with(""))
+            .iter()
+            .filter(|(text, _)| text.chars().any(char::is_alphanumeric))
+            .count()
+    }
+
+    fn margin_grid(count: usize) -> Vec<(i32, i32, i32)> {
+        (0..count)
+            .map(|at| (10 + 15 * (at / 40) as i32, 780 - 16 * (at % 40) as i32, 12))
+            .collect()
+    }
+
+    #[test]
+    fn should_keep_native_text_with_as_many_lost_glyphs_as_words() {
+        let (pdf, layer, read) = lost_glyph_page(&margin_grid(solid_words_of_prose_page()), &[]);
+        assert!(ink_owned(&pdf, &layer, &read));
+    }
+
+    #[test]
+    fn should_take_the_read_when_lost_glyphs_outnumber_the_native_words() {
+        let (pdf, layer, read) = lost_glyph_page(&margin_grid(solid_words_of_prose_page() + 1), &[]);
+        assert!(!ink_owned(&pdf, &layer, &read));
     }
 
     #[test]
