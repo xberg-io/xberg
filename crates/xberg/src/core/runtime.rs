@@ -61,10 +61,15 @@ pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime
 
 /// Run `future` as a task on the shared 16 MiB-stack runtime and await its result.
 ///
-/// The caller's own thread may be a host thread of about 2 MB (an FFI caller) or a default tokio worker of
-/// the same size, while the extraction poll chain needs more. Dropping the returned future aborts the task,
-/// so cancellation still stops the work. A panic in the task resumes unwinding in the caller, and the task
-/// does not inherit the caller's task-locals, so the future must establish any it needs.
+/// The caller's own thread may be a host thread of about 1 to 2 MB (an FFI caller) or a default tokio
+/// worker of the same size, while the extraction poll chain needs more. The task keeps the caller's current
+/// span and tracing subscriber, so `with_default` / `set_default` capture still sees its events; it does not
+/// inherit the caller's other task-locals, so the future must establish any it needs.
+///
+/// Dropping the returned future aborts the task, which stops it at its next await point: a blocking call or
+/// a long CPU-bound poll that is already running finishes first. A panic in the task resumes unwinding in
+/// the caller. If the shared runtime cannot be created (thread exhaustion), the future runs on the caller's
+/// stack instead, with a warning, so the call degrades rather than fails.
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) async fn run_on_large_stack<T, F>(future: F) -> crate::Result<T>
 where
@@ -72,6 +77,7 @@ where
     F: std::future::Future<Output = T> + Send + 'static,
 {
     use tracing::Instrument;
+    use tracing::instrument::WithSubscriber;
 
     struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
 
@@ -81,7 +87,14 @@ where
         }
     }
 
-    let mut task = AbortOnDrop(global_runtime()?.spawn(future.instrument(tracing::Span::current())));
+    let runtime = match global_runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            tracing::warn!(%error, "large-stack runtime unavailable; running on the caller's stack");
+            return Ok(future.await);
+        }
+    };
+    let mut task = AbortOnDrop(runtime.spawn(future.instrument(tracing::Span::current()).with_current_subscriber()));
     match (&mut task.0).await {
         Ok(value) => Ok(value),
         Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
@@ -114,6 +127,54 @@ mod large_stack_tests {
         }
         // 4 MiB of frames: overflows a 2 MB worker, fits the 16 MiB runtime.
         assert!(run_on_large_stack(async { deep(1024) }).await.is_ok());
+    }
+
+    // Reverting to `.instrument(Span::current())` alone drops the event: the worker has no thread-local
+    // dispatcher of its own. The interest-cache rebuilds follow `issue_282_telemetry_spans`. ~keep
+    #[test]
+    fn the_task_keeps_the_callers_thread_local_subscriber() {
+        use std::io::Write;
+        use std::sync::Mutex;
+
+        #[derive(Clone)]
+        struct Capture(Arc<Mutex<Vec<u8>>>);
+        impl Write for Capture {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().expect("log buffer poisoned").write_all(buf)?;
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let capture = Capture(Arc::clone(&buffer));
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::INFO)
+            .with_writer(move || capture.clone())
+            .finish();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        tracing::callsite::rebuild_interest_cache();
+        tracing::subscriber::with_default(subscriber, || {
+            runtime
+                .block_on(run_on_large_stack(async {
+                    tracing::info!("emitted inside the large-stack task")
+                }))
+                .unwrap();
+        });
+        tracing::callsite::rebuild_interest_cache();
+
+        let logged = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        assert!(
+            logged.contains("emitted inside the large-stack task"),
+            "captured: {logged:?}"
+        );
     }
 
     #[tokio::test]

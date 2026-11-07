@@ -10,6 +10,8 @@ mod khmer_retention;
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
+pub(crate) use layout_runner::inherit_test_selected_page_detections;
 pub(crate) mod ocr;
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 mod outline_ocr;
