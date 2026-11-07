@@ -2007,6 +2007,24 @@ impl TjBuffer {
         true
     }
 
+    /// Whether text shown under `state` continues this run: every setting the buffer captured at its
+    /// start is unchanged, so the run can go on without a span of its own. ~keep
+    fn continues_under(&self, state: &crate::content::graphics_state::GraphicsState) -> bool {
+        let text_rise = if state.font_size > 0.0 {
+            state.text_rise / state.font_size
+        } else {
+            0.0
+        };
+        self.fill_color_rgb == state.fill_color_rgb
+            && self.char_space == state.char_space
+            && self.word_space == state.word_space
+            && self.horizontal_scaling == state.horizontal_scaling
+            && self.render_mode == state.render_mode
+            && self.wmode == state.text_wmode
+            && self.text_rise == text_rise
+            && self.font_name == state.font_name
+    }
+
     /// Push one width for each output letter of a code, so `char_widths` and the text stay equal in length.
     fn push_letter_widths(&mut self, letter_count: usize, width: f32) {
         for _ in 0..letter_count {

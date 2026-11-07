@@ -449,3 +449,17 @@ fn char_spacing_widens_the_space_so_a_pullback_of_226_keeps_it() {
     assert_eq!(span_text(&mut spans, stream), "defi ne", "spans");
     assert_eq!(char_text(&mut chars, stream), "defi ne", "chars");
 }
+
+/// A setting that changes between the `Tj` and the `TJ` ends the run, so the ligature does not carry
+/// into the array and the space keeps its room.
+#[test]
+fn colour_change_between_tj_and_tj_array_ends_the_ligature() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    assert_eq!(
+        span_text(
+            &mut extractor,
+            b"BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 rg [240 ( ne)] TJ ET"
+        ),
+        "defi ne"
+    );
+}

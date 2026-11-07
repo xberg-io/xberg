@@ -166,7 +166,9 @@ impl<'doc> TextExtractor<'doc> {
         // puts inside the ligature box is dropped only when the ligature is in the same buffer.
         // The run is still contiguous with the array, so the array continues it from its origin. ~keep
         let carried = if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
-            self.tj_span_buffer.take_if(|b| b.ligature_tail && !b.is_empty())
+            let state = self.state_stack.current();
+            self.tj_span_buffer
+                .take_if(|b| b.ligature_tail && !b.is_empty() && b.continues_under(state))
         } else {
             None
         };
