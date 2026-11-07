@@ -2610,6 +2610,31 @@ fn build_extended_grid_cells(h_edges: &[Edge], v_edges: &[Edge]) -> Vec<Intersec
     cells
 }
 
+/// The V edges that may supply columns to a projected grid.
+///
+/// Projection exists for rules that stand beside the ruled rows without crossing them. A V edge
+/// runs through the horizontal rules it stands under (those whose extent contains its x position)
+/// when it overlaps their vertical span by more than `SNAP_TOL`; a rule that merely hangs from the
+/// span's edge does not. When some V edges run through, the others belong to a section beyond the
+/// span, and projecting them splits the ruled rows where nothing is drawn. When none does, every
+/// rule stands beside the rows and all are kept. ~keep
+fn projectable_v_edges(h_edges: &[Edge], v_edges: &[Edge]) -> Vec<Edge> {
+    let runs_through_rules = |v: &Edge| {
+        let (low, high) = h_edges
+            .iter()
+            .filter(|h| h.start - SNAP_TOL <= v.coord && v.coord <= h.end + SNAP_TOL)
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(low, high), h| {
+                (low.min(h.coord), high.max(h.coord))
+            });
+        v.end.min(high) - v.start.max(low) > SNAP_TOL
+    };
+    if v_edges.iter().any(runs_through_rules) {
+        v_edges.iter().filter(|v| runs_through_rules(v)).copied().collect()
+    } else {
+        v_edges.to_vec()
+    }
+}
+
 /// Group cells that share edges into tables using union-find.
 fn group_cells_into_tables(cells: &[IntersectionCell]) -> Vec<Vec<usize>> {
     if cells.is_empty() {
@@ -3261,7 +3286,10 @@ fn build_grid_from_lines(
         let c = build_cells_from_intersections(&intersections, &h_edges, &v_edges);
         if c.is_empty() {
             // Lines exist but don't form real intersection cells — try extended grid. ~keep
-            (build_extended_grid_cells(&h_edges, &v_edges), false)
+            (
+                build_extended_grid_cells(&h_edges, &projectable_v_edges(&h_edges, &v_edges)),
+                false,
+            )
         } else {
             (c, true)
         }
@@ -3269,7 +3297,10 @@ fn build_grid_from_lines(
         // H and V lines don't physically cross (e.g. Census table: H-lines in
         // header area, V tick marks in data area). Build a virtual grid by
         // projecting all V-line X positions across all H-line Y positions. ~keep
-        (build_extended_grid_cells(&h_edges, &v_edges), false)
+        (
+            build_extended_grid_cells(&h_edges, &projectable_v_edges(&h_edges, &v_edges)),
+            false,
+        )
     };
     if cells.is_empty() {
         return (Vec::new(), v_edges, cells_are_intersections);
@@ -5576,6 +5607,54 @@ mod tests {
         });
         let groups = attach_spanning_headers(&cells, group_cells_into_tables(&cells), 6);
         assert_eq!(groups.len(), 2);
+    }
+
+    fn ruled_grid_config() -> TableDetectionConfig {
+        TableDetectionConfig {
+            horizontal_strategy: TableStrategy::Lines,
+            vertical_strategy: TableStrategy::Lines,
+            column_tolerance: 3.0,
+            row_tolerance: 2.0,
+            regular_row_ratio: 0.5,
+            column_merge_threshold: 12.0,
+            v_split_gap: 4.0,
+            text_fallback: false,
+            ..TableDetectionConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_rule_of_another_section_adds_no_column_to_a_projected_grid() {
+        use crate::elements::PathContent;
+        // Two column rules run inside the ruled band; a third hangs from the band's lower rule
+        // into the section below, touching the band's edge but never entering it. ~keep
+        let lines = vec![
+            PathContent::line(50., 400., 560., 400.),
+            PathContent::line(50., 720., 560., 720.),
+            PathContent::line(218., 430., 218., 719.),
+            PathContent::line(394., 430., 394., 719.),
+            PathContent::line(306., 110., 306., 399.),
+        ];
+        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        assert!(
+            groups.is_empty(),
+            "the lone in-band column pair is one column: {groups:?}"
+        );
+    }
+
+    #[test]
+    fn rules_wholly_below_every_horizontal_rule_still_project_columns() {
+        use crate::elements::PathContent;
+        let lines = vec![
+            PathContent::line(0., 400., 300., 400.),
+            PathContent::line(0., 380., 300., 380.),
+            PathContent::line(50., 100., 50., 370.),
+            PathContent::line(150., 100., 150., 370.),
+            PathContent::line(250., 100., 250., 370.),
+        ];
+        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].3, 2);
     }
 
     #[test]
