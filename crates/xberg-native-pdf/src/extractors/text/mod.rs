@@ -1846,7 +1846,19 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// How far, in text-space units, the pen sits left of the right edge of the last glyph
+    /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
+    pullback: f32,
+    /// Whether the last glyph stood for more than one letter (a ligature). Only such a glyph has a
+    /// box that a space can start inside of.
+    ligature_tail: bool,
 }
+
+/// The share of a space glyph that must lie inside the previous glyph's box before the space
+/// takes no room. The value is chosen, not inherited: the ligature joins seen in real documents pull
+/// the pen back by the whole space (a gap of 0.008 em at most), and a pull-back of half the space
+/// leaves a word gap, so the line sits near the full width. Tests pin 60% (kept) and 96% (dropped). ~keep
+const ROOMLESS_SPACE_OVERLAP: f32 = 0.9;
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
 /// `θ = atan2(b, a)`) to the nearest of `0 / 90 / 180 / -90` when it is within
@@ -1972,7 +1984,27 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            pullback: 0.0,
+            ligature_tail: false,
         }
+    }
+
+    /// Decide whether a space glyph of advance `width` takes no room on the line: it follows a
+    /// ligature and the pen was pulled back over at least `ROOMLESS_SPACE_OVERLAP` of the space.
+    /// If so, the space stays out of the text and its advance goes to the previous glyph, so the
+    /// gap test between the real neighbours decides. A smaller pull-back keeps the space, because
+    /// part of the space then stands between the two words. A glyph of one letter keeps its space
+    /// too, because a producer may pull the pen back there to place a word gap. ~keep
+    fn absorb_roomless_space(&mut self, width: f32) -> bool {
+        if !self.ligature_tail || self.pullback < width * ROOMLESS_SPACE_OVERLAP {
+            return false;
+        }
+        let Some(last) = self.char_widths.last_mut() else {
+            return false;
+        };
+        *last += width;
+        self.pullback = (self.pullback - width).max(0.0);
+        true
     }
 
     /// Check if the buffer is empty.
@@ -2174,6 +2206,8 @@ pub struct TextExtractor<'doc> {
     pub(crate) preserve_script_baselines: bool,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
+    /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
+    after_ligature: bool,
     /// Resources dictionary (for accessing XObjects and fonts)
     resources: Option<Object>,
     /// Reference to the document (for loading XObjects)

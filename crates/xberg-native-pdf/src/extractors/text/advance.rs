@@ -256,7 +256,13 @@ impl<'doc> TextExtractor<'doc> {
                         w += ws_hs;
                     }
                     w_sum += w;
-                    buffer.char_widths.push(w);
+                    // One width for each output letter, as in the string-array path. ~keep
+                    let letter_count = font
+                        .char_to_unicode(code as u32)
+                        .map_or(1, |s| s.chars().count().max(1));
+                    for _ in 0..letter_count {
+                        buffer.char_widths.push(w / letter_count as f32);
+                    }
                 }
                 w_sum
             } else {
@@ -413,6 +419,17 @@ impl<'doc> TextExtractor<'doc> {
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
+                    if c == ' ' {
+                        let mut space_w = width_table[byte as usize] * fs_factor * hs_factor + cs_hs;
+                        if byte == 0x20 {
+                            space_w += ws_hs;
+                        }
+                        if buffer.absorb_roomless_space(space_w) {
+                            w_sum += space_w;
+                            continue;
+                        }
+                    }
+                    buffer.pullback = 0.0;
                     if c != '\0' {
                         buffer.unicode.push(c);
                     } else if let Some(s) = font.char_to_unicode(byte as u32) {
@@ -440,6 +457,7 @@ impl<'doc> TextExtractor<'doc> {
                     }
                     w_sum += w;
                     let chars_added = buffer.unicode.len() - len_before;
+                    buffer.ligature_tail = chars_added > 1;
                     if chars_added == 1 {
                         buffer.char_widths.push(w);
                     } else if chars_added > 1 {
@@ -451,13 +469,15 @@ impl<'doc> TextExtractor<'doc> {
                 }
                 w_sum
             } else if wmode == 0 {
-                buffer.append(text)?;
                 // Width calculation: use TextCharIter so byte-width respects the
                 // CMap codespace (1 or 2 bytes per character). Fixes CJK fonts
                 // whose encoding name doesn't match the well-known Identity-H/EUC/…
                 // keyword patterns but whose ToUnicode CMap declares a 2-byte
                 // codespace range (§9.7.5). ~keep
                 let mut w_sum = 0.0f32;
+                // `kept_from` is where the text not yet appended starts; `offset` is the current code. ~keep
+                let mut kept_from = 0usize;
+                let mut offset = 0usize;
                 for (code, nbytes) in TextCharIter::new(text, Some(font)) {
                     // GH #1631: translate to a CID before the width lookup;
                     // Tw stays keyed on the raw code (§9.3.3). ~keep
@@ -467,9 +487,26 @@ impl<'doc> TextExtractor<'doc> {
                     if nbytes == 1 && code == 32 {
                         w += ws_hs;
                     }
+                    let letters = font.char_to_unicode(code as u32);
+                    if letters.as_deref() == Some(" ") && buffer.absorb_roomless_space(w) {
+                        buffer.append(&text[kept_from..offset])?;
+                        kept_from = offset + nbytes;
+                        offset = kept_from;
+                        w_sum += w;
+                        continue;
+                    }
+                    buffer.pullback = 0.0;
+                    let letter_count = letters.as_deref().map_or(1, |s| s.chars().count().max(1));
+                    buffer.ligature_tail = letter_count > 1;
+                    offset += nbytes;
                     w_sum += w;
-                    buffer.char_widths.push(w);
+                    // One width for each output letter, so a code that yields two letters keeps the
+                    // lengths of `char_widths` and the text equal. ~keep
+                    for _ in 0..letter_count {
+                        buffer.char_widths.push(w / letter_count as f32);
+                    }
                 }
+                buffer.append(&text[kept_from..])?;
                 w_sum
             } else {
                 // Type0/CID font, vertical mode: per-glyph displacement is
@@ -683,6 +720,7 @@ impl<'doc> TextExtractor<'doc> {
         };
         *last += adv;
         buffer.accumulated_width += adv;
+        buffer.pullback = (buffer.pullback - adv).max(0.0);
     }
 
     /// Whether `(e, f)` continues `start`'s run along that run's writing axis.
@@ -985,6 +1023,7 @@ impl<'doc> TextExtractor<'doc> {
                 tx_device_space
             };
 
+            let mut dropped_roomless = false;
             for (char_index, unicode_char) in unicode_string.chars().enumerate() {
                 let should_skip = unicode_char == '\0'
                     || (unicode_char.is_control()
@@ -992,12 +1031,24 @@ impl<'doc> TextExtractor<'doc> {
                         && unicode_char != '\n'
                         && unicode_char != '\r');
 
-                if !should_skip {
-                    let x_offset_device = char_index as f32 * char_width_device;
-                    let x_offset_user = char_index as f32 * char_width_user;
+                let x_offset_device = char_index as f32 * char_width_device;
+                let char_origin_x = pos.x + x_offset_device;
+                let char_origin_y = pos.y;
+                // A space that starts inside the glyph before it takes no room, so the gap test decides. The
+                // baseline tolerance of a tenth of the font size is chosen, as the overlap share is. ~keep
+                let roomless_space = unicode_char == ' '
+                    && self.after_ligature
+                    && rotation_degrees.abs() < 1.0
+                    && self.chars.last().is_some_and(|prev| {
+                        prev.rotation_degrees.abs() < 1.0
+                            && (prev.origin_y - char_origin_y).abs() < effective_font_size * 0.1
+                            && prev.origin_x + prev.advance_width - char_origin_x
+                                >= char_width_device * ROOMLESS_SPACE_OVERLAP
+                    });
 
-                    let char_origin_x = pos.x + x_offset_device;
-                    let char_origin_y = pos.y;
+                dropped_roomless |= roomless_space;
+                if !should_skip && !roomless_space {
+                    let x_offset_user = char_index as f32 * char_width_user;
 
                     let text_char = TextChar {
                         char: unicode_char,
@@ -1030,6 +1081,10 @@ impl<'doc> TextExtractor<'doc> {
                         super::marked_content::push_held(&mut self.chars, &mut self.char_holds, text_char, hold);
                     }
                 }
+            }
+
+            if !dropped_roomless {
+                self.after_ligature = char_count > 1;
             }
 
             // Update text matrix per ISO 32000-1:2008 §9.4.4. The axis swap
