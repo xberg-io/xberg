@@ -2773,9 +2773,11 @@ fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (Str
 
 /// Reads a one-page PDF on the single-backend route and keeps the result when the first stage
 /// of the synthesized classical pipeline would have accepted it, so that route's source-image
-/// recoveries and budgeted upscale apply. A page below the pipeline's quality threshold, or one
+/// recoveries and budgeted scaling apply. A page below the pipeline's quality threshold, or one
 /// the single-backend route fails, returns `None` and takes the per-page route with its
-/// automatic fallback stage.
+/// automatic fallback stage. So does a read whose scale the budget did not bound: it gains
+/// nothing from this route, and the per-page route carries the frame metadata and point
+/// placement of detached rasters that this one does not.
 #[cfg(all(
     paddle_ocr,
     feature = "ocr",
@@ -2804,6 +2806,14 @@ pub(crate) async fn accepted_single_page_first_pass(
     ))
     .await
     .ok()?;
+    let budget_bounded = output
+        .0
+        .9
+        .values()
+        .any(|metadata| metadata.final_dpi < metadata.target_dpi);
+    if !budget_bounded {
+        return None;
+    }
     let score = pipeline_stage_score(compute_quality_score(&output.0.0, thresholds), output.0.1);
     (score >= thresholds.pipeline_min_quality).then_some(output)
 }
