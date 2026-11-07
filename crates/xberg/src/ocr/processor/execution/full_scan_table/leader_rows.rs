@@ -14,9 +14,10 @@ const MAX_LEADER_CROP_PIXELS: usize = 32_768;
 const DOT_TO_TEXT_HEIGHT_DIVISOR: usize = 3;
 const MAX_DOT_ASPECT_RATIO: (usize, usize) = (3, 2);
 
-// Reuse the actual deskewed recognition frame; the retained 1-bpp Pix is the one preprocessing
-// already allocated, so only the proof crops are added to the peak of the preprocessing that
-// produced it. An unmodelled policy has no known peak and declines. ~keep
+// Reuse the actual deskewed recognition frame. Preprocessing and recognition are disjoint
+// phases: `image_data` is dropped before `recognize`, so the retained 1-bpp Pix sits inside what
+// the preprocessing peak already reserved and only the proof crops are added to that peak. An
+// unmodelled policy has no known peak and declines. ~keep
 pub(in crate::ocr::processor::execution) fn can_hold_leader_raster(
     raster: &Pix,
     (width, height): (u32, u32),
@@ -30,6 +31,7 @@ pub(in crate::ocr::processor::execution) fn can_hold_leader_raster(
         && leader_budget_fits(width, height, encoded_bytes, preprocessing, limits.max_content_size)
 }
 
+/// Declines when the policy has no modelled peak, which includes `auto_rotate`.
 fn leader_budget_fits(
     width: u32,
     height: u32,
@@ -100,8 +102,8 @@ fn line_envelopes(words: &[Word]) -> Option<Vec<Word>> {
 fn line_envelope(group: &[Word]) -> Option<HocrWord> {
     let first = &group.first()?.1;
     let mut top = first.top;
-    let mut right = first.left + first.width;
-    let mut bottom = first.top + first.height;
+    let mut right = first.left.saturating_add(first.width);
+    let mut bottom = first.top.saturating_add(first.height);
     let mut shared_top = top;
     let mut shared_bottom = bottom;
     let mut prior_left = first.left;
@@ -111,10 +113,10 @@ fn line_envelope(group: &[Word]) -> Option<HocrWord> {
         }
         prior_left = word.left;
         top = top.min(word.top);
-        right = right.max(word.left + word.width);
-        bottom = bottom.max(word.top + word.height);
+        right = right.max(word.left.saturating_add(word.width));
+        bottom = bottom.max(word.top.saturating_add(word.height));
         shared_top = shared_top.max(word.top);
-        shared_bottom = shared_bottom.min(word.top + word.height);
+        shared_bottom = shared_bottom.min(word.top.saturating_add(word.height));
     }
     (shared_top < shared_bottom).then(|| HocrWord {
         text: group
@@ -131,7 +133,7 @@ fn line_envelope(group: &[Word]) -> Option<HocrWord> {
 }
 
 fn horizontal(word: &HocrWord) -> Range<u32> {
-    word.left..word.left + word.width
+    word.left..word.left.saturating_add(word.width)
 }
 
 fn build_leader_grid(
@@ -173,7 +175,7 @@ fn build_leader_grid(
             .get_or_insert_with(|| Track::new(horizontal(leader)))
             .admit(horizontal(leader))?;
         proves_dots(leader, text_height)?;
-        let mut cells = vec![format!("{} {}", label.text, leader.text)];
+        let mut cells = vec![label.text.clone()];
         for ((_, value), track) in values.iter().zip(&mut tracks[1..]) {
             track.admit(horizontal(value))?;
             cells.push(value.text.clone());
@@ -396,6 +398,18 @@ mod tests {
         let exact = (applied + crops) as usize;
         assert!(leader_budget_fits(width, height, 227_360, Some(&options), exact));
         assert!(!leader_budget_fits(width, height, 227_360, Some(&options), exact - 1));
+    }
+
+    #[test]
+    fn retained_bitmap_and_crops_fit_inside_the_applied_peak_beyond_the_rgb_copy() {
+        let options = ImagePreprocessingConfig::default();
+        let (width, height) = (2550u64, 3300u64);
+        let peak = super::super::super::native_image_budget::known_phase_peak(2550, 3300, 227_360, Some(&options))
+            .unwrap()
+            .unwrap();
+        let bitmap = width * height / 8;
+        assert!(2 * bitmap + MAX_LEADER_CROP_PIXELS as u64 * 2 <= peak - width * height * 3);
+        assert!(peak - width * height * 3 >= 5 * width * height);
     }
 
     #[test]
