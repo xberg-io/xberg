@@ -2757,7 +2757,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && raster_dpis
                     .get(&(page.saturating_sub(1) as usize))
                     .is_some_and(|raster| raster.type0_ink_loss)
-                && accepted_replacements.contains_key(&page)
                 && let (Some(native), Some(read)) = (native, ocr_results.get(&page))
                 && super::document::native_survives_type0_ink_loss(native, read, &ocr_output_thresholds)
             {
@@ -2827,21 +2826,33 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 );
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            if type0_loss_pages.contains(&page) {
-                if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
-                    && page_count == 1
-                    && pages.single_native_type0_page.is_some()
-                {
-                    return Err(type0_ocr_rejection());
-                }
-                crate::core::diagnostics::push_warning_deduped(
-                    &mut accumulated_warnings,
-                    crate::core::diagnostics::warning(
-                        "ocr",
-                        format!("Page {page} retained native text after its OCR render lost Type0 glyph ink."),
-                    ),
-                );
+            if type0_loss_pages.contains(&page)
+                && all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
+                && page_count == 1
+                && pages.single_native_type0_page.is_some()
+            {
+                return Err(type0_ocr_rejection());
             }
+        }
+    }
+    // A page whose OCR text the information-loss check already rejected never reaches the loop
+    // above, so the warning is raised here for every such page, whichever check kept it. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    {
+        let mut retained: Vec<u32> = type0_loss_pages
+            .iter()
+            .copied()
+            .filter(|page| !accepted_replacements.contains_key(page))
+            .collect();
+        retained.sort_unstable();
+        for page in retained {
+            crate::core::diagnostics::push_warning_deduped(
+                &mut accumulated_warnings,
+                crate::core::diagnostics::warning(
+                    "ocr",
+                    format!("Page {page} retained native text after its OCR render lost Type0 glyph ink."),
+                ),
+            );
         }
     }
     // The structured page keeps the layer first as well, after the passes above rebuilt it. ~keep
