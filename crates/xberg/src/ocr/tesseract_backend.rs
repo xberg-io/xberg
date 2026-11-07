@@ -496,6 +496,33 @@ impl Plugin for TesseractBackend {
     }
 }
 
+/// Counts reads per `security_limits.max_archive_size`, a field no scan read uses, so a test
+/// picks a value of its own and concurrent tests never see each other's reads.
+#[cfg(all(
+    test,
+    paddle_ocr,
+    feature = "pdf",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng"
+))]
+pub(crate) mod read_counter {
+    use super::OcrConfig;
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+
+    static READS: LazyLock<Mutex<HashMap<usize, usize>>> = LazyLock::new(Default::default);
+
+    pub(crate) fn record(config: &OcrConfig) {
+        if let Some(limits) = config.security_limits.as_ref() {
+            *READS.lock().unwrap().entry(limits.max_archive_size).or_default() += 1;
+        }
+    }
+
+    pub(crate) fn reads(key: usize) -> usize {
+        READS.lock().unwrap().get(&key).copied().unwrap_or(0)
+    }
+}
+
 impl TesseractBackend {
     pub(crate) async fn process_image_with_dpi_policy(
         &self,
@@ -537,6 +564,14 @@ impl TesseractBackend {
         config: &OcrConfig,
         policy: ImageOcrPolicy,
     ) -> Result<ExtractedDocument> {
+        #[cfg(all(
+            test,
+            paddle_ocr,
+            feature = "pdf",
+            feature = "tokio-runtime",
+            feature = "bundle-tessdata-eng"
+        ))]
+        read_counter::record(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();

@@ -26,9 +26,12 @@ fn assert_projection(content: &str, original_len: usize, cut: usize, original_sh
     assert!(content.len() > original_len, "right-column recovery absent");
     let end = cut + content.len() - original_len;
     let inserted = &content[cut..end];
+    let original = [&content.as_bytes()[..cut], &content.as_bytes()[end..]].concat();
     assert_eq!(
-        sha([&content.as_bytes()[..cut], &content.as_bytes()[end..]].concat()),
-        original_sha
+        sha(&original),
+        original_sha,
+        "OCR text around the recovered lines changed:\n{}",
+        String::from_utf8_lossy(&original)
     );
     let lines: Vec<_> = inserted
         .lines()

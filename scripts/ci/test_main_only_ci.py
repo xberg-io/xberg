@@ -6,14 +6,24 @@ import ast
 import re
 import unittest
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
 EXPECTED_WORKFLOWS = 16
 EXPECTED_JOBS = 76
 EXPECTED_CHECKOUTS = 76
+# The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
+FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
+FOCUSED_PR_GUARDS = (
+    "github.repository == 'xberg-io/xberg'",
+    "github.event.pull_request.head.repo.full_name == github.repository",
+)
 
 
 def requires_main(expression: str) -> bool:
@@ -31,7 +41,7 @@ def ci_workflows() -> list[Path]:
     return sorted(
         path
         for path in WORKFLOWS.iterdir()
-        if not path.name.startswith("publish") and path.name != "plugin-artifacts.yaml"
+        if not path.name.startswith("publish") and path.name not in {"plugin-artifacts.yaml", FOCUSED_PR_WORKFLOW}
     )
 
 
@@ -55,7 +65,60 @@ def keeps_latest_ci_run(concurrency: object, workflow: str) -> bool:
     )
 
 
+def focused_pr_violations(workflow: dict) -> list[str]:
+    """Keep the pull-request exemption from widening into secrets, forks or superseded runs."""
+    triggers = workflow.get("on", workflow.get(True))
+    violations = []
+    if set(triggers) != {"pull_request", "workflow_dispatch"}:
+        violations.append(f"triggers: {sorted(triggers)}")
+    if workflow.get("permissions") != {"contents": "read"}:
+        violations.append("permissions must stay contents: read")
+    if not keeps_latest_ci_run(workflow.get("concurrency"), Path(FOCUSED_PR_WORKFLOW).stem):
+        violations.append("superseded runs must cancel")
+    for name, job in workflow["jobs"].items():
+        condition = job.get("if", "")
+        violations.extend(f"{name}: missing {guard}" for guard in FOCUSED_PR_GUARDS if guard not in condition)
+        for step in job["steps"]:
+            is_checkout = str(step.get("uses", "")).startswith("actions/checkout@")
+            if is_checkout and step.get("with", {}).get("persist-credentials") is not False:
+                violations.append(f"{name}: checkout must not persist credentials")
+    return violations
+
+
 class MainOnlyCiTests(unittest.TestCase):
+    def test_focused_pr_workflow_stays_read_only_and_same_repository(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        assert focused_pr_violations(workflow) == []
+
+    def test_focused_pr_check_rejects_each_widening(self) -> None:
+        def mutated(change: Callable[[dict], None]) -> dict:
+            workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+            change(workflow)
+            return workflow
+
+        def add_target_trigger(workflow: dict) -> None:
+            workflow[True]["pull_request_target"] = None
+
+        def grant_write(workflow: dict) -> None:
+            workflow["permissions"] = {"contents": "write"}
+
+        def stop_cancelling(workflow: dict) -> None:
+            workflow["concurrency"]["cancel-in-progress"] = False
+
+        def admit_forks(workflow: dict) -> None:
+            workflow["jobs"]["regressions"]["if"] = "${{ github.repository == 'xberg-io/xberg' }}"
+
+        def persist_credentials(workflow: dict) -> None:
+            next(
+                step
+                for step in workflow["jobs"]["regressions"]["steps"]
+                if str(step.get("uses", "")).startswith("actions/checkout@")
+            )["with"]["persist-credentials"] = True
+
+        for change in [add_target_trigger, grant_write, stop_cancelling, admit_forks, persist_credentials]:
+            with self.subTest(change=change.__name__):
+                assert focused_pr_violations(mutated(change))
+
     def test_every_ci_workflow_keeps_only_its_latest_main_run(self) -> None:
         paths = ci_workflows()
         assert len(paths) == EXPECTED_WORKFLOWS, "CI workflow inventory changed"

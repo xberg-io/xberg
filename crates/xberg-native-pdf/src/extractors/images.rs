@@ -4087,6 +4087,36 @@ pub struct PdfImageHandle<'doc> {
 }
 
 impl<'doc> PdfImageHandle<'doc> {
+    /// Width and height, in points, the image is painted at, when its placement is exactly known.
+    ///
+    /// Known means the transformation matrix is an unsheared quarter-turn multiple (the image
+    /// axes land on the page axes, possibly swapped or mirrored) with finite non-zero scale. Any
+    /// other matrix, such as a skew or an arbitrary rotation, gives `None` rather than an
+    /// estimate. The extents are those of the image's own width and height axes, so a
+    /// quarter-turned image still reports its width first.
+    #[must_use]
+    pub fn placed_extent_points(&self) -> Option<(f64, f64)> {
+        let (a, b, c, d) = (
+            f64::from(self.ctm.a),
+            f64::from(self.ctm.b),
+            f64::from(self.ctm.c),
+            f64::from(self.ctm.d),
+        );
+        if ![a, b, c, d].iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let scale = a.abs().max(b.abs()).max(c.abs()).max(d.abs());
+        let negligible = |v: f64| v.abs() <= scale * 1e-4;
+        let (width, height) = if negligible(b) && negligible(c) {
+            (a.abs(), d.abs())
+        } else if negligible(a) && negligible(d) {
+            (b.abs(), c.abs())
+        } else {
+            return None;
+        };
+        (width > 0.0 && height > 0.0).then_some((width, height))
+    }
+
     /// Decode this image into a [`PdfImage`].
     ///
     /// This is the expensive operation: it decompresses the image stream,
