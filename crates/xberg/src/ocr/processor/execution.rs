@@ -1067,6 +1067,7 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
     dots.text.len() >= MIN_DOT_LEADER_LENGTH
         && dots.text.bytes().all(|byte| byte == b'.')
         && dots.width > left.height.max(right.height)
+        && dots.height.saturating_mul(2) <= left.height.min(right.height)
         && left.left.saturating_add(left.width) < dots.left
         && dots.left.saturating_add(dots.width) < right.left
         && dots.top >= left.top.max(right.top)
@@ -4081,6 +4082,23 @@ mod tests {
         assert!(accepts(["Signal", "timing"], ["-64", "143.92"]));
         assert!(accepts(["Item", "4(b)"], ["$1,010", "3.2%"]));
         assert!(accepts(["Total:", "net"], ["alpha", "beta"]));
+    }
+
+    #[test]
+    fn dot_leader_box_is_at_most_half_the_text_height() {
+        let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
+        let mut words = positioned_dot_leader_row();
+        words[2].top = 30;
+        words[2].height = 5;
+        assert!(
+            row_has_only_extra_dot_leader(&words.each_ref(), &cells),
+            "half of 10 is the limit"
+        );
+        words[2].height = 6;
+        assert!(
+            !row_has_only_extra_dot_leader(&words.each_ref(), &cells),
+            "a box taller than half the text inside the shared band is a stroke, not leader dots"
+        );
     }
 
     #[test]
