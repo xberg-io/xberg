@@ -13,3 +13,10 @@ inventory and both PDF hashes.
 ```sh
 python3 generate.py --font /path/to/NotoSansKhmer-Regular.ttf --out .
 ```
+
+`khmer-then-scanned-english.pdf` is page 1 of `cluster-complete-mapped.pdf` followed by the
+scanned English page `test_documents/pdf_scanned/memo_prose_scanned.pdf`:
+
+```sh
+qpdf --empty --pages cluster-complete-mapped.pdf 1 memo_prose_scanned.pdf 1 -- khmer-then-scanned-english.pdf
+```
