@@ -63,11 +63,12 @@ impl JobStore {
         self.active.lock().len()
     }
 
-    /// Create a new job in the store and return its ID.
-    pub fn create_job(&self) -> String {
+    /// Create a new job in the store and return its ID, or `None` when
+    /// [`MAX_ACTIVE_JOBS`] jobs are already pending or running.
+    pub fn create_job(&self) -> Option<String> {
         let job_id = generate_job_id();
-        self.create(job_id.clone(), now_rfc3339());
-        job_id
+        self.create(job_id.clone(), now_rfc3339())?;
+        Some(job_id)
     }
 
     /// Return the cancellation token of a pending or running job.
@@ -79,8 +80,12 @@ impl JobStore {
         self.active.lock().get(job_id).map(|job| job.token.clone())
     }
 
-    /// Register a new job in `Pending` state. Returns its initial `JobStatus`.
-    pub fn create(&self, job_id: String, timestamp: String) -> JobStatus {
+    /// Register a new job in `Pending` state and return its initial `JobStatus`.
+    ///
+    /// The capacity check and the insert happen under one lock, so concurrent
+    /// submissions cannot take the store above [`MAX_ACTIVE_JOBS`]. Returns `None`
+    /// when the store is full.
+    pub fn create(&self, job_id: String, timestamp: String) -> Option<JobStatus> {
         let status = JobStatus {
             job_id: job_id.clone(),
             state: JobState::Pending,
@@ -93,8 +98,12 @@ impl JobStore {
             status: status.clone(),
             token: CancellationToken::default(),
         };
-        self.active.lock().insert(job_id, job);
-        status
+        let mut active = self.active.lock();
+        if active.len() >= MAX_ACTIVE_JOBS {
+            return None;
+        }
+        active.insert(job_id, job);
+        Some(status)
     }
 
     /// Retrieve the current status of a job by ID.
@@ -206,7 +215,7 @@ mod tests {
     fn test_create_job_is_pending() {
         let store = JobStore::new();
         let ts = "2026-05-01T12:00:00Z".to_string();
-        let status = store.create("job-1".to_string(), ts.clone());
+        let status = store.create("job-1".to_string(), ts.clone()).expect("slot available");
         assert_eq!(status.state, JobState::Pending);
         assert_eq!(status.job_id, "job-1");
         assert_eq!(status.created_at, ts);
@@ -215,7 +224,9 @@ mod tests {
     #[test]
     fn test_get_existing_job() {
         let store = JobStore::new();
-        store.create("job-2".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-2".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         let got = store.get("job-2");
         assert!(got.is_some());
         assert_eq!(got.unwrap().job_id, "job-2");
@@ -230,7 +241,9 @@ mod tests {
     #[test]
     fn test_set_running_transitions_state() {
         let store = JobStore::new();
-        store.create("job-3".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-3".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         store.set_running("job-3", "2026-05-01T12:00:01Z".to_string());
         let status = store.get("job-3").unwrap();
         assert_eq!(status.state, JobState::Running);
@@ -239,7 +252,9 @@ mod tests {
     #[test]
     fn test_complete_stores_result() {
         let store = JobStore::new();
-        store.create("job-4".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-4".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         store.complete(
             "job-4",
             serde_json::json!({"content": "hello"}),
@@ -253,7 +268,9 @@ mod tests {
     #[test]
     fn test_fail_stores_error() {
         let store = JobStore::new();
-        store.create("job-5".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-5".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         store.fail(
             "job-5",
             "OCR unavailable".to_string(),
@@ -267,7 +284,7 @@ mod tests {
     #[test]
     fn test_cancel_pending_job() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         assert_eq!(store.active_count(), 1);
 
         match store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string()) {
@@ -281,7 +298,7 @@ mod tests {
     #[test]
     fn test_cancel_running_job_fires_token() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.set_running(&job_id, "2026-05-01T12:00:01Z".to_string());
         let token = store.cancellation_token(&job_id).expect("token registered on create");
         assert!(!token.is_cancelled());
@@ -296,7 +313,7 @@ mod tests {
     #[test]
     fn test_cancel_completed_job_is_conflict() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.complete(
             &job_id,
             serde_json::json!({"content": "done"}),
@@ -317,7 +334,7 @@ mod tests {
     #[test]
     fn test_cancel_failed_job_is_conflict() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.fail(&job_id, "boom".to_string(), "2026-05-01T12:00:01Z".to_string());
 
         match store.cancel(&job_id, "2026-05-01T12:00:02Z".to_string()) {
@@ -329,7 +346,7 @@ mod tests {
     #[test]
     fn test_cancel_already_cancelled_job_is_conflict() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         match store.cancel(&job_id, "2026-05-01T12:00:02Z".to_string()) {
@@ -350,7 +367,7 @@ mod tests {
     #[test]
     fn test_complete_after_cancel_is_noop() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         store.complete(
@@ -371,7 +388,7 @@ mod tests {
     #[test]
     fn test_fail_after_cancel_is_noop() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         store.fail(&job_id, "late error".to_string(), "2026-05-01T12:00:02Z".to_string());
@@ -398,16 +415,30 @@ mod tests {
     #[test]
     fn test_create_job_helper() {
         let store = JobStore::new();
-        let id = store.create_job();
+        let id = store.create_job().expect("slot available");
         assert!(!id.is_empty());
         let status = store.get(&id).expect("job must be created");
         assert_eq!(status.state, JobState::Pending);
     }
 
     #[test]
+    fn test_create_job_refuses_when_store_is_full() {
+        let store = JobStore::new();
+        let ids: Vec<String> = (0..MAX_ACTIVE_JOBS)
+            .map(|_| store.create_job().expect("slot available"))
+            .collect();
+        assert!(store.create_job().is_none());
+        assert_eq!(store.active_count(), MAX_ACTIVE_JOBS);
+
+        store.complete(&ids[0], serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+        assert!(store.create_job().is_some());
+        assert_eq!(store.active_count(), MAX_ACTIVE_JOBS);
+    }
+
+    #[test]
     fn test_job_ttl_counts_from_finish() {
         let store = JobStore::with_limits(Duration::from_millis(50), MAX_FINISHED_JOBS);
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.set_running(&job_id, "2026-05-01T12:00:01Z".to_string());
         std::thread::sleep(Duration::from_millis(150));
 
@@ -430,7 +461,7 @@ mod tests {
     #[test]
     fn test_set_running_after_cancel_does_not_resurrect() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         store.set_running(&job_id, "2026-05-01T12:00:02Z".to_string());
@@ -445,7 +476,7 @@ mod tests {
     #[test]
     fn test_finished_job_does_not_transition_again() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
 
         store.fail(&job_id, "late error".to_string(), "2026-05-01T12:00:02Z".to_string());
@@ -459,12 +490,12 @@ mod tests {
     #[test]
     fn test_finished_capacity_never_evicts_running_job() {
         let store = JobStore::with_limits(JOB_TTL, 2);
-        let running = store.create_job();
+        let running = store.create_job().expect("slot available");
         store.set_running(&running, "2026-05-01T12:00:01Z".to_string());
         let token = store.cancellation_token(&running).unwrap();
 
         for _ in 0..100 {
-            let job_id = store.create_job();
+            let job_id = store.create_job().expect("slot available");
             store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:02Z".to_string());
         }
         store.finished.run_pending_tasks();
@@ -490,7 +521,7 @@ fn test_create_job_concurrent_uniqueness() {
 
     for _ in 0..100 {
         let store_clone = Arc::clone(&store);
-        handles.push(thread::spawn(move || store_clone.create_job()));
+        handles.push(thread::spawn(move || store_clone.create_job().expect("slot available")));
     }
 
     let mut job_ids = std::collections::HashSet::new();
@@ -500,6 +531,44 @@ fn test_create_job_concurrent_uniqueness() {
     }
 
     assert_eq!(job_ids.len(), 100);
+}
+
+/// With one slot left, concurrent submissions admit exactly one job: the capacity
+/// check and the insert happen under one lock, so the store never exceeds
+/// `MAX_ACTIVE_JOBS`.
+#[test]
+fn test_concurrent_admission_fills_last_slot_once() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    for _ in 0..50 {
+        let store = Arc::new(JobStore::new());
+        for _ in 1..MAX_ACTIVE_JOBS {
+            store.create_job().expect("slot available");
+        }
+
+        let contenders = 16;
+        let barrier = Arc::new(Barrier::new(contenders));
+        let handles: Vec<_> = (0..contenders)
+            .map(|_| {
+                let store = Arc::clone(&store);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    store.create_job()
+                })
+            })
+            .collect();
+
+        let admitted = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .filter(Option::is_some)
+            .count();
+
+        assert_eq!(admitted, 1, "exactly one submission may take the last slot");
+        assert_eq!(store.active_count(), MAX_ACTIVE_JOBS);
+    }
 }
 
 /// Regression test for a race between `cancel()` and `complete()` on the same job:
@@ -512,7 +581,7 @@ fn test_concurrent_cancel_and_complete_finish_once() {
 
     for _ in 0..200 {
         let store = Arc::new(JobStore::new());
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         let token = store.cancellation_token(&job_id).unwrap();
 
         let store_a = Arc::clone(&store);
