@@ -250,6 +250,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
   Fractional rules can refine existing cells when the original word bounds clear the full painted stroke.
 
+- **(pdf): Admit fully source-ruled wide tables with merged index cells.** (#2376)
+  Certify 16-18 column grids only when every cell, merged span and word is proven by plain painted rules on the page.
+
 - **(pdf): Keep certified side-by-side panel lines in source order in plain output.** (#2537)
   Preserve complete rows and page boundaries in documents that mix panels with ordinary text.
 
