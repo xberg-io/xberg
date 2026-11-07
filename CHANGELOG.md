@@ -248,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
   Recover counterclockwise table rows when native line membership proves the source geometry.
   Recover a single sideways prose paragraph when native lines prove the complete text and geometry.
+  Recover an upside-down table by reading the half-turned raster once Tesseract reports every text block rotated 180 degrees, returning geometry in the original frame.
   Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
 
 - **(ocr): Correct detached two-table PDF reading order and coordinates.** (#2497)

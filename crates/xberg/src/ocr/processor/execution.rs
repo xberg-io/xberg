@@ -2694,7 +2694,10 @@ pub(super) fn perform_ocr(
 
         let words = extract_table_words_from_tsv(tsv_data, config.table_min_confidence, &table_mark_symbols)?;
 
-        let oriented = recognition_orientation::tables(
+        let recognition_orientation::Oriented {
+            tables: oriented,
+            page_down,
+        } = recognition_orientation::tables(
             &api,
             tsv_data,
             &words,
@@ -2702,6 +2705,12 @@ pub(super) fn perform_ocr(
             (ocr_image_width, ocr_image_height),
             &security_limits,
         );
+        if page_down {
+            metadata.insert(
+                crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY.to_string(),
+                serde_json::Value::Bool(true),
+            );
+        }
         let regions = if oriented.is_some() {
             Vec::new()
         } else {
