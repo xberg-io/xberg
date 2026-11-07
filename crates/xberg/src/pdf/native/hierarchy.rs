@@ -1083,6 +1083,47 @@ fn is_marker_sized(span: &xberg_native_pdf::layout::TextSpan) -> bool {
             .all(|ch| ch.is_alphanumeric() || matches!(ch, ',' | '*' | '†' | '‡' | '+' | '-' | '−'))
 }
 
+/// A raised script with a lowered one under the same stretch of a larger base between them:
+/// the two read as one stacked pair, and snapping only the raised half would send it into the
+/// base's row while the lowered half stays out. Both keep their raw rows. ~keep
+fn is_stacked_script(spans: &[xberg_native_pdf::layout::TextSpan], index: usize) -> bool {
+    let raised = &spans[index];
+    if !is_marker_sized(raised) {
+        return false;
+    }
+    spans.iter().any(|base| {
+        let reach = base.font_size * INLINE_SCRIPT_MAX_SUFFIX_GAP_EM.max(1.0);
+        base.font_size > raised.font_size / INLINE_SCRIPT_MAX_FONT_RATIO
+            && base.bbox.y < raised.bbox.y
+            && raised.bbox.x - base.bbox.right() >= -base.font_size * NUMERIC_SUFFIX_OVERHANG
+            && raised.bbox.x - base.bbox.right() <= reach
+            && spans.iter().any(|lowered| {
+                is_marker_sized(lowered)
+                    && lowered.bbox.y < base.bbox.y
+                    && (lowered.font_size / raised.font_size - 1.0).abs() <= STACKED_SCRIPT_SIZE_DRIFT
+                    && lowered.bbox.x < raised.bbox.right()
+                    && lowered.bbox.right() > raised.bbox.x
+                    && base.bbox.y - lowered.bbox.y <= base.font_size * INLINE_SCRIPT_MAX_BASELINE_SHIFT_EM
+            })
+    })
+}
+
+/// Whether another span lies in the same visual row as `index`, by the row rule the reading-order
+/// sort applies. A marker alone in its row is ordered directly before its base's row, still
+/// adjacent to it; only a row shared with other spans carries the marker away from its base. ~keep
+fn shares_row(spans: &[xberg_native_pdf::layout::TextSpan], index: usize) -> bool {
+    const ROW_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
+    let marker = &spans[index];
+    let scale = |span: &xberg_native_pdf::layout::TextSpan| span.font_size.max(span.bbox.height);
+    spans.iter().enumerate().any(|(other, span)| {
+        other != index
+            && (span.bbox.y - marker.bbox.y).abs() <= scale(span).max(scale(marker)) * ROW_TOLERANCE_SCALE_FACTOR
+    })
+}
+
+const STACKED_SCRIPT_SIZE_DRIFT: f32 = 0.15;
+const NUMERIC_SUFFIX_OVERHANG: f32 = 0.25;
+
 type SpanBaselineKey = (usize, u32, u32, u32, String);
 
 fn span_baseline_key(span: &xberg_native_pdf::layout::TextSpan) -> SpanBaselineKey {
@@ -1100,11 +1141,14 @@ fn span_baseline_key(span: &xberg_native_pdf::layout::TextSpan) -> SpanBaselineK
 /// bases for the ordering and return the raw baselines, keyed by the snapped span, to restore. ~keep
 fn snap_scripts_for_ordering(spans: &mut [xberg_native_pdf::layout::TextSpan]) -> HashMap<SpanBaselineKey, f32> {
     let raw: Vec<f32> = spans.iter().map(|span| span.bbox.y).collect();
+    let stacked: Vec<bool> = (0..spans.len())
+        .map(|index| is_stacked_script(spans, index) || !shares_row(spans, index))
+        .collect();
     xberg_native_pdf::extractors::text::snap_spans_to_base_baselines(spans);
     // The snap takes any smaller span beside a larger one; only a marker-sized span is a script. ~keep
-    for (span, raw) in spans.iter_mut().zip(&raw) {
+    for (index, (span, raw)) in spans.iter_mut().zip(&raw).enumerate() {
         let smallest_displacement = INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM * span.font_size / INLINE_SCRIPT_MAX_FONT_RATIO;
-        if !is_marker_sized(span) || (raw - span.bbox.y).abs() < smallest_displacement {
+        if !is_marker_sized(span) || stacked[index] || (raw - span.bbox.y).abs() < smallest_displacement {
             span.bbox.y = *raw;
         }
     }
