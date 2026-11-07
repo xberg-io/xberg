@@ -1846,7 +1846,19 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// How far, in text-space units, the pen sits left of the right edge of the last glyph
+    /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
+    pullback: f32,
+    /// Whether the last glyph stood for more than one letter (a ligature). Only such a glyph has a
+    /// box that a space can start inside of.
+    ligature_tail: bool,
 }
+
+/// The share of a space glyph that must lie inside the previous glyph's box before the space
+/// takes no room. The value is chosen, not measured: a producer that joins a ligature pulls the pen
+/// back by the whole space, and a pull-back of half the space leaves a word gap. Tests pin 60% (kept)
+/// and 96% (dropped). ~keep
+const ROOMLESS_SPACE_OVERLAP: f32 = 0.9;
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
 /// `θ = atan2(b, a)`) to the nearest of `0 / 90 / 180 / -90` when it is within
@@ -1972,6 +1984,50 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            pullback: 0.0,
+            ligature_tail: false,
+        }
+    }
+
+    /// Decide whether a space glyph of advance `width` takes no room on the line: it follows a
+    /// ligature and the pen was pulled back over at least `ROOMLESS_SPACE_OVERLAP` of the space.
+    /// If so, the space stays out of the text and its advance goes to the previous glyph, so the
+    /// gap test between the real neighbours decides. A smaller pull-back keeps the space, because
+    /// part of the space then stands between the two words. A glyph of one letter keeps its space
+    /// too, because a producer may pull the pen back there to place a word gap. ~keep
+    fn absorb_roomless_space(&mut self, width: f32) -> bool {
+        if !self.ligature_tail || self.pullback < width * ROOMLESS_SPACE_OVERLAP {
+            return false;
+        }
+        let Some(last) = self.char_widths.last_mut() else {
+            return false;
+        };
+        *last += width;
+        self.pullback = (self.pullback - width).max(0.0);
+        true
+    }
+
+    /// Whether text shown under `state` continues this run: every setting the buffer captured at its
+    /// start is unchanged, so the run can go on without a span of its own. The font and the writing mode
+    /// need no comparison: `Tf` and `Q` flush the run before they change either. ~keep
+    fn continues_under(&self, state: &crate::content::graphics_state::GraphicsState) -> bool {
+        let text_rise = if state.font_size > 0.0 {
+            state.text_rise / state.font_size
+        } else {
+            0.0
+        };
+        self.fill_color_rgb == state.fill_color_rgb
+            && self.char_space == state.char_space
+            && self.word_space == state.word_space
+            && self.horizontal_scaling == state.horizontal_scaling
+            && self.render_mode == state.render_mode
+            && self.text_rise == text_rise
+    }
+
+    /// Push one width for each output letter of a code, so `char_widths` and the text stay equal in length.
+    fn push_letter_widths(&mut self, letter_count: usize, width: f32) {
+        for _ in 0..letter_count {
+            self.char_widths.push(width / letter_count as f32);
         }
     }
 
@@ -2174,6 +2230,8 @@ pub struct TextExtractor<'doc> {
     pub(crate) preserve_script_baselines: bool,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
+    /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
+    after_ligature: bool,
     /// Resources dictionary (for accessing XObjects and fonts)
     resources: Option<Object>,
     /// Reference to the document (for loading XObjects)
