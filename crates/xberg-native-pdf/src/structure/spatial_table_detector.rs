@@ -3149,7 +3149,14 @@ fn detect_intersections(
             evidence.bounds = table.bbox;
             return vec![table];
         }
-        let mut sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        let mut sub_tables = finalize_intersection_tables(
+            table_rows,
+            &row_cell_span_indices,
+            spans,
+            config,
+            *num_cols,
+            cells_are_intersections.then_some(lines),
+        );
         if cells_are_intersections
             && let Some(evidence) = recovery.as_deref_mut()
             && !sub_tables.iter().any(Table::is_real_grid)
@@ -3699,18 +3706,23 @@ fn finalize_intersection_tables(
     spans: &[TextSpan],
     config: &TableDetectionConfig,
     num_cols: usize,
+    source_header_paths: Option<&[crate::elements::PathContent]>,
 ) -> Vec<Table> {
     let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_split", || {
         header_source_diagnostic::rows(&table_rows)
     });
-
     strip_form_numbering_artifacts(&mut table_rows);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_stripped", || {
         header_source_diagnostic::rows(&table_rows)
     });
+    if let Some(paths) = source_header_paths {
+        for segment in table_rows.split_mut(|row| row.cells.iter().all(|cell| cell.text.is_empty())) {
+            source_headers::retain_grouped_leaf_header(segment, paths, num_cols);
+        }
+    }
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();
@@ -10690,7 +10702,7 @@ mod tests {
         assert_eq!(split_only[0].cells[0].text, "5");
         assert_eq!(split_only[0].cells[1].text, "");
 
-        let tables = finalize_intersection_tables(vec![row], &row_cell_span_indices, &spans, &config, 2);
+        let tables = finalize_intersection_tables(vec![row], &row_cell_span_indices, &spans, &config, 2, None);
 
         assert_eq!(tables.len(), 1, "the two evidenced data rows must still form one table");
         let surviving_rows: Vec<Vec<&str>> = tables[0]

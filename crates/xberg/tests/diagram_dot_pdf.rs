@@ -244,6 +244,44 @@ BT /F1 12 Tf 130 135 Td (Hub) Tj ET
     assert_eq!(dot.matches("->").count(), 2, "both incoming edges must survive:\n{dot}");
 }
 
+/// Four evenly spaced horizontal gridlines of one colour span the plot between two bars. Two are
+/// dashed and two solid, so a family keyed on dash style splits into pairs below the minimum of
+/// three and the gridlines surface as edges between the bars.
+#[test]
+fn mixed_dashed_and_solid_gridlines_between_two_bars_are_not_edges() {
+    let content = b"1 w 0 0 0 RG
+10 20 40 160 re S
+150 20 40 160 re S
+[4 2] 0 d 50 40 m 150 40 l S
+[] 0 d 50 80 m 150 80 l S
+[4 2] 0 d 50 120 m 150 120 l S
+[] 0 d 50 160 m 150 160 l S
+BT /F1 12 Tf 20 100 Td (A) Tj ET
+BT /F1 12 Tf 160 100 Td (B) Tj ET
+"
+    .to_vec();
+    let dot = extract_dot(&single_page_pdf(&content, 200, 200));
+
+    assert_eq!(dot.matches("->").count(), 0, "gridlines must not become edges:\n{dot}");
+}
+
+/// A single dashed connector between two boxes is a real edge and keeps its dashed style.
+#[test]
+fn a_dashed_connector_between_two_boxes_is_a_dashed_edge() {
+    let content = b"1 w 0 0 0 RG
+10 150 80 30 re S
+10 20 80 30 re S
+[4 2] 0 d 50 150 m 50 50 l S
+BT /F1 12 Tf 30 160 Td (Alpha) Tj ET
+BT /F1 12 Tf 30 30 Td (Beta) Tj ET
+"
+    .to_vec();
+    let dot = extract_dot(&single_page_pdf(&content, 200, 200));
+
+    assert_eq!(dot.matches("->").count(), 1, "expected one edge:\n{dot}");
+    assert!(dot.contains("style=dashed"), "the edge must stay dashed:\n{dot}");
+}
+
 /// Every renderer but `dot` discards the recovered graph, so recovery must be
 /// requested through the output format rather than run unconditionally. This
 /// checks the contract from outside the crate: the same diagram that produces
