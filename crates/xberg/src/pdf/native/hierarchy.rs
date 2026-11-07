@@ -1057,6 +1057,8 @@ fn extract_final_spans_from_page_with_primes(
     }
     let used_structure_order = apply_rtl_structure_order(doc, page_index, &mut page_text_data.spans);
     if !used_structure_order {
+        let raw_baselines =
+            (script_geometry == ScriptGeometry::Preserve).then(|| snap_scripts_for_ordering(&mut page_text_data.spans));
         reorder_page_reading_order(
             &mut page_text_data.spans,
             page_text_data.page_width,
@@ -1064,8 +1066,65 @@ fn extract_final_spans_from_page_with_primes(
             page_index,
         );
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
+        if let Some(raw_baselines) = raw_baselines {
+            restore_script_baselines(&mut page_text_data.spans, &raw_baselines);
+        }
     }
     Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
+}
+
+fn is_marker_sized(span: &xberg_native_pdf::layout::TextSpan) -> bool {
+    let char_count = span.text.chars().count();
+    (1..=INLINE_SCRIPT_MAX_CHARS).contains(&char_count)
+        && span.text.chars().any(|ch| ch != ',')
+        && span
+            .text
+            .chars()
+            .all(|ch| ch.is_alphanumeric() || matches!(ch, ',' | '*' | '†' | '‡' | '+' | '-' | '−'))
+}
+
+type SpanBaselineKey = (usize, u32, u32, u32, String);
+
+fn span_baseline_key(span: &xberg_native_pdf::layout::TextSpan) -> SpanBaselineKey {
+    (
+        span.sequence,
+        span.bbox.x.to_bits(),
+        span.bbox.y.to_bits(),
+        span.font_size.to_bits(),
+        span.text.clone(),
+    )
+}
+
+/// Row ordering keys on `bbox.y`, so a raised marker whose own height falls in a neighbouring
+/// column's row is ordered into that row, away from its base. Snap script spans onto their
+/// bases for the ordering and return the raw baselines, keyed by the snapped span, to restore. ~keep
+fn snap_scripts_for_ordering(spans: &mut [xberg_native_pdf::layout::TextSpan]) -> HashMap<SpanBaselineKey, f32> {
+    let raw: Vec<f32> = spans.iter().map(|span| span.bbox.y).collect();
+    xberg_native_pdf::extractors::text::snap_spans_to_base_baselines(spans);
+    // The snap takes any smaller span beside a larger one; only a marker-sized span is a script. ~keep
+    for (span, raw) in spans.iter_mut().zip(&raw) {
+        let smallest_displacement = INLINE_SCRIPT_MIN_BASELINE_SHIFT_EM * span.font_size / INLINE_SCRIPT_MAX_FONT_RATIO;
+        if !is_marker_sized(span) || (raw - span.bbox.y).abs() < smallest_displacement {
+            span.bbox.y = *raw;
+        }
+    }
+    spans
+        .iter()
+        .zip(raw)
+        .filter(|(span, raw)| span.bbox.y.to_bits() != raw.to_bits())
+        .map(|(span, raw)| (span_baseline_key(span), raw))
+        .collect()
+}
+
+fn restore_script_baselines(
+    spans: &mut [xberg_native_pdf::layout::TextSpan],
+    raw_baselines: &HashMap<SpanBaselineKey, f32>,
+) {
+    for span in spans {
+        if let Some(&raw) = raw_baselines.get(&span_baseline_key(span)) {
+            span.bbox.y = raw;
+        }
+    }
 }
 
 fn project_final_spans(

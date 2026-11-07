@@ -2096,6 +2096,7 @@ impl<'a> ParagraphVisualRow<'a> {
             script,
             (base.upright_baseline() - script.upright_baseline()).abs(),
             base.font_size,
+            crate::script_run::SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR,
         ) && crate::script_run::is_script_run_forward_gap(
             self.left,
             self.right,
@@ -2112,6 +2113,36 @@ impl<'a> ParagraphVisualRow<'a> {
             self.anchor = segment;
         }
     }
+}
+
+/// The base a raised run ending at `last` hangs from, found among the lines already in the
+/// paragraph. Scripts that abut each other at the same raise and size form one run, so the
+/// base of `−4` is found through `4` and `−`. ~keep
+fn raised_run_base<'a>(lines: &[&'a SegmentData], last: &SegmentData) -> Option<&'a SegmentData> {
+    const MAX_SIZE_DRIFT: f32 = 0.15;
+    let mut member = last;
+    for candidate in lines.iter().rev().take(SCRIPT_RUN_BASE_LOOKBACK + 1).copied() {
+        if std::ptr::eq(candidate, last) {
+            continue;
+        }
+        if is_raised_run_of(candidate, member) {
+            return Some(candidate);
+        }
+        let sibling = candidate.has_same_rotation(member)
+            && (candidate.font_size / member.font_size - 1.0).abs() <= MAX_SIZE_DRIFT
+            && (candidate.upright_baseline() - member.upright_baseline()).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
+            && {
+                let (_, candidate_end) = candidate.upright_advance_extent();
+                let (member_start, _) = member.upright_advance_extent();
+                (member_start - candidate_end).abs()
+                    <= member.font_size * crate::script_run::SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR
+            };
+        if !sibling {
+            return None;
+        }
+        member = candidate;
+    }
+    None
 }
 
 fn blocks_to_paragraphs(
@@ -2150,6 +2181,10 @@ fn blocks_to_paragraphs(
                 .as_ref()
                 .filter(|row| row.carries_script(prev))
                 .map_or(*prev, |row| row.anchor);
+            let line_is_on_scripts_base_row = raised_run_base(&current_lines, prev).is_some_and(|base| {
+                base.has_same_rotation(line)
+                    && (base.upright_baseline() - line.upright_baseline()).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
+            });
             let font_change = (line.font_size - font_reference.font_size).abs() > 1.5
                 && !is_row_script
                 && !is_inline_style_transition(
@@ -2162,7 +2197,8 @@ fn blocks_to_paragraphs(
                     .iter()
                     .rev()
                     .take(SCRIPT_RUN_BASE_LOOKBACK)
-                    .any(|candidate| is_script_run_of(candidate, line));
+                    .any(|candidate| is_raised_run_of(candidate, line))
+                && !line_is_on_scripts_base_row;
             let role_change = line.assigned_role != prev.assigned_role;
             let bold_change = line.is_bold != font_reference.is_bold
                 && !is_row_script
@@ -2175,7 +2211,8 @@ fn blocks_to_paragraphs(
             let rotation_change = !line.has_same_rotation(prev);
             let starts_new_line = rotation_change
                 || ((line.upright_baseline() - prev.upright_baseline()).abs() > INLINE_STYLE_BASELINE_TOLERANCE
-                    && !is_script_run_of(prev, line));
+                    && !is_raised_run_of(prev, line)
+                    && !line_is_on_scripts_base_row);
             let has_same_line_follower = lines.get(line_idx + 1).is_some_and(|next| {
                 next.has_same_rotation(line)
                     && (next.upright_baseline() - line.upright_baseline()).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
@@ -2437,15 +2474,42 @@ fn is_inline_style_transition(
 /// Deliberately requires a *non-zero* offset. A run at the identical baseline is already handled by
 /// `INLINE_STYLE_BASELINE_TOLERANCE`, so this predicate only ever relaxes a comparison the existing
 /// gate rejects outright -- it cannot change the outcome of any pair that passes today. ~keep
-fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_delta: f32, font_size: f32) -> bool {
+fn is_script_run_offset(
+    previous: &SegmentData,
+    next: &SegmentData,
+    baseline_delta: f32,
+    font_size: f32,
+    max_baseline_font_factor: f32,
+) -> bool {
     let smaller_font_size = previous.font_size.min(next.font_size);
-    crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
+    crate::script_run::is_script_run_baseline_offset_within(
+        baseline_delta,
+        font_size,
+        smaller_font_size,
+        max_baseline_font_factor,
+    )
 }
 
 /// Whether `next` reads as a sub/superscript attached to `previous`: same rotation and role,
 /// neither monospace, a materially smaller font raised or lowered by a fraction of it, and a start
 /// inside or abutting `previous`'s advance extent.
 pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
+    is_script_run_within(previous, next, crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR)
+}
+
+/// [`is_script_run_of`] at the wider bound a text row tolerates, for grouping lines into
+/// paragraphs rather than annotating. Only a script after its larger base counts: a raised
+/// marker that leads a line is a note label, not part of the text that follows it.
+fn is_raised_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
+    previous.font_size > next.font_size
+        && is_script_run_within(
+            previous,
+            next,
+            crate::script_run::SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR,
+        )
+}
+
+fn is_script_run_within(previous: &SegmentData, next: &SegmentData, max_baseline_font_factor: f32) -> bool {
     if previous.is_monospace || next.is_monospace || previous.assigned_role != next.assigned_role {
         return false;
     }
@@ -2471,7 +2535,7 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
     let baseline_delta = (next.upright_baseline() - previous.upright_baseline()).abs();
     let (previous_start, previous_end) = previous.upright_advance_extent();
     let (next_start, _) = next.upright_advance_extent();
-    is_script_run_offset(previous, next, baseline_delta, font_size)
+    is_script_run_offset(previous, next, baseline_delta, font_size, max_baseline_font_factor)
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 

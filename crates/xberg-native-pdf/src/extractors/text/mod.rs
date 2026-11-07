@@ -2450,5 +2450,6 @@ mod run;
 mod setup;
 mod span_merging;
 mod span_ordering;
+pub use span_ordering::snap_spans_to_base_baselines;
 mod tj_arrays;
 mod xobjects;

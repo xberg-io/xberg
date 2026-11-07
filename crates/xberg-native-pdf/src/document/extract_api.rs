@@ -666,7 +666,28 @@ impl PdfDocument {
             HashSet::new(),
             ScriptGeometry::Preserve,
         )?;
-        let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
+        // The extractor restored raw script baselines, so a raised marker sits in whichever row
+        // its own height falls in, which can be a neighbouring column's row rather than its
+        // base's. Rows are therefore ordered on snapped baselines, then the raw ones return.
+        // Temporary indices stand in for sequence numbers, which cached Form XObjects reuse. ~keep
+        let mut spans = spans;
+        let source: Vec<(usize, f32)> = spans
+            .iter_mut()
+            .enumerate()
+            .map(|(index, span)| {
+                let source = (span.sequence, span.bbox.y);
+                span.sequence = index;
+                source
+            })
+            .collect();
+        crate::extractors::text::snap_spans_to_base_baselines(&mut spans);
+        let mut spans = self.order_extracted_spans(page_index, reading_order, spans)?;
+        for span in &mut spans {
+            if let Some(&(sequence, baseline)) = source.get(span.sequence) {
+                span.sequence = sequence;
+                span.bbox.y = baseline;
+            }
+        }
         let chars = spans.iter().flat_map(|span| span.to_chars()).collect();
         let media_box = self.get_page_media_box(page_index)?;
         Ok(crate::layout::PageText {

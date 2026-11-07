@@ -204,6 +204,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep a raised note marker with its line and its paragraph.** (#2443)
+  Native PDF row ordering now uses a marker's base baseline, so a raised number beside a higher neighbouring column is no longer sorted into that column's row, and a marker raised up to half the base font size no longer splits its paragraph.
+  Pages with a raised and a lowered script stacked on one base can still split; see #2443.
+
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
 

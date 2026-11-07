@@ -518,3 +518,19 @@ mod input_checks {
         assert_eq!(failures, vec!["b.pdf: no output"]);
     }
 }
+
+#[test]
+fn regression_page_keeps_raised_note_marker_in_its_sentence_beside_other_columns() {
+    assert_regression_page_has_script(
+        "fr-2026-08190-hcbs-p2.pdf",
+        "Medicaid Director Letter \\# 22–003<sup>2</sup> to release the first official version",
+    );
+}
+
+#[test]
+fn regression_page_keeps_ordinal_suffixes_in_the_author_line() {
+    assert_regression_page_has_script(
+        "arxiv-2403.01153v1-p1.pdf",
+        "1st Zhiyuan He, 2nd Ke Deng, 3rd Jiangchao Gong,",
+    );
+}

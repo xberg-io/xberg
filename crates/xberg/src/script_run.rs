@@ -45,8 +45,31 @@ pub(crate) const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
 /// Deliberately requires a *non-zero* offset — a run at the identical baseline is a same-size
 /// style transition, not a script run, and is handled by the caller's own on-baseline path.
 pub(crate) fn is_script_run_baseline_offset(baseline_delta: f32, font_size: f32, smaller_font_size: f32) -> bool {
+    is_script_run_baseline_offset_within(
+        baseline_delta,
+        font_size,
+        smaller_font_size,
+        SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR,
+    )
+}
+
+/// Largest baseline offset at which a smaller abutting run still belongs to its base's text row.
+///
+/// Wider than [`SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR`], which bounds what the geometry alone
+/// annotates as a script. A marker raised further than that is annotated only on native script
+/// evidence (`pdf::native::hierarchy::script_evidence`, same 0.5 bound), yet it still must not
+/// split the row's paragraph: a wrapped line sits a full leading (>= 1.0) away. ~keep
+pub(crate) const SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR: f32 = 0.5;
+
+/// [`is_script_run_baseline_offset`] with the caller's own offset bound.
+pub(crate) fn is_script_run_baseline_offset_within(
+    baseline_delta: f32,
+    font_size: f32,
+    smaller_font_size: f32,
+    max_baseline_font_factor: f32,
+) -> bool {
     baseline_delta > 0.0
-        && baseline_delta <= font_size * SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+        && baseline_delta <= font_size * max_baseline_font_factor
         && smaller_font_size <= font_size * SCRIPT_RUN_MAX_FONT_SIZE_RATIO
 }
 

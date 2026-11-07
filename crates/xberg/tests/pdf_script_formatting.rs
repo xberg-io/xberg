@@ -379,3 +379,33 @@ fn should_use_the_source_gap_for_a_raised_isotope_like_prefix() {
         assert_eq!(markdown(&bytes).trim(), expected, "{gap}pt source gap");
     }
 }
+
+#[test]
+fn should_keep_a_raised_marker_on_its_line_beside_a_higher_neighbouring_column() {
+    let metrics = script_pdf("BT /F1 10 Tf 1 0 0 1 72 700 Tm (Medicaid Director Letter 22\\261003) Tj ET");
+    let native = xberg_native_pdf::PdfDocument::from_bytes(metrics).expect("native parses source metrics");
+    let base_width: f32 = native
+        .extract_chars(0)
+        .expect("source advances")
+        .iter()
+        .map(|ch| ch.advance_width)
+        .sum();
+    let marker_x = 72.0 + base_width + 1.0;
+    let bytes = script_pdf(&format!(
+        "BT /F1 10 Tf 1 0 0 1 72 712 Tm (In July 2022 we issued State) Tj ET \
+         BT /F1 10 Tf 1 0 0 1 72 700 Tm (Medicaid Director Letter 22\\261003) Tj ET \
+         BT /F1 6 Tf 1 0 0 1 {marker_x} 702.5 Tm (2) Tj ET \
+         BT /F1 10 Tf 1 0 0 1 {} 700 Tm (to release the first version) Tj ET \
+         BT /F1 10 Tf 1 0 0 1 340 703.2 Tm (A neighbouring column of text) Tj ET",
+        marker_x + 6.0
+    ));
+    let content = markdown(&bytes);
+    assert!(
+        content.lines().all(|line| line.trim() != "2"),
+        "the raised marker must not become a paragraph of its own:\n{content}"
+    );
+    assert!(
+        content.contains("Letter 22–003<sup>2</sup> to release the first version"),
+        "{content}"
+    );
+}

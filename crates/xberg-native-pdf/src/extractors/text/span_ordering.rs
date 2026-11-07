@@ -137,48 +137,7 @@ impl<'doc> TextExtractor<'doc> {
     ///   font_size beyond (the position a superscript would
     ///   appear when typeset directly after the base).
     pub(super) fn snap_superscript_baselines(&mut self) {
-        let n = self.spans.len();
-        if n < 2 {
-            return;
-        }
-
-        // Snapshot the read-side fields we need so the borrow checker
-        // lets us mutate `self.spans[i].bbox.y` inside the loop. ~keep
-        let snapshot: Vec<(f32, f32, f32, f32)> = self
-            .spans
-            .iter()
-            .map(|s| (s.bbox.x, s.bbox.y, s.bbox.width, s.font_size))
-            .collect();
-
-        // A valid base candidate `j` always has `y_offset = sy - by` in
-        // `[0, bfs*0.5]` (see the gates below), so `by` lies in
-        // `[sy - bfs*0.5, sy] ⊆ [sy - max_fs*0.5, sy]`. Sort span indices by
-        // Y once and, per candidate, binary-search that Y-window instead of
-        // rescanning all spans — this turns the previous O(n²) double loop
-        // (which hung for >30 s on archive.org / Google-Books pages whose
-        // invisible hOCR layer emits thousands of spans) into roughly
-        // O(n log n + n·window). The window is a strict superset of the
-        // acceptable bases, so the result is identical to the full scan. ~keep
-        let max_fs = snapshot.iter().map(|s| s.3).fold(0.0f32, f32::max);
-        let max_half_em = max_fs * 0.5;
-        let mut by_order: Vec<usize> = (0..n).collect();
-        by_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(snapshot[a].1, snapshot[b].1));
-        let ys_sorted: Vec<f32> = by_order.iter().map(|&idx| snapshot[idx].1).collect();
-
-        let search = SnapBaseSearch {
-            snapshot: &snapshot,
-            by_order: &by_order,
-            ys_sorted: &ys_sorted,
-            max_half_em,
-        };
-        for i in 0..n {
-            if snapshot[i].3 <= 0.0 {
-                continue;
-            }
-            if let Some(by) = search.base_y_for(i) {
-                self.spans[i].bbox.y = by;
-            }
-        }
+        snap_spans_to_base_baselines(&mut self.spans);
     }
 
     /// Sort extracted text spans by reading order (top-to-bottom, left-to-right).
@@ -738,6 +697,54 @@ impl<'doc> TextExtractor<'doc> {
             }
         }
         None
+    }
+}
+
+/// Snap each super/subscript candidate in `spans` onto its base's baseline
+/// (see [`TextExtractor::snap_superscript_baselines`]). Public so a caller that
+/// must order spans by row after raw script baselines were restored can snap a copy
+/// for the ordering key alone.
+pub fn snap_spans_to_base_baselines(spans: &mut [TextSpan]) {
+    let n = spans.len();
+    if n < 2 {
+        return;
+    }
+
+    // Snapshot the read-side fields we need so the borrow checker
+    // lets us mutate `spans[i].bbox.y` inside the loop. ~keep
+    let snapshot: Vec<(f32, f32, f32, f32)> = spans
+        .iter()
+        .map(|s| (s.bbox.x, s.bbox.y, s.bbox.width, s.font_size))
+        .collect();
+
+    // A valid base candidate `j` always has `y_offset = sy - by` in
+    // `[0, bfs*0.5]` (see the gates below), so `by` lies in
+    // `[sy - bfs*0.5, sy] ⊆ [sy - max_fs*0.5, sy]`. Sort span indices by
+    // Y once and, per candidate, binary-search that Y-window instead of
+    // rescanning all spans — this turns the previous O(n²) double loop
+    // (which hung for >30 s on archive.org / Google-Books pages whose
+    // invisible hOCR layer emits thousands of spans) into roughly
+    // O(n log n + n·window). The window is a strict superset of the
+    // acceptable bases, so the result is identical to the full scan. ~keep
+    let max_fs = snapshot.iter().map(|s| s.3).fold(0.0f32, f32::max);
+    let max_half_em = max_fs * 0.5;
+    let mut by_order: Vec<usize> = (0..n).collect();
+    by_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(snapshot[a].1, snapshot[b].1));
+    let ys_sorted: Vec<f32> = by_order.iter().map(|&idx| snapshot[idx].1).collect();
+
+    let search = SnapBaseSearch {
+        snapshot: &snapshot,
+        by_order: &by_order,
+        ys_sorted: &ys_sorted,
+        max_half_em,
+    };
+    for i in 0..n {
+        if snapshot[i].3 <= 0.0 {
+            continue;
+        }
+        if let Some(by) = search.base_y_for(i) {
+            spans[i].bbox.y = by;
+        }
     }
 }
 
