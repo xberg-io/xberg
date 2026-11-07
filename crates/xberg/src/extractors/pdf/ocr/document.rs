@@ -603,6 +603,8 @@ pub(crate) fn page_line_boxes(
 pub(crate) struct PageLayers<'a> {
     pub(crate) lines: &'a ahash::AHashMap<u32, String>,
     pub(crate) boxes: &'a ahash::AHashMap<u32, PageLineBoxes>,
+    /// Pages whose unconfirmed layer was proven to lie on the scan's ink. ~keep
+    pub(crate) raster_proven: &'a ahash::AHashSet<u32>,
 }
 /// The OCR lines of a page ordered by the vertical centre of their box: the row index that bounds
 /// the matching work to one band per layer line. ~keep
@@ -690,7 +692,7 @@ fn layer_lines_missing_and_owned(layer: &str, boxes: &PageLineBoxes) -> String {
 /// complete equal OCR row occurrences certify coverage and nothing is deleted. With geometry,
 /// complete ordered native-token coverage is sufficient. Ambiguous and differing OCR payloads
 /// remain beside restored native rows. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) fn layer_lines_to_put_first(
     layer: &str,
     ocr_text: &str,
@@ -698,7 +700,21 @@ pub(crate) fn layer_lines_to_put_first(
     thresholds: &OcrQualityThresholds,
     boxes: Option<&PageLineBoxes>,
 ) -> Option<LayerFirst> {
-    if !noise_verdict && !ocr_confirms_layer(layer, ocr_text, thresholds) {
+    layer_lines_to_put_first_with_proof(layer, ocr_text, noise_verdict, false, thresholds, boxes)
+}
+/// As [`layer_lines_to_put_first`], where `raster_proven` stands for a layer that no OCR read
+/// confirms but whose glyphs lie on the scan's ink: the layer is the true text of a script the
+/// OCR language cannot read, so its rows absent from the OCR text come first. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn layer_lines_to_put_first_with_proof(
+    layer: &str,
+    ocr_text: &str,
+    noise_verdict: bool,
+    raster_proven: bool,
+    thresholds: &OcrQualityThresholds,
+    boxes: Option<&PageLineBoxes>,
+) -> Option<LayerFirst> {
+    if !noise_verdict && !raster_proven && !ocr_confirms_layer(layer, ocr_text, thresholds) {
         return None;
     }
     let lines = match boxes {
@@ -828,9 +844,14 @@ pub(super) fn put_layers_first_in_run(
         else {
             continue;
         };
-        let Some(mut first) =
-            layer_lines_to_put_first(layer, page_text, noise_verdict, &thresholds, layers.boxes.get(&page))
-        else {
+        let Some(mut first) = layer_lines_to_put_first_with_proof(
+            layer,
+            page_text,
+            noise_verdict,
+            layers.raster_proven.contains(&page),
+            &thresholds,
+            layers.boxes.get(&page),
+        ) else {
             continue;
         };
         lost_glyphs =

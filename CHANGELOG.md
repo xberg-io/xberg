@@ -202,6 +202,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep a text-layer number that the scan draws when OCR reads other letters there.** (#2408)
+  When no OCR read confirms a page's invisible text layer, the page is rendered again with the layer's glyphs revealed. A layer whose every glyph lies on matching scan ink, and whose ink inside each glyph box belongs to the glyph, comes first in the page text for the rows the OCR text lacks. A layer that names a different character at the same place draws a different shape and is refused. Forced OCR, layout and custom pipelines keep the previous behavior.
+
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
   This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.

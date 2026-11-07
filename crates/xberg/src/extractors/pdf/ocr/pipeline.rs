@@ -2414,11 +2414,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 complete_native_pages.insert(*page_number);
             }
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let raster_proven = layers.get(page_number).is_some_and(|layer| {
+                !noise_verdict_pages.contains(page_number)
+                    && super::document::native_preservation_is_automatic(config, *page_number)
+                    && !super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds)
+                    && super::layer_ink_proof::hidden_layer_matches_scan(&render_doc, (*page_number as usize) - 1)
+            });
+            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+            let raster_proven = false;
             if let Some(layer) = layers.get(page_number)
-                && let Some(mut first) = super::document::layer_lines_to_put_first(
+                && let Some(mut first) = super::document::layer_lines_to_put_first_with_proof(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
+                    raster_proven,
                     &ocr_output_thresholds,
                     boxes.as_ref(),
                 )
@@ -6943,6 +6953,7 @@ fn with_run_layers_first(
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
         let boxes = run_merge_geometry(&layers, &run, &page_texts, config);
+        let raster_proven = raster_proven_run_pages(&layers, &run, &page_texts, config);
         let lost = super::document::put_layers_first_in_run(
             &mut text,
             &mut page_texts,
@@ -6950,6 +6961,7 @@ fn with_run_layers_first(
             super::document::PageLayers {
                 lines: &layers,
                 boxes: &boxes,
+                raster_proven: &raster_proven,
             },
             run.verdicts,
             run.page_index_offset,
@@ -6961,6 +6973,61 @@ fn with_run_layers_first(
         }
     }
     (text, page_texts, doc)
+}
+
+/// The pages of a whole-document run whose layer no OCR read confirms but whose hidden glyphs
+/// lie on the scan's ink. Only an automatic run asks: a forced or customised run keeps the
+/// layer decision it had. ~keep
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn raster_proven_run_pages(
+    layers: &ahash::AHashMap<u32, String>,
+    run: &RunLayerSources<'_>,
+    page_texts: &[String],
+    config: &ExtractionConfig,
+) -> ahash::AHashSet<u32> {
+    let mut proven = ahash::AHashSet::new();
+    let Some(content) = run.content else {
+        return proven;
+    };
+    let thresholds = config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.quality_thresholds.clone())
+        .unwrap_or_default();
+    let mut document = None;
+    for (&page_number, layer) in layers {
+        let local = (page_number as usize).checked_sub(run.page_index_offset + 1);
+        let Some(read) = local.and_then(|index| page_texts.get(index)) else {
+            continue;
+        };
+        if run
+            .verdicts
+            .iter()
+            .any(|verdict| verdict.page_index as u32 + 1 == page_number)
+            || !super::document::native_preservation_is_automatic(config, page_number)
+            || super::document::ocr_confirms_layer(layer, read, &thresholds)
+        {
+            continue;
+        }
+        let document = document.get_or_insert_with(|| xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()).ok());
+        if document
+            .as_ref()
+            .is_some_and(|doc| super::layer_ink_proof::hidden_layer_matches_scan(doc, page_number as usize - 1))
+        {
+            proven.insert(page_number);
+        }
+    }
+    proven
+}
+
+#[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+fn raster_proven_run_pages(
+    _layers: &ahash::AHashMap<u32, String>,
+    _run: &RunLayerSources<'_>,
+    _page_texts: &[String],
+    _config: &ExtractionConfig,
+) -> ahash::AHashSet<u32> {
+    ahash::AHashSet::new()
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
