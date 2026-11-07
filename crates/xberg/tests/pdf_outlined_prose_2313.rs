@@ -131,6 +131,55 @@ async fn an_ocr_read_that_loses_the_native_heading_keeps_the_native_page() {
     assert!(!automatic.metadata.ocr_used);
 }
 
+/// The five outlined rows painted at three heights: fifteen drawn rows between the same native stubs.
+fn fifteen_outlined_rows() -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(OUTLINED).expect("load outlined prose fixture");
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).expect("one content stream");
+    let content = String::from_utf8(pdf.get_page_content(page)).expect("ASCII PDF drawing commands");
+    let (outline, stubs) = content.split_once("BT").expect("outline paint before the native stubs");
+    let rows: String = [0, -165, -330]
+        .iter()
+        .map(|dy| format!("q 1 0 0 1 0 {dy} cm\n{outline}Q\n"))
+        .collect();
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(format!("{rows}BT{stubs}").into_bytes());
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).expect("serialize fifteen-row page");
+    bytes
+}
+
+#[tokio::test]
+async fn auto_ocr_recovers_outlined_rows_past_the_seven_row_paint_budget() {
+    let bytes = fifteen_outlined_rows();
+    let pdf = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("load fifteen-row page");
+    assert!(
+        pdf.extract_bounded_page_local_paths(0, 512 * 1024, 12_000)
+            .unwrap()
+            .is_empty(),
+        "the page paints more than the seven-row budget allowed"
+    );
+    assert_eq!(
+        pdf.extract_bounded_page_local_paths(0, usize::MAX, usize::MAX)
+            .unwrap()
+            .len(),
+        3
+    );
+
+    let document = read(&bytes, false, None).await;
+    assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    for line in std::iter::once(HEADER).chain(PROSE).chain(std::iter::once("Page 7")) {
+        assert!(
+            document.content.contains(line),
+            "missing {line:?} in {:?}",
+            document.content
+        );
+    }
+}
+
 #[test]
 fn vector_inventory_abstains_before_materializing_out_of_budget_paths() {
     let pdf = xberg_native_pdf::PdfDocument::from_bytes(OUTLINED.to_vec()).expect("load outlined prose fixture");
