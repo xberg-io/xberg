@@ -11,7 +11,6 @@ y=210 with a 29 px row pitch. Columns begin at x=60, 230, 370, 510,
 680, 850, 990 and 1130. The fixture PDF SHA-256 is
 `0007e630efa28f59639975016a8a2560729af47a696f137920557d8bed16344f`.
 
-
 The 90° control is the same raster rotated clockwise before PDF encoding,
 with an unchanged cell oracle. Its SHA-256 is
 `1128fc7e3586699c33b14372e71265e2cec284311c493a7a85ac1c0ac30073a0`.

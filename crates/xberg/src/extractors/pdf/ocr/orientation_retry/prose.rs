@@ -220,4 +220,23 @@ mod tests {
             assert_eq!(complete_text(&case, 0.5), None, "{name}");
         }
     }
+
+    #[test]
+    fn the_implicit_retry_accepts_text_around_a_table_only_with_a_consistent_word_count() {
+        use crate::core::config::{ExtractionConfig, OcrQualityThresholds};
+        use crate::plugins::ConfidenceSemantics;
+
+        let retry = super::super::OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
+        let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };
+        let mut counted = candidate();
+        assert!(retry.accepts(&counted, confidence, 0.5));
+        counted.metadata.additional.insert("word_count".into(), 12.into());
+        assert!(!retry.accepts(&counted, confidence, 0.5));
+        let mut unrotated = candidate();
+        unrotated.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY.into(),
+            0.into(),
+        );
+        assert!(!retry.accepts(&unrotated, confidence, 0.5));
+    }
 }
