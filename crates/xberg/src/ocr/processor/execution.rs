@@ -1178,6 +1178,8 @@ const CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD: u16 =
 const CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD: f64 = 0.80;
 /// Minimum separation between background and foreground luminance modes. ~keep
 const CLEAN_PAGE_MIN_FOREGROUND_CONTRAST: f64 = 0.20;
+/// Channel spread above which a foreground pixel counts as coloured ink rather than neutral ink. ~keep
+const CLEAN_PAGE_CHROMATIC_CHANNEL_SPREAD: u8 = 40;
 /// Minimum image fraction required before a lower foreground mode counts as significant. ~keep
 const CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD: f64 = 0.005;
 /// Minimum population required for the lower foreground mode on small rasters. ~keep
@@ -1343,6 +1345,7 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     let mut foreground_channel_sum = 0u128;
     let mut light_pixels = 0usize;
     let mut foreground_pixels = 0usize;
+    let mut chromatic_foreground_pixels = 0usize;
     let mut foreground_histogram = [0usize; 256];
 
     for pixel in rgb_data.as_chunks::<RGB_CHANNEL_COUNT>().0 {
@@ -1355,6 +1358,8 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             foreground_channel_sum += u128::from(pixel_channel_sum);
             foreground_pixels += 1;
             foreground_histogram[((pixel_channel_sum + 1) / RGB_CHANNEL_COUNT as u16) as usize] += 1;
+            let spread = pixel.iter().max().copied().unwrap_or(0) - pixel.iter().min().copied().unwrap_or(0);
+            chromatic_foreground_pixels += usize::from(spread > CLEAN_PAGE_CHROMATIC_CHANNEL_SPREAD);
         }
     }
     let pixel_count_f64 = pixel_count as f64;
@@ -1375,6 +1380,10 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
         return true;
     }
     if !bright_mean && !strong_contrast {
+        return false;
+    }
+    // A dark mean from mostly coloured ink is a graphic, not dense text; it keeps its raw pixels. ~keep
+    if !bright_mean && chromatic_foreground_pixels * 2 > foreground_pixels {
         return false;
     }
 
@@ -6192,6 +6201,62 @@ mod tests {
             should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
             "the dark text components qualify despite their contribution to the page mean"
         );
+    }
+
+    const RING_GRID_SIDE: usize = 400;
+    const RING_GRID_PITCH: usize = 40;
+    const RING_OUTER: usize = 20;
+    const RING_HOLE: std::ops::Range<usize> = 3..17;
+
+    /// A grid of closed rings with a one-pixel outline: open glyph-like shapes on a light page. ~keep
+    fn ring_grid_raster(ink: [u8; 3], outline: [u8; 3]) -> Vec<u8> {
+        let mut data = vec![255u8; RING_GRID_SIDE * RING_GRID_SIDE * RGB_CHANNEL_COUNT];
+        let cells = RING_GRID_SIDE / RING_GRID_PITCH;
+        for (cell_y, cell_x) in (0..cells).flat_map(|y| (0..cells).map(move |x| (y, x))) {
+            for dy in 0..=RING_OUTER + 1 {
+                for dx in 0..=RING_OUTER + 1 {
+                    let on_outline = dx == 0 || dy == 0 || dx == RING_OUTER + 1 || dy == RING_OUTER + 1;
+                    let (ring_x, ring_y) = (dx.wrapping_sub(1), dy.wrapping_sub(1));
+                    let in_hole = RING_HOLE.contains(&ring_x) && RING_HOLE.contains(&ring_y);
+                    let color = match (on_outline, in_hole) {
+                        (true, _) => outline,
+                        (false, true) => continue,
+                        (false, false) => ink,
+                    };
+                    let x = cell_x * RING_GRID_PITCH + 8 + dx;
+                    let y = cell_y * RING_GRID_PITCH + 8 + dy;
+                    let offset = (y * RING_GRID_SIDE + x) * RGB_CHANNEL_COUNT;
+                    data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&color);
+                }
+            }
+        }
+        data
+    }
+
+    fn mean_luminance(rgb: &[u8]) -> f64 {
+        rgb.iter().map(|&channel| f64::from(channel)).sum::<f64>() / (rgb.len() as f64 * RGB_CHANNEL_MAX)
+    }
+
+    #[test]
+    fn dense_neutral_ink_with_a_dark_mean_selects_default_preprocessing() {
+        let neutral = ring_grid_raster([0; 3], [128; 3]);
+        let side = RING_GRID_SIDE as u32;
+        assert!(
+            mean_luminance(&neutral) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+        assert!(should_apply_default_preprocessing(&neutral, side, side));
+    }
+
+    #[test]
+    fn dense_coloured_graphic_with_a_dark_mean_keeps_raw_pixels() {
+        let coloured = ring_grid_raster([0, 0, 160], [96, 96, 208]);
+        let side = RING_GRID_SIDE as u32;
+        assert!(
+            mean_luminance(&coloured) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+        assert!(!should_apply_default_preprocessing(&coloured, side, side));
     }
 
     #[test]
