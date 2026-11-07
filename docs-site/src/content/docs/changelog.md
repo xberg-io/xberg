@@ -200,6 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep the readable text of a page with lost glyphs when OCR reads less than the page holds.** (GH#2517)
+  A lost-glyph marker still sends the page to OCR, but the checks that ask whether the native text is readable now ignore the markers. A page whose OCR text drops most of its readable words keeps its native text, and a page whose OCR text confirms the native text gets the native rows that OCR lacks.
+
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
 

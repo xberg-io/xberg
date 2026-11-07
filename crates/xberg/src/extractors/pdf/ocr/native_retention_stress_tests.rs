@@ -570,3 +570,78 @@ fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() 
         &thresholds
     ));
 }
+
+/// A readable page that lost six glyphs: the lost-glyph markers sit between its words.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn readable_page_with_lost_glyphs() -> String {
+    let words = "the committee reviewed the annual budget and approved the design of the new archive reader \
+                 for every branch library after the long public meeting about the shared reading room";
+    let mut page = String::new();
+    for (at, word) in words.split(' ').enumerate() {
+        if at % 3 == 0 && at < 18 {
+            page.push('\u{FFFD}');
+            page.push(' ');
+        }
+        page.push_str(word);
+        page.push(' ');
+    }
+    assert_eq!(page.matches('\u{FFFD}').count(), 6, "the fixture holds six markers");
+    page
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn one_page(page: &str) -> Vec<crate::types::PageBoundary> {
+    vec![crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: page.len(),
+        page_number: 1,
+    }]
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_page_still_routes_to_ocr_but_keeps_its_readable_layer() {
+    use super::super::document::clean_native_page_layers;
+    use super::super::scoring::evaluate_native_text_for_ocr;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let page = readable_page_with_lost_glyphs();
+    assert!(
+        evaluate_native_text_for_ocr(&page, Some(1), &thresholds).fallback,
+        "control: the routing gate still counts the markers"
+    );
+    let layers = clean_native_page_layers(&page, &one_page(&page), None, &thresholds);
+    assert!(layers.contains_key(&1), "the readable words of the page stay a layer");
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_that_drops_the_readable_words_of_a_marked_page_is_not_accepted() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
+    let page = readable_page_with_lost_glyphs();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds);
+    assert!(accepted.is_empty(), "OCR keeps under half of the readable words");
+    let all_lost = "\u{FFFD} ".repeat(20);
+    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds);
+    assert!(
+        accepted.contains_key(&1),
+        "control: a page with no readable word keeps no protection"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_that_reads_a_marked_layer_gets_the_rows_it_lacks_put_first() {
+    use super::super::document::layer_lines_to_put_first;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let layer = "the committee \u{FFFD} reviewed the annual budget and approved \u{FFFD}\n\
+                 the design of the new archive reader \u{FFFD} for every branch \u{FFFD}\n\
+                 library after the long public \u{FFFD} meeting about the \u{FFFD}\n\
+                 shared reading room";
+    let read = "the committee reviewed the annual budget and approved\n\
+                the design of the new archive reader for every branch\n\
+                library after the long public meeting about the";
+    let first = layer_lines_to_put_first(layer, read, false, &thresholds, None).expect("one row is missing");
+    assert!(first.lines.contains("shared reading room"));
+}
