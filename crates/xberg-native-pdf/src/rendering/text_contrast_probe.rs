@@ -138,7 +138,7 @@ fn luminance_samples(pixmap: &Pixmap, rect: PixelRect) -> impl Iterator<Item = u
     })
 }
 
-fn luminance(rgb: &[u8; 4]) -> u8 {
+pub(super) fn luminance(rgb: &[u8; 4]) -> u8 {
     ((54 * u16::from(rgb[0]) + 183 * u16::from(rgb[1]) + 19 * u16::from(rgb[2])) >> 8) as u8
 }
 

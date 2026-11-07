@@ -204,6 +204,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
+  A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
+
+- **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
+  The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.
+
+- **(pdf): Table rows are no longer repeated as prose when a marker or sign splits a cell.** (#2443)
+  A short run inside one table cell, such as a superscript citation or either side of a multiplication sign, is now treated as that cell's text instead of being emitted a second time beside the table.
+
+- **(pdf): Rules that belong to another section no longer split a ruled band into columns.** (#2443)
+  A column rule lying wholly beyond the ruled rows is no longer projected across them when other rules run through them, so a list column beside a section divider is not read as a two-column table that swallows the page heading.
+
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
   This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.
@@ -219,6 +231,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Keep certified table rows on one line in Markdown and Djot output of a standalone image.** (#2432)
   The sparse-row recovery that already served Plain output now also serves Markdown and Djot; the recognized words and amounts are unchanged.
+
+- **(pdf): Return a native page's text once when automatic OCR only re-reads its ink.** (#2534)
+  When every word Tesseract read lies on a native text line, shows glyph ink and sits on a background that only glyphs vary, the native page replaces the read even where the words differ.
+  Words over rasters, outlines, rules, partial fills or overpaint keep their OCR alternative.
+  The proof also runs on the direct Tesseract route used when PaddleOCR is not compiled in.
+  A native word that no glyph paint shows (under a fill, clipped or invisible) or a native layer that the read contradicts at more than 15% of its words keeps the OCR page.
 
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
@@ -241,10 +259,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
   Recover counterclockwise table rows when native line membership proves the source geometry.
   Recover a single sideways prose paragraph when native lines prove the complete text and geometry.
+  Recover an upside-down table by reading the half-turned raster once Tesseract reports every text block rotated 180 degrees, returning geometry in the original frame.
   Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
 
 - **(ocr): Correct detached two-table PDF reading order and coordinates.** (#2497)
   Keep the recognized cells and convert their render bounds to PDF points before returning the tables.
+
+- **(ocr): Keep source-proven dot-leader scan rows together in Auto OCR.** (Refs #2503)
+  A page-wide scan table whose leader runs are confirmed as regular dots in the recognition raster is returned as one table with every label and value kept and the leader dots left out.
 
 - **(ocr): Remove duplicate dot-leader rows from standalone Tesseract PSM 6 output.** (#2503)
   Require matching text and geometry while preserving numeric cells, default OCR, and PDF output.

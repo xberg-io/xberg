@@ -219,6 +219,9 @@ pub struct PageRenderer {
     pub(super) text_contrast_probe: Option<super::text_contrast_probe::TextContrastProbe>,
     path_rasterizer: PathRasterizer,
     text_rasterizer: TextRasterizer,
+    /// Draw text in the invisible rendering modes (3, or 7 where it clips) so the raster shows
+    /// everything on the page except glyph ink.
+    text_ink_suppressed: bool,
     /// Font cache (name -> FontInfo) for current context
     fonts: HashMap<String, Arc<FontInfo>>,
     /// Color space cache (name -> Object) for current context
@@ -463,6 +466,7 @@ impl PageRenderer {
             text_contrast_probe: None,
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
+            text_ink_suppressed: false,
             fonts: HashMap::new(),
             color_spaces: HashMap::new(),
             excluded_layers_snapshot: None,
@@ -579,6 +583,24 @@ impl PageRenderer {
     pub fn render_page_with_options(&mut self, page_num: usize, doc: &PdfDocument) -> Result<RenderedImage> {
         self.render_page_with_budget(page_num, doc, None)
             .map(|(image, _)| image)
+    }
+
+    pub(super) fn without_text_ink(mut self) -> Self {
+        self.text_ink_suppressed = true;
+        self
+    }
+
+    /// The graphics state a visible text show paints with. A render without glyph ink draws
+    /// text in the invisible modes of ISO 32000-1 §9.3.6, which still advance the text matrix:
+    /// mode 3 for fill and stroke, mode 7 where the glyphs also clip. A clip silhouette is drawn
+    /// through `coverage_only_gs`, which sets mode 0, so it keeps its glyph paint.
+    fn text_paint_state<'a>(&self, gs: &'a GraphicsState) -> std::borrow::Cow<'a, GraphicsState> {
+        if !self.text_ink_suppressed {
+            return std::borrow::Cow::Borrowed(gs);
+        }
+        let mut invisible = gs.clone();
+        invisible.render_mode = if gs.render_mode >= 4 { 7 } else { 3 };
+        std::borrow::Cow::Owned(invisible)
     }
 
     pub(super) fn type0_ink_loss(&self) -> bool {
@@ -2127,11 +2149,12 @@ impl PageRenderer {
                                 .text_contrast_probe
                                 .as_mut()
                                 .and_then(|probe| probe.capture(pixmap, text, base_transform));
+                            let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
                                 text,
                                 transform,
-                                gs,
+                                &paint_gs,
                                 colors.as_ref(),
                                 resources,
                                 doc,
@@ -2239,11 +2262,12 @@ impl PageRenderer {
                             let text_coverage = spot_snap.as_ref().and_then(|_| {
                                 self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
                             });
+                            let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
                                 text,
                                 transform,
-                                gs,
+                                &paint_gs,
                                 colors.as_ref(),
                                 resources,
                                 doc,
@@ -2340,11 +2364,12 @@ impl PageRenderer {
                             let text_coverage = spot_snap.as_ref().and_then(|_| {
                                 self.rasterise_text_coverage_render_tj_array(array, transform, gs, resources, doc, clip)
                             });
+                            let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_tj_array(
                                 pixmap,
                                 array,
                                 transform,
-                                gs,
+                                &paint_gs,
                                 colors.as_ref(),
                                 resources,
                                 doc,
@@ -2453,11 +2478,12 @@ impl PageRenderer {
                             let text_coverage = spot_snap.as_ref().and_then(|_| {
                                 self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
                             });
+                            let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
                                 text,
                                 transform,
-                                gs,
+                                &paint_gs,
                                 colors.as_ref(),
                                 resources,
                                 doc,
