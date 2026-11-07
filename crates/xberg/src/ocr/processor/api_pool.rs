@@ -253,6 +253,21 @@ struct PooledTesseractApi {
     secondary: super::dictionary::SecondaryDictionaries,
 }
 
+impl PooledTesseractApi {
+    /// Lets the process-exit cleanup free the primary and every secondary handle.
+    fn mark_idle(&self) {
+        self.primary.mark_idle();
+        self.secondary.initialized().for_each(TesseractAPI::mark_idle);
+    }
+
+    /// Makes the process-exit cleanup skip the primary and every secondary handle, which
+    /// a recognition thread uses until the lease ends.
+    fn mark_in_use(&self) -> Result<(), xberg_tesseract::TesseractError> {
+        self.primary.mark_in_use()?;
+        self.secondary.initialized().try_for_each(TesseractAPI::mark_in_use)
+    }
+}
+
 pub(super) struct TesseractApiPool {
     resources: Arc<ResourcePool<ApiKey, PooledTesseractApi>>,
 }
@@ -296,10 +311,7 @@ impl TesseractApiPool {
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
             })
         })?;
-        Ok(TesseractApiLease {
-            inner: lease,
-            models: models.clone(),
-        })
+        TesseractApiLease::begin(lease, models)
     }
 }
 
@@ -309,6 +321,26 @@ pub(super) struct TesseractApiLease {
 }
 
 impl TesseractApiLease {
+    /// Starts a lease: the handles count as in use until the lease ends.
+    ///
+    /// The process-exit cleanup frees idle handles. A parked handle that the cleanup freed
+    /// is discarded here, not handed out.
+    fn begin(
+        mut inner: ResourceLease<ApiKey, PooledTesseractApi>,
+        models: &super::model_context::ModelContext,
+    ) -> Result<Self, OcrError> {
+        if inner.mark_in_use().is_err() {
+            inner.release_for_models(models, |_| false);
+            return Err(OcrError::ProcessingFailed(
+                "The OCR engine was shut down because the process is exiting".to_string(),
+            ));
+        }
+        Ok(Self {
+            inner,
+            models: models.clone(),
+        })
+    }
+
     pub(super) fn word_dictionary(&self) -> super::dictionary::WordDictionary<'_> {
         super::dictionary::WordDictionary::new(self, &self.inner.secondary)
     }
@@ -326,7 +358,10 @@ impl Drop for TesseractApiLease {
     fn drop(&mut self) {
         self.inner
             .release_for_models(&self.models, |api| match api.primary.clear() {
-                Ok(()) => true,
+                Ok(()) => {
+                    api.mark_idle();
+                    true
+                }
                 Err(error) => {
                     tracing::warn!(
                         error = %error,
@@ -343,6 +378,50 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
+
+    fn bare_handles() -> PooledTesseractApi {
+        let secondary = super::super::dictionary::SecondaryDictionaries::new("", "eng+deu", 1);
+        secondary
+            .initialize(0, |_, _, _| TesseractAPI::new().ok())
+            .expect("create the secondary handle");
+        PooledTesseractApi {
+            primary: TesseractAPI::new().expect("create the primary handle"),
+            secondary,
+        }
+    }
+
+    fn every_handle_is(handles: &PooledTesseractApi, idle: bool) -> bool {
+        handles.primary.is_idle() == idle && handles.secondary.initialized().all(|api| api.is_idle() == idle)
+    }
+
+    #[test]
+    fn a_lease_holds_every_handle_in_use_and_parks_them_idle_when_it_ends() {
+        let directory = tempfile::tempdir().unwrap();
+        let models =
+            super::super::model_context::ModelContext::for_path(directory.path().to_str().unwrap().into(), 3).unwrap();
+        let pool = ResourcePool::new(1);
+        let key = ApiKey::for_models(&models, "eng+deu", 1);
+
+        let first = pool
+            .checkout(key.clone(), || Ok::<_, OcrError>(bare_handles()))
+            .unwrap();
+        drop(TesseractApiLease::begin(first, &models).unwrap());
+        assert!(
+            every_handle_is(&pool.state.lock().unwrap().idle[0].1, true),
+            "a returned lease must park its primary and secondary handles as idle"
+        );
+
+        let second = pool
+            .checkout(key, || -> Result<PooledTesseractApi, OcrError> {
+                panic!("the parked handles must be reused")
+            })
+            .unwrap();
+        let lease = TesseractApiLease::begin(second, &models).unwrap();
+        assert!(
+            every_handle_is(&lease.inner, false),
+            "a lease must hold its primary and secondary handles in use"
+        );
+    }
 
     #[test]
     fn changed_revision_during_initialization_discards_handle_before_rollback() {
