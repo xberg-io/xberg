@@ -9,6 +9,8 @@ pub(crate) mod forms;
 pub(crate) mod hierarchy;
 pub(crate) mod images;
 pub(crate) mod metadata;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) mod proven_dpi;
 pub(crate) mod span_geometry;
 pub(crate) mod table;
 pub(crate) mod text;

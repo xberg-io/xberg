@@ -155,7 +155,11 @@ async fn should_apply_request_limits_to_direct_and_every_pipeline_backend() {
             assert_eq!(observations.len(), expected_backends.len());
             for ((backend, limits), expected_backend) in observations.into_iter().zip(expected_backends) {
                 assert_eq!(backend, *expected_backend);
-                assert_eq!(limits.as_ref().map(|value| value.max_content_size), configured_limit);
+                // The pipeline resolves an unset request limit to the default before each backend runs. ~keep
+                assert_eq!(
+                    limits.as_ref().map(|value| value.max_content_size),
+                    Some(configured_limit.unwrap_or(SecurityLimits::default().max_content_size))
+                );
                 assert_reported_page_budgets(&limits.unwrap_or_default(), configured_limit == Some(RAISED_LIMIT));
             }
         }

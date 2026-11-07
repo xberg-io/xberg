@@ -9,6 +9,14 @@ fn main() {
         println!("cargo::rustc-cfg=inference_ort");
     }
 
+    println!("cargo::rustc-check-cfg=cfg(onnx_retrieval)");
+    if ["EMBEDDINGS", "RERANKER", "SPARSE_EMBEDDINGS", "LATE_INTERACTION"]
+        .iter()
+        .any(|feature| std::env::var_os(format!("CARGO_FEATURE_{feature}")).is_some())
+    {
+        println!("cargo::rustc-cfg=onnx_retrieval");
+    }
+
     println!("cargo::rustc-check-cfg=cfg(auto_rotate)");
     if std::env::var_os("CARGO_FEATURE_AUTO_ROTATE").is_some()
         || std::env::var_os("CARGO_FEATURE_AUTO_ROTATE_TRACT").is_some()

@@ -573,8 +573,9 @@ fn direct_image_decode_api_calls_are_audited() {
 /// one then read as production code calling a decoder unguarded. Keyed on the convention rather
 /// than on a path list, so the next split does not reopen this. ~keep
 fn is_test_submodule(relative: &str) -> bool {
-    let name = relative.rsplit('/').next().unwrap_or(relative);
-    name == "tests.rs" || name.ends_with("_tests.rs")
+    let mut parts = relative.split('/');
+    let name = parts.next_back().unwrap_or(relative);
+    name == "tests.rs" || name.ends_with("_tests.rs") || parts.any(|dir| dir.ends_with("_tests"))
 }
 
 fn decoder_audit_violations(relative: &str, source: &str) -> Vec<String> {
@@ -605,7 +606,8 @@ fn approved_decoder_guard(relative: &str, function: &str, path: &str) -> Option<
         | ("extraction/image.rs", "decode_jbig2_to_gray_with_security_limits", "decoder::decode") => {
             Some("method::validate")
         }
-        ("extraction/image.rs", "extract_image_metadata_with_security_limits", _) => Some("method::validate"),
+        ("extraction/image.rs", "extract_image_metadata_with_security_limits", _)
+        | ("extraction/image.rs", "extract_image_metadata_for_processing", _) => Some("method::validate"),
         ("extraction/image.rs", "detect_tiff_frame_count", _) => Some("header-only"),
         ("extraction/heif.rs", "decode_heic_to_png", "xberg_libheif::HeifContext::read_from_bytes") => {
             Some("validate_heif_encoded_input_budget")

@@ -1,6 +1,6 @@
 //! Exact, budgeted decoding of grayscale-equivalent source samples.
 
-use super::super::hidden_layer::image_predictor;
+use super::super::hidden_layer::{decode_exact_flate, image_predictor};
 use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI};
 use xberg_native_pdf::decoders::{DecodeParams, decode_predictor};
 use xberg_native_pdf::geometry::Rect;
@@ -68,7 +68,7 @@ pub(super) fn decode_source_gray(
         return None;
     }
     if packing == GrayPacking::Byte {
-        return Some((decode_exact_gray(compressed, pixels)?, retained_bytes));
+        return Some((decode_exact_flate(compressed, pixels)?, retained_bytes));
     }
     let stride = match packing {
         GrayPacking::Byte => return None,
@@ -80,7 +80,7 @@ pub(super) fn decode_source_gray(
     if stride == 0 || retained_bytes.checked_add(packed_size)? > byte_limit {
         return None;
     }
-    let packed = decode_exact_gray(compressed, packed_size)?;
+    let packed = decode_exact_flate(compressed, packed_size)?;
     if let GrayPacking::PngPredictor(predictor) = packing {
         let samples = decode_predictor(
             &packed,
@@ -118,27 +118,6 @@ pub(super) fn decode_source_gray(
         }
     }
     Some((samples, retained_bytes))
-}
-
-pub(super) fn decode_exact_gray(compressed: &[u8], pixels: usize) -> Option<Vec<u8>> {
-    use flate2::{Decompress, FlushDecompress, Status};
-
-    let capacity = pixels.checked_add(1)?;
-    let mut samples = Vec::new();
-    samples.try_reserve_exact(capacity).ok()?;
-    samples.resize(capacity, 0);
-    let mut decoder = Decompress::new(true);
-    let status = decoder
-        .decompress(compressed, &mut samples, FlushDecompress::Finish)
-        .ok()?;
-    if status != Status::StreamEnd
-        || decoder.total_out() != pixels as u64
-        || decoder.total_in() != compressed.len() as u64
-    {
-        return None;
-    }
-    samples.truncate(pixels);
-    Some(samples)
 }
 
 pub(super) fn source_frame(
