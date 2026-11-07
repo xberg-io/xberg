@@ -2066,7 +2066,10 @@ impl<'a> ParagraphVisualRow<'a> {
 
     fn carries_script(&self, script: &SegmentData) -> bool {
         let base = self.anchor;
-        if base.is_monospace
+        // A list marker is set apart from the text beside it, not under it: that text is the
+        // item's body, never a script run of the marker's glyph. ~keep
+        if is_bare_list_marker(&base.text)
+            || base.is_monospace
             || script.is_monospace
             || base.assigned_role != script.assigned_role
             || !base.has_same_rotation(script)
@@ -2114,6 +2117,38 @@ impl<'a> ParagraphVisualRow<'a> {
     }
 }
 
+/// Whether `marker` is a bare list marker standing at the left of `body` on the same printed row
+/// and within one hanging indent of it: the geometry [`accepts_detached_list_marker`] requires.
+fn marker_stands_left_of_row_body(marker: &SegmentData, body: &SegmentData) -> bool {
+    if !is_bare_detached_list_marker(&marker.text) || is_bare_list_marker(&body.text) || !marker.has_same_rotation(body)
+    {
+        return false;
+    }
+    let font_size = marker.font_size.max(body.font_size);
+    let (marker_start, marker_end) = marker.upright_advance_extent();
+    let (body_start, _) = body.upright_advance_extent();
+    let baseline_delta = (marker.upright_baseline() - body.upright_baseline()).abs();
+    let indent = body_start - marker_end;
+    font_size.is_finite()
+        && font_size > 0.0
+        && baseline_delta <= font_size * DETACHED_MARKER_BASELINE_TOLERANCE_FONT_FACTOR
+        && body_start > marker_start
+        && indent >= -(font_size * DETACHED_MARKER_MAX_OVERLAP_FONT_FACTOR)
+        && indent <= font_size * DETACHED_MARKER_MAX_INDENT_FONT_FACTOR
+}
+
+/// Put a list marker ahead of the body it stands beside when the producer drew the body first, so
+/// the row reads marker then body whatever order the content stream used. A marker that follows its
+/// body is otherwise taken for the start of the next item's line and takes that line for its body.
+fn place_markers_before_their_row_bodies(mut lines: Vec<SegmentData>) -> Vec<SegmentData> {
+    for index in 1..lines.len() {
+        if marker_stands_left_of_row_body(&lines[index], &lines[index - 1]) {
+            lines.swap(index, index - 1);
+        }
+    }
+    lines
+}
+
 fn blocks_to_paragraphs(
     lines: Vec<SegmentData>,
     heading_map: &[(f32, Option<u8>)],
@@ -2122,6 +2157,7 @@ fn blocks_to_paragraphs(
     if lines.is_empty() {
         return Vec::new();
     }
+    let lines = place_markers_before_their_row_bodies(lines);
 
     let gap_info = super::classify::precompute_gap_info(heading_map);
     let visual_line_texts = visual_line_texts(&lines);

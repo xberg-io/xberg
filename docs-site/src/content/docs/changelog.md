@@ -200,6 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
+  The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.
+
 - **(pdf): Table rows are no longer repeated as prose when a marker or sign splits a cell.** (#2443)
   A short run inside one table cell, such as a superscript citation or either side of a multiplication sign, is now treated as that cell's text instead of being emitted a second time beside the table.
 

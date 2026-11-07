@@ -3343,6 +3343,89 @@ fn a_bare_marker_does_not_adopt_a_block_on_another_baseline() {
     );
 }
 
+/// A bullet set in a larger symbol font sits on its first line's baseline. The text run beside it
+/// is a smaller font on a baseline a fraction of a point off, which is the shape of a script run,
+/// so the bullet was taken as the row's base and every later line of the item, a plain text line
+/// of the same size as the first, read as a font change and broke the item after one line.
+#[test]
+fn a_list_item_wraps_onto_later_lines_though_its_bullet_is_set_larger() {
+    let line = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let segments = vec![
+        line("\u{2022}", 60.0, 4.0, 12.0, 722.36),
+        line(
+            "The original use of the property must begin with",
+            72.0,
+            230.0,
+            10.0,
+            722.84,
+        ),
+        line(
+            "you after April 11, 2005. Original use means the",
+            72.0,
+            230.0,
+            10.0,
+            711.34,
+        ),
+        line("first use to which the property is put.", 72.0, 180.0, 10.0, 699.84),
+    ];
+
+    let paragraphs = blocks_to_paragraphs(segments, &[(10.0, None)], &[]);
+
+    assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
+    assert!(paragraphs[0].is_list_item);
+    assert_eq!(paragraphs[0].lines.len(), 3, "the bullet shares the first printed line");
+}
+
+/// A producer may draw an item's body before its bullet. The bullet then follows the body's
+/// first line in segment order, was taken for the start of the next printed line, and made the
+/// item's wrapped line a separate paragraph.
+#[test]
+fn a_bullet_drawn_after_its_body_still_leads_that_item() {
+    let line = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let segments = vec![
+        line(
+            "Basis adjustment for advanced manufacturing invest-",
+            332.0,
+            200.0,
+            10.0,
+            295.76,
+        ),
+        line("\u{2022}", 321.0, 4.0, 12.0, 295.28),
+        line("ment credit property. See section 48D.", 332.0, 180.0, 10.0, 284.26),
+    ];
+
+    let paragraphs = blocks_to_paragraphs(segments, &[(10.0, None)], &[]);
+
+    assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
+    assert!(paragraphs[0].is_list_item);
+}
+
 /// Helper: create a segment with positional data.
 fn seg(text: &str, x: f32, width: f32) -> SegmentData {
     SegmentData {

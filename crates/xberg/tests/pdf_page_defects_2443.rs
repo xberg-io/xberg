@@ -83,3 +83,23 @@ async fn should_not_repeat_table_rows_whose_cells_a_marker_or_sign_split() {
         document.content
     );
 }
+
+#[tokio::test]
+async fn should_join_line_end_hyphens_inside_wrapped_list_items() {
+    let document = extract_page(
+        "irs-p946--2024-p31",
+        "ded79bcc007ec782b96749e982409be9f46909d332fd9196f7546ca9c01de089",
+    )
+    .await;
+    for joined in [
+        "section 179B of the Internal Revenue Code for capital costs",
+        "section 179D of the Internal Revenue Code for certain energy",
+        "advanced manufacturing investment credit property",
+    ] {
+        assert!(
+            document.content.contains(joined),
+            "wrapped item text is joined: {joined:?}\n{}",
+            document.content
+        );
+    }
+}
