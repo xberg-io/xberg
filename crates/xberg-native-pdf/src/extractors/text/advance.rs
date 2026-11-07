@@ -451,6 +451,7 @@ impl<'doc> TextExtractor<'doc> {
                     }
                     w_sum += w;
                     let chars_added = buffer.unicode.len() - len_before;
+                    buffer.ligature_tail = chars_added > 1;
                     if chars_added == 1 {
                         buffer.char_widths.push(w);
                     } else if chars_added > 1 {
@@ -1009,6 +1010,7 @@ impl<'doc> TextExtractor<'doc> {
                 let char_origin_y = pos.y;
                 // A space that starts inside the glyph before it takes no room, so the gap test decides. ~keep
                 let roomless_space = unicode_char == ' '
+                    && self.after_ligature
                     && rotation_degrees.abs() < 1.0
                     && self.chars.last().is_some_and(|prev| {
                         prev.rotation_degrees.abs() < 1.0
@@ -1050,6 +1052,10 @@ impl<'doc> TextExtractor<'doc> {
                         super::marked_content::push_held(&mut self.chars, &mut self.char_holds, text_char, hold);
                     }
                 }
+            }
+
+            if unicode_string != " " {
+                self.after_ligature = char_count > 1;
             }
 
             // Update text matrix per ISO 32000-1:2008 §9.4.4. The axis swap

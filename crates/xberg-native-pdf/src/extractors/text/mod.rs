@@ -1849,6 +1849,9 @@ struct TjBuffer {
     /// How far, in text-space units, the pen sits left of the right edge of the last glyph
     /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
     pullback: f32,
+    /// Whether the last glyph stood for more than one letter (a ligature). Only such a glyph has a
+    /// box that a space can start inside of.
+    ligature_tail: bool,
 }
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
@@ -1976,16 +1979,18 @@ impl TjBuffer {
             },
             render_mode: state.render_mode,
             pullback: 0.0,
+            ligature_tail: false,
         }
     }
 
-    /// Decide whether a space glyph of advance `width` takes no room on the line: the pen was
-    /// pulled back over more than half of the space, which is the line the gap test already uses
-    /// for a word break. If so, the space stays out of the text and its advance goes
-    /// to the previous glyph, so the gap test between the real neighbours decides. A small kern keeps
-    /// the space. ~keep
+    /// Decide whether a space glyph of advance `width` takes no room on the line: it follows a
+    /// ligature and the pen was pulled back over more than half of the space, which is the line
+    /// the gap test already uses for a word break. If so, the space stays out of the text and its
+    /// advance goes to the previous glyph, so the gap test between the real neighbours decides.
+    /// A small kern keeps the space. A glyph of one letter keeps its space too, because a producer
+    /// may pull the pen back there to place a word gap. ~keep
     fn absorb_roomless_space(&mut self, width: f32) -> bool {
-        if self.pullback <= width * 0.5 {
+        if !self.ligature_tail || self.pullback <= width * 0.5 {
             return false;
         }
         let Some(last) = self.char_widths.last_mut() else {
@@ -2195,6 +2200,8 @@ pub struct TextExtractor<'doc> {
     pub(crate) preserve_script_baselines: bool,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
+    /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
+    after_ligature: bool,
     /// Resources dictionary (for accessing XObjects and fonts)
     resources: Option<Object>,
     /// Reference to the document (for loading XObjects)

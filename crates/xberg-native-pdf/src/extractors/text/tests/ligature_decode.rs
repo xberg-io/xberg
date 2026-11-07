@@ -90,13 +90,20 @@ fn space_glyph_with_its_own_room_after_a_ligature_stays_in_chars() {
     );
 }
 
+/// A producer may pull the pen back before a space to place a word gap. Only a ligature has a box
+/// that a space can start inside of, so a glyph of one letter keeps its space.
+const PULLED_BACK_SPACE: &[u8] = b"BT /F1 10 Tf 72 700 Td [(ab) 250 ( cd)] TJ ET";
+
 #[test]
-fn space_after_a_pulled_back_glyph_that_is_not_a_ligature_is_also_dropped() {
+fn space_after_a_pulled_back_glyph_that_is_not_a_ligature_stays_in_spans() {
     let mut extractor = extractor_with(ligature_font("00660069", None));
-    assert_eq!(
-        span_text(&mut extractor, b"BT /F1 10 Tf 72 700 Td [(ab) 250 ( cd)] TJ ET"),
-        "abcd"
-    );
+    assert_eq!(span_text(&mut extractor, PULLED_BACK_SPACE), "ab cd");
+}
+
+#[test]
+fn space_after_a_pulled_back_glyph_that_is_not_a_ligature_stays_in_chars() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    assert_eq!(char_text(&mut extractor, PULLED_BACK_SPACE), "ab cd");
 }
 
 #[test]

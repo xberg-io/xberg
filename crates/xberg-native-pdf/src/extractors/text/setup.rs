@@ -45,6 +45,7 @@ impl<'doc> TextExtractor<'doc> {
             spans: Vec::new(),
             preserve_script_baselines: false,
             chars: Vec::new(),
+            after_ligature: false,
             resources: None,
             document: None,
             processed_xobjects: HashSet::new(),
