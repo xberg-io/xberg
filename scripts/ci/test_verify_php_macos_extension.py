@@ -11,12 +11,12 @@ HOMEBREW_HEIF = "/opt/homebrew/opt/libheif/lib/libheif.1.dylib"
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="needs otool and clang")
 
 
-def build_extension(directory: Path, import_name: str | None) -> Path:
+def build_extension(directory: Path, import_name: str | None, kind: str = "-dynamiclib") -> Path:
     """Compile a real Mach-O xberg.so, optionally importing a dylib by install name."""
     source = directory / "ext.c"
     source.write_text("int ext(void) { return 0; }\n")
     extension = directory / "xberg.so"
-    command = ["clang", "-dynamiclib", "-o", str(extension), str(source)]
+    command = ["clang", kind, "-o", str(extension), str(source)]
     if import_name is not None:
         dep_source = directory / "dep.c"
         dep_source.write_text("int dep(void) { return 1; }\n")
@@ -43,6 +43,17 @@ def run(archive: Path) -> subprocess.CompletedProcess[str]:
 
 def test_homebrew_libheif_import_is_rejected(tmp_path: Path) -> None:
     result = run(archive_of(tmp_path, build_extension(tmp_path, HOMEBREW_HEIF)))
+    assert result.returncode == 1
+    assert HOMEBREW_HEIF in result.stderr
+
+
+def test_bundle_without_an_install_name_is_still_checked(tmp_path: Path) -> None:
+    extension = build_extension(tmp_path, HOMEBREW_HEIF, kind="-bundle")
+    assert (
+        subprocess.run(["otool", "-D", str(extension)], capture_output=True, text=True, check=True).stdout.count("\n")
+        == 1
+    )
+    result = run(archive_of(tmp_path, extension))
     assert result.returncode == 1
     assert HOMEBREW_HEIF in result.stderr
 

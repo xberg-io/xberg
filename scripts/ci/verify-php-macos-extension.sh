@@ -35,9 +35,9 @@ rows="$(printf '%s\n' "$imports" | sed -n 's/^[[:space:]]*\(.*\) (compatibility 
 checked="$(printf '%s\n' "$rows" | wc -l | tr -d ' ')"
 
 bad="$(printf '%s\n' "$rows" | grep -v -E '^(/usr/lib/|/System/Library/)' || true)"
-if [ -n "$bad" ]; then
-  # The extension's own install name is also a row; it is only acceptable when relative.
-  self="$(otool -D "$extension" | tail -n +2 | head -1)"
+# A dylib lists its own install name as a row, which is not an import. A bundle has none.
+self="$(otool -D "$extension" | sed -n '2p')"
+if [ -n "$bad" ] && [ -n "$self" ]; then
   bad="$(printf '%s\n' "$bad" | grep -v -x -F -- "$self" || true)"
 fi
 if [ -n "$bad" ]; then
