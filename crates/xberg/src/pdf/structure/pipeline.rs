@@ -2096,7 +2096,7 @@ impl<'a> ParagraphVisualRow<'a> {
             script,
             (base.upright_baseline() - script.upright_baseline()).abs(),
             base.font_size,
-            crate::script_run::SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR,
+            true,
         ) && crate::script_run::is_script_run_forward_gap(
             self.left,
             self.right,
@@ -2479,37 +2479,31 @@ fn is_script_run_offset(
     next: &SegmentData,
     baseline_delta: f32,
     font_size: f32,
-    max_baseline_font_factor: f32,
+    within_row: bool,
 ) -> bool {
     let smaller_font_size = previous.font_size.min(next.font_size);
-    crate::script_run::is_script_run_baseline_offset_within(
-        baseline_delta,
-        font_size,
-        smaller_font_size,
-        max_baseline_font_factor,
-    )
+    if within_row {
+        crate::script_run::is_raised_row_offset(baseline_delta, font_size, smaller_font_size)
+    } else {
+        crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
+    }
 }
 
 /// Whether `next` reads as a sub/superscript attached to `previous`: same rotation and role,
 /// neither monospace, a materially smaller font raised or lowered by a fraction of it, and a start
 /// inside or abutting `previous`'s advance extent.
 pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
-    is_script_run_within(previous, next, crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR)
+    is_script_run_within(previous, next, false)
 }
 
 /// [`is_script_run_of`] at the wider bound a text row tolerates, for grouping lines into
 /// paragraphs rather than annotating. Only a script after its larger base counts: a raised
 /// marker that leads a line is a note label, not part of the text that follows it.
 fn is_raised_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
-    previous.font_size > next.font_size
-        && is_script_run_within(
-            previous,
-            next,
-            crate::script_run::SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR,
-        )
+    previous.font_size > next.font_size && is_script_run_within(previous, next, true)
 }
 
-fn is_script_run_within(previous: &SegmentData, next: &SegmentData, max_baseline_font_factor: f32) -> bool {
+fn is_script_run_within(previous: &SegmentData, next: &SegmentData, within_row: bool) -> bool {
     if previous.is_monospace || next.is_monospace || previous.assigned_role != next.assigned_role {
         return false;
     }
@@ -2535,7 +2529,7 @@ fn is_script_run_within(previous: &SegmentData, next: &SegmentData, max_baseline
     let baseline_delta = (next.upright_baseline() - previous.upright_baseline()).abs();
     let (previous_start, previous_end) = previous.upright_advance_extent();
     let (next_start, _) = next.upright_advance_extent();
-    is_script_run_offset(previous, next, baseline_delta, font_size, max_baseline_font_factor)
+    is_script_run_offset(previous, next, baseline_delta, font_size, within_row)
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 

@@ -2450,6 +2450,9 @@ mod run;
 mod setup;
 mod span_merging;
 mod span_ordering;
-pub use span_ordering::snap_spans_to_base_baselines;
+pub use span_ordering::{
+    SCRIPT_MARKER_MAX_CHARS, SCRIPT_MAX_FONT_RATIO, SCRIPT_MAX_SHIFT_EM, SCRIPT_MAX_SUFFIX_GAP_EM,
+    SCRIPT_MIN_FONT_RATIO, SCRIPT_MIN_SHIFT_EM, script_ordering_baselines, snap_spans_to_base_baselines,
+};
 mod tj_arrays;
 mod xobjects;

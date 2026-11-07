@@ -45,31 +45,29 @@ pub(crate) const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
 /// Deliberately requires a *non-zero* offset — a run at the identical baseline is a same-size
 /// style transition, not a script run, and is handled by the caller's own on-baseline path.
 pub(crate) fn is_script_run_baseline_offset(baseline_delta: f32, font_size: f32, smaller_font_size: f32) -> bool {
-    is_script_run_baseline_offset_within(
-        baseline_delta,
-        font_size,
-        smaller_font_size,
-        SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR,
-    )
+    baseline_delta > 0.0
+        && baseline_delta <= font_size * SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+        && smaller_font_size <= font_size * SCRIPT_RUN_MAX_FONT_SIZE_RATIO
 }
 
-/// Largest baseline offset at which a smaller abutting run still belongs to its base's text row.
+/// Largest baseline offset, in base ems, at which a smaller abutting run can still belong to its
+/// base's text row.
 ///
-/// Wider than [`SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR`], which bounds what the geometry alone
-/// annotates as a script. A marker raised further than that is annotated only on native script
-/// evidence (`pdf::native::hierarchy::script_evidence`, same 0.5 bound), yet it still must not
-/// split the row's paragraph: a wrapped line sits a full leading (>= 1.0) away. ~keep
+/// Wider than [`SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR`], which bounds what the geometry alone annotates
+/// as a script. A marker raised further than that is annotated only on native script evidence
+/// (`pdf::native::hierarchy::script_evidence`, same 0.5 bound), yet it still must not split the
+/// row's paragraph. ~keep
 pub(crate) const SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR: f32 = 0.5;
 
-/// [`is_script_run_baseline_offset`] with the caller's own offset bound.
-pub(crate) fn is_script_run_baseline_offset_within(
-    baseline_delta: f32,
-    font_size: f32,
-    smaller_font_size: f32,
-    max_baseline_font_factor: f32,
-) -> bool {
+/// Whether a smaller run raised or lowered by `baseline_delta` still sits in its base's text row.
+///
+/// The offset may also not exceed the run's own height: a script displaced further than it is tall
+/// is detached from the row, and a large font keeps `0.5 em` far above that, so a deck line set
+/// below a title or a drop cap beside its first line must not read as a script of the larger run.
+pub(crate) fn is_raised_row_offset(baseline_delta: f32, font_size: f32, smaller_font_size: f32) -> bool {
     baseline_delta > 0.0
-        && baseline_delta <= font_size * max_baseline_font_factor
+        && baseline_delta <= font_size * SCRIPT_RUN_MAX_ROW_BASELINE_FONT_FACTOR
+        && baseline_delta <= smaller_font_size
         && smaller_font_size <= font_size * SCRIPT_RUN_MAX_FONT_SIZE_RATIO
 }
 
