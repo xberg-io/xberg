@@ -1,3 +1,8 @@
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use crate::extraction::image_decode::probe_standard_image_with_security_limits;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use crate::extractors::security::SecurityLimits;
+
 /// Fraction of the page a painted image must cover for its scale to stand for the page's scan.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 const PAGE_COVERING_MIN: f32 = 0.80;
@@ -27,16 +32,14 @@ impl ProvenPlacement {
     /// The proven resolution, only when the bytes handed to the backend have the pixel size the
     /// dictionary declared. A dictionary that disagrees with its stream proves nothing about the
     /// stream the backend decodes. JPEG 2000 is not read here, so it never confirms.
-    pub(crate) fn confirmed_by(&self, format: &str, bytes: &[u8]) -> Option<f64> {
-        let format = match format {
+    pub(crate) fn confirmed_by(&self, format: &str, bytes: &[u8], limits: &SecurityLimits) -> Option<f64> {
+        let expected = match format {
             "jpeg" => image::ImageFormat::Jpeg,
             "png" => image::ImageFormat::Png,
             _ => return None,
         };
-        let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes));
-        reader.set_format(format);
-        let (width, height) = reader.into_dimensions().ok()?;
-        (width == self.declared_width && height == self.declared_height).then_some(self.dpi)
+        let (width, height, found) = probe_standard_image_with_security_limits(bytes, limits).ok()?;
+        (found == expected && width == self.declared_width && height == self.declared_height).then_some(self.dpi)
     }
 }
 
@@ -204,7 +207,11 @@ mod proven_source_dpi_tests {
             panic!("one image")
         };
         assert_eq!(
-            proven[&0].confirmed_by(image.format, &image.bytes),
+            proven[&0].confirmed_by(
+                image.format,
+                &image.bytes,
+                &crate::extractors::security::SecurityLimits::default()
+            ),
             Some(proven[&0].dpi)
         );
 
@@ -219,8 +226,22 @@ mod proven_source_dpi_tests {
             proven.contains_key(&0),
             "the placement alone still proves a resolution: {proven:?}"
         );
-        assert_eq!(proven[&0].confirmed_by(image.format, &image.bytes), None);
-        assert_eq!(proven[&0].confirmed_by("jpeg2000", &image.bytes), None);
+        assert_eq!(
+            proven[&0].confirmed_by(
+                image.format,
+                &image.bytes,
+                &crate::extractors::security::SecurityLimits::default()
+            ),
+            None
+        );
+        assert_eq!(
+            proven[&0].confirmed_by(
+                "jpeg2000",
+                &image.bytes,
+                &crate::extractors::security::SecurityLimits::default()
+            ),
+            None
+        );
     }
 
     #[test]

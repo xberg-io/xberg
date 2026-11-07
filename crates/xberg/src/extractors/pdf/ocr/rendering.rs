@@ -646,10 +646,11 @@ pub(super) async fn recover_page_text_from_image_xobjects(
     let mut fallback_images = fallback_images;
     if context.use_proven_source_dpi {
         let proven_dpis = crate::pdf::native::proven_dpi::proven_source_dpis(render_doc, page_idx);
+        let limits = ocr_config.security_limits.clone().unwrap_or_default();
         for image in &mut fallback_images {
             image.source_dpi = proven_dpis
                 .get(&image.paint_order)
-                .and_then(|placement| placement.confirmed_by(image.format, &image.bytes));
+                .and_then(|placement| placement.confirmed_by(image.format, &image.bytes, &limits));
         }
     }
     let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();
