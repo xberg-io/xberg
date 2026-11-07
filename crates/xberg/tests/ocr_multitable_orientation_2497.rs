@@ -246,8 +246,8 @@ async fn implicit_sideways_heading_recovers_exact_source_and_table_bounds() {
         }),
     )
     .await;
-    assert_heading_and_table(&forced, &expected);
     let implicit = extract(pdf, None).await;
+    assert_heading_and_table(&forced, &expected);
     assert_heading_and_table(&implicit, &expected);
     assert_eq!(implicit.tables[0].bounding_box, forced.tables[0].bounding_box);
     assert!(implicit.ocr_elements.is_none());

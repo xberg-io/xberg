@@ -204,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Recover an implicitly rotated table together with a heading or prose.** (#2497)
+  A sideways read of one table is accepted with text above or below it when every outside word is a separate Tesseract word lying wholly above or below the table and their row-by-row order is the returned text.
+
 - **(ocr): Recover tall scans at 120 DPI in every certified encoding, under Markdown output and an explicit Tesseract page mode, and report when recovery was not used.** (#2502)
   Bilevel, neutral RGB, Indexed and grayscale JPEG sources down to 120 DPI now use source-image strips, each of which must match its source ink rows. A Tesseract page mode such as PSM 3 and Markdown output no longer turn recovery off. A tall page that stays on the downscaled read now carries a warning that names why: the configuration option that blocked recovery, or an uncertifiable source.
 

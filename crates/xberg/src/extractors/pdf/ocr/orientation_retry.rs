@@ -1,5 +1,7 @@
 //! Bounded orientation recovery for low-confidence whole-page PDF OCR.
 
+#[cfg(auto_rotate)]
+mod prose;
 mod recognition;
 #[cfg(auto_rotate)]
 mod two_tables;
@@ -15,7 +17,7 @@ use crate::extractors::security::SecurityBudget;
 use crate::extractors::security::SecurityLimits;
 use crate::plugins::{ConfidenceSemantics, OcrBackend};
 use crate::table_core::{HocrWord, detect_rows, find_row_index};
-use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementConfig, OcrElementLevel};
+use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementConfig, OcrElementLevel, Table};
 
 use super::document::processed_ocr_layout_dimensions;
 #[cfg(auto_rotate)]
@@ -298,7 +300,9 @@ impl OrientationRetry {
         let text = if result.tables.is_empty() {
             &result.content
         } else {
-            let Some(text) = complete_table_text(result, row_threshold, table_matches_iterator_rows) else {
+            let Some(text) = complete_table_text(result, row_threshold, table_matches_iterator_rows)
+                .or_else(|| prose::complete_text(result, row_threshold))
+            else {
                 return false;
             };
             table_text = text;
@@ -379,11 +383,7 @@ fn raster_has_glyphs(raster: &[u8], limits: &SecurityLimits) -> bool {
         .is_some()
 }
 
-fn complete_table_text(
-    result: &ExtractedDocument,
-    row_threshold: f64,
-    matches: impl Fn(&[Vec<String>], &[OcrElement], BoundingBox, f64) -> bool,
-) -> Option<String> {
+fn single_table(result: &ExtractedDocument) -> Option<(&Table, BoundingBox, (u32, u32))> {
     const MIN_ROWS: usize = 3;
     const MIN_COLUMNS: usize = 2;
     let [table] = result.tables.as_slice() else {
@@ -407,6 +407,15 @@ fn complete_table_text(
     {
         return None;
     }
+    Some((table, bbox, (width, height)))
+}
+
+fn complete_table_text(
+    result: &ExtractedDocument,
+    row_threshold: f64,
+    matches: impl Fn(&[Vec<String>], &[OcrElement], BoundingBox, f64) -> bool,
+) -> Option<String> {
+    let (table, bbox, _) = single_table(result)?;
     let words = table.cells.iter().flatten().flat_map(|cell| cell.split_whitespace());
     if usize::try_from(word_count_of(&result.metadata.additional)?).ok()? != words.clone().count()
         || (table.markdown.trim() != result.content.trim() && !words.clone().eq(result.content.split_whitespace()))
