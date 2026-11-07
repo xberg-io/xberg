@@ -2999,7 +2999,7 @@ fn embedded_image_ocr_gate_has_no_second_copy() {
 /// and the prebuilt page content before any renderer runs.
 #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 mod embedded_image_ocr_text_fold_tests {
-    use super::fold_embedded_image_ocr_text;
+    use super::{fold_embedded_image_ocr_text, fold_embedded_image_ocr_text_with_gap};
     use crate::types::internal::{
         ElementKind, InternalDocument, InternalElement, Relationship, RelationshipKind, RelationshipTarget,
     };
@@ -3105,6 +3105,30 @@ mod embedded_image_ocr_text_fold_tests {
             page_contents(&document),
             vec![format!("{NATIVE_TEXT}\n\n{PICTURE_WORDS}")]
         );
+    }
+
+    #[test]
+    fn a_recovered_line_replaces_the_text_only_when_the_anchor_is_on_its_page() {
+        const RECOVERED: &str = "CRATE 17 KEEP DRY\nRELAY SERVICE STARTS MONDAY";
+        for (gap_page, expected) in [(1, RECOVERED), (2, PICTURE_WORDS)] {
+            let mut document = one_page_document(text_only_anchor(0, 1), Some(PICTURE_WORDS));
+
+            fold_embedded_image_ocr_text_with_gap(&mut document, Some((gap_page, RECOVERED)));
+
+            assert_eq!(
+                kinds_and_texts(&document),
+                vec![
+                    (ElementKind::Paragraph, NATIVE_TEXT),
+                    (ElementKind::Paragraph, expected)
+                ],
+                "gap page {gap_page}"
+            );
+            assert_eq!(
+                page_contents(&document),
+                vec![format!("{NATIVE_TEXT}\n\n{expected}")],
+                "gap page {gap_page}"
+            );
+        }
     }
 
     #[test]

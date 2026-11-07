@@ -2235,6 +2235,32 @@ fn update_formula_container_stack(open: &mut Vec<ElementKind>, kind: ElementKind
     }
 }
 
+/// Put a picture's OCR text anchor after the last element of its own page, so the recovered
+/// text reads before the next page instead of after the whole document.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn insert_image_ocr_text_anchor(doc: &mut InternalDocument, anchor: InternalElement) {
+    let next_page = anchor.page.and_then(|page| {
+        doc.elements
+            .iter()
+            .position(|element| element.page.is_some_and(|other| other > page))
+    });
+    let Some(at) = next_page else {
+        doc.push_element(anchor);
+        return;
+    };
+    for relationship in &mut doc.relationships {
+        if relationship.source >= at as u32 {
+            relationship.source += 1;
+        }
+        if let crate::types::internal::RelationshipTarget::Index(target) = &mut relationship.target
+            && *target >= at as u32
+        {
+            *target += 1;
+        }
+    }
+    doc.elements.insert(at, anchor);
+}
+
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
 fn insert_formula_document_element(doc: &mut InternalDocument, at: usize, mut element: InternalElement) {
     // ~keep Insertion positions can be reused after shifts; allocate a fresh identity without renumbering old IDs.
@@ -3838,7 +3864,10 @@ impl PdfExtractor {
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
                     if image_anchor == extraction::ImageAnchor::OcrTextOnly {
                         if !page_text_is_from_ocr {
-                            doc.push_element(InternalElement::image_ocr_text_anchor(idx as u32, img.page_number));
+                            insert_image_ocr_text_anchor(
+                                &mut doc,
+                                InternalElement::image_ocr_text_anchor(idx as u32, img.page_number),
+                            );
                         }
                         continue;
                     }
