@@ -1319,6 +1319,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
                             })
                             .cloned(),
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        single_native_type0_page: pages
+                            .single_native_type0_page
+                            .filter(|_| page_count == 1 && page_idx == 0)
+                            .map(std::sync::Arc::from),
                         ..Default::default()
                     };
                     // See `extract_with_ocr_for_page`'s doc comment on
@@ -1536,6 +1541,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 super::document::native_preservation_is_automatic(config, (*page_idx + 1) as u32)
                             })
                             .cloned(),
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        single_native_type0_page: pages
+                            .single_native_type0_page
+                            .filter(|_| page_count == 1 && *page_idx == 0)
+                            .map(std::sync::Arc::from),
                         ..Default::default()
                     };
                     let points_per_pixel_override = {
@@ -2456,9 +2466,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && structured_ocr_pages
                     .get(page_number)
                     .is_some_and(super::native_word_coverage::has_only_certified_tesseract_text)
-                && layers
-                    .get(page_number)
-                    .is_some_and(|layer| super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds))
+                && layers.get(page_number).is_some_and(|layer| {
+                    let mut stripped = layer.clone();
+                    super::super::unmapped_glyphs::strip_native_fragment(&mut stripped);
+                    super::document::ocr_confirms_layer(&stripped, text, &ocr_output_thresholds)
+                })
             {
                 complete_native_pages.insert(*page_number);
             }
@@ -2618,6 +2630,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut type0_loss_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut lost_glyph_ink_pages = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if !probing_hidden_layer
         && !mixed_route_layout_active
         && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
@@ -2651,6 +2665,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 complete_native_pages.insert(page);
                 type0_loss_pages.insert(page);
             }
+            if native_ink_owned_pages.contains(&page)
+                && ink_proof_layout_free
+                && page_count == 1
+                && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
+                && accepted_replacements.contains_key(&page)
+                && !noise_verdict_pages.contains(&page)
+            {
+                complete_native_pages.insert(page);
+                let lost = native.map_or(0, |native| {
+                    native.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count()
+                });
+                lost_glyph_ink_pages.insert(page, lost);
+            }
         }
     }
     // Reject only certified automatic replacements, preserving the original native page objects.
@@ -2664,9 +2691,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     return true;
                 }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                if native_words_covered_pages.contains(&page) || native_ink_owned_pages.contains(&page) {
+                if native_words_covered_pages.contains(&page) {
                     return super::native_word_coverage::has_only_certified_tesseract_text(doc)
                         && super::document::ocr_elements_follow_text(doc, text);
+                }
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if native_ink_owned_pages.contains(&page) {
+                    return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text);
                 }
                 false
             });
@@ -2679,6 +2710,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             ocr_confidence_by_page.remove(&page);
             preprocessing_by_page.remove(&page);
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            if let Some(lost) = lost_glyph_ink_pages.get(&page) {
+                if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
+                    && pages.single_native_type0_page.is_some()
+                {
+                    return Err(lost_glyph_ocr_rejection(*lost));
+                }
+                crate::core::diagnostics::push_warning_deduped(
+                    &mut accumulated_warnings,
+                    crate::core::diagnostics::warning(
+                        "ocr",
+                        format!(
+                            "Page {page} retained native text with {lost} glyphs lost; its OCR read only re-read glyph ink the native text paints."
+                        ),
+                    ),
+                );
+            }
             if type0_loss_pages.contains(&page) {
                 if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
                     && page_count == 1
@@ -3423,6 +3470,15 @@ pub(super) struct OcrReadEvidence {
     complete_native_words: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     native_ink_owned: bool,
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn lost_glyph_ocr_rejection(lost: usize) -> FailedOcrRun {
+    crate::XbergError::Ocr {
+        message: format!("Page 1 OCR read only re-read glyph ink that the native text paints; {lost} glyphs are lost"),
+        source: None,
+    }
+    .into()
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -4643,33 +4699,45 @@ pub(super) async fn extract_with_ocr_for_page(
             let document_page_number = (document_page_idx + 1) as u32;
             let mut ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-            if can_retry_orientation
-                && batch_upright_correction[offset].0 == 0
-                && let Some(source) = detached_page
-                && let Some(layer) = page_ocr_hints
+            if can_retry_orientation && batch_upright_correction[offset].0 == 0 {
+                let coverage_layer = page_ocr_hints
                     .as_ref()
                     .and_then(|hints| hints.native_coverage_layers.as_ref())
                     .and_then(|layers| layers.get(&document_page_number))
-            {
-                complete_native_words = super::native_word_coverage::covers_complete_native_page(
-                    source.document,
-                    document_page_idx,
-                    layer,
-                    &ocr_result,
-                );
-                native_ink_owned = !complete_native_words
-                    && super::document::native_preservation_is_automatic(config, document_page_number)
-                    && super::native_word_coverage::native_text_paints_all_read_ink(
-                        source.document,
+                    .map(String::as_str);
+                let lost_glyph_layer = page_ocr_hints
+                    .as_ref()
+                    .and_then(|hints| hints.single_native_type0_page.as_deref())
+                    .filter(|_| document_page_idx == 0 && super::document::native_preservation_is_automatic(config, 1));
+                let pdf = detached_page
+                    .map(|source| source.document)
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf));
+                if let (Some(pdf), Some(layer)) = (pdf, coverage_layer.filter(|_| detached_page.is_some())) {
+                    complete_native_words = super::native_word_coverage::covers_complete_native_page(
+                        pdf,
                         document_page_idx,
                         layer,
                         &ocr_result,
-                        super::native_word_coverage::InkProofLimits {
-                            thresholds: &ocr_output_thresholds,
-                            max_working_bytes: super::hidden_layer::preview_byte_limit(config),
-                            cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
-                        },
                     );
+                }
+                if let (Some(pdf), Some(layer)) = (
+                    pdf,
+                    coverage_layer.filter(|_| detached_page.is_some()).or(lost_glyph_layer),
+                ) {
+                    native_ink_owned = !complete_native_words
+                        && super::document::native_preservation_is_automatic(config, document_page_number)
+                        && super::native_word_coverage::native_text_paints_all_read_ink(
+                            pdf,
+                            document_page_idx,
+                            layer,
+                            &ocr_result,
+                            super::native_word_coverage::InkProofLimits {
+                                thresholds: &ocr_output_thresholds,
+                                max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                                cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                            },
+                        );
+                }
             }
             crate::extraction::derive::adopt_public_ocr_document(
                 &mut ocr_result,
@@ -5776,6 +5844,36 @@ pub(super) async fn extract_with_ocr_for_page(
             crate::pdf::render::record_render_warning(warning);
         }
         return Err(type0_ocr_rejection());
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    if native_ink_owned
+        && detached_page.is_none()
+        && images.is_none()
+        && page_index_offset == 0
+        && !has_layout_detections
+        && !tall_source_used
+        && let [read] = page_texts.as_slice()
+        && !read.trim().is_empty()
+        && pages_with_recovered_xobject_payload == [false]
+        && public_ocr_pages.is_empty()
+        && collected_tables.is_empty()
+        && accumulated_formulas.is_empty()
+        && accumulated_llm_usage.is_empty()
+        && ocr_doc
+            .as_ref()
+            .is_none_or(|doc| super::native_word_coverage::only_segments_certified_tesseract_text(doc, read))
+    {
+        for warning in render_warnings {
+            crate::pdf::render::record_render_warning(warning);
+        }
+        let lost = page_ocr_hints
+            .as_ref()
+            .and_then(|hints| hints.single_native_type0_page.as_deref())
+            .map_or(0, |native| {
+                native.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count()
+            });
+        return Err(lost_glyph_ocr_rejection(lost));
     }
 
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
