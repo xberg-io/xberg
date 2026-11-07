@@ -311,7 +311,10 @@ fn test_ligature_fi_expanded_in_extract_text() {
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     let text = doc.extract_text(0).unwrap();
     assert!(text.contains("fi"), "ﬁ must come out as fi; got: {text:?}");
-    assert!(!text.contains('\u{FB01}'), "U+FB01 must not reach the text; got: {text:?}");
+    assert!(
+        !text.contains('\u{FB01}'),
+        "U+FB01 must not reach the text; got: {text:?}"
+    );
 }
 
 #[test]

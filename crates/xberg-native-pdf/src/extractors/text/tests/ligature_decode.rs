@@ -141,12 +141,19 @@ fn ligature_presentation_forms_come_out_as_letters() {
         ("FB06", "st"),
     ] {
         let font = ligature_font(target, None);
-        assert_eq!(font.char_to_unicode(LIGATURE_CODE).as_deref(), Some(letters), "{target}");
+        assert_eq!(
+            font.char_to_unicode(LIGATURE_CODE).as_deref(),
+            Some(letters),
+            "{target}"
+        );
     }
 }
 
 #[test]
 fn ligature_presentation_form_spreads_its_advance_over_its_letters() {
     let mut extractor = extractor_with(ligature_font("FB01", None));
-    assert_eq!(span_text(&mut extractor, b"BT /F1 10 Tf 72 700 Td (de\\200ne) Tj ET"), "define");
+    assert_eq!(
+        span_text(&mut extractor, b"BT /F1 10 Tf 72 700 Td (de\\200ne) Tj ET"),
+        "define"
+    );
 }

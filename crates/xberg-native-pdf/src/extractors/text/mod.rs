@@ -1979,9 +1979,9 @@ impl TjBuffer {
         }
     }
 
-    /// Decide whether a space glyph of advance `width` takes no room on the line (R1 of the ligature
-    /// ruling): the pen was pulled back over more than half of the space, which is the line the gap
-    /// test already uses for a word break. If so, the space stays out of the text and its advance goes
+    /// Decide whether a space glyph of advance `width` takes no room on the line: the pen was
+    /// pulled back over more than half of the space, which is the line the gap test already uses
+    /// for a word break. If so, the space stays out of the text and its advance goes
     /// to the previous glyph, so the gap test between the real neighbours decides. A small kern keeps
     /// the space. ~keep
     fn absorb_roomless_space(&mut self, width: f32) -> bool {

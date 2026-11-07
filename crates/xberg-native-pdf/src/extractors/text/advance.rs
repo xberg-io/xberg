@@ -1007,7 +1007,7 @@ impl<'doc> TextExtractor<'doc> {
                 let x_offset_device = char_index as f32 * char_width_device;
                 let char_origin_x = pos.x + x_offset_device;
                 let char_origin_y = pos.y;
-                // R1: a space that starts inside the glyph before it takes no room, so the gap test decides. ~keep
+                // A space that starts inside the glyph before it takes no room, so the gap test decides. ~keep
                 let roomless_space = unicode_char == ' '
                     && rotation_degrees.abs() < 1.0
                     && self.chars.last().is_some_and(|prev| {
