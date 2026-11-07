@@ -13,6 +13,7 @@ variants.add_argument("--bilevel-only", action="store_true")
 variants.add_argument("--neutral-rgb-only", action="store_true")
 variants.add_argument("--jpeg-only", action="store_true")
 variants.add_argument("--predictor-indexed-only", action="store_true")
+variants.add_argument("--lower-density-only", action="store_true")
 args = parser.parse_args()
 target, font_path = args.target, args.font.resolve(strict=True)
 phrase = "Source scan keeps all words from this repeated line safely today"
@@ -66,13 +67,13 @@ def _stream(data: bytes, fields: str = "") -> bytes:
     return f"<< /Length {len(data)} {fields} >>\nstream\n".encode() + data + b"\nendstream"
 
 
-def _raster(height: int, packing: str) -> bytes:
-    width = 1275
+def _raster(height: int, packing: str, width: int = 1275) -> bytes:
+    scale = width / 1275
     image = Image.new("L", (width, height), 255)
-    font = ImageFont.truetype(str(font_path), 20 if packing in {"predictor", "indexed"} else 18)
+    font = ImageFont.truetype(str(font_path), (20 if packing in {"predictor", "indexed"} else 18) * scale)
     draw = ImageDraw.Draw(image)
     for line in range(40):
-        draw.text((95, 180 + line * ((height - 350) // 40)), lines[line], fill=0, font=font)
+        draw.text((round(95 * scale), round(180 * scale) + line * ((height - round(350 * scale)) // 40)), lines[line], fill=0, font=font)
     if packing in {"predictor", "indexed"}:
         return _predictor_or_indexed(image, packing)
     if packing == "bilevel":
@@ -122,14 +123,14 @@ def _predictor_or_indexed(image: Image.Image, packing: str) -> bytes:
     return _stream(zlib.compress(encoded), fields)
 
 
-def _pdf(name: str, height: int, *, mixed: bool = False, packing: str = "gray") -> None:
-    pts = height * 0.48
+def _pdf(name: str, height: int, *, mixed: bool = False, packing: str = "gray", width: int = 1275) -> None:
+    pts = height * 612 / width
     entries = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 {pts:g}] /Resources << /XObject << /Scan 5 0 R >> >> /Contents 4 0 R >>".encode(),
         _stream(f"q 612 0 0 {pts:g} 0 0 cm /Scan Do Q".encode()),
-        _raster(height, packing),
+        _raster(height, packing, width),
     ]
     if mixed:
         entries[1] = b"<< /Type /Pages /Kids [6 0 R 3 0 R] /Count 2 >>"
@@ -166,6 +167,9 @@ elif args.jpeg_only:
 elif args.predictor_indexed_only:
     _pdf("predictor-mixed.pdf", 12000, packing="predictor")
     _pdf("indexed-inverted.pdf", 12000, packing="indexed")
+elif args.lower_density_only:
+    for name, packing in [("bilevel-120.pdf", "bilevel"), ("neutral-rgb-120.pdf", "neutral-rgb"), ("indexed-120.pdf", "indexed"), ("jpeg-120.pdf", "jpeg")]:
+        _pdf(name, 9600, packing=packing, width=1020)
 else:
     _pdf("strict-tall.pdf", 9000)
     _pdf("strict-short.pdf", 3600)

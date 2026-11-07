@@ -15,7 +15,7 @@ const NEUTRAL_RGB: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-st
 const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-mixed.pdf");
 const SHORT: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-short.pdf");
 const ORACLE: &str = include_str!("../../../fixtures/repros/tall-scan-strips/expected.txt");
-const STRIP_WARNING: &str = "source-image strips";
+const STRIP_WARNING: &str = "source-image strips.";
 
 fn extraction_config() -> ExtractionConfig {
     serde_json::from_value(serde_json::json!({
@@ -89,9 +89,12 @@ fn tall_scan_recovers_every_source_line_once_in_order() {
 
 #[test]
 fn bilevel_tall_scan_recovers_every_source_line_once_in_order() {
-    let document = extract(BILEVEL, &extraction_config());
+    assert_bilevel_text(&extract(BILEVEL, &extraction_config()));
+}
+
+fn assert_bilevel_text(document: &ExtractedDocument) {
     assert_eq!(document.extraction_method, Some(ExtractionMethod::Ocr));
-    assert!(strip_warning(&document));
+    assert!(strip_warning(document));
     let pages = document.pages.as_ref().unwrap();
     let [page] = pages.as_slice() else {
         panic!("expected one page, got {}", pages.len());
@@ -210,13 +213,13 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
 }
 
 #[test]
-fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_markdown_ocr() {
+fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false,
-        "output_format": "markdown",
+        "output_format": "djot",
         "ocr": {"backend": "tesseract", "language": ["eng"]},
     }))
-    .expect("markdown configuration that bypasses the strip recovery");
+    .expect("Djot configuration that bypasses the strip recovery");
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -252,7 +255,11 @@ fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_markdown_ocr()
 }
 
 fn assert_exact_tall_source_text(source: &[u8]) {
-    let document = extract(source, &extraction_config());
+    assert_exact_tall_source_text_with(source, &extraction_config());
+}
+
+fn assert_exact_tall_source_text_with(source: &[u8], config: &ExtractionConfig) {
+    let document = extract(source, config);
     assert_image_text(&document, true);
     assert!(document.content.split_whitespace().eq(ORACLE.split_whitespace()));
     let pages = document.pages.as_ref().unwrap();
@@ -288,15 +295,20 @@ fn tall_lower_density_png_predictor_recovers_all_source_words_in_order() {
 }
 
 fn lower_density_predictor() -> Vec<u8> {
-    // Keep the exact encoded image and xref offsets; only the page and paint size change.
-    let swaps: [(&[u8], &[u8]); 2] = [
-        (b"/MediaBox [0 0 612 5760]", b"/MediaBox [0 0 765 7200]"),
-        (b"q 612 0 0 5760 0 0 cm", b"q 765 0 0 7200 0 0 cm"),
+    lower_density(TALL_PREDICTOR, (765, 7200))
+}
+
+/// Keep the exact encoded image and xref offsets; only the page and paint size change.
+fn lower_density(source: &[u8], (width, height): (u32, u32)) -> Vec<u8> {
+    let swaps = [
+        ("/MediaBox [0 0 612 5760]", format!("/MediaBox [0 0 {width} {height}]")),
+        ("q 612 0 0 5760 0 0 cm", format!("q {width} 0 0 {height} 0 0 cm")),
     ];
-    let mut lower_density = TALL_PREDICTOR.to_vec();
+    let mut lower_density = source.to_vec();
     for (old, new) in swaps {
+        let (old, new) = (old.as_bytes(), new.as_bytes());
         assert_eq!(old.len(), new.len());
-        let mut positions = TALL_PREDICTOR
+        let mut positions = source
             .windows(old.len())
             .enumerate()
             .filter_map(|(index, window)| (window == old).then_some(index));
@@ -333,4 +345,157 @@ fn tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order() {
 fn tall_inverted_indexed_scan_recovers_all_source_words_in_order() {
     let source = include_bytes!("../../../fixtures/repros/tall-scan-strips/indexed-inverted.pdf");
     assert_exact_tall_source_text(source);
+}
+
+const BELOW_FLOOR_DENSITY: (u32, u32) = (918, 8640);
+
+fn configured(extra: serde_json::Value) -> ExtractionConfig {
+    let mut value = serde_json::to_value(extraction_config()).expect("serialize base configuration");
+    let (base, extra) = (value.as_object_mut().unwrap(), extra.as_object().unwrap());
+    for (key, field) in extra {
+        match (base.get_mut(key), field) {
+            (Some(serde_json::Value::Object(base)), serde_json::Value::Object(field)) => base.extend(field.clone()),
+            _ => {
+                base.insert(key.clone(), field.clone());
+            }
+        }
+    }
+    serde_json::from_value(value).expect("merged configuration")
+}
+
+macro_rules! fixture_120 {
+    ($name:literal) => {
+        include_bytes!(concat!("../../../fixtures/repros/tall-scan-strips/", $name)).as_slice()
+    };
+}
+
+#[test]
+fn indexed_scan_rendered_at_120_dpi_recovers_every_source_word() {
+    assert_exact_tall_source_text(fixture_120!("indexed-120.pdf"));
+}
+
+#[test]
+fn bilevel_rgb_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
+    for source in [
+        fixture_120!("bilevel-120.pdf"),
+        fixture_120!("neutral-rgb-120.pdf"),
+        fixture_120!("jpeg-120.pdf"),
+    ] {
+        let document = extract(source, &extraction_config());
+        assert!(!strip_warning(&document));
+        assert!(
+            document
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains("source-image strips were not used")),
+            "{:?}",
+            document.processing_warnings
+        );
+    }
+}
+
+#[test]
+fn tall_scans_below_the_density_floor_say_recovery_was_not_used() {
+    for source in [TALL_PREDICTOR, NEUTRAL_RGB, BILEVEL] {
+        let document = extract(&lower_density(source, BELOW_FLOOR_DENSITY), &extraction_config());
+        assert!(!strip_warning(&document));
+        assert!(
+            document
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains("source-image strips were not used")),
+            "{:?}",
+            document.processing_warnings
+        );
+    }
+}
+
+#[test]
+fn markdown_output_recovers_the_tall_scan_in_every_certified_encoding() {
+    let config = configured(serde_json::json!({"output_format": "markdown"}));
+    for source in [TALL, NEUTRAL_RGB, TALL_JPEG, TALL_PREDICTOR] {
+        assert_exact_tall_source_text_with(source, &config);
+    }
+}
+
+#[test]
+fn strips_join_as_separate_paragraphs_and_markdown_reports_flat_text() {
+    let plain = extract(TALL, &extraction_config());
+    assert!(strip_warning(&plain));
+    assert_eq!(plain.content.split("\n\n").count(), 40, "{:?}", plain.content);
+    let markdown = extract(TALL, &configured(serde_json::json!({"output_format": "markdown"})));
+    assert!(strip_warning(&markdown));
+    assert!(
+        markdown
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("Markdown structure")),
+        "{:?}",
+        markdown.processing_warnings
+    );
+    assert!(
+        !plain
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("Markdown structure"))
+    );
+}
+
+#[test]
+fn markdown_output_with_an_uncertifiable_jpeg_keeps_the_typed_render_refusal() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "use_cache": false,
+        "output_format": "markdown",
+        "ocr": {"backend": "tesseract", "language": ["eng"]},
+    }))
+    .expect("Markdown configuration");
+    let below_floor = lower_density(TALL_JPEG, BELOW_FLOOR_DENSITY);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let error = runtime
+        .block_on(extract_public(
+            ExtractInput::from_bytes(below_floor, "application/pdf", None),
+            &config,
+        ))
+        .expect_err("a JPEG below the density floor cannot be certified");
+    let xberg::XbergError::Parsing {
+        source: Some(source), ..
+    } = error
+    else {
+        panic!("expected the typed render refusal, got {error:?}");
+    };
+    let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
+        source
+            .source()
+            .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
+    });
+    assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
+}
+
+#[test]
+fn an_explicit_tesseract_page_mode_recovers_the_tall_scan() {
+    let config = configured(serde_json::json!({"ocr": {"tesseract_config": {"psm": 3}}}));
+    for source in [TALL, NEUTRAL_RGB, TALL_PREDICTOR] {
+        let document = extract(source, &config);
+        assert_image_text(&document, true);
+        assert_eq!(
+            document.metadata.additional.get("ocr_page_segmentation_modes"),
+            Some(&serde_json::json!([{ "page_number": 1, "psm": 3 }]))
+        );
+    }
+}
+
+#[test]
+fn a_configuration_that_blocks_strip_recovery_is_named_in_the_result() {
+    let config = configured(serde_json::json!({"include_document_structure": true}));
+    let document = extract(TALL, &config);
+    assert!(!strip_warning(&document));
+    let warning = document
+        .processing_warnings
+        .iter()
+        .find(|warning| warning.message.contains("source-image strips were not used"))
+        .expect("the skipped recovery is reported");
+    assert!(warning.message.contains("document structure"), "{}", warning.message);
 }

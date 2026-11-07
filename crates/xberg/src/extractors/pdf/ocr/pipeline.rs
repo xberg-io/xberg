@@ -1708,11 +1708,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             feature = "tokio-runtime",
             not(target_arch = "wasm32")
         ))]
-        let try_tall_source = !mixed_route_layout_active
-            && super::tall_source::supports(config, &ocr_config_resolved)
+        let tall_source_candidate = !mixed_route_layout_active
             && crate::plugins::registry::get_ocr_backend_registry()
                 .read()
                 .is_builtin_tesseract(backend);
+        let tall_source_unsupported = tall_source_candidate
+            .then(|| super::tall_source::unsupported_reason(config, &ocr_config_resolved))
+            .flatten();
+        let try_tall_source = tall_source_candidate && tall_source_unsupported.is_none();
         let batch_slice = &page_images;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
@@ -1879,6 +1882,18 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .await?
                     {
                         alternative_raster_pages.insert((page_idx + 1) as u32);
+                    } else if let Some(reason) = tall_source_unsupported
+                        && correction_degrees == 0
+                        && let Ok(extraction_result) = &mut result
+                        && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
+                    {
+                        super::tall_source::note_unrecovered(
+                            extraction_result,
+                            &ocr_config_resolved,
+                            (&render_doc, page_idx),
+                            raster.3,
+                            super::tall_source::Unrecovered::Config(reason),
+                        );
                     }
                     result
                 };
@@ -3528,10 +3543,24 @@ pub(super) async fn extract_with_ocr_for_page(
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    let try_tall_source = !has_layout_detections
-        && !has_stored_scan
-        && super::tall_source::supports(config, base_ocr_config)
-        && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
+    let tall_source_candidate =
+        !has_layout_detections && !has_stored_scan && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let tall_source_unsupported = tall_source_candidate
+        .then(|| super::tall_source::unsupported_reason(config, base_ocr_config))
+        .flatten();
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let try_tall_source = tall_source_candidate && tall_source_unsupported.is_none();
     #[cfg(all(
         feature = "ocr",
         feature = "pdf",
@@ -4402,6 +4431,21 @@ pub(super) async fn extract_with_ocr_for_page(
                             &encoded_batch[page_idx - batch_start],
                         )
                         .await?;
+                    } else if let Some(reason) = tall_source_unsupported
+                        && correction_degrees == 0
+                        && let Ok(document) = &mut ocr_result
+                        && let Some(source) = lazy_pdf_render_state
+                            .as_ref()
+                            .map(|(pdf, _, _)| (pdf, page_idx))
+                            .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
+                    {
+                        super::tall_source::note_unrecovered(
+                            document,
+                            base_ocr_config,
+                            source,
+                            encoded_batch[page_idx - batch_start].3,
+                            super::tall_source::Unrecovered::Config(reason),
+                        );
                     }
                     ocr_result
                 };
@@ -4615,8 +4659,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 let normalize_recovered_table = xobject_document.is_some()
-                    && orientation_retry.is_some()
-                    && !base_ocr_config.auto_rotate
+                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate)
                     && !ocr_result.tables.is_empty()
                     && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
                         .is_some_and(|angle| angle != 0);
