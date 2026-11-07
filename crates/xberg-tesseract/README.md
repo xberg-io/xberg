@@ -352,9 +352,9 @@ fn load_test_image(filename: &str) -> Result<(Vec<u8>, u32, u32), Box<dyn Error>
 
 ### Process Exit
 
-When the process calls C `exit()`, the crate frees the engines that their owner parked with `TesseractAPI::mark_idle`. Call `mark_in_use` before a thread takes a parked engine again. The exit cleanup skips an engine in use, because another thread can still recognize with it.
+When the process calls C `exit()`, the crate frees the idle engines that never ran `Drop`. A new engine counts as in use, and the exit cleanup skips it. If you never mark an engine idle, tesseract reports the leaked dictionaries on stderr at exit. The process does not crash.
 
-If you never call `mark_idle`, tesseract reports the leaked dictionaries on stderr at exit. The process does not crash.
+`TesseractAPI::mark_idle`, `mark_in_use` and `is_idle` are for engine pools such as the xberg OCR pool. They are public, hidden from the generated docs, and not part of the stable API. Call `mark_idle` only when no thread holds the engine, because the exit cleanup then frees it. Call `mark_in_use` before a thread takes a parked engine again. It returns an error when the cleanup already freed the engine.
 
 ## Building
 

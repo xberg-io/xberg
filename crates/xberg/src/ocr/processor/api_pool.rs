@@ -315,6 +315,16 @@ impl TesseractApiPool {
     }
 }
 
+/// Tells the caller why a pooled handle cannot start a lease.
+fn lease_failure_message(error: &xberg_tesseract::TesseractError) -> &'static str {
+    match error {
+        xberg_tesseract::TesseractError::MutexLockError => {
+            "The OCR engine registry is unusable because a thread panicked while it held the lock"
+        }
+        _ => "The OCR engine was shut down because the process is exiting",
+    }
+}
+
 pub(super) struct TesseractApiLease {
     inner: ResourceLease<ApiKey, PooledTesseractApi>,
     models: super::model_context::ModelContext,
@@ -331,13 +341,7 @@ impl TesseractApiLease {
     ) -> Result<Self, OcrError> {
         if let Err(error) = inner.mark_in_use() {
             inner.release_for_models(models, |_| false);
-            let message = match error {
-                xberg_tesseract::TesseractError::MutexLockError => {
-                    "The OCR engine registry is unusable because a thread panicked while it held the lock"
-                }
-                _ => "The OCR engine was shut down because the process is exiting",
-            };
-            return Err(OcrError::ProcessingFailed(message.to_string()));
+            return Err(OcrError::ProcessingFailed(lease_failure_message(&error).to_string()));
         }
         Ok(Self {
             inner,
@@ -383,6 +387,13 @@ mod exit_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_poisoned_registry_and_a_process_exit_report_different_messages() {
+        use xberg_tesseract::TesseractError;
+        assert!(lease_failure_message(&TesseractError::MutexLockError).contains("registry is unusable"));
+        assert!(lease_failure_message(&TesseractError::NullPointerError).contains("process is exiting"));
+    }
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
 

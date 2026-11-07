@@ -2282,11 +2282,18 @@ mod live_engine_tests {
         }
     }
 
+    const POISON_CHILD_ENV: &str = "XBERG_TESSERACT_POISON_CHILD";
+
+    /// Poisons the registry of the process that runs it, and never repairs it. Only the
+    /// child process of the next test sets `POISON_CHILD_ENV`, so no other test shares a
+    /// process with a poisoned registry.
     #[test]
-    fn a_poisoned_registry_is_reported_and_not_read_as_a_freed_engine() {
-        let _serial = EXIT_CLEANUP_TESTS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+    fn poisoned_registry_child() {
+        if std::env::var_os(POISON_CHILD_ENV).is_none() {
+            return;
+        }
+        let api = TesseractAPI::new().expect("create engine");
+        api.mark_idle();
         let poisoner = std::thread::spawn(|| {
             let _held = LIVE_ENGINES.lock().unwrap();
             panic!("poison the registry on purpose");
@@ -2294,8 +2301,53 @@ mod live_engine_tests {
         assert!(poisoner.join().is_err());
         // ~keep: a made-up address; the lookup fails on the lock before it reads the list.
         let outcome = set_engine_idle(0x7100_usize as *mut c_void, 1, false);
-        LIVE_ENGINES.clear_poison();
         assert_eq!(outcome, None, "a poisoned registry is not the same as a freed engine");
+        assert!(
+            matches!(api.mark_in_use(), Err(TesseractError::MutexLockError)),
+            "taking an engine back on a poisoned registry reports the lock error"
+        );
+        assert!(
+            !api.is_idle(),
+            "an engine on a poisoned registry does not count as idle"
+        );
+    }
+
+    #[test]
+    fn a_poisoned_registry_is_reported_and_not_read_as_a_freed_engine() {
+        // ~keep: module_path! starts with the crate name; a test filter does not.
+        let module = module_path!().split_once("::").map_or("", |(_, rest)| rest);
+        let child = format!("{module}::poisoned_registry_child");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary path"))
+            .args(["--exact", child.as_str(), "--test-threads=1"])
+            .env(POISON_CHILD_ENV, "1")
+            .output()
+            .expect("run the child process");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "child failed: {stdout}{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn a_newer_engine_at_the_same_address_does_not_count_as_idle() {
+        let _serial = EXIT_CLEANUP_TESTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let api = TesseractAPI::new().expect("create engine");
+        api.mark_idle();
+        assert!(api.is_idle());
+        let addr = *api.handle.lock().unwrap() as usize;
+        let reissue = |generation: u64| {
+            let mut live = LIVE_ENGINES.lock().unwrap();
+            let engine = live.iter_mut().find(|engine| engine.addr == addr).expect("live entry");
+            std::mem::replace(&mut engine.generation, generation)
+        };
+        let own = reissue(u64::MAX);
+        assert!(!api.is_idle(), "an entry of another generation is not this engine");
+        reissue(own);
+        assert!(api.is_idle());
     }
 
     #[test]
