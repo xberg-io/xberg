@@ -284,6 +284,16 @@ fn every_ocr_row_has_one_native_owner(native: &[String], read: &[String], boxes:
     true
 }
 
+/// A layer with no garbage or undecodable character that passes the garble clauses of the
+/// native-text gate: the glyph-to-Unicode mapping shows no sign of being broken. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn native_layer_decodes_cleanly(layer: &str, thresholds: &OcrQualityThresholds) -> bool {
+    let stats = NativeTextStats::compute(layer, thresholds);
+    stats.garbage_char_count == 0
+        && stats.undecodable_ratio <= 0.0
+        && super::scoring::native_layer_is_clean(layer, thresholds)
+}
+
 /// A native page can replace OCR only when every literal occurrence has a unique ordered
 /// source match and every OCR row belongs to that same native row geometrically. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -296,11 +306,7 @@ pub(super) fn native_page_covers_ocr(
     let Some(boxes) = boxes else {
         return false;
     };
-    let stats = NativeTextStats::compute(layer, thresholds);
-    if stats.garbage_char_count != 0 || stats.undecodable_ratio > 0.0 {
-        return false;
-    }
-    if !super::scoring::native_layer_is_clean(layer, thresholds)
+    if !native_layer_decodes_cleanly(layer, thresholds)
         || !ocr_confirms_layer(layer, read, thresholds)
         || !unique_literal_embedding(layer, read)
     {
