@@ -2899,6 +2899,7 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
         [
             vec!["PICCOLO21", "854\u{d7}480 and 1920\u{d7}1080"],
             vec!["KUMC22", "various"],
+            vec!["Wei Yang", "Counsel"],
         ],
     )];
     let segments = vec![
@@ -2907,13 +2908,18 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
         column_seg("854", 300.0, 14.0, 380.0),
         column_seg("480", 318.0, 14.0, 380.0),
         column_seg("22", 82.0, 6.0, 363.0),
+        column_seg("Wei Y", 40.0, 30.0, 340.0),
         column_seg("0001", 40.0, 20.0, 350.0),
     ];
     let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
         .into_iter()
         .map(|seg| seg.text)
         .collect();
-    assert_eq!(kept, vec!["0001".to_string()], "only the run no cell holds survives");
+    assert_eq!(
+        kept,
+        vec!["Wei Y".to_string(), "0001".to_string()],
+        "a run that cuts through a cell's word is not that cell's text, and neither is one no cell holds"
+    );
 }
 
 /// A form's line-item cells: every word of the printed instruction on lines 43 and 44 of IRS

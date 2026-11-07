@@ -5114,9 +5114,9 @@ struct TableCoverage {
     row_words: Vec<ahash::AHashSet<String>>,
     /// Every whitespace-separated word of every cell, normalized.
     words: ahash::AHashSet<String>,
-    /// Each cell's glyphs, concatenated and kept apart, so a run is tested against one cell and
-    /// never across the seam of two.
-    cells: Vec<String>,
+    /// Each cell's alphanumeric runs, kept apart per cell, so a piece is tested against one cell
+    /// and never across the seam of two.
+    cell_runs: Vec<Vec<String>>,
 }
 
 /// Normalized length, in characters, at which [`TableCoverage::carries`] stops matching a segment against the
@@ -5132,12 +5132,12 @@ impl TableCoverage {
         let mut row_texts = Vec::new();
         let mut row_words = Vec::new();
         let mut words = ahash::AHashSet::new();
-        let mut cells = Vec::new();
+        let mut cell_runs = Vec::new();
         for row in rows {
-            cells.extend(
+            cell_runs.extend(
                 row.iter()
-                    .map(|cell| normalize_for_table_coverage(cell))
-                    .filter(|cell| !cell.is_empty()),
+                    .map(|cell| alphanumeric_runs(cell))
+                    .filter(|runs| !runs.is_empty()),
             );
             row_texts.push(
                 row.iter()
@@ -5159,7 +5159,7 @@ impl TableCoverage {
             rows: row_texts,
             row_words,
             words,
-            cells,
+            cell_runs,
         }
     }
 
@@ -5180,9 +5180,9 @@ impl TableCoverage {
             .collect();
         if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
             // A marker or a sign splits one printed cell into several segments while the grid holds
-            // it whole, so a piece inside one cell is that cell's text. ~keep
+            // it whole, so a piece made of whole runs of one cell is that cell's text. ~keep
             return text_words.iter().all(|word| self.words.contains(word))
-                || self.cells.iter().any(|cell| cell.contains(&normalized));
+                || self.cell_runs.iter().any(|runs| runs_spell(runs, &normalized));
         }
         self.rows.iter().any(|row| row.contains(&normalized))
             || self
@@ -5190,6 +5190,37 @@ impl TableCoverage {
                 .iter()
                 .any(|row| text_words.iter().all(|word| row.contains(word)))
     }
+}
+
+/// A cell's maximal runs of letters or of digits, lowercased: the places a marker or a sign can
+/// split a printed cell without cutting through a word or a number.
+fn alphanumeric_runs(cell: &str) -> Vec<String> {
+    let mut runs: Vec<String> = Vec::new();
+    let mut previous_is_digit = None;
+    for character in cell.chars() {
+        if !character.is_alphanumeric() {
+            previous_is_digit = None;
+            continue;
+        }
+        let is_digit = character.is_numeric();
+        match runs.last_mut() {
+            Some(run) if previous_is_digit == Some(is_digit) => run.extend(character.to_lowercase()),
+            _ => runs.push(character.to_lowercase().collect()),
+        }
+        previous_is_digit = Some(is_digit);
+    }
+    runs
+}
+
+/// Whether consecutive whole runs of one cell spell exactly `piece`.
+fn runs_spell(runs: &[String], piece: &str) -> bool {
+    (0..runs.len()).any(|start| {
+        let mut spelled = String::new();
+        runs[start..].iter().any(|run| {
+            spelled.push_str(run);
+            spelled.len() >= piece.len() && spelled == piece
+        })
+    })
 }
 
 /// Reduce text to lowercase alphanumerics, dropping whitespace and punctuation entirely.
