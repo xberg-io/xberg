@@ -311,7 +311,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Keep nested text backgrounds from creating extra columns while preserving separate table records.
 
 - **(pdf): Preserve source-proven grouped leaf headers in ruled tables.** (#2332)
-  Two bold group bands over a bold leaf band stay header rows only when dark solid rules, which may be split into collinear segments, underline both.
+  Two bold group bands over a bold leaf band stay header rows only when dark solid rules, which may be split into collinear segments, underline both. Path extraction now records the `d` dash pattern on stroked paths, so dashed rules are told apart from solid ones.
 
 
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)

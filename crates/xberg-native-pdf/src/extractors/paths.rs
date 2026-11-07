@@ -43,9 +43,9 @@ use crate::elements::{LineCap, LineJoin, PathContent, PathOperation, path_operat
 use crate::geometry::Point;
 use crate::layout::Color;
 
-/// Copy-only graphics state for path extraction (no String/Vec fields).
-/// Enables allocation-free q/Q save/restore unlike the full [`GraphicsState`].
-#[derive(Debug, Clone, Copy)]
+/// Lightweight graphics state for path extraction. The dash array is empty (no allocation)
+/// for solid lines, so q/Q save/restore allocates only while a dash is active.
+#[derive(Debug, Clone)]
 pub(crate) struct PathGraphicsState {
     pub ctm: Matrix,
     pub stroke_color_rgb: (f32, f32, f32),
@@ -53,6 +53,8 @@ pub(crate) struct PathGraphicsState {
     pub line_width: f32,
     pub line_cap: u8,
     pub line_join: u8,
+    /// `d` operand: on/off lengths in user space and phase; an empty array is solid.
+    pub dash: (Vec<f32>, f32),
 }
 
 impl PathGraphicsState {
@@ -64,6 +66,7 @@ impl PathGraphicsState {
             line_width: 1.0,
             line_cap: 0,
             line_join: 0,
+            dash: (Vec::new(), 0.0),
         }
     }
 }
@@ -89,7 +92,7 @@ impl PathGraphicsStateStack {
     }
 
     pub fn save(&mut self) {
-        let state = *self.current();
+        let state = self.current().clone();
         self.stack.push(state);
     }
 
@@ -142,6 +145,7 @@ pub struct PathExtractor {
     current_line_width: f32,
     current_line_cap: LineCap,
     current_line_join: LineJoin,
+    current_dash: (Vec<f32>, f32),
     /// Current transformation matrix for coordinate transformation
     ctm: Matrix,
     /// Page resources for XObject resolution
@@ -182,6 +186,7 @@ impl PathExtractor {
             current_line_width: 1.0,
             current_line_cap: LineCap::Butt,
             current_line_join: LineJoin::Miter,
+            current_dash: (Vec::new(), 0.0),
             ctm: Matrix::identity(),
             resources: None,
             xobject_processing_stack: Vec::new(),
@@ -401,6 +406,7 @@ impl PathExtractor {
 
         let (r, g, b) = state.fill_color_rgb;
         self.current_fill_color = Some(Color::new(r, g, b));
+        self.current_dash = state.dash_pattern.clone();
     }
 
     /// Update extractor state from a lightweight path graphics state.
@@ -421,6 +427,12 @@ impl PathExtractor {
         self.current_stroke_color = Some(Color::new(r, g, b));
         let (r, g, b) = state.fill_color_rgb;
         self.current_fill_color = Some(Color::new(r, g, b));
+        self.current_dash = state.dash.clone();
+    }
+
+    /// Set the line dash pattern (`d` operator); an empty array restores a solid line.
+    pub fn set_dash(&mut self, array: Vec<f32>, phase: f32) {
+        self.current_dash = (array, phase);
     }
 
     /// Set stroke color.
@@ -612,6 +624,14 @@ impl PathExtractor {
             path.stroke_width = self.current_line_width * self.ctm.stroke_scale();
             path.line_cap = self.current_line_cap;
             path.line_join = self.current_line_join;
+            // Dash lengths are user-space like `w`, so they scale with the CTM the same way. ~keep
+            if !self.current_dash.0.is_empty() {
+                let scale = self.ctm.stroke_scale();
+                path.dash_pattern = Some((
+                    self.current_dash.0.iter().map(|length| length * scale).collect(),
+                    self.current_dash.1 * scale,
+                ));
+            }
         } else {
             path.stroke_color = None;
         }

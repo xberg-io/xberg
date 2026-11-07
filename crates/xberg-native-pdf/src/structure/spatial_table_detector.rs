@@ -3709,15 +3709,16 @@ fn finalize_intersection_tables(
     header_source_diagnostic::event("intersection_rows_split", || {
         header_source_diagnostic::rows(&table_rows)
     });
-    if let Some(paths) = source_header_paths {
-        source_headers::retain_grouped_leaf_header(&mut table_rows, paths, num_cols);
-    }
-
     strip_form_numbering_artifacts(&mut table_rows);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_stripped", || {
         header_source_diagnostic::rows(&table_rows)
     });
+    if let Some(paths) = source_header_paths {
+        for segment in table_rows.split_mut(|row| row.cells.iter().all(|cell| cell.text.is_empty())) {
+            source_headers::retain_grouped_leaf_header(segment, paths, num_cols);
+        }
+    }
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();

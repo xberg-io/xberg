@@ -1,6 +1,6 @@
 use super::*;
 use crate::elements::PathOperation;
-use crate::layout::text_block::{Color, FontWeight};
+use crate::layout::text_block::{Color, FontWeight, TextSpan};
 use crate::structure::spatial_table_detector::tests::create_test_span;
 
 const COLUMNS: usize = 5;
@@ -196,10 +196,17 @@ fn a_group_spanning_more_columns_than_remain_is_rejected() {
 }
 
 #[test]
-fn numeric_group_labels_do_not_make_a_header() {
+fn year_group_labels_over_quarter_leaves_become_headers() {
     let mut rows = standard_rows();
     rows[0].cells[1] = cell("2023", 1, 2, HEIGHT, true);
     rows[0].cells[2] = cell("2024", 3, 2, HEIGHT, true);
+    assert!(retained(rows, &standard_rules()));
+}
+
+#[test]
+fn a_blank_group_label_is_rejected() {
+    let mut rows = standard_rows();
+    rows[0].cells[1] = cell(" ", 1, 2, HEIGHT, true);
     assert!(!retained(rows, &standard_rules()));
 }
 
@@ -359,4 +366,317 @@ fn a_non_rectangular_fill_over_the_rule_does_not_hide_it() {
     let mut rules = standard_rules();
     rules.push(triangle);
     assert!(retained(standard_rows(), &rules));
+}
+
+fn unchanged_after_retaining(mut rows: Vec<TableRow>) {
+    let before: Vec<bool> = rows.iter().map(|row| row.is_header).collect();
+    let cells_before: Vec<Vec<bool>> = rows
+        .iter()
+        .map(|row| row.cells.iter().map(|cell| cell.is_header).collect())
+        .collect();
+    retain_grouped_leaf_header(&mut rows, &standard_rules(), COLUMNS);
+    assert_eq!(rows.iter().map(|row| row.is_header).collect::<Vec<_>>(), before);
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.cells.iter().map(|cell| cell.is_header).collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        cells_before
+    );
+}
+
+#[test]
+fn an_already_flagged_leaf_row_is_left_alone() {
+    let mut rows = standard_rows();
+    rows[1].is_header = true;
+    unchanged_after_retaining(rows);
+}
+
+#[test]
+fn an_already_flagged_first_body_row_is_left_alone() {
+    let mut rows = standard_rows();
+    rows[2].is_header = true;
+    unchanged_after_retaining(rows);
+}
+
+#[test]
+fn a_header_flagged_cell_in_any_band_is_left_alone() {
+    for (row, column) in [(0, 1), (1, 2), (2, 3)] {
+        let mut rows = standard_rows();
+        rows[row].cells[column].is_header = true;
+        unchanged_after_retaining(rows);
+    }
+}
+
+#[test]
+fn a_body_or_leaf_cell_that_is_not_plain_horizontal_text_is_rejected() {
+    let spoilers: [fn(&mut TextSpan); 2] = [|span| span.rotation_degrees = 90.0, |span| span.wmode = 1];
+    for spoil in spoilers {
+        for (row, column) in [(1, 2), (2, 2)] {
+            let mut rows = standard_rows();
+            spoil(&mut rows[row].cells[column].spans[0]);
+            assert!(!retained(rows, &standard_rules()), "row {row}");
+        }
+        let mut rows = standard_rows();
+        spoil(&mut rows[0].cells[1].spans[0]);
+        assert!(!retained(rows, &standard_rules()), "group");
+    }
+}
+
+#[test]
+fn a_leaf_or_body_cell_without_text_spans_or_bounds_is_rejected() {
+    for row in [1, 2] {
+        let mut rows = standard_rows();
+        rows[row].cells[2].text = String::new();
+        assert!(!retained(rows, &standard_rules()), "empty text, row {row}");
+
+        let mut rows = standard_rows();
+        rows[row].cells[2].spans.clear();
+        assert!(!retained(rows, &standard_rules()), "no spans, row {row}");
+
+        let mut rows = standard_rows();
+        rows[row].cells[2].bbox = None;
+        assert!(!retained(rows, &standard_rules()), "no bounds, row {row}");
+    }
+}
+
+#[test]
+fn a_leaf_span_overflowing_its_cell_is_rejected() {
+    let mut rows = standard_rows();
+    rows[1].cells[2].spans[0].bbox = Rect::new(39.0, 1.0, 22.0, HEIGHT - 2.0);
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn a_band_with_the_wrong_cell_count_is_rejected() {
+    let mut rows = standard_rows();
+    rows[2].cells.pop();
+    assert!(!retained(rows, &standard_rules()));
+    let mut rows = standard_rows();
+    rows[1].cells.pop();
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn a_spanning_cell_in_the_leaf_band_is_rejected() {
+    let mut rows = standard_rows();
+    rows[1].cells[2].colspan = 2;
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn a_row_span_on_a_leaf_or_body_cell_is_rejected() {
+    for row in [1, 2] {
+        let mut rows = standard_rows();
+        rows[row].cells[2].rowspan = 2;
+        assert!(!retained(rows, &standard_rules()), "row {row}");
+    }
+}
+
+#[test]
+fn an_empty_first_group_must_be_a_plain_blank_cell() {
+    let mut rows = standard_rows();
+    rows[0].cells[0].rowspan = 2;
+    assert!(!retained(rows, &standard_rules()));
+
+    let mut rows = standard_rows();
+    rows[0].cells[0].spans = cell("x", 0, 1, HEIGHT, false).spans;
+    assert!(!retained(rows, &standard_rules()));
+
+    let mut rows = standard_rows();
+    rows[0].cells[0].text = "x".to_string();
+    assert!(!retained(rows, &standard_rules()));
+}
+
+#[test]
+fn an_empty_first_group_may_cover_several_label_columns() {
+    let columns = 6;
+    let groups = row(vec![
+        cell("", 0, 2, HEIGHT, false),
+        cell("Revenue", 2, 2, HEIGHT, true),
+        cell("Costs", 4, 2, HEIGHT, true),
+    ]);
+    let leaf_band = row(["Item", "Unit", "Q1", "Q2", "Q1", "Q2"]
+        .iter()
+        .enumerate()
+        .map(|(column, label)| cell(label, column, 1, 0.0, true))
+        .collect());
+    let body_band = row((0..columns)
+        .map(|column| cell("1.5", column, 1, -HEIGHT, false))
+        .collect());
+    let mut rows = vec![groups, leaf_band, body_band];
+    let rules = vec![
+        PathContent::line(0.0, 0.0, 120.0, 0.0),
+        PathContent::line(40.0, HEIGHT, 80.0, HEIGHT),
+        PathContent::line(80.0, HEIGHT, 120.0, HEIGHT),
+    ];
+    retain_grouped_leaf_header(&mut rows, &rules, columns);
+    assert!(rows[0].is_header && rows[1].is_header);
+}
+
+#[test]
+fn a_second_group_only_spans_when_the_first_is_blank() {
+    let mut rows = standard_rows();
+    rows[0] = row(vec![cell("", 0, 1, HEIGHT, false), cell("Revenue", 1, 4, HEIGHT, true)]);
+    let rules = vec![
+        PathContent::line(0.0, 0.0, 100.0, 0.0),
+        PathContent::line(20.0, HEIGHT, 100.0, HEIGHT),
+    ];
+    assert!(!retained(rows, &rules));
+}
+
+#[test]
+fn a_negative_color_channel_is_not_a_dark_rule() {
+    let mut rules = standard_rules();
+    rules[0] = restyled(rules[0].clone(), Color::new(-0.5, 0.0, 0.0));
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn the_lightest_accepted_rule_color_is_pinned_at_a_tenth_below_white() {
+    let mut rules = standard_rules();
+    rules[0] = restyled(rules[0].clone(), Color::new(0.9, 0.9, 0.9));
+    assert!(retained(standard_rows(), &rules));
+    rules[0] = restyled(rules[0].clone(), Color::new(0.9, 0.9, 0.91));
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_hairline_rule_with_zero_width_is_visible() {
+    let mut rules = standard_rules();
+    rules[0] = rules[0].clone().with_stroke_width(0.0);
+    assert!(retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_rule_with_a_negative_or_non_finite_width_is_rejected() {
+    for width in [-1.0, f32::NAN, f32::INFINITY] {
+        let mut rules = standard_rules();
+        rules[0] = rules[0].clone().with_stroke_width(width);
+        assert!(!retained(standard_rows(), &rules), "width {width}");
+    }
+}
+
+#[test]
+fn segments_closer_than_a_tenth_of_a_point_join_into_one_rule() {
+    let mut rules = standard_rules();
+    rules[0] = PathContent::line(0.0, 0.0, 50.0, 0.0);
+    rules.push(PathContent::line(50.05, 0.0, 100.0, 0.0));
+    assert!(retained(standard_rows(), &rules));
+
+    rules[3] = PathContent::line(50.3, 0.0, 100.0, 0.0);
+    assert!(!retained(standard_rows(), &rules));
+}
+
+#[test]
+fn a_thin_border_painted_across_a_rule_splits_it() {
+    let mut rules = standard_rules();
+    rules.push(white_fill(49.5, -5.0, 1.0, 10.0));
+    assert!(!retained(standard_rows(), &rules));
+}
+
+fn grid_lines() -> Vec<PathContent> {
+    let mut lines = Vec::new();
+    for y in [-20.0, -10.0, 0.0, 10.0, 20.0] {
+        lines.push(PathContent::line(0.0, y, 100.0, y));
+    }
+    for x in [0.0, 20.0, 60.0, 100.0] {
+        lines.push(PathContent::line(x, -20.0, x, 20.0));
+    }
+    for x in [40.0, 80.0] {
+        lines.push(PathContent::line(x, -20.0, x, 10.0));
+    }
+    lines
+}
+
+fn grid_spans() -> Vec<TextSpan> {
+    let mut spans = Vec::new();
+    let mut bold = |text: &str, x: f32, y: f32, width: f32| {
+        let mut span = create_test_span(text, x + 1.0, y + 1.0, width - 2.0, HEIGHT - 2.0);
+        span.font_weight = FontWeight::Bold;
+        spans.push(span);
+    };
+    bold("Revenue", 20.0, 10.0, 40.0);
+    bold("Costs", 60.0, 10.0, 40.0);
+    for (column, label) in ["Item", "Q1", "Q2", "Q1", "Q2"].iter().enumerate() {
+        bold(label, column as f32 * WIDTH, 0.0, WIDTH);
+    }
+    for row in 0..2 {
+        for column in 0..COLUMNS {
+            spans.push(create_test_span(
+                "1.5",
+                column as f32 * WIDTH + 1.0,
+                -HEIGHT * (row as f32 + 1.0) + 1.0,
+                WIDTH - 2.0,
+                HEIGHT - 2.0,
+            ));
+        }
+    }
+    spans
+}
+
+fn detected(lines: &[PathContent], spans: &[TextSpan]) -> Vec<Table> {
+    let config = crate::structure::spatial_table_detector::TableDetectionConfig::default();
+    crate::structure::spatial_table_detector::detect_intersections(spans, lines, &config, None)
+}
+
+fn header_flags(tables: &[Table]) -> Vec<bool> {
+    assert_eq!(tables.len(), 1, "one table expected");
+    tables[0].rows.iter().map(|row| row.is_header).collect()
+}
+
+#[test]
+fn a_ruled_grid_with_grouped_bold_headers_reaches_the_table_with_both_bands_flagged() {
+    let tables = detected(&grid_lines(), &grid_spans());
+    assert_eq!(header_flags(&tables), [true, true, false, false]);
+    assert!(tables[0].has_header);
+    assert!(
+        tables[0].rows[..2]
+            .iter()
+            .all(|row| row.cells.iter().all(|cell| cell.is_header))
+    );
+}
+
+#[test]
+fn the_same_grid_with_a_white_leaf_rule_keeps_no_header() {
+    let mut lines = grid_lines();
+    let leaf_rule = lines
+        .iter()
+        .position(|line| line.bbox.y == 0.0 && line.bbox.width > 90.0)
+        .unwrap();
+    lines[leaf_rule] = restyled(lines[leaf_rule].clone(), Color::white());
+    let tables = detected(&lines, &grid_spans());
+    assert_eq!(header_flags(&tables), [false, false, false, false]);
+}
+
+#[test]
+fn a_numbering_row_above_the_header_bands_does_not_hide_them() {
+    let mut lines = grid_lines();
+    lines.push(PathContent::line(0.0, 30.0, 100.0, 30.0));
+    for x in [0.0, 20.0, 40.0, 60.0, 80.0, 100.0] {
+        lines.push(PathContent::line(x, 20.0, x, 30.0));
+    }
+    let mut spans = grid_spans();
+    for column in 0..COLUMNS {
+        spans.push(create_test_span(
+            "1",
+            column as f32 * WIDTH + 1.0,
+            21.0,
+            WIDTH - 2.0,
+            HEIGHT - 2.0,
+        ));
+    }
+    let tables = detected(&lines, &spans);
+    assert_eq!(header_flags(&tables), [true, true, false, false]);
+}
+
+#[test]
+fn an_empty_band_above_the_header_bands_does_not_hide_them() {
+    let mut lines = grid_lines();
+    lines.push(PathContent::line(0.0, 30.0, 100.0, 30.0));
+    for x in [0.0, 20.0, 40.0, 60.0, 80.0, 100.0] {
+        lines.push(PathContent::line(x, 20.0, x, 30.0));
+    }
+    let tables = detected(&lines, &grid_spans());
+    let flags = header_flags(&tables);
+    assert_eq!(&flags[flags.len() - 4..], [true, true, false, false]);
 }

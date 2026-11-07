@@ -4,10 +4,15 @@ use crate::structure::table_extractor::{Table, TableCell, TableRow};
 
 // Cell fills are often inset from their rules; thin strokes must not count as a background. ~keep
 const MIN_SHADED_CELL_AREA_RATIO: f32 = 0.9;
+// One point is a typical hairline rule: it is the snap distance for a rule's position and ends, the
+// slack when matching group edges to leaf edges, and the proximity window around the header. ~keep
 const HEADER_RULE_TOLERANCE: f32 = 1.0;
+// A stroke lighter than this on any channel is indistinguishable from the white page it is drawn on. ~keep
 const MAX_HEADER_RULE_CHANNEL: f32 = 0.9;
-// Gaps wider than this separate dots or dashes from a drawn rule. ~keep
+// Segments of one rule abut or overlap; a gap above a tenth of a point is a dot or a dash. ~keep
 const RULE_GAP_TOLERANCE: f32 = 0.1;
+// Bounds the work per grid on pages dense with vector art, where a header's neighbourhood holds
+// hundreds of paths and no single rule can be told apart. ~keep
 const MAX_GROUPED_HEADER_PATHS: usize = 128;
 
 pub(super) fn shading_rectangles(paths: &[PathContent]) -> Vec<Rect> {
@@ -163,16 +168,10 @@ fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[&PathCont
         }
         if group.colspan >= 2
             && source_label(group, true)
-            && group.text.chars().any(char::is_alphabetic)
             && visible_rule(paths, bounds.left(), bounds.right(), bounds.y)
         {
             grouped += 1;
-        } else if index != 0
-            || group.colspan != 1
-            || group.rowspan != 1
-            || !group.text.trim().is_empty()
-            || !group.spans.is_empty()
-        {
+        } else if index != 0 || group.rowspan != 1 || !group.text.trim().is_empty() || !group.spans.is_empty() {
             return false;
         }
         remaining = rest;
@@ -197,9 +196,10 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
         && drawn.top() <= bounds.bottom() + HEADER_RULE_TOLERANCE
 }
 
-/// Paint order decides visibility: a later dashed, light or filled rectangle covering the whole stroke band over the same line hides
-/// what was drawn before it, and a rule may be split into collinear segments. PathContent
-/// carries no alpha, so any fill is opaque. ~keep
+/// Paint order decides visibility: a later dashed, light or filled rectangle covering the stroke band
+/// hides the part of the rule it crosses, and a rule may be split into collinear segments. PathContent
+/// carries no alpha, so any fill is treated as opaque; a thin border drawn across a rule therefore
+/// splits it and the header is not retained, the conservative outcome. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
     let mut visible: Vec<(f32, f32)> = Vec::new();
     for path in paths {
@@ -246,8 +246,7 @@ fn covering_fill(path: &PathContent, y: f32) -> bool {
 
 fn dark_solid_stroke(path: &PathContent) -> bool {
     path.dash_pattern.is_none()
-        && path.stroke_width.is_finite()
-        && path.stroke_width > 0.0
+        && path.stroke_width >= 0.0
         && path.stroke_color.is_some_and(|color| {
             let channels = [color.r, color.g, color.b];
             channels.iter().all(|channel| (0.0..=1.0).contains(channel))
