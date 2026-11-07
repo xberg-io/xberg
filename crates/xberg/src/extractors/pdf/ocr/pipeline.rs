@@ -7020,7 +7020,10 @@ fn raster_proven_run_pages(
     proven
 }
 
-#[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))
+))]
 fn raster_proven_run_pages(
     _layers: &ahash::AHashMap<u32, String>,
     _run: &RunLayerSources<'_>,
