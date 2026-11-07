@@ -2256,9 +2256,6 @@ mod tests {
         }
     }
 
-    /// #354: `word_iterator_skipped_count` is pipeline plumbing consumed by
-    /// `warnings_from_ocr_metadata` -- it must not survive into the
-    /// user-visible metadata map that becomes `Metadata::additional`.
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
     #[tokio::test]
     async fn recognition_page_down_marker_is_kept_only_for_the_retry_that_requested_it() {
@@ -2278,6 +2275,9 @@ mod tests {
         assert!(!page_down_request::requesting(async { take_recognition_page_down(&mut unmarked) }).await);
     }
 
+    /// #354: `word_iterator_skipped_count` is pipeline plumbing consumed by
+    /// `warnings_from_ocr_metadata` -- it must not survive into the
+    /// user-visible metadata map that becomes `Metadata::additional`.
     #[test]
     fn strip_ocr_scratch_metadata_keys_removes_word_iterator_skipped_count() {
         let mut metadata = std::collections::HashMap::new();

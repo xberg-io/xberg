@@ -282,12 +282,20 @@ impl OrientationRetry {
                     .additional
                     .remove(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
                     .is_some();
-                match recognition::try_select(original, candidate, &self.thresholds, confidence, config, allow_prose) {
-                    Err(original) if page_down => {
-                        self.after_half_turn(backend, raster, config, original, &witness, cancel)
-                            .await
-                    }
-                    Ok(selected) | Err(selected) => Ok(selected),
+                if recognition::accepts_candidate(
+                    &original,
+                    &candidate,
+                    &self.thresholds,
+                    confidence,
+                    config,
+                    allow_prose,
+                ) {
+                    Ok(recognition::adopt(original, candidate))
+                } else if page_down {
+                    self.after_half_turn(backend, raster, config, original, &witness, cancel)
+                        .await
+                } else {
+                    Ok(original)
                 }
             }
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),

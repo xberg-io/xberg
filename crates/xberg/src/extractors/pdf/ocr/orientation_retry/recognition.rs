@@ -177,39 +177,29 @@ fn within_image(element: &OcrElement, width: u32, height: u32) -> bool {
         && top.checked_add(word_height).is_some_and(|bottom| bottom <= height)
 }
 
-pub(super) fn select(
-    original: ExtractedDocument,
-    candidate: ExtractedDocument,
+/// Whether the recognition-orientation read proves itself against the primary.
+pub(super) fn accepts_candidate(
+    original: &ExtractedDocument,
+    candidate: &ExtractedDocument,
     thresholds: &OcrQualityThresholds,
     confidence: ConfidenceSemantics,
     config: &OcrConfig,
     allow_prose: bool,
-) -> ExtractedDocument {
-    try_select(original, candidate, thresholds, confidence, config, allow_prose).unwrap_or_else(|original| original)
-}
-
-/// Returns the primary read back when the candidate does not prove itself.
-pub(super) fn try_select(
-    original: ExtractedDocument,
-    mut candidate: ExtractedDocument,
-    thresholds: &OcrQualityThresholds,
-    confidence: ConfidenceSemantics,
-    config: &OcrConfig,
-    allow_prose: bool,
-) -> Result<ExtractedDocument, ExtractedDocument> {
-    let row_threshold = row_threshold(config);
-    if !accepts(
-        &original,
-        &candidate,
+) -> bool {
+    accepts(
+        original,
+        candidate,
         thresholds,
         confidence,
-        row_threshold,
+        row_threshold(config),
         allow_prose,
-    ) {
-        return Err(original);
-    }
+    )
+}
+
+/// Takes the accepted candidate, keeping the primary's warnings.
+pub(super) fn adopt(original: ExtractedDocument, mut candidate: ExtractedDocument) -> ExtractedDocument {
     crate::core::diagnostics::dedup_extend_warnings(&mut candidate.processing_warnings, original.processing_warnings);
-    Ok(candidate)
+    candidate
 }
 
 fn row_threshold(config: &OcrConfig) -> f64 {
@@ -677,6 +667,21 @@ mod tests {
             y1: 180.0,
         });
         candidate
+    }
+
+    fn select(
+        original: ExtractedDocument,
+        candidate: ExtractedDocument,
+        thresholds: &OcrQualityThresholds,
+        confidence: ConfidenceSemantics,
+        config: &OcrConfig,
+        allow_prose: bool,
+    ) -> ExtractedDocument {
+        if accepts_candidate(&original, &candidate, thresholds, confidence, config, allow_prose) {
+            adopt(original, candidate)
+        } else {
+            original
+        }
     }
 
     fn accepted(primary: &ExtractedDocument, candidate: &ExtractedDocument) -> bool {
