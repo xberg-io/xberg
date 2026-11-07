@@ -142,7 +142,8 @@ const MIN_KNOWN_SHARE: f64 = 0.9;
 /// are not counted: a name or URL in a Khmer page neither helps nor hurts. Of the rest, the
 /// whole-page text excluding whitespace, lost-glyph markers, digits and punctuation, at least
 /// [`MIN_SCRIPT_CHARS`] must be in uncovered known scripts and they must make up
-/// [`MIN_KNOWN_SHARE`] of it. A configured language this module does not know means no claim.
+/// [`MIN_KNOWN_SHARE`] of it. They must also outnumber the letters of covered scripts: a mostly
+/// covered page (an English page with a few Greek symbols) is one OCR can read. A configured language this module does not know means no claim.
 fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     if languages.is_empty() {
         return None;
@@ -153,6 +154,7 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     }
     let mut counts: Vec<(Script, usize)> = Vec::new();
     let mut unattributed = 0usize;
+    let mut covered_chars = 0usize;
     for character in text.chars().filter(|character| {
         !character.is_whitespace()
             && *character != super::unmapped_glyphs::LOST_GLYPH_MARKER
@@ -161,7 +163,7 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
             && !matches!(*character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
     }) {
         match script_of(character) {
-            Some(script) if covered.contains(&script) => {}
+            Some(script) if covered.contains(&script) => covered_chars += 1,
             Some(script) => match counts.iter_mut().find(|(known, _)| *known == script) {
                 Some((_, count)) => *count += 1,
                 None => counts.push((script, 1)),
@@ -170,7 +172,10 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
         }
     }
     let known: usize = counts.iter().map(|(_, count)| count).sum();
-    if known < MIN_SCRIPT_CHARS || (known as f64) < MIN_KNOWN_SHARE * (known + unattributed) as f64 {
+    if known < MIN_SCRIPT_CHARS
+        || (known as f64) < MIN_KNOWN_SHARE * (known + unattributed) as f64
+        || known <= covered_chars
+    {
         return None;
     }
     counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
@@ -427,16 +432,29 @@ mod tests {
 
     #[test]
     fn latin_names_in_a_khmer_page_do_not_dilute_it() {
-        let page = format!("{KHMER_MARKED} Mallori https://example.org/khmer Phnom Penh Invoice");
+        let khmer = [KHMER_MARKED; 4].join(" ");
+        let page = format!("{khmer} Mallori https://example.org/khmer Phnom Penh Invoice");
         assert_eq!(unreadable_scripts(&page, &langs(&["eng"])), Some(vec![Script::Khmer]));
+    }
+
+    #[test]
+    fn a_mostly_covered_page_stays_with_ocr() {
         let latin_heavy = format!(
             "{KHMER_MARKED} {}",
-            "Invoice number and total due on receipt of goods ".repeat(20)
+            "Invoice number and total due on receipt of goods ".repeat(2)
         );
-        assert_eq!(
-            unreadable_scripts(&latin_heavy, &langs(&["eng"])),
-            Some(vec![Script::Khmer])
+        assert_eq!(unreadable_scripts(&latin_heavy, &langs(&["eng"])), None);
+        let english_with_greek = format!(
+            "The measured resistance in the sample was {} with a tolerance of the stated value \u{FFFD}\u{FFFD} per cent \
+             across every one of the trial runs reported in the table below and in the appendix",
+            "αβγδ ".repeat(8)
         );
+        let greek = english_with_greek
+            .chars()
+            .filter(|c| script_of(*c) == Some(Script::Greek))
+            .count();
+        assert_eq!(greek, 32);
+        assert_eq!(unreadable_scripts(&english_with_greek, &langs(&["eng"])), None);
     }
 
     #[test]
