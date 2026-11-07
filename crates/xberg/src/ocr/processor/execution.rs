@@ -6260,6 +6260,33 @@ mod tests {
     }
 
     #[test]
+    fn dense_coloured_graphic_with_a_dark_mean_reaches_ocr_unprocessed() {
+        let coloured = ring_grid_raster([0, 0, 160], [96, 96, 208]);
+        let side = RING_GRID_SIDE as u32;
+
+        let prepared = prepare_ocr_image(coloured.clone(), side, side, None, None, false, None, false);
+
+        assert!(
+            !prepared.apply_pix_preprocessing,
+            "the coloured graphic must keep its raw pixels"
+        );
+        assert_eq!(prepared.data, coloured);
+    }
+
+    #[test]
+    fn dense_neutral_ink_with_a_dark_mean_reaches_ocr_preprocessed() {
+        let neutral = ring_grid_raster([0; 3], [128; 3]);
+        let side = RING_GRID_SIDE as u32;
+
+        let prepared = prepare_ocr_image(neutral, side, side, None, None, false, None, false);
+
+        assert!(
+            prepared.apply_pix_preprocessing,
+            "dense neutral ink must take the default preprocessing"
+        );
+    }
+
+    #[test]
     fn dense_unstructured_or_shadowed_rasters_keep_raw_pixels() {
         let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
             return;
