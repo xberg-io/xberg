@@ -276,14 +276,17 @@ pub(crate) fn native_anchor_text(
     if anchors.next()?.page != Some(placement.page) || anchors.next().is_some() {
         return None;
     }
-    doc.elements.iter().try_fold(String::new(), |mut native, element| {
-        if native.len().checked_add(element.text.len())?.checked_add(1)? > MAX_NATIVE_TEXT_BYTES {
-            return None;
-        }
-        native.push_str(&element.text);
-        native.push('\n');
-        Some(native)
-    })
+    doc.elements
+        .iter()
+        .filter(|element| element.page.is_none_or(|page| page == placement.page))
+        .try_fold(String::new(), |mut native, element| {
+            if native.len().checked_add(element.text.len())?.checked_add(1)? > MAX_NATIVE_TEXT_BYTES {
+                return None;
+            }
+            native.push_str(&element.text);
+            native.push('\n');
+            Some(native)
+        })
 }
 
 #[cfg(test)]

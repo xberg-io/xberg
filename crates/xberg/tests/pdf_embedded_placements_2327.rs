@@ -21,9 +21,20 @@ fn native_page(label: &str) -> String {
     )
 }
 
-/// `leading` text-only pages, then the panel page, then `trailing` text-only pages.
-/// `after_panel` is appended to the panel page's content stream.
-fn build(leading: usize, trailing: usize, with_logo: bool, after_panel: &str) -> Vec<u8> {
+#[derive(Clone, Default)]
+struct Layout {
+    leading: usize,
+    trailing: usize,
+    with_logo: bool,
+    after_panel: &'static str,
+    inherit_media_box: bool,
+    inherited_crop_box: Option<[i64; 4]>,
+    second_panel_page: bool,
+    filler_lines: usize,
+}
+
+/// `leading` text-only pages, the panel page, then `trailing` text-only pages.
+fn build(layout: &Layout) -> Vec<u8> {
     let raster = image::load_from_memory(IMAGE).unwrap().into_rgb8();
     let mut pdf = Document::with_version("1.4");
     let pages = pdf.new_object_id();
@@ -40,35 +51,62 @@ fn build(leading: usize, trailing: usize, with_logo: bool, after_panel: &str) ->
             .map(|i| if (i / 64 + i % 64) % 16 < 8 { 40u8 } else { 215 })
             .collect::<Vec<u8>>(),
     ));
+    let media_box: Vec<Object> = vec![0.into(), 0.into(), 612.into(), 792.into()];
     let mut kids = Vec::new();
-    let text_page = |pdf: &mut Document, kids: &mut Vec<Object>, label: &str| {
-        let content = pdf.add_object(Stream::new(Dictionary::new(), native_page(label).into_bytes()));
-        kids.push(Object::Reference(pdf.add_object(dictionary! {
-        "Type"=>"Page","Parent"=>pages,"MediaBox"=>vec![0.into(),0.into(),612.into(),792.into()],
-        "Resources"=>dictionary!{"Font"=>dictionary!{"F1"=>font}},"Contents"=>content})));
+    let page = |pdf: &mut Document, kids: &mut Vec<Object>, content: String, xobjects: Dictionary| {
+        let content = pdf.add_object(Stream::new(Dictionary::new(), content.into_bytes()));
+        let mut dictionary = dictionary! {"Type"=>"Page","Parent"=>pages,
+        "Resources"=>dictionary!{"Font"=>dictionary!{"F1"=>font},"XObject"=>xobjects},"Contents"=>content};
+        if !layout.inherit_media_box {
+            dictionary.set("MediaBox", media_box.clone());
+        }
+        kids.push(Object::Reference(pdf.add_object(dictionary)));
     };
-    for index in 0..leading {
-        text_page(&mut pdf, &mut kids, &format!("leading {index}"));
+    let mut leading_text = String::new();
+    for line in 0..layout.filler_lines {
+        leading_text.push_str(&format!(
+            "BT /F1 8 Tf 1 0 0 1 20 {} Tm (Filler line {line} of ordinary running text that pads the document well past the native text budget.) Tj ET\n",
+            20 + (line % 700)
+        ));
     }
-    let mut drawing = native_page("panel");
-    drawing.push_str("q 612 0 0 396 0 0 cm /Panel Do Q\n");
-    if with_logo {
-        drawing.push_str("q 48 0 0 48 520 730 cm /Logo Do Q\n");
+    for index in 0..layout.leading {
+        let text = format!("{}{leading_text}", native_page(&format!("leading {index}")));
+        page(&mut pdf, &mut kids, text, Dictionary::new());
     }
-    drawing.push_str(after_panel);
-    let content = pdf.add_object(Stream::new(Dictionary::new(), drawing.into_bytes()));
-    kids.push(Object::Reference(pdf.add_object(dictionary! {
-    "Type"=>"Page","Parent"=>pages,"MediaBox"=>vec![0.into(),0.into(),612.into(),792.into()],
-    "Resources"=>dictionary!{"Font"=>dictionary!{"F1"=>font},"XObject"=>dictionary!{"Panel"=>panel,"Logo"=>logo}},
-    "Contents"=>content})));
-    for index in 0..trailing {
-        text_page(&mut pdf, &mut kids, &format!("trailing {index}"));
+    let panel_page = |label: &str| {
+        let mut drawing = native_page(label);
+        drawing.push_str("q 612 0 0 396 0 0 cm /Panel Do Q\n");
+        if layout.with_logo {
+            drawing.push_str("q 48 0 0 48 520 730 cm /Logo Do Q\n");
+        }
+        drawing.push_str(layout.after_panel);
+        drawing
+    };
+    let xobjects = dictionary! {"Panel"=>panel,"Logo"=>logo};
+    page(&mut pdf, &mut kids, panel_page("panel"), xobjects.clone());
+    if layout.second_panel_page {
+        page(&mut pdf, &mut kids, panel_page("second panel"), xobjects);
+    }
+    for index in 0..layout.trailing {
+        page(
+            &mut pdf,
+            &mut kids,
+            native_page(&format!("trailing {index}")),
+            Dictionary::new(),
+        );
     }
     let count = kids.len() as i64;
-    pdf.objects.insert(
-        pages,
-        Object::Dictionary(dictionary! {"Type"=>"Pages","Kids"=>kids,"Count"=>count}),
-    );
+    let mut tree = dictionary! {"Type"=>"Pages","Kids"=>kids,"Count"=>count};
+    if layout.inherit_media_box {
+        tree.set("MediaBox", media_box);
+    }
+    if let Some(crop) = layout.inherited_crop_box {
+        tree.set(
+            "CropBox",
+            crop.iter().map(|value| Object::from(*value)).collect::<Vec<_>>(),
+        );
+    }
+    pdf.objects.insert(pages, Object::Dictionary(tree));
     let catalog = pdf.add_object(dictionary! {"Type"=>"Catalog","Pages"=>pages});
     pdf.trailer.set("Root", catalog);
     pdf.compress();
@@ -122,8 +160,13 @@ fn nested(document: &ExtractedDocument) -> String {
 
 #[tokio::test]
 async fn picture_on_a_later_page_gets_its_missing_line_once() {
-    for (leading, trailing, panel_page) in [(1usize, 0usize, 2u32), (2, 1, 3)] {
-        let result = extract(build(leading, trailing, false, "")).await;
+    for (leading, trailing, panel_page) in [(1usize, 0usize, 2u32), (2, 1, 3), (3, 0, 4)] {
+        let result = extract(build(&Layout {
+            leading,
+            trailing,
+            ..Default::default()
+        }))
+        .await;
         assert_eq!(result.content.matches(MISSING).count(), 1, "leading={leading}");
         let pages = result.pages.as_deref().expect("tracked pages");
         for page in pages {
@@ -146,17 +189,87 @@ async fn picture_on_a_later_page_gets_its_missing_line_once() {
 }
 
 #[tokio::test]
+async fn recovered_line_stays_with_its_page_in_document_order() {
+    let result = extract(build(&Layout {
+        leading: 2,
+        trailing: 1,
+        ..Default::default()
+    }))
+    .await;
+    let at = |needle: &str| {
+        result
+            .content
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle} missing"))
+    };
+    assert!(at("leading 1") < at(MISSING), "after the preceding page");
+    assert!(at(MISSING) < at("trailing 0"), "before the following page");
+}
+
+#[tokio::test]
+async fn page_attributes_inherited_from_the_page_tree_are_honoured() {
+    let inherited = extract(build(&Layout {
+        leading: 1,
+        inherit_media_box: true,
+        ..Default::default()
+    }))
+    .await;
+    assert_eq!(inherited.content.matches(MISSING).count(), 1);
+
+    // An inherited CropBox that differs from the MediaBox changes the visible frame, which the
+    // panel proof does not measure, so the page is left to the ordinary read.
+    let cropped = extract(build(&Layout {
+        leading: 1,
+        inherit_media_box: true,
+        inherited_crop_box: Some([0, 0, 612, 700]),
+        ..Default::default()
+    }))
+    .await;
+    assert!(!cropped.content.contains(MISSING));
+}
+
+#[tokio::test]
+async fn a_long_document_still_recovers_the_picture_line() {
+    let result = extract(build(&Layout {
+        leading: 1,
+        filler_lines: 900,
+        ..Default::default()
+    }))
+    .await;
+    assert!(
+        result.content.len() > 64 * 1024,
+        "document exceeds the native text budget"
+    );
+    assert_eq!(result.content.matches(MISSING).count(), 1);
+}
+
+#[tokio::test]
+async fn two_pictures_on_different_pages_recover_nothing() {
+    let result = extract(build(&Layout {
+        leading: 1,
+        second_panel_page: true,
+        ..Default::default()
+    }))
+    .await;
+    assert!(!result.content.contains(MISSING));
+}
+
+#[tokio::test]
 async fn later_paint_and_extra_pictures_on_the_page_add_nothing() {
-    let overpainted = extract(build(
-        1,
-        0,
-        false,
-        "BT /F1 24 Tf 1 0 0 1 55 284 Tm (Inspection overlay) Tj ET\n",
-    ))
+    let overpainted = extract(build(&Layout {
+        leading: 1,
+        after_panel: "BT /F1 24 Tf 1 0 0 1 55 284 Tm (Inspection overlay) Tj ET\n",
+        ..Default::default()
+    }))
     .await;
     assert!(overpainted.content.contains("Inspection overlay"));
     assert!(!overpainted.content.contains(MISSING));
 
-    let with_logo = extract(build(1, 0, true, "")).await;
+    let with_logo = extract(build(&Layout {
+        leading: 1,
+        with_logo: true,
+        ..Default::default()
+    }))
+    .await;
     assert!(!with_logo.content.contains(MISSING));
 }
