@@ -83,6 +83,10 @@ fn a_cell_span_absent_from_the_source_words_is_not_certified() {
 #[test]
 fn a_source_word_inside_the_table_that_no_cell_claims_is_not_certified() {
     let mut grid = fixture::grid();
-    grid.table.rows[0].cells[0].spans.clear();
+    let mut stray = grid.spans[0].clone();
+    stray.sequence = grid.spans.len();
+    stray.text = "X".to_string();
+    assert!(grid.table.bbox.unwrap().contains_rect(&stray.bbox));
+    grid.spans.push(stray);
     assert!(!certified(&grid));
 }

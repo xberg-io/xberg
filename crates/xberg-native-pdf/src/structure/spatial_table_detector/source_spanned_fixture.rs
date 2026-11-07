@@ -30,20 +30,32 @@ fn cell(text: &str, x: f32, y: f32, columns: usize, sequence: usize) -> (TableCe
 /// Three ruled rows of sixteen tracks whose middle row merges them as 1, 8, 6 and 1, with
 /// every rule painted and every word claimed by exactly one cell.
 pub(crate) fn grid() -> Grid {
+    grid_at(0.0, 0)
+}
+
+/// [`grid`] shifted down the page by `offset`, numbering its words from `first_sequence`.
+pub(crate) fn grid_at(offset: f32, first_sequence: usize) -> Grid {
     let mut spans = Vec::new();
     let mut table = Table::new();
     table.col_count = COLUMNS;
-    table.bbox = Some(Rect::new(0.0, 0.0, CELL * COLUMNS as f32, CELL * 3.0));
+    table.bbox = Some(Rect::new(0.0, offset, CELL * COLUMNS as f32, CELL * 3.0));
     let mut paths: Vec<PathContent> = (0..=3)
-        .map(|row| PathContent::line(0.0, row as f32 * CELL, CELL * COLUMNS as f32, row as f32 * CELL))
+        .map(|row| {
+            PathContent::line(
+                0.0,
+                offset + row as f32 * CELL,
+                CELL * COLUMNS as f32,
+                offset + row as f32 * CELL,
+            )
+        })
         .collect();
     for row in 0..3 {
         let widths: &[usize] = if row == 1 { &MERGED_WIDTHS } else { &[1; COLUMNS] };
         let mut track = 0;
-        let y = (2 - row) as f32 * CELL;
+        let y = offset + (2 - row) as f32 * CELL;
         let mut cells = TableRow::new(false);
         for width in widths {
-            let (cell, span) = cell("W", track as f32 * CELL, y, *width, spans.len());
+            let (cell, span) = cell("W", track as f32 * CELL, y, *width, first_sequence + spans.len());
             spans.push(span);
             cells.add_cell(cell);
             paths.push(PathContent::line(track as f32 * CELL, y, track as f32 * CELL, y + CELL));
