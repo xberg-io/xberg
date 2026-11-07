@@ -224,6 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   When every word Tesseract read lies on a native text line, shows glyph ink and sits on a background that only glyphs vary, the native page replaces the read even where the words differ.
   Words over rasters, outlines, rules, partial fills or overpaint keep their OCR alternative.
   The proof also runs on the direct Tesseract route used when PaddleOCR is not compiled in.
+  A native word that no glyph paint shows (under a fill, clipped or invisible) or a native layer that the read contradicts at more than 15% of its words keeps the OCR page.
 
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.

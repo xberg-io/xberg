@@ -68,6 +68,12 @@ pub(super) struct InkProofLimits<'a> {
 
 /// Luminance difference, on a 0-255 scale, that makes a pixel visibly differ from its surround.
 const MIN_VISIBLE_CONTRAST: u8 = 51;
+/// The share of native words the read must show at their own place. The read judges the native
+/// layer only where it is reliable: Tesseract misreads a few percent of the words of a clean
+/// render (2.6% on the code-listing page and about 9% on the NIST checklist, which sets in
+/// small type and symbols), so a layer that disagrees with the read at more than 15% of its words
+/// is more than misreads explain and the read is the better witness. ~keep
+const MIN_NATIVE_READ_AGREEMENT: f64 = 0.85;
 /// Resolution of the two rasters that tell glyph ink from every other mark. Word boxes are tested
 /// in points, so the resolution only has to resolve a glyph; it is not an OCR resolution.
 const INK_PROOF_DPI: u32 = 144;
@@ -119,6 +125,11 @@ pub(super) fn native_text_paints_all_read_ink(
     let Ok(lines) = pdf.extract_text_lines(page_index) else {
         return false;
     };
+    let native_words: Vec<(String, LineBox)> = lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .map(|word| (word.text.clone(), native_box(word.bbox)))
+        .collect();
     let line_boxes: Vec<LineBox> = lines.iter().map(|line| native_box(line.bbox)).collect();
     let placed: Option<Vec<LineBox>> = words()
         .map(|word| {
@@ -139,7 +150,77 @@ pub(super) fn native_text_paints_all_read_ink(
         return false;
     };
     let scale = INK_PROOF_DPI as f32 / 72.0;
-    placed.iter().all(|word| glyph_ink_only(&rasters, word, media, scale))
+    let read_words: Vec<(String, LineBox)> = words().map(|w| w.text.clone()).zip(placed.iter().copied()).collect();
+    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+        && placed.iter().all(|word| glyph_ink_only(&rasters, word, media, scale))
+        && native_words
+            .iter()
+            .filter(|(text, _)| !alnum_key(text).is_empty())
+            .all(|(_, word)| glyph_ink_in(&rasters, word, media, scale))
+}
+
+fn alnum_key(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// The share of native words with letters or digits that the read shows at the same place: the
+/// read words over a native word, joined, hold its letters and digits. A native word that the read
+/// omits counts against the share.
+fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> f64 {
+    let mut total = 0usize;
+    let mut agreed = 0usize;
+    for (text, place) in native {
+        let key = alnum_key(text);
+        if key.is_empty() {
+            continue;
+        }
+        total += 1;
+        let seen: String = read
+            .iter()
+            .filter(|(_, at)| place.owns(at))
+            .map(|(word, _)| alnum_key(word))
+            .collect();
+        if seen.contains(&key) {
+            agreed += 1;
+        }
+    }
+    if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
+}
+
+fn pixel_window(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    placed: &LineBox,
+    media: Rect,
+    scale: f32,
+) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
+    let (width, height) = (rasters.width as usize, rasters.height as usize);
+    let columns = (placed.left * scale).floor().max(0.0) as usize..((placed.right * scale).ceil() as usize).min(width);
+    let rows = ((media.height - placed.bottom) * scale).floor().max(0.0) as usize
+        ..(((media.height - placed.top) * scale).ceil() as usize).min(height);
+    (columns, rows)
+}
+
+/// Whether glyph paints made a visible difference somewhere in the box. A native word with none
+/// is not shown on the page: it lies under a fill, is clipped, is invisible, or matches its ground.
+fn glyph_ink_in(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    placed: &LineBox,
+    media: Rect,
+    scale: f32,
+) -> bool {
+    let width = rasters.width as usize;
+    let (columns, rows) = pixel_window(rasters, placed, media, scale);
+    !columns.is_empty()
+        && rows.clone().any(|row| {
+            let at = row * width;
+            rasters.drawn[at + columns.start..at + columns.end]
+                .iter()
+                .zip(&rasters.without_glyphs[at + columns.start..at + columns.end])
+                .any(|(drawn, bare)| drawn.abs_diff(*bare) >= MIN_VISIBLE_CONTRAST)
+        })
 }
 
 fn glyph_ink_only(
@@ -148,10 +229,8 @@ fn glyph_ink_only(
     media: Rect,
     scale: f32,
 ) -> bool {
-    let (width, height) = (rasters.width as usize, rasters.height as usize);
-    let columns = (placed.left * scale).floor().max(0.0) as usize..((placed.right * scale).ceil() as usize).min(width);
-    let rows = ((media.height - placed.bottom) * scale).floor().max(0.0) as usize
-        ..(((media.height - placed.top) * scale).ceil() as usize).min(height);
+    let width = rasters.width as usize;
+    let (columns, rows) = pixel_window(rasters, placed, media, scale);
     if columns.is_empty() || rows.is_empty() {
         return false;
     }
@@ -165,14 +244,7 @@ fn glyph_ink_only(
         }
         high.saturating_sub(low)
     };
-    let drawn_over_glyph_free = rows.clone().any(|row| {
-        let at = row * width;
-        rasters.drawn[at + columns.start..at + columns.end]
-            .iter()
-            .zip(&rasters.without_glyphs[at + columns.start..at + columns.end])
-            .any(|(drawn, bare)| drawn.abs_diff(*bare) >= MIN_VISIBLE_CONTRAST)
-    });
-    spread(&rasters.without_glyphs) < MIN_VISIBLE_CONTRAST && drawn_over_glyph_free
+    spread(&rasters.without_glyphs) < MIN_VISIBLE_CONTRAST && glyph_ink_in(rasters, placed, media, scale)
 }
 
 fn is_iterator_word(word: &OcrElement) -> bool {
@@ -548,12 +620,61 @@ call puts",
                 .join(" ")
         }
 
+        /// A read of `pdf` whose first `misread` words with letters or digits are words the page never shows.
+        fn read_misreading(pdf: &PdfDocument, misread: usize) -> (ExtractedDocument, usize) {
+            let mut left = misread;
+            let mut solid = 0;
+            let words = native_word_boxes(pdf)
+                .iter()
+                .map(|(text, placed)| {
+                    if text.chars().any(char::is_alphanumeric) {
+                        solid += 1;
+                        if left > 0 {
+                            left -= 1;
+                            return iterator_word("zzzz", *placed);
+                        }
+                    }
+                    iterator_word(text, *placed)
+                })
+                .collect();
+            (read_of(words), solid)
+        }
+
         #[test]
-        fn should_prefer_a_plausibly_wrong_native_layer_that_the_read_still_half_confirms() {
+        fn should_own_a_read_that_misreads_up_to_the_agreement_floor() {
             let pdf = pdf_with("");
-            let read = read_matching_ink(&pdf);
-            assert!(ink_owned(&pdf, &layer_with_words_wrong(|at| at % 5 == 0), &read));
-            assert!(ink_owned(&pdf, &layer_with_words_wrong(|at| at % 3 == 0), &read));
+            let (_, solid) = read_misreading(&pdf, 0);
+            let allowed = ((1.0 - MIN_NATIVE_READ_AGREEMENT) * solid as f64).floor() as usize;
+            assert!(allowed > 0, "{solid} words leave room for a misread");
+            assert!(ink_owned(&pdf, LAYER, &read_misreading(&pdf, allowed).0));
+        }
+
+        #[test]
+        fn should_not_own_a_read_that_misreads_past_the_agreement_floor() {
+            let pdf = pdf_with("");
+            let (_, solid) = read_misreading(&pdf, 0);
+            let allowed = ((1.0 - MIN_NATIVE_READ_AGREEMENT) * solid as f64).floor() as usize;
+            assert!(!ink_owned(&pdf, LAYER, &read_misreading(&pdf, allowed + 1).0));
+        }
+
+        #[test]
+        fn should_not_own_a_read_that_contradicts_a_third_of_the_native_words() {
+            let pdf = pdf_with("");
+            let (_, solid) = read_misreading(&pdf, 0);
+            assert!(!ink_owned(&pdf, LAYER, &read_misreading(&pdf, solid / 3).0));
+        }
+
+        #[test]
+        fn should_not_own_a_page_whose_native_word_lies_under_a_fill_the_read_omits() {
+            let pdf = pdf_with("1 g 72 696 43 14 re f");
+            let covered = |placed: &Rect| placed.x + placed.width <= 72.0 + 43.0;
+            let words: Vec<_> = native_word_boxes(&pdf)
+                .iter()
+                .filter(|(_, placed)| !covered(placed))
+                .map(|(text, placed)| iterator_word(text, *placed))
+                .collect();
+            assert!(words.len() < native_word_boxes(&pdf).len(), "a native word is covered");
+            assert!(!ink_owned(&pdf, LAYER, &read_of(words)));
         }
 
         #[test]

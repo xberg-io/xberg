@@ -1923,11 +1923,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         layer,
                         &extraction_result,
                         super::native_word_coverage::InkProofLimits {
-                            thresholds: &config
-                                .ocr
-                                .as_ref()
-                                .and_then(|ocr| ocr.quality_thresholds.clone())
-                                .unwrap_or_default(),
+                            thresholds: &ocr_output_thresholds,
                             max_working_bytes: super::hidden_layer::preview_byte_limit(config),
                             cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                         },
@@ -4664,17 +4660,14 @@ pub(super) async fn extract_with_ocr_for_page(
                     &ocr_result,
                 );
                 native_ink_owned = !complete_native_words
+                    && super::document::native_preservation_is_automatic(config, document_page_number)
                     && super::native_word_coverage::native_text_paints_all_read_ink(
                         source.document,
                         document_page_idx,
                         layer,
                         &ocr_result,
                         super::native_word_coverage::InkProofLimits {
-                            thresholds: &config
-                                .ocr
-                                .as_ref()
-                                .and_then(|ocr| ocr.quality_thresholds.clone())
-                                .unwrap_or_default(),
+                            thresholds: &ocr_output_thresholds,
                             max_working_bytes: super::hidden_layer::preview_byte_limit(config),
                             cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                         },
