@@ -205,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
-  A page whose lost-glyph-marked text layer is nearly all one script none of the configured languages cover (Khmer under `eng`) no longer goes to OCR, which read it as other letters and replaced it. A page a picture covers is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
+  A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
 
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).

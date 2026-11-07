@@ -10,6 +10,7 @@ const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-
 const PARTIAL: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/genuinely-partial-mapped.pdf");
 const SCANNED_ENGLISH_KHMER_OVERLAY: &[u8] =
     include_bytes!("fixtures/pdf/khmer-cluster-2536/scanned-english-khmer-overlay.pdf");
+const KHMER_TEXT_WITH_FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 const KHMER_THEN_SCANNED_ENGLISH: &[u8] =
     include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
 
@@ -108,4 +109,18 @@ fn automatic_english_ocr_still_reads_a_scanned_page_that_carries_a_khmer_text_ov
         "the rasterised English body was not read: {:?}",
         automatic.content
     );
+}
+
+#[test]
+fn automatic_english_ocr_keeps_a_text_heavy_khmer_page_that_carries_a_figure() {
+    let models = english_model();
+    let native = extract(KHMER_TEXT_WITH_FIGURE, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    let automatic = extract(KHMER_TEXT_WITH_FIGURE, models.path(), |_| {});
+    assert!(khmer_count(&native.content) > 400);
+    // The figure's own text is read by the embedded-image pass and follows the kept layer.
+    assert!(automatic.content.starts_with(native.content.trim_end()));
+    assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content));
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
 }

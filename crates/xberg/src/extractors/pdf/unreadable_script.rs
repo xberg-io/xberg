@@ -124,36 +124,35 @@ fn language_scripts(model: &str) -> Option<&'static [Script]> {
     Some(scripts)
 }
 
-/// Fewest characters of one script that can establish the script of a page. Below about three
-/// short words the layer may be a stamp, a header or a stray character, and the page body is
-/// then still OCR's to read.
-const MIN_SCRIPT_CHARS: usize = 20;
+/// Fewest uncovered-script characters that can establish a layer's script. A letter-poor layer,
+/// such as a numeric table that repeats one unit symbol (`μ`, `Ω`), holds a handful; the Khmer
+/// fixtures hold 222 and 28. A title or certificate page of a dozen characters is still a page.
+const MIN_SCRIPT_CHARS: usize = 8;
 
-/// Share of a page's attributable characters that the dominant unreadable script must hold. The
-/// rest of the page may carry a few covered-script words (a label, a page number), but a page
-/// that is not nearly all in one script OCR cannot read still gives OCR text to read.
-const MIN_DOMINANT_SHARE: f64 = 0.9;
+/// Share of the characters that no configured language covers that must be in a known script.
+/// The rest are private-use, dingbat and symbol characters, which a mis-decode or a symbol font
+/// produces; a layer that is mostly those is not a page in any script. The Khmer fixtures have
+/// none of them (100%); 3000 private-use characters with one letter give 0.03%.
+const MIN_KNOWN_SHARE: f64 = 0.9;
 
-/// The one unreadable script a page is written in, or `None` when the layer does not establish
-/// one.
+/// The scripts a page is written in when its layer is nearly all in scripts none of `languages`
+/// covers, largest first, or `None` when the layer does not establish that.
 ///
-/// Attributable characters are all non-whitespace characters except lost-glyph markers, digits
-/// and punctuation. Characters of no known script (private-use, dingbats, symbols) stay in that
-/// count, so a layer of such characters with one stray letter is not a page in that letter's
-/// script. The dominant script must be covered by none of `languages`, must hold at least
-/// [`MIN_SCRIPT_CHARS`] and [`MIN_DOMINANT_SHARE`] of the attributable characters. Latin counts
-/// as covered whenever the configured languages are known. A configured language this module
-/// does not know means no claim.
-fn unreadable_script(text: &str, languages: &[String]) -> Option<Script> {
+/// Characters a configured language covers (Latin always, and each configured model's scripts)
+/// are not counted: a name or URL in a Khmer page neither helps nor hurts. Of the rest, the
+/// whole-page text excluding whitespace, lost-glyph markers, digits and punctuation, at least
+/// [`MIN_SCRIPT_CHARS`] must be in uncovered known scripts and they must make up
+/// [`MIN_KNOWN_SHARE`] of it. A configured language this module does not know means no claim.
+fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
+    if languages.is_empty() {
+        return None;
+    }
     let mut covered = vec![Script::Latin];
     for model in languages.iter().flat_map(|language| language.split('+')) {
         covered.extend_from_slice(language_scripts(model)?);
     }
-    if languages.is_empty() {
-        return None;
-    }
     let mut counts: Vec<(Script, usize)> = Vec::new();
-    let mut attributable = 0usize;
+    let mut unattributed = 0usize;
     for character in text.chars().filter(|character| {
         !character.is_whitespace()
             && *character != super::unmapped_glyphs::LOST_GLYPH_MARKER
@@ -161,19 +160,21 @@ fn unreadable_script(text: &str, languages: &[String]) -> Option<Script> {
             && !character.is_ascii_punctuation()
             && !matches!(*character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
     }) {
-        attributable += 1;
-        if let Some(script) = script_of(character) {
-            match counts.iter_mut().find(|(known, _)| *known == script) {
+        match script_of(character) {
+            Some(script) if covered.contains(&script) => {}
+            Some(script) => match counts.iter_mut().find(|(known, _)| *known == script) {
                 Some((_, count)) => *count += 1,
                 None => counts.push((script, 1)),
-            }
+            },
+            None => unattributed += 1,
         }
     }
-    let (script, count) = counts.into_iter().max_by_key(|(_, count)| *count)?;
-    (!covered.contains(&script)
-        && count >= MIN_SCRIPT_CHARS
-        && count as f64 >= MIN_DOMINANT_SHARE * attributable as f64)
-        .then_some(script)
+    let known: usize = counts.iter().map(|(_, count)| count).sum();
+    if known < MIN_SCRIPT_CHARS || (known as f64) < MIN_KNOWN_SHARE * (known + unattributed) as f64 {
+        return None;
+    }
+    counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+    Some(counts.into_iter().map(|(script, _)| script).collect())
 }
 
 /// The tessdata model that reads `script`, for the user-facing hint.
@@ -209,12 +210,50 @@ fn model_for(script: Script) -> &'static str {
     }
 }
 
+/// Whether the page is a scan or a page that carries one, by the rule the scanned-page detector
+/// uses: pictures covering at least 80% of it, or covering a quarter with a text layer too short to
+/// be the page's body. A page with a figure beside a full text layer is not.
+fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+    crate::pdf::native::guard_native_panic(
+        || Ok::<_, String>(crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()),
+        |message| message,
+    )
+    .unwrap_or_else(|error| {
+        tracing::debug!(%error, page_index, "script evidence assumes a scan: the page raster check failed");
+        true
+    })
+}
+
+fn kept_pages_warning(kept: &[(u32, Vec<Script>)], languages: &[String]) -> crate::types::ProcessingWarning {
+    let described = kept
+        .iter()
+        .map(|(page, scripts)| {
+            let names = scripts.iter().map(|script| format!("{script:?}")).collect::<Vec<_>>();
+            format!(
+                "page {page} ({}; for example {})",
+                names.join(" and "),
+                model_for(scripts[0])
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: std::borrow::Cow::Owned(format!(
+            "OCR was skipped for {described}: the native text is in a script the configured OCR languages \
+             ({}) cannot read, so it was kept as extracted, and glyphs it has no Unicode value for stay lost. \
+             Add a model for this script, for example the one named, to ocr.language to OCR it.",
+            languages.join("+")
+        )),
+    }
+}
+
 /// Remove from the quality gate's failing pages every page that OCR with the configured
 /// languages cannot improve: a page whose native text carries lost-glyph markers and is written
 /// in one script none of the languages covers (see [`unreadable_script`]). Pages that stay
 /// failing are unchanged, and the document-level flags follow from what remains.
 ///
-/// A page the PDF's pictures cover (`carries_scan_raster`) stays failing: its text layer says
+/// A page that is a scan or carries one (see [`page_is_scan`]) stays failing: its text layer says
 /// nothing about the picture, which OCR is the only reader of. Returns an `ocr` warning for the
 /// kept pages.
 ///
@@ -246,7 +285,7 @@ pub(super) fn retain_unreadable_script_pages(
         return None;
     }
     let languages = ocr.effective_tesseract_language();
-    let candidates: Vec<(u32, Script)> = decision
+    let candidates: Vec<(u32, Vec<Script>)> = decision
         .failing_pages
         .iter()
         .filter_map(|page| {
@@ -255,16 +294,22 @@ pub(super) fn retain_unreadable_script_pages(
             if !text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
                 return None;
             }
-            Some((*page, unreadable_script(text, &languages)?))
+            Some((*page, unreadable_scripts(text, &languages)?))
         })
         .collect();
     if candidates.is_empty() {
         return None;
     }
-    let document = xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()).ok()?;
-    let kept: Vec<(u32, Script)> = candidates
+    let document = match xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) {
+        Ok(document) => document,
+        Err(error) => {
+            tracing::debug!(%error, "script evidence skipped: the PDF could not be opened to check for pictures");
+            return None;
+        }
+    };
+    let kept: Vec<(u32, Vec<Script>)> = candidates
         .into_iter()
-        .filter(|(page, _)| !crate::pdf::scan_detect::carries_scan_raster(&document, *page as usize - 1))
+        .filter(|(page, _)| !page_is_scan(&document, *page as usize - 1))
         .collect();
     if kept.is_empty() {
         return None;
@@ -274,19 +319,7 @@ pub(super) fn retain_unreadable_script_pages(
         .retain(|page| !kept.iter().any(|(kept_page, _)| kept_page == page));
     decision.fallback = !decision.failing_pages.is_empty();
     decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
-    let described = kept
-        .iter()
-        .map(|(page, script)| format!("page {page} ({script:?}, model {})", model_for(*script)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    Some(crate::types::ProcessingWarning {
-        source: std::borrow::Cow::Borrowed("ocr"),
-        message: std::borrow::Cow::Owned(format!(
-            "OCR was skipped for {described}: the native text is in a script the configured OCR languages \
-             ({}) cannot read, so the native text was kept. Add the named model to ocr.language to OCR it.",
-            languages.join("+")
-        )),
-    })
+    Some(kept_pages_warning(&kept, &languages))
 }
 
 #[cfg(test)]
@@ -299,6 +332,9 @@ mod tests {
         include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
     const SCAN_WITH_OVERLAY: &[u8] =
         include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/scanned-english-khmer-overlay.pdf");
+
+    const TEXT_WITH_FIGURE: &[u8] =
+        include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 
     const KHMER_MARKED: &str = "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD} សួស្តី\u{FFFD} ភ្នំពេញ";
 
@@ -360,19 +396,62 @@ mod tests {
     }
 
     #[test]
-    fn names_the_script_no_configured_language_reads() {
-        assert_eq!(unreadable_script(KHMER_MARKED, &langs(&["eng"])), Some(Script::Khmer));
-        assert_eq!(unreadable_script(KHMER_MARKED, &langs(&["ENG"])), Some(Script::Khmer));
+    fn names_the_scripts_no_configured_language_reads() {
+        assert_eq!(
+            unreadable_scripts(KHMER_MARKED, &langs(&["eng"])),
+            Some(vec![Script::Khmer])
+        );
+        assert_eq!(
+            unreadable_scripts(KHMER_MARKED, &langs(&["ENG"])),
+            Some(vec![Script::Khmer])
+        );
         let russian = "Привет мир это длинная строка текста\u{FFFD}";
         assert_eq!(
-            unreadable_script(russian, &langs(&["eng", "deu"])),
-            Some(Script::Cyrillic)
+            unreadable_scripts(russian, &langs(&["eng", "deu"])),
+            Some(vec![Script::Cyrillic])
         );
         let devanagari = "यह एक लंबा वाक्य है जो देवनागरी में लिखा गया\u{FFFD}";
         assert_eq!(
-            unreadable_script(devanagari, &langs(&["eng"])),
-            Some(Script::Devanagari)
+            unreadable_scripts(devanagari, &langs(&["eng"])),
+            Some(vec![Script::Devanagari])
         );
+    }
+
+    #[test]
+    fn japanese_is_a_set_of_uncovered_scripts_under_english() {
+        let japanese = "日本語のテキストはここにあります。これは長い文です\u{FFFD}";
+        let found = unreadable_scripts(japanese, &langs(&["eng"])).expect("Han and Kana");
+        assert!(found.contains(&Script::Han) && found.contains(&Script::Kana) && found.len() == 2);
+        assert_eq!(unreadable_scripts(japanese, &langs(&["jpn"])), None);
+    }
+
+    #[test]
+    fn latin_names_in_a_khmer_page_do_not_dilute_it() {
+        let page = format!("{KHMER_MARKED} Mallori https://example.org/khmer Phnom Penh Invoice");
+        assert_eq!(unreadable_scripts(&page, &langs(&["eng"])), Some(vec![Script::Khmer]));
+        let latin_heavy = format!(
+            "{KHMER_MARKED} {}",
+            "Invoice number and total due on receipt of goods ".repeat(20)
+        );
+        assert_eq!(
+            unreadable_scripts(&latin_heavy, &langs(&["eng"])),
+            Some(vec![Script::Khmer])
+        );
+    }
+
+    #[test]
+    fn the_floor_separates_a_unit_symbol_from_a_short_title() {
+        let omegas = |count: usize| format!("12.5 3.4 \u{FFFD} {} 9.1", "Ω ".repeat(count));
+        assert_eq!(
+            unreadable_scripts(&omegas(MIN_SCRIPT_CHARS - 1), &langs(&["eng"])),
+            None
+        );
+        assert_eq!(
+            unreadable_scripts(&omegas(MIN_SCRIPT_CHARS), &langs(&["eng"])),
+            Some(vec![Script::Greek])
+        );
+        let title = "ខ្ញុំ\u{FFFD} សួស្តី";
+        assert_eq!(unreadable_scripts(title, &langs(&["eng"])), Some(vec![Script::Khmer]));
     }
 
     #[test]
@@ -391,7 +470,7 @@ mod tests {
             (KHMER_MARKED, langs(&["eng", "zzz"])),
             (KHMER_MARKED, Vec::new()),
         ] {
-            assert_eq!(unreadable_script(text, &languages), None, "{text} {languages:?}");
+            assert_eq!(unreadable_scripts(text, &languages), None, "{text} {languages:?}");
         }
     }
 
@@ -399,19 +478,14 @@ mod tests {
     fn latin_is_read_by_the_non_latin_models() {
         let english = "An English page with lost glyphs \u{FFFD}\u{FFFD} in a longer sentence of text";
         for languages in [&["rus"][..], &["chi_sim"], &["khm"], &["eng"]] {
-            assert_eq!(unreadable_script(english, &langs(languages)), None, "{languages:?}");
+            assert_eq!(unreadable_scripts(english, &langs(languages)), None, "{languages:?}");
         }
     }
 
     #[test]
-    fn a_layer_that_is_not_mostly_one_unreadable_script_does_not_qualify() {
+    fn a_layer_that_is_not_mostly_a_known_unreadable_script_does_not_qualify() {
         let private_use = "\u{E000}".repeat(3000);
         let dingbats = "\u{2701}".repeat(3000);
-        let khmer_stamp = "ខ្ញុំ\u{FFFD} សួស្តី";
-        let mixed = format!(
-            "{KHMER_MARKED} {}",
-            "Invoice number and total due on receipt of goods ".repeat(2)
-        );
         let cases = [
             ("private use", format!("{private_use}\u{FFFD}й")),
             ("dingbats", format!("{dingbats}\u{FFFD}й")),
@@ -419,11 +493,9 @@ mod tests {
                 "numeric table",
                 "12.5 3.4 7.8 \u{FFFD} 9.1 2.2 μ 4.4 5.5 6.6".to_string(),
             ),
-            ("stamp", khmer_stamp.to_string()),
-            ("half Latin", mixed),
         ];
         for (name, text) in cases {
-            assert_eq!(unreadable_script(&text, &langs(&["eng"])), None, "{name}");
+            assert_eq!(unreadable_scripts(&text, &langs(&["eng"])), None, "{name}");
         }
     }
 
@@ -435,7 +507,7 @@ mod tests {
         assert!(!decision.whole_doc_failure);
         let warning = warning.expect("the kept page is reported");
         assert_eq!(warning.source, "ocr");
-        for part in ["page 1", "Khmer", "khm", "(eng)"] {
+        for part in ["page 1", "Khmer", "for example khm", "(eng)", "lost"] {
             assert!(warning.message.contains(part), "{part}: {}", warning.message);
         }
         assert!(!warning.message.contains("page 2"));
@@ -456,6 +528,19 @@ mod tests {
         assert_eq!(decision.failing_pages, [1]);
         assert!(decision.fallback);
         assert!(warning.is_none());
+    }
+
+    #[test]
+    fn a_text_heavy_page_with_a_figure_is_kept_although_a_picture_covers_a_quarter_of_it() {
+        let document = xberg_native_pdf::PdfDocument::from_bytes(TEXT_WITH_FIGURE.to_vec()).unwrap();
+        assert!(
+            crate::pdf::scan_detect::carries_scan_raster(&document, 0),
+            "a coverage-only check would send this page to OCR"
+        );
+        assert!(!page_is_scan(&document, 0));
+        let (decision, warning) = run(&[KHMER_MARKED], TEXT_WITH_FIGURE, &config_with(&["eng"]));
+        assert!(decision.failing_pages.is_empty());
+        assert!(warning.is_some());
     }
 
     #[test]
