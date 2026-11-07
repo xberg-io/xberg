@@ -202,6 +202,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
+  Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
+
 - **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text.**
   The full-scan leader recovery no longer requires an all-letter header and label or digit-only values. Rows are still refused unless every leader is proved as regular dots on the raster, each value lies in its header column and the hOCR words match exactly.
 
