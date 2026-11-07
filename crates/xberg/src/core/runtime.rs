@@ -12,31 +12,13 @@
 //! no `Drop` ever runs, so the panic cannot occur, and runtime construction
 //! happens at most once per process.
 
-#[cfg(all(
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32"),
-    any(
-        feature = "embeddings",
-        feature = "static-embeddings",
-        feature = "reranker",
-        feature = "redaction"
-    )
-))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use once_cell::sync::OnceCell;
 
 /// The shared runtime. Initialized on first use and intentionally never dropped
 /// (it lives for the remainder of the process), so it can never trigger the
 /// "drop a runtime in a blocking context" panic.
-#[cfg(all(
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32"),
-    any(
-        feature = "embeddings",
-        feature = "static-embeddings",
-        feature = "reranker",
-        feature = "redaction"
-    )
-))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 
 /// Worker-thread stack size for the global runtime.
@@ -46,16 +28,7 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 /// instead of raising a catchable panic. `crates/xberg-node/src/lib.rs:62-64` raised its
 /// pool to 16 MB for exactly this reason; this runtime had never been given the same
 /// budget.
-#[cfg(all(
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32"),
-    any(
-        feature = "embeddings",
-        feature = "static-embeddings",
-        feature = "reranker",
-        feature = "redaction"
-    )
-))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Returns a reference to the shared multi-thread Tokio runtime, building it on
@@ -70,16 +43,7 @@ const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 ///
 /// Returns an error if the runtime cannot be created (e.g. system resource
 /// exhaustion).
-#[cfg(all(
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32"),
-    any(
-        feature = "embeddings",
-        feature = "static-embeddings",
-        feature = "reranker",
-        feature = "redaction"
-    )
-))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
         tokio::runtime::Builder::new_multi_thread()
@@ -101,7 +65,7 @@ pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime
 /// the same size, while the extraction poll chain needs more. Dropping the returned future aborts the task,
 /// so cancellation still stops the work. A panic in the task resumes unwinding in the caller, and the task
 /// does not inherit the caller's task-locals, so the future must establish any it needs.
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32"), feature = "redaction"))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) async fn run_on_large_stack<T, F>(future: F) -> crate::Result<T>
 where
     T: Send + 'static,
@@ -125,7 +89,7 @@ where
     }
 }
 
-#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32"), feature = "redaction"))]
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod large_stack_tests {
     use super::run_on_large_stack;
     use std::sync::Arc;

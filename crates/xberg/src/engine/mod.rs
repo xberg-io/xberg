@@ -94,6 +94,30 @@ impl Engine {
     /// ([`NoopCache`], [`NoopProgressSink`]), so callers who inject nothing see
     /// byte-identical behavior to before this wiring existed.
     pub async fn extract(&self, input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractionResult> {
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let result = {
+            let (engine, config) = (self.clone(), config.clone());
+            crate::core::runtime::run_on_large_stack(async move {
+                Box::pin(engine.extract_on_current_stack(input, &config)).await
+            })
+            .await?
+        };
+
+        #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+        let result = self.extract_on_current_stack(input, config).await;
+
+        result
+    }
+
+    /// The body of [`Engine::extract`], polled on the caller's stack.
+    ///
+    /// Callers that already run on the 16 MiB runtime, or that scope a task-local around the call, use this
+    /// directly: a hop to a new task would not inherit the task-local.
+    async fn extract_on_current_stack(
+        &self,
+        input: ExtractInput,
+        config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
         #[cfg(feature = "tokio-runtime")]
         return seams::scope_progress(
             Arc::clone(&self.inner.progress),
@@ -141,6 +165,30 @@ impl Engine {
 
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     async fn extract_with_layout_selection(
+        &self,
+        input: ExtractInput,
+        config: &ExtractionConfig,
+        selection: &crate::core::layout_pages::LayoutPageSelection,
+    ) -> Result<ExtractionResult> {
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let result = {
+            let (engine, config, selection) = (self.clone(), config.clone(), selection.clone());
+            crate::core::runtime::run_on_large_stack(async move {
+                Box::pin(engine.extract_with_layout_selection_on_current_stack(input, &config, &selection)).await
+            })
+            .await?
+        };
+
+        #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+        let result = self
+            .extract_with_layout_selection_on_current_stack(input, config, selection)
+            .await;
+
+        result
+    }
+
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    async fn extract_with_layout_selection_on_current_stack(
         &self,
         input: ExtractInput,
         config: &ExtractionConfig,
@@ -229,7 +277,7 @@ impl Engine {
             let work = async move {
                 let result = crate::text::redaction::external::scope_external_redaction(
                     request.clone(),
-                    engine.extract(input, &uncached_config),
+                    engine.extract_on_current_stack(input, &uncached_config),
                 )
                 .await;
                 if result.is_ok() && !request.was_consumed() {
@@ -274,13 +322,27 @@ impl Engine {
         self.extract_batch_inputs(inputs, config).await
     }
 
-    async fn extract_batch_inputs<I: extract_impl::BatchInputRef>(
+    async fn extract_batch_inputs<I: extract_impl::BatchInputRef + Send + 'static>(
         &self,
         inputs: Vec<I>,
         config: &ExtractionConfig,
     ) -> Result<ExtractionResult> {
-        #[cfg(feature = "tokio-runtime")]
-        return seams::scope_progress(
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let result = {
+            let (engine, config) = (self.clone(), config.clone());
+            crate::core::runtime::run_on_large_stack(async move {
+                Box::pin(seams::scope_progress(
+                    Arc::clone(&engine.inner.progress),
+                    None,
+                    extract_impl::extract_batch(&engine.inner, inputs, &config),
+                ))
+                .await
+            })
+            .await?
+        };
+
+        #[cfg(all(feature = "tokio-runtime", target_arch = "wasm32"))]
+        let result = seams::scope_progress(
             Arc::clone(&self.inner.progress),
             None,
             extract_impl::extract_batch(&self.inner, inputs, config),
@@ -288,7 +350,9 @@ impl Engine {
         .await;
 
         #[cfg(not(feature = "tokio-runtime"))]
-        extract_impl::extract_batch(&self.inner, inputs, config).await
+        let result = extract_impl::extract_batch(&self.inner, inputs, config).await;
+
+        result
     }
 
     /// The injected [`CacheBackend`] seam (default: [`NoopCache`]).
@@ -376,6 +440,65 @@ mod tests {
                 .expect("recording sink mutex poisoned")
                 .push(event.stage);
         }
+    }
+
+    /// A [`ProgressSink`] that records the thread each event is emitted on.
+    #[derive(Default)]
+    struct ThreadRecordingSink {
+        threads: Mutex<Vec<std::thread::ThreadId>>,
+    }
+
+    impl ProgressSink for ThreadRecordingSink {
+        fn emit(&self, _event: ProgressEvent) {
+            self.threads
+                .lock()
+                .expect("thread sink mutex poisoned")
+                .push(std::thread::current().id());
+        }
+    }
+
+    // A current-thread runtime stands in for an FFI host thread: every await runs on the caller's own stack.
+    // Reverting `Engine::extract` to call `extract_on_current_stack` directly makes the first assertion fail.
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn extract_and_batch_run_on_the_large_stack_runtime_not_the_callers_thread() {
+        let caller = std::thread::current().id();
+        let sink = Arc::new(ThreadRecordingSink::default());
+        let engine = Engine::builder().with_progress_sink(sink.clone()).build();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let input = || ExtractInput::from_bytes(b"hello stack".to_vec(), "text/plain", None);
+
+        runtime
+            .block_on(engine.extract(input(), &ExtractionConfig::default()))
+            .unwrap();
+        let single = std::mem::take(&mut *sink.threads.lock().unwrap());
+        assert!(!single.is_empty(), "extract emitted no progress events");
+        assert!(
+            single.iter().all(|thread| *thread != caller),
+            "extract polled on the caller's thread"
+        );
+
+        runtime
+            .block_on(engine.extract_batch(vec![input()], &ExtractionConfig::default()))
+            .unwrap();
+        let batch = std::mem::take(&mut *sink.threads.lock().unwrap());
+        assert!(!batch.is_empty(), "extract_batch emitted no progress events");
+        assert!(
+            batch.iter().all(|thread| *thread != caller),
+            "extract_batch polled on the caller's thread"
+        );
+
+        runtime
+            .block_on(engine.extract_on_current_stack(input(), &ExtractionConfig::default()))
+            .unwrap();
+        let direct = sink.threads.lock().unwrap().clone();
+        assert!(
+            direct.iter().all(|thread| *thread == caller),
+            "the on-current-stack variant must stay on the caller's thread"
+        );
     }
 
     // Revert line: change `Engine::extract` back to
