@@ -1158,7 +1158,7 @@ pub(super) fn accept_or_reject_ocr_page(
         dict_invalid_word_ratio,
         discarded,
     };
-    warnings.push(ocr_noise_warning(&verdict, thresholds, confidence_semantics, false));
+    warnings.push(ocr_noise_warning(&verdict, thresholds, confidence_semantics));
     let verdict = Some(verdict);
     if discarded {
         OcrPageAcceptance {
@@ -1179,7 +1179,6 @@ pub(super) fn ocr_noise_warning(
     verdict: &OcrPageNoiseVerdict,
     thresholds: &OcrQualityThresholds,
     confidence_semantics: crate::plugins::ConfidenceSemantics,
-    retained_native_khmer: bool,
 ) -> crate::types::ProcessingWarning {
     // Name only the signals that actually fired. Leading with the fragmentation numbers
     // unconditionally would report a ratio *below* its own threshold as the reason whenever
@@ -1213,9 +1212,7 @@ pub(super) fn ocr_noise_warning(
             thresholds.max_ocr_output_dict_invalid_word_ratio * 100.0
         ));
     }
-    let disposition = if retained_native_khmer {
-        "English OCR recognized no Khmer, so the existing Khmer text was retained."
-    } else if verdict.discarded {
+    let disposition = if verdict.discarded {
         "its text was discarded because discard_suspected_ocr_noise is enabled."
     } else {
         "its text was retained. Set discard_suspected_ocr_noise to true to discard suspected noise."

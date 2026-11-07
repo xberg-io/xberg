@@ -41,3 +41,6 @@ pub(crate) const OCR_IMAGE_PREPROCESSING_METADATA_KEY: &str = "image_preprocessi
 /// array to an `OcrElement` through the element's own `page_number` instead.
 pub(crate) const OCR_PAGE_COORDINATE_FRAMES_METADATA_KEY: &str = "ocr_page_coordinate_frames";
 pub(crate) const OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY: &str = "ocr_page_segmentation_modes";
+
+/// Set by recognition-orientation OCR when every text block reports the page rotated 180 degrees.
+pub(crate) const OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY: &str = "ocr_recognition_page_down";
