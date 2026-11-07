@@ -1918,14 +1918,16 @@ fn is_greek_letter(c: char) -> bool {
 
 /// Remove arXiv watermark/sidebar noise from paragraphs on the first pages.
 ///
-/// Handles two cases:
+/// The stamp arXiv prints always carries the version (`arXiv:2312.13591v2 [hep-ph] 6 Dec 2023`); a
+/// citation's identifier does not, and is body text. Handles two cases:
+///
 /// 1. Short standalone paragraphs that are just the arXiv identifier → mark as furniture.
 /// 2. arXiv identifier appended to the end of a longer paragraph (LaTeX sidebar
 ///    text that the PDF extractor concatenates with body text) → strip the trailing noise.
 pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
-    let arxiv_re = regex::Regex::new(r"arXiv:\d{4}\.\d{4,5}").expect("valid regex");
+    let arxiv_re = regex::Regex::new(r"arXiv:\d{4}\.\d{4,5}v\d+").expect("valid regex");
     let trailing_re = regex::Regex::new(
-        r"(?:\s+(?:\S+\s+){0,8})?arXiv:\d{4}\.\d{4,5}(?:v\d+)?(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?\s*$",
+        r"(?:\s+(?:\S+\s+){0,8})?arXiv:\d{4}\.\d{4,5}v\d+(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?\s*$",
     )
     .expect("valid regex");
 
@@ -2243,6 +2245,49 @@ mod tests {
             block_bbox: None,
             word_count,
         }
+    }
+
+    fn paragraph_with_text(text: &str) -> PdfParagraph {
+        let mut paragraph = make_paragraph(10.0, 1);
+        paragraph.lines[0].segments[0].text = text.to_string();
+        paragraph
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_versioned_stamp_as_furniture() {
+        let mut pages = vec![vec![paragraph_with_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023")]];
+        mark_arxiv_noise(&mut pages);
+        assert!(pages[0][0].is_page_furniture);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_short_citation_that_ends_in_an_unversioned_identifier() {
+        let mut pages = vec![vec![paragraph_with_text("82 , 419 (2022), arXiv:2107.09275 [hep-ph].")]];
+        mark_arxiv_noise(&mut pages);
+        assert!(!pages[0][0].is_page_furniture);
+        assert_eq!(
+            pages[0][0].lines[0].segments[0].text,
+            "82 , 419 (2022), arXiv:2107.09275 [hep-ph]."
+        );
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_long_citation_that_ends_in_an_unversioned_identifier() {
+        let text = "[95] X. Liu, Y. Tan, X. Chen, D. Chen, H. Huang, and J. Ping, Investigation of the analog of the states, the doubly charmed molecular pentaquarks of strange quarks, mass spectra, radiative decays and magnetic moments, (2023), arXiv:2312.04390 [hep-ph].";
+        assert!(text.split_whitespace().count() > 25);
+        let mut pages = vec![vec![paragraph_with_text(text)]];
+        mark_arxiv_noise(&mut pages);
+        assert!(!pages[0][0].is_page_furniture);
+        assert_eq!(pages[0][0].lines[0].segments[0].text, text);
+    }
+
+    #[test]
+    fn arxiv_noise_strips_a_versioned_stamp_appended_to_a_longer_paragraph() {
+        let text = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six arXiv:2312.13591v2 [hep-ph] 6 Dec 2023";
+        let mut pages = vec![vec![paragraph_with_text(text)]];
+        mark_arxiv_noise(&mut pages);
+        assert!(!pages[0][0].is_page_furniture);
+        assert!(!pages[0][0].lines[0].segments[0].text.contains("arXiv"));
     }
 
     #[test]
