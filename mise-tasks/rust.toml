@@ -48,6 +48,12 @@ depends = ["os:require linux darwin"]
 env = { CARGO_TERM_COLOR = "always" }
 run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
 
+["rust:test:focused-pr"]
+description = "Run the exact PDF/OCR or API jobs checks used on pull requests"
+depends = ["os:require linux darwin"]
+usage = 'arg "<suite>" help="Fixed suite: pdf-ocr or api-jobs"'
+run = 'bash scripts/ci/rust/run-focused-pr-tests.sh "$usage_suite"'
+
 ["rust:test:jpeg-recovery"]
 description = "Qualify nine real OCR recovery controls with verified English"
 depends = ["os:require linux darwin"]
