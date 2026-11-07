@@ -143,6 +143,10 @@ run = [
   "python3 scripts/ci/test_ios_compiler_runtime.py",
 ]
 
+[tasks."release:test:php-macos-gate"]
+description = "Test the macOS PHP archive gate against compiled Mach-O files"
+run = "uv run --no-project --with pytest python -m pytest -q scripts/ci/test_verify_php_macos_extension.py"
+
 [tasks."poly:verify:tool-scopes"]
 description = "Check external Poly formatters are restricted to their intended languages"
 run = "python3 scripts/ci/check-poly-tool-scopes.py"

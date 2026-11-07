@@ -51,3 +51,46 @@ fn unknown_dpi_jpeg_checks_native_budget_even_when_resize_workspace_fits() {
         .to_string();
     assert!(error.contains("native image workspace after DPI resize"), "{error}");
 }
+
+fn densityless_png(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(width, height, image::Rgb([245, 245, 245])))
+        .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .expect("encode PNG");
+    bytes
+}
+
+#[test]
+fn engine_selected_policy_fits_a_densityless_png_upscale_to_the_workspace() {
+    let bytes = densityless_png(800, 1000);
+    assert!(resolve_known_source_dpi(None, &bytes, 800, 1000).is_none());
+    let prepared = prepare_encoded_ocr_image(
+        &bytes,
+        &SecurityLimits::default(),
+        &TesseractConfig::default(),
+        None,
+        false,
+    )
+    .expect("an engine-selected policy shrinks its upscale instead of refusing the page");
+    assert!(prepared.width >= 800 && prepared.height >= 1000);
+    assert!(u64::from(prepared.width) * u64::from(prepared.height) * 8 <= 100 * 1024 * 1024);
+}
+
+#[test]
+fn caller_selected_policy_keeps_its_requested_densityless_png_upscale() {
+    let bytes = densityless_png(800, 1000);
+    let error = prepare_encoded_ocr_image(
+        &bytes,
+        &SecurityLimits::default(),
+        &TesseractConfig {
+            preprocessing: Some(Default::default()),
+            ..Default::default()
+        },
+        None,
+        false,
+    )
+    .err()
+    .expect("the requested 300 DPI raster does not fit")
+    .to_string();
+    assert!(error.contains("OCR native image workspace exceeds"), "{error}");
+}

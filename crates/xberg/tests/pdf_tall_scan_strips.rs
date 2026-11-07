@@ -209,6 +209,48 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
     }
 }
 
+#[test]
+fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_markdown_ocr() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "use_cache": false,
+        "output_format": "markdown",
+        "ocr": {"backend": "tesseract", "language": ["eng"]},
+    }))
+    .expect("markdown configuration that bypasses the strip recovery");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let outcome = runtime.block_on(extract_public(
+        ExtractInput::from_bytes(TALL_JPEG.to_vec(), "application/pdf", None),
+        &config,
+    ));
+    let error = match outcome {
+        Err(error) => error,
+        Ok(result) => panic!(
+            "the noisy retry read must not be reported as the page text: {:?}",
+            result
+                .results
+                .first()
+                .map(|document| document.content.chars().take(120).collect::<String>())
+        ),
+    };
+    let xberg::XbergError::Parsing {
+        message,
+        source: Some(source),
+    } = error
+    else {
+        panic!("expected the typed render refusal, got {error:?}");
+    };
+    assert!(message.contains("the retry read was rejected as noise"), "{message}");
+    let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
+        source
+            .source()
+            .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
+    });
+    assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
+}
+
 fn assert_exact_tall_source_text(source: &[u8]) {
     let document = extract(source, &extraction_config());
     assert_image_text(&document, true);

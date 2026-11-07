@@ -222,6 +222,22 @@ pub(crate) struct PageFallbackImage {
     pub recovery: XObjectRecovery,
     /// Zero-based paint order in the source page before recovery filtering.
     pub paint_order: usize,
+    /// Resolution of `bytes` as painted, when the page's geometry proves it; see
+    /// [`proven_source_dpis`].
+    pub source_dpi: Option<f64>,
+}
+
+#[cfg(all(test, feature = "ocr"))]
+impl PageFallbackImage {
+    pub(crate) fn placeholder_jpeg(paint_order: usize) -> Self {
+        Self {
+            bytes: Bytes::from_static(b"ignored image bytes"),
+            format: "jpeg",
+            recovery: XObjectRecovery::EmbeddedJpeg,
+            paint_order,
+            source_dpi: None,
+        }
+    }
 }
 
 /// Recover standalone JPEG/JP2 streams without decoding pixels or outer filters.
@@ -257,6 +273,7 @@ pub(crate) fn page_ocr_fallback_image_bytes_with_limits(
                 format,
                 recovery,
                 paint_order: handle.paint_order,
+                source_dpi: None,
             });
         }
     }
@@ -309,6 +326,7 @@ impl StoredJpegRecoveryBudget {
             format: "jpeg",
             recovery: XObjectRecovery::EmbeddedJpeg,
             paint_order: handle.paint_order,
+            source_dpi: None,
         });
         true
     }
@@ -364,6 +382,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                     format: "jpeg",
                     recovery: XObjectRecovery::EmbeddedJpeg,
                     paint_order: handle.paint_order,
+                    source_dpi: None,
                 }),
                 xberg_native_pdf::extractors::ImageData::Raw { pixels, format } => {
                     match raw_pixels_to_png(img.width(), img.height(), format, pixels) {
@@ -372,6 +391,7 @@ pub(crate) fn page_ocr_fallback_image_bytes(
                             format: "png",
                             recovery: XObjectRecovery::ReencodedPixels,
                             paint_order: handle.paint_order,
+                            source_dpi: None,
                         }),
                         Err(error) => {
                             recovery_complete = false;
@@ -434,6 +454,7 @@ fn recover_raw_jpeg_or_jp2(
         format,
         recovery: XObjectRecovery::RawCompressedStream,
         paint_order: handle.paint_order,
+        source_dpi: None,
     }))
 }
 
