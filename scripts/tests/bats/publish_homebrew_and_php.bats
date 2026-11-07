@@ -7,7 +7,7 @@ setup() {
 	cd "$XBERG_WORK" || return
 	export TAP_DIR="$XBERG_WORK/tap" TAG=v1.4.0 VERSION=1.4.0 GITHUB_WORKSPACE="$XBERG_WORK"
 	export CHECKOUT_SHA=1111111111111111111111111111111111111111
-	unset DRY_RUN MOVED_TAG CORRUPT_ASSET UPLOAD_STATUS
+	unset DRY_RUN MOVED_TAG CORRUPT_ASSET UPLOAD_STATUS EXISTING_ASSET
 	mkdir -p tap/Formula source packages/php target/release output
 	printf 'source bytes\n' >source/README
 	tar -czf source.tar.gz -C source README
@@ -21,6 +21,7 @@ setup() {
 		'printf "gh %s\n" "$*" >>"$XBERG_TRACE"' \
 		'case "$1 $2" in' \
 		'api*) if [ -f "$XBERG_WORK/api-seen" ] && [ "${MOVED_TAG:-false}" = true ]; then printf "2222222222222222222222222222222222222222\n"; else printf "1111111111111111111111111111111111111111\n"; fi; touch "$XBERG_WORK/api-seen" ;;' \
+		'"release view") if [ "${EXISTING_ASSET:-false}" = true ]; then printf "xberg-%s.tar.gz\n" "$VERSION"; fi ;;' \
 		'"release upload") [ "${UPLOAD_STATUS:-0}" = 0 ] || exit "$UPLOAD_STATUS"; cp "$4" "$XBERG_WORK/published.tar.gz" ;;' \
 		'"release download") while [ "$1" != --dir ]; do shift; done; cp "$XBERG_WORK/published.tar.gz" "$2/xberg-$VERSION.tar.gz"; if [ "${CORRUPT_ASSET:-false}" = true ]; then printf corrupt >"$2/xberg-$VERSION.tar.gz"; fi ;;' \
 		'*) exit 97 ;; esac'
@@ -42,6 +43,16 @@ PY
 	[ "$(grep -c '^gh api ' "$XBERG_TRACE")" -eq 2 ]
 	[ "$(grep -c '^gh release upload ' "$XBERG_TRACE")" -eq 1 ]
 	[ "$(grep -c '^gh release download ' "$XBERG_TRACE")" -eq 1 ]
+}
+
+@test "Homebrew update should reuse an existing source asset instead of replacing its bytes" {
+	export EXISTING_ASSET=true
+	printf 'previously published bytes\n' >published.tar.gz
+	run "$BASH" "$REPOSITORY_ROOT/scripts/publish/update-homebrew-formula.sh"
+	xberg_assert_status 0
+	[ "$(grep -c '^gh release upload ' "$XBERG_TRACE")" -eq 0 ]
+	[ "$(grep -c '^curl ' "$XBERG_TRACE")" -eq 0 ]
+	grep -qF "sha256 \"$(shasum -a 256 published.tar.gz | awk '{print $1}')\"" tap/Formula/xberg.rb
 }
 
 @test "Homebrew dry run should leave formula bytes unchanged without external commands" {
