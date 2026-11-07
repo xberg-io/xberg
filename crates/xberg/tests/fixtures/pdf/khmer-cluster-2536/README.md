@@ -20,3 +20,5 @@ scanned English page `test_documents/pdf_scanned/memo_prose_scanned.pdf`:
 ```sh
 qpdf --empty --pages cluster-complete-mapped.pdf 1 memo_prose_scanned.pdf 1 -- khmer-then-scanned-english.pdf
 ```
+
+`scanned-english-khmer-overlay.pdf` is the scanned page with a scaled-down copy of the Khmer page drawn over its lower right (the stamp is mirrored by the overlay matrix), so the text layer is Khmer only and the English body exists only in the picture.

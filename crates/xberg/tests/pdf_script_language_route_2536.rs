@@ -8,6 +8,8 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
 const PARTIAL: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/genuinely-partial-mapped.pdf");
+const SCANNED_ENGLISH_KHMER_OVERLAY: &[u8] =
+    include_bytes!("fixtures/pdf/khmer-cluster-2536/scanned-english-khmer-overlay.pdf");
 const KHMER_THEN_SCANNED_ENGLISH: &[u8] =
     include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
 
@@ -73,6 +75,14 @@ fn automatic_english_ocr_reads_the_scanned_page_and_keeps_the_khmer_page() {
         pages[1].content
     );
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(
+        automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.source == "ocr" && w.message.contains("page 1") && w.message.contains("Khmer")),
+        "{:?}",
+        automatic.processing_warnings
+    );
 }
 
 #[test]
@@ -83,4 +93,19 @@ fn forced_ocr_still_replaces_the_page_so_the_automatic_result_is_the_routing() {
     });
     assert_eq!(forced.extraction_method, Some(ExtractionMethod::Ocr));
     assert_eq!(khmer_count(&forced.content), 0);
+}
+
+#[test]
+fn automatic_english_ocr_still_reads_a_scanned_page_that_carries_a_khmer_text_overlay() {
+    let models = english_model();
+    let native = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    assert!(khmer_count(&native.content) > 0 && !native.content.contains("bottles"));
+    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    assert!(
+        automatic.content.contains("20,000 bottles of water"),
+        "the rasterised English body was not read: {:?}",
+        automatic.content
+    );
 }

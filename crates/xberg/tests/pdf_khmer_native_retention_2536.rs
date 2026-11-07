@@ -1,4 +1,4 @@
-#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng", not(paddle_ocr)))]
+#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
 
 mod helpers;
 
@@ -72,6 +72,16 @@ fn assert_preserves_mapped_occurrences(source: &[u8], mapped: usize, config: &Ex
     assert_eq!(forced.extraction_method, Some(ExtractionMethod::Ocr));
     assert_eq!(khmer_count(&native), mapped);
     assert_eq!(khmer_count(&forced), 0);
+    assert!(
+        automatic.processing_warnings.iter().any(|warning| {
+            warning.source == "ocr"
+                && warning.message.contains("page 1")
+                && warning.message.contains("Khmer")
+                && warning.message.contains("khm")
+        }),
+        "the kept page is reported: {:?}",
+        automatic.processing_warnings
+    );
     assert_eq!(khmer_count(&automatic), mapped);
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
     assert_eq!(automatic.content, native.content);

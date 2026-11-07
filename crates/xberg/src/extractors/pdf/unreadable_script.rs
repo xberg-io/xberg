@@ -39,15 +39,21 @@ enum Script {
     Kana,
 }
 
-/// The script of an alphabetic character; `None` when the character is not alphabetic or its
-/// script is not one this module tells apart.
+/// The script of a character by Unicode block, marks and signs of the script included; `None`
+/// for digits, punctuation, symbols, private-use characters and scripts this module does not
+/// tell apart.
 fn script_of(character: char) -> Option<Script> {
-    if !character.is_alphabetic() {
-        return None;
-    }
     let code = character as u32;
     let script = match code {
-        0x0041..=0x024F | 0x1E00..=0x1EFF | 0xFB00..=0xFB06 | 0xFF21..=0xFF5A => Script::Latin,
+        0x0041..=0x005A
+        | 0x0061..=0x007A
+        | 0x00C0..=0x00D6
+        | 0x00D8..=0x00F6
+        | 0x00F8..=0x024F
+        | 0x1E00..=0x1EFF
+        | 0xFB00..=0xFB06
+        | 0xFF21..=0xFF3A
+        | 0xFF41..=0xFF5A => Script::Latin,
         0x0370..=0x03FF | 0x1F00..=0x1FFF => Script::Greek,
         0x0400..=0x052F | 0x1C80..=0x1C8F | 0x2DE0..=0x2DFF | 0xA640..=0xA69F => Script::Cyrillic,
         0x0530..=0x058F => Script::Armenian,
@@ -118,126 +124,186 @@ fn language_scripts(model: &str) -> Option<&'static [Script]> {
     Some(scripts)
 }
 
-/// The scripts of `text`'s letters when every letter is in a script that none of `languages`
-/// covers. `None` when any letter is in a covered or unrecognised script, when `text` has no
-/// letters, or when a configured language is unknown: each leaves OCR a legitimate claim on part
-/// of the page.
-fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
-    let mut covered = Vec::new();
+/// Fewest characters of one script that can establish the script of a page. Below about three
+/// short words the layer may be a stamp, a header or a stray character, and the page body is
+/// then still OCR's to read.
+const MIN_SCRIPT_CHARS: usize = 20;
+
+/// Share of a page's attributable characters that the dominant unreadable script must hold. The
+/// rest of the page may carry a few covered-script words (a label, a page number), but a page
+/// that is not nearly all in one script OCR cannot read still gives OCR text to read.
+const MIN_DOMINANT_SHARE: f64 = 0.9;
+
+/// The one unreadable script a page is written in, or `None` when the layer does not establish
+/// one.
+///
+/// Attributable characters are all non-whitespace characters except lost-glyph markers, digits
+/// and punctuation. Characters of no known script (private-use, dingbats, symbols) stay in that
+/// count, so a layer of such characters with one stray letter is not a page in that letter's
+/// script. The dominant script must be covered by none of `languages`, must hold at least
+/// [`MIN_SCRIPT_CHARS`] and [`MIN_DOMINANT_SHARE`] of the attributable characters. Latin counts
+/// as covered whenever the configured languages are known. A configured language this module
+/// does not know means no claim.
+fn unreadable_script(text: &str, languages: &[String]) -> Option<Script> {
+    let mut covered = vec![Script::Latin];
     for model in languages.iter().flat_map(|language| language.split('+')) {
         covered.extend_from_slice(language_scripts(model)?);
     }
-    let mut found: Vec<Script> = Vec::new();
-    for character in text.chars().filter(|character| character.is_alphabetic()) {
-        let script = script_of(character)?;
-        if covered.contains(&script) {
-            return None;
-        }
-        if !found.contains(&script) {
-            found.push(script);
+    if languages.is_empty() {
+        return None;
+    }
+    let mut counts: Vec<(Script, usize)> = Vec::new();
+    let mut attributable = 0usize;
+    for character in text.chars().filter(|character| {
+        !character.is_whitespace()
+            && *character != super::unmapped_glyphs::LOST_GLYPH_MARKER
+            && !character.is_numeric()
+            && !character.is_ascii_punctuation()
+            && !matches!(*character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
+    }) {
+        attributable += 1;
+        if let Some(script) = script_of(character) {
+            match counts.iter_mut().find(|(known, _)| *known == script) {
+                Some((_, count)) => *count += 1,
+                None => counts.push((script, 1)),
+            }
         }
     }
-    (!found.is_empty()).then_some(found)
+    let (script, count) = counts.into_iter().max_by_key(|(_, count)| *count)?;
+    (!covered.contains(&script)
+        && count >= MIN_SCRIPT_CHARS
+        && count as f64 >= MIN_DOMINANT_SHARE * attributable as f64)
+        .then_some(script)
+}
+
+/// The tessdata model that reads `script`, for the user-facing hint.
+fn model_for(script: Script) -> &'static str {
+    use Script::*;
+    match script {
+        Khmer => "khm",
+        Han => "chi_sim",
+        Kana => "jpn",
+        Hangul => "kor",
+        Arabic => "ara",
+        Hebrew => "heb",
+        Cyrillic => "rus",
+        Greek => "ell",
+        Devanagari => "hin",
+        Bengali => "ben",
+        Gurmukhi => "pan",
+        Gujarati => "guj",
+        Oriya => "ori",
+        Tamil => "tam",
+        Telugu => "tel",
+        Kannada => "kan",
+        Malayalam => "mal",
+        Sinhala => "sin",
+        Thai => "tha",
+        Lao => "lao",
+        Tibetan => "bod",
+        Myanmar => "mya",
+        Georgian => "kat",
+        Armenian => "hye",
+        Ethiopic => "amh",
+        Latin => "eng",
+    }
 }
 
 /// Remove from the quality gate's failing pages every page that OCR with the configured
-/// languages cannot improve: a page whose native text carries lost-glyph markers and whose
-/// letters are all in scripts none of the languages covers. Pages that stay failing are
-/// unchanged, and the document-level flags follow from what remains.
+/// languages cannot improve: a page whose native text carries lost-glyph markers and is written
+/// in one script none of the languages covers (see [`unreadable_script`]). Pages that stay
+/// failing are unchanged, and the document-level flags follow from what remains.
+///
+/// A page the PDF's pictures cover (`carries_scan_raster`) stays failing: its text layer says
+/// nothing about the picture, which OCR is the only reader of. Returns an `ocr` warning for the
+/// kept pages.
+///
+/// The filter runs before the provenance and plausibility flags are merged into the decision, so
+/// a page whose layer is flagged as a mis-decode (all-Greek English from a symbol font, for
+/// example) is returned to OCR by them.
 pub(super) fn retain_unreadable_script_pages(
     decision: &mut OcrFallbackDecision,
     native_text: &str,
     boundaries: Option<&[PageBoundary]>,
     page_count: Option<u32>,
+    content: &[u8],
     config: &ExtractionConfig,
-) {
-    let Some(ocr) = config.ocr.as_ref() else {
-        return;
-    };
-    let Some(boundaries) = boundaries.filter(|boundaries| {
+) -> Option<crate::types::ProcessingWarning> {
+    let ocr = config.ocr.as_ref()?;
+    let boundaries = boundaries.filter(|boundaries| {
         !decision.failing_pages.is_empty()
             && page_count.is_some_and(|count| count as usize == boundaries.len())
             && boundaries
                 .iter()
                 .enumerate()
                 .all(|(index, boundary)| boundary.page_number as usize == index + 1)
-    }) else {
-        return;
-    };
+    })?;
     if !(ocr.enabled
         && ocr.backend == "tesseract"
         && ocr.pipeline.is_none()
         && ocr.vlm_fallback == VlmFallbackPolicy::Disabled)
     {
-        return;
+        return None;
     }
     let languages = ocr.effective_tesseract_language();
-    let unreadable = |page: u32| {
-        boundaries
-            .iter()
-            .find(|boundary| boundary.page_number == page)
-            .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
-            .is_some_and(|text| {
-                text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)
-                    && unreadable_scripts(text, &languages).is_some()
-            })
-    };
-    let before = decision.failing_pages.len();
-    decision.failing_pages.retain(|page| !unreadable(*page));
-    if decision.failing_pages.len() != before {
-        decision.fallback = !decision.failing_pages.is_empty();
-        decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
+    let candidates: Vec<(u32, Script)> = decision
+        .failing_pages
+        .iter()
+        .filter_map(|page| {
+            let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
+            let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
+            if !text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+                return None;
+            }
+            Some((*page, unreadable_script(text, &languages)?))
+        })
+        .collect();
+    if candidates.is_empty() {
+        return None;
     }
+    let document = xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()).ok()?;
+    let kept: Vec<(u32, Script)> = candidates
+        .into_iter()
+        .filter(|(page, _)| !crate::pdf::scan_detect::carries_scan_raster(&document, *page as usize - 1))
+        .collect();
+    if kept.is_empty() {
+        return None;
+    }
+    decision
+        .failing_pages
+        .retain(|page| !kept.iter().any(|(kept_page, _)| kept_page == page));
+    decision.fallback = !decision.failing_pages.is_empty();
+    decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
+    let described = kept
+        .iter()
+        .map(|(page, script)| format!("page {page} ({script:?}, model {})", model_for(*script)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: std::borrow::Cow::Owned(format!(
+            "OCR was skipped for {described}: the native text is in a script the configured OCR languages \
+             ({}) cannot read, so the native text was kept. Add the named model to ocr.language to OCR it.",
+            languages.join("+")
+        )),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const ONE_PAGE: &[u8] =
+        include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
+    const TWO_PAGES: &[u8] =
+        include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
+    const SCAN_WITH_OVERLAY: &[u8] =
+        include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/scanned-english-khmer-overlay.pdf");
+
+    const KHMER_MARKED: &str = "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD} សួស្តី\u{FFFD} ភ្នំពេញ";
+
     fn langs(codes: &[&str]) -> Vec<String> {
         codes.iter().map(|code| (*code).to_string()).collect()
-    }
-
-    #[test]
-    fn reports_scripts_that_no_configured_language_reads() {
-        assert_eq!(
-            unreadable_scripts("ខ្ញុំ� កម្ពុជា", &langs(&["eng"])),
-            Some(vec![Script::Khmer])
-        );
-        assert_eq!(
-            unreadable_scripts("Привет мир", &langs(&["eng", "deu"])),
-            Some(vec![Script::Cyrillic])
-        );
-        assert_eq!(
-            unreadable_scripts("English text", &langs(&["khm"])),
-            Some(vec![Script::Latin])
-        );
-        assert_eq!(
-            unreadable_scripts("ខ្ញុំ� α", &langs(&["eng"])),
-            Some(vec![Script::Khmer, Script::Greek])
-        );
-        assert_eq!(
-            unreadable_scripts("日本語のテキスト", &langs(&["eng"])),
-            Some(vec![Script::Han, Script::Kana])
-        );
-    }
-
-    #[test]
-    fn claims_nothing_when_any_letter_or_language_leaves_ocr_a_claim() {
-        let khmer = "ខ្ញុំ� កម្ពុជា";
-        for (text, languages) in [
-            (khmer, langs(&["eng", "khm"])),
-            (khmer, langs(&["eng+khm"])),
-            (khmer, langs(&["khmer"])),
-            ("ខ្ញុំ� A", langs(&["eng"])),
-            ("English� prose", langs(&["eng"])),
-            ("��", langs(&["eng"])),
-            (khmer, langs(&["zzz"])),
-            (khmer, langs(&["eng", "zzz"])),
-            ("日本語", langs(&["jpn"])),
-        ] {
-            assert_eq!(unreadable_scripts(text, &languages), None, "{text} {languages:?}");
-        }
     }
 
     fn page_text(pages: &[&str]) -> (String, Vec<PageBoundary>) {
@@ -275,38 +341,126 @@ mod tests {
         )
     }
 
-    const KHMER_MARKED: &str = "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD}";
+    fn run(
+        pages: &[&str],
+        content: &[u8],
+        config: &ExtractionConfig,
+    ) -> (OcrFallbackDecision, Option<crate::types::ProcessingWarning>) {
+        let (text, boundaries) = page_text(pages);
+        let mut decision = decision_for(&text, &boundaries);
+        let warning = retain_unreadable_script_pages(
+            &mut decision,
+            &text,
+            Some(&boundaries),
+            Some(boundaries.len() as u32),
+            content,
+            config,
+        );
+        (decision, warning)
+    }
 
     #[test]
-    fn marked_page_in_an_unreadable_script_leaves_the_failing_pages() {
-        let (text, boundaries) = page_text(&[KHMER_MARKED, ""]);
-        let mut decision = decision_for(&text, &boundaries);
+    fn names_the_script_no_configured_language_reads() {
+        assert_eq!(unreadable_script(KHMER_MARKED, &langs(&["eng"])), Some(Script::Khmer));
+        assert_eq!(unreadable_script(KHMER_MARKED, &langs(&["ENG"])), Some(Script::Khmer));
+        let russian = "Привет мир это длинная строка текста\u{FFFD}";
         assert_eq!(
-            decision.failing_pages,
-            [1, 2],
-            "the gate fails both pages before the filter"
+            unreadable_script(russian, &langs(&["eng", "deu"])),
+            Some(Script::Cyrillic)
         );
-        assert!(decision.whole_doc_failure);
-        retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), Some(2), &config_with(&["eng"]));
+        let devanagari = "यह एक लंबा वाक्य है जो देवनागरी में लिखा गया\u{FFFD}";
+        assert_eq!(
+            unreadable_script(devanagari, &langs(&["eng"])),
+            Some(Script::Devanagari)
+        );
+    }
+
+    #[test]
+    fn a_covered_script_or_an_unknown_model_leaves_ocr_the_page() {
+        let devanagari = "यह एक लंबा वाक्य है जो देवनागरी में लिखा गया\u{FFFD}";
+        for (text, languages) in [
+            (KHMER_MARKED, langs(&["eng", "khm"])),
+            (KHMER_MARKED, langs(&["eng+khm"])),
+            (KHMER_MARKED, langs(&["KHM"])),
+            (KHMER_MARKED, langs(&["khmer"])),
+            (KHMER_MARKED, langs(&["script/Khmer"])),
+            (devanagari, langs(&["script/Devanagari"])),
+            (devanagari, langs(&["hin"])),
+            (KHMER_MARKED, langs(&["eng", "osd"])),
+            (KHMER_MARKED, langs(&["zzz"])),
+            (KHMER_MARKED, langs(&["eng", "zzz"])),
+            (KHMER_MARKED, Vec::new()),
+        ] {
+            assert_eq!(unreadable_script(text, &languages), None, "{text} {languages:?}");
+        }
+    }
+
+    #[test]
+    fn latin_is_read_by_the_non_latin_models() {
+        let english = "An English page with lost glyphs \u{FFFD}\u{FFFD} in a longer sentence of text";
+        for languages in [&["rus"][..], &["chi_sim"], &["khm"], &["eng"]] {
+            assert_eq!(unreadable_script(english, &langs(languages)), None, "{languages:?}");
+        }
+    }
+
+    #[test]
+    fn a_layer_that_is_not_mostly_one_unreadable_script_does_not_qualify() {
+        let private_use = "\u{E000}".repeat(3000);
+        let dingbats = "\u{2701}".repeat(3000);
+        let khmer_stamp = "ខ្ញុំ\u{FFFD} សួស្តី";
+        let mixed = format!(
+            "{KHMER_MARKED} {}",
+            "Invoice number and total due on receipt of goods ".repeat(2)
+        );
+        let cases = [
+            ("private use", format!("{private_use}\u{FFFD}й")),
+            ("dingbats", format!("{dingbats}\u{FFFD}й")),
+            (
+                "numeric table",
+                "12.5 3.4 7.8 \u{FFFD} 9.1 2.2 μ 4.4 5.5 6.6".to_string(),
+            ),
+            ("stamp", khmer_stamp.to_string()),
+            ("half Latin", mixed),
+        ];
+        for (name, text) in cases {
+            assert_eq!(unreadable_script(&text, &langs(&["eng"])), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn marked_page_in_an_unreadable_script_leaves_the_failing_pages_with_a_warning() {
+        let (decision, warning) = run(&[KHMER_MARKED, ""], TWO_PAGES, &config_with(&["eng"]));
         assert_eq!(decision.failing_pages, [2]);
         assert!(decision.fallback);
         assert!(!decision.whole_doc_failure);
+        let warning = warning.expect("the kept page is reported");
+        assert_eq!(warning.source, "ocr");
+        for part in ["page 1", "Khmer", "khm", "(eng)"] {
+            assert!(warning.message.contains(part), "{part}: {}", warning.message);
+        }
+        assert!(!warning.message.contains("page 2"));
     }
 
     #[test]
     fn single_marked_page_in_an_unreadable_script_needs_no_fallback() {
-        let (text, boundaries) = page_text(&[KHMER_MARKED]);
-        let mut decision = decision_for(&text, &boundaries);
-        assert!(decision.fallback);
-        retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), Some(1), &config_with(&["eng"]));
+        let (decision, warning) = run(&[KHMER_MARKED], ONE_PAGE, &config_with(&["eng"]));
         assert!(decision.failing_pages.is_empty());
         assert!(!decision.fallback);
         assert!(!decision.whole_doc_failure);
+        assert!(warning.is_some());
     }
 
     #[test]
-    fn page_stays_failing_when_a_language_reads_its_script_or_nothing_marks_it() {
-        let unmarked = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា";
+    fn a_page_a_picture_covers_stays_failing_so_its_body_is_read() {
+        let (decision, warning) = run(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config_with(&["eng"]));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(decision.fallback);
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn a_page_stays_failing_when_nothing_qualifies_it() {
+        let unmarked = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ ក្រុង សៀវភៅ សាលារៀន";
         let latin_marked = "Invoice \u{FFFD}\u{FFFD}\u{FFFD} total \u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}";
         for (page, languages) in [
             (KHMER_MARKED, &["eng", "khm"][..]),
@@ -315,34 +469,115 @@ mod tests {
             (unmarked, &["eng"][..]),
         ] {
             let (text, boundaries) = page_text(&[page]);
-            let mut decision = decision_for(&text, &boundaries);
-            let before = (decision.fallback, decision.failing_pages.clone());
-            retain_unreadable_script_pages(
-                &mut decision,
-                &text,
-                Some(&boundaries),
-                Some(1),
-                &config_with(languages),
-            );
+            let before = decision_for(&text, &boundaries);
+            let (after, warning) = run(&[page], ONE_PAGE, &config_with(languages));
             assert_eq!(
-                (decision.fallback, decision.failing_pages.clone()),
-                before,
+                (after.fallback, after.failing_pages.clone()),
+                (before.fallback, before.failing_pages.clone()),
                 "{page:?} {languages:?}"
             );
+            assert!(warning.is_none());
         }
     }
 
     #[test]
+    fn page_numbering_and_count_must_match_the_boundaries() {
+        let (text, mut boundaries) = page_text(&[KHMER_MARKED]);
+        let config = config_with(&["eng"]);
+        let mut decision = decision_for(&text, &boundaries);
+        let before = decision.failing_pages.clone();
+        assert!(!before.is_empty());
+        for (page_count, shift) in [(None, 0), (Some(2), 0), (Some(1), 1)] {
+            boundaries[0].page_number += shift;
+            let warning =
+                retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), page_count, ONE_PAGE, &config);
+            boundaries[0].page_number -= shift;
+            assert!(warning.is_none(), "{page_count:?} {shift}");
+            assert_eq!(decision.failing_pages, before, "{page_count:?} {shift}");
+        }
+        let warning = retain_unreadable_script_pages(&mut decision, &text, None, Some(1), ONE_PAGE, &config);
+        assert!(warning.is_none());
+        assert_eq!(decision.failing_pages, before);
+    }
+
+    #[test]
     fn explicit_pipeline_and_other_backends_are_left_alone() {
-        let (text, boundaries) = page_text(&[KHMER_MARKED]);
         let mut paddle = config_with(&["eng"]);
         paddle.ocr.as_mut().unwrap().backend = "paddleocr".to_string();
         let mut vlm = config_with(&["eng"]);
         vlm.ocr.as_mut().unwrap().vlm_fallback = VlmFallbackPolicy::OnLowQuality { quality_threshold: 0.5 };
         for config in [paddle, vlm] {
-            let mut decision = decision_for(&text, &boundaries);
-            retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), Some(1), &config);
+            let (decision, warning) = run(&[KHMER_MARKED], ONE_PAGE, &config);
             assert_eq!(decision.failing_pages, [1]);
+            assert!(warning.is_none());
         }
+    }
+
+    #[test]
+    fn a_flagged_mis_decode_returns_to_ocr_after_the_filter() {
+        let (text, boundaries) = page_text(&[KHMER_MARKED]);
+        let mut decision = decision_for(&text, &boundaries);
+        retain_unreadable_script_pages(
+            &mut decision,
+            &text,
+            Some(&boundaries),
+            Some(1),
+            ONE_PAGE,
+            &config_with(&["eng"]),
+        );
+        assert!(decision.failing_pages.is_empty());
+        super::super::ocr::apply_flagged_pages(&mut decision, &[1], true, Some(1));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(decision.fallback);
+    }
+
+    #[test]
+    fn english_decoded_through_a_greek_symbol_font_is_outside_what_script_evidence_can_tell() {
+        let english = "The committee reviewed the annual report and approved the budget for the next fiscal year. \
+                       Members discussed staffing, equipment purchases and the schedule of public meetings. ";
+        let symbol_font: String = english
+            .chars()
+            .map(|c| match c {
+                'a' => 'α',
+                'b' => 'β',
+                'c' => 'χ',
+                'd' => 'δ',
+                'e' => 'ε',
+                'f' => 'φ',
+                'g' => 'γ',
+                'h' => 'η',
+                'i' => 'ι',
+                'k' => 'κ',
+                'l' => 'λ',
+                'm' => 'μ',
+                'n' => 'ν',
+                'o' => 'ο',
+                'p' => 'π',
+                'q' => 'θ',
+                'r' => 'ρ',
+                's' => 'σ',
+                't' => 'τ',
+                'u' => 'υ',
+                'w' => 'ω',
+                'x' => 'ξ',
+                'y' => 'ψ',
+                other => other,
+            })
+            .collect::<String>()
+            .repeat(3);
+        let marked = format!("{symbol_font}\u{FFFD}");
+        let (text, boundaries) = page_text(&[&marked]);
+        // The language check abstains on Greek-letter gibberish, so nothing flags this layer. Script
+        // evidence cannot tell it from real Greek text: the filter keeps the page, as it would any
+        // layer that reads as one unconfigured script. A wrongly decoded layer in a script the user
+        // did not configure is therefore out of scope; a flagged one is returned to OCR (see
+        // `a_flagged_mis_decode_returns_to_ocr_after_the_filter`).
+        let scan = super::super::ocr::scan_text_plausibility(&text, Some(&boundaries), Some(1), &Default::default());
+        assert_eq!(
+            (scan.judged, scan.implausible.clone(), scan.unjudged.clone()),
+            (0, vec![], vec![1])
+        );
+        let (decision, _) = run(&[&marked], ONE_PAGE, &config_with(&["eng"]));
+        assert!(decision.failing_pages.is_empty());
     }
 }
