@@ -4,7 +4,7 @@
 //! recognizes a synthetic page in a loop, and the main thread calls C `exit()` while the
 //! worker is inside a recognition. `exit()` runs the exit cleanup. The child must exit
 //! with status 0. A crash (SIGSEGV or SIGABRT) means the cleanup freed the engine under
-//! the worker. The test needs `eng.traineddata` from `TESSDATA_PREFIX`.
+//! the worker. The test skips itself without `eng.traineddata` in `TESSDATA_PREFIX`.
 
 #![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
 #![allow(clippy::print_stdout, clippy::print_stderr)] // ~keep: the child reports its progress on stdout by design
@@ -23,21 +23,23 @@ const RECOGNIZING: &str = "RECOGNIZING";
 const WIDTH: usize = 2400;
 const HEIGHT: usize = 3200;
 
-fn tessdata_dir() -> PathBuf {
-    let prefix =
-        std::env::var("TESSDATA_PREFIX").expect("TESSDATA_PREFIX must point at a directory with eng.traineddata");
-    let path = PathBuf::from(prefix);
+/// The tessdata directory from `TESSDATA_PREFIX`, or `None` when it holds no `eng.traineddata`.
+fn tessdata_dir() -> Option<PathBuf> {
+    let path = PathBuf::from(std::env::var_os("TESSDATA_PREFIX")?);
     let dir = if path.ends_with("tessdata") {
         path
     } else {
         path.join("tessdata")
     };
-    assert!(
-        dir.join("eng.traineddata").exists(),
-        "eng.traineddata not found in {dir:?}"
-    );
-    dir
+    dir.join("eng.traineddata").exists().then_some(dir)
 }
+
+/// The tessdata directory in the child, which only runs after the parent found it.
+fn child_tessdata_dir() -> PathBuf {
+    tessdata_dir().expect("the parent test checked TESSDATA_PREFIX")
+}
+
+const SKIP_NOTE: &str = "skipped: TESSDATA_PREFIX does not point at a directory with eng.traineddata";
 
 /// A white RGB page with rows of stroke groups, so layout analysis finds text lines and
 /// the recognizer has real work. The content is fixed by a small linear generator.
@@ -77,7 +79,7 @@ fn synthetic_page() -> Vec<u8> {
 /// worker is inside a later recognition. The first recognition has to finish first, because
 /// the exit cleanup registers itself after the first successful recognition.
 fn run_child(exit_delay: Duration) -> ! {
-    let tessdata = tessdata_dir();
+    let tessdata = child_tessdata_dir();
     let (first_done, first_done_receiver) = mpsc::channel::<()>();
     std::thread::spawn(move || {
         let api = TesseractAPI::new().expect("create engine");
@@ -106,6 +108,10 @@ fn process_exit_during_recognition_does_not_crash() {
     if std::env::var_os(CHILD_ENV).is_some() {
         let delay_ms: u64 = std::env::var(CHILD_ENV).unwrap().parse().unwrap();
         run_child(Duration::from_millis(delay_ms));
+    }
+    if tessdata_dir().is_none() {
+        eprintln!("{SKIP_NOTE}");
+        return;
     }
     let exe = std::env::current_exe().expect("test binary path");
     let mut failures = Vec::new();

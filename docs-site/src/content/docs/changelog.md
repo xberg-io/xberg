@@ -202,7 +202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Do not crash when the process exits while a thread is still recognizing.**
   The Tesseract exit cleanup freed every engine, including one an OCR thread still used, so a document that hit the extraction timeout could abort or segfault and lose all its text.
-  The cleanup now frees only engines that are parked in the idle pool and leaves an engine in use to the operating system.
+  The cleanup now frees only engines that are parked in the idle pool and skips an engine in use. Each engine has its own id, so a new engine at the address of a freed one is never mistaken for the old engine. A direct user of the `xberg-tesseract` crate who never calls `mark_idle` gets tesseract's leak report on stderr at exit instead of a crash.
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.

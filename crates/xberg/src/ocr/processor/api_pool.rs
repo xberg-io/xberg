@@ -329,11 +329,15 @@ impl TesseractApiLease {
         mut inner: ResourceLease<ApiKey, PooledTesseractApi>,
         models: &super::model_context::ModelContext,
     ) -> Result<Self, OcrError> {
-        if inner.mark_in_use().is_err() {
+        if let Err(error) = inner.mark_in_use() {
             inner.release_for_models(models, |_| false);
-            return Err(OcrError::ProcessingFailed(
-                "The OCR engine was shut down because the process is exiting".to_string(),
-            ));
+            let message = match error {
+                xberg_tesseract::TesseractError::MutexLockError => {
+                    "The OCR engine registry is unusable because a thread panicked while it held the lock"
+                }
+                _ => "The OCR engine was shut down because the process is exiting",
+            };
+            return Err(OcrError::ProcessingFailed(message.to_string()));
         }
         Ok(Self {
             inner,
@@ -372,6 +376,9 @@ impl Drop for TesseractApiLease {
             });
     }
 }
+
+#[cfg(all(test, unix, feature = "bundle-tessdata-eng"))]
+mod exit_tests;
 
 #[cfg(test)]
 mod tests {

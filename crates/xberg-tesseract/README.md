@@ -350,6 +350,12 @@ fn load_test_image(filename: &str) -> Result<(Vec<u8>, u32, u32), Box<dyn Error>
 }
 ```
 
+### Process Exit
+
+When the process calls C `exit()`, the crate frees the engines that their owner parked with `TesseractAPI::mark_idle`. Call `mark_in_use` before a thread takes a parked engine again. The exit cleanup skips an engine in use, because another thread can still recognize with it.
+
+If you never call `mark_idle`, tesseract reports the leaked dictionaries on stderr at exit. The process does not crash.
+
 ## Building
 
 ### Static Linking (Default)
