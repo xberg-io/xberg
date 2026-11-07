@@ -189,8 +189,7 @@ async fn options_seen_by_the_backend(
             .unwrap()
             .expect("the page paints one JPEG");
     assert_eq!(outcome.attempted, 1);
-    let recorded = seen.lock().unwrap().clone();
-    recorded
+    seen.lock().unwrap().clone()
 }
 
 #[tokio::test]
