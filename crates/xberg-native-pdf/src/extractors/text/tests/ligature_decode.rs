@@ -463,3 +463,95 @@ fn colour_change_between_tj_and_tj_array_ends_the_ligature() {
         "defi ne"
     );
 }
+
+/// A `Tm` between the `Tj` and the `TJ` sets the pen again. The pull-back of the array no longer refers
+/// to the ligature, so the space keeps its room at every distance, in both paths and both font kinds.
+#[test]
+fn text_matrix_between_tj_and_tj_array_ends_the_ligature() {
+    for gap in [95, 102, 132] {
+        let simple = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 1 {gap} 700 Tm [240 ( ne)] TJ ET");
+        let type0 =
+            format!("BT /F1 10 Tf 72 700 Td <000100020003> Tj 1 0 0 1 {gap} 700 Tm [240 <0020 0004 0002>] TJ ET");
+        for (stream, font) in [
+            (simple, ligature_font("00660069", None)),
+            (type0, type0_ligature_font("00660069")),
+        ] {
+            let (mut spans, mut chars) = (extractor_with(font.clone()), extractor_with(font));
+            assert_eq!(
+                span_text(&mut spans, stream.as_bytes()),
+                "defi ne",
+                "spans, Tm at {gap}"
+            );
+            assert_eq!(
+                char_text(&mut chars, stream.as_bytes()),
+                "defi ne",
+                "chars, Tm at {gap}"
+            );
+        }
+    }
+}
+
+/// Each setting that the run captured ends the ligature when it changes between the `Tj` and the `TJ`.
+/// Each pull-back below covers the whole space under the new setting, so a run that went on across the
+/// change would drop the space. The spans are checked; the characters ignore the change, as before.
+#[test]
+fn setting_change_between_tj_and_tj_array_ends_the_ligature() {
+    for (setting, kern) in [
+        ("2 Tc", 450),
+        ("3 Tw", 550),
+        ("150 Tz", 240),
+        ("1 Tr", 240),
+        ("2 Ts", 240),
+    ] {
+        let stream = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj {setting} [{kern} ( ne)] TJ ET");
+        let mut spans = extractor_with(ligature_font("00660069", None));
+        assert_eq!(span_text(&mut spans, stream.as_bytes()), "defi ne", "after {setting}");
+    }
+}
+
+/// Vertical writing does not carry a ligature into an array: the pull-back is a horizontal notion, so the
+/// `Tj` and the `TJ` stay two spans, as before.
+#[test]
+fn type0_vertical_tj_then_tj_array_stays_two_spans() {
+    let mut font = type0_ligature_font("00660069");
+    font.wmode = 1;
+    let mut extractor = extractor_with(font);
+    let spans = extractor
+        .extract_text_spans(b"BT /F1 10 Tf 72 700 Td <000100020003> Tj [240 <0020 0004 0002>] TJ ET")
+        .unwrap();
+    let texts: Vec<&str> = spans.iter().map(|s| s.text.as_str()).collect();
+    assert_eq!(texts, ["defi", " ne"]);
+}
+
+/// A ligature drawn by `Tj`, then an array of one offset, then a `Tj`: the run goes on through the array,
+/// as it does when the ligature sits in the array itself.
+#[test]
+fn ligature_in_tj_then_offset_array_then_tj_reads_like_the_array_form() {
+    let spans_of = |stream: &[u8]| -> Vec<String> {
+        let mut extractor = extractor_with(ligature_font("00660069", None));
+        extractor
+            .extract_text_spans(stream)
+            .unwrap()
+            .iter()
+            .map(|s| s.text.clone())
+            .collect()
+    };
+    let tj_form = spans_of(b"BT /F1 10 Tf 72 700 Td (de\\200) Tj [240] TJ (ne) Tj ET");
+    let array_form = spans_of(b"BT /F1 10 Tf 72 700 Td [(de\\200) 240] TJ (ne) Tj ET");
+    assert_eq!(tj_form, ["define"]);
+    assert_eq!(array_form, tj_form);
+}
+
+/// A `Tj` of UTF-8 text in a font without a ToUnicode map ends the ligature before it, so the space in
+/// the array that follows keeps its room.
+#[test]
+fn utf8_tj_after_a_ligature_ends_the_ligature() {
+    let mut font = ligature_font("00660069", Some("fi"));
+    font.to_unicode = None;
+    let mut extractor = extractor_with(font);
+    let text = span_text(
+        &mut extractor,
+        b"BT /F1 10 Tf 72 700 Td (de\\200) Tj (\\320\\257) Tj [240 ( ne)] TJ ET",
+    );
+    assert!(text.ends_with("\u{42F} ne"), "{text:?}");
+}

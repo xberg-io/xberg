@@ -164,7 +164,8 @@ impl<'doc> TextExtractor<'doc> {
         //
         // A ligature that ends the open run stays open: a space in this array that the pull-back
         // puts inside the ligature box is dropped only when the ligature is in the same buffer.
-        // The run is still contiguous with the array, so the array continues it from its origin. ~keep
+        // Nothing moved the pen since the ligature (a `Tm` ends the ligature, `Td` and the other line moves
+        // flush the run), so the array continues the run from its origin. ~keep
         let carried = if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
             let state = self.state_stack.current();
             self.tj_span_buffer
