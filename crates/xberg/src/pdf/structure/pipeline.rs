@@ -5116,7 +5116,7 @@ struct TableCoverage {
     words: ahash::AHashSet<String>,
     /// Each cell's alphanumeric runs, kept apart per cell, so a piece is tested against one cell
     /// and never across the seam of two.
-    cell_runs: Vec<Vec<String>>,
+    cell_runs: Vec<Vec<TextRun>>,
 }
 
 /// Normalized length, in characters, at which [`TableCoverage::carries`] stops matching a segment against the
@@ -5181,8 +5181,10 @@ impl TableCoverage {
         if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
             // A marker or a sign splits one printed cell into several segments while the grid holds
             // it whole, so a piece made of whole runs of one cell is that cell's text. ~keep
-            return text_words.iter().all(|word| self.words.contains(word))
-                || self.cell_runs.iter().any(|runs| runs_spell(runs, &normalized));
+            return text_words.iter().all(|word| self.words.contains(word)) || {
+                let piece = alphanumeric_runs(text);
+                self.cell_runs.iter().any(|runs| runs_spell(runs, &piece))
+            };
         }
         self.rows.iter().any(|row| row.contains(&normalized))
             || self
@@ -5192,35 +5194,57 @@ impl TableCoverage {
     }
 }
 
-/// A cell's maximal runs of letters or of digits, lowercased: the places a marker or a sign can
-/// split a printed cell without cutting through a word or a number.
-fn alphanumeric_runs(cell: &str) -> Vec<String> {
-    let mut runs: Vec<String> = Vec::new();
+/// A maximal run of letters or of digits with the separator that precedes it.
+#[derive(Clone, PartialEq, Eq)]
+struct TextRun {
+    /// Non-alphanumeric text between the previous run and this one, whitespace collapsed to one
+    /// space; empty where letters meet digits directly. Meaningless on a text's first run.
+    separator: String,
+    run: String,
+}
+
+/// A text's maximal runs of letters or of digits, lowercased, with their separators: the places
+/// a marker or a sign can split a printed cell without cutting through a word or a number.
+fn alphanumeric_runs(text: &str) -> Vec<TextRun> {
+    let mut runs: Vec<TextRun> = Vec::new();
+    let mut separator = String::new();
     let mut previous_is_digit = None;
-    for character in cell.chars() {
+    for character in text.chars() {
         if !character.is_alphanumeric() {
+            if !(character.is_whitespace() && separator.ends_with(' ')) {
+                separator.push(if character.is_whitespace() { ' ' } else { character });
+            }
             previous_is_digit = None;
             continue;
         }
         let is_digit = character.is_numeric();
         match runs.last_mut() {
-            Some(run) if previous_is_digit == Some(is_digit) => run.extend(character.to_lowercase()),
-            _ => runs.push(character.to_lowercase().collect()),
+            Some(last) if previous_is_digit == Some(is_digit) => last.run.extend(character.to_lowercase()),
+            _ => runs.push(TextRun {
+                separator: std::mem::take(&mut separator),
+                run: character.to_lowercase().collect(),
+            }),
         }
+        separator.clear();
         previous_is_digit = Some(is_digit);
     }
     runs
 }
 
-/// Whether consecutive whole runs of one cell spell exactly `piece`.
-fn runs_spell(runs: &[String], piece: &str) -> bool {
-    (0..runs.len()).any(|start| {
-        let mut spelled = String::new();
-        runs[start..].iter().any(|run| {
-            spelled.push_str(run);
-            spelled.len() >= piece.len() && spelled == piece
+/// Whether consecutive whole runs of one cell, joined by the same separators, are exactly
+/// `piece`. A piece the cell never broke at that sign, such as `COVID-19` against `COVID 19`,
+/// is not the cell's text.
+fn runs_spell(cell: &[TextRun], piece: &[TextRun]) -> bool {
+    !piece.is_empty()
+        && cell.windows(piece.len()).any(|window| {
+            window
+                .iter()
+                .zip(piece)
+                .enumerate()
+                .all(|(index, (cell_run, piece_run))| {
+                    cell_run.run == piece_run.run && (index == 0 || cell_run.separator == piece_run.separator)
+                })
         })
-    })
 }
 
 /// Reduce text to lowercase alphanumerics, dropping whitespace and punctuation entirely.

@@ -2897,9 +2897,11 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
             y1: 400.0,
         },
         [
-            vec!["PICCOLO21", "854\u{d7}480 and 1920\u{d7}1080"],
+            vec!["PICCOLO21", "854\u{d7}480 and 1920\u{d7}1080", "ASU-Mayo17"],
             vec!["KUMC22", "various"],
             vec!["Wei Yang", "Counsel"],
+            vec!["COVID 19 cases", "Q 4"],
+            vec!["A 1", "total"],
         ],
     )];
     let segments = vec![
@@ -2909,6 +2911,10 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
         column_seg("480", 318.0, 14.0, 380.0),
         column_seg("22", 82.0, 6.0, 363.0),
         column_seg("Wei Y", 40.0, 30.0, 340.0),
+        column_seg("COVID-19", 40.0, 40.0, 335.0),
+        column_seg("Q4", 40.0, 10.0, 330.0),
+        column_seg("A1", 40.0, 10.0, 325.0),
+        column_seg("ASU-Mayo", 40.0, 30.0, 320.0),
         column_seg("0001", 40.0, 20.0, 350.0),
     ];
     let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
@@ -2917,7 +2923,13 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
         .collect();
     assert_eq!(
         kept,
-        vec!["Wei Y".to_string(), "0001".to_string()],
+        vec![
+            "Wei Y".to_string(),
+            "COVID-19".to_string(),
+            "Q4".to_string(),
+            "A1".to_string(),
+            "0001".to_string()
+        ],
         "a run that cuts through a cell's word is not that cell's text, and neither is one no cell holds"
     );
 }

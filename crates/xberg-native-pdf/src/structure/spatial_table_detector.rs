@@ -2609,10 +2609,11 @@ fn build_extended_grid_cells(h_edges: &[Edge], v_edges: &[Edge]) -> Vec<Intersec
 /// The V edges that may supply columns to a projected grid.
 ///
 /// Projection exists for rules that stand beside the ruled rows without crossing them. A V edge
-/// runs through the rules it stands under (those whose extent contains its x position) when it
-/// overlaps their vertical span; when some V edges do, the others belong to a section that lies beyond that span, and projecting
-/// them splits the ruled rows at a place nothing in them is drawn. With no V edge running
-/// through, every rule stands beside the rows and all of them are kept. ~keep
+/// runs through the horizontal rules it stands under (those whose extent contains its x position)
+/// when it overlaps their vertical span by more than `SNAP_TOL`; a rule that merely hangs from the
+/// span's edge does not. When some V edges run through, the others belong to a section beyond the
+/// span, and projecting them splits the ruled rows where nothing is drawn. When none does, every
+/// rule stands beside the rows and all are kept. ~keep
 fn projectable_v_edges(h_edges: &[Edge], v_edges: &[Edge]) -> Vec<Edge> {
     let runs_through_rules = |v: &Edge| {
         let (low, high) = h_edges
@@ -5589,7 +5590,7 @@ mod tests {
     fn a_rule_of_another_section_adds_no_column_to_a_projected_grid() {
         use crate::elements::PathContent;
         // Two column rules run inside the ruled band; a third hangs from the band's lower rule
-        // into the section below and never reaches the band. ~keep
+        // into the section below, touching the band's edge but never entering it. ~keep
         let lines = vec![
             PathContent::line(50., 400., 560., 400.),
             PathContent::line(50., 720., 560., 720.),
