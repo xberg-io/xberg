@@ -204,6 +204,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
+  A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
+  This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.
+
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
 
@@ -212,6 +216,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(redaction): Run external-redaction extraction on the shared 16 MiB runtime.**
   The poll chain of `extract_with_external_redaction` needs about 2.2 MB, which overflowed the roughly 2 MB host thread of an FFI caller such as the JVM and crashed the process. Dropping the call still cancels the work.
+
+- **(ocr): Keep certified table rows on one line in Markdown and Djot output of a standalone image.** (#2432)
+  The sparse-row recovery that already served Plain output now also serves Markdown and Djot; the recognized words and amounts are unchanged.
 
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
@@ -252,6 +259,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
   Fractional rules can refine existing cells when the original word bounds clear the full painted stroke.
+
+- **(pdf): Admit fully source-ruled wide tables with merged index cells.** (#2376)
+  Certify 16-18 column grids only when every cell, merged span and word is proven by plain painted rules on the page.
 
 - **(pdf): Keep certified side-by-side panel lines in source order in plain output.** (#2537)
   Preserve complete rows and page boundaries in documents that mix panels with ordinary text.
@@ -314,6 +324,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Retain independently shaded source table headers and ruled cell boundaries.** (#2332)
   Keep nested text backgrounds from creating extra columns while preserving separate table records.
+
+- **(pdf): Preserve source-proven grouped leaf headers in ruled tables.** (#2332)
+  Two bold group bands over a bold leaf band stay header rows only when dark solid rules, which may be split into collinear segments, underline both. Path extraction now records the `d` dash pattern on stroked paths, so dashed rules are told apart from solid ones; a dash or transparency set through an ExtGState (`gs`) is not yet seen. A grid whose body rows are ruled in the same colour and weight as the leaf rule keeps no header from this path, and gridline detection in recovered diagrams groups lines by colour as well as by colour and dash style.
 
 
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
