@@ -6,6 +6,7 @@ use image::{ColorType, GrayImage, ImageDecoder, RgbImage};
 
 use crate::cancellation::CancellationToken;
 use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat};
+use crate::ocr::preprocessing::NEUTRAL_CHANNEL_SPREAD;
 use crate::ocr::tesseract_backend::TesseractBackend;
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
 use crate::plugins::OcrBackend;
@@ -22,7 +23,6 @@ const MAX_SOURCE_AXIS: u32 = 4096;
 const MIN_TITLE_HEIGHT: u32 = 30;
 const MAX_TITLE_PIXELS_PER_THOUSAND: u32 = 35;
 const BRIGHT_CUTOFFS: [u8; 2] = [235, 245];
-const NEUTRAL_CHANNEL_SPREAD: u8 = 8;
 const DARK_CUTOFF: u8 = 40;
 const RING_RADIUS: u32 = 4;
 const MASK_PADDING: u32 = 16;

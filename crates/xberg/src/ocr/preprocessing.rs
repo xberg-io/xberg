@@ -4,6 +4,8 @@ use crate::types::ImagePreprocessingConfig;
 use xberg_tesseract::Pix;
 
 pub(crate) const ADAPTIVE_TILE_SIZE: i32 = 32;
+/// Largest spread between the RGB channels of a pixel that still counts as neutral grey, black or white. ~keep
+pub(crate) const NEUTRAL_CHANNEL_SPREAD: u8 = 8;
 const CONTRAST_GAMMA: f32 = 0.5;
 const CONTRAST_INPUT_MIN: i32 = 40;
 const CONTRAST_INPUT_MAX: i32 = 220;
