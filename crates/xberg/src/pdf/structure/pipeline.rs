@@ -2066,9 +2066,10 @@ impl<'a> ParagraphVisualRow<'a> {
 
     fn carries_script(&self, script: &SegmentData) -> bool {
         let base = self.anchor;
-        // A list marker is set apart from the text beside it, not under it: that text is the
-        // item's body, never a script run of the marker's glyph. ~keep
-        if is_bare_list_marker(&base.text)
+        // A bullet glyph is set apart from the text beside it, not under it: that text is the
+        // item's body, never a script run of the glyph. Other markers, such as the label `(0)`,
+        // are text and can carry a script. ~keep
+        if is_bullet_glyph_text(&base.text)
             || base.is_monospace
             || script.is_monospace
             || base.assigned_role != script.assigned_role
@@ -2115,6 +2116,12 @@ impl<'a> ParagraphVisualRow<'a> {
             self.anchor = segment;
         }
     }
+}
+
+/// Whether `text` is nothing but one bullet glyph.
+fn is_bullet_glyph_text(text: &str) -> bool {
+    let mut characters = text.trim().chars();
+    characters.next().is_some_and(super::list_marker::is_bullet_glyph) && characters.next().is_none()
 }
 
 /// Whether `marker` is a bare list marker standing at the left of `body` on the same printed row
@@ -5218,7 +5225,15 @@ fn alphanumeric_runs(text: &str) -> Vec<TextRun> {
             continue;
         }
         let is_digit = character.is_numeric();
+        // A decimal point or a thousands mark joins the digits around it into one number. ~keep
+        let continues_number = is_digit
+            && matches!(separator.as_str(), "." | ",")
+            && runs.last().is_some_and(|last| last.run.ends_with(char::is_numeric));
         match runs.last_mut() {
+            Some(last) if continues_number => {
+                last.run.push_str(&separator);
+                last.run.push(character);
+            }
             Some(last) if previous_is_digit == Some(is_digit) => last.run.extend(character.to_lowercase()),
             _ => runs.push(TextRun {
                 separator: std::mem::take(&mut separator),

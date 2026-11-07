@@ -2902,6 +2902,7 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
             vec!["Wei Yang", "Counsel"],
             vec!["COVID 19 cases", "Q 4"],
             vec!["A 1", "total"],
+            vec!["1.0", "13,000"],
         ],
     )];
     let segments = vec![
@@ -2915,6 +2916,8 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
         column_seg("Q4", 40.0, 10.0, 330.0),
         column_seg("A1", 40.0, 10.0, 325.0),
         column_seg("ASU-Mayo", 40.0, 30.0, 320.0),
+        column_seg("0", 40.0, 6.0, 315.0),
+        column_seg("000", 40.0, 18.0, 310.0),
         column_seg("0001", 40.0, 20.0, 350.0),
     ];
     let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
@@ -2928,6 +2931,8 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
             "COVID-19".to_string(),
             "Q4".to_string(),
             "A1".to_string(),
+            "0".to_string(),
+            "000".to_string(),
             "0001".to_string()
         ],
         "a run that cuts through a cell's word is not that cell's text, and neither is one no cell holds"
@@ -3405,6 +3410,31 @@ fn a_list_item_wraps_onto_later_lines_though_its_bullet_is_set_larger() {
     assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
     assert!(paragraphs[0].is_list_item);
     assert_eq!(paragraphs[0].lines.len(), 3, "the bullet shares the first printed line");
+}
+
+/// A bare label such as `(0)` reads as a list marker but is text: a smaller raised run beside it,
+/// as on a chart axis, is its script, unlike the run beside a bullet glyph.
+#[test]
+fn a_bare_label_carries_a_script_run_but_a_bullet_glyph_does_not() {
+    let run = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let label = run("(0)", 100.0, 14.0, 12.0, 500.0);
+    let bullet = run("\u{2022}", 100.0, 14.0, 12.0, 500.0);
+    let script = run("i", 114.0, 3.0, 8.0, 498.0);
+    assert!(ParagraphVisualRow::new(&label).carries_script(&script));
+    assert!(!ParagraphVisualRow::new(&bullet).carries_script(&script));
 }
 
 /// A producer may draw an item's body before its bullet. The bullet then follows the body's
