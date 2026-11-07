@@ -217,6 +217,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(redaction): Run external-redaction extraction on the shared 16 MiB runtime.**
   The poll chain of `extract_with_external_redaction` needs about 2.2 MB, which overflowed the roughly 2 MB host thread of an FFI caller such as the JVM and crashed the process. Dropping the call still cancels the work.
 
+- **(ocr): Keep certified table rows on one line in Markdown and Djot output of a standalone image.** (#2432)
+  The sparse-row recovery that already served Plain output now also serves Markdown and Djot; the recognized words and amounts are unchanged.
+
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
 
