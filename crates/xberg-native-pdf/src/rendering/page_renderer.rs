@@ -135,6 +135,9 @@ pub struct RenderOptions {
     /// When `Some`, bypasses integer-DPI quantization so fit dimensions are
     /// exact. Not part of the public API; set via `render_page_fit` only.
     pub(crate) scale_override: Option<f32>,
+    /// Paint invisible text (render mode 3) in pure red instead of omitting it, so a caller can
+    /// read the hidden layer's glyph silhouettes off the raster (default: false).
+    pub reveal_invisible_text: bool,
 }
 
 impl Default for RenderOptions {
@@ -147,6 +150,7 @@ impl Default for RenderOptions {
             jpeg_quality: 85,
             excluded_layers: HashSet::new(),
             scale_override: None,
+            reveal_invisible_text: false,
         }
     }
 }
@@ -456,13 +460,17 @@ fn resolve_generic_stroke_color(
 impl PageRenderer {
     /// Create a new page renderer with the specified options.
     pub fn new(options: RenderOptions) -> Self {
+        let mut text_rasterizer = TextRasterizer::new();
+        if options.reveal_invisible_text {
+            text_rasterizer.reveal_invisible_text(Some(tiny_skia::Color::from_rgba8(255, 0, 0, 255)));
+        }
         Self {
             options,
             source_image_budget: None,
             reported_source_budget_exceeded: false,
             text_contrast_probe: None,
             path_rasterizer: PathRasterizer::new(),
-            text_rasterizer: TextRasterizer::new(),
+            text_rasterizer,
             fonts: HashMap::new(),
             color_spaces: HashMap::new(),
             excluded_layers_snapshot: None,

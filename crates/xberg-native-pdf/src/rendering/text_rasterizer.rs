@@ -463,6 +463,8 @@ pub struct TextRasterizer {
     /// (#991 asked for once per font).
     warned_fonts: std::sync::Mutex<std::collections::HashSet<(String, &'static str)>>,
     type0_ink_loss: std::sync::atomic::AtomicBool,
+    /// Paint render mode 3 text in this opaque color instead of leaving it invisible.
+    reveal_invisible_text: Option<tiny_skia::Color>,
 }
 
 impl TextRasterizer {
@@ -472,6 +474,7 @@ impl TextRasterizer {
             fontdb: system_fontdb(),
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
+            reveal_invisible_text: None,
         }
     }
 
@@ -484,7 +487,12 @@ impl TextRasterizer {
             fontdb,
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
+            reveal_invisible_text: None,
         }
+    }
+
+    pub(crate) fn reveal_invisible_text(&mut self, color: Option<tiny_skia::Color>) {
+        self.reveal_invisible_text = color;
     }
 
     /// Forget which fonts a glyph-drop warning has named. `PageRenderer`
@@ -639,7 +647,8 @@ impl TextRasterizer {
         // clip-path accumulation itself (modes 4–7) is not yet applied, but
         // mode-7 glyphs must at minimum not paint. (WS1.5) ~keep
         if gs.render_mode == 3 || gs.render_mode == 7 {
-            paint.set_color(tiny_skia::Color::from_rgba(0.0, 0.0, 0.0, 0.0).unwrap());
+            let revealed = self.reveal_invisible_text.filter(|_| gs.render_mode == 3);
+            paint.set_color(revealed.unwrap_or_else(|| tiny_skia::Color::from_rgba(0.0, 0.0, 0.0, 0.0).unwrap()));
         }
 
         // Predefined CIDFont substitution path: if this font was flagged
