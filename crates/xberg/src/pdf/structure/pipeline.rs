@@ -2066,7 +2066,11 @@ impl<'a> ParagraphVisualRow<'a> {
 
     fn carries_script(&self, script: &SegmentData) -> bool {
         let base = self.anchor;
-        if base.is_monospace
+        // A bullet glyph is set apart from the text beside it, not under it: that text is the
+        // item's body, never a script run of the glyph. Other markers, such as the label `(0)`,
+        // are text and can carry a script. ~keep
+        if is_bullet_glyph_text(&base.text)
+            || base.is_monospace
             || script.is_monospace
             || base.assigned_role != script.assigned_role
             || !base.has_same_rotation(script)
@@ -2114,6 +2118,44 @@ impl<'a> ParagraphVisualRow<'a> {
     }
 }
 
+/// Whether `text` is nothing but one bullet glyph.
+fn is_bullet_glyph_text(text: &str) -> bool {
+    let mut characters = text.trim().chars();
+    characters.next().is_some_and(super::list_marker::is_bullet_glyph) && characters.next().is_none()
+}
+
+/// Whether `marker` is a bare list marker standing at the left of `body` on the same printed row
+/// and within one hanging indent of it: the geometry [`accepts_detached_list_marker`] requires.
+fn marker_stands_left_of_row_body(marker: &SegmentData, body: &SegmentData) -> bool {
+    if !is_bare_detached_list_marker(&marker.text) || is_bare_list_marker(&body.text) || !marker.has_same_rotation(body)
+    {
+        return false;
+    }
+    let font_size = marker.font_size.max(body.font_size);
+    let (marker_start, marker_end) = marker.upright_advance_extent();
+    let (body_start, _) = body.upright_advance_extent();
+    let baseline_delta = (marker.upright_baseline() - body.upright_baseline()).abs();
+    let indent = body_start - marker_end;
+    font_size.is_finite()
+        && font_size > 0.0
+        && baseline_delta <= font_size * DETACHED_MARKER_BASELINE_TOLERANCE_FONT_FACTOR
+        && body_start > marker_start
+        && indent >= -(font_size * DETACHED_MARKER_MAX_OVERLAP_FONT_FACTOR)
+        && indent <= font_size * DETACHED_MARKER_MAX_INDENT_FONT_FACTOR
+}
+
+/// Put a list marker ahead of the body it stands beside when the producer drew the body first, so
+/// the row reads marker then body whatever order the content stream used. A marker that follows its
+/// body is otherwise taken for the start of the next item's line and takes that line for its body.
+fn place_markers_before_their_row_bodies(mut lines: Vec<SegmentData>) -> Vec<SegmentData> {
+    for index in 1..lines.len() {
+        if marker_stands_left_of_row_body(&lines[index], &lines[index - 1]) {
+            lines.swap(index, index - 1);
+        }
+    }
+    lines
+}
+
 fn blocks_to_paragraphs(
     lines: Vec<SegmentData>,
     heading_map: &[(f32, Option<u8>)],
@@ -2122,6 +2164,7 @@ fn blocks_to_paragraphs(
     if lines.is_empty() {
         return Vec::new();
     }
+    let lines = place_markers_before_their_row_bodies(lines);
 
     let gap_info = super::classify::precompute_gap_info(heading_map);
     let visual_line_texts = visual_line_texts(&lines);
@@ -5078,6 +5121,9 @@ struct TableCoverage {
     row_words: Vec<ahash::AHashSet<String>>,
     /// Every whitespace-separated word of every cell, normalized.
     words: ahash::AHashSet<String>,
+    /// Each cell's alphanumeric runs, kept apart per cell, so a piece is tested against one cell
+    /// and never across the seam of two.
+    cell_runs: Vec<Vec<TextRun>>,
 }
 
 /// Normalized length, in characters, at which [`TableCoverage::carries`] stops matching a segment against the
@@ -5093,7 +5139,13 @@ impl TableCoverage {
         let mut row_texts = Vec::new();
         let mut row_words = Vec::new();
         let mut words = ahash::AHashSet::new();
+        let mut cell_runs = Vec::new();
         for row in rows {
+            cell_runs.extend(
+                row.iter()
+                    .map(|cell| alphanumeric_runs(cell))
+                    .filter(|runs| !runs.is_empty()),
+            );
             row_texts.push(
                 row.iter()
                     .map(|cell| normalize_for_table_coverage(cell))
@@ -5114,12 +5166,13 @@ impl TableCoverage {
             rows: row_texts,
             row_words,
             words,
+            cell_runs,
         }
     }
 
     /// Whether the grid represents `text`. A run shorter than [`MIN_CROSS_CELL_RUN_GLYPHS`] is
-    /// carried when every word is a whole cell word anywhere in the table; a longer one when one
-    /// row holds it, either as a run inside that row's cells or as every word a whole cell word of
+    /// carried when every word is a whole cell word anywhere in the table or one cell holds it; a
+    /// longer one when one row holds it, either as a run inside that row's cells or as every word a whole cell word of
     /// that row. A run is not matched against the whole table's concatenated glyphs, which lets
     /// digits straddling unrelated cells stand in for it.
     fn carries(&self, text: &str) -> bool {
@@ -5133,7 +5186,12 @@ impl TableCoverage {
             .filter(|word| !word.is_empty())
             .collect();
         if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
-            return text_words.iter().all(|word| self.words.contains(word));
+            // A marker or a sign splits one printed cell into several segments while the grid holds
+            // it whole, so a piece made of whole runs of one cell is that cell's text. ~keep
+            return text_words.iter().all(|word| self.words.contains(word)) || {
+                let piece = alphanumeric_runs(text);
+                self.cell_runs.iter().any(|runs| runs_spell(runs, &piece))
+            };
         }
         self.rows.iter().any(|row| row.contains(&normalized))
             || self
@@ -5141,6 +5199,67 @@ impl TableCoverage {
                 .iter()
                 .any(|row| text_words.iter().all(|word| row.contains(word)))
     }
+}
+
+/// A maximal run of letters or of digits with the separator that precedes it.
+#[derive(Clone, PartialEq, Eq)]
+struct TextRun {
+    /// Non-alphanumeric text between the previous run and this one, whitespace collapsed to one
+    /// space; empty where letters meet digits directly. Meaningless on a text's first run.
+    separator: String,
+    run: String,
+}
+
+/// A text's maximal runs of letters or of digits, lowercased, with their separators: the places
+/// a marker or a sign can split a printed cell without cutting through a word or a number.
+fn alphanumeric_runs(text: &str) -> Vec<TextRun> {
+    let mut runs: Vec<TextRun> = Vec::new();
+    let mut separator = String::new();
+    let mut previous_is_digit = None;
+    for character in text.chars() {
+        if !character.is_alphanumeric() {
+            if !(character.is_whitespace() && separator.ends_with(' ')) {
+                separator.push(if character.is_whitespace() { ' ' } else { character });
+            }
+            previous_is_digit = None;
+            continue;
+        }
+        let is_digit = character.is_numeric();
+        // A decimal point or a thousands mark joins the digits around it into one number. ~keep
+        let continues_number = is_digit
+            && matches!(separator.as_str(), "." | ",")
+            && runs.last().is_some_and(|last| last.run.ends_with(char::is_numeric));
+        match runs.last_mut() {
+            Some(last) if continues_number => {
+                last.run.push_str(&separator);
+                last.run.push(character);
+            }
+            Some(last) if previous_is_digit == Some(is_digit) => last.run.extend(character.to_lowercase()),
+            _ => runs.push(TextRun {
+                separator: std::mem::take(&mut separator),
+                run: character.to_lowercase().collect(),
+            }),
+        }
+        separator.clear();
+        previous_is_digit = Some(is_digit);
+    }
+    runs
+}
+
+/// Whether consecutive whole runs of one cell, joined by the same separators, are exactly
+/// `piece`. A piece the cell never broke at that sign, such as `COVID-19` against `COVID 19`,
+/// is not the cell's text.
+fn runs_spell(cell: &[TextRun], piece: &[TextRun]) -> bool {
+    !piece.is_empty()
+        && cell.windows(piece.len()).any(|window| {
+            window
+                .iter()
+                .zip(piece)
+                .enumerate()
+                .all(|(index, (cell_run, piece_run))| {
+                    cell_run.run == piece_run.run && (index == 0 || cell_run.separator == piece_run.separator)
+                })
+        })
 }
 
 /// Reduce text to lowercase alphanumerics, dropping whitespace and punctuation entirely.
