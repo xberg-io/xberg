@@ -200,6 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Rules that belong to another section no longer split a ruled band into columns.** (#2443)
+  A column rule lying wholly beyond the ruled rows is no longer projected across them when other rules run through them, so a list column beside a section divider is not read as a two-column table that swallows the page heading.
+
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
 
