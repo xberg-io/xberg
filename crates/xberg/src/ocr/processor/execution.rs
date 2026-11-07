@@ -1052,15 +1052,11 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
     if split == 0
         || values.len() < 2
         || row.len() != split + 1 + values.len()
-        || !label_words.clone().all(|word| word.chars().all(char::is_alphabetic))
         || !row[..split].iter().map(|word| word.text.as_str()).eq(label_words)
-        || !row[split + 1..].iter().zip(values).all(|(word, value)| {
-            word.text == *value
-                && value.bytes().any(|byte| byte.is_ascii_digit())
-                && value
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || b",.()+-".contains(&byte))
-        })
+        || !row[split + 1..]
+            .iter()
+            .zip(values)
+            .all(|(word, value)| word.text == *value)
     {
         return false;
     }
@@ -1071,6 +1067,7 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
     dots.text.len() >= MIN_DOT_LEADER_LENGTH
         && dots.text.bytes().all(|byte| byte == b'.')
         && dots.width > left.height.max(right.height)
+        && dots.height.saturating_mul(2) <= left.height.min(right.height)
         && left.left.saturating_add(left.width) < dots.left
         && dots.left.saturating_add(dots.width) < right.left
         && dots.top >= left.top.max(right.top)
@@ -4053,6 +4050,55 @@ mod tests {
             changed[2].width = width;
             assert!(!accepts(&changed), "must reject leader box {left},{top},{width}");
         }
+    }
+
+    #[test]
+    fn dot_leader_row_ownership_does_not_depend_on_label_letters_or_value_digits() {
+        let accepts = |label: [&str; 2], values: [&str; 2]| {
+            let cells = [
+                format!("{} {}", label[0], label[1]),
+                values[0].to_owned(),
+                values[1].to_owned(),
+            ];
+            let mut words = positioned_dot_leader_row();
+            words[0].text = label[0].to_owned();
+            words[1].text = label[1].to_owned();
+            words[3].text = values[0].to_owned();
+            words[4].text = values[1].to_owned();
+            let accepted = row_has_only_extra_dot_leader(&words.each_ref(), &cells);
+            for (index, token) in [(0, "Other"), (3, "x"), (4, "3.2")] {
+                let mut changed = words.clone();
+                changed[index].text = token.to_owned();
+                assert!(
+                    !row_has_only_extra_dot_leader(&changed.each_ref(), &cells),
+                    "source token changed to {token:?}"
+                );
+            }
+            let mut overlapping = words.clone();
+            overlapping[2].left = 95;
+            assert!(!row_has_only_extra_dot_leader(&overlapping.each_ref(), &cells));
+            accepted
+        };
+        assert!(accepts(["Signal", "timing"], ["-64", "143.92"]));
+        assert!(accepts(["Item", "4(b)"], ["$1,010", "3.2%"]));
+        assert!(accepts(["Total:", "net"], ["alpha", "beta"]));
+    }
+
+    #[test]
+    fn dot_leader_box_is_at_most_half_the_text_height() {
+        let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
+        let mut words = positioned_dot_leader_row();
+        words[2].top = 30;
+        words[2].height = 5;
+        assert!(
+            row_has_only_extra_dot_leader(&words.each_ref(), &cells),
+            "half of 10 is the limit"
+        );
+        words[2].height = 6;
+        assert!(
+            !row_has_only_extra_dot_leader(&words.each_ref(), &cells),
+            "a box taller than half the text inside the shared band is a stroke, not leader dots"
+        );
     }
 
     #[test]
