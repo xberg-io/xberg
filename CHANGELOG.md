@@ -209,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The hOCR row claim no longer requires an all-letter label and digit-only values; a value such as "$1,010" or "3.2%" or a label with a digit now keeps its one claimed row. The row's words must still equal the table cells and the leader must still sit alone between the label and the first value.
 
 - **(ocr): Admit a sideways prose region by its word boxes, not by word letters (#2616).**
-  The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. A word box thinner than a third of the region's median line thickness, measured in the upright frame, still refuses the region.
+  The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. Instead the region needs a median line thickness above a page-relative floor, at most a small share of marks thinner than a third of that median, mostly word-shaped (not stroke-shaped) boxes and mostly tokens carrying a letter, all measured in the upright frame.
 
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
