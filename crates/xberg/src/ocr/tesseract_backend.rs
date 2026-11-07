@@ -640,12 +640,14 @@ impl TesseractBackend {
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
         let ocr_elements = select_byte_read_elements(&mut ocr_result, config);
+        let page_down = take_recognition_page_down(&mut ocr_result.metadata);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
 
         let mut additional = AHashMap::new();
         for (key, value) in ocr_result.metadata {
             additional.insert(Cow::Owned(key), value);
         }
+        restore_recognition_page_down(&mut additional, page_down);
 
         let metadata = crate::types::Metadata {
             format: Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
@@ -751,6 +753,7 @@ impl OcrBackend for TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
+        let page_down = take_recognition_page_down(&mut ocr_result.metadata);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
         let ocr_elements = select_output_ocr_elements(ocr_result.ocr_elements.take(), config);
 
@@ -758,6 +761,7 @@ impl OcrBackend for TesseractBackend {
         for (key, value) in ocr_result.metadata {
             additional.insert(Cow::Owned(key), value);
         }
+        restore_recognition_page_down(&mut additional, page_down);
 
         let metadata = crate::types::Metadata {
             format: Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
@@ -1092,6 +1096,46 @@ fn warnings_from_ocr_metadata(
     }
 
     warnings
+}
+
+/// Carries "the orientation retry is reading" from the retry to this backend across `.await`
+/// points; public configuration such as `psm` or `element_config` cannot stand in for it. ~keep
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) mod page_down_request {
+    tokio::task_local! {
+        static REQUESTED: ();
+    }
+
+    pub(crate) async fn requesting<T>(read: impl std::future::Future<Output = T>) -> T {
+        REQUESTED.scope((), read).await
+    }
+
+    pub(super) fn requested() -> bool {
+        REQUESTED.try_with(|()| ()).is_ok()
+    }
+}
+
+#[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
+mod page_down_request {
+    pub(super) fn requested() -> bool {
+        false
+    }
+}
+
+fn take_recognition_page_down(metadata: &mut std::collections::HashMap<String, serde_json::Value>) -> bool {
+    let marked = metadata
+        .remove(crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
+        .is_some();
+    marked && page_down_request::requested()
+}
+
+fn restore_recognition_page_down(additional: &mut AHashMap<Cow<'static, str>, serde_json::Value>, marked: bool) {
+    if marked {
+        additional.insert(
+            Cow::Borrowed(crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY),
+            serde_json::Value::Bool(true),
+        );
+    }
 }
 
 /// Remove the OCR pipeline's internal scratch metadata keys before the
@@ -2210,6 +2254,25 @@ mod tests {
             assert_eq!(before_warning.source, after_warning.source);
             assert_eq!(before_warning.message, after_warning.message);
         }
+    }
+
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn recognition_page_down_marker_is_kept_only_for_the_retry_that_requested_it() {
+        let marked = || {
+            std::collections::HashMap::from([(
+                crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY.to_string(),
+                serde_json::Value::Bool(true),
+            )])
+        };
+        let mut caller = marked();
+        assert!(!take_recognition_page_down(&mut caller));
+        assert!(caller.is_empty(), "a caller never sees the marker, whatever its config");
+        let mut retry = marked();
+        assert!(page_down_request::requesting(async { take_recognition_page_down(&mut retry) }).await);
+        assert!(retry.is_empty());
+        let mut unmarked = std::collections::HashMap::new();
+        assert!(!page_down_request::requesting(async { take_recognition_page_down(&mut unmarked) }).await);
     }
 
     /// #354: `word_iterator_skipped_count` is pipeline plumbing consumed by
