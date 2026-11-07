@@ -206,3 +206,7 @@ fn certify_empty_legacy_routes<const N: usize>(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "source_ownership/wide_admission_tests.rs"]
+mod wide_admission_tests;

@@ -171,9 +171,9 @@ fn source_pdf() -> Vec<u8> {
 }
 
 #[test]
-fn native_wide_ruled_admission_declines_a_table_translated_off_the_page() {
+fn native_wide_ruled_admission_declines_translated_rules() {
     let identity = wrapped_source_tables(b"q 1 0 0 1 0 0 cm\n", false);
     assert_eq!(identity.len(), 1, "an identity cm must still certify");
     let moved = wrapped_source_tables(b"q 1 0 0 1 200 0 cm\n", false);
-    assert!(moved.is_empty(), "a table translated off the page was certified");
+    assert!(moved.is_empty(), "a table with translated rules was certified");
 }

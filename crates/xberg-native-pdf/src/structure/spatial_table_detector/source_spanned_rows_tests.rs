@@ -47,3 +47,42 @@ fn rule_must_span_the_requested_extent() {
     assert!(!painted_rule(&[rule()], false, 100.0, 10.0, 400.0));
     assert!(!painted_rule(&[rule()], false, 120.0, 10.0, 190.0));
 }
+
+use super::fixture::{self, Grid};
+
+fn certified(grid: &Grid) -> bool {
+    certify(&grid.table, &grid.spans, &grid.paths).is_some()
+}
+
+#[test]
+fn fully_ruled_merged_middle_row_is_certified() {
+    assert!(certified(&fixture::grid()));
+}
+
+#[test]
+fn a_closed_cell_needs_every_horizontal_rule_painted() {
+    for rule in 0..=3 {
+        let mut grid = fixture::grid();
+        grid.paths.remove(rule);
+        assert!(
+            !certified(&grid),
+            "table certified without the horizontal rule at row boundary {rule}"
+        );
+    }
+}
+
+#[test]
+fn a_cell_span_absent_from_the_source_words_is_not_certified() {
+    let mut grid = fixture::grid();
+    let mut invented = grid.spans[0].clone();
+    invented.sequence = grid.spans.len();
+    grid.table.rows[0].cells[0].spans.push(invented);
+    assert!(!certified(&grid));
+}
+
+#[test]
+fn a_source_word_inside_the_table_that_no_cell_claims_is_not_certified() {
+    let mut grid = fixture::grid();
+    grid.table.rows[0].cells[0].spans.clear();
+    assert!(!certified(&grid));
+}

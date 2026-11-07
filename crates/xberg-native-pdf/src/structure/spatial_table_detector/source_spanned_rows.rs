@@ -178,5 +178,9 @@ fn span_identity(span: &TextSpan) -> (usize, &str, [u32; 4]) {
 }
 
 #[cfg(test)]
+#[path = "source_spanned_fixture.rs"]
+pub(crate) mod fixture;
+
+#[cfg(test)]
 #[path = "source_spanned_rows_tests.rs"]
 mod tests;
