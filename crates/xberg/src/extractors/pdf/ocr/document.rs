@@ -220,7 +220,12 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
     };
     holds_half(&all_words)
         && holds_half(&lettered)
-        && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
+        && !evaluate_native_text_for_ocr(
+            &super::super::unmapped_glyphs::dropping_markers(layer),
+            Some(1),
+            thresholds,
+        )
+        .fallback
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn unique_literal_embedding(native: &str, read: &str) -> bool {
@@ -1566,7 +1571,8 @@ pub(super) fn destructive_ocr_information_loss(
     ocr_text: &str,
     thresholds: &OcrQualityThresholds,
 ) -> Option<(usize, usize)> {
-    let native_decision = evaluate_native_text_for_ocr(native_page, Some(1), thresholds);
+    let readable = super::super::unmapped_glyphs::dropping_markers(native_page);
+    let native_decision = evaluate_native_text_for_ocr(&readable, Some(1), thresholds);
     if native_decision.fallback {
         return None;
     }

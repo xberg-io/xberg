@@ -315,6 +315,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
   This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.
+- **(pdf): Keep the readable text of a page with lost glyphs when OCR reads less than the page holds.** (GH#2517)
+  A lost-glyph marker still sends the page to OCR, but the checks that ask whether the native text is readable now ignore the markers. A page whose OCR text drops most of its readable words keeps its native text, and a page whose OCR text confirms the native text gets the native rows that OCR lacks.
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.

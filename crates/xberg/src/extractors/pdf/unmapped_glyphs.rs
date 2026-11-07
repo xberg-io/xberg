@@ -94,6 +94,19 @@ impl MarkerRuns {
     }
 }
 
+/// The text as the extractor gave it before it kept markers: each lost glyph dropped, nothing put
+/// in its place. The garble gates judge whether a page is readable on this text, so a marker that
+/// OCR routing has already read does not also make the readable words of the page look like
+/// garbage. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn dropping_markers(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains(LOST_GLYPH_MARKER) {
+        std::borrow::Cow::Owned(text.replace(LOST_GLYPH_MARKER, ""))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
 fn without_markers(text: &str) -> String {
     MarkerRuns::of(text).map_or_else(|| text.to_string(), |runs| runs.apply(text))
 }
