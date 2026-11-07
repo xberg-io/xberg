@@ -2464,7 +2464,7 @@ impl InternalDocumentExtractor for PdfExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        self.extract_core(content, mime_type, config, None).await
+        crate::pdf::render::with_task_render_warnings(self.extract_core(content, mime_type, config, None)).await
     }
 
     #[cfg(feature = "tokio-runtime")]
@@ -2474,7 +2474,9 @@ impl InternalDocumentExtractor for PdfExtractor {
         // Async on native (non-blocking tokio::fs); sync fallback on wasm32 where tokio's `fs`
         // feature is unavailable. See `core::io::read_file_async`. ~keep
         let bytes = crate::core::io::read_file_async(path).await?;
-        let result = self.extract_core(&bytes, mime_type, config, Some(path)).await;
+        let result =
+            crate::pdf::render::with_task_render_warnings(self.extract_core(&bytes, mime_type, config, Some(path)))
+                .await;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(None);
         result
@@ -3696,10 +3698,10 @@ impl PdfExtractor {
         doc.processing_warnings.append(&mut pdf_extraction_warnings);
 
         // #340: drain any xberg_native_pdf glyph-drop warnings captured while this
-        // document's pages were rendered on *this* thread (OCR rasterization
+        // document's pages were rendered by *this* task (OCR rasterization
         // and any other call routed through `render_page_capturing_glyph_drops`
-        // in `crate::pdf::render` that runs inline on the extracting task's
-        // thread). The drain is unconditionally cheap and correct even when
+        // in `crate::pdf::render` that runs inline on it;
+        // `with_task_render_warnings` keeps them with the task). The drain is unconditionally cheap and correct even when
         // nothing was ever captured: `install_pdf_render_diagnostics` is
         // opt-in and only an embedding application calls it (a library must
         // not seize the process-global `log` backend on its own — see
