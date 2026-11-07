@@ -4,7 +4,7 @@ use super::hidden_layer::{decode_probe_stream, page_frame_and_contents, stream_f
 use super::pipeline::ocr_config_with_page_rotation_hint;
 use super::tall_geometry::{StripLimits, plan_strips};
 use crate::cancellation::CancellationToken;
-use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat};
+use crate::core::config::{ExtractionConfig, OcrConfig};
 use crate::plugins::OcrBackend;
 use crate::types::{ExtractedDocument, ProcessingWarning};
 use image::ImageEncoder;
@@ -18,6 +18,8 @@ use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
 
 pub(super) mod augmentation;
+mod policy;
+pub(super) use policy::{note_unrecovered, supports, unsupported_reason};
 mod gray_jpeg;
 mod indexed;
 mod ordered;
@@ -94,30 +96,6 @@ impl<'a> Attempt<'a> {
     }
 }
 
-pub(super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> bool {
-    #[cfg(feature = "layout-detection")]
-    if config.layout.is_some() {
-        return false;
-    }
-    config.output_format == OutputFormat::Plain
-        && config.result_format == crate::types::ResultFormat::Unified
-        && !config.include_document_structure
-        && config.images.is_none()
-        && config.pdf_options.is_none()
-        && config.content_filter.is_none()
-        && ocr.tesseract_config.is_none()
-        && ocr.element_config.is_none()
-        && ocr.output_format.is_none()
-        && ocr.pipeline.is_none()
-        && !ocr.auto_rotate
-        && ocr.language == ["eng"]
-        && ocr.backend_options.as_ref().is_none_or(|options| {
-            options
-                .as_object()
-                .is_some_and(|fields| fields.keys().all(|key| key == "use_cache"))
-        })
-}
-
 pub(super) async fn try_replace(
     original: &mut ExtractedDocument,
     backend: &Arc<dyn OcrBackend>,
@@ -140,6 +118,12 @@ pub(super) async fn try_replace(
         apply_recovery(original, recovered, page, strips);
         return Ok(true);
     }
+    note_unrecovered(
+        original,
+        ocr,
+        (document, page),
+        "the scan is not a single certifiable image, or its strips did not read as the complete page",
+    );
     Ok(false)
 }
 
@@ -479,7 +463,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         (Some(_), "FlateDecode") => Some(flate_packing(&dict, width, unfiltered_paint)?),
         _ => return None,
     };
-    if !source_density_allowed(dpi, packing) {
+    if !source_density_allowed(dpi) {
         return None;
     }
     let (samples, retained_bytes) = if let Some(packing) = packing {

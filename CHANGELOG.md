@@ -202,6 +202,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Recover tall scans at 120 DPI in every certified encoding, under Markdown output and an explicit Tesseract page mode, and report when recovery was not used.** (#2502)
+  Bilevel, neutral RGB, Indexed and grayscale JPEG sources down to 120 DPI now use source-image strips, each of which must match its source ink rows. A Tesseract page mode such as PSM 3 and Markdown output no longer turn recovery off. A tall page that stays on the downscaled read now carries a warning that names why: the configuration option that blocked recovery, or an uncertifiable source.
+
 - **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
   A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
   This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.

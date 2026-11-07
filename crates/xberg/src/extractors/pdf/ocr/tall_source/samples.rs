@@ -1,7 +1,7 @@
 //! Exact, budgeted decoding of grayscale-equivalent source samples.
 
 use super::super::hidden_layer::{decode_exact_flate, image_predictor};
-use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI};
+use super::{MAX_SOURCE_PIXELS, MAX_STRIPS, MAX_TILE_SIDE};
 use xberg_native_pdf::decoders::{DecodeParams, decode_predictor};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::object::Object;
@@ -144,16 +144,11 @@ pub(super) fn source_frame(
     Some((width, height, dpi))
 }
 
-pub(super) fn source_density_allowed(dpi: f64, packing: Option<GrayPacking>) -> bool {
-    const MIN_CERTIFIED_GRAY_SOURCE_DPI: f64 = 120.0;
+pub(super) fn source_density_allowed(dpi: f64) -> bool {
+    const MIN_CERTIFIED_SOURCE_DPI: f64 = 120.0;
     const MAX_SOURCE_DPI: f64 = 300.0;
 
-    let minimum = if matches!(packing, Some(GrayPacking::Byte | GrayPacking::PngPredictor(_))) {
-        MIN_CERTIFIED_GRAY_SOURCE_DPI
-    } else {
-        MIN_STANDARD_SOURCE_DPI
-    };
-    (minimum..=MAX_SOURCE_DPI).contains(&dpi)
+    (MIN_CERTIFIED_SOURCE_DPI..=MAX_SOURCE_DPI).contains(&dpi)
 }
 
 #[cfg(test)]
@@ -170,22 +165,12 @@ mod tests {
     }
 
     #[test]
-    fn lower_source_density_is_limited_to_byte_and_predicted_grayscale() {
-        let cases = [
-            (None, false),
-            (Some(GrayPacking::Byte), true),
-            (Some(GrayPacking::Bilevel), false),
-            (Some(GrayPacking::NeutralRgb), false),
-            (Some(GrayPacking::Indexed([0, 255])), false),
-            (Some(GrayPacking::PngPredictor(12)), true),
-        ];
-        for (packing, supports_lower_density) in cases {
-            assert_eq!(source_density_allowed(120.0, packing), supports_lower_density);
-            assert!(!source_density_allowed(119.99, packing));
-            assert!(source_density_allowed(150.0, packing));
-            assert!(source_density_allowed(300.0, packing));
-            assert!(!source_density_allowed(300.01, packing));
-        }
+    fn source_density_is_bounded_for_every_packing() {
+        assert!(source_density_allowed(120.0));
+        assert!(!source_density_allowed(119.99));
+        assert!(source_density_allowed(150.0));
+        assert!(source_density_allowed(300.0));
+        assert!(!source_density_allowed(300.01));
     }
 
     #[test]
