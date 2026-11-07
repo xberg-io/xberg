@@ -393,7 +393,8 @@ struct Synthetic {
 }
 
 fn synthetic_block(last_line: &[(&'static str, u32, u32)]) -> Synthetic {
-    let rows: [(&[(&str, u32, u32)], usize); 4] = [
+    type Word = (&'static str, u32, u32);
+    let rows: [(&[Word], usize); 4] = [
         (&[("a", 100, 300), ("b", 310, 660), ("c", 680, 1000)], 2),
         (
             &[("x", 100, 400), ("y", 410, 640), ("z", 650, 760), ("t", 770, 1000)],
