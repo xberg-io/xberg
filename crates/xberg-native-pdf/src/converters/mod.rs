@@ -280,19 +280,6 @@ pub struct ConversionOptions {
     /// Default: `None` (all spans kept).
     pub include_region: Option<(crate::geometry::Rect, crate::layout::RectFilterMode)>,
 
-    /// Expand Unicode ligature characters to their component letters.
-    ///
-    /// When `true`, ligature characters from the Latin Alphabetic Presentation
-    /// Forms block (U+FB00–U+FB06) are expanded to their ASCII equivalents:
-    /// `ﬁ`→`fi`, `ﬂ`→`fl`, `ﬀ`→`ff`, `ﬃ`→`ffi`, `ﬄ`→`ffl`, `ﬅ`→`st`, `ﬆ`→`st`.
-    ///
-    /// When `false` (default), these characters are preserved exactly as the
-    /// font's ToUnicode map produced them. Ground-truth corpora for PDF quality
-    /// testing usually preserve ligatures, so the default avoids Jaccard penalty.
-    ///
-    /// Default: `false`.
-    pub expand_ligatures: bool,
-
     /// Emit a visible marker in the markdown/HTML for a page that produced no
     /// extractable text but is a scanned / image page (rasterised content with
     /// no usable text layer). Without it, ~half the pages of a scanned corpus
@@ -354,7 +341,6 @@ impl Default for ConversionOptions {
             exclude_regions: Vec::new(),
             exclude_regions_mode: crate::layout::RectFilterMode::Intersects,
             include_region: None,
-            expand_ligatures: false,
             annotate_skipped_pages: true,
             include_artifacts: true,
         }

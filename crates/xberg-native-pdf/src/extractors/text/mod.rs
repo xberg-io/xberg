@@ -1846,6 +1846,9 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// How far, in text-space units, the pen sits left of the right edge of the last glyph
+    /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
+    pullback: f32,
 }
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
@@ -1972,7 +1975,25 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            pullback: 0.0,
         }
+    }
+
+    /// Decide whether a space glyph of advance `width` takes no room on the line (R1 of the ligature
+    /// ruling): the pen was pulled back over more than half of the space, which is the line the gap
+    /// test already uses for a word break. If so, the space stays out of the text and its advance goes
+    /// to the previous glyph, so the gap test between the real neighbours decides. A small kern keeps
+    /// the space. ~keep
+    fn absorb_roomless_space(&mut self, width: f32) -> bool {
+        if self.pullback <= width * 0.5 {
+            return false;
+        }
+        let Some(last) = self.char_widths.last_mut() else {
+            return false;
+        };
+        *last += width;
+        self.pullback = (self.pullback - width).max(0.0);
+        true
     }
 
     /// Check if the buffer is empty.

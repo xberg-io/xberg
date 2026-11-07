@@ -302,25 +302,16 @@ fn test_get_page_ref_out_of_bounds() {
     assert!(result.is_err());
 }
 
-/// A ToUnicode CMap that maps char 0x01 → U+FB01 (ﬁ) must produce the
-/// ligature character in extract_text output — NOT the expanded "fi".
-///
-/// Before the fix, `extract_text` unconditionally calls
-/// `get_ligature_components(ﬁ)` → "fi", discarding the font's own
-/// ToUnicode intent. After the fix the ligature char is preserved.
+/// A ToUnicode CMap that maps char 0x01 → U+FB01 (ﬁ) must produce the letters
+/// "fi" in extract_text output (GH#2322): a ligature glyph comes out as its
+/// letters at the glyph stage, so a search for "office" matches.
 #[test]
-fn test_ligature_fi_preserved_in_extract_text() {
+fn test_ligature_fi_expanded_in_extract_text() {
     let pdf = build_ligature_fi_pdf();
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     let text = doc.extract_text(0).unwrap();
-    assert!(
-        text.contains('\u{FB01}'),
-        "U+FB01 (ﬁ) must be preserved in extracted text; got: {text:?}"
-    );
-    assert!(
-        !text.contains("fi") || text.contains('\u{FB01}'),
-        "must not expand ﬁ → fi; got: {text:?}"
-    );
+    assert!(text.contains("fi"), "ﬁ must come out as fi; got: {text:?}");
+    assert!(!text.contains('\u{FB01}'), "U+FB01 must not reach the text; got: {text:?}");
 }
 
 #[test]

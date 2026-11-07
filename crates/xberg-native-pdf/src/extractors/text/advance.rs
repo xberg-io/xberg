@@ -413,6 +413,17 @@ impl<'doc> TextExtractor<'doc> {
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
+                    if c == ' ' {
+                        let mut space_w = width_table[byte as usize] * fs_factor * hs_factor + cs_hs;
+                        if byte == 0x20 {
+                            space_w += ws_hs;
+                        }
+                        if buffer.absorb_roomless_space(space_w) {
+                            w_sum += space_w;
+                            continue;
+                        }
+                    }
+                    buffer.pullback = 0.0;
                     if c != '\0' {
                         buffer.unicode.push(c);
                     } else if let Some(s) = font.char_to_unicode(byte as u32) {
@@ -683,6 +694,7 @@ impl<'doc> TextExtractor<'doc> {
         };
         *last += adv;
         buffer.accumulated_width += adv;
+        buffer.pullback = (buffer.pullback - adv).max(0.0);
     }
 
     /// Whether `(e, f)` continues `start`'s run along that run's writing axis.
@@ -992,12 +1004,20 @@ impl<'doc> TextExtractor<'doc> {
                         && unicode_char != '\n'
                         && unicode_char != '\r');
 
-                if !should_skip {
-                    let x_offset_device = char_index as f32 * char_width_device;
-                    let x_offset_user = char_index as f32 * char_width_user;
+                let x_offset_device = char_index as f32 * char_width_device;
+                let char_origin_x = pos.x + x_offset_device;
+                let char_origin_y = pos.y;
+                // R1: a space that starts inside the glyph before it takes no room, so the gap test decides. ~keep
+                let roomless_space = unicode_char == ' '
+                    && rotation_degrees.abs() < 1.0
+                    && self.chars.last().is_some_and(|prev| {
+                        prev.rotation_degrees.abs() < 1.0
+                            && (prev.origin_y - char_origin_y).abs() < effective_font_size * 0.1
+                            && prev.origin_x + prev.advance_width - char_origin_x > char_width_device * 0.5
+                    });
 
-                    let char_origin_x = pos.x + x_offset_device;
-                    let char_origin_y = pos.y;
+                if !should_skip && !roomless_space {
+                    let x_offset_user = char_index as f32 * char_width_user;
 
                     let text_char = TextChar {
                         char: unicode_char,

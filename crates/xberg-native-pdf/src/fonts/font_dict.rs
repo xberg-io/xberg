@@ -4307,11 +4307,9 @@ impl FontInfo {
 
     /// Convert a character code to Unicode string.
     ///
-    /// Returns the faithful Unicode mapping per PDF Spec §9.10.2. Ligature
-    /// characters (U+FB00–FB06) are preserved here; expansion into component
-    /// letters is done by the text pipeline via `LigatureDecisionMaker`, which
-    /// inspects surrounding context (neighboring chars, word boundaries) to
-    /// decide whether to split — keeping font_dict a pure encoding layer.
+    /// Returns the Unicode mapping per PDF Spec §9.10.2. A glyph that maps to a
+    /// Latin ligature presentation form (U+FB00–FB06) yields its letters, so a
+    /// ligature takes the same path as a ToUnicode map to letter pairs.
     pub fn char_to_unicode(&self, char_code: u32) -> Option<String> {
         // Serve from the per-font memo. Read and write are separate lock scopes
         // so the decode in between never holds the lock. ~keep
@@ -4322,7 +4320,7 @@ impl FontInfo {
         }
         let result = self
             .char_to_unicode_uncached(char_code)
-            .map(|s| normalize_cjk_radical_forms(&s));
+            .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)));
         if let Ok(mut memo) = self.type0_unicode_memo.lock() {
             memo.insert(char_code, result.clone());
         }
@@ -4375,8 +4373,8 @@ impl FontInfo {
                     // Fix B: filter bare C0 control characters (U+0000–U+001F except
                     // tab/LF/CR which are legitimate whitespace in extracted text).
                     // These are never valid visible text and typically indicate a
-                    // broken ToUnicode entry. Return U+FFFD and do NOT fall through
-                    // even for simple fonts — the CMap explicitly mapped this code. ~keep
+                    // broken ToUnicode entry. Return U+FFFD, unless the font's own glyph
+                    // name for the code decides it (below); do NOT fall through otherwise. ~keep
                     let is_c0_control = unicode
                         .chars()
                         .all(|c| matches!(c as u32, 0x00..=0x08 | 0x0B..=0x0C | 0x0E..=0x1F))
@@ -4391,6 +4389,15 @@ impl FontInfo {
                         return Some("\u{FFFD}".to_string());
                     }
                     if is_c0_control {
+                        // A C0 value is a miss: the glyph name of the font decides. ~keep
+                        if self.subtype != "Type0"
+                            && char_code <= 0xFF
+                            && let Some(named) = self
+                                .glyph_name_for_code(char_code)
+                                .and_then(glyph_name_to_unicode_string)
+                        {
+                            return Some(named);
+                        }
                         tracing::trace!(
                             "ToUnicode CMap maps code 0x{:04X} to C0 control char(s) in font '{}' - returning U+FFFD",
                             char_code,
@@ -5587,6 +5594,18 @@ fn is_non_sensible_symbol(s: &str) -> bool {
 /// ```ignore
 fn is_ligature_char(c: char) -> bool {
     matches!(c, 'ﬀ' | 'ﬁ' | 'ﬂ' | 'ﬃ' | 'ﬄ' | 'ﬅ' | 'ﬆ')
+}
+
+/// Replace each Latin ligature presentation form (U+FB00-U+FB06) in `s` with its letters.
+fn expand_ligature_forms(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match expand_ligature_char(c) {
+            Some(letters) => out.push_str(letters),
+            None => out.push(c),
+        }
+    }
+    out
 }
 
 /// Expand a ligature character to its ASCII equivalent.

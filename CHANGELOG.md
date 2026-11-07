@@ -198,6 +198,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Join a word that a ligature glyph split in two, and return the letters of every ligature.** (GH#2322)
+  A space drawn inside a ligature's box (the pen is pulled back by the space width) no longer counts as a word break: the gap between the real letters decides. A ToUnicode value of U+0000 for a ligature now falls back to the glyph name of the font. A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters, so `office` matches a search. The `expand_ligatures` option of the native conversion options has nothing left to do and is removed.
+
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
 
