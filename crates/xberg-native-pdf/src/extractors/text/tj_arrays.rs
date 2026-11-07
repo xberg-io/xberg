@@ -162,10 +162,10 @@ impl<'doc> TextExtractor<'doc> {
         // reading-order sort then splices it in beside whatever sits near that stale position,
         // scrambling the line (GH#1544). ~keep
         //
-        // A ligature that ends the open run stays open: a space in this array that the pull-back
+        // A run that ends in a ligature stays open for this array: a space that the pull-back
         // puts inside the ligature box is dropped only when the ligature is in the same buffer.
-        // Nothing moved the pen since the ligature (a `Tm` ends the ligature, `Td` and the other line moves
-        // flush the run), so the array continues the run from its origin. ~keep
+        // Nothing moved the pen since the ligature (a `Tm` ends the ligature, `Td` and the other
+        // line moves flush the run), so the array continues the run from its origin. ~keep
         let carried = if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
             let state = self.state_stack.current();
             self.tj_span_buffer

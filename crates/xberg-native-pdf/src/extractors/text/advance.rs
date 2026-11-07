@@ -184,7 +184,6 @@ impl<'doc> TextExtractor<'doc> {
                                 buffer.char_widths.push(per_char);
                             }
                         }
-                        buffer.pullback = 0.0;
                         buffer.ligature_tail = false;
                         // Fall through to the matrix update at the
                         // bottom of the function via `w_sum`. Vertical
@@ -200,7 +199,6 @@ impl<'doc> TextExtractor<'doc> {
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
-                    buffer.pullback = 0.0;
                     if c != '\0' {
                         buffer.unicode.push(c);
                     } else {
@@ -262,7 +260,6 @@ impl<'doc> TextExtractor<'doc> {
                     w_sum += w;
                     // One width for each output letter, as in the string-array path. ~keep
                     let letter_count = letter_count_of(font, code as u32);
-                    buffer.pullback = 0.0;
                     buffer.ligature_tail = letter_count > 1;
                     buffer.push_letter_widths(letter_count, w);
                 }
