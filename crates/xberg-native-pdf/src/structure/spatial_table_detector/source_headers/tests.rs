@@ -577,7 +577,8 @@ fn a_thin_border_painted_across_a_rule_splits_it() {
 fn grid_lines() -> Vec<PathContent> {
     let mut lines = Vec::new();
     for y in [-20.0, -10.0, 0.0, 10.0, 20.0] {
-        lines.push(PathContent::line(0.0, y, 100.0, y));
+        let line = PathContent::line(0.0, y, 100.0, y);
+        lines.push(if y < 0.0 { line.with_stroke_width(0.5) } else { line });
     }
     for x in [0.0, 20.0, 60.0, 100.0] {
         lines.push(PathContent::line(x, -20.0, x, 20.0));
@@ -679,4 +680,49 @@ fn an_empty_band_above_the_header_bands_does_not_hide_them() {
     let tables = detected(&lines, &grid_spans());
     let flags = header_flags(&tables);
     assert_eq!(&flags[flags.len() - 4..], [true, true, false, false]);
+}
+
+#[test]
+fn a_grid_ruled_alike_on_every_row_keeps_no_header() {
+    let mut lines = grid_lines();
+    for line in &mut lines {
+        *line = line.clone().with_stroke_width(1.0);
+    }
+    let tables = detected(&lines, &grid_spans());
+    assert_eq!(header_flags(&tables), [false, false, false, false]);
+}
+
+fn body_rule_rows() -> (Vec<TableRow>, Vec<PathContent>) {
+    (standard_rows(), standard_rules())
+}
+
+#[test]
+fn a_body_rule_of_the_same_weight_and_colour_rejects_the_header() {
+    let (rows, mut rules) = body_rule_rows();
+    rules.push(PathContent::line(0.0, -HEIGHT, 100.0, -HEIGHT));
+    assert!(!retained(rows, &rules));
+}
+
+#[test]
+fn a_thinner_body_rule_keeps_the_header() {
+    let (rows, mut rules) = body_rule_rows();
+    rules.push(PathContent::line(0.0, -HEIGHT, 100.0, -HEIGHT).with_stroke_width(0.5));
+    assert!(retained(rows, &rules));
+}
+
+#[test]
+fn a_lighter_body_rule_keeps_the_header() {
+    let (rows, mut rules) = body_rule_rows();
+    rules.push(restyled(
+        PathContent::line(0.0, -HEIGHT, 100.0, -HEIGHT),
+        Color::new(0.5, 0.5, 0.5),
+    ));
+    assert!(retained(rows, &rules));
+}
+
+#[test]
+fn a_partial_body_rule_does_not_reject_the_header() {
+    let (rows, mut rules) = body_rule_rows();
+    rules.push(PathContent::line(0.0, -HEIGHT, 30.0, -HEIGHT));
+    assert!(retained(rows, &rules));
 }

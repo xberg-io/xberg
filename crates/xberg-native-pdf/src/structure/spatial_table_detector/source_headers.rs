@@ -89,11 +89,13 @@ pub(super) fn infer_complete_leading_header(table: &mut Table, shading: &[Rect])
     }
 }
 
+type RuleStyle = ([u32; 3], u32);
+
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
     let [groups, leaves, first_body, ..] = rows else {
         return;
     };
-    let Some(bounds) = header_bounds(groups, leaves) else {
+    let Some(bounds) = header_bounds(groups, leaves, first_body) else {
         return;
     };
     let nearby: Vec<&PathContent> = paths.iter().filter(|path| near_header(path, bounds)).collect();
@@ -104,6 +106,7 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
         || !complete_source_band(first_body, columns, false)
         || !complete_source_band(leaves, columns, true)
         || !grouped_header_rules(groups, leaves, &nearby)
+        || body_repeats_the_header_rule(leaves, first_body, &nearby)
     {
         return;
     }
@@ -179,11 +182,30 @@ fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[&PathCont
     grouped >= 2 && remaining.is_empty()
 }
 
-fn header_bounds(groups: &TableRow, leaves: &TableRow) -> Option<Rect> {
+/// In a grid ruled alike on every row, a rule under the leaf band says nothing about the header.
+/// The band is a header only when no rule of the same colour and weight also closes the first body
+/// row. Tables that rule every row at one weight get no retained header from this path. ~keep
+fn body_repeats_the_header_rule(leaves: &TableRow, first_body: &TableRow, paths: &[&PathContent]) -> bool {
+    let (Some(first), Some(last)) = (
+        leaves.cells.first().and_then(|c| c.bbox),
+        leaves.cells.last().and_then(|c| c.bbox),
+    ) else {
+        return false;
+    };
+    let Some(body) = first_body.cells.first().and_then(|cell| cell.bbox) else {
+        return false;
+    };
+    let header = visible_rule_styles(paths, first.left(), last.right(), first.y);
+    let below = visible_rule_styles(paths, first.left(), last.right(), body.y);
+    matches!((header, below), (Some(header), Some(below)) if header == below)
+}
+
+fn header_bounds(groups: &TableRow, leaves: &TableRow, first_body: &TableRow) -> Option<Rect> {
     groups
         .cells
         .iter()
         .chain(&leaves.cells)
+        .chain(&first_body.cells)
         .filter_map(|cell| cell.bbox)
         .reduce(|all, bounds| all.union(&bounds))
 }
@@ -201,7 +223,12 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
 /// carries no alpha, so any fill is treated as opaque; a thin border drawn across a rule therefore
 /// splits it and the header is not retained, the conservative outcome. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
-    let mut visible: Vec<(f32, f32)> = Vec::new();
+    visible_rule_styles(paths, left, right, y).is_some()
+}
+
+/// The colours and weights of the segments that together make the rule visible, or `None`.
+fn visible_rule_styles(paths: &[&PathContent], left: f32, right: f32, y: f32) -> Option<Vec<RuleStyle>> {
+    let mut visible: Vec<(f32, f32, RuleStyle)> = Vec::new();
     for path in paths {
         let drawn = path.rendered_bbox();
         let (low, high) = (drawn.left(), drawn.right());
@@ -209,32 +236,43 @@ fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
             && path.stroke_color.is_some()
             && same_rule_position(path.bbox.center().y, y);
         if is_rule && dark_solid_stroke(path) {
-            visible.push((low, high));
+            visible.push((low, high, rule_style(path)));
         } else if is_rule || covering_fill(path, y) {
             visible = visible
                 .into_iter()
-                .flat_map(|(start, end)| {
-                    let before = (start, end.min(low));
-                    let after = (start.max(high), end);
-                    [before, after].into_iter().filter(|(a, b)| a < b)
+                .flat_map(|(start, end, style)| {
+                    let before = (start, end.min(low), style);
+                    let after = (start.max(high), end, style);
+                    [before, after].into_iter().filter(|(a, b, _)| a < b)
                 })
                 .collect();
         }
     }
     visible.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut covered: Option<f32> = None;
-    for (low, high) in visible {
+    let mut styles: Vec<RuleStyle> = Vec::new();
+    for (low, high, style) in visible {
         let (reached, tolerance) = covered.map_or((left, HEADER_RULE_TOLERANCE), |end| (end, RULE_GAP_TOLERANCE));
         if low > reached + tolerance {
-            return false;
+            return None;
         }
+        styles.push(style);
         let end = covered.unwrap_or(left).max(high);
         covered = Some(end);
         if end >= right - HEADER_RULE_TOLERANCE {
-            return true;
+            styles.sort_unstable();
+            styles.dedup();
+            return Some(styles);
         }
     }
-    false
+    None
+}
+
+fn rule_style(path: &PathContent) -> RuleStyle {
+    let channels = path.stroke_color.map_or([0; 3], |color| {
+        [color.r.to_bits(), color.g.to_bits(), color.b.to_bits()]
+    });
+    (channels, path.stroke_width.to_bits())
 }
 
 fn covering_fill(path: &PathContent, y: f32) -> bool {
@@ -244,6 +282,8 @@ fn covering_fill(path: &PathContent, y: f32) -> bool {
         && path.bbox.bottom() >= y + HEADER_RULE_TOLERANCE / 2.0
 }
 
+/// Dash comes from the `d` operator; a dash or alpha set through an ExtGState (`gs`) is not seen,
+/// so such a rule counts as solid and opaque. ~keep
 fn dark_solid_stroke(path: &PathContent) -> bool {
     path.dash_pattern.is_none()
         && path.stroke_width >= 0.0

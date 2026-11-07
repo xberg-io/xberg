@@ -57,3 +57,107 @@ fn a_fill_only_path_has_no_pattern() {
     let paths = paths_of(b"[3 2] 0 d 10 10 50 50 re f\n");
     assert_eq!(paths[0].dash_pattern, None);
 }
+
+#[test]
+fn dashes_that_paint_a_solid_line_leave_no_pattern() {
+    for dash in ["[3 0] 0 d", "[0 0] 0 d", "[0] 0 d", "[3 0 3 0] 0 d", "[-3 2] 0 d"] {
+        let paths = paths_of(format!("{dash} {}", rule(700)).as_bytes());
+        assert_eq!(paths[0].dash_pattern, None, "{dash}");
+    }
+}
+
+#[test]
+fn dashes_with_a_visible_gap_keep_their_pattern() {
+    for (dash, expected) in [
+        ("[5] 0 d", vec![5.0]),
+        ("[3 2 1] 0 d", vec![3.0, 2.0, 1.0]),
+        ("[0 3] 0 d", vec![0.0, 3.0]),
+    ] {
+        let paths = paths_of(format!("{dash} {}", rule(700)).as_bytes());
+        assert_eq!(paths[0].dash_pattern, Some((expected, 0.0)), "{dash}");
+    }
+}
+
+#[test]
+fn a_collapsed_matrix_leaves_no_pattern() {
+    let paths = paths_of(format!("q 0 0 0 0 0 0 cm [3 2] 0 d {}Q", rule(350)).as_bytes());
+    assert_eq!(paths[0].dash_pattern, None);
+}
+
+#[test]
+fn a_dash_set_through_an_extgstate_is_not_seen() {
+    let content = b"/GS1 gs 0 700 m 300 700 l S\n";
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![0usize];
+    for object in [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".as_slice(),
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+          /Resources << /ExtGState << /GS1 << /D [[3 2] 0] >> >> >> >>\nendobj\n",
+    ] {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(object);
+    }
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
+    pdf.extend_from_slice(content);
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    let doc = PdfDocument::from_bytes(common::finalize_pdf(pdf, &offsets)).expect("parse fixture");
+    let paths = doc.extract_paths(0).expect("extract paths");
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].dash_pattern, None, "ExtGState /D is a known gap");
+}
+
+fn paths_with_form(page_content: &[u8], form_content: &[u8], form_matrix: &str) -> Vec<PathContent> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![0usize];
+    for object in [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".as_slice(),
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+          /Resources << /XObject << /X1 5 0 R >> >> >>\nendobj\n",
+    ] {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(object);
+    }
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", page_content.len()).as_bytes());
+    pdf.extend_from_slice(page_content);
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(
+        format!(
+            "5 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] /Matrix {form_matrix} \
+             /Length {} >>\nstream\n",
+            form_content.len()
+        )
+        .as_bytes(),
+    );
+    pdf.extend_from_slice(form_content);
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    PdfDocument::from_bytes(common::finalize_pdf(pdf, &offsets))
+        .expect("parse fixture")
+        .extract_paths(0)
+        .expect("extract paths")
+}
+
+#[test]
+fn a_form_inherits_the_page_dash_keeps_its_own_inside_and_scales_by_its_matrix() {
+    let form = b"0 50 m 100 50 l S [7 1] 0 d 0 100 m 100 100 l S";
+    let paths = paths_with_form(b"[3 2] 0 d /X1 Do 0 700 m 300 700 l S", form, "[2 0 0 2 0 0]");
+    let dashes: Vec<_> = paths.iter().map(|path| path.dash_pattern.clone()).collect();
+    assert_eq!(
+        dashes,
+        [
+            Some((vec![6.0, 4.0], 0.0)),
+            Some((vec![14.0, 2.0], 0.0)),
+            Some((vec![3.0, 2.0], 0.0)),
+        ]
+    );
+}
+
+#[test]
+fn a_form_without_a_matrix_does_not_rescale_the_dash() {
+    let paths = paths_with_form(b"[3 2] 0 d /X1 Do", b"0 50 m 100 50 l S", "[1 0 0 1 0 0]");
+    assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 0.0)));
+}

@@ -71,7 +71,7 @@ impl PathGraphicsState {
     }
 }
 
-/// Graphics state stack using [`PathGraphicsState`] for allocation-free save/restore.
+/// Graphics state stack using [`PathGraphicsState`]; save/restore clones it, allocating only while a dash is set.
 pub(crate) struct PathGraphicsStateStack {
     stack: Vec<PathGraphicsState>,
 }
@@ -101,6 +101,25 @@ impl PathGraphicsStateStack {
             self.stack.pop();
         }
     }
+}
+
+/// The dash pattern as drawn, in page space, or `None` when it paints a solid line: an empty array,
+/// lengths that are negative or non-finite, a collapsed CTM scale, or gaps of zero length (§8.4.3.6).
+fn visible_dash((array, phase): &(Vec<f32>, f32), scale: f32) -> Option<(Vec<f32>, f32)> {
+    if array.is_empty() {
+        return None;
+    }
+    let scaled: Vec<f32> = array.iter().map(|length| length * scale).collect();
+    if scaled.iter().any(|length| !length.is_finite() || *length < 0.0) || !phase.is_finite() {
+        return None;
+    }
+    // An odd-length array repeats with the roles swapped, so every length is a gap at some point. ~keep
+    let gaps_are_open = if scaled.len() % 2 == 1 {
+        scaled.iter().any(|length| *length > 0.0)
+    } else {
+        scaled.iter().skip(1).step_by(2).any(|gap| *gap > 0.0)
+    };
+    gaps_are_open.then(|| (scaled, phase * scale))
 }
 
 /// Fill rule for path filling operations.
@@ -625,13 +644,7 @@ impl PathExtractor {
             path.line_cap = self.current_line_cap;
             path.line_join = self.current_line_join;
             // Dash lengths are user-space like `w`, so they scale with the CTM the same way. ~keep
-            if !self.current_dash.0.is_empty() {
-                let scale = self.ctm.stroke_scale();
-                path.dash_pattern = Some((
-                    self.current_dash.0.iter().map(|length| length * scale).collect(),
-                    self.current_dash.1 * scale,
-                ));
-            }
+            path.dash_pattern = visible_dash(&self.current_dash, self.ctm.stroke_scale());
         } else {
             path.stroke_color = None;
         }
