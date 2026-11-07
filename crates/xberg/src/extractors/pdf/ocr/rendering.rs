@@ -384,6 +384,11 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) formulas: Vec<crate::types::Formula>,
     /// First preprocessing record in paint order, matching the per-page metadata surface.
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+    /// Why each embedded image the backend rejected yielded nothing, in paint order.
+    pub(super) failure_causes: Vec<String>,
+    /// Whether any image was read at a resolution the page's placement proved rather than one
+    /// the backend estimated.
+    pub(super) used_proven_source_dpi: bool,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_image_xobjects(
@@ -403,6 +408,8 @@ pub(super) async fn recover_image_xobjects(
         tables: Vec::new(),
         formulas: Vec::new(),
         image_preprocessing: None,
+        failure_causes: Vec::new(),
+        used_proven_source_dpi: false,
     };
     for fallback in fallback_images {
         context.check_cancelled()?;
@@ -476,13 +483,22 @@ pub(super) async fn collect_xobject_recovery_result(
     budget: &mut crate::extractors::security::SecurityBudget,
     outcome: &mut XObjectRecoveryOutcome,
 ) -> crate::Result<()> {
-    let result = match backend.process_image(&fallback.bytes, ocr_config).await {
+    let ocr_config = source_dpi::with_proven_source_dpi(ocr_config, fallback.source_dpi);
+    if matches!(ocr_config, std::borrow::Cow::Owned(_)) {
+        outcome.used_proven_source_dpi = true;
+    }
+    let result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
         Err(error) => {
             tracing::debug!(
                 page = page_idx,
                 "force_ocr fallback: OCR of embedded image bytes failed: {error}"
             );
+            outcome.failure_causes.push(format!(
+                "image {}: {}",
+                fallback.paint_order,
+                source_dpi::failure_cause(&error)
+            ));
             return Ok(());
         }
     };
@@ -627,6 +643,16 @@ pub(super) async fn recover_page_text_from_image_xobjects(
         }
         return Ok(None);
     }
+    let mut fallback_images = fallback_images;
+    if context.use_proven_source_dpi {
+        let proven_dpis = crate::pdf::native::proven_dpi::proven_source_dpis(render_doc, page_idx);
+        let limits = ocr_config.security_limits.clone().unwrap_or_default();
+        for image in &mut fallback_images {
+            image.source_dpi = proven_dpis
+                .get(&image.paint_order)
+                .and_then(|placement| placement.confirmed_by(image.format, &image.bytes, &limits));
+        }
+    }
     let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(render_doc, page_idx).is_some();
     let ocr_config =
         super::pipeline::ocr_config_with_page_rotation_hint(ocr_config, 0, None, whole_page_raster, false, false);
@@ -735,9 +761,13 @@ fn render_one_full_pdf_ocr_page(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-#[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub(super) struct SourceImageBudgetExceeded(#[source] xberg_native_pdf::Error);
+mod error_source;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+mod source_dpi;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) use error_source::SourceImageBudgetExceeded;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+use error_source::render_error_source;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn render_one_full_pdf_ocr_page_with_dpi(
@@ -762,14 +792,9 @@ fn render_one_full_pdf_ocr_page_with_dpi(
     )
     .map_err(|error| {
         let message = format!("Failed to render page {page_idx} for OCR: {error:?}");
-        let source: Box<dyn std::error::Error + Send + Sync> = if exceeded {
-            Box::new(SourceImageBudgetExceeded(error))
-        } else {
-            Box::new(error)
-        };
         crate::XbergError::Parsing {
             message,
-            source: Some(source),
+            source: Some(render_error_source(error, exceeded)),
         }
     })?;
     let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
@@ -876,14 +901,9 @@ fn render_one_selected_page(
     )
     .map_err(|error| {
         let message = format!("Failed to render PDF page {}: {}", idx + 1, error);
-        let source: Box<dyn std::error::Error + Send + Sync> = if exceeded {
-            Box::new(SourceImageBudgetExceeded(error))
-        } else {
-            Box::new(error)
-        };
         crate::XbergError::Parsing {
             message,
-            source: Some(source),
+            source: Some(render_error_source(error, exceeded)),
         }
     })?;
     let rotation = page_rotations.get(idx).copied().unwrap_or(0);
@@ -973,7 +993,7 @@ pub(super) fn share_rendered_page_images(
 mod thread_probe;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
 mod xobject_text_tests;
-#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
 pub(super) use thread_probe::RENDER_CALL_THREAD_NAMES;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]
 pub(super) use thread_probe::clear_render_call_thread_ids;

@@ -38,7 +38,7 @@ on:
 
 concurrency:
   group: ci-lint-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
