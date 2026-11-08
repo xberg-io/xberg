@@ -53,6 +53,11 @@ struct Fixture {
     short_map: Option<usize>,
     /// The tag of the GSUB feature that references the ligature lookup.
     feature: &'static [u8; 4],
+    /// The /Subtype of the descendant font. A CIDFontType0 font embeds its program as /FontFile3 and has
+    /// no CIDToGIDMap: its CIDs are charset CIDs, not glyph indices.
+    cid_font_type: &'static str,
+    /// Whether the program carries its `cmap` table. Without one the renderer paints the run by CID.
+    unicode_cmap: bool,
 }
 
 impl Fixture {
@@ -64,6 +69,8 @@ impl Fixture {
             cid_offset: 0,
             short_map: None,
             feature: b"liga",
+            cid_font_type: "CIDFontType2",
+            unicode_cmap: true,
         }
     }
 }
@@ -78,6 +85,12 @@ fn be32(v: u32) -> [u8; 4] {
 
 fn len16(v: usize) -> [u8; 2] {
     be16(u16::try_from(v).expect("fixture table fits u16"))
+}
+
+/// The advance of a glyph, in the `hmtx` table and the /W array. Distinct per glyph, so a glyph painted at
+/// another code's advance moves the ink. ~keep
+fn advance(gid: u16) -> u16 {
+    400 + 50 * gid
 }
 
 /// One box outline, used for every glyph except .notdef, so the page renders with ink.
@@ -197,7 +210,7 @@ fn gsub_table(rules: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
 }
 
 /// The font program: box glyphs, a letters-only `cmap`, `post` format 3, and the GSUB rules.
-fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
+fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4], unicode_cmap: bool) -> Vec<u8> {
     let outline = box_glyph();
     let mut glyf: Vec<u8> = Vec::new();
     // Short loca (offset / 2): .notdef is empty, then one box per glyph. ~keep
@@ -233,8 +246,8 @@ fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
     hhea.extend(be16(NUM_GLYPHS));
 
     let mut hmtx: Vec<u8> = Vec::new();
-    for _ in 0..NUM_GLYPHS {
-        hmtx.extend(be16(500));
+    for gid in 0..NUM_GLYPHS {
+        hmtx.extend(be16(advance(gid)));
         hmtx.extend(be16(0));
     }
 
@@ -251,8 +264,10 @@ fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
     if !ligatures.is_empty() {
         tables.push((b"GSUB", gsub_table(ligatures, feature)));
     }
+    if unicode_cmap {
+        tables.push((b"cmap", cmap_table()));
+    }
     tables.extend([
-        (b"cmap", cmap_table()),
         (b"glyf", glyf),
         (b"head", head),
         (b"hhea", hhea),
@@ -310,14 +325,21 @@ fn push_object(pdf: &mut Vec<u8>, offsets: &mut Vec<usize>, dict: &str, stream: 
 
 /// A one-page PDF that draws "potential" in the fixture font.
 fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
-    let font = font_program(&fixture.ligatures, fixture.feature);
+    let font = font_program(&fixture.ligatures, fixture.feature, fixture.unicode_cmap);
+    let truetype = fixture.cid_font_type == "CIDFontType2";
     let codes: String = DRAWN
         .iter()
         .map(|g| format!("{:04X}", g + fixture.cid_offset))
         .collect();
     let content = format!("BT /F1 24 Tf 20 100 Td <{codes}> Tj ET");
     let to_unicode = to_unicode_cmap(fixture);
-    let font_stream_keys = format!(" /Length1 {}", font.len());
+    let font_stream_keys = if truetype {
+        format!(" /Length1 {}", font.len())
+    } else {
+        " /Subtype /OpenType".to_string()
+    };
+    let widths: Vec<String> = (0..NUM_GLYPHS).map(|gid| advance(gid).to_string()).collect();
+    let widths = format!("/W [{} [{}]]", fixture.cid_offset, widths.join(" "));
     // CID -> GID as big-endian pairs; CIDs below the offset map to .notdef. ~keep
     let mut cid_to_gid: Vec<u8> = (0..fixture.cid_offset)
         .map(|_| 0u16)
@@ -329,10 +351,21 @@ fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
     }
     let explicit_map = fixture.cid_offset != 0 || fixture.short_map.is_some();
     let cid_to_gid_ref = if explicit_map { "10 0 R" } else { "/Identity" };
+    let cid_to_gid_entry = if truetype {
+        format!(" /CIDToGIDMap {cid_to_gid_ref}")
+    } else {
+        String::new()
+    };
     let cid_font = format!(
-        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /AAAAAA+LigSans \
+        "<< /Type /Font /Subtype /{} /BaseFont /AAAAAA+LigSans \
          /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> \
-         /FontDescriptor 7 0 R /CIDToGIDMap {cid_to_gid_ref} /DW 500 >>"
+         /FontDescriptor 7 0 R{cid_to_gid_entry} /DW 500 {widths} >>",
+        fixture.cid_font_type
+    );
+    let font_file = if truetype { "FontFile2" } else { "FontFile3" };
+    let descriptor = format!(
+        "<< /Type /FontDescriptor /FontName /AAAAAA+LigSans /Flags 32 /FontBBox [0 -200 500 800] \
+         /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 /{font_file} 9 0 R >>"
     );
     let mut pdf = b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n".to_vec();
     let mut offsets = vec![0usize];
@@ -351,11 +384,7 @@ fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
             None,
         ),
         (&cid_font, None),
-        (
-            "<< /Type /FontDescriptor /FontName /AAAAAA+LigSans /Flags 32 /FontBBox [0 -200 500 800] \
-             /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 9 0 R >>",
-            None,
-        ),
+        (&descriptor, None),
         ("", Some(&to_unicode)),
         (&font_stream_keys, Some(&font)),
         ("", Some(&cid_to_gid)),
@@ -484,6 +513,26 @@ fn components_past_the_end_of_a_short_cid_to_gid_map_keep_their_cid_as_glyph() {
     assert!(
         text.contains("potential"),
         "the ligature lost its letters when its components lie past the CIDToGIDMap: {text:?}"
+    );
+}
+
+#[test]
+fn a_cid_keyed_cff_font_does_not_read_its_cids_as_glyph_indices() {
+    // CIDs are the glyph index plus one and no CIDToGIDMap exists. CID 9 ("l") has no /ToUnicode entry;
+    // glyph 9 is the "ti" ligature, whose components glyph 3 and 6 read as CIDs 3 and 6 ("o", "n"). Read
+    // as a glyph index, the unmapped CID would invent "on". ~keep
+    let fixture = Fixture {
+        cid_font_type: "CIDFontType0",
+        cid_offset: 1,
+        changed_letter: Some((L, None)),
+        extra_to_unicode: vec![(LIG_TI, "ti")],
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(text.contains("potentia"), "control letters missing: {text:?}");
+    assert!(
+        !text.contains("potentiaon"),
+        "a CID of a CID-keyed CFF font was read as a glyph index: {text:?}"
     );
 }
 

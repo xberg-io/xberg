@@ -686,7 +686,13 @@ impl FontInfo {
     /// The letters of a Type0 ligature glyph that /ToUnicode leaves unmapped (GH#2664): the
     /// components of the embedded program's GSUB ligature rules for the code's glyph, each mapped
     /// through /ToUnicode. `None` without a /ToUnicode map, an embedded program or such a rule.
+    /// Only a CIDFontType2 descendant qualifies: its CIDs are glyph indices (through the
+    /// CIDToGIDMap). A CIDFontType0 CID is a charset CID, so GSUB, which names glyph indices,
+    /// would be read at the wrong glyph and invent the letters of an unrelated ligature. ~keep
     fn gsub_ligature_letters(&self, char_code: u32) -> Option<String> {
+        if self.cid_font_type.as_deref() != Some("CIDFontType2") {
+            return None;
+        }
         let cid = u16::try_from(char_code).ok()?;
         let cmap = self.to_unicode.as_ref()?.get()?;
         let font_data = self.embedded_font_data.as_ref()?;
