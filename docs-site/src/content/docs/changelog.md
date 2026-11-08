@@ -213,6 +213,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
+  The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that spans more than one read word now keeps the OCR read.
+
 - **(pdf): Stop a math line such as `X = Y` from reading as a numbered heading (#2688).**
   A leading roman numeral or number matched the heading enumerator whatever followed it, so a formula opening with a variable (`X = Y`, `2 + ...`), a decimal (`0.03 ± 0.01`, `1.5 = x`) or a DOI tail (`10.1109/IPIN.2018`) became a heading and split its paragraph. An enumerator now fails to be a heading when a math operator (`= + < > ^ ± ≤ −` and the like) follows it, or when `/` or `*` is followed directly by an operand, as in `12/1996`. So `3.2 ± 0.1`, `4.1 × Scaling` and `1.2/1.3 Results` are no longer headings, while `IV. Results`, `II Methods`, `1/ INTRODUCTION` and `IV - Results` still are.
 
