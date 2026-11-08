@@ -1503,9 +1503,6 @@ pub async fn not_found_handler() -> ApiError {
     )
 }
 
-#[cfg(all(test, feature = "api"))]
-mod running_job_tests;
-
 #[cfg(test)]
 mod tests {
     use super::*;

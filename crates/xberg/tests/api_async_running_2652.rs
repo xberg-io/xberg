@@ -1,3 +1,5 @@
+#![cfg(all(feature = "api", feature = "tokio-runtime"))]
+
 use std::{sync::Arc, time::Duration};
 
 use axum::{
@@ -8,14 +10,10 @@ use axum::{
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-use crate::{
-    ExtractionConfig, ExtractionResult,
-    api::{
-        create_router,
-        types::{AsyncJobResponse, JobState, JobStatus},
-    },
-    plugins::{InternalDocumentExtractor, Plugin, register_document_extractor, unregister_document_extractor},
-    types::{internal::InternalDocument, internal_builder::InternalDocumentBuilder},
+use xberg::{
+    ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionResult,
+    api::create_router,
+    plugins::{DocumentExtractor, Plugin, register_document_extractor, unregister_document_extractor},
 };
 
 const MIME: &str = "text/x-djot";
@@ -37,20 +35,14 @@ impl Plugin for HeldExtractor {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-impl InternalDocumentExtractor for HeldExtractor {
-    async fn extract_content(
-        &self,
-        bytes: &[u8],
-        mime_type: &str,
-        _config: &ExtractionConfig,
-    ) -> crate::Result<InternalDocument> {
-        assert_eq!(bytes, CONTENT.as_bytes());
+impl DocumentExtractor for HeldExtractor {
+    async fn extract(&self, input: ExtractInput, _config: &ExtractionConfig) -> xberg::Result<ExtractedDocument> {
+        assert_eq!(input.bytes.as_deref(), Some(CONTENT.as_bytes()));
         self.started.notify_one();
         self.release.notified().await;
-        let mut builder = InternalDocumentBuilder::new("running-job-test");
-        builder.push_paragraph(CONTENT, vec![], None, None);
-        let mut document = builder.build();
-        document.mime_type = mime_type.to_owned();
+        let mut document = ExtractedDocument::default();
+        document.content = CONTENT.to_owned();
+        document.mime_type = MIME.into();
         Ok(document)
     }
 
@@ -86,12 +78,11 @@ async fn submit_job(app: &Router) -> String {
     let bytes = to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("submission body");
-    serde_json::from_slice::<AsyncJobResponse>(&bytes)
-        .expect("job submission JSON")
-        .job_id
+    let submission: serde_json::Value = serde_json::from_slice(&bytes).expect("job submission JSON");
+    submission["job_id"].as_str().expect("submitted job ID").to_owned()
 }
 
-async fn poll_job(app: &Router, job_id: &str) -> JobStatus {
+async fn poll_job(app: &Router, job_id: &str) -> serde_json::Value {
     let request = Request::builder()
         .uri(format!("/jobs/{job_id}"))
         .body(Body::empty())
@@ -99,8 +90,8 @@ async fn poll_job(app: &Router, job_id: &str) -> JobStatus {
     let response = app.clone().oneshot(request).await.expect("poll responded");
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.expect("poll body");
-    let status: JobStatus = serde_json::from_slice(&bytes).expect("job status JSON");
-    assert_eq!(status.job_id, job_id);
+    let status: serde_json::Value = serde_json::from_slice(&bytes).expect("job status JSON");
+    assert_eq!(status["job_id"], job_id);
     status
 }
 
@@ -118,22 +109,22 @@ async fn should_report_running_while_extractor_is_held_then_complete_after_relea
         let job_id = submit_job(&app).await;
         extractor.started.notified().await;
         let running = poll_job(&app, &job_id).await;
-        assert_eq!(running.state, JobState::Running);
-        assert_eq!(running.result, None);
-        assert_eq!(running.error, None);
+        assert_eq!(running["state"], "running");
+        assert_eq!(running.get("result"), None);
+        assert_eq!(running.get("error"), None);
 
         extractor.release.notify_one();
         let completed = loop {
             let status = poll_job(&app, &job_id).await;
-            if status.state != JobState::Running {
+            if status["state"] != "running" {
                 break status;
             }
             tokio::task::yield_now().await;
         };
-        assert_eq!(completed.state, JobState::Completed);
-        assert_eq!(completed.error, None);
+        assert_eq!(completed["state"], "completed");
+        assert_eq!(completed.get("error"), None);
         let result: ExtractionResult =
-            serde_json::from_value(completed.result.expect("completed result")).expect("extraction envelope");
+            serde_json::from_value(completed["result"].clone()).expect("extraction envelope");
         assert_eq!(result.results.len(), 1);
         assert_eq!(result.results[0].content, CONTENT);
         assert_eq!(result.results[0].mime_type, MIME);
