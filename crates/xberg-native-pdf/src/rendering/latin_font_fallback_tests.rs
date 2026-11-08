@@ -36,12 +36,23 @@ fn embedded_dejavu(base_font: &str, font: &[u8], glyph: u8) -> Vec<Vec<u8>> {
 
 /// A one-page PDF whose content uses font `/F0`, the first of `font_objects`.
 /// The font objects are numbered from 5.
-fn page_pdf((width, height): (u32, u32), content: &[u8], font_objects: Vec<Vec<u8>>) -> PdfDocument {
+fn page_pdf(size: (u32, u32), content: &[u8], font_objects: Vec<Vec<u8>>) -> PdfDocument {
+    page_pdf_with_resources(size, content, font_objects, "")
+}
+
+/// [`page_pdf`] with `extra_resources` added to the page's resource dictionary.
+fn page_pdf_with_resources(
+    (width, height): (u32, u32),
+    content: &[u8],
+    font_objects: Vec<Vec<u8>>,
+    extra_resources: &str,
+) -> PdfDocument {
     let mut objects = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R /Resources << /Font << /F0 5 0 R >> >> >>"
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R \
+             /Resources << /Font << /F0 5 0 R >> {extra_resources} >> >>"
         )
         .into_bytes(),
         pdf_stream("", content),
@@ -524,4 +535,44 @@ fn provided_font_is_used_before_the_bundled_regular_face() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(stdout.contains("1 passed"), "{stdout}");
+}
+
+/// A form XObject (object 8) that shows `text` in a font named only by the form's own
+/// resource dictionary, which is an indirect object (object 9).
+fn form_with_indirect_font_resources(text: &str) -> RenderedImage {
+    let mut objects = embedded_dejavu("DejaVuSans", crate::fonts::bundled::DEJAVU_SANS, b'0');
+    objects[0] = b"<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /Encoding /WinAnsiEncoding \
+        /FirstChar 48 /LastChar 56 /Widths [750 750 750 750 750 750 750 750 750] /FontDescriptor 6 0 R >>"
+        .to_vec();
+    objects.push(pdf_stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 60 20] /Resources 9 0 R ",
+        format!("BT /F1 10 Tf 0 4 Td ({text}) Tj ET").as_bytes(),
+    ));
+    objects.push(b"<< /Font << /F1 5 0 R >> >>".to_vec());
+    let doc = page_pdf_with_resources(
+        (100, 40),
+        b"q 1 0 0 1 20 10 cm /Fm0 Do Q",
+        objects,
+        "/XObject << /Fm0 8 0 R >>",
+    );
+    render_without_system_fonts(&doc)
+}
+
+fn separate_ink_columns(image: &RenderedImage) -> usize {
+    let width = image.width as usize;
+    let has_ink_in_column = |x: usize| {
+        (0..image.height as usize).any(|y| has_ink(image.data[(y * width + x) * 4..][..4].try_into().unwrap()))
+    };
+    let columns: Vec<bool> = (0..width).map(has_ink_in_column).collect();
+    columns.windows(2).filter(|pair| !pair[0] && pair[1]).count()
+}
+
+/// GH#2685: a page number drawn by a form whose font resources are an indirect object lost every glyph
+/// after the first, because the renderer never loaded that font and spaced the glyphs by raw font units.
+#[test]
+fn a_form_with_indirect_font_resources_draws_every_glyph_of_a_page_number() {
+    let one = separate_ink_columns(&form_with_indirect_font_resources("3"));
+    let three = separate_ink_columns(&form_with_indirect_font_resources("308"));
+    assert_eq!(one, 1, "control: a one-digit page number draws one glyph");
+    assert_eq!(three, 3, "all three digits of the page number are drawn");
 }
