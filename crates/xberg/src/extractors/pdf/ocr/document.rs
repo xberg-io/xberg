@@ -321,8 +321,12 @@ pub(super) fn native_page_covers_ocr(
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn no_ocr_rich_assets(doc: &crate::types::internal::InternalDocument) -> bool {
-    doc.tables.is_empty()
-        && doc.images.is_empty()
+    doc.tables.is_empty() && !doc.ocr_text_claimed_by_tables && no_ocr_rich_assets_besides_tables(doc)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn no_ocr_rich_assets_besides_tables(doc: &crate::types::internal::InternalDocument) -> bool {
+    doc.images.is_empty()
         && doc.diagrams.is_empty()
         && doc.uris.is_empty()
         && doc.relationships.is_empty()
@@ -338,7 +342,6 @@ fn no_ocr_rich_assets(doc: &crate::types::internal::InternalDocument) -> bool {
         && doc.processing_warnings.is_empty()
         && doc.ocr_page_failures.is_empty()
         && doc.uris_dropped == 0
-        && !doc.ocr_text_claimed_by_tables
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -405,6 +408,58 @@ pub(super) fn ocr_page_only_segments_text_with(
         && !doc.elements.is_empty()
         && doc.elements.iter().all(segmenting_ocr_text)
         && block_words == solid_words(read)
+}
+
+/// Whether a page's structure holds nothing but its read text cut into blocks and tables: the
+/// same words, each once, with no image, link, formula or markup. Tables reorder the words into
+/// cells and add rulings, so the words are compared by their letters and digits alone. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn ocr_page_only_segments_text_and_tables_with(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    use crate::types::internal::ElementKind;
+
+    let mut metadata = doc.metadata.clone();
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
+    let solid_words = |text: &str| {
+        let mut words: Vec<String> = text
+            .split_whitespace()
+            .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+            .filter(|word| !word.is_empty())
+            .collect();
+        words.sort_unstable();
+        words
+    };
+    let table_element = |element: &crate::types::internal::InternalElement| {
+        matches!(element.kind, ElementKind::Table { .. })
+            && element.layer == crate::types::document_structure::ContentLayer::Body
+            && element.annotations.is_empty()
+    };
+    let block_text = doc
+        .elements
+        .iter()
+        .filter(|element| !table_element(element))
+        .map(|element| element.text.as_str())
+        .chain(doc.tables.iter().map(|table| table.markdown.as_str()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let cells_match_markdown = doc.tables.iter().all(|table| {
+        solid_words(&table.cells.iter().flatten().cloned().collect::<Vec<_>>().join(" "))
+            == solid_words(&table.markdown)
+    });
+    !doc.tables.is_empty()
+        && no_ocr_rich_assets_besides_tables(doc)
+        && metadata.is_empty()
+        && doc
+            .elements
+            .iter()
+            .all(|element| segmenting_ocr_text(element) || table_element(element))
+        && cells_match_markdown
+        && solid_words(&block_text) == solid_words(read)
 }
 
 /// The final structure must independently retain exactly the raw OCR text. Word geometry is
