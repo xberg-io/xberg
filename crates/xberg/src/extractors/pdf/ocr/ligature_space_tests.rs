@@ -1,4 +1,4 @@
-use super::document::heuristically_restructured_ocr_pages;
+use super::document::{heuristically_restructured_ocr_pages, ocr_structure_heuristic_char_retention};
 use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::pdf::structure::adapters::{OcrFontSizeScale, ocr_doc_to_paragraphs};
 use crate::pdf::structure::types::PdfParagraph;
@@ -97,4 +97,30 @@ fn heuristically_restructured_ocr_pages_absorbs_the_space_after_a_ligature() {
             .any(|t| t.contains("The field notes describe the effort and the floor plan.")),
         "OCR ligature spaces must be absorbed, got: {text:?}"
     );
+}
+
+/// The retention gate must read each ligature code point as the letters it stands for, checked
+/// against hand-written spellings and not against the table the gate itself calls (#2689).
+#[test]
+fn ocr_retention_gate_reads_each_ligature_as_its_letters() {
+    for (ligature, spelled) in [
+        ('\u{FB00}', "ff"),
+        ('\u{FB01}', "fi"),
+        ('\u{FB02}', "fl"),
+        ('\u{FB03}', "ffi"),
+        ('\u{FB04}', "ffl"),
+        ('\u{FB05}', "st"),
+        ('\u{FB06}', "st"),
+    ] {
+        let glyph = format!("o{ligature}ce");
+        let letters = format!("o{spelled}ce");
+        for (baseline, restructured) in [(&glyph, &letters), (&letters, &glyph)] {
+            assert_eq!(
+                ocr_structure_heuristic_char_retention(restructured, baseline),
+                1.0,
+                "U+{:04X}: {baseline:?} against {restructured:?}",
+                ligature as u32
+            );
+        }
+    }
 }

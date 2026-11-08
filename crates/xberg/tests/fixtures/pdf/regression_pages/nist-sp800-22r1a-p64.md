@@ -47,9 +47,7 @@ The specific test used here is based on the distribution of the total number of 
 
 *n* −1
 
-*V* = *k* ) + 1. The *P-value* reported is
-
-*n*
+*V*~*n*~ = *k* ) + 1. The *P-value* reported is
 
 ∑
 
