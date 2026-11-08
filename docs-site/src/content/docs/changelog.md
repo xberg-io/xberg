@@ -1284,6 +1284,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Both were dropped, so the words around them ran together, in text boxes too. Tab stop definitions in a text
   box no longer add a tab before its text. (#2152)
 
+- **(ocr): Let a confident OCR read replace an invisible text layer that shares almost no words with the page picture.** (#2425)
+  A layer painted only in render mode 3 over a page-covering scan is replaced when the read repeats at most 15% of its words and passes the confidence check; visible text and layers that match the picture keep their text. The hidden-layer probe now also audits a text stream and a picture stream that are both Flate-compressed, in either order, and decodes a 300 dpi CCITT Group 4 picture with `/Decode [0 1]` and no `/Rows` or `/BlackIs1`. A layer that covers every ink band is now read too, unless the language check judged it plausible prose. Its CCITT preview budget is 16 work units per `max_iterations`.
+
 ## [1.3.11] - 2026-10-16
 
 ### Added
