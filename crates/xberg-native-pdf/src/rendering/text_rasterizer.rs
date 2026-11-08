@@ -716,8 +716,9 @@ impl TextRasterizer {
                         && info.cid_font_type.as_deref() == Some("CIDFontType2");
                     // Unicode cmap presence does not recover codes dropped by ToUnicode. For
                     // identity-encoded TrueType runs, the original CIDs still own their outlines. ~keep
-                    // A code that decodes to several letters (a ligature) is the same case: shaping
-                    // reads PDF widths by letter index, so later glyphs take later codes' widths. ~keep
+                    // A code that decodes to several letters (a ligature, a letter with an accent) is the
+                    // same case: shaping reads PDF widths by letter index, so later glyphs take later
+                    // codes' widths. ~keep
                     let lost_identity_run = cid_truetype
                         && matches!(info.encoding, crate::fonts::Encoding::Identity)
                         && info.embedded_cid_map.is_none()
