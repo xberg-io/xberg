@@ -708,11 +708,7 @@ impl FontInfo {
     /// Every CID whose glyph is `gid` under the font's CIDToGIDMap (CID == GID without one).
     fn cids_of_gid(&self, gid: u16) -> Vec<u16> {
         match &self.cid_to_gid_map {
-            Some(CIDToGIDMap::Explicit(gids)) => (0..=u16::MAX)
-                .zip(gids.iter())
-                .filter(|&(_, &mapped)| mapped == gid)
-                .map(|(cid, _)| cid)
-                .collect(),
+            Some(map @ CIDToGIDMap::Explicit(_)) => (0..=u16::MAX).filter(|&cid| map.get_gid(cid) == gid).collect(),
             Some(CIDToGIDMap::Identity) | None => vec![gid],
         }
     }

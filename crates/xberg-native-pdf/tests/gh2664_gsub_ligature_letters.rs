@@ -48,6 +48,9 @@ struct Fixture {
     changed_letter: Option<(u16, Option<&'static str>)>,
     /// Added to each glyph ID to make its CID. Nonzero writes an explicit CIDToGIDMap stream.
     cid_offset: u16,
+    /// Writes an explicit CIDToGIDMap stream with only this many entries. A CID past its end keeps
+    /// its own value as the glyph ID.
+    short_map: Option<usize>,
 }
 
 impl Fixture {
@@ -57,6 +60,7 @@ impl Fixture {
             extra_to_unicode: Vec::new(),
             changed_letter: None,
             cid_offset: 0,
+            short_map: None,
         }
     }
 }
@@ -309,12 +313,16 @@ fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
     let to_unicode = to_unicode_cmap(fixture);
     let font_stream_keys = format!(" /Length1 {}", font.len());
     // CID -> GID as big-endian pairs; CIDs below the offset map to .notdef. ~keep
-    let cid_to_gid: Vec<u8> = (0..fixture.cid_offset)
+    let mut cid_to_gid: Vec<u8> = (0..fixture.cid_offset)
         .map(|_| 0u16)
         .chain(0..NUM_GLYPHS)
         .flat_map(be16)
         .collect();
-    let cid_to_gid_ref = if fixture.cid_offset == 0 { "/Identity" } else { "10 0 R" };
+    if let Some(entries) = fixture.short_map {
+        cid_to_gid.truncate(entries * 2);
+    }
+    let explicit_map = fixture.cid_offset != 0 || fixture.short_map.is_some();
+    let cid_to_gid_ref = if explicit_map { "10 0 R" } else { "/Identity" };
     let cid_font = format!(
         "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /AAAAAA+LigSans \
          /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> \
@@ -457,5 +465,18 @@ fn components_map_through_an_explicit_cid_to_gid_map() {
     assert!(
         text.contains("potential"),
         "the ligature lost its letters when CIDs differ from glyph IDs: {text:?}"
+    );
+}
+
+#[test]
+fn components_past_the_end_of_a_short_cid_to_gid_map_keep_their_cid_as_glyph() {
+    let fixture = Fixture {
+        short_map: Some(usize::from(T)),
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(
+        text.contains("potential"),
+        "the ligature lost its letters when its components lie past the CIDToGIDMap: {text:?}"
     );
 }
