@@ -6,7 +6,7 @@ use super::super::*;
 use super::extraction_and_rotation::create_test_font;
 
 /// A simple font: every glyph is half an em wide, the space a quarter em.
-fn extractor() -> TextExtractor<'static> {
+fn half_em_font() -> FontInfo {
     let mut font = create_test_font();
     font.base_font = "Helvetica".to_string();
     font.widths = Some(
@@ -16,8 +16,12 @@ fn extractor() -> TextExtractor<'static> {
     );
     font.first_char = Some(32);
     font.last_char = Some(126);
+    font
+}
+
+fn extractor() -> TextExtractor<'static> {
     let mut extractor = TextExtractor::new();
-    extractor.add_font("F1".to_string(), font);
+    extractor.add_font("F1".to_string(), half_em_font());
     extractor
 }
 
@@ -170,4 +174,59 @@ fn tj_lead_after_a_tm_back_into_the_run_ends_the_run_at_its_drawn_width() {
     assert_eq!(drawn_at_the_pen, [("abcd".to_string(), 72.0, 13.0)]);
     let shown_at_the_pen = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [(d)] TJ ET");
     assert_eq!(shown_at_the_pen, [("abc".to_string(), 72.0, 8.0), ("d".to_string(), 80.0, 5.0)]);
+}
+
+/// The words of the spans after the merge, for a stream drawn in `font`.
+fn merged_words(font: FontInfo, stream: &str) -> Vec<String> {
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), font);
+    let spans = extractor.extract_text_spans(stream.as_bytes()).unwrap();
+    let text = spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("");
+    text.split_whitespace().map(str::to_string).collect()
+}
+
+/// A producer that sets `Tm` back to the start of a drawn line and reaches each word with a lead, as for a
+/// justified line or a table cell drawn word by word: a lead that ends `gap` units past the drawn run reads
+/// as an offset of `gap` units after its last glyph, so a real word gap is not lost. ~keep
+#[test]
+fn lead_after_a_tm_back_to_the_line_start_reads_like_an_offset_at_the_drawn_end() {
+    // "abc" is 1500 units wide at 10 points and starts at the pen. ~keep
+    for gap in [100, 150, 200, 250, 500, 3000, 12000] {
+        let set_back = format!(
+            "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 72 700 Tm [-{} (def)] TJ ET",
+            1500 + gap
+        );
+        let at_end = format!("BT /F1 10 Tf 72 700 Td (abc) Tj [-{gap} (def)] TJ ET");
+        let words = merged_words(half_em_font(), &set_back);
+        assert_eq!(words, merged_words(half_em_font(), &at_end), "gap {gap}");
+        if gap >= 250 {
+            assert_eq!(words, ["abc", "def"], "gap {gap}");
+        }
+    }
+}
+
+/// A justified line redrawn word by word from its start keeps every word gap.
+#[test]
+fn justified_line_redrawn_word_by_word_from_its_start_keeps_its_words() {
+    // "abc" ends at 87, "def" at 107; each lead reaches 3 points past the last drawn word. ~keep
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 72 700 Tm [-1800 (def)] TJ \
+                  1 0 0 1 72 700 Tm [-3800 (ghi)] TJ ET";
+    assert_eq!(merged_words(half_em_font(), stream), ["abc", "def", "ghi"]);
+}
+
+/// A `Tm` set back into a run that ends in a ligature, then a lead (GH#2322). The `Tm` ends the ligature, so
+/// a space glyph after the lead keeps its room; the lead adds a space only for the part past the ligature.
+#[test]
+fn lead_after_a_tm_back_into_a_ligature_run() {
+    use super::ligature_decode::ligature_font;
+    // "de" and the "fi" ligature end at 92; the `Tm` sets the pen 7 points back, inside the ligature. ~keep
+    for (array, words) in [
+        ("[-700 (ne)]", &["define"][..]),
+        ("[-3000 (ne)]", &["defi", "ne"][..]),
+        ("[-700 ( ne)]", &["defi", "ne"][..]),
+        ("[-450 ( ne)]", &["defi", "ne"][..]),
+    ] {
+        let stream = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 1 85 700 Tm {array} TJ ET");
+        assert_eq!(merged_words(ligature_font("00660069", None), &stream), words, "{array}");
+    }
 }
