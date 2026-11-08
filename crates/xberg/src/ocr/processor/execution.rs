@@ -1182,6 +1182,10 @@ const CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD: usize = 8;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_NUMERATOR: usize = 3;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_DENOMINATOR: usize = 4;
 const CLEAN_PAGE_TEXT_COMPONENT_MIN_NARROW_ASPECT_RATIO: usize = 3;
+/// Largest spread between the RGB channels of dark ink that still counts as neutral: black, slate, brown-black. ~keep
+/// Coloured graphics have ink far above it; scan noise on black stays below it. The photo-title check keeps its own
+/// limit: it asks whether a background is near white, not what hue the ink has.
+const INK_NEUTRAL_CHANNEL_SPREAD: u8 = 40;
 /// Maximum value of an 8-bit RGB channel.
 const RGB_CHANNEL_MAX: f64 = u8::MAX as f64;
 /// Number of channels in an RGB pixel.
@@ -1341,6 +1345,8 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     let mut light_pixels = 0usize;
     let mut foreground_pixels = 0usize;
     let mut foreground_histogram = [0usize; 256];
+    let mut foreground_by_darkest = [0usize; 256];
+    let mut coloured_by_darkest = [0usize; 256];
 
     for pixel in rgb_data.as_chunks::<RGB_CHANNEL_COUNT>().0 {
         let pixel_channel_sum = u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]);
@@ -1352,6 +1358,10 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             foreground_channel_sum += u128::from(pixel_channel_sum);
             foreground_pixels += 1;
             foreground_histogram[((pixel_channel_sum + 1) / RGB_CHANNEL_COUNT as u16) as usize] += 1;
+            let darkest = pixel[0].min(pixel[1]).min(pixel[2]);
+            let spread = pixel[0].max(pixel[1]).max(pixel[2]) - darkest;
+            foreground_by_darkest[usize::from(darkest)] += 1;
+            coloured_by_darkest[usize::from(darkest)] += usize::from(spread > INK_NEUTRAL_CHANNEL_SPREAD);
         }
     }
     let pixel_count_f64 = pixel_count as f64;
@@ -1379,6 +1389,10 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     let Some((lower_mode_max, lower_mode_pixels)) = foreground_lower_mode(&foreground_histogram) else {
         return false;
     };
+    // A dark mean from mostly coloured ink is a graphic, not dense text; it keeps its raw pixels. ~keep
+    if !bright_mean && ink_is_coloured(&foreground_by_darkest, &coloured_by_darkest, lower_mode_max) {
+        return false;
+    }
     lower_mode_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD
         && lower_mode_pixels as f64 / pixel_count_f64 >= CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD
         && lower_mode_has_text_structure(
@@ -1389,6 +1403,20 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             lower_mode_pixels,
             (!bright_mean).then_some(foreground_pixels),
         )
+}
+
+/// More than half of the ink is coloured. Ink is every foreground pixel whose darkest channel is in the lower mode.
+/// Pure blue text has a channel mean of 85, so the lower mode can leave it out, but its darkest channel is 0, as for
+/// black ink. Pale shading keeps a high darkest channel and stays out of the ink. ~keep
+fn ink_is_coloured(
+    foreground_by_darkest: &[usize; 256],
+    coloured_by_darkest: &[usize; 256],
+    lower_mode_max: u8,
+) -> bool {
+    let ink_bins = ..=usize::from(lower_mode_max);
+    let ink: usize = foreground_by_darkest[ink_bins].iter().sum();
+    let coloured_ink: usize = coloured_by_darkest[ink_bins].iter().sum();
+    coloured_ink * 2 > ink
 }
 
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
@@ -6283,6 +6311,511 @@ mod tests {
         assert!(
             should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
             "the dark text components qualify despite their contribution to the page mean"
+        );
+    }
+
+    const RING_GRID_SIDE: usize = 400;
+    const RING_GRID_PITCH: usize = 40;
+    const RING_OUTER: usize = 20;
+    const RING_HOLE: std::ops::Range<usize> = 3..17;
+
+    /// Paints one closed ring with a one-pixel outline: an open glyph-like shape on a light page. ~keep
+    fn draw_ring(data: &mut [u8], stride: usize, origin: (usize, usize), ink: [u8; 3], outline: [u8; 3]) {
+        for dy in 0..=RING_OUTER + 1 {
+            for dx in 0..=RING_OUTER + 1 {
+                let on_outline = dx == 0 || dy == 0 || dx == RING_OUTER + 1 || dy == RING_OUTER + 1;
+                let (ring_x, ring_y) = (dx.wrapping_sub(1), dy.wrapping_sub(1));
+                let in_hole = RING_HOLE.contains(&ring_x) && RING_HOLE.contains(&ring_y);
+                let color = match (on_outline, in_hole) {
+                    (true, _) => outline,
+                    (false, true) => continue,
+                    (false, false) => ink,
+                };
+                let offset = ((origin.1 + dy) * stride + origin.0 + dx) * RGB_CHANNEL_COUNT;
+                data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&color);
+            }
+        }
+    }
+
+    /// A square page with `rings_per_side` squared rings; ring `index` is painted with `ink_of(index)`. ~keep
+    fn ring_grid_page(rings_per_side: usize, ink_of: impl Fn(usize) -> [u8; 3], outline: [u8; 3]) -> Vec<u8> {
+        let mut data = vec![255u8; RING_GRID_SIDE * RING_GRID_SIDE * RGB_CHANNEL_COUNT];
+        for index in 0..rings_per_side * rings_per_side {
+            let origin = (
+                (index % rings_per_side) * RING_GRID_PITCH + 8,
+                (index / rings_per_side) * RING_GRID_PITCH + 8,
+            );
+            draw_ring(&mut data, RING_GRID_SIDE, origin, ink_of(index), outline);
+        }
+        data
+    }
+
+    fn ring_grid_raster(ink: [u8; 3], outline: [u8; 3]) -> Vec<u8> {
+        ring_grid_page(RING_GRID_SIDE / RING_GRID_PITCH, |_| ink, outline)
+    }
+
+    fn mean_luminance(rgb: &[u8]) -> f64 {
+        rgb.iter().map(|&channel| f64::from(channel)).sum::<f64>() / (rgb.len() as f64 * RGB_CHANNEL_MAX)
+    }
+
+    #[test]
+    fn dense_neutral_ink_with_a_dark_mean_selects_default_preprocessing() {
+        let neutral = ring_grid_raster([0; 3], [128; 3]);
+        let side = RING_GRID_SIDE as u32;
+        assert!(
+            mean_luminance(&neutral) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+        assert!(should_apply_default_preprocessing(&neutral, side, side));
+    }
+
+    #[test]
+    fn dense_coloured_graphic_with_a_dark_mean_keeps_raw_pixels() {
+        let coloured = ring_grid_raster([0, 0, 160], [96, 96, 208]);
+        let side = RING_GRID_SIDE as u32;
+        assert!(
+            mean_luminance(&coloured) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+        assert!(!should_apply_default_preprocessing(&coloured, side, side));
+    }
+
+    #[test]
+    fn dense_coloured_graphic_with_a_dark_mean_reaches_ocr_unprocessed() {
+        let coloured = ring_grid_raster([0, 0, 160], [96, 96, 208]);
+        let side = RING_GRID_SIDE as u32;
+
+        let prepared = prepare_ocr_image(coloured.clone(), side, side, None, None, false, None, false);
+
+        assert!(
+            !prepared.apply_pix_preprocessing,
+            "the coloured graphic must keep its raw pixels"
+        );
+        assert_eq!(prepared.data, coloured);
+    }
+
+    #[test]
+    fn dense_neutral_ink_with_a_dark_mean_reaches_ocr_preprocessed() {
+        let neutral = ring_grid_raster([0; 3], [128; 3]);
+        let side = RING_GRID_SIDE as u32;
+
+        let prepared = prepare_ocr_image(neutral, side, side, None, None, false, None, false);
+
+        assert!(
+            prepared.apply_pix_preprocessing,
+            "dense neutral ink must take the default preprocessing"
+        );
+    }
+
+    const COLOURED_INK: [u8; 3] = [0, 0, 160];
+    const GRID_OUTLINE: [u8; 3] = [128; 3];
+
+    fn assert_dark_mean(rgb: &[u8]) {
+        assert!(
+            mean_luminance(rgb) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+    }
+
+    #[test]
+    fn ink_up_to_the_neutral_spread_is_preprocessed_and_one_step_beyond_keeps_raw_pixels() {
+        let side = RING_GRID_SIDE as u32;
+        assert_eq!(
+            INK_NEUTRAL_CHANNEL_SPREAD, 40,
+            "the boundary below is written for a spread of 40"
+        );
+        for spread in [0, 8, 9, 20, 40] {
+            let ink = ring_grid_raster([0, 0, spread], GRID_OUTLINE);
+            assert_dark_mean(&ink);
+            assert!(
+                should_apply_default_preprocessing(&ink, side, side),
+                "ink at spread {spread} is neutral and must be preprocessed"
+            );
+        }
+        for spread in [41, 60] {
+            let ink = ring_grid_raster([0, 0, spread], GRID_OUTLINE);
+            assert_dark_mean(&ink);
+            assert!(
+                !should_apply_default_preprocessing(&ink, side, side),
+                "ink at spread {spread} is coloured and must keep its raw pixels"
+            );
+        }
+    }
+
+    /// Rings in a 10 by 10 grid; the first `coloured_rings` are coloured ink and the rest are neutral. ~keep
+    fn grid_with_coloured_rings(coloured_rings: usize) -> Vec<u8> {
+        let ink_of = |index: usize| if index < coloured_rings { COLOURED_INK } else { [0; 3] };
+        ring_grid_page(RING_GRID_SIDE / RING_GRID_PITCH, ink_of, GRID_OUTLINE)
+    }
+
+    #[test]
+    fn ink_that_is_exactly_half_coloured_is_preprocessed_and_one_ring_more_keeps_raw_pixels() {
+        let side = RING_GRID_SIDE as u32;
+        let rings = (RING_GRID_SIDE / RING_GRID_PITCH).pow(2);
+        let half = grid_with_coloured_rings(rings / 2);
+        let more_than_half = grid_with_coloured_rings(rings / 2 + 1);
+        assert_dark_mean(&half);
+        assert!(should_apply_default_preprocessing(&half, side, side));
+        assert!(!should_apply_default_preprocessing(&more_than_half, side, side));
+    }
+
+    const PANEL_PAGE_WIDTH: usize = 600;
+    const PANEL_PAGE_HEIGHT: usize = 400;
+
+    /// 80 rings on the left, 23 040 ink pixels in `ring_ink`, and on the right a solid panel of the same
+    /// pixel count in `panel`. Foreground is split exactly in half between rings and panel. ~keep
+    fn rings_beside_panel(ring_ink: [u8; 3], panel: [u8; 3]) -> Vec<u8> {
+        let mut data = vec![255u8; PANEL_PAGE_WIDTH * PANEL_PAGE_HEIGHT * RGB_CHANNEL_COUNT];
+        for index in 0..80 {
+            let origin = ((index % 10) * RING_GRID_PITCH + 8, (index / 10) * RING_GRID_PITCH + 8);
+            draw_ring(&mut data, PANEL_PAGE_WIDTH, origin, ring_ink, ring_ink);
+        }
+        for y in 20..164 {
+            for x in 420..580 {
+                let offset = (y * PANEL_PAGE_WIDTH + x) * RGB_CHANNEL_COUNT;
+                data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&panel);
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn coloured_graphic_beside_an_equal_neutral_panel_keeps_raw_pixels() {
+        let (width, height) = (PANEL_PAGE_WIDTH as u32, PANEL_PAGE_HEIGHT as u32);
+        let page = rings_beside_panel(COLOURED_INK, [150; 3]);
+        assert_dark_mean(&page);
+        assert!(
+            !should_apply_default_preprocessing(&page, width, height),
+            "the ink is coloured; the neutral panel must not outvote it"
+        );
+        let prepared = prepare_ocr_image(page.clone(), width, height, None, None, false, None, false);
+        assert!(!prepared.apply_pix_preprocessing);
+        assert_eq!(prepared.data, page);
+    }
+
+    /// The shape of a debugger screenshot: pale blue paper, black, dark blue and green text in the lower mode, and
+    /// pure blue text whose channel mean of 85 puts it above the lower mode. Ring counts per ink, in this order. ~keep
+    const SCREENSHOT_INKS: [([u8; 3], usize); 5] = [
+        ([0; 3], 34),
+        ([0, 0, 132], 15),
+        ([0, 129, 0], 5),
+        ([0, 0, 255], 38),
+        ([129; 3], 8),
+    ];
+
+    fn screenshot_shaped_page() -> Vec<u8> {
+        let mut data = [224, 224, 255].repeat(RING_GRID_SIDE * RING_GRID_SIDE);
+        let inks = SCREENSHOT_INKS
+            .iter()
+            .flat_map(|&(ink, rings)| std::iter::repeat_n(ink, rings));
+        for (index, ink) in inks.enumerate() {
+            let origin = ((index % 10) * RING_GRID_PITCH + 8, (index / 10) * RING_GRID_PITCH + 8);
+            draw_ring(&mut data, RING_GRID_SIDE, origin, ink, ink);
+        }
+        data
+    }
+
+    #[test]
+    fn coloured_text_on_pale_paper_keeps_raw_pixels_when_pure_blue_falls_outside_the_lower_mode() {
+        let side = RING_GRID_SIDE as u32;
+        let page = screenshot_shaped_page();
+        assert_dark_mean(&page);
+        let bin = |pixel: &[u8; 3]| usize::from((pixel.iter().map(|&c| u16::from(c)).sum::<u16>() + 1) / 3);
+        let mut histogram = [0usize; 256];
+        for pixel in page.as_chunks::<RGB_CHANNEL_COUNT>().0 {
+            if pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD {
+                histogram[bin(pixel)] += 1;
+            }
+        }
+        let (lower_mode_max, _) = foreground_lower_mode(&histogram).expect("the page has a lower mode");
+        let lower_mode = ..=usize::from(lower_mode_max);
+        assert!(
+            lower_mode.contains(&bin(&[0, 0, 132])) && !lower_mode.contains(&bin(&[0, 0, 255])),
+            "the lower mode must hold the dark blue ink and leave out the pure blue: {lower_mode_max}"
+        );
+        assert!(
+            !should_apply_default_preprocessing(&page, side, side),
+            "most of the ink is coloured once the pure blue text counts as ink"
+        );
+        let prepared = prepare_ocr_image(page.clone(), side, side, None, None, false, None, false);
+        assert!(!prepared.apply_pix_preprocessing);
+        assert_eq!(prepared.data, page);
+    }
+
+    /// 100 rings in the left 400 columns, the first `coloured_rings` in coloured ink and the rest black, and a
+    /// pale blue panel of 90 by 160 pixels on the right. ~keep
+    fn mostly_black_rings_beside_a_pale_panel(coloured_rings: usize) -> Vec<u8> {
+        let mut data = vec![255u8; PANEL_PAGE_WIDTH * PANEL_PAGE_HEIGHT * RGB_CHANNEL_COUNT];
+        for index in 0..100 {
+            let origin = ((index % 10) * RING_GRID_PITCH + 8, (index / 10) * RING_GRID_PITCH + 8);
+            let ink = if index < coloured_rings { COLOURED_INK } else { [0; 3] };
+            draw_ring(&mut data, PANEL_PAGE_WIDTH, origin, ink, ink);
+        }
+        for y in 20..180 {
+            for x in 420..510 {
+                let offset = (y * PANEL_PAGE_WIDTH + x) * RGB_CHANNEL_COUNT;
+                data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&[200, 220, 255]);
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn mostly_black_ink_beside_a_pale_panel_is_preprocessed_though_most_page_pixels_are_coloured() {
+        let (width, height) = (PANEL_PAGE_WIDTH as u32, PANEL_PAGE_HEIGHT as u32);
+        let page = mostly_black_rings_beside_a_pale_panel(34);
+        assert_dark_mean(&page);
+        let share = coloured_foreground_share(&page);
+        assert!(
+            share > 0.5,
+            "the pale panel and the coloured rings must be most of the page pixels: {share}"
+        );
+        assert!(
+            should_apply_default_preprocessing(&page, width, height),
+            "two thirds of the ink is black; the pale panel is not ink"
+        );
+        let prepared = prepare_ocr_image(page, width, height, None, None, false, None, false);
+        assert!(prepared.apply_pix_preprocessing);
+    }
+
+    #[test]
+    fn coloured_graphic_with_a_bright_mean_is_preprocessed_as_before_the_dark_mean_lane() {
+        let side = RING_GRID_SIDE as u32;
+        let sparse = ring_grid_page(5, |_| COLOURED_INK, [96, 96, 208]);
+        assert!(
+            mean_luminance(&sparse) >= CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "fewer rings leave the mean bright"
+        );
+        assert!(
+            should_apply_default_preprocessing(&sparse, side, side),
+            "a bright mean with strong contrast decides before the ink is measured"
+        );
+
+        // Light grey shading dominates the foreground, so the contrast is weak and the ink is measured. ~keep
+        let mut shaded = vec![255u8; RING_GRID_SIDE * RING_GRID_SIDE * RGB_CHANNEL_COUNT];
+        for index in 0..10 {
+            draw_ring(
+                &mut shaded,
+                RING_GRID_SIDE,
+                (index * RING_GRID_PITCH + 8, 8),
+                COLOURED_INK,
+                COLOURED_INK,
+            );
+        }
+        for y in 100..260 {
+            for x in 100..250 {
+                let offset = (y * RING_GRID_SIDE + x) * RGB_CHANNEL_COUNT;
+                shaded[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&[225; 3]);
+            }
+        }
+        assert!(mean_luminance(&shaded) >= CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD);
+        assert!(
+            foreground_luminance(&shaded) > 1.0 - CLEAN_PAGE_MIN_FOREGROUND_CONTRAST,
+            "the shading must make the contrast weak"
+        );
+        assert!(
+            should_apply_default_preprocessing(&shaded, side, side),
+            "on a bright mean the coloured ink does not decide, as before the dark-mean lane"
+        );
+    }
+
+    /// Mean luminance of the pixels that are not light, which the contrast check compares with the paper.
+    fn foreground_luminance(rgb: &[u8]) -> f64 {
+        let foreground: Vec<u16> = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .map(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>())
+            .filter(|&sum| sum < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .collect();
+        let channels = RGB_CHANNEL_COUNT as f64 * RGB_CHANNEL_MAX;
+        foreground.iter().map(|&sum| f64::from(sum)).sum::<f64>() / (foreground.len() as f64 * channels)
+    }
+
+    /// Share of the foreground pixels that are coloured, counted over the whole page and not over the ink.
+    fn coloured_foreground_share(rgb: &[u8]) -> f64 {
+        let foreground: Vec<&[u8; 3]> = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .collect();
+        let coloured = foreground
+            .iter()
+            .filter(|pixel| {
+                pixel[0].max(pixel[1]).max(pixel[2]) - pixel[0].min(pixel[1]).min(pixel[2]) > INK_NEUTRAL_CHANNEL_SPREAD
+            })
+            .count();
+        coloured as f64 / foreground.len() as f64
+    }
+
+    const PALE_TINT: [u16; 3] = [200, 220, 255];
+
+    /// Share of the pixels that are not light, which is what the 80 percent light-pixel gate reads.
+    fn foreground_share(rgb: &[u8]) -> f64 {
+        let foreground = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .count();
+        foreground as f64 / (rgb.len() / RGB_CHANNEL_COUNT) as f64
+    }
+
+    /// The repeated-line raster with a pale blue tint over the top `band` rows of every line, like shaded
+    /// form fields. The glyphs keep their pixels; only the white paper takes the tint. ~keep
+    fn tinted_field_lines(band: u32) -> Option<image::RgbImage> {
+        let mut raster = repeated_line_raster(REPEATED_LINE_COUNT, false)?;
+        for (y, row) in raster.enumerate_rows_mut() {
+            if y % REPEATED_LINE_PITCH >= band {
+                continue;
+            }
+            for (_, _, pixel) in row {
+                for (channel, tint) in pixel.0.iter_mut().zip(PALE_TINT) {
+                    *channel = (u16::from(*channel) * tint / 255) as u8;
+                }
+            }
+        }
+        Some(raster)
+    }
+
+    /// The widest tint that still leaves the page 80 percent light, so the page reaches the ink check. ~keep
+    fn pale_tinted_field_lines() -> Option<(image::RgbImage, f64)> {
+        let plain = foreground_share(repeated_line_raster(REPEATED_LINE_COUNT, false)?.as_raw());
+        (1..REPEATED_LINE_PITCH).rev().find_map(|band| {
+            let raster = tinted_field_lines(band)?;
+            let share = foreground_share(raster.as_raw());
+            (share <= 1.0 - CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD - 0.01).then_some((raster, share - plain))
+        })
+    }
+
+    const CORPUS_TEXT_LINE: &str =
+        "needs test_documents/images/test_hello_world.png: run `python3 test_documents/scripts/fetch_corpus.py`";
+
+    #[test]
+    fn dense_text_with_pale_tinted_fields_is_preprocessed_though_most_page_pixels_are_coloured() {
+        let (mut raster, tint_share) = pale_tinted_field_lines().expect(CORPUS_TEXT_LINE);
+        assert!(
+            tint_share > 0.02,
+            "the tint must cover a real share of the page: {tint_share}"
+        );
+        // Recolour the glyphs of the first lines until the tint and the coloured glyphs are most of the page
+        // pixels, so that only a count over the ink keeps the page preprocessed. ~keep
+        let mut coloured_lines = 0;
+        while coloured_foreground_share(raster.as_raw()) <= 0.5 {
+            assert!(
+                coloured_lines < REPEATED_LINE_COUNT / 2,
+                "the tint must outvote the black glyphs"
+            );
+            let top = REPEATED_LINE_PITCH * u32::try_from(coloured_lines).expect("small test raster");
+            for y in top..top + REPEATED_LINE_PITCH {
+                for x in 0..raster.width() {
+                    let pixel = raster.get_pixel_mut(x, y);
+                    if pixel.0.iter().all(|&channel| channel < 128) {
+                        pixel.0 = COLOURED_INK;
+                    }
+                }
+            }
+            coloured_lines += 1;
+        }
+        assert_dark_mean(raster.as_raw());
+        assert!(
+            should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+            "{coloured_lines} of {REPEATED_LINE_COUNT} lines are coloured; the pale tint is not ink"
+        );
+    }
+
+    #[tokio::test]
+    async fn dense_black_text_with_pale_tinted_fields_keeps_every_word() {
+        let (raster, _) = pale_tinted_field_lines().expect(CORPUS_TEXT_LINE);
+        let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+        assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+        assert!(result.metadata.image_preprocessing.is_some());
+    }
+
+    /// The repeated-line raster with the black glyph pixels recoloured to `ink`; the white paper is unchanged. ~keep
+    fn inked_lines(ink: [u8; 3]) -> Option<image::RgbImage> {
+        let mut raster = repeated_line_raster(REPEATED_LINE_COUNT, false)?;
+        for pixel in raster.pixels_mut() {
+            let paper = u16::from(pixel.0[0]);
+            for (channel, ink) in pixel.0.iter_mut().zip(ink) {
+                *channel = ((u16::from(ink) * (255 - paper) + 255 * paper) / 255) as u8;
+            }
+        }
+        Some(raster)
+    }
+
+    #[test]
+    fn dense_slate_and_tinted_black_text_with_a_dark_mean_is_preprocessed() {
+        for ink in [[20, 28, 40], [0, 0, 40]] {
+            let raster = inked_lines(ink).expect(CORPUS_TEXT_LINE);
+            assert_dark_mean(raster.as_raw());
+            assert!(
+                should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+                "ink {ink:?} is neutral and must be preprocessed"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn dense_slate_and_tinted_black_text_reads_every_line() {
+        for ink in [[20, 28, 40], [0, 0, 40]] {
+            let raster = inked_lines(ink).expect(CORPUS_TEXT_LINE);
+            assert_dark_mean(raster.as_raw());
+            let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+            assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+            assert!(
+                result.metadata.image_preprocessing.is_some(),
+                "ink {ink:?} must take the default preprocessing"
+            );
+        }
+    }
+
+    /// Ink of each line of a debugger listing: black, dark blue and green in the lower mode, pure blue and grey above
+    /// it, as in the screenshot-shaped page. ~keep
+    const LISTING_INKS: [[u8; 3]; 12] = [
+        [0; 3],
+        [0, 0, 255],
+        [0, 0, 132],
+        [0; 3],
+        [0, 0, 255],
+        [0, 129, 0],
+        [0; 3],
+        [129; 3],
+        [0, 0, 132],
+        [0; 3],
+        [0, 0, 255],
+        [0; 3],
+    ];
+
+    /// The repeated-line text at half size as a 1-bit screenshot: every glyph pixel takes the ink of its line, with
+    /// no anti-aliasing, and the paper is pale blue. At full size Tesseract drops letters from the raw pixels. ~keep
+    fn coloured_listing() -> Option<image::RgbImage> {
+        let full = repeated_line_raster(LISTING_INKS.len(), false)?;
+        let mut raster = image::imageops::resize(
+            &full,
+            full.width() / 2,
+            full.height() / 2,
+            image::imageops::FilterType::Lanczos3,
+        );
+        for (y, row) in raster.enumerate_rows_mut() {
+            let ink = LISTING_INKS[(y / (REPEATED_LINE_PITCH / 2)) as usize];
+            for (_, _, pixel) in row {
+                pixel.0 = if pixel.0[0] < 128 { ink } else { [224, 224, 255] };
+            }
+        }
+        Some(raster)
+    }
+
+    #[tokio::test]
+    async fn coloured_screenshot_listing_reads_every_line_from_its_raw_pixels() {
+        let raster = coloured_listing().expect(CORPUS_TEXT_LINE);
+        assert_dark_mean(raster.as_raw());
+        let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+        assert_repeated_line_text(&result, LISTING_INKS.len(), "11");
+        assert!(
+            result.metadata.image_preprocessing.is_none(),
+            "the coloured screenshot must reach OCR with its raw pixels"
         );
     }
 
