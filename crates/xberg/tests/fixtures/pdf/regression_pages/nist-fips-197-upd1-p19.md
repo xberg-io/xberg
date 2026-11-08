@@ -1,8 +1,10 @@
 # 5\. Algorithm Specifcations
 
-The general function for executing AES-128, AES-192, or AES-256 is denoted by CIPHER(); its inverse is denoted by INVCIPHER().
+The general function for executing AES-128, AES-192, or AES-256 is denoted by CIPHER(); its
 
 2
+
+inverse is denoted by INVCIPHER().
 
 The core of the algorithms for CIPHER() and INVCIPHER() is a sequence of fxed transformations of the state called a round. Each round requires an additional input called the round key; the round key is a block that is usually represented as a sequence of four words (i.e., 16 bytes).
 

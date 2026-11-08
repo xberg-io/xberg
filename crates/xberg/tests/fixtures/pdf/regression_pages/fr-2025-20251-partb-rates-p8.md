@@ -1,6 +1,8 @@
-# 52070 Federal Register / Vol. 90, No. 221 / Wednesday, November 19, 2025 / Notices TABLE 2—PROJECTION FACTORS
+# **52070 Federal Register** / Vol. 90, No. 221 / Wednesday, November 19, 2025 / Notices TABLE 2—PROJECTION FACTORS<sup>1</sup>—Continued
 
-1—Continued [12-Month Periods Ending December 31 of 2023–2026 (in percent)] Physician Durable Physician- Other Home Other Practitioner Outpatient Hospital Managed Calendar year fee medical administered practitioner health institutional Lab 2 hospital lab 4 care schedule equipment drugs services 3 agency services 5 2023 ............... 2.6 13.5 ¥1.6 27.9 15.3 5.4 2.6 ¥9.7 7.6 8.5 2024 ............... 4.0 6.6 7.7 40.4 ¥2.5 8.1 3.2 1.8 10.0 3.1 2025 ............... 8.8 8.5 8.0 33.8 12.1 14.3 5.6 12.1 16.5 5.4 2026 ............... 7.2 8.5 7.0 ¥26.2 9.6 11.7 9.2 4.7 8.2 8.1 1 All values for services other than managed care are per fee-for-service enrollee. Managed care values are per managed care enrollee.
+[12-Month Periods Ending December 31 of 2023–2026 (in percent)] Physician Durable Physician- Other Home Other Practitioner Outpatient Hospital Managed Calendar year fee medical administered practitioner health institutional Lab<sup>2</sup> hospital lab<sup>4</sup> care schedule equipment drugs services<sup>3</sup> agency services<sup>5</sup> 2023 ............... 2.6 13.5 ¥1.6 27.9 15.3 5.4 2.6 ¥9.7 7.6 8.5 2024 ............... 4.0 6.6 7.7 40.4 ¥2.5 8.1 3.2 1.8 10.0 3.1 2025 ............... 8.8 8.5 8.0 33.8 12.1 14.3 5.6 12.1 16.5 5.4 2026 ............... 7.2 8.5 7.0 ¥26.2 9.6 11.7 9.2 4.7 8.2 8.1
+
+1 All values for services other than managed care are per fee-for-service enrollee. Managed care values are per managed care enrollee.
 
 2 Includes services paid under the lab fee schedule furnished in the physician's office or an independent lab.
 
@@ -18,9 +20,7 @@ Covered services (at level recognized):
 
 OF
 
-Physician fee schedule ............................................................................. Durable medical equipment ...................................................................... Practitioner lab
-
-1 ........................................................................................ Physician-administered drugs .................................................................. Other practitioner services 2 ..................................................................... Outpatient hospital .................................................................................... Home health agency ................................................................................ Hospital lab 3 ............................................................................................. Other institutional services
+Physician fee schedule ............................................................................. Durable medical equipment ...................................................................... Practitioner lab<sup>1</sup> ........................................................................................ Physician-administered drugs .................................................................. Other practitioner services<sup>2</sup> ..................................................................... Outpatient hospital .................................................................................... Home health agency ................................................................................ Hospital lab<sup>3</sup> ............................................................................................. Other institutional services
 
 Cost sharing:
 
@@ -112,9 +112,7 @@ Covered services (at level recognized):
 
 OF
 
-Physician fee schedule ............................................................................. Durable medical equipment ...................................................................... Practitioner lab
-
-1 ........................................................................................ Physician-administered drugs .................................................................. Other practitioner services 2 ..................................................................... Outpatient hospital .................................................................................... Home health agency ................................................................................ Hospital lab 3 ............................................................................................. Other institutional services
+Physician fee schedule ............................................................................. Durable medical equipment ...................................................................... Practitioner lab<sup>1</sup> ........................................................................................ Physician-administered drugs .................................................................. Other practitioner services<sup>2</sup> ..................................................................... Outpatient hospital .................................................................................... Home health agency ................................................................................ Hospital lab<sup>3</sup> ............................................................................................. Other institutional services
 
 Cost sharing:
 

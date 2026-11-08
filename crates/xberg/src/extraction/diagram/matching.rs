@@ -229,7 +229,7 @@ pub(super) fn find_arrowheads(
 /// of one such stroke land on a chart's first and last bar and read as an
 /// edge between them. What tells the family apart from a diagram is the
 /// other members: nothing a layout engine draws puts three-or-more
-/// same-coloured, same-dashed, axis-aligned strokes at a regular spacing
+/// same-coloured, axis-aligned strokes at a regular spacing
 /// that all cover the same span of the canvas.
 ///
 /// A straightforward "does this stroke cross a shape's interior" rule was
@@ -255,7 +255,12 @@ pub(super) fn find_gridlines(connectors: &[Connector], snap: f32) -> Vec<bool> {
     // Horizontal and vertical are judged separately: a family only ever runs
     // one direction, and a diagonal or curved stroke belongs to neither.
     for horizontal in [true, false] {
-        let mut groups: HashMap<(String, bool), Vec<usize>> = HashMap::new();
+        // Families are tried by colour alone and by colour and dash style. Colour alone catches a
+        // grid whose lines mix dashed and solid strokes (a dashed minor grid between solid majors);
+        // the finer key still isolates a regular dashed grid drawn beside irregular solid axes of
+        // the same colour, which would break the spacing test if pooled with it. ~keep
+        let mut by_colour: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_style: HashMap<(String, bool), Vec<usize>> = HashMap::new();
         for (index, connector) in connectors.iter().enumerate() {
             let axis_aligned = if horizontal {
                 (connector.start.1 - connector.end.1).abs() <= GRIDLINE_AXIS_EPSILON
@@ -265,11 +270,12 @@ pub(super) fn find_gridlines(connectors: &[Connector], snap: f32) -> Vec<bool> {
             if !axis_aligned {
                 continue;
             }
-            let key = (connector.stroke.clone().unwrap_or_default(), connector.dashed);
-            groups.entry(key).or_default().push(index);
+            let stroke = connector.stroke.clone().unwrap_or_default();
+            by_colour.entry(stroke.clone()).or_default().push(index);
+            by_style.entry((stroke, connector.dashed)).or_default().push(index);
         }
 
-        for indices in groups.values() {
+        for indices in by_colour.values().chain(by_style.values()) {
             if indices.len() >= GRIDLINE_MIN_COUNT && is_gridline_family(connectors, indices, horizontal, snap) {
                 for &index in indices {
                     marked[index] = true;

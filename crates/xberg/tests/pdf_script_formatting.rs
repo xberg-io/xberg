@@ -379,3 +379,68 @@ fn should_use_the_source_gap_for_a_raised_isotope_like_prefix() {
         assert_eq!(markdown(&bytes).trim(), expected, "{gap}pt source gap");
     }
 }
+
+fn regression_page_markdown(name: &str) -> Option<String> {
+    let skip = std::env::var_os("XBERG_REGRESSION_PAGES_SKIP").is_some_and(|value| value == "1");
+    if skip {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "XBERG_REGRESSION_PAGES_SKIP=1 must not be set in CI"
+        );
+        return None;
+    }
+    let path = helpers::get_test_file_path(&format!("pdf/regression_pages/{name}.pdf"));
+    assert!(
+        path.exists(),
+        "{name}.pdf is missing. The corpus is fetched with: python3 test_documents/scripts/fetch_corpus.py"
+    );
+    let config = ExtractionConfig {
+        disable_ocr: true,
+        use_cache: false,
+        enable_quality_processing: false,
+        output_format: OutputFormat::Markdown,
+        ..Default::default()
+    };
+    let document = helpers::extract_uri_document_blocking(&path, Some("application/pdf"), &config)
+        .expect("regression page extracts");
+    Some(document.content)
+}
+
+fn marker_only_paragraphs(markdown: &str) -> Vec<&str> {
+    markdown
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            let digits = line.chars().filter(|ch| !ch.is_whitespace()).collect::<String>();
+            (1..=3).contains(&digits.len()) && digits.chars().all(|ch| ch.is_ascii_digit() || ch == '′')
+        })
+        .collect()
+}
+
+#[test]
+fn should_keep_raised_exponents_inside_their_line_on_a_real_page() {
+    let Some(markdown) = regression_page_markdown("gutenberg-36670-p106") else {
+        return;
+    };
+    assert!(
+        markdown.contains("(x + 3y)<sup>2</sup> − 16a<sup>2</sup>"),
+        "{markdown}"
+    );
+    let plain = markdown.replace("<sup>", "").replace("</sup>", "");
+    assert!(
+        plain.contains("Therefore (x + 3y)2 − 16a2 = (x + 3y + 4a)(x + 3y − 4a)."),
+        "{markdown}"
+    );
+}
+
+#[test]
+fn should_keep_a_footnote_mark_inside_its_sentence_on_a_real_page() {
+    let Some(markdown) = regression_page_markdown("fr-2026-08190-hcbs-p2") else {
+        return;
+    };
+    assert_eq!(marker_only_paragraphs(&markdown), Vec::<&str>::new(), "{markdown}");
+    assert!(
+        markdown.contains("State Medicaid Director Letter \\# 22–003"),
+        "{markdown}"
+    );
+}

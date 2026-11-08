@@ -19,12 +19,10 @@
 | 333413 | Industrial and Commercial Fan and Blower and Air Purification Equipment Manufacturing6 |  | 500 |
 | 333414 | Heating Equipment (except Warm Air Furnaces) Manufacturing6 |  | 500 |
 | 333415 | Air Conditioning and Warm Air Heating Equipment and Commercial and Industrial Refrigeration Equipment Manufacturing6 |  | 1,250 |
-| 333511 | Industrial Mold Manufacturing6 |  | 500 |
+| 333511 | Industrial Mold Manufacturing<sup>6</sup> |  | 500 |
 | 333514 | Special Die and Tool, Die Set, Jig and Fixture Manufacturing6 |  | 500 |
 | 333515 | Cutting Tool and Machine Tool Accessory Manufacturing6 |  | 500 |
 | 333517 | Machine Tool Manufacturing6 |  | 500 |
 | 333519 | Rolling Mill and Other Metalworking Machinery Manufacturing6 |  | 500 |
 | 333611 | Turbine and Turbine Generator Set Unit Manufacturing6 |  | 1,500 |
 | 333612 | Speed Changer, Industrial High Speed Drive and Gear Manufacturing6 |  | 750 |
-
-6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6

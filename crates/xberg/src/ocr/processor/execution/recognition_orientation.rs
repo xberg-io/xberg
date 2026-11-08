@@ -113,6 +113,11 @@ fn agree(
     .then_some(orientation)
 }
 
+pub(super) struct Oriented {
+    pub(super) tables: Option<Vec<OcrTable>>,
+    pub(super) page_down: bool,
+}
+
 pub(super) fn tables(
     api: &TesseractAPI,
     tsv: &str,
@@ -120,18 +125,38 @@ pub(super) fn tables(
     config: &TesseractConfig,
     dimensions: (u32, u32),
     limits: &SecurityLimits,
-) -> Option<Vec<OcrTable>> {
+) -> Oriented {
+    let none = Oriented {
+        tables: None,
+        page_down: false,
+    };
     let byte_limit = MAX_ORIENTED_TSV_BYTES.min(limits.max_content_size);
     let word_limit = MAX_ORIENTED_WORDS.min(limits.max_iterations);
     if !supports(config, tsv.len(), original, limits) {
-        return None;
+        return none;
     }
     tracing::debug!(
         psm = config.psm,
         words = original.words.len(),
         "Qualifying recognition-frame table assembly"
     );
-    let frame = uniform_frame(api, dimensions, word_limit)?;
+    let Some(frame) = uniform_frame(api, dimensions, word_limit) else {
+        return none;
+    };
+    Oriented {
+        tables: table_in_frame(frame, tsv, original, config, limits, byte_limit),
+        page_down: frame.orientation == TessOrientation::ORIENTATION_PAGE_DOWN,
+    }
+}
+
+fn table_in_frame(
+    frame: Frame,
+    tsv: &str,
+    original: &TableWords,
+    config: &TesseractConfig,
+    limits: &SecurityLimits,
+    byte_limit: usize,
+) -> Option<Vec<OcrTable>> {
     let projected = frame.project_tsv(tsv, byte_limit)?;
     let mut words = extract_table_words_from_tsv(&projected, config.table_min_confidence, &[]).ok()?;
     if !words

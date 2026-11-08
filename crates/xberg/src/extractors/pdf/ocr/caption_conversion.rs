@@ -318,6 +318,72 @@ mod tests {
         assert!(matches!(doc.elements[1].kind, ElementKind::Table { table_index: 0 }));
     }
 
+    fn captured_result() -> (ExtractedDocument, WordInventory, (u32, u32)) {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/ocr_caption_2530/p9-iterator.json"
+        ))
+        .unwrap();
+        let ocr_table: crate::types::formats::OcrTable = serde_json::from_value(fixture["table"].clone()).unwrap();
+        let mut elements: Vec<OcrElement> = serde_json::from_value(fixture["elements"].clone()).unwrap();
+        let mut count = 0;
+        for word in elements
+            .iter_mut()
+            .filter(|element| element.level == OcrElementLevel::Word)
+        {
+            word.backend_metadata
+                .insert("backend".into(), "tesseract-iterator".into());
+            count += 1;
+        }
+        let frame = (2586, 3346);
+        let region = ocr_table.bounding_box.unwrap();
+        let table = Table {
+            cells: ocr_table.cells,
+            markdown: ocr_table.markdown,
+            page_number: ocr_table.page_number,
+            bounding_box: Some(BoundingBox {
+                x0: f64::from(region.left),
+                y0: f64::from(region.top),
+                x1: f64::from(region.right),
+                y1: f64::from(region.bottom),
+            }),
+            ..Default::default()
+        };
+        let mut result = ExtractedDocument {
+            tables: vec![table],
+            ocr_elements: Some(elements),
+            ..Default::default()
+        };
+        let additional = &mut result.metadata.additional;
+        additional.insert("psm".into(), "11".into());
+        additional.insert(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), frame.0.into());
+        additional.insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), frame.1.into());
+        (result, WordInventory { count, skipped: 0 }, frame)
+    }
+
+    #[test]
+    fn captures_a_certified_wrapped_caption_as_its_source_lines() {
+        let (result, inventory, frame) = captured_result();
+        let mut limits = SecurityLimits::default();
+        let (rewrite, _) = capture(&result, frame, &mut limits, inventory)
+            .expect("a certified wrapped caption must reach the conversion");
+        let lines: Vec<_> = result
+            .ocr_elements
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|element| element.level == OcrElementLevel::Line)
+            .map(|line| line.text.as_str())
+            .collect();
+        assert_eq!(lines.len(), 6);
+        assert_eq!(rewrite.prose, lines.join("\n"));
+        assert_eq!(rewrite.grid, result.tables[0].markdown.trim_end_matches('\n'));
+        assert_eq!(rewrite.cells, result.tables[0].cells);
+
+        let mut untrusted = result.clone();
+        untrusted.metadata.additional.insert("psm".into(), "3".into());
+        assert!(capture(&untrusted, frame, &mut SecurityLimits::default(), inventory).is_none());
+    }
+
     #[test]
     fn rejects_omitted_or_untrusted_iterator_words_and_typed_skips() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(

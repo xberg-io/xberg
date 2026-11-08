@@ -14,13 +14,15 @@ pub(crate) fn embedded_gap_placement(
     image: &ExtractedImage,
     limits: &SecurityLimits,
 ) -> Option<Placement> {
-    if doc.page_count().ok()? != 1 || image.page_number != Some(1) || image.image_index != 0 || image.is_mask {
+    let page_number = image.page_number.filter(|number| *number >= 1)?;
+    let page_index = usize::try_from(page_number - 1).ok()?;
+    if page_index >= doc.page_count().ok()? || image.image_index != 0 || image.is_mask {
         return None;
     }
-    if doc.get_page(0).ok()?.as_dict()?.contains_key("CropBox") {
+    if doc.get_page(page_index).ok()?.as_dict()?.contains_key("CropBox") {
         return None;
     }
-    let (page, content) = page_frame_and_contents(doc, 0)?;
+    let (page, content) = page_frame_and_contents(doc, page_index)?;
     let Object::Stream { dict, data } = content else {
         return None;
     };
@@ -34,9 +36,9 @@ pub(crate) fn embedded_gap_placement(
         MAX_CONTENT_BYTES.min(byte_limit / 4),
         byte_limit,
     )?;
-    let fonts = simple_font_resources(doc, 0)?;
+    let fonts = simple_font_resources(doc, page_index)?;
     let (name, bbox) = last_opaque_panel(&bytes, |font| fonts.contains_key(font))?;
-    if doc.get_page_content_data(0).ok()? != bytes {
+    if doc.get_page_content_data(page_index).ok()? != bytes {
         return None;
     }
     drop(bytes);
@@ -49,7 +51,7 @@ pub(crate) fn embedded_gap_placement(
     if [actual.x0, actual.y0, actual.x1, actual.y1] != bbox {
         return None;
     }
-    let source = image_source(doc, 0, &name)?;
+    let source = image_source(doc, page_index, &name)?;
     let dimensions = (source.width, source.height);
     let dpi = f64::from(source.width) * POINTS_PER_INCH / (right - left);
     if source.channels != 3
@@ -60,7 +62,7 @@ pub(crate) fn embedded_gap_placement(
     {
         return None;
     }
-    Placement::new(image, dimensions, dpi, limits)
+    Placement::new(image, page_number, dimensions, dpi, limits)
 }
 
 fn is_partial_page_panel(page: super::Rect, [left, bottom, right, top]: [f64; 4]) -> bool {

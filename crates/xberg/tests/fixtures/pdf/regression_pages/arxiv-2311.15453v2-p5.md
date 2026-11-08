@@ -1,12 +1,15 @@
-- 5\. **COMPLIANCE WITH ETHICAL STANDARDS**
+5. **COMPLIANCE WITH ETHICAL STANDARDS**
 
 This research study was conducted retrospectively using human subject data made available in open access by [16, 17, 18]. Ethical approval was not required as confirmed by the license attached with the open-access data.
 
-- 6\. **ACKNOWLEDGMENTS**
+6. **ACKNOWLEDGMENTS**
 
 Bernhard Kainz received support by the ERC - project MIA- NORMAL 101083647, Matthew Baugh by a UKRI DTP award.
 
-- 7\. **REFERENCES**
+7. **REFERENCES**
+
+<!-- end list -->
+
 - [1] Geert Litjens et al., "A Survey on Deep Learning in Medical Image Analysis," Medical image analysis, vol. vol. 42, pp. 60–88, 2017.
 - [2] Christoph Baur et al., "Autoencoders for Unsupervised Anomaly Segmentation in Brain MR Images: A Comparative Study," Medical image analysis, no. 02 Jan 2021, pp. 69:101952, 2021.
 - [3] Thomas Schlegl et al., "f-AnoGAN: Fast unsupervised anomaly detection with generative adversarial networks," Medical image analysis, vol. 54, pp. 30–44,
@@ -28,6 +31,8 @@ tion using vector quantized variational autoencoders," in 2021 IEEE 18th Interna
 - [13] Sergio Naval Marimont and Giacomo Tarroni, "Achieving state-of-the-art performance in the Medical Outof-Distribution (MOOD) challenge using plausible synthetic anomalies," Nov. 2023, arXiv:2308.01412 [cs].
 - [14] Arpit Bansal et al., "Cold Diffusion: Inverting Arbitrary Image Transforms Without Noise," Aug. 2022, arXiv:2208.09392 [cs].
 - [15] Ioannis Lagogiannis et al., "Unsupervised Pathology
+
+Detection: A Deep Dive Into the State of the Art," IEEE Transactions on Medical Imaging, pp. 1–1, 2023, arXiv:2303.00609 [cs].
 
 - [16] Jason R Taylor et al., "The Cambridge Centre for Ageing and Neuroscience (Cam-CAN) data repository: Structural and functional MRI, MEG, and cognitive data from a cross-sectional adult lifespan sample," neuroimage , vol. 144, pp. 262–269, 2017.
 - [17] Sook-Lei Liew et al., "A large, open source dataset of stroke anatomical brain images and manual lesion segmentations," Scientific data, vol. 5, pp. 1–11, 2018.

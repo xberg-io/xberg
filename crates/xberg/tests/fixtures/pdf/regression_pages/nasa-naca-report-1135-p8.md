@@ -18,7 +18,7 @@ TABLES, AND
 
 _=_-- (_-t- 1) 2 *M,'* =(7M, 2- 1) (M,2+5)
 
-## (95)
+#### (95)
 
 36M, _
 
@@ -34,27 +34,35 @@ _m 2u2-vT--1 p2
 | --- | --- | --- | --- |
 | 1U12nt_ __1 1 at 2 =_ 1 u2_+__ | 1 a22 | M22" 25" M_ 2 -- (5" -- 1 )---_ 7 M, 2- | 1 |
 
-\! together with the requirement that the entropy does not *p_* 25" *M12--(7-* l) decrease:
+together with the requirement that the entropy does not *p_* 25" decrease:
 
-*V,,=-* _-_ [(5"_
+# V,,=-
 
-- 1) 7_
+As=--s2--s_\>_0 (87)
+
+It follows immediately from the energy relation (86) that total enthalpy, total temperature, and total speed of sound are constant across the shock and hence (from the previous
+
+\!
+
+*M12--(7-* l)
+
+_-_ [(5"_
+
+- 1\) 7_
 
 *M_2+21 -l'-'*
 
-As=--s2--s_\>_0 (87) __ 5 _"
+__ 5 _"
 
 (97)
 
 7M_2--1('M_+5 )
 
-It follows immediately from the energy relation (86) that 6 total enthalpy, total temperature, and total speed of sound
+6
 
 7
 
-are constant across the shock and hence (from the previous
-
-## (98)
+#### (98)
 
 relations" (33) for adiabatic flow) also the critical speed of
 
@@ -78,9 +86,9 @@ sound and limiting speed:
 
 *T,,= T,* 2.1
 
-## [- (5"+1) M, * -- [_ _+\! .T -1
+### [- (5"+1) M, * -- [_ _+\! .T -1
 
-## =L(_ i-)_,-_ 2]'-' L2,_M,'-(5"- l)j [adiab, perf] (88b)
+### =L(_ i-)_,-_ 2]'-' L2,_M,'-(5"- l)j [adiab, perf] (88b)
 
 *ah=at2*
 
@@ -137,16 +145,13 @@ wave and subsonic behind (the reverse possibility is ruled out by the requiremen
 
 ***p-_--(_+***
 
-- 1) *p1-_-(5"--* 1) *p2* __ln(7M6--1\\ 7, 6Mr' (101)
-- *)-_,n [*
+- 1\) *p1-_-(5"--* 1) *p2* __ln(7M6--1\\ 6Mr' (101)
 
-# LM_) \\
+# \- *)-_,*<sup>7,</sup>*n*
 
-__ *p2+pt* [adiab, perf] (92)
+*[*LM_) \\
 
-*p2--P,* 5"
-
-*p2--P,* 4(M, 2-1) 5(Mt2--1) (102)
+__~*p2--P,*~ 5"*p2+pt* [adiab, perf] (92) *p2--P,* 4(M, 2-1) 5(Mt2--1) (102)
 
 ***p2--Pl P2qt-Pt***
 
@@ -162,21 +167,11 @@ equations (93), (94), (95), (96), (99), and (100) (with 5"=7/5) are given in tab
 
 Many relations for normal shock waves are conveniently
 
-For weak shock waves (M_ only slightly greater than unity) expressed in terms of either upstream Mach number *M_* or the following ttm static-pressure ratio across the shock _---p2/px. The following relations apply to adiabatic flow of a completely _= perfect fluid. The last form of each equation holds for Ph
+For weak expressed in terms of either upstream Mach number *M_* or the following ttm static-pressure ratio across the shock _---p2/px. The following relations apply to adiabatic flow of a completely _= perfect fluid. The last form of each equation holds for Ph
 
 ## _=7/5.
 
-series are useful:
-
-**1)s+ 25"2**
-
-25" (M2 (M_ _-
-
-**1)'+ -..**
-
-= **1** --2_6 (M, 2 --1) s -b_-g_245 (M,'-- 1)'-t- .... (103)
-
-**Parameter**
+= **1 Parameter**
 
 *M,.--*
 
@@ -185,7 +180,7 @@ series are useful:
 |  |  |  | _-5"-1 | 1 c, | 3(5"+ | '_-(5"+1) | 2 _''1' |
 | p, | 5"+1 | 6 |  |  |  |  |  |
 
-35 , -s 245 (M2_l),_t - ...- (104)
+35
 
 ***p_ Ul***
 
@@ -195,6 +190,20 @@ series are useful:
 
 (_-t-1) *M_* **2** _ 6M_ **2** (94)
 
-## =2_ (M, - 1) -gg_
+## =2_
 
 _----_a *a..2_--'_--(5"* -I) *M,2+2--M'_%5*
+
+shock waves (M_ only slightly greater than unity) series are useful:
+
+**1)s+ 25"2**
+
+25" (M2 (M_ _-
+
+**1)'+ -..**
+
+\--2_6 (M, 2 --1) s -b_-g_245 (M,'-- 1)'-t- .... (103)
+
+, -s 245 (M2_l),_t - ...- (104)
+
+## (M, - 1) -gg_

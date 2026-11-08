@@ -15,6 +15,7 @@ mod filled_cells;
 mod header_bands;
 mod painted_double_rule_grid;
 mod source_headers;
+mod source_spanned_rows;
 
 /// Disjoint-set (union-find) with path compression.
 struct UnionFind {
@@ -118,6 +119,9 @@ pub struct TableDetectionConfig {
     pub text_fallback: bool,
 }
 
+/// Column cap of the default and bordered detection configurations.
+pub const DEFAULT_MAX_TABLE_COLUMNS: usize = 15;
+
 impl Default for TableDetectionConfig {
     fn default() -> Self {
         Self {
@@ -129,7 +133,7 @@ impl Default for TableDetectionConfig {
             min_table_cells: 4,
             min_table_columns: 2,
             regular_row_ratio: 0.3,
-            max_table_columns: 15,
+            max_table_columns: DEFAULT_MAX_TABLE_COLUMNS,
             column_merge_threshold: 25.0,
             v_split_gap: 20.0,
             text_fallback: true,
@@ -2606,6 +2610,31 @@ fn build_extended_grid_cells(h_edges: &[Edge], v_edges: &[Edge]) -> Vec<Intersec
     cells
 }
 
+/// The V edges that may supply columns to a projected grid.
+///
+/// Projection exists for rules that stand beside the ruled rows without crossing them. A V edge
+/// runs through the horizontal rules it stands under (those whose extent contains its x position)
+/// when it overlaps their vertical span by more than `SNAP_TOL`; a rule that merely hangs from the
+/// span's edge does not. When some V edges run through, the others belong to a section beyond the
+/// span, and projecting them splits the ruled rows where nothing is drawn. When none does, every
+/// rule stands beside the rows and all are kept. ~keep
+fn projectable_v_edges(h_edges: &[Edge], v_edges: &[Edge]) -> Vec<Edge> {
+    let runs_through_rules = |v: &Edge| {
+        let (low, high) = h_edges
+            .iter()
+            .filter(|h| h.start - SNAP_TOL <= v.coord && v.coord <= h.end + SNAP_TOL)
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(low, high), h| {
+                (low.min(h.coord), high.max(h.coord))
+            });
+        v.end.min(high) - v.start.max(low) > SNAP_TOL
+    };
+    if v_edges.iter().any(runs_through_rules) {
+        v_edges.iter().filter(|v| runs_through_rules(v)).copied().collect()
+    } else {
+        v_edges.to_vec()
+    }
+}
+
 /// Group cells that share edges into tables using union-find.
 fn group_cells_into_tables(cells: &[IntersectionCell]) -> Vec<Vec<usize>> {
     if cells.is_empty() {
@@ -3145,7 +3174,14 @@ fn detect_intersections(
             evidence.bounds = table.bbox;
             return vec![table];
         }
-        let mut sub_tables = finalize_intersection_tables(table_rows, &row_cell_span_indices, spans, config, *num_cols);
+        let mut sub_tables = finalize_intersection_tables(
+            table_rows,
+            &row_cell_span_indices,
+            spans,
+            config,
+            *num_cols,
+            cells_are_intersections.then_some(lines),
+        );
         if cells_are_intersections
             && let Some(evidence) = recovery.as_deref_mut()
             && !sub_tables.iter().any(Table::is_real_grid)
@@ -3250,7 +3286,10 @@ fn build_grid_from_lines(
         let c = build_cells_from_intersections(&intersections, &h_edges, &v_edges);
         if c.is_empty() {
             // Lines exist but don't form real intersection cells — try extended grid. ~keep
-            (build_extended_grid_cells(&h_edges, &v_edges), false)
+            (
+                build_extended_grid_cells(&h_edges, &projectable_v_edges(&h_edges, &v_edges)),
+                false,
+            )
         } else {
             (c, true)
         }
@@ -3258,7 +3297,10 @@ fn build_grid_from_lines(
         // H and V lines don't physically cross (e.g. Census table: H-lines in
         // header area, V tick marks in data area). Build a virtual grid by
         // projecting all V-line X positions across all H-line Y positions. ~keep
-        (build_extended_grid_cells(&h_edges, &v_edges), false)
+        (
+            build_extended_grid_cells(&h_edges, &projectable_v_edges(&h_edges, &v_edges)),
+            false,
+        )
     };
     if cells.is_empty() {
         return (Vec::new(), v_edges, cells_are_intersections);
@@ -3695,18 +3737,23 @@ fn finalize_intersection_tables(
     spans: &[TextSpan],
     config: &TableDetectionConfig,
     num_cols: usize,
+    source_header_paths: Option<&[crate::elements::PathContent]>,
 ) -> Vec<Table> {
     let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_split", || {
         header_source_diagnostic::rows(&table_rows)
     });
-
     strip_form_numbering_artifacts(&mut table_rows);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_stripped", || {
         header_source_diagnostic::rows(&table_rows)
     });
+    if let Some(paths) = source_header_paths {
+        for segment in table_rows.split_mut(|row| row.cells.iter().all(|cell| cell.text.is_empty())) {
+            source_headers::retain_grouped_leaf_header(segment, paths, num_cols);
+        }
+    }
 
     // Split on completely empty rows (same strategy as cluster-based approach). ~keep
     let mut tables = Vec::new();
@@ -4659,6 +4706,27 @@ impl PaintedCellOwnership {
     }
 }
 
+pub(crate) fn certify_source_spanned_wide_table(
+    table: &Table,
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+) -> Option<PaintedCellOwnership> {
+    let bounds = source_spanned_rows::certify(table, spans, lines)?;
+    Some(PaintedCellOwnership {
+        columns: table.col_count,
+        words: Vec::new(),
+        recovered_bounds: Some(bounds),
+        double_rule: false,
+        replaces_empty_ruled_route: false,
+    })
+}
+
+#[cfg(test)]
+pub(crate) use source_spanned_rows::fixture as source_spanned_fixture;
+pub(crate) use source_spanned_rows::{
+    MAX_SOURCE_SPANNED_COLUMNS, is_dark_on_white, source_spanned_rules_present, source_spanned_work_fits,
+};
+
 /// Detect tables using vector lines and text spans (main entry point for hybrid detection).
 pub fn detect_tables_with_lines(
     spans: &[TextSpan],
@@ -5539,6 +5607,54 @@ mod tests {
         });
         let groups = attach_spanning_headers(&cells, group_cells_into_tables(&cells), 6);
         assert_eq!(groups.len(), 2);
+    }
+
+    fn ruled_grid_config() -> TableDetectionConfig {
+        TableDetectionConfig {
+            horizontal_strategy: TableStrategy::Lines,
+            vertical_strategy: TableStrategy::Lines,
+            column_tolerance: 3.0,
+            row_tolerance: 2.0,
+            regular_row_ratio: 0.5,
+            column_merge_threshold: 12.0,
+            v_split_gap: 4.0,
+            text_fallback: false,
+            ..TableDetectionConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_rule_of_another_section_adds_no_column_to_a_projected_grid() {
+        use crate::elements::PathContent;
+        // Two column rules run inside the ruled band; a third hangs from the band's lower rule
+        // into the section below, touching the band's edge but never entering it. ~keep
+        let lines = vec![
+            PathContent::line(50., 400., 560., 400.),
+            PathContent::line(50., 720., 560., 720.),
+            PathContent::line(218., 430., 218., 719.),
+            PathContent::line(394., 430., 394., 719.),
+            PathContent::line(306., 110., 306., 399.),
+        ];
+        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        assert!(
+            groups.is_empty(),
+            "the lone in-band column pair is one column: {groups:?}"
+        );
+    }
+
+    #[test]
+    fn rules_wholly_below_every_horizontal_rule_still_project_columns() {
+        use crate::elements::PathContent;
+        let lines = vec![
+            PathContent::line(0., 400., 300., 400.),
+            PathContent::line(0., 380., 300., 380.),
+            PathContent::line(50., 100., 50., 370.),
+            PathContent::line(150., 100., 150., 370.),
+            PathContent::line(250., 100., 250., 370.),
+        ];
+        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].3, 2);
     }
 
     #[test]
@@ -10665,7 +10781,7 @@ mod tests {
         assert_eq!(split_only[0].cells[0].text, "5");
         assert_eq!(split_only[0].cells[1].text, "");
 
-        let tables = finalize_intersection_tables(vec![row], &row_cell_span_indices, &spans, &config, 2);
+        let tables = finalize_intersection_tables(vec![row], &row_cell_span_indices, &spans, &config, 2, None);
 
         assert_eq!(tables.len(), 1, "the two evidenced data rows must still form one table");
         let surviving_rows: Vec<Vec<&str>> = tables[0]

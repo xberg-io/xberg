@@ -2,9 +2,15 @@
 
 # Multi-Person Indoor Localization by CSI
 
-1st Zhiyuan He, 2nd Ke Deng, 3rd Jiangchao Gong, 4th Yi Zhou, 5th Desheng Wang Wuhan National Laboratory for Optoelectronics Huazhong University of Science and Technology Wuhan, China 1
+st nd rd th
 
-st zedyuanhe@hust.edu.cn, 2nd sheepsui@hust.edu.cn, 3rd m202272478@hust.edu.cn 4th u202014002@hust.edu.cn, 5th dswang@hust.edu.cn
+1 Zhiyuan He, 2 Ke Deng, 3 Jiangchao Gong, 4<sup>th</sup> Yi Zhou, 5 Desheng Wang Wuhan National Laboratory for Optoelectronics Huazhong University of Science and Technology Wuhan, China
+
+st nd rd
+
+1 zedyuanhe@hust.edu.cn, 2 sheepsui@hust.edu.cn, 3 m202272478@hust.edu.cn
+
+4<sup>th</sup> u202014002@hust.edu.cn, 5<sup>th</sup> dswang@hust.edu.cn
 
 **Abstract—Passive indoor localization, integral to smart build-**
 
@@ -68,14 +74,17 @@ In this research, we focus on developing an instantaneous, passive indoor locali
 
 I. INTRODUCTION
 
-vices, which provide rich carrier and antenna dimensionality, Amidst the technological evolution from 5G towards 6G, we collect Channel State Information (CSI). A meticulous passive indoor localization technologies independent of specialized portable equipment have attracted substantial attention within the academic and industrial spheres. These technologies underpin a wide array of location-based services and applications, extending to elderly monitoring [1], intrusion detection [2], and real-time human tracking [3]. Despite certain advancements made by vision-based methods [4] in this domain, they confront dual challenges posed by lighting conditions and privacy concerns. Similarly, prevalent infrared positioning suffers from accuracy issues influenced by environmental
+vices, which provide rich carrier and antenna dimensionality, Amidst the technological evolution from 5G towards 6G, we collect Channel State Information (CSI). A meticulous passive indoor localization technologies independent of specialized portable equipment have attracted substantial attention within the academic and industrial spheres. These technologies underpin a wide array of location-based services and applicaanalysis of the amplitude-phase characteristics of CSI is conducted for efficient data preprocessing, followed by constructing an effective network for localization, which is capable of accurately locating multi-people. The key contributions of this tions, extending to elderly monitoring [1], intrusion detection study are outlined as follows: [2], and real-time human tracking [3]. Despite certain ad-
 
-precision. temperatures [13]. In contrast, traditional radar-based systems are often prohibitive in cost for widespread deployment [5]. In this context, WiFi-based positioning systems, leveraging their extensive availability and cost-effectiveness, have become a preferred solution to address these challenges [6]. Although some scholars concentrate on utilizing Angle of Arrival (AoA) and Time of Flight (ToF) for localization, the resolution of these techniques is often constrained due to the limited bandwidth and antenna count of commercial WiFi devices [5], [7], thereby narrowing their practical applicability.
+- We reconceptualize the localization task as a multi-label vancements made by vision-based methods [4] in this domain, prediction problem, introducing an advanced CSI prethey confront dual challenges posed by lighting conditions
+
+and privacy concerns. Similarly, prevalent infrared positioning suffers from accuracy issues influenced by environmental
+
+temperatures [13]. In contrast, traditional radar-based systems are often prohibitive in cost for widespread deployment [5]. In processing strategy to mitigate errors from WiFi restarts, thereby elevating precision.
+
+- we introduce a CSI-ResNet for localization, leveraging single-timestamp CSI inputs for enhanced accuracy and this context, WiFi-based positioning systems, leveraging their extensive availability and cost-effectiveness, have become a preferred solution to address these challenges [6]. efficiency in real-time deployment. The network preserves CSI integrity, achieving 99.21% accuracy with a 0.6m precision. A nuclear norm-based transfer learning Although some scholars concentrate on utilizing Angle of Arrival (AoA) and Time of Flight (ToF) for localization, the resolution of these techniques is often constrained due to the limited bandwidth and antenna count of commercial WiFi devices [5], [7], thereby narrowing their practical applicability. approach is implemented, ensuring adaptability across varied scenarios with minimal initial data.
+- A robust dataset was curated, comprising four experimental scenarios and multi-target data from 60 unique locations. This dataset, excelling in scale and label diversity, significantly advances the groundwork for intricate
 
 This work was supported by the National Natural Science Foundation of China (Grant No. 62071192) and the National Key Research and Development Program of China (Grant No. 2020YFB1806904).
 
-analysis of the amplitude-phase characteristics of CSI is conducted for efficient data preprocessing, followed by constructing an effective network for localization, which is capable of accurately locating multi-people. The key contributions of this study are outlined as follows:
-
-- We reconceptualize the localization task as a multi-label prediction problem, introducing an advanced CSI preprocessing strategy to mitigate errors from WiFi restarts, thereby elevating
-- we introduce a CSI-ResNet for localization, leveraging single-timestamp CSI inputs for enhanced accuracy and efficiency in real-time deployment. The network preserves CSI integrity, achieving 99.21% accuracy with a 0.6m precision. A nuclear norm-based transfer learning approach is implemented, ensuring adaptability across varied scenarios with minimal initial data.
-- A robust dataset was curated, comprising four experimental scenarios and multi-target data from 60 unique locations. This dataset, excelling in scale and label diversity, significantly advances the groundwork for intricate CSI-based location prediction analyses. This paper is structured as follows: Section II reviews
+CSI-based location prediction analyses. This paper is structured as follows: Section II reviews

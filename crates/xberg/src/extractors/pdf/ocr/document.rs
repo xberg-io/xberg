@@ -284,6 +284,16 @@ fn every_ocr_row_has_one_native_owner(native: &[String], read: &[String], boxes:
     true
 }
 
+/// A layer with no garbage or undecodable character that passes the garble clauses of the
+/// native-text gate: the glyph-to-Unicode mapping shows no sign of being broken. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn native_layer_decodes_cleanly(layer: &str, thresholds: &OcrQualityThresholds) -> bool {
+    let stats = NativeTextStats::compute(layer, thresholds);
+    stats.garbage_char_count == 0
+        && stats.undecodable_ratio <= 0.0
+        && super::scoring::native_layer_is_clean(layer, thresholds)
+}
+
 /// A native page can replace OCR only when every literal occurrence has a unique ordered
 /// source match and every OCR row belongs to that same native row geometrically. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -296,11 +306,7 @@ pub(super) fn native_page_covers_ocr(
     let Some(boxes) = boxes else {
         return false;
     };
-    let stats = NativeTextStats::compute(layer, thresholds);
-    if stats.garbage_char_count != 0 || stats.undecodable_ratio > 0.0 {
-        return false;
-    }
-    if !super::scoring::native_layer_is_clean(layer, thresholds)
+    if !native_layer_decodes_cleanly(layer, thresholds)
         || !ocr_confirms_layer(layer, read, thresholds)
         || !unique_literal_embedding(layer, read)
     {
@@ -346,6 +352,59 @@ fn unannotated_ocr_text(element: &crate::types::internal::InternalElement) -> bo
         && element.attributes.as_ref().is_none_or(|attributes| {
             attributes.is_empty() || (attributes.len() == 1 && element.measured_font_size().is_some())
         })
+}
+
+/// An element that only segments the read text into blocks: a paragraph, a heading or a list
+/// item with no inline markup. Which block a line becomes is derived from the read's geometry, so
+/// a page whose every word a native layer already owns takes its blocks from that layer. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn segmenting_ocr_text(element: &crate::types::internal::InternalElement) -> bool {
+    use crate::types::internal::ElementKind;
+    matches!(
+        element.kind,
+        ElementKind::Paragraph
+            | ElementKind::OcrText { .. }
+            | ElementKind::Heading { .. }
+            | ElementKind::ListItem { .. }
+    ) && element.layer == crate::types::document_structure::ContentLayer::Body
+        && element.annotations.is_empty()
+}
+
+/// Whether a page's structure holds nothing but its read text cut into blocks: the same words,
+/// each once, in blocks that carry no table, image, link, formula or markup. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn ocr_page_only_segments_text_with(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    let mut metadata = doc.metadata.clone();
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
+    // Block building normalizes quotes, escapes Markdown and splits markers, so punctuation is not
+    // compared: the letters and digits of each word are. ~keep
+    let solid_words = |text: &str| {
+        let mut words: Vec<String> = text
+            .split_whitespace()
+            .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+            .filter(|word| !word.is_empty())
+            .collect();
+        words.sort_unstable();
+        words
+    };
+    let block_words = solid_words(
+        &doc.elements
+            .iter()
+            .map(|element| element.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    no_ocr_rich_assets(doc)
+        && metadata.is_empty()
+        && !doc.elements.is_empty()
+        && doc.elements.iter().all(segmenting_ocr_text)
+        && block_words == solid_words(read)
 }
 
 /// The final structure must independently retain exactly the raw OCR text. Word geometry is

@@ -3,7 +3,7 @@
 |  |  | standards in | standards in |
 |  |  | millions of | number of |
 |  |  | dollars | employees |
-| 561510 | Travel Agencies10 | $25.0 |  |
+| 561510 | Travel Agencies<sup>10</sup> | $25.0 |  |
 | 561520 | Tour Operators10 | $25.0 |  |
 | 561591 | Convention and Visitors Bureaus | $25.0 |  |
 | 561599 | All Other Travel Arrangement and Reservation Services | $32.5 |  |
@@ -32,5 +32,3 @@
 | 562920 | Materials Recovery Facilities | $25.0 |  |
 | 562991 | Septic Tank and Related Services | $9.0 |  |
 | 562998 | All Other Miscellaneous Waste Management Services | $16.5 |  |
-
-10 10 10 14

@@ -1,0 +1,88 @@
+name: CI Focused PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".cargo/**"
+      - ".github/workflows/ci-focused-pr.yaml"
+      - "crates/**"
+      - "fixtures/**"
+      - "vendored/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "mise.toml"
+      - "mise.lock"
+      - "mise-tasks/rust.toml"
+      - "scripts/ci/rust/run-focused-pr-tests.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-focused-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  RUST_BACKTRACE: short
+  RUST_MIN_STACK: "16777216"
+  OMP_THREAD_LIMIT: "1"
+  HF_HUB_OFFLINE: "1"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  regressions:
+    if: >-
+      ${{ github.repository == 'xberg-io/xberg' &&
+          (github.event_name == 'workflow_dispatch' ||
+           github.event.pull_request.head.repo.full_name == github.repository) }}
+    name: Focused ${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [pdf-ocr, api-jobs]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          disable-cache: "true"
+          use-sccache: "false"
+          install-llvm-cov: "false"
+
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+          cache: "false"
+
+      - name: Install OCR build dependencies and pinned English data
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake libicu-dev libjpeg-dev libpng-dev libtiff-dev pkg-config zlib1g-dev
+          tessdata="$RUNNER_TEMP/xberg-focused-tessdata"
+          mkdir -p "$tessdata"
+          curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+            https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata \
+            --output "$tessdata/eng.traineddata"
+          printf '%s  %s\n' 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 \
+            "$tessdata/eng.traineddata" | sha256sum --check
+          printf 'TESSDATA_PREFIX=%s\n' "$tessdata" >> "$GITHUB_ENV"
+
+      - name: Run exact regression tests
+        shell: bash
+        env:
+          FOCUSED_SUITE: ${{ matrix.suite }}
+        run: mise run rust:test:focused-pr "$FOCUSED_SUITE"

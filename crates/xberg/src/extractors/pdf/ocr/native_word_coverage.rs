@@ -1,6 +1,8 @@
 use super::document::{
-    LineBox, ocr_page_has_only_plain_payload_with, processed_ocr_layout_dimensions, valid_ocr_layout_dimension,
+    LineBox, native_layer_decodes_cleanly, ocr_confirms_layer, ocr_page_has_only_plain_payload_with,
+    ocr_page_only_segments_text_with, processed_ocr_layout_dimensions, valid_ocr_layout_dimension,
 };
+use crate::core::config::OcrQualityThresholds;
 use crate::ocr_metadata_keys::{
     OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
     OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY,
@@ -56,6 +58,368 @@ pub(super) fn covers_complete_native_page(
         })
 }
 
+/// What bounds an ink proof: the quality thresholds that judge the native layer, the memory the
+/// two renders may use, and a cancellation check consulted between them.
+pub(super) struct InkProofLimits<'a> {
+    pub(super) thresholds: &'a OcrQualityThresholds,
+    pub(super) max_working_bytes: usize,
+    pub(super) cancelled: &'a dyn Fn() -> bool,
+}
+
+/// Luminance difference, on a 0-255 scale, that makes a pixel visibly differ from its surround.
+const MIN_VISIBLE_CONTRAST: u8 = 51;
+/// The share of native words the read must show at their own place. The read judges the native
+/// layer only where it is reliable: Tesseract misreads a few percent of the words of a clean
+/// render (2.6% on the code-listing page and about 8% on the NIST checklist, which sets in
+/// small type and symbols), so a layer that disagrees with the read at more than 15% of its words
+/// is more than misreads explain and the read is the better witness. ~keep
+const MIN_NATIVE_READ_AGREEMENT: f64 = 0.85;
+/// The most the ground may vary under a read word that no glyph and no native word accounts for.
+/// One gray level is the rounding of the luminance conversion; more is a mark, and Tesseract
+/// binarizes a page, so a faint mark can be read, which makes it content the native text lacks. ~keep
+const FLAT_GROUND_SPREAD: u8 = 1;
+/// Resolution of the two rasters that tell glyph ink from every other mark. Word boxes are tested
+/// in points, so the resolution only has to resolve a glyph; it is not an OCR resolution.
+const INK_PROOF_DPI: u32 = 144;
+
+/// Whether the native text paints all the ink that a Tesseract read of the page sits on, for a
+/// read whose words do not literally equal the native words. Every iterator word must lie in a
+/// native text line, show glyph ink, and hold no mark that is not a glyph, so the read can only
+/// be a second reading of ink the native text already holds. A word that differs from the native
+/// word at its place is still a reading of that ink; a word over a raster, an outline, a rule or
+/// a fill is not provably one.
+///
+/// A glyph without a Unicode value is content the native text lacks. The layer may carry such
+/// markers only when each one sits in a located native word and no read word lies over it: a read
+/// that sees something there may hold what the native text lost.
+pub(super) fn native_text_paints_all_read_ink(
+    pdf: &PdfDocument,
+    page_index: usize,
+    layer: &str,
+    read: &ExtractedDocument,
+    limits: InkProofLimits<'_>,
+) -> bool {
+    let InkProofLimits {
+        thresholds,
+        max_working_bytes,
+        cancelled,
+    } = limits;
+    let mut layer = layer.to_owned();
+    let lost = super::super::unmapped_glyphs::strip_native_fragment(&mut layer);
+    if !native_layer_decodes_cleanly(&layer, thresholds) || !ocr_confirms_layer(&layer, &read.content, thresholds) {
+        return false;
+    }
+    let Some(elements) = read.ocr_elements.as_deref() else {
+        return false;
+    };
+    let words = || elements.iter().filter(|element| element.level == OcrElementLevel::Word);
+    if words().next().is_none()
+        || !words().all(is_iterator_word)
+        || !read.content.split_whitespace().eq(words().map(|word| word.text.trim()))
+    {
+        return false;
+    }
+    let Some(raster) = processed_ocr_layout_dimensions(&read.metadata) else {
+        return false;
+    };
+    let (Some(media), Ok(lines)) = (upright_media_box(pdf, page_index), pdf.extract_text_lines(page_index)) else {
+        return false;
+    };
+    let Some(read_boxes) = words()
+        .map(|word| ocr_word_in_page_points(word, raster, media))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    let read_words: Vec<(String, LineBox)> = words()
+        .map(|w| w.text.clone())
+        .zip(read_boxes.iter().copied())
+        .collect();
+    if !lost_glyphs_leave_native_text(&lines, lost, &read_words) {
+        return false;
+    }
+    let native_words: Vec<(String, LineBox)> = lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .map(|word| (word.text.clone(), native_box(word.bbox)))
+        .collect();
+    let Some(placed) = read_on_native_lines(&read_boxes, &lines) else {
+        return false;
+    };
+    // The words are the unit because a lost glyph spoils the word it stands in, and a reader
+    // takes the page in by words: with more holes than words, most words are holed, and the
+    // intact native text no longer carries the page the read would replace. ~keep
+    let solid_native_words = native_words
+        .iter()
+        .filter(|(text, _)| !alnum_key(text).is_empty())
+        .count();
+    if lost > solid_native_words {
+        return false;
+    }
+    let Ok(Some(rasters)) = xberg_native_pdf::rendering::render_text_ink_rasters(
+        pdf,
+        page_index,
+        INK_PROOF_DPI,
+        max_working_bytes,
+        cancelled,
+    ) else {
+        return false;
+    };
+    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+        && ink_is_glyph_ink(&rasters, media, &placed, &native_words)
+}
+
+/// Whether every lost glyph of the layer sits in a located native word and the read does not
+/// recover them as text (see [`lost_glyphs_recovered_by_read`]).
+fn lost_glyphs_leave_native_text(
+    lines: &[xberg_native_pdf::layout::TextLine],
+    lost: usize,
+    read_words: &[(String, LineBox)],
+) -> bool {
+    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+
+    let lost_words: Vec<_> = lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .filter(|word| word.text.contains(LOST_GLYPH_MARKER))
+        .collect();
+    let located: usize = lost_words
+        .iter()
+        .map(|word| word.text.matches(LOST_GLYPH_MARKER).count())
+        .sum();
+    located == lost
+        && !lost_glyphs_recovered_by_read(&lost_words, |gap| {
+            read_words
+                .iter()
+                .any(|(text, placed)| !alnum_key(text).is_empty() && gap.owns(placed))
+        })
+}
+
+/// Every read word holds only glyph ink (or sits on blank paper between native words), glyph ink
+/// shows in at least one, and every native word with letters, digits or a lost glyph shows glyph ink.
+fn ink_is_glyph_ink(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    media: Rect,
+    placed: &[(LineBox, bool)],
+    native_words: &[(String, LineBox)],
+) -> bool {
+    let scale = INK_PROOF_DPI as f32 / 72.0;
+    let shown: Option<Vec<bool>> = placed
+        .iter()
+        .map(|(word, over_native_word)| {
+            word_ink(rasters, word, media, scale).filter(|shows_glyph| *shows_glyph || !over_native_word)
+        })
+        .collect();
+    shown.is_some_and(|shown| shown.contains(&true))
+        && native_words
+            .iter()
+            .filter(|(text, _)| {
+                !alnum_key(text).is_empty() || text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
+            })
+            .all(|(_, word)| glyph_ink_in(rasters, word, media, scale))
+}
+
+fn alnum_key(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// The share of native words with letters or digits that the read shows at the same place: the
+/// read words over a native word, joined, hold its letters and digits. A native word that the read
+/// omits counts against the share.
+fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> f64 {
+    let mut total = 0usize;
+    let mut agreed = 0usize;
+    for (text, place) in native {
+        let key = alnum_key(text);
+        if key.is_empty() {
+            continue;
+        }
+        total += 1;
+        let seen: String = read
+            .iter()
+            .filter(|(_, at)| place.owns(at))
+            .map(|(word, _)| alnum_key(word))
+            .collect();
+        if seen.contains(&key) {
+            agreed += 1;
+        }
+    }
+    if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
+}
+
+fn pixel_window(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    placed: &LineBox,
+    media: Rect,
+    scale: f32,
+) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
+    let (width, height) = (rasters.width as usize, rasters.height as usize);
+    let columns = (placed.left * scale).floor().max(0.0) as usize..((placed.right * scale).ceil() as usize).min(width);
+    let rows = ((media.height - placed.bottom) * scale).floor().max(0.0) as usize
+        ..(((media.height - placed.top) * scale).ceil() as usize).min(height);
+    (columns, rows)
+}
+
+/// Whether glyph paints made a visible difference somewhere in the box. A native word with none
+/// is not shown on the page: it lies under a fill, is clipped, is invisible, or matches its ground.
+fn glyph_ink_in(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    placed: &LineBox,
+    media: Rect,
+    scale: f32,
+) -> bool {
+    let width = rasters.width as usize;
+    let (columns, rows) = pixel_window(rasters, placed, media, scale);
+    !columns.is_empty()
+        && rows.clone().any(|row| {
+            let at = row * width;
+            rasters.drawn[at + columns.start..at + columns.end]
+                .iter()
+                .zip(&rasters.without_glyphs[at + columns.start..at + columns.end])
+                .any(|(drawn, bare)| drawn.abs_diff(*bare) >= MIN_VISIBLE_CONTRAST)
+        })
+}
+
+/// The page's media box when the page is unrotated, starts at the origin and is not cropped.
+fn upright_media_box(pdf: &PdfDocument, page_index: usize) -> Option<Rect> {
+    let info = pdf.get_page_info(page_index).ok()?;
+    let media = info.media_box;
+    (info.rotation == 0 && media.x == 0.0 && media.y == 0.0 && info.crop_box.is_none_or(|crop| crop == media))
+        .then_some(media)
+}
+
+/// Each read box with whether it lies over a native word that holds its own glyphs, or `None`
+/// when a box lies in no native line. A box over a lost glyph or in the gap between words is not
+/// over such a word.
+fn read_on_native_lines(
+    read_boxes: &[LineBox],
+    lines: &[xberg_native_pdf::layout::TextLine],
+) -> Option<Vec<(LineBox, bool)>> {
+    let line_boxes: Vec<LineBox> = lines.iter().map(|line| native_box(line.bbox)).collect();
+    let word_boxes: Vec<LineBox> = lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .filter(|word| !word.text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
+        .map(|word| native_box(word.bbox))
+        .collect();
+    read_boxes
+        .iter()
+        .map(|placed| {
+            line_boxes
+                .iter()
+                .any(|line| line.owns(placed))
+                .then(|| (*placed, word_boxes.iter().any(|native| native.owns(placed))))
+        })
+        .collect()
+}
+
+/// Half a point: font sizes that differ by less print as one size.
+const SIZE_STEP_PT: f32 = 0.5;
+/// A tenth of a point: glyphs of one code advance by the same width, and a smaller difference is
+/// rounding in the box.
+const ADVANCE_STEP_PT: f32 = 0.1;
+
+/// Places of the glyphs the native text lost that stand for one glyph code: the same font, the
+/// same printed size and, for a word that is only lost glyphs, the same advance per glyph. Glyphs
+/// inside a word with letters cannot be told apart by width and share the key of their font and size.
+#[derive(Hash, PartialEq, Eq)]
+struct LostGlyphKind<'a> {
+    font: &'a str,
+    size: i32,
+    advance: Option<i32>,
+}
+
+impl<'a> LostGlyphKind<'a> {
+    fn of(word: &'a xberg_native_pdf::layout::Word, markers: usize) -> Self {
+        let alone = word
+            .text
+            .chars()
+            .all(|c| c == super::super::unmapped_glyphs::LOST_GLYPH_MARKER);
+        Self {
+            font: word.dominant_font.as_str(),
+            size: (word.avg_font_size / SIZE_STEP_PT).round() as i32,
+            advance: alone.then(|| (word.bbox.width / markers as f32 / ADVANCE_STEP_PT).round() as i32),
+        }
+    }
+}
+
+/// The fewest places of a kind that can show a pattern. One or two places of a font and size say
+/// nothing about a glyph code, so such kinds decide a page only together.
+const MIN_KIND_PLACES: usize = 3;
+
+/// Whether the read recovers the glyphs the native text lost. A missing Unicode mapping belongs to
+/// a glyph code of one font, so every place that shows the glyph is lost the same way, and a read
+/// that really recovers the glyph recovers it wherever it stands, as letters or digits. A kind
+/// whose places the read sees as text at fewer than half is being misread, not recovered: the
+/// unread places outnumber the read ones, which a recovered glyph does not explain. At half or
+/// more the misses are ordinary read misses of a recovered glyph; the tie goes to the read
+/// because keeping the native text would then discard characters the read supplied. Kinds are
+/// judged one by one, never by a tally over the page: a kind of `MIN_KIND_PLACES` or more that the
+/// read recovers is text the native layer lacks, and no number of unread symbols elsewhere
+/// outweighs it. Kinds of fewer places cannot show a pattern one by one, and one code can split
+/// into several of them when its boxes differ in size or advance by a step; they are pooled, and
+/// the pool decides the page when it holds `MIN_KIND_PLACES` places or more, or when no larger
+/// kind exists. A lone read letter among many unread symbols is a pool of one and decides
+/// nothing. ~keep
+fn lost_glyphs_recovered_by_read(
+    lost_words: &[&xberg_native_pdf::layout::Word],
+    is_read_as_text_at: impl Fn(&LineBox) -> bool,
+) -> bool {
+    let mut kinds: std::collections::HashMap<LostGlyphKind<'_>, (usize, usize)> = std::collections::HashMap::new();
+    for word in lost_words {
+        let markers = word
+            .text
+            .matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
+            .count();
+        let (places, read) = kinds.entry(LostGlyphKind::of(word, markers)).or_default();
+        *places += markers;
+        if is_read_as_text_at(&native_box(word.bbox)) {
+            *read += markers;
+        }
+    }
+    let recovered = |&&(places, read): &&(usize, usize)| read * 2 >= places;
+    let (large, small): (Vec<_>, Vec<_>) = kinds.values().partition(|(places, _)| *places >= MIN_KIND_PLACES);
+    if large.iter().any(recovered) {
+        return true;
+    }
+    let places: usize = small.iter().map(|(places, _)| places).sum();
+    let read: usize = small.iter().map(|(_, read)| read).sum();
+    (large.is_empty() || places >= MIN_KIND_PLACES) && places > 0 && read * 2 >= places
+}
+
+/// `None` when the word holds a mark that is not a glyph; otherwise whether glyph ink shows in it.
+/// A read word in the gap between native words that sits on blank paper reads nothing, so it
+/// cannot hide native content; over a native word, blank paper means that word's glyphs are not
+/// shown, which the caller refuses. ~keep
+fn word_ink(
+    rasters: &xberg_native_pdf::rendering::TextInkRasters,
+    placed: &LineBox,
+    media: Rect,
+    scale: f32,
+) -> Option<bool> {
+    let width = rasters.width as usize;
+    let (columns, rows) = pixel_window(rasters, placed, media, scale);
+    if columns.is_empty() || rows.is_empty() {
+        return None;
+    }
+    let spread = |raster: &[u8]| {
+        let (mut low, mut high) = (u8::MAX, u8::MIN);
+        for row in rows.clone() {
+            for &value in &raster[row * width + columns.start..row * width + columns.end] {
+                low = low.min(value);
+                high = high.max(value);
+            }
+        }
+        high.saturating_sub(low)
+    };
+    let ground = spread(&rasters.without_glyphs);
+    let glyph_ink = glyph_ink_in(rasters, placed, media, scale);
+    (ground < MIN_VISIBLE_CONTRAST && (glyph_ink || ground <= FLAT_GROUND_SPREAD)).then_some(glyph_ink)
+}
+
 fn is_iterator_word(word: &OcrElement) -> bool {
     word.backend_metadata.get("backend").and_then(serde_json::Value::as_str) == Some("tesseract-iterator")
 }
@@ -101,6 +465,11 @@ pub(super) fn has_only_certified_tesseract_text(doc: &InternalDocument) -> bool 
     doc.prebuilt_ocr_elements.is_none() && ocr_page_has_only_plain_payload_with(doc, is_hocr_bookkeeping)
 }
 
+/// Whether the page's final structure only cuts a certified Tesseract read into blocks.
+pub(super) fn only_segments_certified_tesseract_text(doc: &InternalDocument, read: &str) -> bool {
+    doc.prebuilt_ocr_elements.is_none() && ocr_page_only_segments_text_with(doc, read, is_hocr_bookkeeping)
+}
+
 fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {
     match key {
         "source_format" => value.as_str() == Some("hocr"),
@@ -125,37 +494,5 @@ fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::internal::ElementKind;
-
-    #[test]
-    fn should_ignore_only_known_hocr_run_bookkeeping_in_a_plain_page() {
-        let mut doc = super::super::document::flat_ocr_page_document("real source words");
-        doc.metadata
-            .additional
-            .insert("source_format".into(), serde_json::json!("hocr"));
-        doc.metadata
-            .additional
-            .insert("table_count".into(), serde_json::json!(0));
-        assert!(has_only_certified_tesseract_text(&doc));
-        assert!(!super::super::document::ocr_page_has_only_plain_payload(&doc));
-
-        let mut unknown = doc.clone();
-        unknown
-            .metadata
-            .additional
-            .insert("unknown".into(), serde_json::json!(0));
-        assert!(!has_only_certified_tesseract_text(&unknown));
-
-        let mut invalid = doc.clone();
-        invalid
-            .metadata
-            .additional
-            .insert("table_count".into(), serde_json::json!(1));
-        assert!(!has_only_certified_tesseract_text(&invalid));
-
-        doc.elements[0].kind = ElementKind::Heading { level: 1 };
-        assert!(!has_only_certified_tesseract_text(&doc));
-    }
-}
+#[path = "native_word_coverage_tests.rs"]
+mod tests;
