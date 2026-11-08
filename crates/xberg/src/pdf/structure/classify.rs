@@ -1162,7 +1162,7 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
         && matches!(bytes[roman_end], b'.' | b' ' | b')')
         && is_valid_roman(&t[..roman_end])
     {
-        return true;
+        return !starts_with_math_operator(&t[roman_end..]);
     }
 
     let mut levels = 0usize;
@@ -1186,6 +1186,9 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
     if levels == 0 {
         return false;
     }
+    if starts_with_math_operator(&t[idx..]) {
+        return false;
+    }
     if levels >= 2 {
         return true;
     }
@@ -1199,6 +1202,31 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
             .chars()
             .filter(|c| c.is_alphabetic())
             .all(|c| c.is_uppercase())
+}
+
+/// Whether `rest`, the text right after an enumerator, opens with a math
+/// operator (`X = Y`, `V + W`, `I < N`, `1.5 = x`). An enumerator is followed by
+/// a title, never by an operator, so such a line is a formula.
+///
+/// `/` and `*` also appear as ordinary punctuation after a numbered title
+/// (`1/ INTRODUCTION`, `IV * Results`), so they count only when an operand follows
+/// with no space, as in `12/1996`. A hyphen or en dash never counts: `IV - Results`
+/// is a heading. See #2688.
+fn starts_with_math_operator(rest: &str) -> bool {
+    let after = rest.trim_start_matches(['.', ')']);
+    let mut chars = after.chars();
+    match chars.next() {
+        Some('/' | '*') => chars.next().is_some_and(|c| !c.is_whitespace()),
+        Some(c) => {
+            let c = if c.is_whitespace() {
+                after.trim_start().chars().next().unwrap_or(' ')
+            } else {
+                c
+            };
+            (is_math_character(c) && !is_greek_letter(c)) || matches!(c, '<' | '>' | '\u{2212}')
+        }
+        None => false,
+    }
 }
 
 /// A leading section keyword is a word, not a preposition. Without a floor,
@@ -3746,6 +3774,51 @@ mod numbered_section_heading_tests {
         assert!(is_numbered_section_heading("IV. Results"));
         assert!(is_numbered_section_heading("II) Scope"));
         assert!(is_numbered_section_heading("I INTRODUCTION"));
+    }
+
+    /// GH#2688: `X`, `V` and `I` are roman numerals and also ordinary variables,
+    /// so a math line opening with one must not read as an enumerated heading.
+    #[test]
+    fn a_roman_numeral_before_a_math_operator_is_not_a_heading() {
+        assert!(!is_numbered_section_heading("X = Y"));
+        assert!(!is_numbered_section_heading("V + W"));
+        assert!(!is_numbered_section_heading("X ^ Y"));
+        assert!(!is_numbered_section_heading("I < N"));
+        assert!(!is_numbered_section_heading("I > N"));
+        assert!(!is_numbered_section_heading("X \u{2212} Y"));
+        assert!(!is_numbered_section_heading("X \u{2264} Y"));
+        assert!(!is_numbered_section_heading("2*X"));
+        assert!(!is_numbered_section_heading("2/X"));
+        assert!(!is_numbered_section_heading("1 = Y"));
+        assert!(!is_numbered_section_heading("1 > Y"));
+        assert!(!is_numbered_section_heading("12/1996\u{2013}P"));
+        assert!(!is_numbered_section_heading("1.5 = X"));
+        assert!(!is_numbered_section_heading("3.2.1 + X"));
+        assert!(is_numbered_section_heading("1/ INTRODUCTION"));
+        assert!(is_numbered_section_heading("IV * Results"));
+        assert!(is_numbered_section_heading("1.5 Results"));
+        assert!(is_numbered_section_heading("II \u{0394} Methods"));
+        assert!(is_numbered_section_heading("IV \u{2013} Results"));
+        assert!(is_numbered_section_heading("X. Results"));
+        assert!(is_numbered_section_heading("IV. Results"));
+        assert!(is_numbered_section_heading("II Methods"));
+        assert!(is_numbered_section_heading("IV - Results"));
+    }
+
+    /// GH#2688: a number followed by a measurement operator or a DOI/ratio tail
+    /// is data, not an enumerated heading. The multi-level cases are headings
+    /// without the operator guard, so each operator is pinned on its own.
+    #[test]
+    fn a_number_before_a_measurement_operator_or_tail_is_not_a_heading() {
+        assert!(!is_numbered_section_heading("2.3 \u{00B1} 0.1"));
+        assert!(!is_numbered_section_heading("3.2 \u{00B1} Error"));
+        assert!(!is_numbered_section_heading("240 \u{00D7} 10"));
+        assert!(!is_numbered_section_heading("4.1 \u{00D7} Scaling"));
+        assert!(!is_numbered_section_heading("3 \u{00F7} 2"));
+        assert!(!is_numbered_section_heading("3.1 \u{00F7} Scale"));
+        assert!(!is_numbered_section_heading("10.1109/IPIN.2018.8533777"));
+        assert!(!is_numbered_section_heading("1.2/1.3 Results"));
+        assert!(is_numbered_section_heading("4.1 Scaling"));
     }
 
     #[test]

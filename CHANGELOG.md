@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(layout): Add an experimental `model` selector for layout detection.** (#2284)
+  `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
+
+- **(ci): Add a PP-DocLayoutV3 cross-runtime comparison helper, not yet wired into the replay runner.** (#2284)
+  `scripts/ci/v3_cross_runtime.py` is a test utility; it ships in no product and no runner calls it yet. It accepts a reading-order rank difference only inside a run of exactly equal sort keys and a mask-bit flip only when both gathered logits are within 1e-4 of zero, an epsilon fitted on two development pages that held-out pages must re-check.
+
 - **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
   `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`, any libheif or codec import, a deployment target above macOS 15.0, and missing or altered license notices; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
   The release workflow now runs it on every macOS PHP archive.
@@ -67,6 +73,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(ocr): Re-read a standalone picture that looks like a table as one uniform block and adopt that read.** (#2503, #2432)
+  When the sparse-text first pass finds no table but its words form a lattice (at least four rows, three columns separated by wide gaps, emitted row by row), the picture is read again with Tesseract PSM 6, whose dot-leader row recovery keeps each row on one line, and that read replaces the first. It is adopted as a caller-forced `psm = 6` would be, so a token PSM 6 misreads is kept; only an empty re-read, or one with under three quarters of the first read's letters and digits, is discarded. On the #2432 set standalone pictures keep 162 of 288 rows whole (108 before; explicit `psm = 6` reaches 167). Every picture the lattice test admits is OCR'd twice, whether or not the re-read is adopted (11 of 24 pictures on that set, adopted on 6); only default Tesseract OCR is affected. An explicit `psm`, vertical languages, any TIFF, a VLM fallback or pipeline, requested document structure, layout detection, a first read that already has a table, and scanned PDF pages keep the first read.
+
+- **(layout): Pin PP-DocLayoutV3 to PaddlePaddle's official ONNX.** (#2284)
+  The `pp_doclayout_v3` artifact now comes from `xberg-io/layout-models` revision `a0c2d342` (130,502,049 bytes, sha256 `45bf7175...`), the official PaddlePaddle export re-hosted with attribution. Its outputs keep the adapter's contract (`fetch_name_0` F32[N,7], `fetch_name_1` I32[1], `fetch_name_2` I32[N,200,200]). Any V3 capture set recorded against the previous artifact is bound to a hash the code no longer pins and must be re-recorded.
 
 - **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
   The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.
@@ -148,6 +160,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Docker and CI use Tesseract 5.5.4, Leptonica 1.87.0, libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2.
   Windows builds verified Tesseract source; Linux and macOS provisioning checks selected runtimes and real decoding.
 
+- **(pdf): The OCR structure heuristic's retention gate reads ligature code points through the text repair's ligature table (#2689).**
+  The gate carried its own copy of the U+FB00..FB06 mapping; behavior is unchanged.
+
 ### Security
 
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
@@ -207,6 +222,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Run no-binarization contrast preprocessing on the 8-bit plane for genuinely gray input.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which shrank or refused the sparse-retry fallback's upscale. A raster whose channels are equal in every pixel now becomes an 8-bit Pix and frees its RGB before background normalization and sharpening; the result is pixel-identical to the colour path, and the native phases peak at 7.0 bytes per pixel as measured with Leptonica's allocator (29,360,128 bytes at 2048x2048 against a modelled 29,360,384). Colour input keeps the colour path and its model, a step that fails after the RGB is freed keeps the best Pix already built, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does. The receipt OCR test is ignored until #2699 is resolved: its expected spelling does not reproduce at default limits and the cause is not isolated.
 
+- **(pdf): Honor graphics-state dash patterns and zero-opacity strokes in native PDF path extraction.** (#2332)
+  All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour for clamped zero opacity; this prevents false HTML headers from those separators.
+  Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
+  Partial stroke opacity, fill opacity (`ca`), soft masks (`SMask`) and blend modes (`BM`) remain unmodelled in path-based header visibility proof.
+
+- **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
+  The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that spans more than one read word now keeps the OCR read.
+
+- **(pdf): Stop a math line such as `X = Y` from reading as a numbered heading (#2688).**
+  A leading roman numeral or number matched the heading enumerator whatever followed it, so a formula opening with a variable (`X = Y`, `2 + ...`), a decimal (`0.03 ± 0.01`, `1.5 = x`) or a DOI tail (`10.1109/IPIN.2018`) became a heading and split its paragraph. An enumerator now fails to be a heading when a math operator (`= + < > ^ ± ≤ −` and the like) follows it, or when `/` or `*` is followed directly by an operand, as in `12/1996`. So `3.2 ± 0.1`, `4.1 × Scaling` and `1.2/1.3 Results` are no longer headings, while `IV. Results`, `II Methods`, `1/ INTRODUCTION` and `IV - Results` still are.
+
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
 
@@ -227,6 +253,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep an authored space after a ligature in Plain and Markdown output.** (#2322)
   A space following a ligature glyph ("staﬀ only") was removed by a string-level repair, welding two words into "staffonly". Word boundaries after a ligature now come only from the extractor's glyph geometry.
+
+- **(pdf): Decode an over-budget JPEG page image at a reduced scale instead of refusing the page.** (#2682)
+  A scan whose embedded JPEG rasters and canvas exceed the image working budget (for example a 6623x4678 RGB scan on a large page) is decoded at the finest 1/2, 1/4 or 1/8 IDCT scale that fits, so the page renders and takes the normal OCR route. Each axis of the reduced raster must reach 90% of the canvas pixels the image is painted over, less one pixel (`reduced >= 0.9 * painted - 1`); a 600 px reduced axis accepts a painted extent up to 667 px and refuses 668 px.
+  Progressive, CMYK, colour-key-masked and in-data soft-masked JPEGs are still refused as before, as is a frame that disagrees with its image dictionary (the JPEG's own frame size decides the scale). A reduced decode that fails after admission is reported as the same budget refusal rather than rendering the page without the image.
+  The decode relies on `jpeg-decoder`'s `rayon` worker (enabled for `xberg-native-pdf` on every non-wasm32 target; wasm32 uses its immediate worker), which converts each coefficient row as it is read; the default thread-per-component worker would queue rows without a bound. The decoder checks its buffer limit only after decoding, so the admission arithmetic is what bounds memory.
 
 - **(ocr): Apply `max_threads` to PaddleOCR ONNX Runtime sessions.** (#2649)
   Sessions now take the installed process thread budget instead of the host default, and keep their intra-op and inter-op limits when an execution provider (including explicit CPU) is configured.

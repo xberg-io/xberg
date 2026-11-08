@@ -3092,14 +3092,9 @@ const MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION: f64 = 1.0;
 fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
     text.chars()
         .filter(|character| character.is_alphanumeric())
-        .flat_map(|character| match character {
-            '\u{FB00}' => vec!['f', 'f'],
-            '\u{FB01}' => vec!['f', 'i'],
-            '\u{FB02}' => vec!['f', 'l'],
-            '\u{FB03}' => vec!['f', 'f', 'i'],
-            '\u{FB04}' => vec!['f', 'f', 'l'],
-            '\u{FB05}' | '\u{FB06}' => vec!['s', 't'],
-            other => other.to_lowercase().collect(),
+        .flat_map(|character| match crate::pdf::structure::ligature_letters(character) {
+            Some(letters) => letters.chars().collect::<Vec<_>>(),
+            None => character.to_lowercase().collect(),
         })
         .collect()
 }
@@ -3111,7 +3106,7 @@ fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
 /// this is only the second call site (`avoid-duplication`: extract after the third). Unlike
 /// that word-token version, this compares characters (see the constant's doc comment for why).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn ocr_structure_heuristic_char_retention(restructured_text: &str, baseline_text: &str) -> f64 {
+pub(super) fn ocr_structure_heuristic_char_retention(restructured_text: &str, baseline_text: &str) -> f64 {
     let baseline_chars = ocr_structure_heuristic_canonical_chars(baseline_text);
     if baseline_chars.is_empty() {
         return 1.0;

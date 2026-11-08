@@ -37,9 +37,7 @@
 
 - C. **LQ Control Deisgn for LWR Model with VSL In order to find Φ(z), we take (14) and transform it into ∂∆ρ ρ**~**0**~ **∂∆ρ = −b** ~**0**~**U**~**max**~ **1 − 2 − ∂t ρ**~**max**~ **∂z ρ**~**0**~ **∂∆b ρ U**~**0 max**~ **1 − (28) ρ**~**max**~ **∂z so that it is now in the form of (15). It follows that**
 
-**ρ**~**0**~
-
-**V = −b**~**0**~ **U**~**max**~ **1 − 2 ρ**~**max**~ **M = 0 (29) ρ**~**0**~ **B**~**0**~ **= −ρ U**~**0 max**~ **1 − ρ**~**max**~ **C**~**0**~ **= I**
+**ρ**~**0**~ **V = −b**~**0**~ **U**~**max**~ **1 − 2 ρ**~**max**~ **M = 0 (29) ρ**~**0**~ **B**~**0**~ **= −ρ U**~**0 max**~ **1 − ρ**~**max**~ **C**~**0**~ **= I**
 
 **1**
 
