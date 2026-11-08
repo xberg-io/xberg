@@ -11,7 +11,7 @@ mod common;
 use xberg_native_pdf::PdfDocument;
 use xberg_native_pdf::rendering::{PageRenderer, RenderOptions};
 
-/// Glyph IDs of the font program, which are also the CIDs (CIDToGIDMap /Identity).
+/// Glyph IDs of the font program. The CID of each is the glyph ID plus `Fixture::cid_offset`.
 const P: u16 = 1;
 const O: u16 = 2;
 const T: u16 = 3;
@@ -42,10 +42,12 @@ const DRAWN: [u16; 8] = [P, O, T, E, N, LIG_TI, A, L];
 struct Fixture {
     /// GSUB ligature rules: (component glyphs, ligature glyph). Empty means no GSUB table.
     ligatures: Vec<(Vec<u16>, u16)>,
-    /// /ToUnicode entries beyond the letters, as (CID, text).
+    /// /ToUnicode entries beyond the letters, as (glyph, text).
     extra_to_unicode: Vec<(u16, &'static str)>,
-    /// A letter glyph that /ToUnicode leaves out.
-    unmapped_letter: Option<u16>,
+    /// A letter glyph whose /ToUnicode entry is replaced by this text, or left out for `None`.
+    changed_letter: Option<(u16, Option<&'static str>)>,
+    /// Added to each glyph ID to make its CID. Nonzero writes an explicit CIDToGIDMap stream.
+    cid_offset: u16,
 }
 
 impl Fixture {
@@ -53,7 +55,8 @@ impl Fixture {
         Self {
             ligatures: vec![(vec![T, I], LIG_TI)],
             extra_to_unicode: Vec::new(),
-            unmapped_letter: None,
+            changed_letter: None,
+            cid_offset: 0,
         }
     }
 }
@@ -256,17 +259,18 @@ fn utf16_hex(text: &str) -> String {
 }
 
 fn to_unicode_cmap(fixture: &Fixture) -> Vec<u8> {
-    let mut entries: Vec<String> = LETTERS
+    let letters = LETTERS.iter().filter_map(|&(gid, ch)| match fixture.changed_letter {
+        Some((changed, text)) if changed == gid => text.map(|text| (gid, text.to_string())),
+        _ => Some((gid, ch.to_string())),
+    });
+    let extra = fixture
+        .extra_to_unicode
         .iter()
-        .filter(|&&(gid, _)| Some(gid) != fixture.unmapped_letter)
-        .map(|&(gid, ch)| format!("<{gid:04X}> <{}>", utf16_hex(&ch.to_string())))
+        .map(|&(gid, text)| (gid, text.to_string()));
+    let entries: Vec<String> = letters
+        .chain(extra)
+        .map(|(gid, text)| format!("<{:04X}> <{}>", gid + fixture.cid_offset, utf16_hex(&text)))
         .collect();
-    entries.extend(
-        fixture
-            .extra_to_unicode
-            .iter()
-            .map(|&(cid, text)| format!("<{cid:04X}> <{}>", utf16_hex(text))),
-    );
     format!(
         "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n\
          /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
@@ -297,13 +301,28 @@ fn push_object(pdf: &mut Vec<u8>, offsets: &mut Vec<usize>, dict: &str, stream: 
 /// A one-page PDF that draws "potential" in the fixture font.
 fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
     let font = font_program(&fixture.ligatures);
-    let codes: String = DRAWN.iter().map(|g| format!("{g:04X}")).collect();
+    let codes: String = DRAWN
+        .iter()
+        .map(|g| format!("{:04X}", g + fixture.cid_offset))
+        .collect();
     let content = format!("BT /F1 24 Tf 20 100 Td <{codes}> Tj ET");
     let to_unicode = to_unicode_cmap(fixture);
     let font_stream_keys = format!(" /Length1 {}", font.len());
+    // CID -> GID as big-endian pairs; CIDs below the offset map to .notdef. ~keep
+    let cid_to_gid: Vec<u8> = (0..fixture.cid_offset)
+        .map(|_| 0u16)
+        .chain(0..NUM_GLYPHS)
+        .flat_map(be16)
+        .collect();
+    let cid_to_gid_ref = if fixture.cid_offset == 0 { "/Identity" } else { "10 0 R" };
+    let cid_font = format!(
+        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /AAAAAA+LigSans \
+         /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> \
+         /FontDescriptor 7 0 R /CIDToGIDMap {cid_to_gid_ref} /DW 500 >>"
+    );
     let mut pdf = b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n".to_vec();
     let mut offsets = vec![0usize];
-    let objects: [(&str, Option<&[u8]>); 9] = [
+    let objects: [(&str, Option<&[u8]>); 10] = [
         ("<< /Type /Catalog /Pages 2 0 R >>", None),
         ("<< /Type /Pages /Kids [3 0 R] /Count 1 >>", None),
         (
@@ -317,12 +336,7 @@ fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
              /DescendantFonts [6 0 R] /ToUnicode 8 0 R >>",
             None,
         ),
-        (
-            "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /AAAAAA+LigSans \
-             /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> \
-             /FontDescriptor 7 0 R /CIDToGIDMap /Identity /DW 500 >>",
-            None,
-        ),
+        (&cid_font, None),
         (
             "<< /Type /FontDescriptor /FontName /AAAAAA+LigSans /Flags 32 /FontBBox [0 -200 500 800] \
              /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 9 0 R >>",
@@ -330,6 +344,7 @@ fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
         ),
         ("", Some(&to_unicode)),
         (&font_stream_keys, Some(&font)),
+        ("", Some(&cid_to_gid)),
     ];
     for (dict, stream) in objects {
         push_object(&mut pdf, &mut offsets, dict, stream);
@@ -380,7 +395,7 @@ fn without_a_gsub_table_no_letters_are_invented() {
 #[test]
 fn a_component_without_a_to_unicode_entry_gives_no_partial_letters() {
     let fixture = Fixture {
-        unmapped_letter: Some(I),
+        changed_letter: Some((I, None)),
         ..Fixture::standard()
     };
     let text = extract(&fixture);
@@ -415,5 +430,32 @@ fn two_rules_that_disagree_on_the_letters_give_none() {
     assert!(
         !text.contains("ti") && !text.contains("enpo"),
         "an ambiguous ligature took the letters of one rule: {text:?}"
+    );
+}
+
+#[test]
+fn a_component_mapped_to_a_placeholder_gives_no_letters() {
+    let fixture = Fixture {
+        changed_letter: Some((I, Some("\u{FFFD}"))),
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(text.contains("poten"), "control letters missing: {text:?}");
+    assert!(
+        !text.contains("potent"),
+        "a ligature took a placeholder component as a letter: {text:?}"
+    );
+}
+
+#[test]
+fn components_map_through_an_explicit_cid_to_gid_map() {
+    let fixture = Fixture {
+        cid_offset: 100,
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(
+        text.contains("potential"),
+        "the ligature lost its letters when CIDs differ from glyph IDs: {text:?}"
     );
 }
