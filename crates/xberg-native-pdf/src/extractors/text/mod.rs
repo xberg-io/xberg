@@ -976,6 +976,20 @@ pub(crate) fn starts_with_agl_ligature(text: &str) -> bool {
     matches!(text, "ff" | "fi" | "fl" | "ffi" | "ffl")
 }
 
+/// How much wider a gap must be to separate words when one side is a ligature glyph.
+pub(crate) const LIGATURE_BOUNDARY_GAP_FACTOR: f32 = 1.5;
+
+/// Whether the boundary between two adjacent runs touches a ligature glyph: the
+/// following run is a bare ligature, or the preceding run ends in one.
+#[inline]
+pub(crate) fn is_ligature_boundary(preceding: &str, following: &str) -> bool {
+    starts_with_agl_ligature(following)
+        || preceding
+            .chars()
+            .next_back()
+            .is_some_and(|c| ('\u{FB00}'..='\u{FB06}').contains(&c))
+}
+
 /// detect monospace fonts by name.
 /// Monospace fonts emit one show-text op per glyph with one-em
 /// advance positioning, which triggers the proportional-font space-
@@ -1369,22 +1383,10 @@ fn should_insert_space(
         font_size * 0.25
     };
 
-    // suppress space insertion at AGL-
-    // ligature boundaries. When the preceding or following text
-    // starts with one of the Latin ligature codepoints (U+FB00..U+FB04)
-    // or matches the multi-char AGL ligature names, the small kerning
-    // gap that surrounds the ligature glyph is NOT a word boundary —
-    // it's an intra-word position artefact from pdfTeX-style ligature
-    // emission. Inflating the threshold by 1.5× at these positions
-    // catches the `di ff cult` → `difficult` repro. ~keep
-    let ligature_boundary = starts_with_agl_ligature(following_text)
-        || preceding_text
-            .chars()
-            .last()
-            .map(|c| ('\u{FB00}'..='\u{FB06}').contains(&c))
-            .unwrap_or(false);
-    let geometric_threshold = if ligature_boundary {
-        geometric_threshold * 1.5
+    // The small kerning gap around a ligature glyph is an intra-word position artefact
+    // of pdfTeX-style ligature emission, not a word boundary (`di ff cult`). ~keep
+    let geometric_threshold = if is_ligature_boundary(preceding_text, following_text) {
+        geometric_threshold * LIGATURE_BOUNDARY_GAP_FACTOR
     } else {
         geometric_threshold
     };
