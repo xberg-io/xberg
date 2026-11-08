@@ -593,6 +593,61 @@ fn naca_1135_p25_reaches_the_coverage_check_within_the_default_preview_budget() 
 }
 
 #[test]
+fn preview_work_is_budgeted_per_page_under_a_document_ceiling() {
+    use super::PreviewWorkBudget;
+
+    let spend = |budget: &mut PreviewWorkBudget, cost: usize| {
+        budget.probe_page(|page_work| {
+            *page_work = page_work.checked_sub(cost)?;
+            Some(())
+        })
+    };
+    let mut budget = PreviewWorkBudget::with_pages(100, 3);
+    assert_eq!(spend(&mut budget, 90), Some(()));
+    assert_eq!(
+        spend(&mut budget, 90),
+        Some(()),
+        "a page does not inherit the previous page's spend"
+    );
+    assert_eq!(
+        spend(&mut budget, 101),
+        None,
+        "one page never exceeds the per-page limit"
+    );
+    assert_eq!(
+        spend(&mut budget, 90),
+        Some(()),
+        "a refused page spends nothing it did not debit"
+    );
+    assert_eq!(
+        spend(&mut budget, 31),
+        None,
+        "only 30 units of the three-page ceiling remain"
+    );
+    assert_eq!(spend(&mut budget, 30), Some(()));
+    assert_eq!(
+        spend(&mut budget, 1),
+        None,
+        "the document ceiling of three per-page limits is spent"
+    );
+}
+
+#[test]
+fn a_page_that_debits_before_refusing_still_consumes_the_document_ceiling() {
+    use super::PreviewWorkBudget;
+
+    let mut budget = PreviewWorkBudget::with_pages(100, 2);
+    for _ in 0..2 {
+        let refused: Option<()> = budget.probe_page(|page_work| {
+            *page_work -= 100;
+            None
+        });
+        assert_eq!(refused, None);
+    }
+    assert_eq!(budget.probe_page(|page_work| *page_work), 0);
+}
+
+#[test]
 fn only_an_audited_covered_layer_that_is_not_judged_plausible_prose_is_probed() {
     use super::probes_page;
 
