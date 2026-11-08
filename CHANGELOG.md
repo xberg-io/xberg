@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(ocr): Re-read a standalone picture that holds a page of amounts but no detected table as one uniform block.** (#2503, #2432)
+  When the sparse-text first pass finds no table, the picture is read again with Tesseract PSM 6, whose dot-leader row recovery keeps each table row on one line. The second read replaces the first only when it prints more rows of amounts and loses none. An explicit `psm`, vertical languages, multi-frame TIFF, requested document structure and layout detection keep the first pass, and scanned PDF pages are unchanged.
+
 - **(pdf): Reduce allocations in native text extraction.** (#2429)
   Reuse ordered spans directly when the text pass does not need character records.
 
