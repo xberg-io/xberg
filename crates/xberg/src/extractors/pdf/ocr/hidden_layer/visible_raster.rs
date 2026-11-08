@@ -468,11 +468,14 @@ mod tests {
     #[test]
     fn icc_gray_source_declines_a_profile_with_a_wrong_declared_size() {
         assert!(icc_source_after_profile_bytes(|_| {}).is_some());
-        let declined = icc_source_after_profile_bytes(|bytes| {
-            let declared = u32::from_be_bytes(bytes[..4].try_into().unwrap());
-            bytes[..4].copy_from_slice(&(declared + 4).to_be_bytes());
-        });
-        assert!(declined.is_none());
+        for delta in [-4_i64, 4] {
+            let declined = icc_source_after_profile_bytes(|bytes| {
+                let declared = i64::from(u32::from_be_bytes(bytes[..4].try_into().unwrap()));
+                let wrong = u32::try_from(declared + delta).unwrap();
+                bytes[..4].copy_from_slice(&wrong.to_be_bytes());
+            });
+            assert!(declined.is_none(), "declared size {delta:+}");
+        }
     }
 
     #[test]
