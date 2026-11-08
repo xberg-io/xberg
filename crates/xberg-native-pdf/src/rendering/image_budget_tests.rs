@@ -3,6 +3,11 @@ use super::*;
 mod source;
 
 const LIMIT: usize = 8 * 1024 * 1024;
+/// Canvas pixels the 32 pt fixture pages are painted over at 72 dpi, far below any reduced scale of
+/// the oversized fixtures.
+const DEVICE: (f32, f32) = (32.0, 32.0);
+/// Refuses the 4096 px fixtures even at 1/8 (about 1.8 MiB of rasters) while admitting the 32 px page.
+const TIGHT: usize = 1024 * 1024;
 const LARGE: u32 = 4096;
 
 fn renderer() -> PageRenderer {
@@ -20,9 +25,16 @@ fn budget() -> Option<PngRenderBudget> {
     })
 }
 
+fn tight_budget() -> Option<PngRenderBudget> {
+    Some(PngRenderBudget {
+        max_working_bytes: TIGHT,
+        minimum_dpi: 72,
+    })
+}
+
 fn assert_refused(renderer: &mut PageRenderer, document: &PdfDocument) {
     let error = renderer
-        .render_page_with_budget(0, document, budget())
+        .render_page_with_budget(0, document, tight_budget())
         .err()
         .expect("source JPEG rasters exceed the supplied working-image budget");
     assert!(error.to_string().contains("image"), "{error}");
@@ -31,8 +43,8 @@ fn assert_refused(renderer: &mut PageRenderer, document: &PdfDocument) {
 
 #[test]
 fn render_bridge_marks_only_a_qualified_source_image_budget_excess() {
-    let oversized = source::document(&source::jpeg(1200), 1200, false);
-    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&oversized, 0, 72, 72, LIMIT)
+    let oversized = source::document(&source::jpeg(LARGE), LARGE, false);
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&oversized, 0, 72, 72, TIGHT)
         .err()
         .expect("large source cannot fit");
     assert!(matches!(error, crate::Error::Image(_)));
@@ -95,7 +107,13 @@ fn prior_unbounded_render_cannot_bypass_a_later_source_image_budget() {
 #[test]
 fn jpeg_header_dimensions_cannot_hide_behind_a_smaller_xobject_dictionary() {
     let document = source::document(&source::jpeg(LARGE), 32, false);
-    assert_refused(&mut renderer(), &document);
+    // The 4096 px frame would fit at 1/8 of the budget if the dictionary were trusted; a mismatch is
+    // not reduced and is refused with the budget refusal, under a limit that would admit a reduction.
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&document, 0, 72, 72, LIMIT)
+        .err()
+        .expect("a frame that disagrees with its dictionary is refused");
+    assert!(exceeded, "{error}");
+    assert!(error.to_string().contains("working budget"), "{error}");
 }
 
 #[test]
@@ -337,8 +355,182 @@ fn wrapped_jpeg_contrast_probe_charges_filters_and_actual_codestream_pixels() {
     assert!(probe(&small, LIMIT).unwrap());
     assert!(!probe(&small, small.len() * 16).unwrap());
 
-    let large = source::wrap_ascii85(&source::jpeg(1200));
-    let error = probe(&large, LIMIT).unwrap_err();
+    let large = source::wrap_ascii85(&source::jpeg(LARGE));
+    // The probe reserves its own raster and sixteen copies of the stored stream before the source
+    // budget; leave 512 KiB, too little for any reduced decode of the fixture. ~keep
+    let error = probe(&large, 16 * large.len() + (1 << 20) + TIGHT / 2).unwrap_err();
     assert!(error.to_string().contains("JPEG source image rasters"), "{error}");
     assert!(error.to_string().contains("working budget"), "{error}");
+}
+
+fn is_black_somewhere(image: &crate::rendering::RenderedImage) -> bool {
+    image
+        .data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .any(|pixel| pixel[..3] == [0, 0, 0])
+}
+
+#[test]
+fn an_oversized_jpeg_is_decoded_at_the_finest_reduced_scale_that_fits() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let encoded = source::jpeg(1200);
+    let image = PdfImage::new(1200, 1200, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(encoded.clone()));
+    assert!(image_budget::ImageBudget::new(LIMIT).admit_jpeg(&image, 0).is_err());
+    for (limit, expected) in [(32 * 1024 * 1024, 1), (LIMIT, 2), (1_500_000, 4), (700_000, 8)] {
+        let denominator = image_budget::ImageBudget::new(limit)
+            .admit_jpeg_reducing(&image, 0, DEVICE)
+            .unwrap_or_else(|error| panic!("limit {limit}: {error}"));
+        assert_eq!(denominator, expected, "limit {limit}");
+    }
+    let decoded = image_budget::decode_reduced_jpeg(&encoded, 4).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (300, 300));
+    assert!(
+        image_budget::ImageBudget::new(500_000)
+            .admit_jpeg_reducing(&image, 0, DEVICE)
+            .is_err()
+    );
+}
+
+#[test]
+fn a_reduced_decode_never_drops_far_below_the_canvas_resolution() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let image = PdfImage::new(
+        1200,
+        1200,
+        ColorSpace::DeviceRGB,
+        8,
+        ImageData::Jpeg(source::jpeg(1200)),
+    );
+    let admit = |device| image_budget::ImageBudget::new(LIMIT).admit_jpeg_reducing(&image, 0, device);
+    assert_eq!(admit((600.0, 600.0)).unwrap(), 2);
+    // reduced >= 0.9 * painted - 1, so a 600 px axis accepts a painted extent up to 667.78 px.
+    assert_eq!(admit((667.0, 667.0)).unwrap(), 2);
+    assert_eq!(admit((667.0, 600.0)).unwrap(), 2);
+    assert_eq!(admit((600.0, 667.0)).unwrap(), 2);
+    assert!(admit((668.0, 600.0)).is_err(), "width 668 is the first refused extent");
+    assert!(admit((600.0, 668.0)).is_err(), "height 668 is the first refused extent");
+    assert!(admit((700.0, 700.0)).is_err());
+}
+
+#[test]
+fn a_jpeg_that_fits_keeps_its_full_size_decode() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let image = PdfImage::new(32, 32, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(source::jpeg(32)));
+    assert_eq!(
+        image_budget::ImageBudget::new(LIMIT)
+            .admit_jpeg_reducing(&image, 0, DEVICE)
+            .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn a_progressive_jpeg_is_refused_not_reduced() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let mut progressive = source::jpeg(1200);
+    let frame = progressive.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    progressive[frame + 1] = 0xc2;
+    let image = PdfImage::new(1200, 1200, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(progressive));
+    let mut budget = image_budget::ImageBudget::new(LIMIT);
+    assert!(budget.admit_jpeg_reducing(&image, 0, DEVICE).is_err());
+    assert!(budget.exceeded());
+}
+
+#[test]
+fn a_cmyk_jpeg_is_refused_not_reduced() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    let cmyk = PdfImage::new(
+        1200,
+        1200,
+        ColorSpace::DeviceCMYK,
+        8,
+        ImageData::Jpeg(source::cmyk_jpeg(1200)),
+    );
+    let ImageData::Jpeg(bytes) = cmyk.data() else {
+        unreachable!()
+    };
+    assert!(
+        image_budget::jpeg_frame(bytes).is_ok(),
+        "the fixture is a readable four-component frame"
+    );
+    assert!(
+        !image_budget::reducible_jpeg(&cmyk, bytes),
+        "CMYK is excluded from reduction"
+    );
+    let mut budget = image_budget::ImageBudget::new(LIMIT);
+    assert!(budget.admit_jpeg_reducing(&cmyk, 0, DEVICE).is_err());
+    assert!(
+        budget.exceeded(),
+        "the refusal is the budget class, not an unqualified source"
+    );
+}
+
+#[test]
+fn a_truncated_jpeg_whose_reduced_decode_fails_is_refused_not_rendered_blank() {
+    let mut truncated = source::jpeg(LARGE);
+    let scan = truncated.windows(2).position(|pair| pair == [0xff, 0xda]).unwrap();
+    truncated.truncate(scan + 16);
+    let document = source::document(&truncated, LARGE, false);
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&document, 0, 72, 72, LIMIT)
+        .err()
+        .expect("a page whose only image cannot be decoded must be refused, not rendered white");
+    assert!(matches!(error, crate::Error::Image(_)), "{error}");
+    assert!(exceeded);
+    let inline = source::inline_document(&truncated_gray(), LARGE);
+    assert!(
+        super::super::render_png_page_with_budget_evidence(&inline, 0, 72, 72, LIMIT).is_err(),
+        "the inline image path records the same refusal"
+    );
+}
+
+fn truncated_gray() -> Vec<u8> {
+    let mut bytes = source::gray_jpeg(LARGE);
+    let scan = bytes.windows(2).position(|pair| pair == [0xff, 0xda]).unwrap();
+    bytes.truncate(scan + 16);
+    bytes
+}
+
+#[test]
+fn a_page_whose_source_jpeg_exceeds_the_budget_renders_from_a_reduced_decode() {
+    let document = source::document(&source::jpeg(LARGE), LARGE, false);
+    let (image, _) = renderer().render_page_with_budget(0, &document, budget()).unwrap();
+    assert_eq!((image.width, image.height), (32, 32));
+    assert!(
+        is_black_somewhere(&image),
+        "the reduced decode must still paint the source"
+    );
+    let inline = source::inline_document(&source::gray_jpeg_of(LARGE, 0), LARGE);
+    let (image, _) = renderer().render_page_with_budget(0, &inline, budget()).unwrap();
+    assert!(
+        is_black_somewhere(&image),
+        "the inline reduced decode must paint the dark image"
+    );
+}
+
+#[test]
+fn a_frame_the_decoder_would_scale_differently_is_never_admitted_at_that_scale() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    // `jpeg-decoder` reaches a one-pixel-wide request on either axis, so at 1/2 and 1/4 it would pick 1/8.
+    let encoded = {
+        let pixels = vec![0; 4096 * 3];
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+            .encode(&pixels, 1, 4096, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        bytes
+    };
+    let image = PdfImage::new(1, 4096, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(encoded.clone()));
+    let limit = 20_000;
+    assert!(image_budget::ImageBudget::new(limit).admit_jpeg(&image, 0).is_err());
+    let admit = |device| image_budget::ImageBudget::new(limit).admit_jpeg_reducing(&image, 0, device);
+    assert_eq!(admit((1.0, 100.0)).unwrap(), 8);
+    let mut budget = image_budget::ImageBudget::new(limit);
+    assert!(budget.admit_jpeg_reducing(&image, 0, (1.0, 2000.0)).is_err());
+    assert!(
+        budget.exceeded(),
+        "a refusal must be the budget refusal, not a decode error"
+    );
+    assert_eq!(image_budget::decode_reduced_jpeg(&encoded, 8).unwrap().height(), 512);
 }
