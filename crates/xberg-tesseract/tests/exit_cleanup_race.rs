@@ -4,7 +4,8 @@
 //! recognizes a synthetic page in a loop, and the main thread calls C `exit()` while the
 //! worker is inside a recognition. `exit()` runs the exit cleanup. The child must exit
 //! with status 0. A crash (SIGSEGV or SIGABRT) means the cleanup freed the engine under
-//! the worker. The engine loads the bundled English model, so the test always runs.
+//! the worker. The engine loads the bundled English model, so `required-features` in
+//! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
 #![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
 #![allow(clippy::print_stdout)] // ~keep: the child reports its progress on stdout by design

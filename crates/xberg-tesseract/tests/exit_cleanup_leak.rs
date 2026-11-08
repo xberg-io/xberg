@@ -1,7 +1,8 @@
 //! The process-exit cleanup frees an idle engine, so tesseract reports no leaked dictionary
 //! on exit, and skips an engine in use, which stays leaked until the operating system
 //! reclaims it. Each test runs its own binary as a child process that calls C `exit()` with
-//! an engine alive. The engine loads the bundled English model, so the tests always run.
+//! an engine alive. The engine loads the bundled English model, so `required-features` in
+//! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
 #![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
 
