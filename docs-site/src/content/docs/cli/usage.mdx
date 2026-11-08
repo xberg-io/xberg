@@ -489,6 +489,7 @@ xberg extract document.pdf --content-format markdown --include-structure true
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--layout`                     | Enable layout detection with default settings (RT-DETR v2). Use `--layout false` to explicitly disable. Requires the `layout-detection` feature. |
 | `--layout-confidence <FLOAT>`  | Layout detection confidence threshold (0.0 - 1.0).                                                                                               |
+| `--layout-model <MODEL>` | Layout detection model: `rt_detr` (default) or `pp_doc_layout_v3` (experimental, ONNX Runtime only, bounding boxes only, about 131 MB download). |
 | `--layout-table-model <MODEL>` | Table structure model: `tatr` (default), `slanet_wired`, `slanet_wireless`, `slanet_plus`, `slanet_auto`, `disabled`.                            |
 
 ```bash title="Terminal"

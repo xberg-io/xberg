@@ -20,7 +20,6 @@
 #define XBERG_FEATURE_ENRICHMENT 1
 #define XBERG_FEATURE_EXCEL 1
 #define XBERG_FEATURE_FORMULA_RECOGNITION 1
-#define XBERG_FEATURE_FULL_NO_HEIC 1
 #define XBERG_FEATURE_HEURISTICS 1
 #define XBERG_FEATURE_HTML 1
 #define XBERG_FEATURE_HWP 1
@@ -1502,6 +1501,12 @@ typedef struct XBERGLayoutDetection XBERGLayoutDetection;
  * is enabled for PDF extraction.
  */
 typedef struct XBERGLayoutDetectionConfig XBERGLayoutDetectionConfig;
+/**
+ * Which layout detection model runs on each page.
+ *
+ * Wire format is snake_case in all serializers (JSON, TOML, YAML).
+ */
+typedef struct XBERGLayoutDetectionModel XBERGLayoutDetectionModel;
 /**
  * A detected layout region on a page.
  *
@@ -16472,6 +16477,17 @@ XBERGAlefHandle xberg_layout_detection_config_strategy(XBERGAlefHandle handle);
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
 /**
+ * Get the `model` field from a `LayoutDetectionConfig`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_layout_detection_model_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_layout_detection_config_model(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_LAYOUT_TYPES)
+/**
  * Get the `confidence_threshold` field from a `LayoutDetectionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -27711,6 +27727,20 @@ int32_t xberg_layout_class_from_i32(int32_t value);
 int32_t xberg_layout_class_from_str(const char *name);
 
 /**
+ * Convert an integer to a `LayoutDetectionModel` variant. Returns -1 on invalid
+ * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_layout_detection_model_from_i32(int32_t value);
+
+/**
+ * Convert a `LayoutDetectionModel` serde wire value (C string) to its integer
+ * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
+ * is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_layout_detection_model_from_str(const char *name);
+
+/**
  * Convert an integer to a `LayoutStrategy` variant. Returns -1 on invalid
  * input. # Safety Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
@@ -29647,6 +29677,37 @@ char *xberg_layout_class_to_json(XBERGAlefHandle handle);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_layout_class_to_string(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_LAYOUT_TYPES)
+/**
+ * Free a `LayoutDetectionModel` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_layout_detection_model_free(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_LAYOUT_TYPES)
+/**
+ * Serialize a `LayoutDetectionModel` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_layout_detection_model_to_json(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_LAYOUT_TYPES)
+/**
+ * Render a `LayoutDetectionModel` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_layout_detection_model_to_string(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)

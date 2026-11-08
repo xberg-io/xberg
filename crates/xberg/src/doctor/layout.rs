@@ -1,7 +1,7 @@
 //! ~keep: Layout capability audit with cache-only optional checks.
 
 use super::DoctorCheck;
-use crate::core::config::{AccelerationConfig, ExtractionConfig};
+use crate::core::config::{AccelerationConfig, ExtractionConfig, LayoutDetectionModel};
 use crate::layout::engine::{CustomModelVariant, LayoutEngine, LayoutEngineConfig, ModelBackend};
 use crate::layout::model_manager::{LayoutModelManager, ModelCacheProbe};
 
@@ -20,17 +20,38 @@ pub(super) fn probe_layout(config: &ExtractionConfig) -> Vec<DoctorCheck> {
 )]
 fn probe_layout_with_manager(config: &ExtractionConfig, manager: &LayoutModelManager) -> Vec<DoctorCheck> {
     let mut checks = Vec::new();
+    let selected_model = config.layout.as_ref().map(|layout| layout.model);
+    let v3_selected = selected_model == Some(LayoutDetectionModel::PpDocLayoutV3);
     #[cfg(feature = "layout-detection")]
-    checks.push(cache_check(
-        "layout.pp-doclayout-v3",
-        manager.probe_model_cache("pp_doclayout_v3"),
-    ));
+    checks.push(match (&config.layout, manager.probe_model_cache("pp_doclayout_v3")) {
+        (Some(layout), ModelCacheProbe::Present) if v3_selected => match manager.verified_model_path("pp_doclayout_v3")
+        {
+            Some(path) => probe_configured_model(
+                "layout.pp-doclayout-v3",
+                CustomModelVariant::PpDocLayoutV3,
+                layout,
+                &path,
+            ),
+            None => DoctorCheck::fail("layout.pp-doclayout-v3", "cached model failed checksum validation"),
+        },
+        (Some(_), ModelCacheProbe::Invalid(message)) if v3_selected => {
+            DoctorCheck::fail("layout.pp-doclayout-v3", message)
+        }
+        (_, status) => cache_check("layout.pp-doclayout-v3", status),
+    });
+    #[cfg(not(feature = "layout-detection"))]
+    if v3_selected {
+        checks.push(DoctorCheck::fail(
+            "layout.pp-doclayout-v3",
+            "selected layout model requires the ORT-backed `layout-detection` feature",
+        ));
+    }
     checks.push(match (&config.layout, manager.probe_model_cache("rtdetr")) {
-        (Some(layout), ModelCacheProbe::Present) => match manager.verified_model_path("rtdetr") {
-            Some(path) => probe_configured_rtdetr(layout, &path),
+        (Some(layout), ModelCacheProbe::Present) if !v3_selected => match manager.verified_model_path("rtdetr") {
+            Some(path) => probe_configured_model("layout.rtdetr", CustomModelVariant::RtDetr, layout, &path),
             None => DoctorCheck::fail("layout.rtdetr", "cached model failed checksum validation"),
         },
-        (Some(_), ModelCacheProbe::Invalid(message)) => DoctorCheck::fail("layout.rtdetr", message),
+        (Some(_), ModelCacheProbe::Invalid(message)) if !v3_selected => DoctorCheck::fail("layout.rtdetr", message),
         (_, status) => cache_check("layout.rtdetr", status),
     });
     #[cfg(feature = "formula-recognition")]
@@ -183,24 +204,28 @@ fn cache_check(name: &str, status: ModelCacheProbe) -> DoctorCheck {
     }
 }
 
-fn probe_configured_rtdetr(
+fn probe_configured_model(
+    name: &str,
+    variant: CustomModelVariant,
     layout: &crate::core::config::LayoutDetectionConfig,
     model_path: &std::path::Path,
 ) -> DoctorCheck {
-    match run_inference(layout, model_path, layout.acceleration.clone()) {
+    match run_inference(&variant, layout, model_path, layout.acceleration.clone()) {
         Ok(detections) => DoctorCheck::pass(
-            "layout.rtdetr",
+            name,
             format!("inference ok ({detections} detections on synthetic page)"),
         ),
-        Err(error) if runtime_retries_on_cpu(layout) => probe_cpu_fallback(layout, model_path, error),
+        Err(error) if runtime_retries_on_cpu(layout) => probe_cpu_fallback(name, &variant, layout, model_path, error),
         Err(error) => DoctorCheck::fail(
-            "layout.rtdetr",
+            name,
             format!("inference failed with configured execution provider: {error}"),
         ),
     }
 }
 
 fn probe_cpu_fallback(
+    name: &str,
+    variant: &CustomModelVariant,
     layout: &crate::core::config::LayoutDetectionConfig,
     model_path: &std::path::Path,
     provider_error: crate::layout::LayoutError,
@@ -209,21 +234,22 @@ fn probe_cpu_fallback(
         provider: crate::core::config::ExecutionProviderType::Cpu,
         ..Default::default()
     });
-    match run_inference(layout, model_path, acceleration) {
+    match run_inference(variant, layout, model_path, acceleration) {
         Ok(_) => DoctorCheck::warn(
-            "layout.rtdetr",
+            name,
             format!(
                 "automatic execution provider failed, CPU works; runtime retries on CPU with a processing warning ({provider_error})"
             ),
         ),
         Err(cpu_error) => DoctorCheck::fail(
-            "layout.rtdetr",
+            name,
             format!("inference failed (automatic provider: {provider_error}; CPU retry: {cpu_error})"),
         ),
     }
 }
 
 fn run_inference(
+    variant: &CustomModelVariant,
     layout: &crate::core::config::LayoutDetectionConfig,
     model_path: &std::path::Path,
     acceleration: Option<AccelerationConfig>,
@@ -231,7 +257,7 @@ fn run_inference(
     let engine_config = LayoutEngineConfig {
         backend: ModelBackend::Custom {
             path: model_path.to_path_buf(),
-            variant: CustomModelVariant::RtDetr,
+            variant: variant.clone(),
         },
         confidence_threshold: layout.confidence_threshold,
         apply_heuristics: layout.apply_heuristics,
@@ -348,6 +374,66 @@ mod tests {
         assert_eq!(rtdetr.status, crate::doctor::ProbeStatus::Fail);
         assert_eq!(rtdetr.message, "cached model failed checksum validation");
         assert_eq!(std::fs::metadata(path).unwrap().len(), RTDETR_MODEL_SIZE_BYTES);
+    }
+
+    #[cfg(any(not(feature = "layout-detection"), feature = "pdf"))]
+    fn v3_config() -> ExtractionConfig {
+        ExtractionConfig {
+            layout: Some(crate::core::config::LayoutDetectionConfig {
+                model: LayoutDetectionModel::PpDocLayoutV3,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[cfg(all(feature = "layout-detection", feature = "pdf"))]
+    #[test]
+    fn selected_v3_same_size_corruption_is_fatal_and_leaves_rtdetr_cache_only() {
+        let root = TempDir::new().unwrap();
+        write_sparse_model(root.path(), "pp_doclayout_v3");
+        let manager = LayoutModelManager::new(Some(root.path().to_path_buf()));
+
+        let checks = probe_layout_with_manager(&v3_config(), &manager);
+        let v3 = checks
+            .iter()
+            .find(|check| check.name == "layout.pp-doclayout-v3")
+            .unwrap();
+        assert_eq!(v3.status, crate::doctor::ProbeStatus::Fail);
+        assert_eq!(v3.message, "cached model failed checksum validation");
+        let rtdetr = checks.iter().find(|check| check.name == "layout.rtdetr").unwrap();
+        assert_eq!(rtdetr.status, crate::doctor::ProbeStatus::Skip);
+    }
+
+    #[cfg(all(feature = "layout-detection", feature = "pdf"))]
+    #[test]
+    fn unselected_v3_corruption_stays_a_cache_warning() {
+        let root = TempDir::new().unwrap();
+        write_sparse_model(root.path(), "pp_doclayout_v3");
+        let manager = LayoutModelManager::new(Some(root.path().to_path_buf()));
+        let config = ExtractionConfig {
+            layout: Some(Default::default()),
+            ..Default::default()
+        };
+
+        let checks = probe_layout_with_manager(&config, &manager);
+        let v3 = checks
+            .iter()
+            .find(|check| check.name == "layout.pp-doclayout-v3")
+            .unwrap();
+        assert_ne!(v3.status, crate::doctor::ProbeStatus::Fail);
+    }
+
+    #[cfg(not(feature = "layout-detection"))]
+    #[test]
+    fn tract_layout_reports_selected_v3_fatal() {
+        let manager = LayoutModelManager::new(Some(TempDir::new().unwrap().path().to_path_buf()));
+        let checks = probe_layout_with_manager(&v3_config(), &manager);
+        let v3 = checks
+            .iter()
+            .find(|check| check.name == "layout.pp-doclayout-v3")
+            .unwrap();
+        assert_eq!(v3.status, crate::doctor::ProbeStatus::Fail);
     }
 
     #[cfg(all(feature = "layout-detection", feature = "pdf"))]

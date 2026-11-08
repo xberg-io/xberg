@@ -1092,6 +1092,16 @@ impl ExtractionConfig {
             validate_unit_interval("layout.confidence_threshold", confidence_threshold)?;
         }
 
+        #[cfg(all(feature = "layout-types", not(feature = "layout-detection")))]
+        if let Some(ref layout) = self.layout
+            && layout.model == super::super::layout::LayoutDetectionModel::PpDocLayoutV3
+        {
+            return Err(crate::XbergError::validation(
+                "layout.model = pp_doc_layout_v3 requires the ORT-backed `layout-detection` feature; \
+                 this build only has the pure-Rust tract engine (RT-DETR only)",
+            ));
+        }
+
         if let Some(ref redaction) = self.redaction {
             redaction.validate()?;
         }
@@ -1241,6 +1251,29 @@ fn default_true() -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "layout-types", not(feature = "layout-detection")))]
+    #[test]
+    fn pp_doclayout_v3_selection_is_rejected_without_the_ort_engine() {
+        use crate::core::config::layout::{LayoutDetectionConfig, LayoutDetectionModel};
+
+        let config = ExtractionConfig {
+            layout: Some(LayoutDetectionConfig {
+                model: LayoutDetectionModel::PpDocLayoutV3,
+                ..LayoutDetectionConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+        let error = config
+            .validate()
+            .expect_err("V3 must not silently fall back to RT-DETR");
+        assert!(error.to_string().contains("pp_doc_layout_v3"), "{error}");
+
+        let default_layout = ExtractionConfig {
+            layout: Some(LayoutDetectionConfig::default()),
+            ..ExtractionConfig::default()
+        };
+        default_layout.validate().expect("RT-DETR stays valid on tract builds");
+    }
     /// Polyglot bindings serialize a zero-valued mirror struct with every field
     /// present, so `ocr_strategy` arrives as an explicit `null`. `#[serde(default)]`
     /// only covers a *missing* key; an internally-tagged enum rejects `null`.
