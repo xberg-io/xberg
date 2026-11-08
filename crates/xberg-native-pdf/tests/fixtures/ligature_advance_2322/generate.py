@@ -50,7 +50,9 @@ def pieces(s):
 lines = [ligate(s) if ligated else s for s in SENT]
 tt = TTFont(str(Path(__file__).resolve().parents[3] / "src/fonts/assets/DejaVuSans.ttf"), recalcTimestamp=False)
 o = subset.Options()
-o.layout_features = ["liga"]
+# accent and fewer drop the ligatures: a run without `e` stays on the shaping route, and a GSUB ligature there
+# would differ from the CID reference for a reason that is not the route of `e`.
+o.layout_features = [] if mode in ("accent", "fewer") else ["liga"]
 o.hinting = False
 o.notdef_outline = True
 s = subset.Subsetter(o)

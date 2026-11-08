@@ -69,8 +69,8 @@ fn should_keep_runs_of_single_letter_codes_on_the_shaping_route() {
 #[test]
 fn should_paint_a_code_that_decodes_to_a_letter_and_an_accent_by_cid() {
     // The route follows the count of characters a code decodes to, not the ligature code points. The
-    // ToUnicode of `e` is U+0065 U+0301, so every run with an `e` leaves the shaping route. The reference is
-    // the same codes with no font cmap, where the font would join the separate f and i codes by GSUB. ~keep
+    // ToUnicode of `e` is U+0065 U+0301, so every run with an `e` leaves the shaping route. The fixture font has
+    // no GSUB ligatures, so a run without `e` shapes to the glyphs of the CID reference. ~keep
     let reference = raster(PLAIN_DIRECT);
     assert_seven_lines_have_ink(&reference);
     let actual = raster(include_bytes!("fixtures/ligature_advance_2322/accent.pdf"));
@@ -84,7 +84,8 @@ fn should_paint_a_code_that_decodes_to_a_letter_and_an_accent_by_cid() {
 #[test]
 fn should_paint_a_code_that_decodes_to_no_characters_by_cid() {
     // The code of `e` decodes to a control character, which the decoder drops with no drop record, so the run
-    // has fewer characters than codes. Shaping that run would skip every `e`; the CID route paints it. ~keep
+    // has fewer characters than codes. Shaping that run would skip every `e`; the CID route paints it. The
+    // fixture font has no GSUB ligatures, as in the accent test. ~keep
     let reference = raster(PLAIN_DIRECT);
     assert_seven_lines_have_ink(&reference);
     let actual = raster(include_bytes!("fixtures/ligature_advance_2322/fewer.pdf"));
