@@ -5435,7 +5435,13 @@ fn deduplicate_overlapping_tables(
                     let i_is_native = i < native_count;
                     let j_is_native = j < native_count;
                     let mixed_origin = i_is_native != j_is_native;
-                    if i < native_count && j < native_count && holds_distinct_rows(&tables[i], &tables[j]) {
+                    let near_coincident = intersection / area_a >= NEAR_COINCIDENT_OVERLAP
+                        && intersection / area_b >= NEAR_COINCIDENT_OVERLAP;
+                    if i < native_count
+                        && j < native_count
+                        && !near_coincident
+                        && holds_distinct_rows(&tables[i], &tables[j])
+                    {
                         continue;
                     }
                     let i_is_protected = protected_layout_children.contains(&i);
@@ -5500,6 +5506,9 @@ fn deduplicate_overlapping_tables(
 /// Fraction of the smaller table's rows that must reappear in the larger one for the pair to
 /// count as two detections of the same region.
 const SHARED_ROW_FRACTION: f64 = 0.5;
+
+/// Boxes covering this much of each other are one region read twice, whatever their rows say.
+const NEAR_COINCIDENT_OVERLAP: f64 = 0.8;
 
 fn row_words(row: &[String]) -> Vec<&str> {
     let mut words: Vec<&str> = row.iter().flat_map(|cell| cell.split_whitespace()).collect();
