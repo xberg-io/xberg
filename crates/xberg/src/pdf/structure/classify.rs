@@ -1979,12 +1979,11 @@ pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
     }
 }
 
-/// The most paragraphs one stamp can be split over: identifier, category and date.
-const MAX_STAMP_PARTS: usize = 3;
-
 /// Mark as furniture the paragraphs of a page that each hold only part of an arXiv stamp, when
 /// together they make one whole stamp. The parts are joined in reading order and reversed, because
-/// the rotated stamp reads from the bottom of the page up.
+/// the rotated stamp reads from the bottom of the page up. A stamp holds three components and each
+/// part holds at least one, so the joined parts make a whole stamp only for two or three parts. With
+/// any other count nothing is marked, and no count check is needed.
 fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
     let parts: Vec<(usize, String)> = page
         .iter()
@@ -1995,9 +1994,6 @@ fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
             is_partial_stamp(&text).then(|| (index, text.trim().to_string()))
         })
         .collect();
-    if !(2..=MAX_STAMP_PARTS).contains(&parts.len()) {
-        return;
-    }
     let forward = parts
         .iter()
         .map(|(_, text)| text.as_str())
@@ -2446,6 +2442,33 @@ mod tests {
             furniture_of(&["6 Dec 2023", "[hep-ph]", "7 Dec 2023", "arXiv:2312.13591v2"]),
             [false; 4]
         );
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_stamp_page_with_one_more_date_paragraph() {
+        let texts = [
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "7 Dec 2023",
+            "Body words stay",
+        ];
+        assert_eq!(furniture_of(&texts), [false; 5]);
+    }
+
+    #[test]
+    fn arxiv_noise_ends_the_heading_of_a_stamp_part() {
+        let mut page: Vec<PdfParagraph> = ["Body words stay", "arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"]
+            .iter()
+            .map(|text| paragraph_with_text(text))
+            .collect();
+        for para in page.iter_mut() {
+            para.heading_level = Some(2);
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        let levels: Vec<Option<u8>> = pages[0].iter().map(|para| para.heading_level).collect();
+        assert_eq!(levels, [Some(2), None, None, None]);
     }
 
     #[test]

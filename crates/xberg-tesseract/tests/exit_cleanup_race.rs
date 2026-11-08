@@ -6,12 +6,7 @@
 //! with status 0. A crash (SIGSEGV or SIGABRT) means the cleanup freed the engine under
 //! the worker. The engine loads the bundled English model, so the test always runs.
 
-#![cfg(all(
-    unix,
-    feature = "build-tesseract",
-    feature = "bundle-tessdata-eng",
-    not(target_arch = "wasm32")
-))]
+#![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
 #![allow(clippy::print_stdout)] // ~keep: the child reports its progress on stdout by design
 
 use std::os::unix::process::ExitStatusExt;
@@ -20,6 +15,9 @@ use std::process::Command;
 use std::sync::mpsc;
 use std::time::Duration;
 use xberg_tesseract::TesseractAPI;
+
+/// The failure message when the build lacks the bundled model. The test fails and does not skip.
+const NEEDS_MODEL: &str = "these tests need the bundled English model: run them with --features bundle-tessdata-eng";
 
 const CHILD_ENV: &str = "XBERG_TESSERACT_EXIT_RACE_CHILD";
 const MODELS_ENV: &str = "XBERG_TESSERACT_EXIT_RACE_MODELS";
@@ -34,7 +32,7 @@ fn english_models() -> tempfile::TempDir {
     let directory = tempfile::tempdir().expect("temporary model directory");
     std::fs::write(
         directory.path().join("eng.traineddata"),
-        xberg_tesseract::bundled_eng_traineddata().expect("bundled English model"),
+        xberg_tesseract::bundled_eng_traineddata().expect(NEEDS_MODEL),
     )
     .expect("write the English model");
     directory

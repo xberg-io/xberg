@@ -3,16 +3,14 @@
 //! reclaims it. Each test runs its own binary as a child process that calls C `exit()` with
 //! an engine alive. The engine loads the bundled English model, so the tests always run.
 
-#![cfg(all(
-    unix,
-    feature = "build-tesseract",
-    feature = "bundle-tessdata-eng",
-    not(target_arch = "wasm32")
-))]
+#![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
 
 use std::path::PathBuf;
 use std::process::Command;
 use xberg_tesseract::TesseractAPI;
+
+/// The failure message when the build lacks the bundled model. The test fails and does not skip.
+const NEEDS_MODEL: &str = "these tests need the bundled English model: run them with --features bundle-tessdata-eng";
 
 const CHILD_ENV: &str = "XBERG_TESSERACT_EXIT_LEAK_CHILD";
 const MODELS_ENV: &str = "XBERG_TESSERACT_EXIT_LEAK_MODELS";
@@ -23,7 +21,7 @@ fn english_models() -> tempfile::TempDir {
     let directory = tempfile::tempdir().expect("temporary model directory");
     std::fs::write(
         directory.path().join("eng.traineddata"),
-        xberg_tesseract::bundled_eng_traineddata().expect("bundled English model"),
+        xberg_tesseract::bundled_eng_traineddata().expect(NEEDS_MODEL),
     )
     .expect("write the English model");
     directory
