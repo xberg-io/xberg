@@ -100,6 +100,13 @@ async fn print_regions(pdf_bytes: Vec<u8>) -> xberg::Result<()> {
 The ordinary extraction is available as `result.extraction`. Regions without a
 proven match are omitted. Redaction requests suppress the region text.
 
+A region's text is returned only when the region owns every native span it
+covers. When a span crosses the region's edge, or another region claims the
+same span, that region is omitted rather than returned with a cut-off word or
+text that belongs to its neighbour. Other regions on the same page that own
+their spans outright still return their text. To read the omitted words, use
+the page text in `result.extraction`.
+
 ## Configuration
 
 <Tabs syncKey="lang">
