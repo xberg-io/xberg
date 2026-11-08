@@ -460,6 +460,10 @@ impl PathExtractor {
         self.current_dash = (array, phase);
     }
 
+    pub(crate) fn set_stroke_alpha(&mut self, alpha: f32) {
+        self.current_stroke_alpha = alpha;
+    }
+
     /// Set stroke color.
     pub fn set_stroke_color(&mut self, color: Color) {
         self.current_stroke_color = Some(color);

@@ -220,8 +220,9 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
 
 /// Paint order decides visibility: a later dashed, light or filled rectangle covering the stroke band
 /// hides the part of the rule it crosses, and a rule may be split into collinear segments. PathContent
-/// carries no alpha, so any fill is treated as opaque; a thin border drawn across a rule therefore
-/// splits it and the header is not retained, the conservative outcome. ~keep
+/// omits zero-opacity strokes but carries no partial alpha or fill opacity (`ca`). Soft masks
+/// (`SMask`) and blend modes (`BM`) are also unmodelled. Fills are treated as opaque, so a fill
+/// crossing a rule can withhold a header even when that fill is transparent in the PDF. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
     visible_rule_styles(paths, left, right, y).is_some()
 }

@@ -395,34 +395,43 @@ impl PdfDocument {
         let Some(states) = extractor
             .current_resources()
             .and_then(|resources| resources.as_dict()?.get("ExtGState"))
-            .and_then(|states| self.deref_object(states))
+            .and_then(|states| self.path_state_object(states))
         else {
             return;
         };
         let Some(dictionary) = states
             .as_dict()
             .and_then(|states| states.get(name))
-            .and_then(|state| self.deref_object(state))
+            .and_then(|state| self.path_state_object(state))
         else {
             return;
         };
         let Some(dictionary) = dictionary.as_dict() else { return };
+        let dash = dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash));
+        let alpha = dictionary.get("CA").and_then(|alpha| self.path_stroke_alpha(alpha));
         let state = stack.current_mut();
-        if let Some(dash) = dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash)) {
-            state.dash = dash;
+        if let Some((lengths, phase)) = dash {
+            state.dash.0.clone_from(&lengths);
+            state.dash.1 = phase;
+            extractor.set_dash(lengths, phase);
         }
-        if let Some(alpha) = dictionary
-            .get("CA")
-            .and_then(|alpha| self.path_state_number(alpha))
-            .filter(|alpha| (0.0..=1.0).contains(alpha))
-        {
+        if let Some(alpha) = alpha {
             state.stroke_alpha = alpha;
+            extractor.set_stroke_alpha(state.stroke_alpha);
         }
-        extractor.update_from_path_state(state);
+    }
+
+    fn path_stroke_alpha(&self, object: &crate::object::Object) -> Option<f32> {
+        let object = self.path_state_object(object)?;
+        let number = object
+            .as_real()
+            .or_else(|| object.as_integer().map(|value| value as f64))?;
+        // Clamp at PDF number precision so finite out-of-f32-range constants are not discarded. ~keep
+        number.is_finite().then(|| number.clamp(0.0, 1.0) as f32)
     }
 
     fn path_state_number(&self, object: &crate::object::Object) -> Option<f32> {
-        let object = self.deref_object(object)?;
+        let object = self.path_state_object(object)?;
         let number = object
             .as_real()
             .or_else(|| object.as_integer().map(|value| value as f64))? as f32;
@@ -430,17 +439,27 @@ impl PdfDocument {
     }
 
     fn path_dash_pattern(&self, object: &crate::object::Object) -> Option<(Vec<f32>, f32)> {
-        let object = self.deref_object(object)?;
+        let object = self.path_state_object(object)?;
         let [array, phase] = object.as_array()?.as_slice() else {
             return None;
         };
-        let array = self.deref_object(array)?;
+        let array = self.path_state_object(array)?;
         let lengths = array
             .as_array()?
             .iter()
             .map(|length| self.path_state_number(length).filter(|length| *length >= 0.0))
             .collect::<Option<Vec<_>>>()?;
         Some((lengths, self.path_state_number(phase)?))
+    }
+
+    fn path_state_object<'a>(
+        &self,
+        object: &'a crate::object::Object,
+    ) -> Option<std::borrow::Cow<'a, crate::object::Object>> {
+        match object.as_reference() {
+            Some(reference) => self.load_object(reference).ok().map(std::borrow::Cow::Owned),
+            None => Some(std::borrow::Cow::Borrowed(object)),
+        }
     }
 
     /// Dereference one level of indirection, loading the target object;

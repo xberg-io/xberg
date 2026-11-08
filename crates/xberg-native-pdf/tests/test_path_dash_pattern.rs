@@ -85,14 +85,22 @@ fn a_collapsed_matrix_leaves_no_pattern() {
 }
 
 fn paths_with_extgstate(content: &[u8], states: &str) -> Vec<PathContent> {
+    paths_with_resource_objects(content, &format!("/ExtGState << {states} >>"), &[])
+}
+
+fn paths_with_resource_objects(content: &[u8], resources: &str, extra_objects: &[&str]) -> Vec<PathContent> {
+    document_with_resource_objects(content, resources, extra_objects)
+        .extract_paths(0)
+        .expect("extract paths")
+}
+
+fn document_with_resource_objects(content: &[u8], resources: &str, extra_objects: &[&str]) -> PdfDocument {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = vec![0usize];
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
-        format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /ExtGState << {states} >> >> >>"
-        ),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << {resources} >> >>"),
     ];
     for (index, object) in objects.iter().enumerate() {
         offsets.push(pdf.len());
@@ -102,10 +110,12 @@ fn paths_with_extgstate(content: &[u8], states: &str) -> Vec<PathContent> {
     pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
     pdf.extend_from_slice(content);
     pdf.extend_from_slice(b"\nendstream\nendobj\n");
-    PdfDocument::from_bytes(common::finalize_pdf(pdf, &offsets))
-        .expect("parse fixture")
-        .extract_paths(0)
-        .expect("extract paths")
+    for object in extra_objects {
+        let id = offsets.len();
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{id} 0 obj\n{object}\nendobj\n").as_bytes());
+    }
+    PdfDocument::from_bytes(common::finalize_pdf(pdf, &offsets)).expect("parse fixture")
 }
 
 #[test]
@@ -238,4 +248,102 @@ fn a_form_without_resources_inherits_extgstate_and_restores_stroke_opacity() {
     assert_eq!(paths.len(), 2);
     assert_eq!(paths[0].stroke_color, None);
     assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+}
+
+#[test]
+fn an_extgstate_empty_dash_array_overrides_an_earlier_dash() {
+    let paths = paths_with_extgstate(
+        b"/Dash gs 0 700 m 300 700 l S /Solid gs 0 690 m 300 690 l S",
+        "/Dash << /D [[3 2] 1] >> /Solid << /D [[] 0] >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+    assert_eq!(paths[1].dash_pattern, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+}
+
+#[test]
+fn a_form_solid_opaque_override_preserves_the_page_state_and_restore() {
+    let paths = paths_with_form_resources(
+        b"q /GS gs /X1 Do 0 700 m 300 700 l S Q 0 690 m 300 690 l S",
+        b"/GS gs 0 50 m 100 50 l S",
+        "[1 0 0 1 0 0]",
+        "/ExtGState << /GS << /D [[3 2] 0] /CA 0 >> >>",
+        "/Resources << /ExtGState << /GS << /D [[] 0] /CA 1 >> >> >>",
+    );
+    assert_eq!(paths.len(), 3);
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[0].dash_pattern, None);
+    assert_eq!(paths[1].stroke_color, None);
+    assert_eq!(paths[2].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[2].dash_pattern, None);
+}
+
+#[test]
+fn a_form_with_own_resources_without_extgstate_does_not_use_page_states() {
+    let paths = paths_with_form_resources(
+        b"/X1 Do 0 700 m 300 700 l S",
+        b"/GS gs 0 50 m 100 50 l S",
+        "[1 0 0 1 0 0]",
+        "/ExtGState << /GS << /D [[3 2] 0] /CA 0 >> >>",
+        "/Resources << >>",
+    );
+    assert_eq!(paths.len(), 2);
+    for path in paths {
+        assert_eq!(path.stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+        assert_eq!(path.dash_pattern, None);
+    }
+}
+
+#[test]
+fn indirect_extgstate_state_and_dash_objects_preserve_the_pattern() {
+    for (resources, object) in [
+        ("/ExtGState 5 0 R", "<< /GS << /D [[3 2] 1] >> >>"),
+        ("/ExtGState << /GS 5 0 R >>", "<< /D [[3 2] 1] >>"),
+        ("/ExtGState << /GS << /D 5 0 R >> >>", "[[3 2] 1]"),
+    ] {
+        let paths = paths_with_resource_objects(b"/GS gs 0 700 m 300 700 l S", resources, &[object]);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)), "{resources}");
+    }
+}
+
+#[test]
+fn negative_stroke_opacity_clamps_to_zero() {
+    let paths = paths_with_extgstate(b"/GS gs 0 700 m 300 700 l S", "/GS << /CA -1 >>");
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].stroke_color, None);
+}
+
+#[test]
+fn above_one_stroke_opacity_clamps_to_one_after_a_clear_state() {
+    let paths = paths_with_extgstate(
+        b"/Clear gs /High gs 0 700 m 300 700 l S",
+        "/Clear << /CA 0 >> /High << /CA 2 >>",
+    );
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+}
+
+#[path = "test_path_dash_pattern/allocations.rs"]
+mod allocations;
+
+#[test]
+fn finite_negative_ca_outside_f32_range_clamps_to_zero() {
+    let paths = paths_with_extgstate(
+        b"/GS gs 0 700 m 300 700 l S",
+        "/GS << /CA -9999999999999999999999999999999999999999.0 >>",
+    );
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].stroke_color, None);
+}
+
+#[test]
+fn finite_positive_ca_outside_f32_range_clamps_to_one() {
+    let paths = paths_with_extgstate(
+        b"/Clear gs /GS gs 0 700 m 300 700 l S",
+        "/Clear << /CA 0 >> /GS << /CA 9999999999999999999999999999999999999999.0 >>",
+    );
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
 }

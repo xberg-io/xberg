@@ -11,7 +11,11 @@ const RECORDS: [[&str; 5]; 2] = [["North", "1", "2", "3", "4"], ["South", "5", "
 
 fn table_stream(separator_state: &str) -> String {
     let mut content = String::from("0 G 1 w 50 680 m 550 680 l S 50 660 m 550 660 l S\n");
-    content.push_str(&format!("q {separator_state} 50 640 m 550 640 l S Q\n"));
+    if separator_state == "form" {
+        content.push_str("q /Dashed gs /Invisible gs /Separator Do Q\n");
+    } else {
+        content.push_str(&format!("q {separator_state} 50 640 m 550 640 l S Q\n"));
+    }
     content.push_str("0.5 w 50 620 m 550 620 l S 50 600 m 550 600 l S\n");
     for x in [50, 150, 350, 550] {
         content.push_str(&format!("1 w {x} 600 m {x} 680 l S\n"));
@@ -41,12 +45,24 @@ fn table_pdf(separator_state: &str) -> Vec<u8> {
     let regular = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
     let bold = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica-Bold" });
     let content = pdf.add_object(Stream::new(dictionary! {}, table_stream(separator_state).into_bytes()));
+    let separator = pdf.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Form", "BBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+            "Resources" => dictionary! { "ExtGState" => dictionary! {
+                "Solid" => dictionary! { "D" => vec![Object::Array(vec![]), 0.into()], "CA" => 1 }
+            } },
+        },
+        b"/Solid gs 50 640 m 550 640 l S".to_vec(),
+    ));
     let resources = dictionary! {
+        "XObject" => dictionary! { "Separator" => separator },
         "Font" => dictionary! { "Regular" => regular, "Bold" => bold },
         "ExtGState" => dictionary! {
             "Dashed" => dictionary! { "D" => vec![Object::Array(vec![3.into(), 2.into()]), 0.into()] },
             "Invisible" => dictionary! { "CA" => 0 },
             "Opaque" => dictionary! { "CA" => 1 },
+            "BelowZero" => dictionary! { "CA" => -1 },
+            "AboveOne" => dictionary! { "CA" => 2 },
         },
     };
     let page = pdf.add_object(dictionary! {
@@ -180,4 +196,19 @@ fn should_retain_leaf_headers_proven_by_opaque_separator() {
 #[test]
 fn should_restore_solid_separator_after_scoped_extgstate() {
     assert_table(&extract("q /Dashed gs /Invisible gs Q"), true);
+}
+
+#[test]
+fn should_retain_leaf_headers_from_form_local_solid_opaque_override() {
+    assert_table(&extract("form"), true);
+}
+
+#[test]
+fn should_clamp_negative_stroke_opacity_before_proving_headers() {
+    assert_table(&extract("/BelowZero gs"), false);
+}
+
+#[test]
+fn should_clamp_above_one_stroke_opacity_after_invisible_state() {
+    assert_table(&extract("/Invisible gs /AboveOne gs"), true);
 }
