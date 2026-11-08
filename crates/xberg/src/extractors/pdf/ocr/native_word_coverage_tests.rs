@@ -118,6 +118,92 @@ fn should_certify_a_page_of_text_and_tables_only_when_it_holds_exactly_the_read_
     ));
 }
 
+mod glued_cells {
+    use super::*;
+
+    const HEIGHT: f32 = 10.0;
+
+    fn at(left: f32, right: f32) -> LineBox {
+        LineBox {
+            left,
+            top: 0.0,
+            right,
+            bottom: HEIGHT,
+        }
+    }
+
+    fn glues(native: LineBox, read: &[(&str, LineBox)]) -> bool {
+        let read: Vec<(String, LineBox)> = read.iter().map(|(text, place)| ((*text).to_owned(), *place)).collect();
+        native_word_glues_separate_cells(&[("abcd".to_owned(), native)], &read)
+    }
+
+    #[test]
+    fn should_not_veto_a_gap_just_below_the_box_height() {
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), ("cd", at(49.9, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_veto_a_gap_just_above_the_box_height() {
+        assert!(glues(at(0.0, 100.0), &[("ab", at(0.0, 40.0)), ("cd", at(50.1, 100.0))]));
+    }
+
+    #[test]
+    fn should_not_veto_a_split_inside_a_word() {
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 48.0)), ("cd", at(51.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_not_veto_a_gap_that_punctuation_fills() {
+        let dots = ("....", at(30.0, 70.0));
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 30.0)), dots, ("cd", at(70.0, 100.0))]
+        ));
+        assert!(glues(at(0.0, 100.0), &[("ab", at(0.0, 30.0)), ("cd", at(70.0, 100.0))]));
+    }
+
+    #[test]
+    fn should_measure_a_gap_from_the_furthest_edge_of_the_words_before_it() {
+        let read = [("wide", at(0.0, 100.0)), ("x", at(10.0, 20.0)), ("y", at(105.0, 115.0))];
+        assert!(!glues(at(0.0, 130.0), &read));
+        let far = [("wide", at(0.0, 100.0)), ("x", at(10.0, 20.0)), ("y", at(115.0, 125.0))];
+        assert!(glues(at(0.0, 130.0), &far));
+    }
+
+    #[test]
+    fn should_not_veto_a_box_without_height() {
+        let flat = LineBox {
+            top: 5.0,
+            bottom: 5.0,
+            ..at(0.0, 100.0)
+        };
+        assert!(!glues(flat, &[("ab", at(0.0, 30.0)), ("cd", at(70.0, 100.0))]));
+    }
+
+    #[test]
+    fn should_keep_the_prior_outcome_for_a_word_set_sideways() {
+        let tall = LineBox {
+            left: 0.0,
+            top: 0.0,
+            right: HEIGHT,
+            bottom: 100.0,
+        };
+        let part = |top: f32, bottom: f32| LineBox {
+            left: 0.0,
+            top,
+            right: HEIGHT,
+            bottom,
+        };
+        assert!(!glues(tall, &[("ab", part(0.0, 30.0)), ("cd", part(70.0, 100.0))]));
+    }
+}
+
 mod ink_ownership {
     use super::*;
     use crate::types::Metadata;

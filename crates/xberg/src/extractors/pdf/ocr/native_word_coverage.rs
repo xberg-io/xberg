@@ -287,18 +287,37 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
 /// that touch in its glyph stream (`1ThreadOvf_PMC1`) although the page sets them a column apart,
 /// so the words the read separates are not words of the native text, and the share cannot credit
 /// the token for them: the joined read words contain it, yet a reader of the native text never
-/// sees `Ovf_PMC1`. A gap under one line height is a break inside a word, such as the read
-/// splitting at an underscore or a bracket, which the native text keeps as one word. ~keep
+/// sees `Ovf_PMC1`. The gap is measured along the line from the furthest right edge of the read
+/// words before it, and any read word, punctuation included, closes a gap, so a dot leader or an
+/// underscore split is not a cell boundary. A gap under one line height is a break inside a
+/// word. Words set sideways stack their read words vertically and are out of scope. ~keep
 fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
     native.iter().any(|(_, place)| {
-        let mut parts: Vec<&LineBox> = read
-            .iter()
-            .filter(|(word, at)| place.owns(at) && !alnum_key(word).is_empty())
-            .map(|(_, at)| at)
-            .collect();
-        parts.sort_by(|a, b| a.left.total_cmp(&b.left));
         let height = place.bottom - place.top;
-        parts.windows(2).any(|pair| pair[1].left - pair[0].right > height.abs())
+        if height <= 0.0 {
+            return false;
+        }
+        let mut parts: Vec<(&LineBox, bool)> = read
+            .iter()
+            .filter(|(word, at)| place.owns(at) && !word.trim().is_empty())
+            .map(|(word, at)| (at, !alnum_key(word).is_empty()))
+            .collect();
+        parts.sort_by(|a, b| a.0.left.total_cmp(&b.0.left));
+        let mut reach = f32::NEG_INFINITY;
+        let (mut word_before, mut gap_after_word) = (false, false);
+        for (part, is_word) in parts {
+            if reach.is_finite() && word_before && part.left - reach > height {
+                gap_after_word = true;
+            }
+            if is_word {
+                if gap_after_word {
+                    return true;
+                }
+                word_before = true;
+            }
+            reach = reach.max(part.right);
+        }
+        false
     })
 }
 
