@@ -131,8 +131,9 @@ async fn an_ocr_read_that_loses_the_native_heading_keeps_the_native_page() {
     assert!(!automatic.metadata.ocr_used);
 }
 
-/// The five outlined rows painted at three heights: fifteen drawn rows between the same native stubs.
-fn fifteen_outlined_rows() -> Vec<u8> {
+/// The five outlined rows painted `copies` times, cycling through three heights, between the same native stubs.
+/// Three copies make fifteen drawn rows; a copy that repeats a height lies exactly over the first.
+fn outlined_rows_painted(copies: usize) -> Vec<u8> {
     let mut pdf = lopdf::Document::load_mem(OUTLINED).expect("load outlined prose fixture");
     let page = pdf.get_pages()[&1];
     let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).expect("one content stream");
@@ -140,6 +141,8 @@ fn fifteen_outlined_rows() -> Vec<u8> {
     let (outline, stubs) = content.split_once("BT").expect("outline paint before the native stubs");
     let rows: String = [0, -165, -330]
         .iter()
+        .cycle()
+        .take(copies)
         .map(|dy| format!("q 1 0 0 1 0 {dy} cm\n{outline}Q\n"))
         .collect();
     pdf.get_object_mut(stream)
@@ -148,13 +151,13 @@ fn fifteen_outlined_rows() -> Vec<u8> {
         .unwrap()
         .set_plain_content(format!("{rows}BT{stubs}").into_bytes());
     let mut bytes = Vec::new();
-    pdf.save_to(&mut bytes).expect("serialize fifteen-row page");
+    pdf.save_to(&mut bytes).expect("serialize repeated-row page");
     bytes
 }
 
 #[tokio::test]
 async fn auto_ocr_recovers_outlined_rows_past_the_seven_row_paint_budget() {
-    let bytes = fifteen_outlined_rows();
+    let bytes = outlined_rows_painted(3);
     let pdf = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("load fifteen-row page");
     assert!(
         pdf.extract_bounded_page_local_paths(0, 512 * 1024, 12_000)
@@ -167,6 +170,42 @@ async fn auto_ocr_recovers_outlined_rows_past_the_seven_row_paint_budget() {
             .unwrap()
             .len(),
         3
+    );
+
+    let document = read(&bytes, false, None).await;
+    assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    for line in std::iter::once(HEADER).chain(PROSE).chain(std::iter::once("Page 7")) {
+        assert!(
+            document.content.contains(line),
+            "missing {line:?} in {:?}",
+            document.content
+        );
+    }
+}
+
+#[tokio::test]
+async fn auto_ocr_recovers_outlined_rows_past_the_first_raised_page_budgets() {
+    // Eight copies pass 30000 operators and 1 MiB (asserted below) and stay inside the audit budgets. ~keep
+    let bytes = outlined_rows_painted(8);
+    let pdf = lopdf::Document::load_mem(&bytes).expect("load repeated-row page");
+    let content = pdf.get_page_content(pdf.get_pages()[&1]);
+    let operators = lopdf::content::Content::decode(&content)
+        .expect("decode page")
+        .operations
+        .len();
+    assert!(operators > 30_000, "the page holds {operators} operators");
+    assert!(
+        content.len() > 1024 * 1024,
+        "the page content holds {} bytes",
+        content.len()
+    );
+    let paths = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).expect("load repeated-row page");
+    assert!(
+        !paths
+            .extract_bounded_page_local_paths(0, 6 * 1024 * 1024, 160_000)
+            .unwrap()
+            .is_empty(),
+        "the page sits inside the audit budgets"
     );
 
     let document = read(&bytes, false, None).await;
@@ -298,6 +337,18 @@ async fn vector_inventory_abstains_at_an_inline_image() {
 async fn vector_inventory_abstains_at_a_clip() {
     let page = outlined_rows_behind("0 0 612 792 re W n");
     assert_eq!(page_local_paths(&page), 0, "the audit stops at a clip");
+    assert_eq!(
+        page_local_paths(&outlined_rows_behind("0 0 612 792 re n")),
+        1,
+        "the same rectangle ended without a clip leaves the outline readable"
+    );
+    stays_native(&page).await;
+}
+
+#[tokio::test]
+async fn vector_inventory_abstains_at_an_even_odd_clip() {
+    let page = outlined_rows_behind("0 0 612 792 re W* n");
+    assert_eq!(page_local_paths(&page), 0, "the audit stops at an even-odd clip");
     assert_eq!(
         page_local_paths(&outlined_rows_behind("0 0 612 792 re n")),
         1,
