@@ -31,6 +31,62 @@ fn should_ignore_only_known_hocr_run_bookkeeping_in_a_plain_page() {
     assert!(!has_only_certified_tesseract_text(&doc));
 }
 
+#[test]
+fn should_compare_a_table_read_to_its_words_without_the_table_markup() {
+    let content = "| Value | Type |\n| --- | --- |\n| 00H | General |";
+    let words = ["Value", "Type", "00H", "General", "|", "|"];
+    assert!(content_holds_exactly_the_read_words(content, words.iter().copied()));
+    assert!(!content_holds_exactly_the_read_words(
+        content,
+        ["Value", "Type", "00H"].iter().copied()
+    ));
+    assert!(!content_holds_exactly_the_read_words(
+        content,
+        ["Value", "Type", "00H", "Special"].iter().copied()
+    ));
+    assert!(
+        !content_holds_exactly_the_read_words(
+            "Value Type 00H General",
+            ["General", "00H", "Type", "Value"].iter().copied()
+        ),
+        "a page without table markup keeps the exact word order"
+    );
+}
+
+#[test]
+fn should_certify_a_page_of_text_and_tables_only_when_it_holds_exactly_the_read_words() {
+    let read = "| Value | Type |\n| --- | --- |\n| 00H | General |";
+    let mut doc = super::super::document::flat_ocr_page_document("Table 3-12 Encoding");
+    let index = doc.push_table(crate::types::Table {
+        cells: vec![
+            vec!["Value".into(), "Type".into()],
+            vec!["00H".into(), "General".into()],
+        ],
+        markdown: read.into(),
+        page_number: 1,
+        ..Default::default()
+    });
+    doc.elements.push(crate::types::internal::InternalElement::text(
+        ElementKind::Table { table_index: index },
+        "",
+        0,
+    ));
+    let page_read = format!("Table 3-12 Encoding {read}");
+    assert!(only_segments_certified_tesseract_text_and_tables(&doc, &page_read));
+    assert!(
+        !only_segments_certified_tesseract_text_and_tables(&doc, &format!("{page_read} Extra")),
+        "a read word the structure lacks is content the native page would drop"
+    );
+    assert!(!only_segments_certified_tesseract_text(&doc, &page_read));
+
+    let mut with_image = doc.clone();
+    with_image.images.push(Default::default());
+    assert!(!only_segments_certified_tesseract_text_and_tables(
+        &with_image,
+        &page_read
+    ));
+}
+
 mod ink_ownership {
     use super::*;
     use crate::types::Metadata;
