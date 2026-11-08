@@ -39,8 +39,8 @@ impl ImageBudget {
 
     /// Admit `image`, or the IDCT-scaled decode that keeps its rasters within the budget when the
     /// full-size decode does not. Returns the scale denominator to decode at (1, 2, 4 or 8): the
-    /// finest scale that fits, provided the reduced raster still covers the `device` extent (in canvas
-    /// pixels) the image is painted at, so reducing never costs rendered resolution. An image that
+    /// finest scale that fits, provided the reduced raster still spans [`MIN_PAINTED_COVERAGE`] of the `device` extent (in canvas
+    /// pixels) the image is painted at, so reducing costs no legible resolution. An image that
     /// cannot be reduced that way is refused exactly as [`Self::admit_jpeg`] refuses it.
     pub(super) fn admit_jpeg_reducing(
         &mut self,
@@ -226,10 +226,16 @@ fn jpeg_frame(bytes: &[u8]) -> std::result::Result<(u32, u32), String> {
     Ok((u32::from(info.width), u32::from(info.height)))
 }
 
-/// Whether a frame of `frame` pixels at `denominator` has at least the canvas pixels it is painted over.
+/// Fraction of the painted canvas extent a reduced raster must still span. Upscaling a reduced raster by
+/// at most a tenth costs no legible detail, and it keeps a page whose canvas sits just above a 1/2
+/// scale from being refused.
+const MIN_PAINTED_COVERAGE: f32 = 0.9;
+
+/// Whether a frame of `frame` pixels at `denominator` still spans [`MIN_PAINTED_COVERAGE`] of the canvas
+/// pixels it is painted over.
 fn covers_device(frame: (u32, u32), denominator: u8, (width, height): (f32, f32)) -> bool {
     let covers = |pixels: u32, painted: f32| {
-        painted.is_finite() && reduced_dimension(pixels, denominator) as f32 >= painted - 1.0
+        painted.is_finite() && reduced_dimension(pixels, denominator) as f32 >= painted * MIN_PAINTED_COVERAGE - 1.0
     };
     covers(frame.0, width) && covers(frame.1, height)
 }

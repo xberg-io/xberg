@@ -402,7 +402,7 @@ fn an_oversized_jpeg_is_decoded_at_the_finest_reduced_scale_that_fits() {
 }
 
 #[test]
-fn a_reduced_decode_never_drops_below_the_canvas_resolution() {
+fn a_reduced_decode_never_drops_far_below_the_canvas_resolution() {
     use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
     let image = PdfImage::new(
         1200,
@@ -413,7 +413,11 @@ fn a_reduced_decode_never_drops_below_the_canvas_resolution() {
     );
     let admit = |device| image_budget::ImageBudget::new(LIMIT).admit_jpeg_reducing(&image, 0, device);
     assert_eq!(admit((600.0, 600.0)).unwrap(), 2);
-    assert!(admit((601.0, 600.0)).is_ok_and(|denominator| denominator == 2));
+    assert_eq!(
+        admit((660.0, 640.0)).unwrap(),
+        2,
+        "a 10% upscale of the reduced raster is accepted"
+    );
     assert!(
         admit((700.0, 700.0)).is_err(),
         "1/2 would paint 600 px over 700 canvas pixels"
