@@ -21,6 +21,8 @@ impl GrayPacking {
     }
 }
 
+/// The caller certifies the decoded full-page q/cm/Do/Q paint before choosing image packing.
+/// Its compression cannot change that transform or the per-sample RGB neutrality proof below.
 pub(super) fn flate_packing(dict: &std::collections::HashMap<String, Object>, width: u32) -> Option<GrayPacking> {
     let color = dict.get("ColorSpace")?;
     let depth = dict.get("BitsPerComponent")?.as_integer()?;

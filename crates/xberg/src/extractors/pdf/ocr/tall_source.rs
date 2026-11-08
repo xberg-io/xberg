@@ -26,6 +26,7 @@ mod geometry_tests;
 mod gray_jpeg;
 mod indexed;
 mod ordered;
+mod read_geometry;
 mod samples;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
 use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
@@ -118,21 +119,16 @@ pub(super) async fn try_replace(
         return Ok(false);
     };
     let mut attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
-    if let Some(read_width) = original
-        .metadata
-        .additional
-        .get(crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY)
-        .and_then(serde_json::Value::as_u64)
-        .and_then(|width| u32::try_from(width).ok())
-        .filter(|&read_width| read_width > 0 && read_width <= *width)
-    {
-        attempt.read_width = Some(read_width);
-    }
+    let Some(read_width) = read_geometry::select_read_width(original, (*width, *height)) else {
+        return Ok(false);
+    };
+    attempt.read_width = Some(read_width);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     let why = match recover(attempt, backend, ocr).await? {
         Some((recovered, strips))
             if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
         {
+            read_geometry::record_original_frame(original, (*width, *height), page);
             apply_recovery(original, recovered, page, strips);
             note_flat_structure(original, config, page);
             return Ok(true);
@@ -570,7 +566,8 @@ struct LineFootprint {
 
 impl LineFootprint {
     fn new(width: usize, dpi: f64) -> Self {
-        let scale = dpi / MIN_STANDARD_SOURCE_DPI;
+        // Retain the existing low-density certificate bounds instead of tightening them. ~keep
+        let scale = (dpi / MIN_STANDARD_SOURCE_DPI).max(1.0);
         Self {
             max_rows: (f64::from(MAX_LINE_ROWS) * scale).floor() as u32,
             max_gap: (MAX_COLUMN_GAP as f64 * scale).ceil() as usize,

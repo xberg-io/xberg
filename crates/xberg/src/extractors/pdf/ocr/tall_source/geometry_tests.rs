@@ -71,3 +71,57 @@ fn two_columns_and_staggered_line_starts_refuse_ordering() {
     assert_eq!(line.add(&row), Some(()));
     assert_eq!(line.finish(), None);
 }
+
+#[test]
+fn low_density_sources_keep_the_existing_inclusive_80_row_limit() {
+    for dpi in [120.0, 150.0] {
+        for height in [65, 79, 80] {
+            let mut source = scaled_ink(1, &[20..40], 20..20 + height);
+            source.dpi = dpi;
+            assert_eq!(
+                source.blank_bands(|| false, 1),
+                Some(vec![0..20, 20 + height as u32..180])
+            );
+        }
+        let mut source = scaled_ink(1, &[20..40], 20..101);
+        source.dpi = dpi;
+        assert_eq!(source.blank_bands(|| false, 1), None, "81 ink rows at {dpi} DPI");
+    }
+}
+
+#[test]
+fn low_density_sources_keep_the_existing_exclusive_48_column_gap_limit() {
+    for dpi in [120.0, 150.0] {
+        for gap in [40, 47, 48] {
+            let mut source = scaled_ink(1, &[20..40, 40 + gap..60 + gap], 20..30);
+            source.dpi = dpi;
+            let expected = (gap < 48).then_some(vec![0..20, 30..180]);
+            assert_eq!(
+                source.blank_bands(|| false, 1),
+                expected,
+                "{gap} column gap at {dpi} DPI"
+            );
+        }
+    }
+}
+
+#[test]
+fn high_density_limits_keep_the_same_inclusive_and_exclusive_boundaries() {
+    for height in [159, 160, 161] {
+        let mut source = scaled_ink(2, &[20..40], 20..30);
+        source.samples.fill(255);
+        for y in 20..20 + height {
+            source.samples[y * 400 + 20..y * 400 + 40].fill(0);
+        }
+        let expected = (height <= 160).then_some(vec![0..20, 20 + height as u32..360]);
+        assert_eq!(source.blank_bands(|| false, 1), expected);
+    }
+    for gap in [95, 96] {
+        let mut line = LineFootprint::new(400, 300.0);
+        let mut row = vec![255; 400];
+        row[20..40].fill(0);
+        row[40 + gap..60 + gap].fill(0);
+        assert_eq!(line.add(&row), Some(()));
+        assert_eq!(line.finish(), (gap < 96).then_some(()));
+    }
+}

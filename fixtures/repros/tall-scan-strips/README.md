@@ -70,3 +70,11 @@ mise exec -- uv run --no-project --with pillow==13.0.0 python generate-scaled.py
 The public API tests also losslessly compress the existing neutral RGB fixture's
 page-paint stream, verifying identical decoded instructions before extraction.
 An additional-drawing variant exercises refusal of pages that are not one scan.
+
+Successful source-strip recovery retains the original rendered and processed frame
+in the page-numbered `ocr_source_strip_original_frame` backend diagnostic. The
+public tests check the actual 154 × 4096 processed frame against the retained native
+render dimensions at both source densities. They exercise raw, Flate and
+ASCII85+Flate page-paint streams, including separately serialized extra-paint
+controls that must report an uncertified source. The low-density geometry tests
+retain the pre-existing 80-row inclusive and 48-column exclusive limits at 120 DPI.

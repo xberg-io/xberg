@@ -2,7 +2,8 @@
     feature = "pdf",
     feature = "ocr",
     feature = "tokio-runtime",
-    feature = "bundle-tessdata-eng"
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
 ))]
 
 use sha2::{Digest, Sha256};
@@ -12,9 +13,57 @@ use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig};
 const NEUTRAL_RGB: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/neutral-rgb-tall.pdf");
 const ORACLE: &str = include_str!("../../../fixtures/repros/tall-scan-strips/expected.txt");
 
-fn compressed_paint(extra_paint: bool) -> Vec<u8> {
+#[derive(Clone, Copy, Debug)]
+enum PaintEncoding {
+    Raw,
+    Flate,
+    Ascii85Flate,
+}
+
+fn ascii85(input: &[u8]) -> Vec<u8> {
+    let mut encoded = Vec::new();
+    for chunk in input.chunks(4) {
+        let mut padded = [0; 4];
+        padded[..chunk.len()].copy_from_slice(chunk);
+        let mut value = u32::from_be_bytes(padded);
+        let mut digits = [b'!'; 5];
+        for digit in digits.iter_mut().rev() {
+            *digit += (value % 85) as u8;
+            value /= 85;
+        }
+        encoded.extend_from_slice(&digits[..chunk.len() + 1]);
+    }
+    encoded.extend_from_slice(b"~>");
+    encoded
+}
+
+fn wrap_paint(stream: &mut lopdf::Stream, encoding: PaintEncoding) {
+    if matches!(encoding, PaintEncoding::Raw) {
+        stream.set_content(stream.content.clone());
+        return;
+    }
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&stream.content).unwrap();
+    let compressed = encoder.finish().unwrap();
+    if matches!(encoding, PaintEncoding::Ascii85Flate) {
+        stream.set_content(ascii85(&compressed));
+        stream.dict.set(
+            "Filter",
+            vec![
+                lopdf::Object::Name(b"ASCII85Decode".to_vec()),
+                lopdf::Object::Name(b"FlateDecode".to_vec()),
+            ],
+        );
+    } else {
+        stream.set_content(compressed);
+        stream.dict.set("Filter", "FlateDecode");
+    }
+}
+
+fn page_paint(encoding: PaintEncoding, extra_paint: bool) -> Vec<u8> {
     let mut doc = lopdf::Document::load_mem(NEUTRAL_RGB).unwrap();
     let mut changed = 0;
+    let mut expected_paint = Vec::new();
     for object in doc.objects.values_mut() {
         let Ok(stream) = object.as_stream_mut() else {
             continue;
@@ -23,24 +72,45 @@ fn compressed_paint(extra_paint: bool) -> Vec<u8> {
             continue;
         }
         assert!(!stream.dict.has(b"Filter"));
-        let original = stream.content.clone();
         if extra_paint {
             stream.content.extend_from_slice(b"\n0 0 m 1 1 l S\n");
         }
-        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
-        encoder.write_all(&stream.content).unwrap();
-        stream.set_content(encoder.finish().unwrap());
-        stream.dict.set("Filter", "FlateDecode");
-        assert!(stream.dict.has(b"Filter"));
-        if !extra_paint {
-            assert_eq!(stream.decompressed_content().unwrap(), original);
-        }
+        let expected = stream.content.clone();
+        expected_paint = expected.clone();
+        wrap_paint(stream, encoding);
+        let decoded = if matches!(encoding, PaintEncoding::Raw) {
+            stream.content.clone()
+        } else {
+            stream.decompressed_content().unwrap()
+        };
+        assert_eq!(decoded, expected, "lossless {encoding:?} page-paint wrapper");
         changed += 1;
     }
     assert_eq!(changed, 1, "change only the certified page-paint stream");
     let mut bytes = Vec::new();
     doc.save_to(&mut bytes).unwrap();
+    assert_serialized_paint(&bytes, &expected_paint, encoding);
     bytes
+}
+
+fn assert_serialized_paint(bytes: &[u8], expected: &[u8], encoding: PaintEncoding) {
+    let reparsed = lopdf::Document::load_mem(bytes).unwrap();
+    let contents = reparsed.get_page_contents(reparsed.get_pages()[&1]);
+    assert_eq!(contents.len(), 1);
+    let stream = reparsed.get_object(contents[0]).unwrap().as_stream().unwrap();
+    assert_eq!(
+        stream.dict.get(b"Length").unwrap().as_i64().unwrap(),
+        stream.content.len() as i64
+    );
+    let decoded = if matches!(encoding, PaintEncoding::Raw) {
+        stream.content.clone()
+    } else {
+        stream.decompressed_content().unwrap()
+    };
+    assert_eq!(
+        decoded, expected,
+        "serialized {encoding:?} artifact contains the intended paint"
+    );
 }
 
 fn config() -> (tempfile::TempDir, ExtractionConfig) {
@@ -96,8 +166,8 @@ fn neutral_rgb_scan_recovers_the_same_words_after_lossless_page_paint_compressio
     let (_models, config) = config();
     let expected = words(ORACLE);
     assert_eq!(expected.len(), 440);
-    for input in [NEUTRAL_RGB.to_vec(), compressed_paint(false)] {
-        let result = extract(&input, &config);
+    for encoding in [PaintEncoding::Raw, PaintEncoding::Flate, PaintEncoding::Ascii85Flate] {
+        let result = extract(&page_paint(encoding, false), &config);
         assert!(result.metadata.ocr_used);
         assert!(used_strips(&result), "{:?}", result.processing_warnings);
         assert_eq!(words(&result.content), expected);
@@ -108,14 +178,25 @@ fn neutral_rgb_scan_recovers_the_same_words_after_lossless_page_paint_compressio
 }
 
 #[test]
-fn compressed_paint_with_an_additional_drawing_is_not_certified_as_one_scan() {
+fn raw_and_filtered_extra_drawing_is_refused_as_uncertified() {
     let (_models, config) = config();
-    let result = extract(&compressed_paint(true), &config);
-    assert!(result.metadata.ocr_used);
-    assert!(!used_strips(&result));
+    for encoding in [PaintEncoding::Raw, PaintEncoding::Flate, PaintEncoding::Ascii85Flate] {
+        let result = extract(&page_paint(encoding, true), &config);
+        assert!(result.metadata.ocr_used);
+        assert!(!used_strips(&result), "{encoding:?}: {:?}", result.processing_warnings);
+        let reason = "source-image strips were not used: the page is not one scan image in a supported encoding and density within the memory limit, or a strip did not read as its source lines. The text may be incomplete.";
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.source == "ocr" && warning.message.contains(reason)),
+            "{encoding:?}: {:?}",
+            result.processing_warnings
+        );
+    }
 }
 
-fn assert_large_text_recovery(input: &[u8]) {
+fn assert_large_text_recovery(input: &[u8], source_width: u64) {
     let (_models, config) = config();
     let oracle = include_str!("../../../fixtures/repros/tall-scan-strips/large-text-expected.txt");
     let expected = words(oracle);
@@ -127,18 +208,29 @@ fn assert_large_text_recovery(input: &[u8]) {
     let pages = result.pages.as_ref().unwrap();
     assert_eq!(pages.len(), 1);
     assert_eq!(words(&pages[0].content), expected);
+    let frame = &result.metadata.additional["ocr_source_strip_original_frame"];
+    assert_eq!(frame["processed_width"], 154);
+    assert_eq!(frame["processed_height"], 4096);
+    let rendered = frame["rendered_width"].as_u64().unwrap();
+    assert!(154 < rendered);
+    assert!(frame["rendered_height"].as_u64().unwrap() > 4096);
+    if source_width == 450 {
+        assert_eq!(rendered, source_width, "only preprocessing shrinks the 150 DPI render");
+    }
 }
 
 #[test]
 fn tall_scan_shrunk_only_by_ocr_preprocessing_recovers_every_source_word() {
-    assert_large_text_recovery(include_bytes!(
-        "../../../fixtures/repros/tall-scan-strips/large-text-150.pdf"
-    ));
+    assert_large_text_recovery(
+        include_bytes!("../../../fixtures/repros/tall-scan-strips/large-text-150.pdf"),
+        450,
+    );
 }
 
 #[test]
 fn same_physical_large_text_at_300_dpi_recovers_every_source_word() {
-    assert_large_text_recovery(include_bytes!(
-        "../../../fixtures/repros/tall-scan-strips/large-text-300.pdf"
-    ));
+    assert_large_text_recovery(
+        include_bytes!("../../../fixtures/repros/tall-scan-strips/large-text-300.pdf"),
+        900,
+    );
 }
