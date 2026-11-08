@@ -2591,6 +2591,34 @@ mod tests {
         assert_eq!(marked, [true; 3]);
     }
 
+    /// Paragraphs for each text, all turned 90 degrees in the left margin and stacked from the top down.
+    fn stamp_parts_in_left_margin(texts: &[&str]) -> Vec<bool> {
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| paragraph_with_text(text)).collect();
+        for (index, para) in page.iter_mut().enumerate() {
+            let segment = &mut para.lines[0].segments[0];
+            (segment.x, segment.y, segment.rotation_degrees) = (20.0, 700.0 - 100.0 * index as f32, 90.0);
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_all_six_parts_of_two_stamps_on_one_page() {
+        let one = ["arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"];
+        // Control: the layout is a margin, so one stamp alone is marked.
+        assert_eq!(stamp_parts_in_left_margin(&one), [true; 3]);
+        let two = [
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "arXiv:2107.09275v1",
+            "[cs.CL]",
+            "7 Dec 2023",
+        ];
+        assert_eq!(stamp_parts_in_left_margin(&two), [false; 6]);
+    }
+
     #[test]
     fn arxiv_noise_keeps_stamp_parts_that_read_category_first() {
         assert_eq!(
