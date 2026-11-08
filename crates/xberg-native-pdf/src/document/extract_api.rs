@@ -12,6 +12,43 @@ enum ScriptGeometry {
     Preserve,
 }
 
+/// Largest raised-mark shift, in ems of its base, that ordering treats as on the base line; the
+/// same bound as the shared script-run predicate. Wider shifts stay on their raw baseline.
+const ORDERING_MAX_SCRIPT_SHIFT_EM: f32 = 0.35;
+
+/// Reorders `spans` with `order` as if each raised mark sat on the baseline of the span it follows.
+///
+/// Preserved script geometry keeps a mark off its base line, so a row sort or column cut on it
+/// lifts the mark out of its sentence. `order` must only permute `spans`; the raw baselines are
+/// put back afterwards, keyed by each span's position before the call.
+pub fn order_on_script_base_lines(
+    spans: &mut Vec<crate::layout::TextSpan>,
+    order: impl FnOnce(&mut Vec<crate::layout::TextSpan>),
+) {
+    let snapshot: Vec<_> = spans
+        .iter()
+        .map(|span| (span.bbox.x, span.bbox.y, span.bbox.width, span.font_size))
+        .collect();
+    let snapped = crate::extractors::text::snapped_script_baselines(&snapshot, ORDERING_MAX_SCRIPT_SHIFT_EM);
+    let originals: Vec<(usize, f32)> = spans
+        .iter_mut()
+        .zip(snapped)
+        .enumerate()
+        .map(|(index, (span, base_y))| {
+            let original = (span.sequence, span.bbox.y);
+            span.sequence = index;
+            if let Some(base_y) = base_y {
+                span.bbox.y = base_y;
+            }
+            original
+        })
+        .collect();
+    order(spans);
+    for span in spans {
+        (span.sequence, span.bbox.y) = originals[span.sequence];
+    }
+}
+
 impl PdfDocument {
     /// Internal helper: extract raw (unsorted) text spans from a page.
     ///
