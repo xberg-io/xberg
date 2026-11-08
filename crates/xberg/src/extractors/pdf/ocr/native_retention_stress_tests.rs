@@ -1081,15 +1081,23 @@ fn a_marker_inside_a_word_does_not_fuse_the_word_the_ocr_confirms() {
     );
 }
 
+/// A page whose first twenty rows read and whose other half is lost glyphs, one for each letter or
+/// digit of the readable half: the rows, the native text and its readable half. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn half_lost_page() -> (Vec<String>, String, String) {
+    let clean = forty_rows();
+    let readable = clean[..20].join("\n");
+    let lost: String = "\u{FFFD}".repeat(readable.chars().filter(|c| c.is_alphanumeric()).count());
+    let native = format!("{readable}\n{lost}");
+    (clean, native, readable)
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
     use super::super::document::accepted_ocr_page_replacements;
     let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let clean = forty_rows();
-    let readable = clean[..20].join("\n");
-    let lost: String = "\u{FFFD}".repeat(readable.chars().filter(|c| c.is_alphanumeric()).count());
-    let native = format!("{readable}\n{lost}");
+    let (clean, native, readable) = half_lost_page();
     // The read holds 80% of the readable half: over the ratio against the layer, under it against
     // the whole page. ~keep
     let alnum = |text: &str| text.chars().filter(|c| c.is_alphanumeric()).count();
@@ -1125,6 +1133,36 @@ fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
     assert!(
         accepted.contains_key(&1),
         "control: OCR that reads the readable half is accepted"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_that_reads_sixty_percent_of_a_half_lost_page_is_accepted() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (clean, native, readable) = half_lost_page();
+    let alnum = |text: &str| text.chars().filter(|c| c.is_alphanumeric()).count();
+    let page_alnum = alnum(&readable) * 2;
+    let rows = (1..=40)
+        .find(|&rows| alnum(&clean[..rows].join("\n")) * 10 >= page_alnum * 6)
+        .expect("forty rows hold the page");
+    let read = clean[..rows].join("\n");
+    let share = alnum(&read) as f64 / page_alnum as f64;
+    assert!(
+        (0.6..0.65).contains(&share),
+        "fixture: the read holds 60% of the page, well over the 0.5 line, not on it: {share}"
+    );
+    let accepted = accepted_ocr_page_replacements(
+        &native,
+        &one_page(&native),
+        &[(1, read)].into_iter().collect(),
+        &thresholds,
+        true,
+    );
+    assert!(
+        accepted.contains_key(&1),
+        "OCR that reads 60% of the real page replaces a layer that holds 50% of it"
     );
 }
 
