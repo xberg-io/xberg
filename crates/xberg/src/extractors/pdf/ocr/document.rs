@@ -1971,8 +1971,7 @@ pub(crate) fn merge_ocr_pages_into_native(
 /// lost-glyph markers is judged on its readable text, and each lost glyph is a character the page
 /// holds and the readable text lacks, so the page is judged against what it held, not against what
 /// survived. Without it, the markers count as the garble they are, so a marked page is judged as
-/// before the markers were kept: the pipelines that do not preserve native text keep their
-/// replacement. ~keep
+/// before the markers were kept: a pipeline the user configured keeps its replacement. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn destructive_ocr_information_loss(
     native_page: &str,
@@ -2000,8 +1999,8 @@ pub(super) fn destructive_ocr_information_loss(
 }
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
-/// `judge_marked_pages` as for `destructive_ocr_information_loss`: true when the run preserves
-/// native text. ~keep
+/// `judge_marked_pages` as for `destructive_ocr_information_loss`: true unless the user configured
+/// an OCR pipeline or the run probes a hidden layer. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn accepted_ocr_page_replacements(
     native_text: &str,

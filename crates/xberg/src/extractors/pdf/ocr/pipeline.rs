@@ -2491,14 +2491,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
-    // A marked page is judged on the text it held only when the run preserves native text; the
-    // pipelines that replace the page keep the replacement. ~keep
+    // A marked page is judged on the text it held unless the user configured an OCR pipeline or the
+    // run probes a hidden layer; a pipeline the build or layout inputs make does not turn it off. ~keep
+    let judge_marked_pages = !probing_hidden_layer && ocr_config_owned.pipeline.is_none();
     let mut accepted_replacements = accepted_ocr_page_replacements(
         native_text,
         boundaries,
         &ocr_results,
         &ocr_output_thresholds,
-        native_preservation_enabled,
+        judge_marked_pages,
     );
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if probing_hidden_layer || !pages.preserve_native.is_empty() {

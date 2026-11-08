@@ -16,6 +16,8 @@ use xberg::types::document_structure::{DocumentNode, DocumentStructure, NodeCont
 const BACKEND: &str = "type0-unicode-recording";
 const NATIVE: &str = "Reliable native source words remain available beside the missing character boundary.";
 const OCR: &str = "qq ww ee rr tt yy uu ii oo pp ss dd ff gg hh jj kk ll zz xx OCR\u{FFFD}TOKEN";
+/// The marker the native extractor leaves for a lost glyph of a symbol font. ~keep
+const LOST_SYMBOL: char = xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER;
 
 #[derive(Clone, Copy)]
 enum Fixture {
@@ -23,27 +25,40 @@ enum Fixture {
     Boundaries,
     AllLost,
     Mixed,
+    /// One lost glyph of a symbol font (Wingdings) at the start of a word. ~keep
+    Symbol,
+    /// The same bytes under the unnamed probe font: the lost glyph may be a letter. ~keep
+    EdgeLoss,
 }
 
-fn type0_font(pdf: &mut Document) -> ObjectId {
+impl Fixture {
+    fn font_name(self) -> &'static str {
+        match self {
+            Fixture::Symbol => "ABCDEF+Wingdings-Regular",
+            _ => "ABCDEF+LossProbe",
+        }
+    }
+}
+
+fn type0_font(pdf: &mut Document, name: &str) -> ObjectId {
     let cmap = b"begincmap /CMapName /LossProbe def /CMapType 2 def \
         1 begincodespacerange <0000> <FFFF> endcodespacerange \
         5 beginbfchar <0041> <0041> <0042> <0042> <0031> <0031> <0032> <0032> <0044> <0000> \
         endbfchar endcmap";
     let unicode = pdf.add_object(Stream::new(dictionary! {}, cmap.to_vec()));
     let descriptor = pdf.add_object(dictionary! {
-        "Type" => "FontDescriptor", "FontName" => "ABCDEF+LossProbe", "Flags" => 4,
+        "Type" => "FontDescriptor", "FontName" => name, "Flags" => 4,
         "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 800.into()],
         "ItalicAngle" => 0, "Ascent" => 800, "Descent" => -200, "CapHeight" => 700, "StemV" => 80,
     });
     let cid = pdf.add_object(dictionary! {
-        "Type" => "Font", "Subtype" => "CIDFontType2", "BaseFont" => "ABCDEF+LossProbe",
+        "Type" => "Font", "Subtype" => "CIDFontType2", "BaseFont" => name,
         "CIDSystemInfo" => dictionary! {"Registry" => Object::string_literal("Adobe"),
             "Ordering" => Object::string_literal("Identity"), "Supplement" => 0},
         "FontDescriptor" => descriptor, "DW" => 600, "CIDToGIDMap" => "Identity",
     });
     pdf.add_object(dictionary! {
-        "Type" => "Font", "Subtype" => "Type0", "BaseFont" => "ABCDEF+LossProbe",
+        "Type" => "Font", "Subtype" => "Type0", "BaseFont" => name,
         "Encoding" => "Identity-H", "DescendantFonts" => vec![cid.into()], "ToUnicode" => unicode,
     })
 }
@@ -54,7 +69,7 @@ fn source_pdf(fixture: Fixture) -> Vec<u8> {
     let ordinary = pdf.add_object(dictionary! {
         "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding",
     });
-    let type0 = type0_font(&mut pdf);
+    let type0 = type0_font(&mut pdf, fixture.font_name());
     let mut text = String::from("q 0.3 G 3 w 30 30 m 250 30 l S Q\nBT /F1 10 Tf 30 220 Td ");
     if !matches!(fixture, Fixture::AllLost) {
         text.push_str(&format!("({NATIVE}) Tj 0 -24 Td "));
@@ -62,6 +77,7 @@ fn source_pdf(fixture: Fixture) -> Vec<u8> {
     text.push_str("/F2 12 Tf ");
     text.push_str(match fixture {
         Fixture::Retained | Fixture::Mixed => "<004100440042> Tj ET",
+        Fixture::Symbol | Fixture::EdgeLoss => "<004400410042> Tj ET",
         Fixture::Boundaries => "<004100440042> Tj 0 -24 Td <003100440032> Tj ET",
         Fixture::AllLost => "<0044004400440044004400440044> Tj ET",
     });
@@ -89,25 +105,39 @@ fn source_pdf(fixture: Fixture) -> Vec<u8> {
     bytes
 }
 
-fn source_with_marker_oracle(fixture: Fixture, expected: usize) -> Vec<u8> {
-    let bytes = source_pdf(fixture);
-    let native = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
+/// The source text the native extractor reads from `bytes`, and its lost-glyph and lost-symbol
+/// marker counts. ~keep
+fn source_markers(bytes: &[u8], fixture: Fixture) -> (String, usize, usize) {
+    let native = xberg_native_pdf::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
     let pages = if matches!(fixture, Fixture::Mixed) { 2 } else { 1 };
     assert_eq!(native.page_count().unwrap(), pages);
     let text: String = (0..pages)
         .flat_map(|page| native.extract_spans(page).unwrap())
         .map(|span| span.text)
         .collect();
-    assert_eq!(
-        text.matches('\u{FFFD}').count(),
-        expected,
-        "source glyph oracle: {text:?}"
-    );
+    let lost = text.matches('\u{FFFD}').count();
+    let symbol = text.matches(LOST_SYMBOL).count();
+    (text, lost, symbol)
+}
+
+fn source_with_marker_oracle(fixture: Fixture, expected: usize) -> Vec<u8> {
+    let bytes = source_pdf(fixture);
+    let (text, lost, symbol) = source_markers(&bytes, fixture);
+    assert_eq!((lost, symbol), (expected, 0), "source glyph oracle: {text:?}");
+    bytes
+}
+
+/// The symbol-font fixture: its lost glyph is the symbol marker, never U+FFFD. ~keep
+fn source_with_symbol_oracle(fixture: Fixture, expected: usize) -> Vec<u8> {
+    let bytes = source_pdf(fixture);
+    let (text, lost, symbol) = source_markers(&bytes, fixture);
+    assert_eq!((lost, symbol), (0, expected), "source symbol oracle: {text:?}");
     bytes
 }
 
 struct RecordingBackend {
     fail: bool,
+    text: String,
     calls: AtomicUsize,
 }
 
@@ -141,11 +171,13 @@ impl OcrBackend for RecordingBackend {
             });
         }
         let mut result = ExtractedDocument::default();
-        result.content = OCR.into();
+        result.content = self.text.clone();
         result.document = Some(DocumentStructure {
             nodes: vec![DocumentNode {
                 id: String::new(),
-                content: NodeContent::Paragraph { text: OCR.into() },
+                content: NodeContent::Paragraph {
+                    text: self.text.clone(),
+                },
                 parent: None,
                 children: Vec::new(),
                 content_layer: Default::default(),
@@ -196,8 +228,19 @@ fn config(format: OutputFormat) -> ExtractionConfig {
 }
 
 fn extract(bytes: &[u8], config: &ExtractionConfig, fail: bool) -> (xberg::Result<ExtractedDocument>, usize) {
+    extract_with_read(bytes, config, fail, OCR)
+}
+
+/// Extracts `bytes` with the recording backend reading `text` on every page. ~keep
+fn extract_with_read(
+    bytes: &[u8],
+    config: &ExtractionConfig,
+    fail: bool,
+    text: &str,
+) -> (xberg::Result<ExtractedDocument>, usize) {
     let backend = Arc::new(RecordingBackend {
         fail,
+        text: text.to_string(),
         calls: AtomicUsize::new(0),
     });
     register_ocr_backend(backend.clone()).unwrap();
@@ -351,5 +394,61 @@ fn a_two_page_document_keeps_the_no_unicode_warning_when_a_marked_layer_is_kept(
             .iter()
             .any(|warning| warning.source == "pdf" && warning.message.contains("no Unicode")),
         "{result:?}"
+    );
+}
+
+/// A lost glyph of a symbol font is a different marker from a lost letter, through the public
+/// extractor: with OCR off the output holds the word and no marker of either kind. ~keep
+#[test]
+#[serial_test::serial]
+fn a_lost_symbol_glyph_leaves_no_marker_with_ocr_disabled() {
+    let source = source_with_symbol_oracle(Fixture::Symbol, 1);
+    let control = source_with_marker_oracle(Fixture::EdgeLoss, 1);
+    let mut config = config(OutputFormat::Plain);
+    config.disable_ocr = true;
+    for (name, bytes) in [("symbol", &source), ("edge loss", &control)] {
+        let (result, calls) = extract(bytes, &config, false);
+        let result = result.unwrap();
+        assert_eq!(calls, 0, "{name}");
+        assert!(
+            result.content.split_whitespace().any(|word| word == "AB"),
+            "{name}: {result:?}"
+        );
+        assert!(!result.content.contains('\u{FFFD}'), "{name}: {result:?}");
+        assert!(!result.content.contains(LOST_SYMBOL), "{name}: {result:?}");
+    }
+}
+
+/// OCR reads the lost symbol glyph as a letter glued to the word. For a symbol font the native word
+/// is kept and the glued row is not printed; for a font of unknown glyphs the OCR read wins. ~keep
+#[test]
+#[serial_test::serial]
+fn a_symbol_glyph_the_ocr_glued_to_a_word_keeps_the_native_word_through_the_extractor() {
+    let symbol = source_with_symbol_oracle(Fixture::Symbol, 1);
+    let unknown = source_with_marker_oracle(Fixture::EdgeLoss, 1);
+    let read = format!("{OCR}\noAB");
+    let config = config(OutputFormat::Plain);
+    let (result, calls) = extract_with_read(&symbol, &config, false, &read);
+    let result = result.unwrap();
+    assert!(calls > 0, "actual custom OCR must execute");
+    assert!(
+        result.content.split_whitespace().any(|word| word == "AB"),
+        "symbol: {result:?}"
+    );
+    assert!(
+        !result.content.contains("oAB"),
+        "symbol: the glued row is the misread: {result:?}"
+    );
+    assert!(!result.content.contains(LOST_SYMBOL), "symbol: {result:?}");
+    let (result, calls) = extract_with_read(&unknown, &config, false, &read);
+    let result = result.unwrap();
+    assert!(calls > 0, "actual custom OCR must execute");
+    assert!(
+        result.content.contains("oAB"),
+        "unknown font: the OCR read wins: {result:?}"
+    );
+    assert!(
+        !result.content.split_whitespace().any(|word| word == "AB"),
+        "unknown font: {result:?}"
     );
 }

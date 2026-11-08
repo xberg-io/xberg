@@ -2,7 +2,7 @@
 
 use super::super::document::{LayerFirst, LineAt, put_layer_first_in_document};
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-use crate::extractors::pdf::unmapped_glyphs::is_lost_glyph;
+use crate::extractors::pdf::unmapped_glyphs::{LOST_SYMBOL_GLYPH_MARKER, is_lost_glyph};
 use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
@@ -1422,7 +1422,7 @@ fn checkbox_rows(marker: char, glyph: &str) -> (Vec<String>, Vec<String>) {
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn a_symbol_glyph_the_ocr_glued_to_a_word_puts_the_native_row_first_without_the_glued_row() {
-    let (native, read) = checkbox_rows('\u{FDD0}', "o");
+    let (native, read) = checkbox_rows(LOST_SYMBOL_GLYPH_MARKER, "o");
     let boxes = row_boxes(&native, &read);
     let expected = format!("{}\n\n{}", forty_rows()[0], read[1..].join("\n"));
     for boxes in [None, Some(&boxes)] {
@@ -1439,7 +1439,7 @@ fn a_symbol_glyph_the_ocr_glued_to_a_word_puts_the_native_row_first_without_the_
 #[test]
 fn a_symbol_glyph_the_ocr_read_as_its_own_token_or_not_at_all_is_a_whole_read() {
     for glyph in ["o ", "", "☐ "] {
-        let (native, read) = checkbox_rows('\u{FDD0}', glyph);
+        let (native, read) = checkbox_rows(LOST_SYMBOL_GLYPH_MARKER, glyph);
         let boxes = row_boxes(&native, &read);
         let read = read.join("\n");
         for boxes in [None, Some(&boxes)] {
@@ -1467,7 +1467,7 @@ fn a_lost_glyph_of_an_unknown_font_glued_by_the_ocr_is_a_whole_read() {
 fn a_word_with_a_lost_glyph_inside_comes_from_the_ocr_that_read_it_whole() {
     let mut native = forty_rows();
     native[0] = native[0].replacen("approved", "appr\u{FFFD}ved", 1);
-    native[1] = native[1].replacen("approved", "appr\u{FDD0}ved", 1);
+    native[1] = native[1].replacen("approved", "appr\u{FFFF}ved", 1);
     let read = forty_rows();
     let boxes = row_boxes(&native, &read);
     let read = read.join("\n");
@@ -1481,7 +1481,7 @@ fn a_word_with_a_lost_glyph_inside_comes_from_the_ocr_that_read_it_whole() {
 fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
     use super::super::document::{accepted_ocr_page_replacements, clean_native_page_layers};
     let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let page = "\u{FDD0} #%& \u{FFFD} @!* ~~ \u{FDD0}\u{FDD0} |||\n".repeat(30);
+    let page = "\u{FFFF} #%& \u{FFFD} @!* ~~ \u{FFFF}\u{FFFF} |||\n".repeat(30);
     assert!(
         !clean_native_page_layers(&page, &one_page(&page), None, &thresholds).contains_key(&1),
         "nothing readable remains to keep"
@@ -1493,7 +1493,7 @@ fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
-fn the_marked_page_judgement_is_off_when_native_preservation_is_off() {
+fn the_marked_page_judgement_is_off_under_a_configured_pipeline() {
     use super::super::document::accepted_ocr_page_replacements;
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
@@ -1501,7 +1501,7 @@ fn the_marked_page_judgement_is_off_when_native_preservation_is_off() {
     let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, false);
     assert!(
         accepted.contains_key(&1),
-        "a pipeline that replaces pages judges the marked page as before: its markers are garble"
+        "a configured pipeline judges the marked page as before: its markers are garble"
     );
     let clean = format!("{}\n", forty_rows()[..20].join("\n"));
     for judge in [false, true] {
@@ -1511,4 +1511,88 @@ fn the_marked_page_judgement_is_off_when_native_preservation_is_off() {
             "control: a clean page keeps its text under either arm ({judge})"
         );
     }
+}
+
+/// A mixed-route config whose OCR runs the named fake backend alone, or as a configured pipeline. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn mixed_route_config(backend: &str, pipeline: bool) -> crate::core::config::ExtractionConfig {
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds};
+    ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: backend.to_string(),
+            pipeline: pipeline.then(|| OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: backend.to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    paddle_ocr_settings: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: OcrQualityThresholds {
+                    pipeline_min_quality: 0.0,
+                    ..Default::default()
+                },
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+/// The mixed route judges a marked page on its readable text: a weak OCR read does not replace the
+/// page under a single backend, and a pipeline the user configured replaces it as before. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn the_mixed_route_keeps_a_marked_page_unless_the_user_configured_a_pipeline() {
+    use super::super::pipeline::extract_mixed_ocr_native;
+    const BACKEND: &str = "marked-page-route-backend";
+    const READ: &str = "two stray words only";
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(super::StageBackend {
+        name: BACKEND,
+        text: READ,
+        noisy: false,
+    }))
+    .unwrap();
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let page = readable_page_with_lost_glyphs();
+    let mut results = Vec::new();
+    for pipeline in [false, true] {
+        let config = mixed_route_config(BACKEND, pipeline);
+        let run = extract_mixed_ocr_native(&page, &one_page(&page), &[1], &pdf, &config, None).await;
+        results.push((pipeline, run));
+    }
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    for (pipeline, run) in results {
+        let (text, replaced, ..) = run.unwrap();
+        if pipeline {
+            assert!(
+                replaced.get(&1).is_some_and(|text| text.contains(READ)),
+                "a configured pipeline replaces the marked page: {text:?}"
+            );
+        } else {
+            assert!(
+                replaced.is_empty(),
+                "a single backend keeps the marked page: {replaced:?}"
+            );
+            assert_eq!(text, page, "the native text of the kept page is unchanged");
+        }
+    }
+}
+
+/// The premise of the route test: under the `full` build the default config has an effective
+/// pipeline (the paddle fallback) that the user did not configure, so the gate reads `pipeline`. ~keep
+#[cfg(all(paddle_ocr, feature = "ocr"))]
+#[test]
+fn the_full_build_makes_a_pipeline_the_user_did_not_configure() {
+    let config = crate::core::config::OcrConfig::default();
+    assert!(config.pipeline.is_none());
+    assert!(
+        config.effective_pipeline().is_some(),
+        "the default backend gets a paddle fallback stage"
+    );
 }

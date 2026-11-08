@@ -22,7 +22,7 @@ pub(super) const PUA_RANGE_END: u32 = 0xF8FF;
 pub(super) const MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO: f64 = 0.5;
 /// Returns `true` for characters that indicate a broken glyph-to-Unicode mapping rather
 /// than legible text: Unicode Private Use Area codepoints (a common fallback target for
-/// undecodable CID/glyph indices), the lost-glyph markers (U+FFFD, U+FDD0), and non-whitespace
+/// undecodable CID/glyph indices), the lost-glyph markers (U+FFFD, U+FFFF), and non-whitespace
 /// control characters. Ordinary symbols, punctuation, and emoji are unaffected.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn is_undecodable_char(ch: char) -> bool {
@@ -39,7 +39,7 @@ pub struct NativeTextStats {
     pub alnum: usize,
     pub meaningful_words: usize,
     pub alnum_ratio: f64,
-    /// Count of lost-glyph markers (U+FFFD, and U+FDD0 for a symbol font) indicating encoding failures.
+    /// Count of lost-glyph markers (U+FFFD, and U+FFFF for a symbol font) indicating encoding failures.
     pub garbage_char_count: usize,
     /// Fraction of whitespace-delimited words that are 1-2 characters (0.0-1.0).
     /// High values indicate fragmented/garbled text extraction.

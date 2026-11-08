@@ -555,9 +555,10 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3
 }
 
 /// The marker a preserved decode leaves for a glyph without a Unicode value when its font is a
-/// symbol font ([`FontInfo::is_symbol_font`]): a noncharacter, so no text layer holds it. Every
-/// other preserved loss stays U+FFFD. ~keep
-pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FDD0}';
+/// symbol font ([`FontInfo::is_symbol_font`]): a noncharacter, so no text layer holds it, and one
+/// outside the right-to-left blocks, so no bidi pass reorders a row that starts with it (U+FDD0 to
+/// U+FDEF sit inside Arabic Presentation Forms-A). Every other preserved loss stays U+FFFD. ~keep
+pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFF}';
 
 pub(crate) fn decode_text_to_unicode(
     bytes: &[u8],
@@ -832,7 +833,7 @@ mod tests {
         ] {
             assert_eq!(
                 mark_symbol_font_losses(lost.clone(), Some(&symbol_font(name)), preserve),
-                "a\u{FDD0}b \u{FDD0}\u{FDD0}",
+                format!("a{LOST_SYMBOL_GLYPH_MARKER}b {LOST_SYMBOL_GLYPH_MARKER}{LOST_SYMBOL_GLYPH_MARKER}"),
                 "{name}"
             );
         }
@@ -846,6 +847,15 @@ mod tests {
         );
         assert_eq!(mark_symbol_font_losses(lost.clone(), None, preserve), lost);
         assert_eq!(LOST_SYMBOL_GLYPH_MARKER.len_utf8(), '\u{FFFD}'.len_utf8());
+    }
+
+    /// A row that starts with the symbol marker is not right-to-left text: a marker inside an
+    /// Arabic block made the span pass reverse `<marker>AB` to `BA`. ~keep
+    #[test]
+    fn the_symbol_marker_is_outside_the_right_to_left_blocks() {
+        assert!(!crate::text::rtl_detector::is_rtl_text(LOST_SYMBOL_GLYPH_MARKER as u32));
+        assert!(!crate::text::bidi::looks_rtl(&format!("{LOST_SYMBOL_GLYPH_MARKER}AB")));
+        assert!(!crate::text::bidi::looks_rtl(&format!("{}AB", '\u{FFFD}')));
     }
 
     /// UTF-8-CMap codes are lead-byte-width segmented; an invalid lead byte

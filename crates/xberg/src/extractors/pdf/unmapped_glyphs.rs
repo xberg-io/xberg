@@ -1,7 +1,7 @@
 //! Glyphs without a Unicode value in native PDF text.
 //!
 //! The native extractor keeps one marker for each Type0 glyph that has no Unicode value (U+FFFD,
-//! or U+FDD0 for a glyph of a symbol font), so the OCR routing gates can count the loss. A page
+//! or U+FFFF for a glyph of a symbol font), so the OCR routing gates can count the loss. A page
 //! that OCR does not replace must not show a marker to the caller. This module replaces each run
 //! of markers with one space between the characters that survive, so that `A<marker>B` and
 //! `1<marker>2` do not fuse into `AB` and `12`. It does this after the routing decision, keeps
@@ -19,7 +19,7 @@ pub(super) const LOST_GLYPH_MARKER: char = '\u{FFFD}';
 /// (a checkbox, a bullet): `xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER`, repeated here because
 /// this module also builds without the `pdf` feature. Such a glyph is no letter of the word next
 /// to it. ~keep
-pub(super) const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FDD0}';
+pub(super) const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFF}';
 
 /// Whether `c` is a lost-glyph marker of either kind.
 pub(super) fn is_lost_glyph(c: char) -> bool {
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn a_lost_symbol_glyph_is_stripped_and_counted_like_a_lost_glyph() {
-        const SYMBOL: &str = "\u{FDD0}";
+        const SYMBOL: &str = "\u{FFFF}";
         assert_eq!(
             LOST_SYMBOL_GLYPH_MARKER.len_utf8(),
             LOST_GLYPH_MARKER.len_utf8(),
