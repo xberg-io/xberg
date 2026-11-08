@@ -206,16 +206,49 @@ fn outlined_rows_beside_xobject(subtype: &str) -> Vec<u8> {
         .and_then(Object::as_dict_mut)
         .expect("inline page resources");
     resources.set("XObject", dictionary! { "Im1" => picture });
+    paint_before_rows(&mut pdf, "q 300 0 0 150 156 300 cm /Im1 Do Q");
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).expect("serialize outlined page with a picture");
+    bytes
+}
+
+/// Prepend `paint` to the one content stream of the outlined-prose page.
+fn paint_before_rows(pdf: &mut lopdf::Document, paint: &str) {
+    let page = pdf.get_pages()[&1];
     let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).expect("one content stream");
     let content = String::from_utf8(pdf.get_page_content(page)).expect("ASCII PDF drawing commands");
     pdf.get_object_mut(stream)
         .unwrap()
         .as_stream_mut()
         .unwrap()
-        .set_plain_content(format!("q 300 0 0 150 156 300 cm /Im1 Do Q\n{content}").into_bytes());
+        .set_plain_content(format!("{paint}\n{content}").into_bytes());
+}
+
+/// The five outlined rows with `paint` drawn before them.
+fn outlined_rows_behind(paint: &str) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(OUTLINED).expect("load outlined prose fixture");
+    paint_before_rows(&mut pdf, paint);
     let mut bytes = Vec::new();
-    pdf.save_to(&mut bytes).expect("serialize outlined page with a picture");
+    pdf.save_to(&mut bytes)
+        .expect("serialize outlined page with paint before the rows");
     bytes
+}
+
+/// The page-local paths the outline audit reports for the first page, with no byte or operator budget.
+fn page_local_paths(pdf: &[u8]) -> usize {
+    xberg_native_pdf::PdfDocument::from_bytes(pdf.to_vec())
+        .expect("load outlined page")
+        .extract_bounded_page_local_paths(0, usize::MAX, usize::MAX)
+        .unwrap()
+        .len()
+}
+
+/// The page keeps its native route: header and footer only, no OCR.
+async fn stays_native(pdf: &[u8]) {
+    let document = read(pdf, false, None).await;
+    assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Native));
+    assert_eq!(document.content.trim(), format!("{HEADER}\n\nPage 7"));
+    assert!(!document.metadata.ocr_used);
 }
 
 #[tokio::test]
@@ -234,13 +267,7 @@ async fn auto_ocr_recovers_outlined_rows_beside_a_picture() {
 
 #[test]
 fn vector_inventory_abstains_at_a_form_xobject() {
-    let paths = |subtype| {
-        xberg_native_pdf::PdfDocument::from_bytes(outlined_rows_beside_xobject(subtype))
-            .expect("load outlined page with an XObject")
-            .extract_bounded_page_local_paths(0, usize::MAX, usize::MAX)
-            .unwrap()
-            .len()
-    };
+    let paths = |subtype| page_local_paths(&outlined_rows_beside_xobject(subtype));
     assert_eq!(
         paths("Image"),
         1,
@@ -251,6 +278,32 @@ fn vector_inventory_abstains_at_a_form_xobject() {
         0,
         "a form XObject can hold paths the page stream does not show"
     );
+}
+
+#[tokio::test]
+async fn vector_inventory_abstains_at_an_inline_image() {
+    // A 2 by 2 gray inline image, hex encoded so the content stream stays ASCII. ~keep
+    let image = "q 300 0 0 150 156 300 cm BI /W 2 /H 2 /CS /G /BPC 8 /F /AHx ID\n5aa0a05a>\nEI Q";
+    let page = outlined_rows_behind(image);
+    assert_eq!(page_local_paths(&page), 0, "the audit stops at an inline image");
+    assert_eq!(
+        page_local_paths(&outlined_rows_behind("q 300 0 0 150 156 300 cm Q")),
+        1,
+        "the same transform without the image leaves the outline readable"
+    );
+    stays_native(&page).await;
+}
+
+#[tokio::test]
+async fn vector_inventory_abstains_at_a_clip() {
+    let page = outlined_rows_behind("0 0 612 792 re W n");
+    assert_eq!(page_local_paths(&page), 0, "the audit stops at a clip");
+    assert_eq!(
+        page_local_paths(&outlined_rows_behind("0 0 612 792 re n")),
+        1,
+        "the same rectangle ended without a clip leaves the outline readable"
+    );
+    stays_native(&page).await;
 }
 
 #[test]
