@@ -202,6 +202,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
+  Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
+
 - **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 

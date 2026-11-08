@@ -1057,12 +1057,18 @@ fn extract_final_spans_from_page_with_primes(
     }
     let used_structure_order = apply_rtl_structure_order(doc, page_index, &mut page_text_data.spans);
     if !used_structure_order {
-        reorder_page_reading_order(
-            &mut page_text_data.spans,
-            page_text_data.page_width,
-            page_text_data.page_height,
-            page_index,
-        );
+        let (page_width, page_height) = (page_text_data.page_width, page_text_data.page_height);
+        let reorder = |spans: &mut Vec<xberg_native_pdf::layout::TextSpan>| {
+            reorder_page_reading_order(spans, page_width, page_height, page_index);
+        };
+        // Preserved geometry puts a raised mark above its line; the column and row passes would cut
+        // it out of its sentence, so they order on the base line and the raw baseline is restored. ~keep
+        match script_geometry {
+            ScriptGeometry::Flatten => reorder(&mut page_text_data.spans),
+            ScriptGeometry::Preserve => {
+                xberg_native_pdf::document::order_on_script_base_lines(&mut page_text_data.spans, reorder);
+            }
+        }
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
     }
     Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
