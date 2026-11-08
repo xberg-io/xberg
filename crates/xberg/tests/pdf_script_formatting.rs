@@ -444,3 +444,19 @@ fn should_keep_a_footnote_mark_inside_its_sentence_on_a_real_page() {
         "{markdown}"
     );
 }
+
+#[test]
+fn should_keep_list_steps_and_a_word_beside_an_icon_in_their_sentences_on_real_pages() {
+    let Some(steps) = regression_page_markdown("irs-p946--2024-p20") else {
+        return;
+    };
+    assert!(
+        steps.contains("***Step 3\u{2014}*** $20,000 ($1,240,000 \u{2212} $1,220,000)."),
+        "{steps}"
+    );
+    let Some(caution) = regression_page_markdown("irs-p946--2024-p23") else {
+        return;
+    };
+    assert!(caution.contains("placed in service during a particular year"), "{caution}");
+    assert!(!caution.contains("\n- \n"), "{caution}");
+}

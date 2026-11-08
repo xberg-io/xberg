@@ -2258,6 +2258,26 @@ mod order_on_script_base_lines_tests {
     }
 
     #[test]
+    fn should_not_snap_prose_that_is_only_slightly_smaller_than_a_bullet_beside_it() {
+        let mut spans = vec![
+            span("item text", 110.0, 700.5, 100.0, 10.0, 2),
+            span("\u{2022}", 100.0, 700.0, 4.0, 12.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["item text", "\u{2022}"]);
+    }
+
+    #[test]
+    fn should_not_snap_a_word_that_sits_far_from_a_larger_icon() {
+        let mut spans = vec![
+            span("during", 118.0, 508.0, 30.0, 10.0, 2),
+            span("!", 100.0, 504.5, 6.0, 19.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["during", "!"]);
+    }
+
+    #[test]
     fn should_restore_raw_baselines_and_keep_sequence_while_ordering() {
         let mut spans = page();
         let sequences: Vec<_> = spans.iter().map(|span| (span.text.clone(), span.sequence)).collect();
