@@ -730,6 +730,7 @@ pub(super) fn make_test_span(text: &str, x: f32, y: f32, width: f32, font_size: 
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }
@@ -794,6 +795,7 @@ pub(super) fn make_decimal_span(text: &str, char_widths: Vec<f32>, bbox_w: f32, 
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }

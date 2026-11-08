@@ -855,13 +855,13 @@ fn test_space_decision_boundary_space() {
     let fonts = std::collections::HashMap::new();
 
     let decision = should_insert_space(
-        "word ", "next", 0.0, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0,
+        "word ", "next", 0.0, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(!decision.insert_space);
     assert_eq!(decision.source, SpaceSource::AlreadyPresent);
 
     let decision = should_insert_space(
-        "word", " next", 0.0, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0,
+        "word", " next", 0.0, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(!decision.insert_space);
     assert_eq!(decision.source, SpaceSource::AlreadyPresent);
@@ -881,7 +881,7 @@ fn test_space_decision_digit_digit_gap_threshold() {
     // For 12pt font with no font-info fallback, geometric_threshold is
     // typically around 1.5pt, so half of that is 0.75pt. ~keep
     let kerning = should_insert_space(
-        "123", "456", 0.3, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0,
+        "123", "456", 0.3, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(
         !kerning.insert_space,
@@ -892,7 +892,7 @@ fn test_space_decision_digit_digit_gap_threshold() {
     // Larger gap (2pt) between digit spans — adjacent table cell values,
     // must still insert a space. ~keep
     let table_cells = should_insert_space(
-        "123", "456", 2.0, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0,
+        "123", "456", 2.0, 12.0, "TestFont", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(
         table_cells.insert_space,

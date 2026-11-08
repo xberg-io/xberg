@@ -177,6 +177,7 @@ impl<'doc> TextExtractor<'doc> {
                             w_sum += w;
                         }
                         let char_count = decoded.chars().count();
+                        let run_start = buffer.unicode.len();
                         if char_count > 0 {
                             let per_char = w_sum / char_count as f32;
                             for ch in decoded.chars() {
@@ -184,6 +185,7 @@ impl<'doc> TextExtractor<'doc> {
                                 buffer.char_widths.push(per_char);
                             }
                         }
+                        buffer.record_decode(run_start, || false);
                         // Fall through to the matrix update at the
                         // bottom of the function via `w_sum`. Vertical
                         // mode flips the axis inside the helper. ~keep
@@ -195,6 +197,7 @@ impl<'doc> TextExtractor<'doc> {
                 let char_table = font.get_byte_to_char_table();
                 let width_table = Self::simple_widths(self.cached_extraction_widths.as_deref(), font, true);
                 let mut w_sum = 0.0f32;
+                let run_start = buffer.unicode.len();
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
@@ -237,6 +240,7 @@ impl<'doc> TextExtractor<'doc> {
                         }
                     }
                 }
+                buffer.record_decode(run_start, || text.len() == 1);
                 w_sum
             } else if wmode == 0 {
                 // Type0/CID font, horizontal: unified iterator handles 1- or
@@ -374,6 +378,7 @@ impl<'doc> TextExtractor<'doc> {
                                     w_sum += w;
                                 }
                                 let char_count = decoded.chars().count();
+                                let run_start = buffer.unicode.len();
                                 if char_count > 0 {
                                     let per_char = w_sum / char_count as f32;
                                     for ch in decoded.chars() {
@@ -381,6 +386,7 @@ impl<'doc> TextExtractor<'doc> {
                                         buffer.char_widths.push(per_char);
                                     }
                                 }
+                                buffer.record_decode(run_start, || false);
                                 tracing::trace!(target: LOG_TARGET,
                                     "UTF-8 mojibake repair: decoded {} Latin-1 bytes as {} chars via UTF-8 in font '{}'",
                                     text.len(),
@@ -410,6 +416,7 @@ impl<'doc> TextExtractor<'doc> {
                 let width_table =
                     Self::simple_widths(self.cached_extraction_widths.as_deref(), font, repair_zero_widths);
                 let mut w_sum = 0.0f32;
+                let run_start = buffer.unicode.len();
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
@@ -449,6 +456,7 @@ impl<'doc> TextExtractor<'doc> {
                         }
                     }
                 }
+                buffer.record_decode(run_start, || text.len() == 1);
                 w_sum
             } else if wmode == 0 {
                 buffer.append(text)?;
@@ -615,6 +623,7 @@ impl<'doc> TextExtractor<'doc> {
                 0.0
             },
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: run_is_mirrored(&state.ctm.multiply(&state.text_matrix)),
             page_rotation_applied: 0,
         };
@@ -818,6 +827,7 @@ impl<'doc> TextExtractor<'doc> {
                 wmode: buffer.wmode,
                 text_rise: buffer.text_rise,
                 rtl_draw_logical: false,
+                ligature_glyph: buffer.lone_ligature,
                 mirrored: buffer.mirrored,
                 page_rotation_applied: 0,
             };

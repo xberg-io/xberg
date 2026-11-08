@@ -183,6 +183,13 @@ pub struct TextSpan {
     /// bindings surface it through explicit accessors.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub provenance: Option<crate::fonts::MappingProvenance>,
+    /// True when the whole span is one glyph that the font decoded to the letters of a ligature
+    /// (`ff`, `fi`, `ffl`): the decoder sets it where one character code yields several Latin
+    /// letters. The gap checks that join a word around a ligature read it instead of matching the
+    /// letters, because real words contain `ff` and `fi` too. Span merging clears it, since a
+    /// merged run is no longer one glyph. Runtime metadata, not serialized.
+    #[serde(skip)]
+    pub ligature_glyph: bool,
 }
 
 /// serde skip helper: omit a `false` flag (the common case) from serialized output.
@@ -233,6 +240,7 @@ impl Default for TextSpan {
             mirrored: false,
             page_rotation_applied: 0,
             provenance: None,
+            ligature_glyph: false,
         }
     }
 }

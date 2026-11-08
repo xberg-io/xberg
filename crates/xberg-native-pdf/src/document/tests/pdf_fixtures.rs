@@ -196,6 +196,7 @@ pub(super) fn corridor_span(text: &str, x: f32, y: f32, w: f32) -> crate::layout
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }

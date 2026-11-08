@@ -95,6 +95,7 @@ impl<'doc> TextExtractor<'doc> {
             wmode: buffer.wmode,
             text_rise: buffer.text_rise,
             rtl_draw_logical: false,
+            ligature_glyph: buffer.lone_ligature,
             mirrored: buffer.mirrored,
             page_rotation_applied: 0,
         };
