@@ -173,3 +173,136 @@ fn plain_output_keeps_the_citations_and_removes_the_margin_stamp() {
     }
     assert!(!content.contains("6 Dec 2023"), "{raw:?}");
 }
+
+/// The stamp as arXiv sets it: one gray string with two spaces between its parts, 20 points, turned
+/// 90 degrees in the left margin and read bottom to top.
+fn rotated_stamp() -> String {
+    "q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 32 237 Tm (arXiv:2107.09275v2  [hep-ph]  6 Dec 2023) Tj ET Q\n".to_string()
+}
+
+fn extract_rotated(output_format: OutputFormat, include_watermarks: bool) -> String {
+    let config = ExtractionConfig {
+        output_format,
+        disable_ocr: true,
+        use_cache: false,
+        content_filter: Some(ContentFilterConfig {
+            include_watermarks,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let content = page_content().replace(&text_at("F1", 9.0, 20.0, 300.0, STAMP), &rotated_stamp());
+    let bytes = build_pdf(&content);
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("fixture must extract");
+    collapse(&result.content)
+}
+
+#[test]
+fn a_rotated_stamp_is_extracted_when_watermarks_are_kept() {
+    let content = extract_rotated(OutputFormat::Markdown, true);
+    assert!(content.contains(STAMP), "control: {STAMP:?} missing from {content:?}");
+}
+
+#[test]
+fn markdown_output_removes_a_rotated_stamp() {
+    let content = extract_rotated(OutputFormat::Markdown, false);
+    assert!(!content.contains("6 Dec 2023"), "{content:?}");
+    assert!(!content.contains("arXiv:2107.09275v2 [hep-ph] 6"), "{content:?}");
+    assert!(content.contains(BARE_IDENTIFIER_SENTENCE), "{content:?}");
+}
+
+#[test]
+fn plain_output_removes_a_rotated_stamp() {
+    let content = extract_rotated(OutputFormat::Plain, false);
+    assert!(!content.contains("6 Dec 2023"), "{content:?}");
+    assert!(content.contains(BARE_IDENTIFIER_SENTENCE), "{content:?}");
+}
+
+/// First pages of real arXiv papers from the regression page corpus, each with its rotated margin stamp.
+const ARXIV_PAGES: [(&str, &str); 3] = [
+    ("arxiv-2310.09680v4-p1.pdf", "arXiv:2310.09680v4 [cs.CL] 4 Mar 2024"),
+    ("arxiv-2403.01153v1-p1.pdf", "arXiv:2403.01153v1 [eess.SP] 2 Mar 2024"),
+    ("arxiv-2405.00399v1-p1.pdf", "arXiv:2405.00399v1 [math.NA] 1 May 2024"),
+];
+
+/// The extracted text of a real page, or `None` when the corpus is absent and the local opt-out is set.
+/// The pages are bucket-fetched (`python3 test_documents/scripts/fetch_corpus.py`); without them the
+/// test fails unless `XBERG_REGRESSION_PAGES_SKIP=1`, which panics when `CI` is set.
+fn extract_real_page(name: &str, output_format: OutputFormat, include_watermarks: bool) -> Option<String> {
+    let path = helpers::get_test_file_path(&format!("pdf/regression_pages/{name}"));
+    if !path.exists() {
+        let skip = std::env::var("XBERG_REGRESSION_PAGES_SKIP").is_ok_and(|value| value == "1");
+        assert!(
+            skip && std::env::var_os("CI").is_none(),
+            "{} is missing; fetch the corpus with python3 test_documents/scripts/fetch_corpus.py",
+            path.display()
+        );
+        return None;
+    }
+    let config = ExtractionConfig {
+        output_format,
+        disable_ocr: true,
+        use_cache: false,
+        content_filter: Some(ContentFilterConfig {
+            include_watermarks,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result =
+        helpers::extract_uri_document_blocking(&path, Some("application/pdf"), &config).expect("page extracts");
+    Some(collapse(&result.content))
+}
+
+/// The words of `text`, counted, so two outputs can be compared word for word.
+fn word_counts(text: &str) -> std::collections::BTreeMap<&str, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    for word in text.split_whitespace() {
+        *counts.entry(word).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// The stamp of each real page is removed, and it is the only text removed: every other word of the
+/// output with watermarks kept is still there.
+fn assert_real_stamps_removed_alone(output_format: OutputFormat) {
+    for (name, stamp) in ARXIV_PAGES {
+        let (Some(kept), Some(removed)) = (
+            extract_real_page(name, output_format.clone(), true),
+            extract_real_page(name, output_format.clone(), false),
+        ) else {
+            continue;
+        };
+        assert!(
+            kept.contains(stamp),
+            "control: {name} has no stamp {stamp:?} when watermarks are kept"
+        );
+        let identifier = stamp.split(' ').next().expect("identifier");
+        assert!(
+            !removed.contains(identifier),
+            "{name}: the stamp survives in {removed:?}"
+        );
+        let mut expected = word_counts(&kept);
+        for word in stamp.split(' ') {
+            if let Some(count) = expected.get_mut(word) {
+                *count -= 1;
+            }
+        }
+        expected.retain(|_, count| *count > 0);
+        assert_eq!(
+            word_counts(&removed),
+            expected,
+            "{name}: removing the stamp changed other words"
+        );
+    }
+}
+
+#[test]
+fn markdown_output_removes_the_rotated_stamp_of_real_arxiv_pages_and_nothing_else() {
+    assert_real_stamps_removed_alone(OutputFormat::Markdown);
+}
+
+#[test]
+fn plain_output_removes_the_rotated_stamp_of_real_arxiv_pages_and_nothing_else() {
+    assert_real_stamps_removed_alone(OutputFormat::Plain);
+}
