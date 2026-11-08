@@ -629,3 +629,56 @@ fn a_form_with_indirect_colour_space_resources_paints_with_them() {
         "the form's indirect colour space paints red, got {through_form:?}"
     );
 }
+
+#[derive(Default)]
+struct CapturedWarnings(std::sync::Arc<std::sync::Mutex<Vec<std::collections::BTreeMap<String, String>>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for CapturedWarnings {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Fields(std::collections::BTreeMap<String, String>);
+        impl tracing::field::Visit for Fields {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                self.0.insert(field.name().to_string(), format!("{value:?}"));
+            }
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                self.0.insert(field.name().to_string(), value.to_string());
+            }
+        }
+        if *event.metadata().level() == tracing::Level::WARN {
+            let mut fields = Fields(Default::default());
+            event.record(&mut fields);
+            self.0.lock().unwrap().push(fields.0);
+        }
+    }
+}
+
+/// A form whose `/Resources` reference cannot load still renders, and the renderer logs a warning with the
+/// object number. A reference to a missing object is a null (ISO 32000-1 7.3.10) and loads without an error,
+/// so the reference here names generation 1 of object 5, which the file holds only as generation 0.
+#[test]
+fn a_form_whose_resources_reference_cannot_load_logs_its_object_number() {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    let form = pdf_stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 60 20] /Resources 5 1 R ",
+        b"0 0 60 20 re f",
+    );
+    let doc = page_pdf_with_resources(
+        (100, 40),
+        b"q 1 0 0 1 20 10 cm /Fm0 Do Q",
+        vec![b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec(), form],
+        "/XObject << /Fm0 6 0 R >>",
+    );
+    let captured = CapturedWarnings::default();
+    let warnings = captured.0.clone();
+    let subscriber = tracing_subscriber::registry().with(captured);
+    let image = tracing::subscriber::with_default(subscriber, || render_without_system_fonts(&doc));
+    assert_eq!((image.width, image.height), (100, 40), "the page still renders");
+    let warnings = warnings.lock().unwrap();
+    let ours: Vec<_> = warnings
+        .iter()
+        .filter(|fields| fields.get("operation").map(String::as_str) == Some("load_render_resources"))
+        .collect();
+    assert_eq!(ours.len(), 1, "one warning for the one unreadable object: {warnings:?}");
+    assert_eq!(ours[0].get("object_number").map(String::as_str), Some("5"));
+    assert_eq!(ours[0].get("error_code").map(String::as_str), Some("parse_error"));
+}
