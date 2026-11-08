@@ -12,10 +12,6 @@ enum ScriptGeometry {
     Preserve,
 }
 
-/// Largest raised-mark shift, in ems of its base, that ordering treats as on the base line; the
-/// same bound as the shared script-run predicate. Wider shifts stay on their raw baseline.
-const ORDERING_MAX_SCRIPT_SHIFT_EM: f32 = 0.35;
-
 /// Internal bridge: reorders `spans` with `order` as if each raised mark sat on the baseline of the
 /// span it follows.
 ///
@@ -29,6 +25,7 @@ pub fn order_on_script_base_lines(
     spans: &mut Vec<crate::layout::TextSpan>,
     order: impl FnOnce(&mut Vec<crate::layout::TextSpan>),
 ) {
+    use crate::extractors::text::{SnapReach, snapped_script_baselines};
     use std::collections::HashMap;
 
     type Key = (String, u32, u32, usize, u32);
@@ -46,7 +43,7 @@ pub fn order_on_script_base_lines(
         .iter()
         .map(|span| (span.bbox.x, span.bbox.y, span.bbox.width, span.font_size))
         .collect();
-    let snapped = crate::extractors::text::snapped_script_baselines(&snapshot, ORDERING_MAX_SCRIPT_SHIFT_EM);
+    let snapped = snapped_script_baselines(&snapshot, SnapReach::ORDERING);
     let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
     for (span, base_y) in spans.iter_mut().zip(snapped) {
         if let Some(base_y) = base_y {
