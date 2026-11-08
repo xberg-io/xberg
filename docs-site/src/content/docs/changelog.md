@@ -204,6 +204,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Recover a page of outlined prose with eight or more drawn rows beside a native header and footer.** (GH#2313)
+  The outlined-prose check refused a page that painted more than about seven rows of outlined text.
+  Such a page kept only its native header and footer. The check now accepts a full page of outlined rows.
+  The recovered words still pass through the merge that keeps every native word.
+- **(pdf): Recover a page of outlined prose that also paints a picture.** (GH#2313)
+  The outlined-prose check refused any page that drew an image or a form object.
+  A picture holds no outlined text, so the check now reads past an image. It still refuses a page with a form object.
 - **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
   One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.
   A reference such as `[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].`, a versioned citation without a date, and a sentence that ends at a bare identifier are kept whole.
