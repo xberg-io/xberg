@@ -379,7 +379,7 @@ const MINOR_SCRIPT_SHARE: f64 = 0.10;
 /// reader of it. A substantial script without checkable structure leaves the page to OCR.
 fn judged_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     let counts = uncovered_script_counts(text, languages)?;
-    if text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+    if text.contains(super::unmapped_glyphs::is_lost_glyph) {
         return Some(counts.into_iter().map(|(script, _)| script).collect());
     }
     let total: usize = counts.iter().map(|(_, count)| count).sum();
@@ -482,9 +482,6 @@ pub(super) fn retain_unreadable_script_pages(
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
-            if !text.contains(super::unmapped_glyphs::is_lost_glyph) {
-                return None;
-            }
             stages
                 .iter()
                 .find_map(|languages| Some((*page, judged_scripts(text, languages)?, languages.as_slice())))
