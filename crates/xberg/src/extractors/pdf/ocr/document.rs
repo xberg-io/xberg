@@ -354,6 +354,59 @@ fn unannotated_ocr_text(element: &crate::types::internal::InternalElement) -> bo
         })
 }
 
+/// An element that only segments the read text into blocks: a paragraph, a heading or a list
+/// item with no inline markup. Which block a line becomes is derived from the read's geometry, so
+/// a page whose every word a native layer already owns takes its blocks from that layer. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn segmenting_ocr_text(element: &crate::types::internal::InternalElement) -> bool {
+    use crate::types::internal::ElementKind;
+    matches!(
+        element.kind,
+        ElementKind::Paragraph
+            | ElementKind::OcrText { .. }
+            | ElementKind::Heading { .. }
+            | ElementKind::ListItem { .. }
+    ) && element.layer == crate::types::document_structure::ContentLayer::Body
+        && element.annotations.is_empty()
+}
+
+/// Whether a page's structure holds nothing but its read text cut into blocks: the same words,
+/// each once, in blocks that carry no table, image, link, formula or markup. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn ocr_page_only_segments_text_with(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    let mut metadata = doc.metadata.clone();
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
+    // Block building normalizes quotes, escapes Markdown and splits markers, so punctuation is not
+    // compared: the letters and digits of each word are. ~keep
+    let solid_words = |text: &str| {
+        let mut words: Vec<String> = text
+            .split_whitespace()
+            .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+            .filter(|word| !word.is_empty())
+            .collect();
+        words.sort_unstable();
+        words
+    };
+    let block_words = solid_words(
+        &doc.elements
+            .iter()
+            .map(|element| element.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    no_ocr_rich_assets(doc)
+        && metadata.is_empty()
+        && !doc.elements.is_empty()
+        && doc.elements.iter().all(segmenting_ocr_text)
+        && block_words == solid_words(read)
+}
+
 /// The final structure must independently retain exactly the raw OCR text. Word geometry is
 /// internal here: the caller excludes explicit OCR-element/raster requests before using this. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]

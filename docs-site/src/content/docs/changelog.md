@@ -259,6 +259,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The proof also runs on the direct Tesseract route used when PaddleOCR is not compiled in.
   A native word that no glyph paint shows (under a fill, clipped or invisible) or a native layer that the read contradicts at more than 15% of its words keeps the OCR page.
 
+- **(pdf): Keep a one-page native text layer whose lost glyphs the automatic OCR read does not recover.** (#2533)
+  The ink-ownership proof now accepts a layer with glyphs that have no Unicode value when each sits in a located native word and no kind of lost glyph (by font, size and advance) of three places or more is read as letters or digits at half its places, tolerates read words only on flat blank paper between native words, requires glyph ink in every located lost glyph and native word, and lets Markdown block structure yield to the native page. A read that sees a kind of three or more lost glyphs as text at half its places, or any word over a raster, outline, rule or fill, keeps the OCR page.
+
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
 
