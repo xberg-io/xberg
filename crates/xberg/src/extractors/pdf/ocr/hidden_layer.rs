@@ -26,7 +26,7 @@ pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 mod ccitt_params;
 use ccitt_params::{decode_is_inverted, supported_group4_params};
 mod layer_judgement;
-pub(super) use layer_judgement::ocr_supersedes_disjoint_layer;
+pub(super) use layer_judgement::{confidence_clears_replacement_floor, ocr_supersedes_disjoint_layer};
 mod source_audit;
 use source_audit::audited_image_name;
 
@@ -114,8 +114,9 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
 }
 
 /// Preview work units that one `max_iterations` step buys. A unit is a pixel or edge visit, far
-/// finer than the object-level iteration the limit counts, and a 300 dpi letter page costs about
-/// 88 million of them.
+/// finer than the object-level iteration the limit counts. The default limit of 10 million
+/// iterations buys 160 million units, enough for one 300 dpi letter page (about 88 million) but
+/// not for two.
 const PREVIEW_WORK_PER_ITERATION: usize = 16;
 
 pub(super) fn preview_work_limit(config: &ExtractionConfig) -> usize {

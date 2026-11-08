@@ -509,35 +509,59 @@ fn only_the_filtered_two_stream_audit_allows_more_than_the_single_stream_operato
 fn a_layer_yields_to_ocr_only_when_nearly_disjoint_from_it() {
     use super::ocr_supersedes_disjoint_layer as supersedes;
 
-    let ocr = "REPORT 1135 NATIONAL ADVISORY COMMITTEE FOR AERONAUTICS TABLE II SUPERSONIC FLOW";
-    assert!(supersedes("3.39 3.40 3.34 3.35 3.36 3.37 3.38 3.25 3.26 3.27", ocr));
-    assert!(!supersedes(ocr, ocr), "a layer that matches the read stays");
-    assert!(
-        !supersedes("REPORT 1135 NATIONAL ADVISORY zzq vvk plm", ocr),
-        "most words are shared"
-    );
-    assert!(!supersedes("", ocr));
-    assert!(!supersedes("3.39 3.40", ""));
-
-    let layer = (0..20).map(|n| format!("junk{n}")).collect::<Vec<_>>();
+    let words = |prefix: &str, count: usize| (0..count).map(|n| format!("{prefix}{n}")).collect::<Vec<_>>();
+    let layer = words("junk", 20).join(" ");
     let read = |shared: usize| {
-        layer[..shared]
-            .iter()
-            .map(String::as_str)
-            .chain(["alpha", "beta", "gamma"])
+        words("junk", shared)
+            .into_iter()
+            .chain(words("alpha", 30))
             .collect::<Vec<_>>()
             .join(" ")
     };
-    assert!(supersedes(&layer.join(" "), &read(3)), "3 of 20 words is 0.15");
-    assert!(!supersedes(&layer.join(" "), &read(4)), "4 of 20 words is 0.20");
+    assert!(supersedes(&layer, &read(3)), "3 of 20 words is 15%");
+    assert!(!supersedes(&layer, &read(4)), "4 of 20 words is 20%");
+    assert!(!supersedes(&layer, &layer), "a layer that matches the read stays");
+    assert!(!supersedes("", &read(0)));
+    assert!(!supersedes(&layer, ""));
+
+    let repeated = ["1"; 20].join(" ");
     assert!(
-        supersedes("1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1", "1 alpha beta gamma"),
+        supersedes(&repeated, "1 alpha beta gamma"),
         "a repeated word is shared once"
     );
-    assert!(!supersedes(
-        "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
-        "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
-    ));
+    assert!(!supersedes(&repeated, &repeated));
+}
+
+#[test]
+fn disjointness_compares_normalized_words_of_a_layer_with_enough_words() {
+    use super::ocr_supersedes_disjoint_layer as supersedes;
+
+    let spaced = (0..20).map(|n| format!("Word{n}.")).collect::<Vec<_>>().join(" ");
+    let read = (0..20).map(|n| format!("(word{n})")).collect::<Vec<_>>().join(" ");
+    assert!(
+        !supersedes(&spaced, &read),
+        "case and edge punctuation do not make words differ"
+    );
+    let stamp = "RECEIVED 14 JUN 1952 ARCHIVE";
+    assert!(
+        !supersedes(stamp, "Received 14 Jun. 1952 Archive"),
+        "a 5-word stamp respelled by OCR stays"
+    );
+    assert!(
+        !supersedes(stamp, "something else entirely"),
+        "a layer under 20 words is never judged junk"
+    );
+    assert!(!supersedes("- - - - -", "x"), "punctuation alone is not a word");
+}
+
+#[test]
+fn replacement_needs_the_default_confidence_gate_whatever_the_caller_set() {
+    use super::confidence_clears_replacement_floor as clears;
+
+    assert!(clears(Some(0.76)));
+    assert!(clears(Some(0.75)));
+    assert!(!clears(Some(0.74)));
+    assert!(!clears(None), "an uncalibrated backend never clears it");
 }
 
 #[test]

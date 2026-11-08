@@ -6,7 +6,8 @@
     feature = "tokio-runtime",
     feature = "bundle-tessdata-eng"
 ))]
-
+#![allow(clippy::print_stderr)]
+// ~keep: test binaries print the p25 confidence margin by design; org logging policy exempts tests
 mod helpers;
 use helpers::get_test_documents_dir;
 use sha2::{Digest, Sha256};
@@ -67,12 +68,28 @@ async fn automatic_ocr_replaces_the_junk_invisible_layer_over_the_ccitt_scan() {
         ..Default::default()
     })
     .await;
-    let automatic = read(ExtractionConfig::default()).await;
+    let automatic = read(ExtractionConfig {
+        pages: Some(xberg::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    })
+    .await;
     assert!(automatic.metadata.ocr_used);
     assert!(words(&automatic).contains(&"COMMITTEE"));
     assert!(!automatic.content.contains("COMMI2\"rEE"));
     assert_eq!(words(&automatic).len(), words(&forced).len());
     assert!(words(&automatic).len() > 2000, "{}", words(&automatic).len());
+    // The replacement needs a calibrated score of at least the default 0.75 gate. Record the
+    // margin so CI on each architecture shows it.
+    let score = automatic
+        .pages
+        .as_deref()
+        .and_then(|pages| pages[0].ocr_confidence.as_ref())
+        .and_then(|c| c.score);
+    eprintln!("NACA 1135 p25 OCR mean confidence score: {score:?}");
+    assert!(score.is_some_and(|score| score >= 0.75), "{score:?}");
 }
 
 #[tokio::test]
@@ -87,4 +104,33 @@ async fn a_tight_preview_budget_keeps_the_native_layer_of_the_ccitt_scan() {
     .await;
     assert!(!automatic.metadata.ocr_used);
     assert_eq!(words(&automatic).len(), 424);
+}
+
+#[tokio::test]
+async fn the_other_audited_naca_1135_layers_keep_their_native_text() {
+    for page in [4, 5, 8, 12, 23, 32, 40, 53] {
+        let path = get_test_documents_dir().join(format!("pdf/regression_pages/nasa-naca-report-1135-p{page}.pdf"));
+        let bytes = std::fs::read(&path)
+            .unwrap_or_else(|e| panic!("NACA 1135 p{page} fixture {path:?} is missing ({e}). {FETCH_HINT}"));
+        let extract = |disable_ocr| {
+            let config = ExtractionConfig {
+                disable_ocr,
+                use_cache: false,
+                ocr: Some(OcrConfig::default()),
+                ..Default::default()
+            };
+            let input = ExtractInput::from_bytes(bytes.clone(), "application/pdf", None);
+            async move {
+                xberg::extract(input, &config)
+                    .await
+                    .expect("extract NACA 1135 page")
+                    .results
+                    .remove(0)
+            }
+        };
+        let native = extract(true).await;
+        let automatic = extract(false).await;
+        assert!(!automatic.metadata.ocr_used, "p{page}");
+        assert_eq!(automatic.content, native.content, "p{page}");
+    }
 }
