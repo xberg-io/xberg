@@ -2508,5 +2508,6 @@ mod run;
 mod setup;
 mod span_merging;
 mod span_ordering;
+pub(crate) use span_ordering::snapped_script_baselines;
 mod tj_arrays;
 mod xobjects;

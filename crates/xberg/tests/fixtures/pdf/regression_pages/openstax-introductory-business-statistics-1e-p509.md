@@ -1,6 +1,6 @@
 Chapter 11 | The Chi-Square Distribution 501
 
-- 105\. According to Dan Lenard, an independent insurance agent in the Buffalo, N.Y. area, the following is a breakdown of the amount of life insurance purchased by males in the following age groups. He is interested in whether the age of the male and the amount of life insurance purchased are independent events. Conduct a test for independence.
+105. According to Dan Lenard, an independent insurance agent in the Buffalo, N.Y. area, the following is a breakdown of the amount of life insurance purchased by males in the following age groups. He is interested in whether the age of the male and the amount of life insurance purchased are independent events. Conduct a test for independence.
 
 ### Age of Males None \< $200,000 $200,000–$400,000 $401,001–$1,000,000 $1,000,001+
 
@@ -8,7 +8,7 @@ Chapter 11 | The Chi-Square Distribution 501
 
 ### Table 11.44
 
-- 106\. Suppose that 600 thirty-year-olds were surveyed to determine whether or not there is a relationship between the level of education an individual has and salary. Conduct a test of independence.
+106. Suppose that 600 thirty-year-olds were surveyed to determine whether or not there is a relationship between the level of education an individual has and salary. Conduct a test of independence.
 
 **Annual Not a high school High school College Masters or Salary graduate graduate graduate doctorate**
 
@@ -24,11 +24,11 @@ $60,000+ 0 5 10 150
 
 *Read the statement and decide whether it is true or false.*
 
-- 107\. The number of degrees of freedom for a test of independence is equal to the sample size minus one.
-- 108\. The test for independence uses tables of observed and expected data values.
-- 109\. The test to use when determining if the college or university a student chooses to attend is related to his or her socioeconomic status is a test for independence.
-- 110\. In a test of independence, the expected number is equal to the row total multiplied by the column total divided by the total surveyed.
-- 111\. An ice cream maker performs a nationwide survey about favorite flavors of ice cream in different geographic areas of the U.S. Based on
+107. The number of degrees of freedom for a test of independence is equal to the sample size minus one.
+108. The test for independence uses tables of observed and expected data values.
+109. The test to use when determining if the college or university a student chooses to attend is related to his or her socioeconomic status is a test for independence.
+110. In a test of independence, the expected number is equal to the row total multiplied by the column total divided by the total surveyed.
+111. An ice cream maker performs a nationwide survey about favorite flavors of ice cream in different geographic areas of the U.S. Based on
 
 **Table 11.46** , do the numbers suggest that geographic location is independent of favorite ice cream flavors? Test at the 5% significance level.
 

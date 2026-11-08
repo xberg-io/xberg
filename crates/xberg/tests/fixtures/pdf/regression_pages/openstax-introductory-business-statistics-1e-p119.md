@@ -1,6 +1,6 @@
 Chapter 2 | Descriptive Statistics 111
 
-- 92\. Six hundred adult Americans were asked by telephone poll, "What do you think constitutes a middle-class income?"
+92. Six hundred adult Americans were asked by telephone poll, "What do you think constitutes a middle-class income?"
 
 The results are in **Table 2.71** . Also, include left endpoint, but not the right endpoint.
 
@@ -22,12 +22,12 @@ The results are in **Table 2.71** . Also, include left endpoint, but not the rig
 - c. Construct a histogram of the data.
 - i. Should all bars have the same width, based on the data? Why or why not?
 - ii. How should the \<20,000 and the 100,000+ intervals be handled? Why?
-- d. Find the 40th and 80th percentiles
+- d. Find the 40<sup>th</sup> and 80<sup>th</sup> percentiles
 - e. Construct a bar graph of the data
 
 ### 2.3 Measures of the Center of the Data
 
-- 93\. The most obese countries in the world have obesity rates that range from 11.4% to 74.6%. This data is summarized in
+93. The most obese countries in the world have obesity rates that range from 11.4% to 74.6%. This data is summarized in
 
 the following table.
 

@@ -211,11 +211,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recover a page of outlined prose that also paints a picture.** (GH#2313)
   The outlined-prose check refused any page that drew an image or a form object.
   A picture holds no outlined text, so the check now reads past an image. It still refuses a page with a form object.
+- **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
+  One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.
+  A reference such as `[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].`, a versioned citation without a date, and a sentence that ends at a bare identifier are kept whole.
+  A stamp that ends a paragraph is removed alone; the words before it stay.
+
 - **(ocr): Do not crash when the process exits while a thread is still recognizing.**
   The Tesseract exit cleanup freed every engine, including one an OCR thread still used, so a document that hit the extraction timeout could abort or segfault and lose all its text.
   The cleanup now frees only engines that are parked in the idle pool and skips an engine in use. Each engine has its own id, so a new engine at the address of a freed one is never mistaken for the old engine. A direct user of the `xberg-tesseract` crate who never calls `mark_idle` gets tesseract's leak report on stderr at exit instead of a crash.
 - **(pdf): Join a word that a ligature glyph split in two, and return the letters of every ligature.** (GH#2322)
   A space drawn inside a ligature's box (the pen is pulled back by the space width) no longer counts as a word break: the gap between the real letters decides. A ToUnicode value of U+0000 for a ligature now falls back to the `/Differences` glyph name of the font. A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next release.
+- **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
+  Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
+
 - **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 

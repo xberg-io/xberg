@@ -2,9 +2,9 @@
 
 ## 643
 
-## TABLE II.--SUPERSONIC
+### TABLE II.--SUPERSONIC
 
-## FLOW--Continued
+### FLOW--Continued
 
 **,_ -** 7/5
 
@@ -18,7 +18,7 @@ __Ts
 
 *M* p L
 
-## T
+### T
 
 *q__ M_*
 
@@ -26,7 +26,7 @@ __Ts
 
 _, p,
 
-## ., T-7
+### ., T-7
 
 _ p,
 

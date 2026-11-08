@@ -2,9 +2,9 @@
 
 The following assumptions are made with respect to random binary sequences to be tested:
 
-- 1\. Uniformity: At any point in the generation of a sequence of random or pseudorandom bits, the occurrence of a zero or one is equally likely, i.e., the probability of each is exactly 1/2. The expected number of zeros (or ones) is *n* /2, where *n* = the sequence length.
-- 2\. Scalability: Any test applicable to a sequence can also be applied to subsequences extracted at random. If a sequence is random, then any such extracted subsequence should also be random. Hence, any extracted subsequence should pass any test for randomness.
-- 3\. Consistency: The behavior of a generator must be consistent across starting values (seeds). It is inadequate to test a PRNG based on the output from a single seed, or an RNG on the basis of an output produced from a single physical output.
+1. Uniformity: At any point in the generation of a sequence of random or pseudorandom bits, the occurrence of a zero or one is equally likely, i.e., the probability of each is exactly 1/2. The expected number of zeros (or ones) is *n* /2, where *n* = the sequence length.
+2. Scalability: Any test applicable to a sequence can also be applied to subsequences extracted at random. If a sequence is random, then any such extracted subsequence should also be random. Hence, any extracted subsequence should pass any test for randomness.
+3. Consistency: The behavior of a generator must be consistent across starting values (seeds). It is inadequate to test a PRNG based on the output from a single seed, or an RNG on the basis of an output produced from a single physical output.
 
 **1.2 Definitions**
 
@@ -26,9 +26,3 @@ The following assumptions are made with respect to random binary sequences to be
 | € | occurring (e.g., 5 %) when the null hypothesis of randomness is true. |
 | Cumulative Distribution | A function giving the probability that the random variable X is less than or |
 | Function (CDF) F(x) | equal to x, for every value x. That is, F(x) = P(X ≤ x). |
-
-*F* σ
-
-*2*
-
-σ *2*

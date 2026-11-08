@@ -5,6 +5,8 @@
 // these needs compiler-in-the-loop verification, not a mechanical pass. Delete this
 // note and the file's baseline entry together once it goes green. Help wanted.
 
+use crate::rendering::arxiv_stamp::trailing_stamp_start;
+
 use super::constants::{
     MAX_BOLD_HEADING_WORD_COUNT, MAX_HEADING_DISTANCE_MULTIPLIER, MAX_HEADING_WORD_COUNT, MAX_TITLE_WORD_COUNT,
     MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO, MIN_TABULAR_NUMERIC_TOKENS,
@@ -1916,21 +1918,14 @@ fn is_greek_letter(c: char) -> bool {
     matches!(c, '\u{0391}'..='\u{03A9}' | '\u{03B1}'..='\u{03C9}')
 }
 
-/// Remove arXiv watermark/sidebar noise from paragraphs on the first pages.
+/// Remove the arXiv margin stamp from paragraphs on the first pages.
 ///
-/// The stamp arXiv prints always carries the version (`arXiv:2312.13591v2 [hep-ph] 6 Dec 2023`); a
-/// citation's identifier does not, and is body text. Handles two cases:
-///
-/// 1. Short standalone paragraphs that are just the arXiv identifier → mark as furniture.
-/// 2. arXiv identifier appended to the end of a longer paragraph (LaTeX sidebar
-///    text that the PDF extractor concatenates with body text) → strip the trailing noise.
+/// A paragraph that is only the stamp becomes page furniture. A paragraph that ends with the stamp
+/// (the extractor concatenated the rotated margin text with body text) loses the stamp and keeps
+/// every body word. A citation that names an identifier is body text: the stamp rule in
+/// `rendering::arxiv_stamp` needs the version, the category and the date, and the Markdown renderer
+/// calls the same rule.
 pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
-    let arxiv_re = regex::Regex::new(r"arXiv:\d{4}\.\d{4,5}v\d+").expect("valid regex");
-    let trailing_re = regex::Regex::new(
-        r"(?:\s+(?:\S+\s+){0,8})?arXiv:\d{4}\.\d{4,5}v\d+(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?\s*$",
-    )
-    .expect("valid regex");
-
     for page in all_pages.iter_mut().take(2) {
         for para in page.iter_mut() {
             if para.is_page_furniture {
@@ -1938,46 +1933,45 @@ pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
             }
             let text = paragraph_plain_text(para);
             let trimmed = text.trim();
-            let word_count = trimmed.split_whitespace().count();
-
-            if !arxiv_re.is_match(trimmed) {
+            let Some(start) = trailing_stamp_start(trimmed) else {
                 continue;
-            }
-
-            if word_count <= 25 {
-                tracing::trace!(
-                    text = %trimmed.chars().take(80).collect::<String>(),
-                    "marking arXiv watermark as furniture"
-                );
+            };
+            if trimmed[..start].is_empty() {
+                tracing::trace!(text = %trimmed, "marking arXiv stamp as furniture");
                 para.is_page_furniture = true;
                 para.heading_level = None;
-            } else if let Some(m) = trailing_re.find(trimmed) {
-                let noise = &trimmed[m.start()..];
-                tracing::trace!(
-                    stripped = %noise.chars().take(80).collect::<String>(),
-                    "stripping trailing arXiv watermark from paragraph"
-                );
-                strip_trailing_text_from_paragraph(para, noise.trim());
+            } else {
+                let stamp = &trimmed[start..];
+                tracing::trace!(stripped = %stamp, "stripping trailing arXiv stamp from paragraph");
+                drop_trailing_words_from_paragraph(para, stamp.split_whitespace().count());
             }
         }
     }
 }
 
-/// Strip trailing noise text from the last segment(s) of a paragraph.
-fn strip_trailing_text_from_paragraph(para: &mut PdfParagraph, noise: &str) {
-    for line in para.lines.iter_mut().rev() {
-        for seg in line.segments.iter_mut().rev() {
-            if let Some(pos) = seg.text.find(noise) {
-                seg.text = seg.text[..pos].trim_end().to_string();
-                return;
-            }
-            let seg_trimmed = seg.text.trim();
-            if !seg_trimmed.is_empty() && noise.contains(seg_trimmed) {
-                seg.text.clear();
-            } else {
-                return;
-            }
+/// Remove the last `count` white-space separated words from the text of a paragraph.
+fn drop_trailing_words_from_paragraph(para: &mut PdfParagraph, mut count: usize) {
+    for seg in para
+        .lines
+        .iter_mut()
+        .rev()
+        .flat_map(|line| line.segments.iter_mut().rev())
+    {
+        if count == 0 {
+            return;
         }
+        let words = seg.text.split_whitespace().count();
+        if words <= count {
+            count -= words;
+            seg.text.clear();
+            continue;
+        }
+        let mut kept = seg.text.trim_end();
+        for _ in 0..count {
+            kept = kept.trim_end_matches(|c: char| !c.is_whitespace()).trim_end();
+        }
+        seg.text.truncate(kept.len());
+        return;
     }
 }
 
@@ -2253,41 +2247,98 @@ mod tests {
         paragraph
     }
 
-    #[test]
-    fn arxiv_noise_marks_a_versioned_stamp_as_furniture() {
-        let mut pages = vec![vec![paragraph_with_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023")]];
+    fn paragraph_of_segments(texts: &[&str]) -> PdfParagraph {
+        let mut paragraph = make_paragraph(10.0, texts.len());
+        for (segment, text) in paragraph.lines[0].segments.iter_mut().zip(texts) {
+            segment.text = (*text).to_string();
+        }
+        paragraph
+    }
+
+    fn marked_text(text: &str) -> (bool, String) {
+        let mut pages = vec![vec![paragraph_with_text(text)]];
         mark_arxiv_noise(&mut pages);
-        assert!(pages[0][0].is_page_furniture);
+        (pages[0][0].is_page_furniture, paragraph_plain_text(&pages[0][0]))
     }
 
     #[test]
-    fn arxiv_noise_keeps_a_short_citation_that_ends_in_an_unversioned_identifier() {
-        let mut pages = vec![vec![paragraph_with_text("82 , 419 (2022), arXiv:2107.09275 [hep-ph].")]];
-        mark_arxiv_noise(&mut pages);
-        assert!(!pages[0][0].is_page_furniture);
-        assert_eq!(
-            pages[0][0].lines[0].segments[0].text,
-            "82 , 419 (2022), arXiv:2107.09275 [hep-ph]."
-        );
+    fn arxiv_noise_marks_the_real_stamp_as_furniture() {
+        let (furniture, _) = marked_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023");
+        assert!(furniture);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_short_versioned_citation() {
+        let text = "[12] A. Author, A title, arXiv:2107.09275v2 [hep-ph].";
+        assert_eq!(marked_text(text), (false, text.to_string()));
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_short_unversioned_citation() {
+        let text = "[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].";
+        assert_eq!(marked_text(text), (false, text.to_string()));
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_citation_that_ends_at_the_bare_identifier() {
+        let text = "The earlier study by Doe and Smith, Journal of Examples 12, 345 (2021), arXiv:2107.09275";
+        assert_eq!(marked_text(text), (false, text.to_string()));
     }
 
     #[test]
     fn arxiv_noise_keeps_a_long_citation_that_ends_in_an_unversioned_identifier() {
-        let text = "[95] X. Liu, Y. Tan, X. Chen, D. Chen, H. Huang, and J. Ping, Investigation of the analog of the states, the doubly charmed molecular pentaquarks of strange quarks, mass spectra, radiative decays and magnetic moments, (2023), arXiv:2312.04390 [hep-ph].";
+        let text = "[95] X. Liu, Y. Tan, X. Chen, D. Chen, H. Huang, and J. Ping, Investigation of the analog of the \
+                    states, the doubly charmed molecular pentaquarks of strange quarks, mass spectra, radiative \
+                    decays and magnetic moments, (2023), arXiv:2312.04390 [hep-ph].";
         assert!(text.split_whitespace().count() > 25);
-        let mut pages = vec![vec![paragraph_with_text(text)]];
-        mark_arxiv_noise(&mut pages);
-        assert!(!pages[0][0].is_page_furniture);
-        assert_eq!(pages[0][0].lines[0].segments[0].text, text);
+        assert_eq!(marked_text(text), (false, text.to_string()));
+    }
+
+    #[test]
+    fn arxiv_noise_strips_only_the_stamp_from_the_end_of_a_longer_paragraph() {
+        let body = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen \
+                    seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five";
+        let (furniture, kept) = marked_text(&format!("{body} arXiv:2312.13591v2 [hep-ph] 6 Dec 2023"));
+        assert!(!furniture);
+        assert_eq!(kept, body);
     }
 
     #[test]
     fn arxiv_noise_strips_a_versioned_stamp_appended_to_a_longer_paragraph() {
-        let text = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six arXiv:2312.13591v2 [hep-ph] 6 Dec 2023";
-        let mut pages = vec![vec![paragraph_with_text(text)]];
+        let body = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen \
+                    seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five \
+                    twenty-six";
+        let (furniture, kept) = marked_text(&format!("{body} arXiv:2312.13591v2 [hep-ph] 6 Dec 2023"));
+        assert!(!furniture);
+        assert_eq!(kept, body);
+    }
+
+    #[test]
+    fn arxiv_noise_strips_a_stamp_that_the_extractor_split_into_segments() {
+        let mut pages = vec![vec![paragraph_of_segments(&[
+            "Body",
+            "words",
+            "stay",
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6",
+            "Dec",
+            "2023",
+        ])]];
         mark_arxiv_noise(&mut pages);
         assert!(!pages[0][0].is_page_furniture);
-        assert!(!pages[0][0].lines[0].segments[0].text.contains("arXiv"));
+        assert_eq!(paragraph_plain_text(&pages[0][0]).trim(), "Body words stay");
+    }
+
+    #[test]
+    fn arxiv_noise_leaves_stamps_after_the_second_page() {
+        let mut pages = vec![
+            Vec::new(),
+            Vec::new(),
+            vec![paragraph_with_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023")],
+        ];
+        mark_arxiv_noise(&mut pages);
+        assert!(!pages[2][0].is_page_furniture);
     }
 
     #[test]

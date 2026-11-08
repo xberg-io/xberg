@@ -433,6 +433,10 @@ exclude = [
   # poly silently re-breaks the pin: it collapsed the `fixtures` array onto one
   # line in 888023d75d, and 8a60458a7dd was an earlier re-pin for the same cause. ~keep
   "tools/benchmark-harness/cohorts/**",
+  # Extractor output compared byte-for-byte by tests/pdf_regression_pages.rs; a rumdl
+  # reformat changes 76 of them and fails that test, and their heading levels are whatever
+  # the extractor emits. ~keep
+  "crates/xberg/tests/fixtures/pdf/regression_pages/**",
   "/skills/**",
   # adrlint owns ADR Markdown with its own rumdl config and content-hash lock; poly would
   # double-report and its lock-unaware formatter would break locks. ~keep

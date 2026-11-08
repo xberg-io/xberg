@@ -6,13 +6,13 @@ This paper proposes a network based on domain invariant features (DIFNet), and e
 
 Algorithm I: DIFNet's pipeline
 
-- 1\. Detect RFI in SAR images;
-- 2\. If there are SAR echoes: Locate interference echoes; else: Convert interfered images into echoes;
-- 3\. Perform STFT pulse-by-pulse;
-- 4\. Predict RFI by DIFNet;
-- 5\. Subtract RFI;
-- 6\. Perform ISTFT pulse-by-pulse;
-- 7\. Convert SAR echoes into SAR images.
+1. Detect RFI in SAR images;
+2. If there are SAR echoes: Locate interference echoes; else: Convert interfered images into echoes;
+3. Perform STFT pulse-by-pulse;
+4. Predict RFI by DIFNet;
+5. Subtract RFI;
+6. Perform ISTFT pulse-by-pulse;
+7. Convert SAR echoes into SAR images.
 
 **Fig. 1.** Flow chart of RFI suppression network based on domain invariant features.
 
@@ -20,21 +20,17 @@ Algorithm I: DIFNet's pipeline
 
 *s ft* + sin *ft*
 
-## ( t
+( <sup>*t*</sup>)<sup>=</sup>
 
-) =
+#### (<sup>*j*</sup> 2πβ( <sup>2</sup>π))
 
-## ( j 2πβ( 2π
+## (<sup>*C*</sup> exp )
 
-))
+wbi~sm~
 
-# ( C exp
+#### ∑ n
 
-)
-
-wbism
-
-## ∑ n cn n
+*cn n*
 
 - A. *RFI signal model*
 
@@ -42,21 +38,17 @@ wbism
 
 Common RFI can be categorized into narrowband  *J f t* + 2 *mf t* (4)
 
-## ( β
-
-## )sin (2ππ
-
-)
+###### ( <sup>β</sup>)<sup>sin</sup> (<sup>2</sup>ππ)
 
 *Nm* =∞ 2 *mn c n*
 
-interference, chirp broadband interference and sinusoidal = ∑∑ *Cn nm* =1 =−∞++ *J f t* 2 *mf t*
+=  *C* interference, chirp broadband interference and sinusoidal ~*n*~
 
-## ( β
+#### ∑∑~*nm*~ ~=1 =−∞~
 
-## ) cos(2ππ
+\++ *J f t* 2 *mf t*
 
-)
+###### ( <sup>β</sup>) <sup>cos</sup>(<sup>2</sup>ππ)
 
 2 *mn c n*
 
@@ -68,7 +60,7 @@ The narrowband interference can be expressed as:
 
 *k* ∞
 
-( −1)
+( <sup>−</sup>1)
 
 β
 
@@ -76,80 +68,80 @@ The narrowband interference can be expressed as:
 
 Where, *J*
 
-*s* exp + *jf* 2πτ (1) ( β ) = . According to
+( <sup>β</sup> )<sup>=</sup>
 
-## (τ
+*s* exp + *jf* 2πτ (1) . According to
 
-) =
+##### (<sup>τ</sup>)<sup>=</sup> (<sup>*jf*</sup> 2πτ )
 
-## ( jf 2πτ
+2 *mn*∑
 
-)
+
 
-2 *mn* ∑ nbi
+nbi
 
-# ∑ n =1 An cn k =0
+∑
 
-*kmk* \!( + )\!2  Where, *fc* is the carrier frequency, *An* is the amplitude, *fn* is (4), sinusoidally modulated broadband interference is the frequency offset, and *N* is the number of interference composed of a series of narrowband interferences, signals. approximating a specific form of chirp modulated broadband The chirp modulation interference can be expressed as: interference.
+*A*~*n*~
 
-*N*
+*cn k* =0 *n* =1
 
-Formulas (1), (2), (4) can be uniformly expressed as: *s* exp *f* + *jk* πτ
+*kmk* \!( +
 
-2
+)<sup>\!2</sup>
 
-(2)
+Where, *f*~*c*~ is the carrier frequency, *A*~*n*~ is the amplitude, *f*~*n*~ is (4), sinusoidally modulated broadband interference is the frequency offset, and *N* is the number of interference composed of a series of narrowband interferences, signals. approximating a specific form of chirp modulated broadband The chirp modulation interference can be expressed as: interference.
 
-## (τ
+*N* 2
 
-) =
+Formulas (1), (2), (4) can be uniformly expressed as: *s* exp *f* + *jk* πτ (2)
 
-# ( j 2πτ
+(<sup>τ</sup> )<sup>=</sup>
 
-)
+# (<sup>*j*</sup> 2πτ )
 
-wbicm
+wbi~cm~
 
-# ∑ n =1 Bn cn N
+∑
 
-*s* exp *ft* + *j k t*
+*B*~*n*~
 
-2
+*cn n* =1 *N* 2
 
-(5)
+*s* exp *ft* + *j k t* (5)
 
-## ( t
+( <sup>*t*</sup>)<sup>=</sup>
 
-) =
-
-# ( j 2ππ
-
-)
+# (<sup>*j*</sup> 2ππ)
 
 *RFI*
 
-# ∑ Dn c RFI
+∑
 
-Where, *Bn* is the amplitude, and *kn* is the chirp rate.
+*D*~*n*~
+
+*c RFI*
+
+Where, *B*~*n*~ is the amplitude, and *k*~*n*~ is the chirp rate.
 
 *n* =1
 
-The sinusoidal modulation interference can be represented Where, *Dn* is the amplitude, *kRFI* is the tuning rate. When *kRFI* as: is small, RFI is a narrowband interference, and when *kRFI* is
+Where, *D*~*n*~ is the amplitude, *k*~*RFI*~is the tuning rate. When *k* The sinusoidal modulation interference can be represented ~*RFI*~ as: is small, RFI is a narrowband interference, and when *k*~*RFI*~ is
 
 *N*
 
 *s* exp *ft* + sin *ft* large, RFI is a broadband interference.
 
-## ( t
+( <sup>*t*</sup>)<sup>=</sup>
 
-) =
+### (<sup>*j*</sup> 2πβ( <sup>2</sup>π)) <sup>(3)</sup>
 
-# ( j 2πβ( 2π
+wbi~sm~
 
-)) (3)
+∑
 
-wbism
+*C*~*n*~
 
-# ∑ n =1 Cn cn n
+*cn n n* =1
 
-By conducting time-frequency analysis on equation (5), it Where, *Cn* is the amplitude, β is the modulation coefficient *n* can be found that: and *fn* is the modulation frequency. According to the Bessel *fkRFI* = ⋅ *t* (6) formula, sinusoidally modulated broadband interference can From formula (6), it can be seen that the signal holds global be expressed as: characteristics on the time-frequency map, which inspires us to propose a Transformer network. Moreover, from the interference model in Equation (5), it can be seen that the
+By conducting time-frequency analysis on equation (5), it Where, *C*~*n*~ is the amplitude, β is the modulation coefficient ~*n*~ can be found that: and *f*~*n*~ is the modulation frequency. According to the Bessel *fk*~*RFI*~ = ⋅ *t* (6) formula, sinusoidally modulated broadband interference can From formula (6), it can be seen that the signal holds global be expressed as: characteristics on the time-frequency map, which inspires us to propose a Transformer network. Moreover, from the interference model in Equation (5), it can be seen that the
