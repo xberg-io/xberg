@@ -824,6 +824,10 @@ impl PageRenderer {
 
     /// Load resources (fonts, color spaces) into local cache.
     fn load_resources(&mut self, doc: &PdfDocument, resources: &Object) -> Result<()> {
+        // A form's /Resources is often an indirect object; without resolving it the form's fonts are never
+        // loaded and its text is drawn without font metrics. ~keep
+        let resolved = doc.resolve_object(resources).unwrap_or_else(|_| resources.clone());
+        let resources = &resolved;
         if let Object::Dictionary(res_dict) = resources {
             tracing::debug!("Loading resources, keys: {:?}", res_dict.keys());
             if let Some(font_obj) = res_dict.get("Font") {

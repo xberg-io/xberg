@@ -204,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Draw every digit of a page number that a form XObject paints.** (GH#2685)
+  A form whose resource dictionary is a separate PDF object never had its fonts loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. OCR then read no page number on the page. The renderer now resolves the form's resource dictionary before it loads the fonts.
+
 - **(ocr): Do not crash when the process exits while a thread is still recognizing.**
   The Tesseract exit cleanup freed every engine, including one an OCR thread still used, so a document that hit the extraction timeout could abort or segfault and lose all its text.
   The cleanup now frees only engines that are parked in the idle pool and skips an engine in use. Each engine has its own id, so a new engine at the address of a freed one is never mistaken for the old engine. A direct user of the `xberg-tesseract` crate who never calls `mark_idle` gets tesseract's leak report on stderr at exit instead of a crash.
