@@ -14,9 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(layout): Add an experimental `model` selector for layout detection.** (#2284)
   `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
 
-- **(ci): Add a PP-DocLayoutV3 cross-runtime comparison helper, not yet wired into the replay runner.** (#2284)
-  `scripts/ci/v3_cross_runtime.py` is a test utility; it ships in no product and no runner calls it yet. It accepts a reading-order rank difference only inside a run of exactly equal sort keys and a mask-bit flip only when both gathered logits are within 1e-4 of zero, an epsilon fitted on two development pages that held-out pages must re-check.
-
 - **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
   `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`, any libheif or codec import, a deployment target above macOS 15.0, and missing or altered license notices; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
   The release workflow now runs it on every macOS PHP archive.
