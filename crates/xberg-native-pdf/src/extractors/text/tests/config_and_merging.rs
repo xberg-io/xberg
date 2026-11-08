@@ -930,3 +930,74 @@ fn test_analyze_tj_distribution_high_variance() {
     assert!(is_justified, "High variance should indicate justified text, cv={}", cv);
     assert!(cv > 0.5, "CV should be > 0.5 for justified text, got {}", cv);
 }
+
+/// One line in a standard-14 font with no `/Widths`, set the way some form producers write it: a `1 Tf`
+/// font under a text matrix that scales it to `size`, a label, a second show far to the right, and the
+/// rest of that word in a show of its own that starts 0.28 points before the second show ends.
+fn standard_font_split_word_stream(font: &FontInfo, scale: f32, size: f32, far_label: bool) -> String {
+    let width = |text: &str| -> f32 {
+        let units: f32 = text.bytes().map(|b| font.get_glyph_width(u16::from(b))).sum();
+        units / 1000.0 * size * scale
+    };
+    let start = 290.0;
+    let tail_x = start + width("Char") - 0.28;
+    let label = if far_label {
+        format!("{scale} 0 0 {scale} 120 600 Tm (Alpha:Bravo ) Tj ")
+    } else {
+        String::new()
+    };
+    format!(
+        "BT /F1 {size} Tf {label}{scale} 0 0 {scale} {start} 600 Tm (Char) Tj {} 0 0 {scale} {tail_x:.3} 600 Tm \
+         (lie) Tj ET",
+        scale * 1.03
+    )
+}
+
+/// The Adobe metrics give a standard-14 font with no `/Widths` the width of its glyphs, so a show that
+/// touches the run before it continues the word, also when that run holds a pen jump.
+#[test]
+fn word_split_across_shows_in_a_standard_font_without_widths_stays_whole() {
+    for (scale, size, far_label) in [(9.1, 1.0, true), (9.1, 1.0, false), (1.0, 9.1, true), (1.0, 9.1, false)] {
+        let font = create_test_font();
+        let stream = standard_font_split_word_stream(&font, scale, size, far_label);
+        let mut extractor = TextExtractor::new();
+        extractor.add_font("F1".to_string(), font);
+        let spans = extractor.extract_text_spans(stream.as_bytes()).unwrap();
+        let text = spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("|");
+        assert!(
+            text.ends_with("Charlie"),
+            "scale {scale}, size {size}, label {far_label}: {text:?}"
+        );
+    }
+}
+
+/// A font with no `/Widths` and no standard metrics reports the fallback advance, which is wider than
+/// its glyphs: an overlap of 0.3 points still holds a word gap, and the merge keeps the space.
+#[test]
+fn overlap_in_a_font_with_fallback_widths_still_gets_its_space() {
+    let mut font = create_test_font();
+    font.base_font = "InventedSans".to_string();
+    assert!(!font.has_explicit_widths() && !font.has_standard_font_metrics());
+    let stream = b"BT /F1 10 Tf 1 0 0 1 72 700 Tm (Alpha) Tj ET BT /F1 10 Tf 1 0 0 1 121.7 700 Tm (Bravo) Tj ET";
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), font);
+    let spans = extractor.extract_text_spans(stream).unwrap();
+    let text = spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("|");
+    assert_eq!(text, "Alpha Bravo");
+}
+
+#[test]
+fn standard_font_metrics_name_the_times_helvetica_and_courier_families() {
+    for (name, expected) in [
+        ("Times-Roman", true),
+        ("ABCDEF+Helvetica-Bold", true),
+        ("Courier", true),
+        ("Symbol", false),
+        ("InventedSans", false),
+        ("HelveticaCorp-Custom", false),
+    ] {
+        let mut font = create_test_font();
+        font.base_font = name.to_string();
+        assert_eq!(font.has_standard_font_metrics(), expected, "{name}");
+    }
+}

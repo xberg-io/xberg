@@ -5234,6 +5234,12 @@ impl FontInfo {
         self.widths.is_some() || self.cid_widths.is_some() || self.has_explicit_dw
     }
 
+    /// Whether the glyph widths come from the Adobe metrics of a standard-14 Times, Helvetica or
+    /// Courier font when the font dictionary gives none, as [`Self::get_glyph_width`] does.
+    pub(crate) fn has_standard_font_metrics(&self) -> bool {
+        self.std14_memo.get_or_init(|| self.classify_std14()).is_some()
+    }
+
     /// Check if this font is likely italic based on the font name.
     ///
     /// This is a heuristic check looking for "Italic" or "Oblique" in the font name.

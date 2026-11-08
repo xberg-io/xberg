@@ -110,11 +110,14 @@ impl<'doc> TextExtractor<'doc> {
             // boundaries. In other words: the merge still happens exactly
             // as before on fallback-width fonts, but once we're inside the
             // merge branch we consult a more honest gap to decide whether
-            // a space is warranted. ~keep
+            // a space is warranted.
+            //
+            // A standard-14 font with no `/Widths` takes its widths from the Adobe metrics, not from
+            // the fallback, so its run is as wide as its glyphs and needs no correction. ~keep
             let reliable_widths = self
                 .fonts
                 .get(&current.font_name)
-                .map(|f| f.has_explicit_widths())
+                .map(|f| f.has_explicit_widths() || f.has_standard_font_metrics())
                 .unwrap_or(true);
             let space_gap = corrected_space_gap(
                 gap,

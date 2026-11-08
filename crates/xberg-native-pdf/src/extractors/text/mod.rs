@@ -908,7 +908,8 @@ impl SpanMergingConfig {
 /// that displacement reaches the font's space advance. We measure it from
 /// the bounding boxes (`raw_gap = next.x − prev.right_edge`).
 ///
-/// When the previous span's font has no explicit `/Widths` array,
+/// When the previous span's font has no explicit `/Widths` array and no
+/// standard-14 Adobe metrics,
 /// `FontInfo` substitutes a fixed fallback advance (~0.55 em) that
 /// systematically OVER-reports proportional Latin glyphs. That inflates
 /// `bbox.width`, pushing `prev.right_edge` past the real glyph end so it can
