@@ -1,5 +1,5 @@
 {
-  "description": "Synthetic evidence shaped like a PP-DocLayoutV3 cross-runtime comparison: page 1 has four exact two-way sort ties whose rows swap rank, page 2 has five mask-bit flips from three boundary logits. Generated with a fixed seed; derived from no real document and no model output. The 1e-4 epsilon was fitted on real development pages and must be re-checked on held-out pages.",
+  "description": "Synthetic evidence shaped like a PP-DocLayoutV3 cross-runtime comparison: page 1 has four exact two-way sort ties whose rows swap rank, page 2 has five mask-bit flips from three boundary logits. Generated with a fixed seed by generate_v3_cross_runtime_synthetic.py; derived from no real document and no model output. The 1e-4 epsilon was fitted on real development pages and must be re-checked on held-out pages.",
   "mask_shape": [300, 200, 200],
   "pages": [
     {

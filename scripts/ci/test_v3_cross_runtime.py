@@ -1,10 +1,14 @@
 import json
 import math
+import sys
 from itertools import pairwise
 from pathlib import Path
 
 import pytest
 import v3_cross_runtime as contract
+
+sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
+import generate_v3_cross_runtime_synthetic as generator
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_synthetic.json").read_text())
 MASK_SHAPE = FIXTURE["mask_shape"]
@@ -229,3 +233,22 @@ def test_a_perturbed_synthetic_flip_fails() -> None:
     page = json.loads(json.dumps(PAGE_TWO))
     page["mask_mismatches"][0]["reference_logit"] = 0.001
     fails("mask_logit_beyond_epsilon", masks, mismatches(page), logits(page))
+
+
+def canonical(data: object) -> bytes:
+    return json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
+
+
+def test_the_committed_fixture_is_what_the_seeded_generator_produces() -> None:
+    assert canonical(generator.build()) == canonical(FIXTURE)
+    assert canonical(generator.build()) == canonical(generator.build())
+
+
+def test_a_changed_seed_no_longer_matches_the_committed_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(generator, "SEED", generator.SEED + 1)
+    assert canonical(generator.build()) != canonical(FIXTURE)
+
+
+@pytest.mark.parametrize("bits", [(True, False), (1.0, 0), (1, 0.0)])
+def test_mask_bits_must_be_plain_integers(bits: tuple) -> None:
+    fails("mask_bit_not_int", masks, [(0, 0, 0, *bits)], {(0, 0, 0): (1e-6, -1e-6)})

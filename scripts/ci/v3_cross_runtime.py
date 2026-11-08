@@ -66,8 +66,8 @@ def compare_ranks(
     - both arrays must be non-empty, equal length, finite and ascending;
     - their exact-tie structure must be identical at every position (the same positions are exactly equal
       to their neighbours), so a tie cannot be invented or lost on either side;
-    - non-tie key values may differ numerically between runtimes (by up to about 0.04 on the development pages),
-      they are not compared. The keys are indexed by sorted position and say nothing about which query
+    - non-tie key values may differ numerically between runtimes and are not compared.
+      The keys are indexed by sorted position and say nothing about which query
       sits at a position, so the rank map is the only evidence of identity.
 
     Ties are exact by design: keys that differ by one ulp are not a tie, and such a near-tie fails
@@ -136,7 +136,8 @@ def compare_masks(
         require((row, y, x) in logits, "mask_logit_missing")
         reference_logit, actual_logit = logits[row, y, x]
         require(math.isfinite(reference_logit) and math.isfinite(actual_logit), "mask_logit_not_finite")
-        require({reference_bit, actual_bit} == {0, 1}, "mask_not_a_flip")
+        require(is_int(reference_bit) and is_int(actual_bit), "mask_bit_not_int")
+        require({int(reference_bit), int(actual_bit)} == {0, 1}, "mask_not_a_flip")
         require(
             int(reference_logit > 0) == reference_bit and int(actual_logit > 0) == actual_bit, "mask_bit_logit_disagree"
         )
