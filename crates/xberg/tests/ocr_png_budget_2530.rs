@@ -39,7 +39,8 @@ fn budgeted_sparse_retry_preserves_the_rotated_png_sentence() {
         .image_preprocessing
         .expect("actual contrast retry normalization");
     assert_eq!(dpi.target_dpi, 300);
-    assert!((225..250).contains(&dpi.final_dpi), "reported DPI: {dpi:?}");
+    // The 8-bit contrast path fits the whole 300 DPI upscale in the default workspace. ~keep
+    assert_eq!(dpi.final_dpi, 300, "reported DPI: {dpi:?}");
     assert_eq!(dpi.calculated_dpi, Some(dpi.final_dpi));
 }
 
@@ -83,7 +84,7 @@ fn budgeted_sparse_retry_recovers_the_densityless_rotated_sales_report() {
         .image_preprocessing
         .expect("contrast retry normalization");
     assert_eq!(dpi.target_dpi, 300);
-    assert!((215..250).contains(&dpi.final_dpi), "reported DPI: {dpi:?}");
+    assert_eq!(dpi.final_dpi, 300, "reported DPI: {dpi:?}");
     assert_eq!(dpi.calculated_dpi, Some(dpi.final_dpi));
 }
 
@@ -96,6 +97,10 @@ fn explicit_contrast_psm_does_not_use_the_implicit_sparse_retry_dpi_policy() {
         "image/png",
         &ExtractionConfig {
             use_cache: false,
+            security_limits: Some(xberg::SecurityLimits {
+                max_content_size: 40 * 1024 * 1024,
+                ..Default::default()
+            }),
             ocr: Some(OcrConfig {
                 tesseract_config: Some(xberg::types::TesseractConfig {
                     psm: Some(3),

@@ -94,3 +94,43 @@ fn caller_selected_policy_keeps_its_requested_densityless_png_upscale() {
     .to_string();
     assert!(error.contains("OCR native image workspace exceeds"), "{error}");
 }
+
+fn densityless_jpeg(width: u16, height: u16) -> Vec<u8> {
+    let rgb = vec![245; usize::from(width) * usize::from(height) * 3];
+    crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, width, height)
+}
+
+fn prepare_densityless_jpeg_with_default_policy(
+    allow_bounded_inferred_upscale: bool,
+) -> crate::Result<super::PreparedOcrImage> {
+    let bytes = densityless_jpeg(800, 1000);
+    assert!(resolve_known_source_dpi(None, &bytes, 800, 1000).is_none());
+    super::encoded_image::prepare_with_dpi_policy(
+        &bytes,
+        &SecurityLimits::default(),
+        &TesseractConfig {
+            preprocessing: Some(Default::default()),
+            ..Default::default()
+        },
+        None,
+        false,
+        allow_bounded_inferred_upscale,
+    )
+}
+
+#[test]
+fn engine_selected_policy_fits_a_densityless_jpeg_upscale_to_the_workspace() {
+    let prepared = prepare_densityless_jpeg_with_default_policy(true)
+        .expect("an engine-selected policy shrinks its upscale instead of refusing the image");
+    assert!(prepared.width > 800 && prepared.height > 1000);
+    assert!(u64::from(prepared.width) * u64::from(prepared.height) * 8 <= 100 * 1024 * 1024);
+}
+
+#[test]
+fn caller_selected_policy_keeps_its_requested_densityless_jpeg_upscale() {
+    let error = prepare_densityless_jpeg_with_default_policy(false)
+        .err()
+        .expect("the requested 300 DPI raster does not fit")
+        .to_string();
+    assert!(error.contains("native image workspace"), "{error}");
+}

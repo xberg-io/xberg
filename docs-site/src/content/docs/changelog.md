@@ -207,6 +207,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Run no-binarization contrast preprocessing on the 8-bit raster and release the source RGB.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which refused or shrank the inferred-DPI upscale that the sparse-retry fallback needs. Background normalization and sharpening now run on gray after the RGB is freed, so the path peaks near 7 bytes per pixel, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does instead of failing. The receipt OCR test is ignored until #2699 is resolved, because its expected spelling depends on the upscale scale.
+
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
 

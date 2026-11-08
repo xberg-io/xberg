@@ -190,7 +190,7 @@ fn rejects_unaffordable_contrast_before_native_preprocessing() {
         let result = super::super::prepare_encoded_ocr_image(
             &bytes,
             &super::super::SecurityLimits {
-                max_content_size: 40 * MIB,
+                max_content_size: 24 * MIB,
                 ..Default::default()
             },
             &config(),

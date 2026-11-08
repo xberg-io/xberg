@@ -46,9 +46,11 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     let gray = pix
         .to_grayscale()
         .map_err(preprocessing_error("convert to grayscale"))?;
-    // Only non-binarized contrast re-reads the color source. Release it before
-    // thresholding allocates full-page grayscale tiles and sampling copies. ~keep
-    let contrast_source = if !binarization_enabled && config.contrast_enhance {
+    // Non-binarized contrast enhances the gray raster. Only the unmodelled combination with
+    // normalize_shaded_rows still re-reads the color source, so release it otherwise before
+    // thresholding or sharpening allocates full-page tiles and sampling copies. ~keep
+    let contrast = !binarization_enabled && config.contrast_enhance;
+    let contrast_source = if contrast && config.normalize_shaded_rows {
         Some(pix)
     } else {
         drop(pix);
@@ -88,6 +90,8 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     } else if let Some(pix) = contrast_source {
         drop(gray);
         enhance_non_binarized(pix, should_invert)?
+    } else if contrast {
+        enhance_gray(gray, should_invert)?
     } else if should_invert {
         gray.invert().map_err(preprocessing_error("invert colors"))?
     } else {
@@ -120,6 +124,25 @@ fn deskew_if_enabled(pix: Pix, enabled: bool) -> Pix {
         geometry_evidence::record(output.as_ref().is_ok_and(|result| result.as_ptr() == source.as_ptr()));
         output
     })
+}
+
+/// Background normalization and sharpening on the 8-bit raster: Tesseract reads gray, and the
+/// 32-bit intermediates of the color path cost four times the memory for the same result.
+fn enhance_gray(gray: Pix, invert: bool) -> Result<Pix, OcrError> {
+    let source = if invert {
+        let inverted = gray.invert().map_err(preprocessing_error("invert colors"))?;
+        drop(gray);
+        inverted
+    } else {
+        gray
+    };
+    let normalized = source
+        .background_normalize()
+        .map_err(preprocessing_error("normalize background"))?;
+    drop(source);
+    normalized
+        .unsharp_mask(UNSHARP_HALF_WIDTH, UNSHARP_FRACTION)
+        .map_err(preprocessing_error("sharpen"))
 }
 
 fn enhance_non_binarized(pix: Pix, invert: bool) -> Result<Pix, OcrError> {

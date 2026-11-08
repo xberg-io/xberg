@@ -238,6 +238,23 @@ impl Preparation<'_> {
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
     }
 
+    /// PNG and TIFF always may. A full-size JPEG may only when the engine chose the policy and the
+    /// resolution is inferred: the caller's requested upscale keeps its refusal, and a reduced
+    /// decode has no inferred resolution of the original to scale. ~keep
+    fn can_shrink_upscale(&self, decoded: &DecodedOcrImage) -> bool {
+        match image::guess_format(self.bytes) {
+            Ok(image::ImageFormat::Png | image::ImageFormat::Tiff) => true,
+            Ok(image::ImageFormat::Jpeg) => {
+                self.allow_bounded_inferred_upscale
+                    && decoded.scale_denominator == 1
+                    && self
+                        .source_dpi(decoded.original_width, decoded.original_height)
+                        .is_none()
+            }
+            _ => false,
+        }
+    }
+
     fn budgeted_upscale(
         &self,
         decoded: &DecodedOcrImage,
@@ -250,11 +267,7 @@ impl Preparation<'_> {
             || source_dpi <= 0.0
             || normalized.0 <= width
             || normalized.1 <= height
-            || self.is_jpeg()
-            || !matches!(
-                image::guess_format(self.bytes),
-                Ok(image::ImageFormat::Png | image::ImageFormat::Tiff)
-            )
+            || !self.can_shrink_upscale(decoded)
             || (!self.allow_bounded_inferred_upscale && self.source_dpi(width, height).is_none())
             || self.known_native_fits(normalized, Some(policy))?
         {
