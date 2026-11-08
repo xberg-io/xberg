@@ -202,6 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Decode an over-budget JPEG page image at a reduced scale instead of refusing the page.** A scan whose embedded JPEG rasters and canvas exceed the image working budget (for example a 6623x4678 RGB scan on a large page) is now decoded at the finest 1/2, 1/4 or 1/8 IDCT scale that fits, so the page renders and takes the normal OCR route. Progressive, CMYK and colour-key-masked JPEGs are still refused.
+
 - **(ocr): Apply `max_threads` to PaddleOCR ONNX Runtime sessions.** (#2649)
   Sessions now take the installed process thread budget instead of the host default, and keep their intra-op and inter-op limits when an execution provider (including explicit CPU) is configured.
 
