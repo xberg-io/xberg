@@ -121,6 +121,13 @@ const SPACE_WITH_ROOM: &str = "(The \\001 eld was open.) Tj";
 /// The same text, with a pull-back of the whole space width (278) between the ligature and the space.
 const SPACE_PULLED_BACK: &str = "[(The \\001) 278 ( eld was open.)] TJ";
 
+/// A `Tj` that ends in the ligature, then a `TJ` array that opens with the pull-back of the whole space.
+const SPACE_PULLED_BACK_ACROSS_OPERATORS: &str = "(The \\001) Tj [278 ( eld was open.)] TJ";
+/// The pull-back covers 60% of the space (167 of 278): part of the space still stands between the words.
+const SPACE_PULLED_BACK_PART: &str = "[(The \\001) 167 ( eld was open.)] TJ";
+/// The pull-back covers 96% of the space (267 of 278): the space is nearly all inside the ligature's box.
+const SPACE_PULLED_BACK_NEARLY_ALL: &str = "[(The \\001) 267 ( eld was open.)] TJ";
+
 /// The last line of the page, for the font with and without the `/ToUnicode` map.
 fn ligature_lines(show: &str, output_format: OutputFormat) -> [String; 2] {
     [false, true].map(|to_unicode| {
@@ -158,6 +165,46 @@ fn markdown_drops_a_space_glyph_pulled_back_into_the_ligature() {
 fn plain_drops_a_space_glyph_pulled_back_into_the_ligature() {
     assert_eq!(
         ligature_lines(SPACE_PULLED_BACK, OutputFormat::Plain),
+        ["The field was open."; 2].map(String::from)
+    );
+}
+
+#[test]
+fn markdown_drops_a_pulled_back_space_when_the_ligature_ends_the_previous_operator() {
+    assert_eq!(
+        ligature_lines(SPACE_PULLED_BACK_ACROSS_OPERATORS, OutputFormat::Markdown),
+        ["The field was open."; 2].map(String::from)
+    );
+}
+
+#[test]
+fn plain_drops_a_pulled_back_space_when_the_ligature_ends_the_previous_operator() {
+    assert_eq!(
+        ligature_lines(SPACE_PULLED_BACK_ACROSS_OPERATORS, OutputFormat::Plain),
+        ["The field was open."; 2].map(String::from)
+    );
+}
+
+#[test]
+fn markdown_keeps_a_space_that_a_partial_pull_back_leaves_a_gap_for() {
+    assert_eq!(
+        ligature_lines(SPACE_PULLED_BACK_PART, OutputFormat::Markdown),
+        ["The fi eld was open."; 2].map(String::from)
+    );
+}
+
+#[test]
+fn plain_keeps_a_space_that_a_partial_pull_back_leaves_a_gap_for() {
+    assert_eq!(
+        ligature_lines(SPACE_PULLED_BACK_PART, OutputFormat::Plain),
+        ["The fi eld was open."; 2].map(String::from)
+    );
+}
+
+#[test]
+fn markdown_drops_a_space_that_a_near_total_pull_back_puts_inside_the_ligature() {
+    assert_eq!(
+        ligature_lines(SPACE_PULLED_BACK_NEARLY_ALL, OutputFormat::Markdown),
         ["The field was open."; 2].map(String::from)
     );
 }
