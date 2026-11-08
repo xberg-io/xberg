@@ -2,7 +2,18 @@
 //! substitutions (OpenType LookupType 4) join into it.
 
 use skrifa::raw::tables::gsub::{LigatureSubst, SubstitutionSubtables};
+use skrifa::raw::types::Tag;
 use skrifa::raw::{FontRef, TableProvider};
+
+/// The GSUB features whose ligatures stand for the letters they join. Shaping features of complex scripts
+/// (such as `blwf` or `abvs`) also use ligature lookups, but their components are in glyph order, not in
+/// reading order. ~keep
+const LETTER_LIGATURE_FEATURES: [Tag; 4] = [
+    Tag::new(b"liga"),
+    Tag::new(b"clig"),
+    Tag::new(b"dlig"),
+    Tag::new(b"hlig"),
+];
 
 /// The text of glyph `gid` as the concatenated text of its components, from every GSUB ligature rule
 /// whose output is `gid`. `component_text` gives the text of one component glyph.
@@ -29,18 +40,30 @@ pub(crate) fn ligature_text(
     found
 }
 
-/// The component glyphs of every Format 1 GSUB ligature rule whose output is `gid`. A font without a
-/// readable GSUB table has none.
+/// The component glyphs of every Format 1 GSUB ligature rule whose output is `gid`, in the lookups of the
+/// letter ligature features. A font without a readable GSUB table has none.
 fn ligature_rules(font_data: &[u8], gid: u16) -> Vec<Vec<u16>> {
-    let Some(lookup_list) = FontRef::new(font_data)
-        .ok()
-        .and_then(|font| font.gsub().ok())
-        .and_then(|gsub| gsub.lookup_list().ok())
-    else {
+    let Some(gsub) = FontRef::new(font_data).ok().and_then(|font| font.gsub().ok()) else {
         return Vec::new();
     };
+    let (Ok(features), Ok(lookup_list)) = (gsub.feature_list(), gsub.lookup_list()) else {
+        return Vec::new();
+    };
+    let mut indices: Vec<u16> = features
+        .feature_records()
+        .iter()
+        .filter(|record| LETTER_LIGATURE_FEATURES.contains(&record.feature_tag()))
+        .filter_map(|record| record.feature(features.offset_data()).ok())
+        .flat_map(|feature| feature.lookup_list_indices().iter().map(|index| index.get()))
+        .collect();
+    indices.sort_unstable();
+    indices.dedup();
+    let lookups = lookup_list.lookups();
     let mut rules = Vec::new();
-    for lookup in lookup_list.lookups().iter().flatten() {
+    for lookup in indices
+        .into_iter()
+        .filter_map(|index| lookups.get(usize::from(index)).ok())
+    {
         let Ok(SubstitutionSubtables::Ligature(subtables)) = lookup.subtables() else {
             continue;
         };

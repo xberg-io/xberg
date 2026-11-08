@@ -51,6 +51,8 @@ struct Fixture {
     /// Writes an explicit CIDToGIDMap stream with only this many entries. A CID past its end keeps
     /// its own value as the glyph ID.
     short_map: Option<usize>,
+    /// The tag of the GSUB feature that references the ligature lookup.
+    feature: &'static [u8; 4],
 }
 
 impl Fixture {
@@ -61,6 +63,7 @@ impl Fixture {
             changed_letter: None,
             cid_offset: 0,
             short_map: None,
+            feature: b"liga",
         }
     }
 }
@@ -128,8 +131,9 @@ fn cmap_table() -> Vec<u8> {
     cmap
 }
 
-/// A GSUB table with one LookupType 4 lookup holding every rule in one Format 1 subtable.
-fn gsub_table(rules: &[(Vec<u16>, u16)]) -> Vec<u8> {
+/// A GSUB table with one LookupType 4 lookup holding every rule in one Format 1 subtable, referenced by one
+/// feature with the tag `feature`.
+fn gsub_table(rules: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
     let mut firsts: Vec<u16> = rules.iter().map(|(comps, _)| comps[0]).collect();
     firsts.sort_unstable();
     firsts.dedup();
@@ -178,20 +182,22 @@ fn gsub_table(rules: &[(Vec<u16>, u16)]) -> Vec<u8> {
     }
     lookup.extend(&subst);
 
+    // Header (10 bytes), an empty ScriptList at 10, the FeatureList at 12 (one record and its Feature table,
+    // 14 bytes), the LookupList at 26 with the lookup 4 bytes past it. ~keep
     let mut gsub: Vec<u8> = Vec::new();
-    for v in [1u16, 0, 10, 12, 14] {
+    for v in [1u16, 0, 10, 12, 26, 0, 1] {
         gsub.extend(be16(v));
     }
-    gsub.extend(be16(0));
-    gsub.extend(be16(0));
-    gsub.extend(be16(1));
-    gsub.extend(be16(4));
+    gsub.extend(feature);
+    for v in [8u16, 0, 1, 0, 1, 4] {
+        gsub.extend(be16(v));
+    }
     gsub.extend(lookup);
     gsub
 }
 
 /// The font program: box glyphs, a letters-only `cmap`, `post` format 3, and the GSUB rules.
-fn font_program(ligatures: &[(Vec<u16>, u16)]) -> Vec<u8> {
+fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
     let outline = box_glyph();
     let mut glyf: Vec<u8> = Vec::new();
     // Short loca (offset / 2): .notdef is empty, then one box per glyph. ~keep
@@ -243,7 +249,7 @@ fn font_program(ligatures: &[(Vec<u16>, u16)]) -> Vec<u8> {
 
     let mut tables: Vec<(&[u8; 4], Vec<u8>)> = Vec::new();
     if !ligatures.is_empty() {
-        tables.push((b"GSUB", gsub_table(ligatures)));
+        tables.push((b"GSUB", gsub_table(ligatures, feature)));
     }
     tables.extend([
         (b"cmap", cmap_table()),
@@ -304,7 +310,7 @@ fn push_object(pdf: &mut Vec<u8>, offsets: &mut Vec<usize>, dict: &str, stream: 
 
 /// A one-page PDF that draws "potential" in the fixture font.
 fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
-    let font = font_program(&fixture.ligatures);
+    let font = font_program(&fixture.ligatures, fixture.feature);
     let codes: String = DRAWN
         .iter()
         .map(|g| format!("{:04X}", g + fixture.cid_offset))
@@ -478,5 +484,19 @@ fn components_past_the_end_of_a_short_cid_to_gid_map_keep_their_cid_as_glyph() {
     assert!(
         text.contains("potential"),
         "the ligature lost its letters when its components lie past the CIDToGIDMap: {text:?}"
+    );
+}
+
+#[test]
+fn a_shaping_form_ligature_gives_no_letters() {
+    let fixture = Fixture {
+        feature: b"blwf",
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(text.contains("poten"), "control letters missing: {text:?}");
+    assert!(
+        !text.contains("potential"),
+        "a ligature from a shaping feature took the letters of its glyph-order components: {text:?}"
     );
 }
