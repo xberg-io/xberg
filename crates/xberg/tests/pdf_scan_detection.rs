@@ -9,6 +9,14 @@ use std::path::{Path, PathBuf};
 use xberg::core::config::{DEFAULT_SCANNED_MIN_CONFIDENCE, ExtractInput, ExtractionConfig, OcrStrategy};
 use xberg::types::FormatMetadata;
 
+/// Detection reads through the extraction cache otherwise, so a stale entry could hide a fresh failure.
+fn no_cache() -> ExtractionConfig {
+    ExtractionConfig {
+        use_cache: false,
+        ..Default::default()
+    }
+}
+
 fn corpus(relative: &str) -> PathBuf {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../test_documents")
@@ -49,7 +57,7 @@ async fn scan_document(relative: &str, config: &ExtractionConfig) -> (Option<f32
 /// Every page of these fixtures is a full-page raster with no text layer.
 #[tokio::test]
 async fn scanned_fixtures_report_high_confidence() {
-    let config = ExtractionConfig::default();
+    let config = no_cache();
 
     for fixture in [
         "pdf_scanned/nougat_004_scanned.pdf",
@@ -81,7 +89,7 @@ async fn scanned_fixtures_report_high_confidence() {
 async fn born_digital_slides_are_not_scans() {
     let (confidence, pages) = scan_metadata(
         "pdf/100_g_networking_technology_overview_slides_toronto_august_2016.pdf",
-        &ExtractionConfig::default(),
+        &no_cache(),
     )
     .await;
 
@@ -102,7 +110,7 @@ async fn born_digital_slides_are_not_scans() {
 async fn born_digital_text_document_has_no_scanned_pages() {
     let (_, pages) = scan_metadata(
         "pdf/a_brief_introduction_to_the_standard_annotation_language_sal_2006.pdf",
-        &ExtractionConfig::default(),
+        &no_cache(),
     )
     .await;
 
@@ -114,11 +122,12 @@ async fn born_digital_text_document_has_no_scanned_pages() {
 async fn min_confidence_controls_which_pages_are_reported() {
     let fixture = "pdf_scanned/nougat_004_scanned.pdf";
 
-    let (_, default_pages) = scan_metadata(fixture, &ExtractionConfig::default()).await;
+    let (_, default_pages) = scan_metadata(fixture, &no_cache()).await;
     assert_eq!(default_pages.as_deref(), Some(&[1_u32][..]));
 
     let strict = ExtractionConfig {
         ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.9 },
+        use_cache: false,
         ..Default::default()
     };
     let (_, strict_pages) = scan_metadata(fixture, &strict).await;
@@ -136,7 +145,7 @@ async fn truncated_pdf_does_not_panic_during_detection() {
     let truncated = bytes[..bytes.len() / 2].to_vec();
 
     let input = ExtractInput::from_bytes(truncated, "application/pdf", None);
-    let outcome = xberg::extract(input, &ExtractionConfig::default()).await;
+    let outcome = xberg::extract(input, &no_cache()).await;
 
     if let Ok(result) = outcome
         && let Some(document) = result.results.first()
@@ -155,6 +164,7 @@ async fn truncated_pdf_does_not_panic_during_detection() {
 async fn scanned_pages_with_disable_ocr_is_rejected() {
     let config = ExtractionConfig {
         disable_ocr: true,
+        use_cache: false,
         ocr_strategy: OcrStrategy::ScannedPages {
             min_confidence: DEFAULT_SCANNED_MIN_CONFIDENCE,
         },

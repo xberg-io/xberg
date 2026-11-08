@@ -39,8 +39,8 @@ impl ImageBudget {
 
     /// Admit `image`, or the IDCT-scaled decode that keeps its rasters within the budget when the
     /// full-size decode does not. Returns the scale denominator to decode at (1, 2, 4 or 8): the
-    /// finest scale that fits, provided the reduced raster still spans [`MIN_PAINTED_COVERAGE`] of the `device` extent (in canvas
-    /// pixels) the image is painted at, so reducing costs no legible resolution. An image that
+    /// finest scale that fits, provided the reduced raster needs at most a 10% linear upscale
+    /// ([`MIN_PAINTED_COVERAGE`]) to span the `device` extent (in canvas pixels) the image is painted at. An image that
     /// cannot be reduced that way is refused exactly as [`Self::admit_jpeg`] refuses it.
     pub(super) fn admit_jpeg_reducing(
         &mut self,
@@ -56,18 +56,14 @@ impl ImageBudget {
         if full.as_ref().is_ok_and(|required| *required <= self.limit as u64) {
             return Ok(1);
         }
-        if reducible_jpeg(image, bytes) {
-            let (frame_width, frame_height) = match jpeg_frame(bytes) {
-                Ok(frame) if frame == (image.width(), image.height()) => frame,
-                Ok(_) => {
-                    return self
-                        .admit_required(Err(
-                            "the JPEG frame dimensions disagree with the image dictionary".into()
-                        ))
-                        .map(|()| 1);
-                }
-                Err(reason) => return self.admit_required(Err(reason)).map(|()| 1),
-            };
+        // The rayon worker's batched `append_rows` path serves progressive scans only, and
+        // `sequential_frame` excludes those. A frame that cannot be read, or that disagrees with the
+        // dictionary, is not reduced and keeps the `Exceeded` refusal the OCR path keys on. ~keep
+        let frame = reducible_jpeg(image, bytes)
+            .then(|| jpeg_frame(bytes).ok())
+            .flatten()
+            .filter(|frame| *frame == (image.width(), image.height()));
+        if let Some((frame_width, frame_height)) = frame {
             for denominator in REDUCED_DENOMINATORS {
                 if !covers_device((frame_width, frame_height), denominator, device) {
                     break;
@@ -226,9 +222,8 @@ fn jpeg_frame(bytes: &[u8]) -> std::result::Result<(u32, u32), String> {
     Ok((u32::from(info.width), u32::from(info.height)))
 }
 
-/// Fraction of the painted canvas extent a reduced raster must still span. Upscaling a reduced raster by
-/// at most a tenth costs no legible detail, and it keeps a page whose canvas sits just above a 1/2
-/// scale from being refused.
+/// Fraction of the painted canvas extent a reduced raster must still span, i.e. at most a 10% linear
+/// upscale. It keeps a page whose canvas sits just above a 1/2 scale from being refused.
 const MIN_PAINTED_COVERAGE: f32 = 0.9;
 
 /// Whether a frame of `frame` pixels at `denominator` still spans [`MIN_PAINTED_COVERAGE`] of the canvas

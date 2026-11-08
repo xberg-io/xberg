@@ -107,16 +107,13 @@ fn prior_unbounded_render_cannot_bypass_a_later_source_image_budget() {
 #[test]
 fn jpeg_header_dimensions_cannot_hide_behind_a_smaller_xobject_dictionary() {
     let document = source::document(&source::jpeg(LARGE), 32, false);
-    // The 4096 px frame would fit at 1/2 of the dictionary's 32 px if the dictionary were trusted; a
-    // mismatch is refused outright instead of reduced.
-    let error = renderer()
-        .render_page_with_budget(0, &document, budget())
+    // The 4096 px frame would fit at 1/8 of the budget if the dictionary were trusted; a mismatch is
+    // not reduced and is refused with the budget refusal, under a limit that would admit a reduction.
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&document, 0, 72, 72, LIMIT)
         .err()
         .expect("a frame that disagrees with its dictionary is refused");
-    assert!(
-        error.to_string().contains("disagree with the image dictionary"),
-        "{error}"
-    );
+    assert!(exceeded, "{error}");
+    assert!(error.to_string().contains("working budget"), "{error}");
 }
 
 #[test]
@@ -362,13 +359,8 @@ fn wrapped_jpeg_contrast_probe_charges_filters_and_actual_codestream_pixels() {
     // The probe reserves its own raster and sixteen copies of the stored stream before the source
     // budget; leave 512 KiB, too little for any reduced decode of the fixture. ~keep
     let error = probe(&large, 16 * large.len() + (1 << 20) + TIGHT / 2).unwrap_err();
-    // The fixture's 32 px dictionary hides the 4096 px frame, which the budget refuses either way. ~keep
-    let message = error.to_string();
-    assert!(message.contains("JPEG source image"), "{error}");
-    assert!(
-        message.contains("working budget") || message.contains("disagree with the image dictionary"),
-        "{error}"
-    );
+    assert!(error.to_string().contains("JPEG source image rasters"), "{error}");
+    assert!(error.to_string().contains("working budget"), "{error}");
 }
 
 fn is_black_somewhere(image: &crate::rendering::RenderedImage) -> bool {
