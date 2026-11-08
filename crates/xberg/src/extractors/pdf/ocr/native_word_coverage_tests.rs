@@ -133,8 +133,12 @@ mod glued_cells {
     }
 
     fn glues(native: LineBox, read: &[(&str, LineBox)]) -> bool {
+        glues_token("abcd", native, read)
+    }
+
+    fn glues_token(token: &str, native: LineBox, read: &[(&str, LineBox)]) -> bool {
         let read: Vec<(String, LineBox)> = read.iter().map(|(text, place)| ((*text).to_owned(), *place)).collect();
-        native_word_glues_separate_cells(&[("abcd".to_owned(), native)], &read)
+        native_word_glues_separate_cells(&[(token.to_owned(), native)], &read)
     }
 
     #[test]
@@ -166,6 +170,45 @@ mod glued_cells {
             &[("ab", at(0.0, 30.0)), dots, ("cd", at(70.0, 100.0))]
         ));
         assert!(glues(at(0.0, 100.0), &[("ab", at(0.0, 30.0)), ("cd", at(70.0, 100.0))]));
+    }
+
+    #[test]
+    fn should_still_veto_a_gap_with_a_table_rule_read_in_it() {
+        let rule = ("|", at(47.0, 48.0));
+        assert!(glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), rule, ("cd", at(55.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_still_veto_a_gap_with_a_lone_dot_read_in_it() {
+        let dot = (".", at(47.0, 48.0));
+        assert!(glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), dot, ("cd", at(55.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_close_a_gap_with_a_leader_run_of_dots_or_an_ellipsis() {
+        for leader in ["...", "......", "\u{2026}", "_____", "-----"] {
+            assert!(
+                !glues(
+                    at(0.0, 100.0),
+                    &[("ab", at(0.0, 40.0)), (leader, at(42.0, 53.0)), ("cd", at(55.0, 100.0))]
+                ),
+                "{leader}"
+            );
+        }
+    }
+
+    #[test]
+    fn should_not_veto_a_label_joined_to_its_value_by_a_leader_the_read_dropped() {
+        let read = [("Introduction", at(0.0, 60.0)), ("12", at(90.0, 100.0))];
+        assert!(!glues_token("Introduction.........12", at(0.0, 100.0), &read));
+        assert!(!glues_token("Introduction\u{2026}12", at(0.0, 100.0), &read));
+        assert!(glues_token("Introduction12", at(0.0, 100.0), &read));
     }
 
     #[test]
