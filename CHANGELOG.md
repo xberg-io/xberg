@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
+  The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.
+
 - **(pdf): Reduce allocations in native text extraction.** (#2429)
   Reuse ordered spans directly when the text pass does not need character records.
 
@@ -208,10 +211,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The Elixir NIF archive ships its four codec libraries as `@loader_path` siblings, staged and load-tested in the release job.
   See `THIRD_PARTY_LICENSES.md` for the licenses and how to relink the LGPL components.
 
+- **(pdf): Join a ligature drawn as its own run to the rest of its word in Plain and Markdown output.** (#2322)
+  The rich text assembler split `di` + `ﬀ` + `erent` at the ligature whenever the kerning gap passed 0.15 em; it now applies the same wider ligature-boundary threshold as the native extractor. OCR text keeps its string-level repair of a space after a ligature. The OCR structure heuristic's character-retention gate now counts a ligature as its letters, so a page with a ligature is no longer rejected.
+
+- **(pdf): Keep an authored space after a ligature in Plain and Markdown output.** (#2322)
+  A space following a ligature glyph ("staﬀ only") was removed by a string-level repair, welding two words into "staffonly". Word boundaries after a ligature now come only from the extractor's glyph geometry.
+
 - **(ocr): Apply `max_threads` to PaddleOCR ONNX Runtime sessions.** (#2649)
   Sessions now take the installed process thread budget instead of the host default, and keep their intra-op and inter-op limits when an execution provider (including explicit CPU) is configured.
 
 - **(pdf): Recover prose behind grayscale ICC page images (#2313).** A page whose only content is a full-page 8-bit gray image with a bounded display ICC profile now takes the visible-raster OCR route, so the prose in the image is no longer dropped in favour of the near-empty native text.
+
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
