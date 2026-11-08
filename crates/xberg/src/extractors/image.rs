@@ -26,12 +26,6 @@ const WHOLE_IMAGE_TESSERACT_PSM: i32 = 6;
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
 const VERTICAL_BLOCK_TESSERACT_PSM: i32 = 5;
 
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-const TABLE_ROW_NUMERIC_TOKENS: usize = 3;
-
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-const MIN_NUMERIC_TOKENS_FOR_TABLE_REREAD: usize = 9;
-
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -2551,6 +2545,9 @@ mod image_ocr_budget;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "image_table_reread.rs"]
+mod image_table_reread;
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -3029,8 +3026,8 @@ fn apply_numeric_repair_to_standalone_image_ocr(
 
 /// The config for the PSM 6 re-read of a standalone table picture, or `None` when the first
 /// pass does not call for one: the caller chose a PSM, the language is vertical, the image is
-/// multi-frame, or the first pass either found a table (its detectors already certified the rows) or
-/// holds too few amounts to be a table the first pass missed.
+/// multi-frame, or the first pass either found a table (its detectors already certified the rows)
+/// or shows no column structure in its word boxes.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn single_block_table_config(
     config: &ExtractionConfig,
@@ -3046,43 +3043,15 @@ fn single_block_table_config(
         return None;
     }
     let mut ocr = config.ocr.clone().unwrap_or_default();
-    let table_like = first.tables.is_empty() && numeric_page_evidence(first).0 >= MIN_NUMERIC_TOKENS_FOR_TABLE_REREAD;
+    let table_like = first.tables.is_empty() && image_table_reread::shows_column_structure(first);
     if !is_implicit_horizontal_tesseract(&ocr) || !table_like || mime_type.to_lowercase().contains("tiff") {
         return None;
     }
+    enable_image_ocr_elements(&mut ocr, true);
     let mut second = config.clone();
     apply_default_tesseract_psm(&mut ocr, crate::ocr::types::PSMMode::SingleBlock as i32);
     second.ocr = Some(ocr);
     Some(second)
-}
-
-/// Digit-bearing tokens and lines carrying at least [`TABLE_ROW_NUMERIC_TOKENS`] of them in
-/// the page text, the way a table row prints its amounts.
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn numeric_page_evidence(doc: &InternalDocument) -> (usize, usize) {
-    let mut tokens = 0;
-    let mut row_lines = 0;
-    for line in doc
-        .prebuilt_pages
-        .iter()
-        .flatten()
-        .flat_map(|page| page.content.lines())
-    {
-        let numeric = line
-            .split(|c: char| c.is_whitespace() || c == '|')
-            .filter(|token| token.chars().any(|c| c.is_ascii_digit()))
-            .count();
-        tokens += numeric;
-        row_lines += usize::from(numeric >= TABLE_ROW_NUMERIC_TOKENS);
-    }
-    (tokens, row_lines)
-}
-
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn second_pass_keeps_more_table_rows(first: &InternalDocument, second: &InternalDocument) -> bool {
-    let ((first_tokens, first_rows), (second_tokens, second_rows)) =
-        (numeric_page_evidence(first), numeric_page_evidence(second));
-    second_rows > first_rows && second_tokens >= first_tokens
 }
 
 #[cfg_attr(alef, alef(skip))]
@@ -3112,10 +3081,10 @@ impl ImageExtractor {
     /// Extract text from image using OCR with optional page tracking for multi-frame TIFFs.
     ///
     /// A standalone picture is read with the sparse-text default first. When that pass finds no
-    /// table yet reads a page of amounts and the caller chose no PSM, the picture is read once
-    /// more as one uniform block (PSM 6), whose row recovery keeps dot-leader table rows whole
-    /// (#2503, #2432); the second read is kept only when it prints more rows of amounts without
-    /// losing any amount.
+    /// table but its word boxes share column edges across rows, and the caller chose no PSM, the
+    /// picture is read once more as one uniform block (PSM 6), whose row recovery keeps
+    /// dot-leader table rows whole (#2503, #2432); the second read is kept only when it puts more
+    /// whole rows across those columns and drops no word the first read placed on them.
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     async fn extract_with_ocr(
         &self,
@@ -3130,7 +3099,7 @@ impl ImageExtractor {
                 return Ok(first);
             };
             return match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-                Ok(second) if second_pass_keeps_more_table_rows(&first, &second) => Ok(second),
+                Ok(second) if image_table_reread::second_read_keeps_more_rows(&first, &second) => Ok(second),
                 Err(error @ crate::XbergError::Cancelled) => Err(error),
                 Ok(_) | Err(_) => Ok(first),
             };

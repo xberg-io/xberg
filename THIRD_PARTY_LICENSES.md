@@ -17,13 +17,13 @@ redistributed in published release artifacts, with an emphasis on copyleft
 - **License:** GNU Lesser General Public License (LGPL). See the upstream
   [`COPYING`](https://github.com/strukturag/libheif/blob/master/COPYING) for the
   authoritative version and text.
-- **Linking:** **Dynamic only.** Xberg resolves `libheif` via `pkg-config`
-  (`-lheif`) against the system shared library; it is never statically linked.
-  The musl CLI container build explicitly disables `crt-static`
+- **Linking:** **Dynamic**, with one exception (below). Xberg resolves
+  `libheif` via `pkg-config` (`-lheif`) against a shared library. The musl CLI
+  container build explicitly disables `crt-static`
   (`RUSTFLAGS="-C target-feature=-crt-static"`) so the resulting binary loads
-  `libheif.so` at runtime rather than embedding it. The static-build
-  (`embedded-libheif`) feature has been **removed** from `xberg-libheif`, so
-  there is no supported way to statically link `libheif` into a Xberg build.
+  `libheif.so` at runtime rather than embedding it. The embedded source build
+  (`embedded-libheif`) feature has been **removed** from `xberg-libheif`. The
+  one static link is the macOS PHP extension, described in the next section.
 - **Redistribution:** the Linux CLI archives and the `full`/`core` images ship
   unmodified `libheif` shared objects separately from the Xberg executable.
   The glibc builds use v1.23.0 from the official release tarball; musl builds
@@ -48,6 +48,80 @@ separate, replaceable shared object and retains its upstream license:
 Xberg supports both HEIF-family input decoding and optional HEIF image output.
 `libx265` is needed only for the latter and is redistributed only when the
 platform's `libheif` build links it.
+
+The macOS Elixir NIF archive ships `libheif`, `libde265`, `libaom` and `libx265`
+(built from the pinned sources with both encoders) as separate sibling dylibs
+resolved through `@loader_path`, beside the upstream license texts and a checksum
+inventory. They remain separate, replaceable shared objects. Pinned versions:
+libheif 1.23.7, libde265 1.1.3, libaom 3.15.3 (encoder enabled) and x265 4.3.
+`libx265` is licensed **GPL-2.0-or-later**; its exact source is the release
+tarball <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz>
+(SHA-256 `83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121`),
+also listed in `sources.tsv` inside the archive with its `COPYING`. The macOS PHP
+extension does not contain it.
+
+## PHP macOS extension: static HEIF stack
+
+PIE installs a PHP extension by copying a single file, so sibling dylibs cannot
+ship with it (a Homebrew-linked build failed to load on Macs without
+`libheif`, xberg-io/xberg#2547). Static linking is therefore used here, and only
+here: the macOS PHP extension (`xberg.so`, Apple Silicon, macOS 15 and later)
+links the following libraries into the extension binary. The Elixir NIF and every
+other binding keep shared libraries.
+
+| Library  | Version | Role                          | License (upstream)          |
+| -------- | ------- | ----------------------------- | --------------------------- |
+| libheif  | 1.23.7  | HEIF/HEIC/AVIF container      | LGPL-3.0-or-later           |
+| libde265 | 1.1.3   | HEVC **decode**               | LGPL-3.0-or-later           |
+| libaom   | 3.15.2  | AV1 **decode** (encoder off)  | BSD-2-Clause + patent grant |
+
+The static set is decode-only. Nothing in it can encode, and no GPL code is
+linked: `libx265` and every other encoder are excluded, so HEIF **output** is
+unavailable in this extension (Xberg reports an encoder-unavailable warning, as
+the macOS Python wheel and Node packages already do). HEIC and AVIF decoding is
+unaffected.
+
+- **Source and provenance:** every component is built unmodified from its
+  pinned upstream release tarball. The URLs and SHA-256 checksums are in
+  [`scripts/ci/build-macos-heif-deps.sh`](scripts/ci/build-macos-heif-deps.sh)
+  (profile `php-static`) and in `sources.tsv`, shipped inside each macOS PHP
+  archive beside the upstream license texts (`libheif-*-COPYING`,
+  `libde265-*-COPYING`, `libaom-*-LICENSE`, `libaom-*-PATENTS`), the GNU GPL
+  v3 text (`GPL-3.0.txt`, which LGPL-3.0 §4(b) requires beside the LGPL text
+  for the combined work) and a `notices.sha256` list. Xberg's own `LICENSE` and
+  this file ship there too.
+- **Relinking (LGPL-3.0 §4):** the complete source of the extension is public
+  (<https://github.com/xberg-io/xberg>, `crates/xberg-php`, MIT). To rebuild it
+  against your own modified `libheif` or `libde265`, reproduce the release job
+  `php-extension` in
+  [`.github/workflows/publish.yaml`](.github/workflows/publish.yaml) on an
+  Apple Silicon Mac with macOS 15 or later:
+  1. Check out the release tag (`git checkout v<version>`) and install the
+     PHP version you target (8.3, 8.4 or 8.5, non-thread-safe), Rust from
+     `rust-toolchain.toml` and Xcode command-line tools.
+  2. Replace the pinned tarball URL and `*_SHA256` of the library you changed
+     in `scripts/ci/build-macos-heif-deps.sh`, then build the static stack into
+     an empty directory: `XBERG_HEIF_PROFILE=php-static
+     XBERG_HEIF_PREFIX=<new empty dir> MACOSX_DEPLOYMENT_TARGET=15.0 bash
+     scripts/ci/build-macos-heif-deps.sh`. The script requires arm64, that
+     exact deployment target and a fresh prefix, and fails otherwise.
+  3. Export `PKG_CONFIG_PATH=<prefix>/lib/pkgconfig` and
+     `SYSTEM_DEPS_LIBHEIF_LINK=static`, then build the extension the way the
+     release does: `scripts/build-out-of-workspace.sh xberg-php xberg_php
+     <checkout>` from the `build-php-extension` action of
+     [`xberg-io/actions`](https://github.com/xberg-io/actions) (`v1`). It copies
+     `crates/xberg-php` out of the workspace, resolves its dependencies from
+     crates.io at the release version and builds the `xberg_php` library with
+     the crate's default features; the resulting `libxberg_php.dylib` is the
+     `xberg.so` the archive carries.
+  4. Check it with `scripts/ci/verify-php-macos-extension.sh` (it needs an
+     archive; `scripts/ci/stage-php-macos-notices.sh` builds one around your
+     binary) and load it with `php -d extension=/path/to/xberg.so`, replacing
+     the file PIE installed.
+- **Gate:** the release workflow runs `scripts/ci/verify-php-macos-extension.sh`
+  on every macOS PHP archive. It rejects any import outside `/usr/lib` and
+  `/System/Library` (including Homebrew paths), any libheif or codec import, a
+  deployment target above macOS 15.0, and a missing or altered notice.
 
 ## libwpd + librevenge (WordPerfect) — MPL-2.0
 

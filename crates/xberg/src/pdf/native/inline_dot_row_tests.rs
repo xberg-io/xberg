@@ -71,6 +71,7 @@ fn document(mut spans: Vec<TextSpan>) -> InternalDocument {
             include_footnotes: true,
             include_watermarks: false,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
