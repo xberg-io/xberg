@@ -6220,10 +6220,10 @@ const MAX_PAGE_NUMBER_WORD_COUNT: usize = 10;
 /// Page width assumed when a document yields no usable paragraph geometry.
 ///
 /// US Letter portrait, matching the 792pt height fallback used for `page_heights`.
-const FALLBACK_PAGE_WIDTH_PTS: f32 = 612.0;
+pub(super) const FALLBACK_PAGE_WIDTH_PTS: f32 = 612.0;
 
 /// Page height assumed when `page_heights` carries no entry for a page index.
-const FALLBACK_PAGE_HEIGHT_PTS: f32 = 792.0;
+pub(super) const FALLBACK_PAGE_HEIGHT_PTS: f32 = 792.0;
 
 /// Mark confirmed running page numbers as furniture (GH#1411).
 ///
