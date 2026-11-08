@@ -212,6 +212,78 @@ mod glued_cells {
     }
 
     #[test]
+    fn should_veto_a_wide_gap_elsewhere_in_a_token_that_holds_a_leader_run() {
+        let read = [("ab", at(0.0, 20.0)), ("cd", at(60.0, 80.0)), ("ef", at(120.0, 140.0))];
+        assert!(glues_token("ab___cdef", at(0.0, 140.0), &read));
+        let at_run_only = [("ab", at(0.0, 20.0)), ("cdef", at(60.0, 100.0))];
+        assert!(!glues_token("ab___cdef", at(0.0, 100.0), &at_run_only));
+        assert!(!glues_token(
+            "PMC0___PMC1",
+            at(0.0, 100.0),
+            &[("PMC0", at(0.0, 20.0)), ("PMC1", at(80.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_not_let_a_read_leader_that_spans_a_word_close_a_gap() {
+        let read = [
+            ("ab", at(0.0, 40.0)),
+            ("_____", at(0.0, 100.0)),
+            ("cd", at(60.0, 100.0)),
+        ];
+        assert!(glues(at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_not_let_a_read_leader_that_overlaps_a_word_close_a_gap() {
+        let read = [
+            ("ab", at(0.0, 40.0)),
+            ("-----", at(30.0, 70.0)),
+            ("cd", at(60.0, 100.0)),
+        ];
+        assert!(glues(at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_treat_a_run_of_three_leader_characters_as_the_smallest_leader() {
+        let read = [("a", at(0.0, 20.0)), ("b", at(80.0, 100.0))];
+        assert!(glues_token("a..b", at(0.0, 100.0), &read));
+        assert!(glues_token("a--b", at(0.0, 100.0), &read));
+        assert!(!glues_token("a...b", at(0.0, 100.0), &read));
+        let gap = [("a", at(0.0, 20.0)), ("..", at(30.0, 60.0)), ("b", at(80.0, 100.0))];
+        assert!(glues_token("ab", at(0.0, 100.0), &gap));
+    }
+
+    #[test]
+    fn should_veto_a_single_underscore_token_over_three_read_boxes() {
+        let read = [
+            ("Thread1", at(0.0, 50.0)),
+            ("Ovf", at(90.0, 120.0)),
+            ("PMC1", at(160.0, 200.0)),
+        ];
+        assert!(glues_token("Thread1Ovf_PMC1", at(0.0, 200.0), &read));
+    }
+
+    #[test]
+    fn should_not_veto_a_tight_pipe_read_between_two_words() {
+        let read = [("a", at(0.0, 10.0)), ("|", at(11.0, 12.0)), ("b", at(13.0, 23.0))];
+        assert!(!glues_token("a|b", at(0.0, 23.0), &read));
+    }
+
+    #[test]
+    fn should_accept_the_midline_ellipsis_and_the_two_dot_leader() {
+        let read = [("Item", at(0.0, 40.0)), ("5", at(90.0, 100.0))];
+        assert!(!glues_token("Item\u{22EF}5", at(0.0, 100.0), &read));
+        assert!(!glues_token("Item\u{2025}\u{2025}5", at(0.0, 100.0), &read));
+        let gap = [
+            ("Item", at(0.0, 40.0)),
+            ("\u{22EF}", at(50.0, 80.0)),
+            ("5", at(90.0, 100.0)),
+        ];
+        assert!(!glues_token("Item5", at(0.0, 100.0), &gap));
+    }
+
+    #[test]
     fn should_measure_a_gap_from_the_furthest_edge_of_the_words_before_it() {
         let read = [("wide", at(0.0, 100.0)), ("x", at(10.0, 20.0)), ("y", at(105.0, 115.0))];
         assert!(!glues(at(0.0, 130.0), &read));

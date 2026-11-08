@@ -286,19 +286,47 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
 /// The fewest leader characters that make a run a leader rather than punctuation.
 const MIN_LEADER_RUN: usize = 3;
 
+/// How many leader characters `c` counts for: dots, middle dots, underscores and hyphens count
+/// one, the two-dot leader two, and the ellipses a whole run. Anything else is not a leader.
+fn leader_weight(c: char) -> Option<usize> {
+    match c {
+        '.' | '·' | '_' | '-' => Some(1),
+        '\u{2025}' => Some(2),
+        '\u{2026}' | '\u{22EF}' => Some(MIN_LEADER_RUN),
+        _ => None,
+    }
+}
+
 /// Whether `text` is a run of the characters a table of contents or form sets between a label and
-/// its value: dots, ellipses, middle dots, underscores and hyphens. A lone `.` or a `|` is not one.
+/// its value. A lone `.` or a `|` is not one.
 fn is_leader_run(text: &str) -> bool {
-    let weight: usize = text
-        .chars()
-        .map(|c| match c {
-            '.' | '·' | '_' | '-' => Some(1),
-            '…' => Some(MIN_LEADER_RUN),
-            _ => None,
-        })
+    text.chars()
+        .map(leader_weight)
         .sum::<Option<usize>>()
-        .unwrap_or(0);
-    weight >= MIN_LEADER_RUN
+        .is_some_and(|weight| weight >= MIN_LEADER_RUN)
+}
+
+/// The letter-and-digit counts at which the token holds a leader run of [`MIN_LEADER_RUN`] or
+/// more leader characters in a row: where a leader joined a label to its value.
+fn leader_run_offsets(token: &str) -> Vec<usize> {
+    let (mut run, mut seen) = (0, 0);
+    let mut offsets = Vec::new();
+    for c in token.chars() {
+        match leader_weight(c) {
+            Some(weight) => {
+                let before = run;
+                run += weight;
+                if before < MIN_LEADER_RUN && run >= MIN_LEADER_RUN {
+                    offsets.push(seen);
+                }
+            }
+            None => {
+                run = 0;
+                seen += usize::from(c.is_alphanumeric());
+            }
+        }
+    }
+    offsets
 }
 
 /// Whether a native word glues read words that stand a cell apart. The native text joins cells
@@ -306,56 +334,51 @@ fn is_leader_run(text: &str) -> bool {
 /// so the words the read separates are not words of the native text, and the share cannot credit
 /// the token for them: the joined read words contain it, yet a reader of the native text never
 /// sees `Ovf_PMC1`. The gap is measured along the line from the furthest right edge of the read
-/// words before it. A gap under one line height is a break inside a word, and a leader run read
-/// in it (`.....`) closes it; a `|` or a lone `.` does not, since a ruled table reads its rules
-/// that way. A native token that holds a leader run is a label and its value joined by a leader
-/// whether or not the read kept the dots (`Introduction.........12`), so it never vetoes. Words
-/// set sideways stack their read words vertically and are out of scope. ~keep
+/// words before it. A gap under one line height is a break inside a word. A leader run read
+/// inside the gap (`.....`) closes it; a `|` or a lone `.` does not, since a ruled table reads its
+/// rules that way, and neither does a leader that overlaps a read word, which is a rule drawn
+/// through the word. A native token that holds a leader run is a label and its value joined by a
+/// leader whether or not the read kept the dots (`Introduction.........12`), so only the gap at
+/// the run, found by counting the letters and digits before it, is exempt and any other gap in
+/// the token still vetoes. Words set sideways stack their read words vertically and are out of
+/// scope. ~keep
 fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
     native.iter().any(|(text, place)| {
         let height = place.bottom - place.top;
-        if height <= 0.0 || has_leader_run(text) {
+        if height <= 0.0 {
             return false;
         }
-        let mut parts: Vec<(&LineBox, bool, bool)> = read
+        let run_offsets = leader_run_offsets(text);
+        let mut parts: Vec<(&LineBox, usize, bool)> = read
             .iter()
             .filter(|(word, at)| place.owns(at) && !word.trim().is_empty())
-            .map(|(word, at)| (at, !alnum_key(word).is_empty(), is_leader_run(word)))
-            .filter(|(_, is_word, is_leader)| *is_word || *is_leader)
+            .map(|(word, at)| (at, alnum_key(word).chars().count(), is_leader_run(word)))
+            .filter(|(_, letters, is_leader)| *letters > 0 || *is_leader)
             .collect();
         parts.sort_by(|a, b| a.0.left.total_cmp(&b.0.left));
         let mut reach = f32::NEG_INFINITY;
-        let (mut word_before, mut gap_after_word) = (false, false);
-        for (part, is_word, is_leader) in parts {
-            if reach.is_finite() && word_before && !is_leader && part.left - reach > height {
-                gap_after_word = true;
-            }
-            if is_word {
-                if gap_after_word {
-                    return true;
+        let mut letters_before: Option<usize> = None;
+        let mut leader_right = f32::INFINITY;
+        for (part, letters, is_leader) in parts {
+            if is_leader {
+                if part.left >= reach {
+                    leader_right = leader_right.min(part.right);
                 }
-                word_before = true;
+                continue;
             }
+            if let Some(before) = letters_before
+                && part.left - reach > height
+                && leader_right > part.left
+                && !run_offsets.contains(&before)
+            {
+                return true;
+            }
+            letters_before = Some(letters_before.unwrap_or(0) + letters);
+            leader_right = f32::INFINITY;
             reach = reach.max(part.right);
         }
         false
     })
-}
-
-/// Whether the token holds a run of [`MIN_LEADER_RUN`] or more leader characters in a row.
-fn has_leader_run(text: &str) -> bool {
-    let mut run = 0;
-    for c in text.chars() {
-        run = match c {
-            '.' | '·' | '_' | '-' => run + 1,
-            '…' => run + MIN_LEADER_RUN,
-            _ => 0,
-        };
-        if run >= MIN_LEADER_RUN {
-            return true;
-        }
-    }
-    false
 }
 
 fn pixel_window(
