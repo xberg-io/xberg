@@ -188,6 +188,9 @@ impl PdfDocument {
                     };
                     extractor.set_line_cap(cap);
                 }
+                Operator::SetExtGState { dict_name } => {
+                    self.apply_path_extgstate(&dict_name, &mut extractor, &mut state_stack);
+                }
                 Operator::SetDash { array, phase } => {
                     state_stack.current_mut().dash = (array.clone(), phase);
                     extractor.set_dash(array, phase);
@@ -381,6 +384,63 @@ impl PdfDocument {
             Object::Name(s) => Some(s.clone()),
             _ => None,
         }
+    }
+
+    fn apply_path_extgstate(
+        &self,
+        name: &str,
+        extractor: &mut crate::extractors::paths::PathExtractor,
+        stack: &mut crate::extractors::paths::PathGraphicsStateStack,
+    ) {
+        let Some(states) = extractor
+            .current_resources()
+            .and_then(|resources| resources.as_dict()?.get("ExtGState"))
+            .and_then(|states| self.deref_object(states))
+        else {
+            return;
+        };
+        let Some(dictionary) = states
+            .as_dict()
+            .and_then(|states| states.get(name))
+            .and_then(|state| self.deref_object(state))
+        else {
+            return;
+        };
+        let Some(dictionary) = dictionary.as_dict() else { return };
+        let state = stack.current_mut();
+        if let Some(dash) = dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash)) {
+            state.dash = dash;
+        }
+        if let Some(alpha) = dictionary
+            .get("CA")
+            .and_then(|alpha| self.path_state_number(alpha))
+            .filter(|alpha| (0.0..=1.0).contains(alpha))
+        {
+            state.stroke_alpha = alpha;
+        }
+        extractor.update_from_path_state(state);
+    }
+
+    fn path_state_number(&self, object: &crate::object::Object) -> Option<f32> {
+        let object = self.deref_object(object)?;
+        let number = object
+            .as_real()
+            .or_else(|| object.as_integer().map(|value| value as f64))? as f32;
+        number.is_finite().then_some(number)
+    }
+
+    fn path_dash_pattern(&self, object: &crate::object::Object) -> Option<(Vec<f32>, f32)> {
+        let object = self.deref_object(object)?;
+        let [array, phase] = object.as_array()?.as_slice() else {
+            return None;
+        };
+        let array = self.deref_object(array)?;
+        let lengths = array
+            .as_array()?
+            .iter()
+            .map(|length| self.path_state_number(length).filter(|length| *length >= 0.0))
+            .collect::<Option<Vec<_>>>()?;
+        Some((lengths, self.path_state_number(phase)?))
     }
 
     /// Dereference one level of indirection, loading the target object;
@@ -644,6 +704,9 @@ impl PdfDocument {
                         _ => LineCap::Butt,
                     };
                     extractor.set_line_cap(cap);
+                }
+                Operator::SetExtGState { dict_name } => {
+                    self.apply_path_extgstate(&dict_name, extractor, state_stack);
                 }
                 Operator::SetDash { array, phase } => {
                     state_stack.current_mut().dash = (array.clone(), phase);

@@ -282,8 +282,7 @@ fn covering_fill(path: &PathContent, y: f32) -> bool {
         && path.bbox.bottom() >= y + HEADER_RULE_TOLERANCE / 2.0
 }
 
-/// Dash comes from the `d` operator; a dash or alpha set through an ExtGState (`gs`) is not seen,
-/// so such a rule counts as solid and opaque. ~keep
+/// Dash comes from `d` or ExtGState `/D`; zero-opacity strokes have no stroke colour. ~keep
 fn dark_solid_stroke(path: &PathContent) -> bool {
     path.dash_pattern.is_none()
         && path.stroke_width >= 0.0

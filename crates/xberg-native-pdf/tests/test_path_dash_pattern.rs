@@ -84,38 +84,88 @@ fn a_collapsed_matrix_leaves_no_pattern() {
     assert_eq!(paths[0].dash_pattern, None);
 }
 
-#[test]
-fn a_dash_set_through_an_extgstate_is_not_seen() {
-    let content = b"/GS1 gs 0 700 m 300 700 l S\n";
+fn paths_with_extgstate(content: &[u8], states: &str) -> Vec<PathContent> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = vec![0usize];
-    for object in [
-        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".as_slice(),
-        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
-          /Resources << /ExtGState << /GS1 << /D [[3 2] 0] >> >> >> >>\nendobj\n",
-    ] {
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /ExtGState << {states} >> >> >>"
+        ),
+    ];
+    for (index, object) in objects.iter().enumerate() {
         offsets.push(pdf.len());
-        pdf.extend_from_slice(object);
+        pdf.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
     }
     offsets.push(pdf.len());
     pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
     pdf.extend_from_slice(content);
     pdf.extend_from_slice(b"\nendstream\nendobj\n");
-    let doc = PdfDocument::from_bytes(common::finalize_pdf(pdf, &offsets)).expect("parse fixture");
-    let paths = doc.extract_paths(0).expect("extract paths");
+    PdfDocument::from_bytes(common::finalize_pdf(pdf, &offsets))
+        .expect("parse fixture")
+        .extract_paths(0)
+        .expect("extract paths")
+}
+
+#[test]
+fn a_dash_set_through_an_extgstate_carries_the_pattern() {
+    let paths = paths_with_extgstate(b"/GS1 gs 0 700 m 300 700 l S", "/GS1 << /D [[3 2] 1] >>");
     assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0].dash_pattern, None, "ExtGState /D is a known gap");
+    assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+}
+
+#[test]
+fn restoring_extgstate_dash_and_opacity_restores_the_visible_stroke() {
+    let paths = paths_with_extgstate(
+        b"q /GS1 gs 0 700 m 300 700 l S Q 0 690 m 300 690 l S",
+        "/GS1 << /D [[3 2] 0] /CA 0 >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].stroke_color, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[1].dash_pattern, None);
+}
+
+#[test]
+fn an_opaque_extgstate_can_restore_stroke_paint_without_clearing_dash() {
+    let paths = paths_with_extgstate(
+        b"/Hidden gs /Visible gs 0 700 m 300 700 l S",
+        "/Hidden << /CA 0 /D [[3 2] 0] >> /Visible << /CA 1 >>",
+    );
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 0.0)));
+}
+
+#[test]
+fn malformed_or_missing_extgstate_values_leave_the_dash_unchanged() {
+    for state in ["/Missing", "/Bad"] {
+        let content = format!("[3 2] 1 d {state} gs 0 700 m 300 700 l S");
+        let paths = paths_with_extgstate(content.as_bytes(), "/Bad << /D [[3 /invalid] 0] /CA /invalid >>");
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+        assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    }
 }
 
 fn paths_with_form(page_content: &[u8], form_content: &[u8], form_matrix: &str) -> Vec<PathContent> {
+    paths_with_form_resources(page_content, form_content, form_matrix, "", "")
+}
+
+fn paths_with_form_resources(
+    page_content: &[u8],
+    form_content: &[u8],
+    form_matrix: &str,
+    page_resources: &str,
+    form_resources: &str,
+) -> Vec<PathContent> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = vec![0usize];
     for object in [
         b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".as_slice(),
         b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
-          /Resources << /XObject << /X1 5 0 R >> >> >>\nendobj\n",
+        format!("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /XObject << /X1 5 0 R >> {page_resources} >> >>\nendobj\n").as_bytes(),
     ] {
         offsets.push(pdf.len());
         pdf.extend_from_slice(object);
@@ -128,7 +178,7 @@ fn paths_with_form(page_content: &[u8], form_content: &[u8], form_matrix: &str) 
     pdf.extend_from_slice(
         format!(
             "5 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] /Matrix {form_matrix} \
-             /Length {} >>\nstream\n",
+             {form_resources} /Length {} >>\nstream\n",
             form_content.len()
         )
         .as_bytes(),
@@ -160,4 +210,32 @@ fn a_form_inherits_the_page_dash_keeps_its_own_inside_and_scales_by_its_matrix()
 fn a_form_without_a_matrix_does_not_rescale_the_dash() {
     let paths = paths_with_form(b"[3 2] 0 d /X1 Do", b"0 50 m 100 50 l S", "[1 0 0 1 0 0]");
     assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 0.0)));
+}
+
+#[test]
+fn a_form_resolves_its_own_extgstate_and_restores_the_page_state() {
+    let paths = paths_with_form_resources(
+        b"/GS gs /X1 Do 0 700 m 300 700 l S",
+        b"/GS gs 0 50 m 100 50 l S",
+        "[2 0 0 2 0 0]",
+        "/ExtGState << /GS << /D [[3 2] 1] >> >>",
+        "/Resources << /ExtGState << /GS << /D [[7 1] 0] >> >> >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].dash_pattern, Some((vec![14.0, 2.0], 0.0)));
+    assert_eq!(paths[1].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+}
+
+#[test]
+fn a_form_without_resources_inherits_extgstate_and_restores_stroke_opacity() {
+    let paths = paths_with_form_resources(
+        b"/X1 Do 0 700 m 300 700 l S",
+        b"/GS gs 0 50 m 100 50 l S",
+        "[1 0 0 1 0 0]",
+        "/ExtGState << /GS << /CA 0 >> >>",
+        "",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].stroke_color, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
 }
