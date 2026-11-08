@@ -107,8 +107,9 @@ impl<'doc> TextExtractor<'doc> {
                             // `is_monospace` so proportional-font Tm+Tj runs (a
                             // separate, differently-shaped gap problem) are
                             // untouched. ~keep
-                            let expected_next_e = buffer.start_matrix.e + buffer.accumulated_width;
-                            let raw_gap = e - expected_next_e;
+                            // The pen's move in text space, the unit of the run's width. ~keep
+                            let advance = Self::text_space_advance(buffer.start_matrix, buffer.wmode, e);
+                            let raw_gap = advance - buffer.accumulated_width;
                             if buffer.wmode == 0
                                 && buffer.is_monospace
                                 && !buffer.unicode.ends_with(|c: char| c.is_whitespace())
@@ -128,7 +129,7 @@ impl<'doc> TextExtractor<'doc> {
 
                             // Same line, same transform, LTR progression →
                             // update width to reflect actual visual extent ~keep
-                            buffer.accumulated_width = e - buffer.start_matrix.e;
+                            buffer.accumulated_width = advance;
                             // A new matrix sets the pen again: the pull-back after a ligature
                             // no longer refers to the glyph that ends the run. ~keep
                             buffer.ligature_tail = false;

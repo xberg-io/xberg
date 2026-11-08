@@ -209,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The letters now come from the font's own standard and discretionary GSUB ligatures: the component glyphs of the ligature, each mapped through ToUnicode.
   A ToUnicode entry for the ligature still wins, and a ligature whose rules disagree or whose components have no ToUnicode entry keeps the old output.
   The shaping forms of complex scripts, such as Khmer below-base forms, are not read, because their components are not in reading order.
+  A ligature drawn by its own show operator under a text matrix that scales the glyphs no longer leaves a space after it ("defi ne" for "define"): the run that holds it is now as wide as its glyph.
 
 - **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
   One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.

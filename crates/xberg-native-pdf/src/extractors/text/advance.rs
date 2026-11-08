@@ -754,6 +754,21 @@ impl<'doc> TextExtractor<'doc> {
         perp.abs() <= tolerance && along >= 0.0
     }
 
+    /// How far the pen at `e` lies from `start`'s origin along an upright run, in text space.
+    ///
+    /// `e` is a user-space coordinate, while a run's `accumulated_width` is in text space and the
+    /// flush scales it by the run's matrix. A text matrix that scales the glyphs (`a = 0.75`) needs the
+    /// user-space move divided by that scale, or the run comes out narrower than the glyphs it holds.
+    /// For `a = 1` this is `e - start.e`. A turned or mirrored matrix and WMode 1 keep the raw
+    /// difference, as before. ~keep
+    pub(super) fn text_space_advance(start: Matrix, wmode: u8, e: f32) -> f32 {
+        let dx = e - start.e;
+        if wmode != 0 || start.b != 0.0 || start.a <= 0.0 {
+            return dx;
+        }
+        dx / start.a
+    }
+
     /// Flush accumulated Tj span buffer into a single TextSpan.
     ///
     /// This is similar to flush_tj_buffer but works with the tj_span_buffer field
