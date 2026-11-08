@@ -24,7 +24,10 @@ fn assert_seven_lines_have_ink(image: &image::RgbaImage) {
             .flat_map(|y| (140..1200).map(move |x| image.get_pixel(x, y)))
             .filter(|pixel| pixel[0] < 128 && pixel[1] < 128 && pixel[2] < 128)
             .count();
-        assert!(ink > 200, "line {row} must contain glyph outlines, found {ink} dark pixels");
+        assert!(
+            ink > 200,
+            "line {row} must contain glyph outlines, found {ink} dark pixels"
+        );
     }
 }
 
