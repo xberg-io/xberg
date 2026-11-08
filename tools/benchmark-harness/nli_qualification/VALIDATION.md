@@ -78,3 +78,41 @@ CPU/runtime isolation, effective thread verification, scoring/calibration,
 unknown rejection, paired confidence intervals, cold-load/RSS measurements and
 downstream binding qualification remain separate work. The runtime runner was
 type-checked, not exercised against a real model or qualified corpus.
+
+## Linux ARM identity follow-up
+
+Review of `0fbf497332045da9941917b25b6f92c7ddca66f2` identified that
+Linux CPU identity required `model name`, absent on common ARM systems. The
+original model-name-only expression was extracted unchanged into a pure parser:
+three collected tests yielded two passes and the expected ARM failure, `CPU
+identity is unavailable`, before the correction.
+
+The parser now retains available x86 or ARM descriptors and board identifiers,
+failing only when none are available. Seven CPU tests cover x86, ARM architecture
+aliases, partial ARM information, missing/empty information, exact key matching,
+record ordering/deduplication and heterogeneous core descriptor associations.
+An independent delta reviewer found that the initial field-wise sets lost
+part/revision associations. A new one-test negative control failed with identical
+identities for swapped revisions before correction; complete per-core records
+now retain those associations separately from platform identifiers.
+
+After correction, `mise run nli:test` collected and passed 22 integration tests
+(13 contract, 2 CLI, 7 CPU), with none ignored. No model was loaded and none of
+these synthetic parser fixtures constitutes measured qualification.
+
+Fetched and merged upstream main `407ccf3d20e0343dfa504621bf13d0072dd012b3`
+without conflicts in merge commit `bb49c1f9433194eae9e8b988c22fb2a39123667e`.
+The merge hook failed because the installed poly hook loader required an
+`ai-rulez` source lock entry; no governance or peer files were changed to repair
+it. The merge commit used a process-local hook bypass. Scoped checks remain the
+authorized verification, not a claim that the shared hooks passed. Disk space
+before this follow-up remained above 178 GiB, exceeding the 40 GB floor.
+
+The final optional runtime check passed with `cargo check --offline --locked`
+and `--features runtime` against the leaf manifest, using the same dedicated
+jobs=1/debug=0 target. Scoped lint examined all four changed Rust files with zero
+findings/errors/skips; format verification examined all six changed files.
+A fresh independent read-only review of the corrected staged delta, runtime
+caller and regression oracles reported no material findings. The follow-up
+commit uses the same process-local hook bypass for the unresolved shared hook
+lock issue; no shared configuration repair or broad compilation is claimed.

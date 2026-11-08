@@ -1,4 +1,5 @@
 mod config;
+pub mod cpu;
 pub mod files;
 mod plan;
 mod report;

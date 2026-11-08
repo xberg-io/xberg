@@ -31,7 +31,11 @@ nli-qualification validate frozen.json SHA256_FROM_FREEZE new-report.json
 
 `identity` supplies the runtime object for the draft plan. It binds the actual
 executable SHA-256, compiled dependency lockfile, ORT build-info string, CPU, OS
-and architecture. Rebuilding the executable requires freezing a new plan.
+and architecture. Linux CPU identity records available architecture-specific
+`/proc/cpuinfo` descriptors as canonical complete core records plus board-wide
+identifiers. Logical CPU numbers and duplicate records are excluded; partial
+metadata is accepted, but no stable identifiers is an error. This metadata is
+not hardware attestation. Rebuilding the executable requires freezing a new plan.
 `threads: 0` explicitly means **SDK default**, not zero threads or a measured
 effective thread count: the SDK session-thread setter is currently private.
 This runner executes requests serially; it makes no isolated-resource claim.

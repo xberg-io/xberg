@@ -20,14 +20,7 @@ pub fn identity(deadline_ms: u64) -> Result<RuntimeIdentity> {
 
 fn cpu_identity() -> Result<String> {
     match std::env::consts::OS {
-        "linux" => std::fs::read_to_string("/proc/cpuinfo")?
-            .lines()
-            .find_map(|line| {
-                line.strip_prefix("model name")
-                    .and_then(|line| line.split_once(':'))
-                    .map(|(_, value)| value.trim().to_owned())
-            })
-            .ok_or_else(|| "CPU identity is unavailable".into()),
+        "linux" => crate::cpu::linux_cpu_identity(&std::fs::read_to_string("/proc/cpuinfo")?, std::env::consts::ARCH),
         "macos" => {
             let output = std::process::Command::new("/usr/sbin/sysctl")
                 .args(["-n", "machdep.cpu.brand_string"])
