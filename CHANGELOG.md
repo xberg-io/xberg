@@ -205,6 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
+  Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
+
 - **(ocr): Compare a table read's escaped cell pipes with their iterator words (Refs #2534).**
   The table renderer writes a `|` inside a cell as `\|`, so a cell word that starts with a bar differed from the Tesseract iterator word and the page never reached the native-ink proof. The escape is now undone before the comparison; the native-agreement share is unchanged. Intel SDM page 4311 returns its 298 native words instead of 874.
 

@@ -5468,6 +5468,15 @@ fn deduplicate_overlapping_tables(
                     let i_is_native = i < native_count;
                     let j_is_native = j < native_count;
                     let mixed_origin = i_is_native != j_is_native;
+                    let near_coincident = intersection / area_a >= NEAR_COINCIDENT_OVERLAP
+                        && intersection / area_b >= NEAR_COINCIDENT_OVERLAP;
+                    if i < native_count
+                        && j < native_count
+                        && !near_coincident
+                        && holds_distinct_rows(&tables[i], &tables[j])
+                    {
+                        continue;
+                    }
                     let i_is_protected = protected_layout_children.contains(&i);
                     let j_is_protected = protected_layout_children.contains(&j);
                     let remove = match (i_is_protected, j_is_protected) {
@@ -5525,6 +5534,58 @@ fn deduplicate_overlapping_tables(
         keep
     });
     canonicalize_affected_table_rows(tables, affected_rows);
+}
+
+/// Fraction of the smaller table's rows that must reappear in the larger one for the pair to
+/// count as two detections of the same region.
+const SHARED_ROW_FRACTION: f64 = 0.5;
+
+/// Boxes covering this much of each other are one region read twice, whatever their rows say.
+const NEAR_COINCIDENT_OVERLAP: f64 = 0.8;
+
+fn row_words(row: &[String]) -> Vec<&str> {
+    let mut words: Vec<&str> = row.iter().flat_map(|cell| cell.split_whitespace()).collect();
+    words.sort_unstable();
+    words
+}
+
+/// Whether the smaller of two same-page native tables mostly holds rows the larger lacks.
+///
+/// Box overlap cannot tell a repeated detection from an L-shaped grid whose boxed corner lies
+/// beside another table; only the rows can. A row is shared when its words fit inside one row of
+/// the other table, whatever the cell split. Tables without cell text give no evidence.
+fn holds_distinct_rows(left: &crate::types::Table, right: &crate::types::Table) -> bool {
+    let (small, large) = if left.cells.len() <= right.cells.len() {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    let large_rows: Vec<Vec<&str>> = large.cells.iter().map(|row| row_words(row)).collect();
+    let small_rows: Vec<Vec<&str>> = small
+        .cells
+        .iter()
+        .map(|row| row_words(row))
+        .filter(|words| !words.is_empty())
+        .collect();
+    if small_rows.is_empty() || large_rows.iter().all(Vec::is_empty) {
+        return false;
+    }
+    let shared = small_rows
+        .iter()
+        .filter(|words| {
+            large_rows.iter().any(|candidate| {
+                let mut available = candidate.clone();
+                words.iter().all(|word| {
+                    available
+                        .iter()
+                        .position(|other| other == word)
+                        .map(|at| available.swap_remove(at))
+                        .is_some()
+                })
+            })
+        })
+        .count();
+    (shared as f64) < SHARED_ROW_FRACTION * small_rows.len() as f64
 }
 
 /// Required containment for a layout child and, in one-to-one cohort matching,

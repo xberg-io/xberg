@@ -1023,6 +1023,136 @@ fn dedup_non_overlapping_tables_both_kept() {
     assert_eq!(tables.len(), 2, "non-overlapping tables are both kept");
 }
 
+/// pb_SERFF_TX_random_pages_1_page173: the right-hand "Lapse Rate" rows lower the assumptions
+/// grid's box over the "Claims Trend" block beside them, though no cell of one sits in the other.
+fn serff_assumptions_grid() -> crate::types::Table {
+    cell_table(
+        1,
+        (73.0, 649.0, 538.0, 704.0),
+        &[
+            &["Requested Rate Increase:", "3.60% 4.00% 2.00%", "", "", ""],
+            &[
+                "Aging Factor:",
+                "1.80% 1.80% 1.80%",
+                "",
+                "Lapse Rate:",
+                "7.50% 5.00% 5.00%",
+            ],
+            &["Premium Trend Rate:", "5.46% 5.87% 3.84%", "", "", ""],
+            &["", "", "", "Additional Lapse Due to Increase:", "0.00% 0.00% 0.00%"],
+            &["", "", "", "Adverse Selection Due to Increase:", "0.00% 0.00% 0.00%"],
+        ],
+    )
+}
+
+#[test]
+fn dedup_keeps_a_native_table_whose_box_overlaps_a_grid_that_does_not_hold_its_rows() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let claims = cell_table(
+        1,
+        (73.0, 640.0, 296.0, 666.0),
+        &[
+            &["Claims Trend Increase:", "3.60% 4.00% 2.00%"],
+            &["Aging Factor:", "1.80% 1.80% 1.80%"],
+            &["Claims Trend Factor:", "5.46% 5.87% 3.84%"],
+        ],
+    );
+    let mut tables = vec![serff_assumptions_grid(), claims];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 2, "the Claims Trend rows exist only in their own table");
+    assert_eq!(tables[1].cells[2][0], "Claims Trend Factor:");
+}
+
+#[test]
+fn dedup_still_drops_a_native_pass_that_repeats_the_rows_of_a_larger_grid() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let repeat = cell_table(
+        1,
+        (73.0, 649.0, 538.0, 690.0),
+        &[
+            &["Requested Rate Increase: 3.60% 4.00% 2.00%"],
+            &["Aging Factor: 1.80% 1.80% 1.80%", "Lapse Rate: 7.50% 5.00% 5.00%"],
+            &["Premium Trend Rate: 5.46% 5.87% 3.84%"],
+        ],
+    );
+    let mut tables = vec![repeat, serff_assumptions_grid()];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].cells.len(), 5);
+}
+
+#[test]
+fn dedup_drops_near_coincident_native_redetections_even_when_their_rows_differ() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let wide = cell_table(
+        1,
+        (206.8, 565.5, 480.1, 674.4),
+        &[
+            &["20", "", "20"],
+            &["A)", "", "A)"],
+            &["\u{3bc}", "", "\u{3bc}"],
+            &["0", "", "0"],
+            &["Current (", "", "Current ("],
+            &["Voltage (V)", "", ""],
+        ],
+    );
+    let narrow = cell_table(
+        1,
+        (195.0, 567.4, 480.1, 674.4),
+        &[
+            &["(a)", "(b)", ""],
+            &["\u{393} =0.2 : \u{393} =0.4", "", "\u{393} =0.2 : \u{393} =0.4"],
+            &["40", "", "40"],
+        ],
+    );
+    let mut tables = vec![wide, narrow];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1, "one region detected twice yields one table");
+}
+
+#[test]
+fn dedup_counts_exactly_half_shared_rows_as_a_duplicate() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let large = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["alpha", "1"], &["beta", "2"], &["gamma", "3"], &["delta", "4"]],
+    );
+    let half = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["other", "9"]]);
+    let mut tables = vec![large, half];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].cells.len(), 4);
+}
+
+#[test]
+fn dedup_without_cell_text_keeps_arbitrating_by_box_overlap() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let mut tables = vec![
+        ov_table(1, (73.0, 649.0, 538.0, 704.0), "grid"),
+        ov_table(1, (73.0, 640.0, 296.0, 666.0), "block"),
+    ];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1);
+}
+
+#[test]
+fn dedup_does_not_apply_the_distinct_rows_guard_to_a_layout_table() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let claims = cell_table(
+        1,
+        (73.0, 640.0, 296.0, 666.0),
+        &[
+            &["Claims Trend Increase:", "3.60% 4.00% 2.00%"],
+            &["Aging Factor:", "1.80% 1.80% 1.80%"],
+            &["Claims Trend Factor:", "5.46% 5.87% 3.84%"],
+        ],
+    );
+    let mut tables = vec![serff_assumptions_grid(), claims];
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1, "native/layout arbitration is unchanged");
+}
+
 #[test]
 fn side_by_side_layout_children_replace_content_heavy_parent() {
     use crate::core::config::layout::TableOverlapPreference;
