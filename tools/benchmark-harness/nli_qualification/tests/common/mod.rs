@@ -15,7 +15,8 @@ pub fn plan_value() -> Value {
         "schema_version": 1, "qualified": false, "expected_inferences": 4, "repeats": 2,
         "labels": ["science", "finance"], "arms": ["fp32"],
         "provenance": {"corpus_receipt_sha256": "b".repeat(64), "split_audit_sha256": "c".repeat(64)},
-        "runtime": {"runner_sha256": "d".repeat(64), "dependency_lock_sha256": "5".repeat(64), "ort_build_info": "test ORT",
+        "runtime": {"runner_sha256": "d".repeat(64), "dependency_lock_sha256": "5".repeat(64),
+            "ort_build_info": "test ORT",
             "os": "macos", "arch": "aarch64", "cpu": "test CPU", "threads": 0, "deadline_ms": 1000},
         "documents": [
             {"id": "doc-a", "family": "source-a", "split": "calibration", "source_sha256": "e".repeat(64),
@@ -40,15 +41,21 @@ pub fn plan() -> FrozenPlan {
 }
 
 pub fn report(plan: &FrozenPlan) -> RunReport {
-    let rows = ["doc-a", "doc-b"].into_iter().flat_map(|document| (1..=2).map(move |repeat| {
-        json!({"document": document, "candidate": "nli", "arm": "fp32", "repeat": repeat,
+    let manifest = &plan.candidates[0].variants["fp32"].config.model.sha256_manifest;
+    let rows = ["doc-a", "doc-b"]
+        .into_iter()
+        .flat_map(|document| {
+            (1..=2).map(move |repeat| {
+                json!({"document": document, "candidate": "nli", "arm": "fp32", "repeat": repeat,
             "inference": "completed", "elapsed_ms": 1.0, "labels": [],
             "model": {"selected_backend": "onnx_cpu", "effective_backend": "onnx_cpu",
                 "repository": "owner/nli", "revision": "4".repeat(40), "model_file": "model.onnx",
                 "model_sha256": "a".repeat(64),
-                "manifest_sha256": digest(plan.candidates[0].variants.values().next().unwrap().config.model.sha256_manifest.as_bytes()),
+                "manifest_sha256": digest(manifest.as_bytes()),
                 "experimental": true}})
-    })).collect::<Vec<_>>();
+            })
+        })
+        .collect::<Vec<_>>();
     serde_json::from_value(json!({"schema_version": 1, "qualified": false,
         "plan_sha256": plan.sha256().unwrap(), "runtime": plan.runtime, "rows": rows}))
     .unwrap()

@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Freeze experimental NLI accounting plans and validate completed reports.** (#2334)
+  The standalone runner calls the existing local classifier with pinned inputs and artifacts; report validation checks accounting consistency and does not qualify a model or prove inference occurred.
+
 - **(layout): Add an experimental `model` selector for layout detection.** (#2284)
   `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
 

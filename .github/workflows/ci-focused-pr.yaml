@@ -6,11 +6,14 @@ on:
     paths:
       - ".cargo/**"
       - ".github/workflows/ci-focused-pr.yaml"
+      - ".github/actions/setup-onnx-runtime/**"
+      - "scripts/ci/actions/setup-onnx-runtime/**"
       - "crates/**"
       - "fixtures/**"
       - "vendored/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "deny.toml"
       - "rust-toolchain.toml"
       - "mise.toml"
       - "mise.lock"
@@ -66,6 +69,12 @@ jobs:
         with:
           install: "false"
           cache: "false"
+
+      - name: Setup ONNX Runtime for NLI admission tests
+        if: matrix.suite == 'nli'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
 
       - name: Install OCR build dependencies and pinned English data
         if: matrix.suite == 'pdf-ocr'

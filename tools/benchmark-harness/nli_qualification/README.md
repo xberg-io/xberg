@@ -14,9 +14,18 @@ model-identity types, and follows the repository's vendored sysinfo override.
 Run contract, CLI and CPU parser tests with `mise run nli:test`. The task inherits
 Cargo target, job and profile settings from the caller and requires cached Cargo
 dependencies. `mise run nli:ci` fetches locked Cargo dependencies, runs all contract
-tests with an executed-count guard, compiles the optional runtime, and lints all
+tests with an executed-count guard in portable and runtime builds, audits the
+standalone lockfile with `deny.toml` (including optional-runtime dependencies),
+compiles the optional runtime, and lints all
 leaf targets with warnings denied. The existing focused PR matrix and Linux Rust
 CI job run this task. No model artifacts are fetched or loaded by these checks.
+`mise run nli:audit --offline` audits cached dependencies/advisories locally; CI
+uses current advisory data. The leaf lock is independent of the root lock and
+must be regenerated with Cargo when its own dependency graph changes.
+Runtime test execution needs pre-staged native ONNX Runtime libraries configured
+through the ORT crate's library settings (for example `ORT_LIB_LOCATION`); the CI
+NLI cell uses the existing native runtime setup action. Offline compilation can
+otherwise emit an unresolved-runtime stub that cannot execute tests.
 Runtime builds additionally need the runtime feature; build them offline using
 the committed leaf lockfile:
 
@@ -98,7 +107,18 @@ the SDK and does not repair missing assets from the network.
 
 This increment does not compute macro-F1, calibration, unknown rejection,
 confidence intervals, peak RSS or cold-load statistics. It does not establish
-quantization parity merely from an arm name. Pilot budgets, untouched held-out
+quantization parity merely from an arm name. Deliberate duplicate-artifact arms
+or candidates are permitted as repeated accounting controls; neither their
+names nor their distinct IDs establish different graphs or independent models.
+The 16-row Cartesian test deliberately uses such duplicate controls. Pilot budgets, untouched held-out
 assessment, measured resource isolation, complete scoring and downstream binding
 qualification remain required by #2334. No model has been qualified by adding
 this tool.
+
+The runner has not been exercised against a real model by this test suite.
+Runtime admission tests call the SDK constructor only; they do not prepare,
+load or run a graph. The portable admission contract is intentionally stricter
+than SDK admission for pin casing and portable artifact names. Selected edge
+configuration tests compare portable refusals directly with the SDK constructor
+to detect policy drift without using the runtime-enabled validation wrapper as
+its own oracle.
