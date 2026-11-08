@@ -4335,6 +4335,20 @@ mod annotation_text_repair_tests {
     }
 
     #[test]
+    fn a_ligature_code_point_before_a_space_still_joins_its_word_on_the_text_repair_paths() {
+        // Native text expands ligatures at decode, so this pass serves text that arrives with the
+        // code point (OCR and structure-tree text). Both repair paths must still reach it.
+        assert_eq!(normalized("\u{FB01} eld", Vec::new()).text, "field");
+        let annotated = normalized(
+            "\u{FB01} eld",
+            vec![annotation("\u{FB01} eld", "eld", AnnotationKind::Bold)],
+        );
+        assert_eq!(annotated.text, "field");
+        let witnesses = super::WordWitnesses::default();
+        assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), "field");
+    }
+
+    #[test]
     fn expansion_preserves_script_and_overlapping_style_byte_ranges() {
         let source = "a*z mod (231-1)";
         let expected = "attz mod (231-1)";

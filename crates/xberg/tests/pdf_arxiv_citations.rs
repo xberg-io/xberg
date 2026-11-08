@@ -306,6 +306,10 @@ fn word_counts(text: &str) -> std::collections::BTreeMap<&str, usize> {
 
 /// The stamp of each real page is removed, and it is the only text removed: every other word of the
 /// output with watermarks kept is still there.
+///
+/// On these three pages the extractor reads the stamp as one paragraph, so they cover the whole-stamp
+/// path. None of them reaches the split-stamp path (measured with a print in that path: no page has a
+/// partial stamp paragraph). The split path is covered by the synthetic page above and the unit tests.
 fn assert_real_stamps_removed_alone(output_format: OutputFormat) {
     for (name, stamp) in ARXIV_PAGES {
         let (Some(kept), Some(removed)) = (
