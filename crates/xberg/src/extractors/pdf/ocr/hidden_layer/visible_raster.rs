@@ -76,9 +76,7 @@ impl VisibleRasterProof {
         }
         drop(audited);
         let handles = doc.page_image_handles(index).ok()?;
-        let [image] = handles.as_slice() else {
-            return None;
-        };
+        let [image] = handles.as_slice() else { return None };
         if image.is_inline
             || image.rotation_degrees != 0.0
             || image.bbox != frame
@@ -173,7 +171,7 @@ fn gray_profile_tags(profile: &[u8]) -> Option<bool> {
     let table_end = 132 + count * 12;
     let mut previous_end = table_end;
     let mut seen = 0;
-    for tag in profile.get(132..table_end)?.chunks_exact(12) {
+    for tag in profile.get(132..table_end)?.as_chunks::<12>().0 {
         let offset = icc_u32(&tag[4..8])?;
         let length = icc_u32(&tag[8..12])?;
         let end = offset.checked_add(length)?;
@@ -337,9 +335,7 @@ fn disjoint_prose_bands(preview: &GrayImage, frame: Rect, boxes: &[Rect]) -> boo
             && band.columns.len() >= MIN_ROW_WIDTH_IN_HEIGHTS * band.rows.len()
             && text_like_band(&mask, width, &band.rows)
     });
-    let Some(first) = body_rows.next() else {
-        return false;
-    };
+    let Some(first) = body_rows.next() else { return false };
     body_rows
         .filter(|band| {
             let shorter = band.rows.len().min(first.rows.len());
@@ -390,6 +386,26 @@ mod tests {
         let source = icc_gray_image_source(&document, 0, "Panel", usize::MAX).unwrap();
         assert!(super::super::decode_exact_flate(&source.data, source.decoded_size().unwrap()).is_none());
         assert!(!proof(1224 * 1584, usize::MAX).has_prose(&document, 0));
+    }
+
+    fn icc_source_after(edit: impl FnOnce(&mut lopdf::Dictionary)) -> Option<ImageSource> {
+        let mut pdf = lopdf::Document::load_mem(ICC_PROSE).unwrap();
+        edit(&mut pdf.get_object_mut((4, 0)).unwrap().as_stream_mut().unwrap().dict);
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        let document = PdfDocument::from_bytes(bytes).unwrap();
+        icc_gray_image_source(&document, 0, "Panel", usize::MAX)
+    }
+
+    #[test]
+    fn icc_gray_source_declines_non_8_bit_samples() {
+        assert!(icc_source_after(|_| {}).is_some());
+        assert!(icc_source_after(|dict| dict.set("BitsPerComponent", 16)).is_none());
+    }
+
+    #[test]
+    fn icc_gray_source_declines_extra_image_dictionary_keys() {
+        assert!(icc_source_after(|dict| dict.set("Interpolate", true)).is_none());
     }
 
     fn proof(pixels_left: usize, byte_limit: usize) -> VisibleRasterProof {
