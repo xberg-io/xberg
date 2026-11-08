@@ -220,10 +220,14 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   composer require xberg-io/xberg
   ```
 
-  The Xberg 1.3.10 Apple Silicon PHP extension archives for PHP 8.3, 8.4, and 8.5
-  require Homebrew's `libheif` at `/opt/homebrew/opt/libheif/lib/libheif.1.dylib`.
-  Install it with `brew install libheif` on a Mac supported by that formula. PHP
-  needs this library to load the extension, even when processing other formats.
+  The Apple Silicon (macOS 15 and later) PHP extension is one self-contained
+  file: PIE installs only the extension binary, so the HEIF stack (`libheif`,
+  `libde265`, `libaom`) is linked into it statically and no Homebrew `libheif`
+  is needed. It decodes HEIC and AVIF but cannot encode HEIF output. The
+  statically linked libraries, their licenses and how to relink them are listed
+  in [Third-party licenses](https://github.com/xberg-io/xberg/blob/main/THIRD_PARTY_LICENSES.md#php-macos-extension-static-heif-stack)
+  and in the notices shipped inside each macOS PHP archive. Xberg 1.3.10 and
+  earlier macOS PHP archives still require `brew install libheif`.
 
   [API Reference](/reference/api-php/)
   [Quick Start](/getting-started/quickstart/)
@@ -391,7 +395,10 @@ Pixel decoding for Apple HEIC photos, HEIF still images, AVIF, HEIC sequences
 Cargo feature** plus the system
 `libheif` library (with `libde265` for HEVC and `libaom` for AV1):
 
-- **macOS**: `brew install libheif`
+- **macOS**: `brew install libheif` (only when building from source; the
+  prebuilt macOS PHP extension links its HEIF stack statically and the macOS
+  Elixir NIF archive ships its codec libraries beside the NIF, so neither needs
+  Homebrew)
 - **Debian / Ubuntu**: `apt install libheif-dev`
 - **Fedora**: `dnf install libheif-devel`
 - **Windows (vcpkg)**: `vcpkg install libheif[hevc,aom]:x64-windows`
