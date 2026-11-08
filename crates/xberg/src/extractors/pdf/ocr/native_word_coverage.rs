@@ -165,7 +165,8 @@ pub(super) fn native_text_paints_all_read_ink(
     ) else {
         return false;
     };
-    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+    !native_word_glues_separate_cells(&native_words, &read_words)
+        && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
         && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
 }
 
@@ -280,6 +281,81 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
         }
     }
     if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
+}
+
+/// The fewest leader characters that make a run a leader rather than punctuation.
+const MIN_LEADER_RUN: usize = 3;
+
+/// Whether `text` is a run of the characters a table of contents or form sets between a label and
+/// its value: dots, ellipses, middle dots, underscores and hyphens. A lone `.` or a `|` is not one.
+fn is_leader_run(text: &str) -> bool {
+    let weight: usize = text
+        .chars()
+        .map(|c| match c {
+            '.' | '·' | '_' | '-' => Some(1),
+            '…' => Some(MIN_LEADER_RUN),
+            _ => None,
+        })
+        .sum::<Option<usize>>()
+        .unwrap_or(0);
+    weight >= MIN_LEADER_RUN
+}
+
+/// Whether a native word glues read words that stand a cell apart. The native text joins cells
+/// that touch in its glyph stream (`1ThreadOvf_PMC1`) although the page sets them a column apart,
+/// so the words the read separates are not words of the native text, and the share cannot credit
+/// the token for them: the joined read words contain it, yet a reader of the native text never
+/// sees `Ovf_PMC1`. The gap is measured along the line from the furthest right edge of the read
+/// words before it. A gap under one line height is a break inside a word, and a leader run read
+/// in it (`.....`) closes it; a `|` or a lone `.` does not, since a ruled table reads its rules
+/// that way. A native token that holds a leader run is a label and its value joined by a leader
+/// whether or not the read kept the dots (`Introduction.........12`), so it never vetoes. Words
+/// set sideways stack their read words vertically and are out of scope. ~keep
+fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
+    native.iter().any(|(text, place)| {
+        let height = place.bottom - place.top;
+        if height <= 0.0 || has_leader_run(text) {
+            return false;
+        }
+        let mut parts: Vec<(&LineBox, bool, bool)> = read
+            .iter()
+            .filter(|(word, at)| place.owns(at) && !word.trim().is_empty())
+            .map(|(word, at)| (at, !alnum_key(word).is_empty(), is_leader_run(word)))
+            .filter(|(_, is_word, is_leader)| *is_word || *is_leader)
+            .collect();
+        parts.sort_by(|a, b| a.0.left.total_cmp(&b.0.left));
+        let mut reach = f32::NEG_INFINITY;
+        let (mut word_before, mut gap_after_word) = (false, false);
+        for (part, is_word, is_leader) in parts {
+            if reach.is_finite() && word_before && !is_leader && part.left - reach > height {
+                gap_after_word = true;
+            }
+            if is_word {
+                if gap_after_word {
+                    return true;
+                }
+                word_before = true;
+            }
+            reach = reach.max(part.right);
+        }
+        false
+    })
+}
+
+/// Whether the token holds a run of [`MIN_LEADER_RUN`] or more leader characters in a row.
+fn has_leader_run(text: &str) -> bool {
+    let mut run = 0;
+    for c in text.chars() {
+        run = match c {
+            '.' | '·' | '_' | '-' => run + 1,
+            '…' => run + MIN_LEADER_RUN,
+            _ => 0,
+        };
+        if run >= MIN_LEADER_RUN {
+            return true;
+        }
+    }
+    false
 }
 
 fn pixel_window(
