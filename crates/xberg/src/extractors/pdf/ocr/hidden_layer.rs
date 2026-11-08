@@ -119,11 +119,14 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
 /// not for two.
 const PREVIEW_WORK_PER_ITERATION: usize = 16;
 
-/// Pages of a document that can each spend a full per-page preview budget. The document-wide
-/// ceiling is this many per-page budgets, so a hostile file with thousands of audited pages gets
-/// bounded decode work (64 pages is about 5.6 billion units at 300 dpi), while a scan of a
-/// realistic length recovers every page (#2694).
-const PREVIEW_FULL_BUDGET_PAGES: usize = 64;
+/// Per-page budgets that make up the document-wide ceiling. The ceiling is this many times
+/// `16 * max_iterations` units: 960 million at the default `max_iterations` of 10 million, 6x the
+/// shared budget it replaces. Decoding measured 1.1 to 2.5 ms per million units on an optimized
+/// build (Apple silicon), so the worst case is about 1 to 2.4 s, and about 5 s at a pessimistic
+/// 5 ms per million. It still buys 10 pages of the costliest audited 300 dpi scan (88 million
+/// units each) and 35 of a light one (27 million), so a realistic multi-page scan recovers every
+/// page (#2694).
+const PREVIEW_FULL_BUDGET_PAGES: usize = 6;
 
 /// Preview work for one document: each page may spend up to the per-page limit derived from
 /// `max_iterations`, and all pages together up to [`PREVIEW_FULL_BUDGET_PAGES`] per-page limits.
@@ -148,12 +151,12 @@ impl PreviewWorkBudget {
     }
 
     /// Run one page's probe under the per-page limit, capped by what the document has left, and
-    /// charge the document for the work the page spent, including work spent on a refusal.
+    /// charge the document for the work the page debited. A refused charge debits nothing.
     pub(super) fn probe_page<R>(&mut self, probe: impl FnOnce(&mut usize) -> R) -> R {
         let mut page_work = self.per_page.min(self.remaining);
         let granted = page_work;
         let result = probe(&mut page_work);
-        self.remaining = self.remaining.saturating_sub(granted - page_work);
+        self.remaining = self.remaining.saturating_sub(granted.saturating_sub(page_work));
         result
     }
 }

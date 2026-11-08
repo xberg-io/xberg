@@ -8,13 +8,24 @@
     feature = "tokio-runtime",
     feature = "bundle-tessdata-eng"
 ))]
+use sha2::{Digest, Sha256};
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig};
 
 const PER_PAGE_ENOUGH: usize = 2_500_000;
 const PER_PAGE_TOO_SMALL: usize = 1_000_000;
+const SCAN_SHA256: &str = "1a50bafc441829efcfdde16a7deaa965f9eeccd526d77768344ae1ce89ebd6b2";
 const SCAN: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
 const PAGE_WORDS: [&str; 4] = ["lighthouse", "Volunteers", "Fishing", "evening"];
 const JUNK: &str = "47110";
+
+fn scan() -> Vec<u8> {
+    assert_eq!(
+        hex::encode(Sha256::digest(SCAN)),
+        SCAN_SHA256,
+        "regenerate with the fixture README"
+    );
+    SCAN.to_vec()
+}
 
 async fn read(security_limits: Option<xberg::extractors::security::SecurityLimits>) -> xberg::ExtractedDocument {
     let config = ExtractionConfig {
@@ -23,12 +34,9 @@ async fn read(security_limits: Option<xberg::extractors::security::SecurityLimit
         security_limits,
         ..Default::default()
     };
-    let output = xberg::extract(
-        ExtractInput::from_bytes(SCAN.to_vec(), "application/pdf", None),
-        &config,
-    )
-    .await
-    .expect("extract the four-page scan");
+    let output = xberg::extract(ExtractInput::from_bytes(scan(), "application/pdf", None), &config)
+        .await
+        .expect("extract the four-page scan");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     output.results.into_iter().next().expect("one document")
 }
@@ -36,7 +44,7 @@ async fn read(security_limits: Option<xberg::extractors::security::SecurityLimit
 #[tokio::test]
 async fn every_page_of_a_multi_page_ccitt_scan_replaces_its_junk_layer() {
     let native = xberg::extract(
-        ExtractInput::from_bytes(SCAN.to_vec(), "application/pdf", None),
+        ExtractInput::from_bytes(scan(), "application/pdf", None),
         &ExtractionConfig {
             disable_ocr: true,
             use_cache: false,
