@@ -1730,9 +1730,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && crate::plugins::registry::get_ocr_backend_registry()
                 .read()
                 .is_builtin_tesseract(backend);
+        #[cfg(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
         let tall_source_unsupported = tall_source_candidate
             .then(|| super::tall_source::unsupported_reason(config, &ocr_config_resolved))
             .flatten();
+        #[cfg(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
         let try_tall_source = tall_source_candidate && tall_source_unsupported.is_none();
         let batch_slice = &page_images;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
@@ -2741,6 +2753,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     ),
                 );
             }
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if type0_loss_pages.contains(&page) {
                 if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
                     && page_count == 1

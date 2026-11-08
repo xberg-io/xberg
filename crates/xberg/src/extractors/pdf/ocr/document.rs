@@ -357,7 +357,7 @@ fn unannotated_ocr_text(element: &crate::types::internal::InternalElement) -> bo
 /// An element that only segments the read text into blocks: a paragraph, a heading or a list
 /// item with no inline markup. Which block a line becomes is derived from the read's geometry, so
 /// a page whose every word a native layer already owns takes its blocks from that layer. ~keep
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 fn segmenting_ocr_text(element: &crate::types::internal::InternalElement) -> bool {
     use crate::types::internal::ElementKind;
     matches!(
@@ -372,7 +372,7 @@ fn segmenting_ocr_text(element: &crate::types::internal::InternalElement) -> boo
 
 /// Whether a page's structure holds nothing but its read text cut into blocks: the same words,
 /// each once, in blocks that carry no table, image, link, formula or markup. ~keep
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn ocr_page_only_segments_text_with(
     doc: &crate::types::internal::InternalDocument,
     read: &str,
