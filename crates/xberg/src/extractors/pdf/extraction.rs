@@ -1038,6 +1038,7 @@ pub(crate) fn extract_all_from_native_document(
                 include_footnotes,
                 include_watermarks,
                 used_structure_tree,
+                ocr_text: false,
                 image_positions: &image_positions,
                 images: images.as_deref(),
                 inject_placeholders,

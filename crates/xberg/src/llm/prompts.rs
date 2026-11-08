@@ -33,6 +33,8 @@ pub const VLM_OCR_TEMPLATE: &str = "\
 Extract all visible text from this image. \
 Reproduce the text exactly as it appears, preserving the original structure, \
 paragraph breaks, and reading order. \
+Transcribe every occurrence of repeated text in order: never merge, skip or \
+summarize a paragraph, sentence or line because it repeats earlier text. \
 Render mathematical formulas as LaTeX, wrapped in $$ for display equations \
 and $ for inline ones. \
 Do not add any commentary, explanation, or formatting beyond what is present \
@@ -83,6 +85,19 @@ mod tests {
         assert!(
             !prompt_en.contains("language:"),
             "English must skip the language hint; got: {prompt_en}"
+        );
+    }
+
+    #[test]
+    fn test_vlm_ocr_template_requires_repeated_text_preserved_issue_2132() {
+        let prompt = render_template(VLM_OCR_TEMPLATE, &minijinja::context! { language => "eng" }).unwrap();
+        assert!(
+            prompt.contains("Transcribe every occurrence of repeated text in order"),
+            "must instruct preserving repeats; got: {prompt}"
+        );
+        assert!(
+            prompt.contains("never merge, skip or summarize"),
+            "must forbid collapsing repeats; got: {prompt}"
         );
     }
 }

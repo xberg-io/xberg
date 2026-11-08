@@ -7,6 +7,8 @@ const OUTLINED: &[u8] = include_bytes!("fixtures/ocr/outlined_prose_2313.pdf");
 const SINGLE_OUTLINE: &[u8] = include_bytes!("fixtures/ocr/outlined_caption_2313.pdf");
 const RASTER_PROSE: &[u8] = include_bytes!("fixtures/ocr/raster_prose_stubs_2313.pdf");
 const RASTER_CAPTION: &[u8] = include_bytes!("fixtures/ocr/raster_caption_stubs_2313.pdf");
+// MuPDF 1.28.6 embeds the same source pixels with a generated D50/2.2 Gray ICC profile. ~keep
+const ICC_RASTER_PROSE: &[u8] = include_bytes!("fixtures/ocr/raster_prose_icc_stubs_2313.pdf");
 const HEADER: &str = "Minutes of the municipal library planning committee and public consultation working group";
 const PROSE: [&str; 5] = [
     "The committee met on Tuesday to review the plans for the library.",
@@ -80,6 +82,60 @@ async fn page_raster_prose_recovers_between_visible_native_stubs() {
     let disabled = read(RASTER_PROSE, false, Some(false)).await;
     assert_eq!(disabled.content.trim(), format!("{HEADER}\n\nPage 7"));
     assert!(!disabled.metadata.ocr_used);
+}
+
+#[tokio::test]
+async fn mupdf_icc_gray_raster_recovers_the_same_prose_and_native_stubs() {
+    use sha2::{Digest, Sha256};
+    use xberg_native_pdf::rendering::{RenderOptions, render_page};
+
+    assert_eq!(
+        hex::encode(Sha256::digest(ICC_RASTER_PROSE)),
+        "5e72cb0a4a963583468c87a60a8b99f1865d7a7bfc67aafbe961bdc52b5dff3f"
+    );
+    let render = |pdf: &[u8]| {
+        let document = xberg_native_pdf::PdfDocument::from_bytes(pdf.to_vec()).unwrap();
+        render_page(&document, 0, &RenderOptions::with_dpi(150)).unwrap()
+    };
+    let plain = render(RASTER_PROSE);
+    let icc = render(ICC_RASTER_PROSE);
+    assert_eq!((icc.width, icc.height), (1275, 1650));
+    assert_eq!((icc.width, icc.height), (plain.width, plain.height));
+    assert!(
+        icc.data == plain.data,
+        "ICC and DeviceGray must paint the same Native raster"
+    );
+
+    let expected: Vec<_> = std::iter::once(HEADER)
+        .chain(PROSE)
+        .chain(std::iter::once("Page 7"))
+        .flat_map(str::split_whitespace)
+        .collect();
+    let forced = read(ICC_RASTER_PROSE, true, None).await;
+    assert_eq!(forced.content.split_whitespace().collect::<Vec<_>>(), expected);
+    let automatic = read(ICC_RASTER_PROSE, false, None).await;
+    assert_eq!(automatic.content.split_whitespace().collect::<Vec<_>>(), expected);
+    assert_eq!(automatic.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+}
+
+#[tokio::test]
+async fn icc_gray_with_an_explicit_range_does_not_claim_raster_prose() {
+    let mut pdf = lopdf::Document::load_mem(ICC_RASTER_PROSE).unwrap();
+    let profile = pdf.get_object_mut((5, 0)).unwrap().as_stream_mut().unwrap();
+    assert_eq!(profile.dict.get(b"N").and_then(lopdf::Object::as_i64).unwrap(), 1);
+    profile
+        .dict
+        .set("Range", vec![lopdf::Object::from(0), lopdf::Object::from(1)]);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+
+    let automatic = read(&bytes, false, None).await;
+    assert_eq!(automatic.content.trim(), format!("{HEADER}\n\nPage 7"));
+    assert_eq!(
+        automatic.extraction_method,
+        Some(xberg::types::ExtractionMethod::Native)
+    );
+    assert!(!automatic.metadata.ocr_used);
 }
 
 #[tokio::test]

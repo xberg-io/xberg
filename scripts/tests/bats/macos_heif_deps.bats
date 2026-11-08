@@ -235,3 +235,83 @@ setup() {
 	xberg_assert_status 1
 	xberg_assert_output_contains 'missing upstream codec notice x265_4.3-COPYING'
 }
+
+@test "macos_heif static profile requires arm64 at the 15.0 floor and an explicit prefix" {
+	run env XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "php-static requires arm64 and MACOSX_DEPLOYMENT_TARGET=15.0"
+	xberg_stub uname 'printf "arm64\n"'
+	run env -u XBERG_HEIF_PREFIX XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "php-static requires an explicit XBERG_HEIF_PREFIX"
+	xberg_assert_trace_empty
+}
+
+@test "macos_heif static profile builds decode-only archives without x265 and stages three notices" {
+	xberg_stub uname 'printf "arm64\n"'
+	xberg_stub otool 'if [ "$1" = -arch ]; then printf "Load command 0\n cmd LC_BUILD_VERSION\n platform 1\n minos %s\n" "${XBERG_TEST_MINOS:-15.0}"; fi'
+	xberg_stub curl 'printf "%s\n" "${!#}" >>"$XBERG_TRACE"'
+	export XBERG_TEST_REAL_SHASUM="$(command -v shasum)"
+	xberg_stub shasum '[ "$*" = "-a 256 -c -" ] && exit 0' 'exec "$XBERG_TEST_REAL_SHASUM" "$@"'
+	xberg_stub tar '
+		case "$2" in
+			*/libde265.tar.gz) dir=libde265-1.1.3; names="COPYING AUTHORS libde265/COPYING";;
+			*/libaom.tar.gz) dir=libaom-3.15.2; names="LICENSE PATENTS AUTHORS third_party/fastfeat/LICENSE third_party/libyuv/LICENSE third_party/vector/LICENSE";;
+			*/libheif.tar.gz) dir=libheif-1.23.7; names="COPYING";;
+			*) exit 93;;
+		esac
+		mkdir -p "$4/$dir"
+		for name in $names; do
+			mkdir -p "$(dirname "$4/$dir/$name")"
+			printf "%s/%s\n" "$dir" "$name" >"$4/$dir/$name"
+		done'
+	xberg_stub cmake '
+		printf "cmake %s\n" "$*" >>"$XBERG_TRACE"
+		[ "$1" = --install ] || exit 0
+		case "$2" in
+			*/libde265-build) name=libde265; lib=libde265; version=1.1.3;;
+			*/libaom-build) name=aom; lib=libaom; version=3.15.2;;
+			*/libheif-build) name=libheif; lib=libheif; version=1.23.7;;
+			*) exit 94;;
+		esac
+		mkdir -p "$XBERG_HEIF_PREFIX/lib/pkgconfig"
+		touch "$XBERG_HEIF_PREFIX/lib/$lib.a"
+		[ -z "${XBERG_TEST_DYLIB:-}" ] || touch "$XBERG_HEIF_PREFIX/lib/$lib.dylib"
+		printf "Version: %s\n" "$version" >"$XBERG_HEIF_PREFIX/lib/pkgconfig/$name.pc"'
+	export XBERG_HEIF_PREFIX="$XBERG_WORK/static-prefix"
+	run env XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
+	xberg_assert_status 0
+	grep -q -- '-DBUILD_SHARED_LIBS=OFF' "$XBERG_TRACE"
+	! grep -q -- '-DBUILD_SHARED_LIBS=ON' "$XBERG_TRACE"
+	grep -q -- '-DWITH_AOM_ENCODER=OFF -DWITH_X265=OFF' "$XBERG_TRACE"
+	grep -q -- '-DCONFIG_AV1_ENCODER=0' "$XBERG_TRACE"
+	grep -q -- '-DENABLE_PLUGIN_LOADING=OFF' "$XBERG_TRACE"
+	[ "$(grep -c -i x265 "$XBERG_TRACE")" = 1 ]
+	local inventory="$XBERG_HEIF_PREFIX/share/xberg-heif-notices"
+	[ "$(wc -l <"$inventory/sources.tsv" | tr -d ' ')" = 3 ]
+	! grep -q x265 "$inventory/sources.tsv"
+	[ "$(find "$inventory" -type f | wc -l | tr -d ' ')" = 13 ]
+	cmp "$inventory/GPL-3.0.txt" "$REPO_ROOT/scripts/ci/notices/GPL-3.0.txt"
+	grep -q '^[0-9a-f]\{64\}  GPL-3.0.txt$' "$inventory/notices.sha256"
+	(cd "$inventory" && shasum -a 256 -c notices.sha256)
+
+	run env XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'already present'
+
+	printf 'altered\n' >"$inventory/GPL-3.0.txt"
+	run env XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or altered GPL-3.0.txt'
+	cp "$REPO_ROOT/scripts/ci/notices/GPL-3.0.txt" "$inventory/GPL-3.0.txt"
+
+	rm -rf "$XBERG_HEIF_PREFIX"
+	run env XBERG_HEIF_PROFILE=php-static XBERG_TEST_MINOS=26.0 "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "objects declare macOS '26.0', expected only 15.0"
+
+	rm -rf "$XBERG_HEIF_PREFIX"
+	run env XBERG_HEIF_PROFILE=php-static XBERG_TEST_DYLIB=1 "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains "static prefix contains"
+}
