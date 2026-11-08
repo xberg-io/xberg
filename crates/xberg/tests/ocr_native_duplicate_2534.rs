@@ -16,6 +16,7 @@ const BOOK: &str = "pdf/assembly_language_for_beginners_al4_b_en.pdf";
 const LISTING_PAGE: u32 = 591;
 const SDM: &str = "pdf/intel_64_and_ia_32_architectures_software_developer_s_manual_combined_volumes_1_4_june_2021_325462_sdm_vol_1_2abcd_3abcd.pdf";
 const DESCRIPTOR_TABLE_PAGE: u32 = 815;
+const ESCAPED_CELL_TABLE_PAGE: u32 = 4311;
 const ENGLISH_MODEL_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
 
 fn three_pages_around(book: &str, page: u32) -> Vec<u8> {
@@ -160,6 +161,37 @@ async fn automatic_ocr_returns_a_table_page_once_when_native_text_holds_every_wo
     assert!(
         words(&native[1]) > 500,
         "the descriptor table page holds its native words"
+    );
+    assert_eq!(
+        words(&automatic[1]),
+        words(&native[1]),
+        "the OCR table of words the native text already holds is not appended"
+    );
+    assert_eq!(automatic[1], native[1]);
+}
+
+#[tokio::test]
+async fn automatic_ocr_returns_a_table_page_once_when_a_cell_starts_with_a_pipe() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(SDM, ESCAPED_CELL_TABLE_PAGE);
+    let (native, _) = pages_of(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    let words = |page: &str| page.split_whitespace().count();
+    assert!(
+        words(&native[1]) > 250,
+        "the register table page holds its native words"
     );
     assert_eq!(
         words(&automatic[1]),

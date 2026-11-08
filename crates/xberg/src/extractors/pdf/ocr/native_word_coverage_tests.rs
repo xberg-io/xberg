@@ -54,6 +54,17 @@ fn should_compare_a_table_read_to_its_words_without_the_table_markup() {
 }
 
 #[test]
+fn should_undo_the_pipe_escape_of_a_table_cell_when_comparing_a_read() {
+    let content = "| Name | Value |\n| --- | --- |\n| \\|A32_X2APIC_PPR | 0 |";
+    let words = ["Name", "Value", "|A32_X2APIC_PPR", "0"];
+    assert!(content_holds_exactly_the_read_words(content, words.iter().copied()));
+    assert!(
+        !content_holds_exactly_the_read_words(content, ["Name", "Value", "A32_X2APIC_PPR", "0"].iter().copied()),
+        "the leading bar is part of the read word"
+    );
+}
+
+#[test]
 fn should_reject_a_table_read_whose_words_differ_from_the_iterator_words() {
     let content = "| Value | Type |\n| --- | --- |";
     assert!(content_holds_exactly_the_read_words(
