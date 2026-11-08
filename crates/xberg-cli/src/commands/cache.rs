@@ -503,6 +503,25 @@ fn warm_formula_recognition(
     Ok(())
 }
 
+#[cfg(feature = "layout-detection")]
+fn parse_layout_model(layout_model: Option<&str>) -> Result<xberg::LayoutDetectionModel> {
+    match layout_model {
+        Some(name) => name
+            .parse()
+            .map_err(|error: String| anyhow::anyhow!("Invalid --layout-model: {error}")),
+        None => Ok(xberg::LayoutDetectionModel::default()),
+    }
+}
+
+/// Whether the selected layout model has weights beyond the always-warmed RT-DETR and TATR.
+///
+/// This is independent of `--all-table-models`: that flag only fetches the full set when RT-DETR
+/// and TATR are not yet cached, so it cannot be relied on to include the selected model.
+#[cfg(feature = "layout-detection")]
+fn selected_model_needs_download(selected: xberg::LayoutDetectionModel) -> bool {
+    selected == xberg::LayoutDetectionModel::PpDocLayoutV3
+}
+
 /// Download (or confirm already cached) the layout-detection model set.
 #[cfg(feature = "layout-detection")]
 fn warm_layout_detection(
@@ -514,12 +533,7 @@ fn warm_layout_detection(
 ) -> Result<()> {
     let layout_dir = cache_base.join("layout");
     let manager = xberg::layout::LayoutModelManager::new(Some(layout_dir));
-    let selected: xberg::LayoutDetectionModel = match layout_model {
-        Some(name) => name
-            .parse()
-            .map_err(|error: String| anyhow::anyhow!("Invalid --layout-model: {error}"))?,
-        None => xberg::LayoutDetectionModel::default(),
-    };
+    let selected = parse_layout_model(layout_model)?;
 
     if all_table_models {
         let was_cached = manager.is_rtdetr_cached() && manager.is_tatr_cached();
@@ -542,7 +556,7 @@ fn warm_layout_detection(
             downloaded.push("layout (rtdetr, tatr)".to_string());
         }
     }
-    if selected == xberg::LayoutDetectionModel::PpDocLayoutV3 && !all_table_models {
+    if selected_model_needs_download(selected) {
         if manager.is_pp_doclayout_v3_cached() {
             already_cached.push("layout (pp_doc_layout_v3)".to_string());
         } else {
@@ -862,5 +876,29 @@ mod classic_ocr_seed_tests {
             parse_nonempty_cache_dir("/opt/xberg/ocr").unwrap(),
             PathBuf::from("/opt/xberg/ocr")
         );
+    }
+}
+
+#[cfg(all(test, feature = "layout-detection"))]
+mod layout_warm_tests {
+    use super::*;
+
+    #[test]
+    fn only_pp_doclayout_v3_needs_an_extra_download() {
+        assert!(selected_model_needs_download(
+            xberg::LayoutDetectionModel::PpDocLayoutV3
+        ));
+        assert!(!selected_model_needs_download(xberg::LayoutDetectionModel::RtDetr));
+    }
+
+    #[test]
+    fn layout_model_flag_defaults_to_rtdetr_and_rejects_unknown_names() {
+        assert_eq!(parse_layout_model(None).unwrap(), xberg::LayoutDetectionModel::RtDetr);
+        assert_eq!(
+            parse_layout_model(Some("pp_doc_layout_v3")).unwrap(),
+            xberg::LayoutDetectionModel::PpDocLayoutV3
+        );
+        let error = parse_layout_model(Some("yolo")).unwrap_err();
+        assert!(error.to_string().contains("Invalid --layout-model"));
     }
 }

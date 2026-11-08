@@ -204,11 +204,53 @@ fn should_run_the_pinned_official_model_with_the_adapter_output_contract() {
     let detections = model.detect_with_threshold(&image, 0.5).expect("official V3 inference");
     let forward = take_forward(&captures);
     validate_outputs(&forward.outputs);
-    for (name, tensor) in forward.inputs.iter().chain(forward.outputs.iter()) {
-        let (dtype, shape, _) = tensor_bytes(tensor);
-        eprintln!("V3 tensor {name}: {dtype} {shape:?}");
-    }
-    eprintln!("V3 processed detections: {}", detections.len());
+    let described = |tensors: &[(String, InferenceTensor)]| -> Vec<(String, &'static str, Vec<usize>)> {
+        let mut rows: Vec<_> = tensors
+            .iter()
+            .map(|(name, tensor)| {
+                let (dtype, shape, _) = tensor_bytes(tensor);
+                (name.clone(), dtype, shape)
+            })
+            .collect();
+        rows.sort();
+        rows
+    };
+    let row = |name: &str, dtype: &'static str, shape: &[usize]| (name.to_string(), dtype, shape.to_vec());
+    assert_eq!(
+        described(&forward.inputs),
+        [
+            row("im_shape", "<f4", &[1, 2]),
+            row("image", "<f4", &[1, 3, 800, 800]),
+            row("scale_factor", "<f4", &[1, 2]),
+        ]
+    );
+    let outputs = described(&forward.outputs);
+    let raw_rows = outputs[0].2[0];
+    assert_eq!(
+        outputs,
+        [
+            row("fetch_name_0", "<f4", &[raw_rows, 7]),
+            row("fetch_name_1", "<i4", &[1]),
+            row("fetch_name_2", "<i4", &[raw_rows, 200, 200]),
+        ]
+    );
+    let InferenceTensor::F32(boxes) = &forward
+        .outputs
+        .iter()
+        .find(|(name, _)| name == "fetch_name_0")
+        .expect("fetch_name_0")
+        .1
+    else {
+        unreachable!("validate_outputs checked the dtype")
+    };
+    assert!(
+        boxes
+            .rows()
+            .into_iter()
+            .take(raw_rows)
+            .all(|row| row[0] >= 0.0 && row[0] < 25.0 && row[0].fract() == 0.0),
+        "every raw class id must be an integer in 0..25"
+    );
     assert!(!detections.is_empty());
 }
 
