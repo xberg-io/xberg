@@ -1,4 +1,9 @@
-#![cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+#![cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng"
+))]
 
 //! Prose inside a raster picture that covers part of a page, beside a heading-sized text layer
 //! (#2327). Fixtures come from `fixtures/pdf_picture_prose_auto_2327/g2327.py`.
@@ -22,7 +27,7 @@ const LONG: &[&str] = &[
     "Page",
     "7",
 ];
-const PROSE_ONE: &[&str] = &["committee", "schedule", "budget", "architect"];
+const PROSE_ONE: &[&str] = &["schedule", "budget", "architect", "council"];
 
 fn config(ocr: bool) -> ExtractionConfig {
     ExtractionConfig {
@@ -86,14 +91,14 @@ async fn bottom_half_picture_with_long_heading_is_read() {
 async fn side_column_picture_with_long_heading_is_read() {
     let document = extract(fixture!("side_long"), true).await;
     assert_has(&document, LONG, "heading");
-    assert_has(&document, &["committee", "library", "architect", "council"], "prose");
+    assert_has(&document, &["budget", "architect", "council", "staff"], "prose");
 }
 
 #[tokio::test]
 async fn two_pictures_with_short_heading_are_both_read() {
     let document = extract(fixture!("two_short"), true).await;
     assert_has(&document, SHORT, "heading");
-    assert_has(&document, &["committee", "budget", "architect", "council"], "prose");
+    assert_has(&document, &["schedule", "budget", "architect", "council"], "prose");
 }
 
 #[tokio::test]
@@ -122,9 +127,17 @@ async fn without_an_ocr_block_the_native_text_is_kept_and_the_picture_is_not_rea
         ("long", fixture!("half_long"), LONG),
     ] {
         let document = extract(pdf, false).await;
-        assert_has(&document, heading, name);
-        let found = words(&document);
-        assert!(!found.contains("architect"), "{name}: {:?}", document.content);
+        let expected: BTreeSet<String> = heading.iter().map(|word| word.to_string()).collect();
+        assert_eq!(words(&document), expected, "{name}: {:?}", document.content);
         assert_eq!(document.extraction_method, Some(xberg::types::ExtractionMethod::Native));
+    }
+}
+
+#[test]
+fn prose_words_asserted_are_not_in_any_native_heading() {
+    for heading in [SHORT, LONG] {
+        for word in PROSE_ONE.iter().chain(&["staff"]) {
+            assert!(!heading.contains(word), "{word} is a native heading word");
+        }
     }
 }
