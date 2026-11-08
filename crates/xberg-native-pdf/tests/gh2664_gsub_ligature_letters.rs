@@ -400,16 +400,48 @@ fn extract(fixture: &Fixture) -> String {
     doc.extract_text(0).expect("extract page 0")
 }
 
-#[test]
-fn the_fixture_font_paints_its_glyphs() {
-    // A fixture whose font program does not parse would decode nothing and prove nothing. ~keep
-    let doc = PdfDocument::from_bytes(fixture_pdf(&Fixture::standard())).expect("parse fixture");
+/// The page rendered as gray pixels.
+fn raster(fixture: &Fixture) -> Vec<u8> {
+    let doc = PdfDocument::from_bytes(fixture_pdf(fixture)).expect("parse fixture");
     let image = PageRenderer::new(RenderOptions::default())
         .render_page(&doc, 0)
         .expect("render page");
-    let luma = image::load_from_memory(&image.data).expect("decode render").to_luma8();
-    let inked = luma.pixels().filter(|pixel| pixel.0[0] < 250).count();
-    assert!(inked > 0, "the fixture font painted nothing");
+    image::load_from_memory(&image.data)
+        .expect("decode render")
+        .to_luma8()
+        .into_raw()
+}
+
+fn inked(raster: &[u8]) -> usize {
+    raster.iter().filter(|&&pixel| pixel < 250).count()
+}
+
+#[test]
+fn the_fixture_font_paints_its_glyphs() {
+    // A fixture whose font program does not parse would decode nothing and prove nothing. ~keep
+    assert!(
+        inked(&raster(&Fixture::standard())) > 0,
+        "the fixture font painted nothing"
+    );
+}
+
+#[test]
+fn the_ligature_run_is_painted_as_the_cid_route_paints_it() {
+    // Without a cmap table the renderer paints the run by CID, each glyph at its own code's advance. A run
+    // whose ligature code now decodes to letters must take the same route: the shaping route would paint the
+    // letters' glyphs at the letters' advances and move every glyph after the ligature (#2676). ~keep
+    let reference = raster(&Fixture {
+        unicode_cmap: false,
+        ..Fixture::standard()
+    });
+    assert!(inked(&reference) > 0, "the CID-direct reference painted nothing");
+    let actual = raster(&Fixture::standard());
+    assert!(
+        actual == reference,
+        "the run with the ligature code is not painted as the CID route paints it ({} inked pixels against {})",
+        inked(&actual),
+        inked(&reference)
+    );
 }
 
 #[test]
