@@ -417,6 +417,8 @@ pub struct WarmOptions {
     pub embedding_model: Option<String>,
     #[cfg(feature = "layout-detection")]
     pub all_table_models: bool,
+    #[cfg(feature = "layout-detection")]
+    pub layout_model: Option<String>,
     #[cfg(feature = "tree-sitter")]
     pub all_grammars: bool,
     #[cfg(feature = "tree-sitter")]
@@ -506,11 +508,18 @@ fn warm_formula_recognition(
 fn warm_layout_detection(
     cache_base: &Path,
     all_table_models: bool,
+    layout_model: Option<&str>,
     downloaded: &mut Vec<String>,
     already_cached: &mut Vec<String>,
 ) -> Result<()> {
     let layout_dir = cache_base.join("layout");
     let manager = xberg::layout::LayoutModelManager::new(Some(layout_dir));
+    let selected: xberg::LayoutDetectionModel = match layout_model {
+        Some(name) => name
+            .parse()
+            .map_err(|error: String| anyhow::anyhow!("Invalid --layout-model: {error}"))?,
+        None => xberg::LayoutDetectionModel::default(),
+    };
 
     if all_table_models {
         let was_cached = manager.is_rtdetr_cached() && manager.is_tatr_cached();
@@ -531,6 +540,16 @@ fn warm_layout_detection(
                 .ensure_default_models()
                 .context("Failed to download layout models")?;
             downloaded.push("layout (rtdetr, tatr)".to_string());
+        }
+    }
+    if selected == xberg::LayoutDetectionModel::PpDocLayoutV3 && !all_table_models {
+        if manager.is_pp_doclayout_v3_cached() {
+            already_cached.push("layout (pp_doc_layout_v3)".to_string());
+        } else {
+            manager
+                .ensure_pp_doclayout_v3_model()
+                .context("Failed to download the PP-DocLayout-V3 model")?;
+            downloaded.push("layout (pp_doc_layout_v3)".to_string());
         }
     }
     Ok(())
@@ -770,6 +789,7 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
     warm_layout_detection(
         &cache_base,
         options.all_table_models,
+        options.layout_model.as_deref(),
         &mut downloaded,
         &mut already_cached,
     )?;

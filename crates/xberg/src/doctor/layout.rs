@@ -210,7 +210,7 @@ fn probe_configured_model(
     layout: &crate::core::config::LayoutDetectionConfig,
     model_path: &std::path::Path,
 ) -> DoctorCheck {
-    match run_inference(&variant, layout, model_path, layout.acceleration.clone()) {
+    match run_inference(&variant, layout, model_path, runtime_acceleration(layout)) {
         Ok(detections) => DoctorCheck::pass(
             name,
             format!("inference ok ({detections} detections on synthetic page)"),
@@ -266,6 +266,16 @@ fn run_inference(
     };
     let mut engine = LayoutEngine::from_config(engine_config)?;
     Ok(engine.detect(&synthetic_page())?.detections.len())
+}
+
+/// The acceleration the PDF layout runner starts with: on macOS an unset or `Auto` provider
+/// starts on CPU for every layout model, unless the execution provider is overridden by env.
+fn runtime_acceleration(layout: &crate::core::config::LayoutDetectionConfig) -> Option<AccelerationConfig> {
+    #[cfg(feature = "layout-detection")]
+    if crate::ort_discovery::execution_provider_override().is_none() {
+        return crate::layout::models::rtdetr::effective_acceleration(layout.acceleration.as_ref());
+    }
+    layout.acceleration.clone()
 }
 
 fn runtime_retries_on_cpu(layout: &crate::core::config::LayoutDetectionConfig) -> bool {

@@ -154,6 +154,12 @@ impl LayoutEngine {
         self.config == *config && self.thread_budget == thread_budget.max(1)
     }
 
+    /// Display name of the loaded detection model, for diagnostics and tests.
+    #[must_use]
+    pub fn model_name(&self) -> &str {
+        self.model.name()
+    }
+
     /// Create a layout engine from a full config.
     ///
     /// `ModelBackend::RtDetr` and `CustomModelVariant::RtDetr` work on either engine

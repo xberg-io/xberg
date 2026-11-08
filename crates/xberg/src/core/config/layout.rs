@@ -303,6 +303,24 @@ impl Default for LayoutDetectionConfig {
     }
 }
 
+impl LayoutDetectionConfig {
+    /// Reject a model selection this build cannot run.
+    ///
+    /// PP-DocLayout-V3 needs the ORT-backed `layout-detection` feature; without it the
+    /// layout runner is compiled out, so accepting the selection would silently skip layout.
+    #[cfg(feature = "layout-types")]
+    pub(crate) fn validate_backend(&self) -> Result<(), crate::XbergError> {
+        #[cfg(not(feature = "layout-detection"))]
+        if self.model == LayoutDetectionModel::PpDocLayoutV3 {
+            return Err(crate::XbergError::validation(
+                "layout.model = pp_doc_layout_v3 requires the ORT-backed `layout-detection` feature; \
+                 this build only has the pure-Rust tract engine (RT-DETR only)",
+            ));
+        }
+        Ok(())
+    }
+}
+
 fn default_true() -> bool {
     true
 }

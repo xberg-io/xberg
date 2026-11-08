@@ -183,6 +183,35 @@ fn should_capture_two_production_v3_forwards() {
     .expect("capture manifest");
 }
 
+#[test]
+#[ignore = "downloads the pinned PP-DocLayout-V3 ONNX and runs one real forward on a corpus page (ORT)"]
+fn should_run_the_pinned_official_model_with_the_adapter_output_contract() {
+    let model_path = crate::layout::LayoutModelManager::new(None)
+        .ensure_pp_doclayout_v3_model()
+        .expect("pinned V3 artifact must download and verify");
+    assert_artifact_hash(&model_path, MODEL_SHA256, "pinned ONNX identity");
+    let page = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/images/doclaynet_page_01.jpg");
+    let image_bytes = fs::read(&page).expect("corpus page must be present for this ignored test");
+    let image =
+        decode_standard_rgb8_with_security_limits(&image_bytes, &SecurityLimits::default()).expect("valid corpus page");
+    let model = PpDocLayoutV3Model::from_file_with_thread_budget(model_path.to_str().expect("UTF-8 path"), None, 1)
+        .expect("official V3 session");
+    let (session, captures) = record_session(model.session);
+    let mut model = PpDocLayoutV3Model {
+        session,
+        input_names: model.input_names,
+    };
+    let detections = model.detect_with_threshold(&image, 0.5).expect("official V3 inference");
+    let forward = take_forward(&captures);
+    validate_outputs(&forward.outputs);
+    for (name, tensor) in forward.inputs.iter().chain(forward.outputs.iter()) {
+        let (dtype, shape, _) = tensor_bytes(tensor);
+        eprintln!("V3 tensor {name}: {dtype} {shape:?}");
+    }
+    eprintln!("V3 processed detections: {}", detections.len());
+    assert!(!detections.is_empty());
+}
+
 fn validate_inputs(inputs: &[Value]) {
     assert_eq!(
         inputs.len(),

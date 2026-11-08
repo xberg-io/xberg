@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **(layout): Add an experimental `model` selector for layout detection.** (#2284)
-  `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
+  `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
 
 - **(ci): Add a PP-DocLayoutV3 cross-runtime comparison helper, not yet wired into the replay runner.** (#2284)
   `scripts/ci/v3_cross_runtime.py` is a test utility; it ships in no product and no runner calls it yet. It accepts a reading-order rank difference only inside a run of exactly equal sort keys and a mask-bit flip only when both gathered logits are within 1e-4 of zero, an epsilon fitted on two development pages that held-out pages must re-check.
@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(layout): Pin PP-DocLayoutV3 to PaddlePaddle's official ONNX.** (#2284)
+  The `pp_doclayout_v3` artifact now comes from `xberg-io/layout-models` revision `a0c2d342` (130,502,049 bytes, sha256 `45bf7175...`), the official PaddlePaddle export re-hosted with attribution. Its outputs keep the adapter's contract (`fetch_name_0` F32[N,7], `fetch_name_1` I32[1], `fetch_name_2` I32[N,200,200]). Any V3 capture set recorded against the previous artifact is bound to a hash the code no longer pins and must be re-recorded.
 
 - **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
   The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.

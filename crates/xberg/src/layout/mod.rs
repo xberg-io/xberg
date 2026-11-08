@@ -397,13 +397,15 @@ pub(crate) fn take_or_create_engine(
     let desired_config = config_from_extraction(layout_config);
     let create_config = desired_config.clone();
     let thread_budget = thread_budget.max(1);
-    CACHED_ENGINE.take_or_create_matching(
+    let engine = CACHED_ENGINE.take_or_create_matching(
         |engine| engine.matches_config(&desired_config, thread_budget),
         || {
             crate::ort_discovery::ensure_ort_available();
             LayoutEngine::from_config_with_thread_budget(create_config, thread_budget)
         },
-    )
+    )?;
+    tracing::debug!(layout_model = engine.model_name(), "layout engine acquired");
+    Ok(engine)
 }
 
 /// Return a layout engine to the global cache for reuse by future extractions.

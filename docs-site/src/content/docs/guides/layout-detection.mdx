@@ -239,9 +239,9 @@ Set `LayoutDetectionConfig.model` to select the layout detector:
 
 PP-DocLayout-V3 is experimental and its quality relative to RT-DETR has not been qualified. Its limits:
 
-- ONNX Runtime only. On builds without the `layout-detection` feature (`tract`-only, WASM), selecting it returns a validation error; it never falls back to RT-DETR.
+- ONNX Runtime only. On builds without the `layout-detection` feature (`tract`-only, WASM), `extract` and `extract_batch` return a validation error for it, including for per-input overrides; it never falls back to RT-DETR.
 - Bounding boxes and classes only. The model's masks and reading-order output are ignored.
-- A one-time download of about 131 MB on first use (`xberg doctor` reports the cached artifact under `layout.pp-doclayout-v3`).
+- A one-time download of about 131 MB on first use (`xberg doctor` reports the cached artifact under `layout.pp-doclayout-v3`). To fetch it ahead of time, run `xberg cache warm --layout-model pp_doc_layout_v3` (`--all-table-models` also includes it).
 
 ```toml title="xberg.toml"
 [layout]
