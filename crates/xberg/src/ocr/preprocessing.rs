@@ -110,7 +110,7 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     Ok(deskew_if_enabled(processed, config.deskew))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 /// Whether every pixel of packed RGB has equal channels, i.e. the raster carries only gray.
 pub(crate) fn rgb_is_gray(rgb: &[u8]) -> bool {
     rgb.as_chunks::<3>()
@@ -119,7 +119,7 @@ pub(crate) fn rgb_is_gray(rgb: &[u8]) -> bool {
         .all(|pixel| pixel[0] == pixel[1] && pixel[1] == pixel[2])
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 /// [`preprocess_pix`] for the non-binarized contrast policy on a gray `rgb` raster, without a 32-bit Pix:
 /// the plane becomes an 8-bit Pix and `rgb` is freed before background normalization and sharpening.
 /// For equal channels the colour path's per-channel normalization and sharpening are the same operation on
@@ -140,7 +140,7 @@ pub(crate) fn preprocess_gray_contrast(
     Ok(enhance_gray_contrast(gray, config.invert_colors))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn enhance_gray_contrast(gray: Pix, invert_colors: bool) -> Pix {
     let should_invert = match gray.grayscale_stats(LIGHT_PIXEL_VALUE_THRESHOLD, POLARITY_SAMPLE_STRIDE) {
         Ok((mean, light_fraction)) => should_invert_for_polarity(mean, light_fraction, invert_colors),
@@ -151,7 +151,7 @@ fn enhance_gray_contrast(gray: Pix, invert_colors: bool) -> Pix {
     })
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn enhance_gray_steps(
     gray: Pix,
     invert: bool,
