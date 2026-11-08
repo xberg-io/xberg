@@ -4130,6 +4130,65 @@ mod tests {
     }
 
     #[test]
+    fn hocr_reconcile_claims_a_symbol_dot_leader_row_only_for_a_standalone_leader_scan() {
+        let fragments = [
+            ("Inventory", 10, 10, 60, 10),
+            ("Item", 10, 40, 22, 10),
+            ("4(b)", 35, 40, 24, 10),
+            ("........", 65, 47, 29, 2),
+            ("$1,010", 101, 40, 30, 10),
+            ("3.2%", 140, 40, 26, 10),
+        ];
+        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
+        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            .to_owned();
+        for (text, left, top, width, height) in fragments {
+            hocr.push_str(r#"<p class="ocr_par"><span class="ocr_line">"#);
+            hocr.push_str(&format!(
+                r#"<span class="ocrx_word" title="bbox {left} {top} {} {}">{text}</span></span></p>"#,
+                left + width,
+                top + height,
+            ));
+            tsv.push_str(&format!(
+                "5\t1\t1\t1\t1\t1\t{left}\t{top}\t{width}\t{height}\t90\t{text}\n"
+            ));
+        }
+        hocr.push_str("</div>");
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+        let table = OcrTable {
+            cells: vec![vec!["Item 4(b)".into(), "$1,010".into(), "3.2%".into()]],
+            markdown: String::new(),
+            page_number: 1,
+            bounding_box: Some(OcrTableBoundingBox {
+                left: 10,
+                top: 40,
+                right: 170,
+                bottom: 52,
+            }),
+        };
+        let config = TesseractConfig::default();
+        let limits = SecurityLimits::default();
+        let reconcile = |allow_dot_leader| {
+            reconcile_fragmented_hocr_table_rows(
+                &hocr,
+                &document,
+                std::slice::from_ref(&table),
+                &tsv,
+                &config,
+                &limits,
+                allow_dot_leader,
+            )
+        };
+        let reconciled = reconcile(true).expect("the leader row is claimed whatever its label and value symbols");
+        assert_eq!(reconciled.elements.len(), 1);
+        assert_eq!(reconciled.elements[0].text, "Inventory");
+        assert!(
+            reconcile(false).is_none(),
+            "only a standalone leader scan may skip the dots between the cells"
+        );
+    }
+
+    #[test]
     fn dot_leader_proof_refuses_to_choose_one_of_two_identical_physical_rows() {
         let first = positioned_dot_leader_row();
         let mut second = positioned_dot_leader_row();

@@ -399,6 +399,106 @@ mod tests {
         assert!(build_leader_grid(&rows, 100, |_, _| Some(())).is_none());
     }
 
+    /// One scanned dot-leader table: a symbol header, and three rows of a two-word label, a run of
+    /// dots and three symbol values. Each cell is its own OCR line, as a sparse-text read gives.
+    struct LeaderScan {
+        tsv: String,
+        hocr: String,
+        content: String,
+        raster: Pix,
+    }
+
+    fn leader_scan(with_dots: bool) -> LeaderScan {
+        const HEADER: [(&str, u32); 4] = [("No.", 0), ("Qty", 200), ("$", 300), ("%", 400)];
+        const VALUES: [&str; 3] = ["$1,010", "3.2%", "-7"];
+        // (text, left, top, width, height, tesseract line)
+        let mut words: Vec<(String, u32, u32, u32, u32, usize)> = Vec::new();
+        for (index, (text, left)) in HEADER.into_iter().enumerate() {
+            words.push((text.to_owned(), left, 10, 40, 20, index));
+        }
+        // Dark ink on white paper: the one-bit raster reads ink as 1. The speck keeps both classes present when a
+        // scan has no dots.
+        let mut dots = vec![255u8; 500 * 170];
+        dots[500 * 170 - 1] = 0;
+        for (row, top) in [50u32, 90, 130].into_iter().enumerate() {
+            let line = 10 * (row + 1);
+            words.push(("Item".to_owned(), 0, top, 30, 20, line));
+            words.push(("4(b)".to_owned(), 35, top, 25, 20, line));
+            words.push(("........".to_owned(), 70, top + 14, 100, 4, line + 1));
+            for (column, value) in VALUES.into_iter().enumerate() {
+                words.push((
+                    value.to_owned(),
+                    200 + 100 * column as u32,
+                    top,
+                    30,
+                    20,
+                    line + 2 + column,
+                ));
+            }
+            let columns = (73..160).step_by(12).flat_map(|x| x..x + 3);
+            let ink = columns.flat_map(|x| (top + 14..top + 17).map(move |y| y as usize * 500 + x));
+            for index in ink {
+                dots[index] = if with_dots { 0 } else { 255 };
+            }
+        }
+        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
+        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            .to_owned();
+        for (text, left, top, width, height, line) in &words {
+            let (right, bottom) = (left + width, top + height);
+            hocr.push_str(r#"<p class="ocr_par"><span class="ocr_line">"#);
+            hocr.push_str(&format!(
+                r#"<span class="ocrx_word" title="bbox {left} {top} {right} {bottom}">{text}</span></span></p>"#
+            ));
+            tsv.push_str(&format!(
+                "5\t1\t1\t1\t{line}\t1\t{left}\t{top}\t{width}\t{height}\t90\t{text}\n"
+            ));
+        }
+        hocr.push_str("</div>");
+        let content = words.iter().map(|word| word.0.as_str()).collect::<Vec<_>>().join(" ");
+        let gray = Pix::from_grayscale_bytes(&dots, 500, 170).expect("grayscale canvas");
+        let raster = gray.otsu_threshold().expect("one-bit raster");
+        assert_eq!(raster.depth(), 1);
+        LeaderScan {
+            tsv,
+            hocr,
+            content,
+            raster,
+        }
+    }
+
+    fn recover_leader_scan(scan: &LeaderScan) -> Option<Vec<Vec<String>>> {
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&scan.hocr);
+        let region = OcrTableBoundingBox {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 170,
+        };
+        recover_dot_leader_rows(
+            &scan.tsv,
+            &scan.content,
+            &region,
+            &SecurityLimits::default(),
+            (&scan.hocr, &document),
+            &scan.raster,
+        )
+    }
+
+    #[test]
+    fn the_entry_reads_a_symbol_table_only_where_the_raster_shows_dots() {
+        let grid = recover_leader_scan(&leader_scan(true)).expect("dots on the raster prove every leader");
+        assert_eq!(grid.len(), 4);
+        assert_eq!(grid[0], ["No.", "Qty", "$", "%"]);
+        for row in &grid[1..] {
+            assert_eq!(row, &["Item 4(b)", "$1,010", "3.2%", "-7"]);
+        }
+        assert!(
+            recover_leader_scan(&leader_scan(false)).is_none(),
+            "a leader word with no dots under it is not a leader"
+        );
+    }
+
     #[test]
     fn leader_proof_uses_the_median_label_height_in_the_table() {
         assert_eq!(proof_heights(&[27, 27, 14, 27]), [27, 27, 27, 27]);
