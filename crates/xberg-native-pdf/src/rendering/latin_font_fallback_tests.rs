@@ -576,3 +576,56 @@ fn a_form_with_indirect_font_resources_draws_every_glyph_of_a_page_number() {
     assert_eq!(one, 1, "control: a one-digit page number draws one glyph");
     assert_eq!(three, 3, "all three digits of the page number are drawn");
 }
+
+/// A separation space whose full tint is red.
+const RED_SPOT: &str =
+    "[/Separation /Spot /DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [1 0 0] /N 1 >>]";
+
+fn filled_centre_pixel(image: &RenderedImage) -> [u8; 4] {
+    let at = ((image.height as usize / 2) * image.width as usize + image.width as usize / 2) * 4;
+    image.data[at..][..4].try_into().unwrap()
+}
+
+/// A page that fills a rectangle with the full tint of the colour space `/Spot`. The space is named by the
+/// resources of the page when `through_form` is false, and by those of a form (object 7, indirect) otherwise.
+fn spot_fill(through_form: bool) -> RenderedImage {
+    let font = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec();
+    let doc = if through_form {
+        let form = pdf_stream(
+            "/Type /XObject /Subtype /Form /BBox [0 0 60 20] /Resources 7 0 R ",
+            b"/Spot cs 1 scn 0 0 60 20 re f",
+        );
+        let resources = format!("<< /ColorSpace << /Spot {RED_SPOT} >> >>").into_bytes();
+        page_pdf_with_resources(
+            (100, 40),
+            b"q 1 0 0 1 20 10 cm /Fm0 Do Q",
+            vec![font, form, resources],
+            "/XObject << /Fm0 6 0 R >>",
+        )
+    } else {
+        page_pdf_with_resources(
+            (100, 40),
+            b"/Spot cs 1 scn 20 10 60 20 re f",
+            vec![font],
+            &format!("/ColorSpace << /Spot {RED_SPOT} >>"),
+        )
+    };
+    render_without_system_fonts(&doc)
+}
+
+/// A form whose colour spaces are an indirect object paints with them, as a page whose resources name the
+/// same space does.
+#[test]
+fn a_form_with_indirect_colour_space_resources_paints_with_them() {
+    let control = filled_centre_pixel(&spot_fill(false));
+    let through_form = filled_centre_pixel(&spot_fill(true));
+    let is_red = |pixel: [u8; 4]| pixel[0] > 200 && pixel[1] < 80 && pixel[2] < 80;
+    assert!(
+        is_red(control),
+        "control: the page's own colour space paints red, got {control:?}"
+    );
+    assert!(
+        is_red(through_form),
+        "the form's indirect colour space paints red, got {through_form:?}"
+    );
+}
