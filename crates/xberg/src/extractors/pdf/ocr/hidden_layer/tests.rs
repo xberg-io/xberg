@@ -593,6 +593,127 @@ fn naca_1135_p25_reaches_the_coverage_check_within_the_default_preview_budget() 
 }
 
 #[test]
+fn preview_work_is_budgeted_per_page_under_a_document_ceiling() {
+    use super::PreviewWorkBudget;
+
+    let spend = |budget: &mut PreviewWorkBudget, cost: usize| {
+        budget.probe_page(|page_work| {
+            *page_work = page_work.checked_sub(cost)?;
+            Some(())
+        })
+    };
+    let mut budget = PreviewWorkBudget::with_pages(100, 3);
+    assert_eq!(spend(&mut budget, 90), Some(()));
+    assert_eq!(
+        spend(&mut budget, 90),
+        Some(()),
+        "a page does not inherit the previous page's spend"
+    );
+    assert_eq!(
+        spend(&mut budget, 101),
+        None,
+        "one page never exceeds the per-page limit"
+    );
+    assert_eq!(
+        spend(&mut budget, 90),
+        Some(()),
+        "a refused page spends nothing it did not debit"
+    );
+    assert_eq!(
+        spend(&mut budget, 31),
+        None,
+        "only 30 units of the three-page ceiling remain"
+    );
+    assert_eq!(spend(&mut budget, 30), Some(()));
+    assert_eq!(
+        spend(&mut budget, 1),
+        None,
+        "the document ceiling of three per-page limits is spent"
+    );
+}
+
+#[test]
+fn a_refused_charge_debits_nothing_and_the_ceiling_is_a_multiple_of_the_page_limit() {
+    use super::{PREVIEW_FULL_BUDGET_PAGES, PREVIEW_WORK_PER_ITERATION, PreviewWorkBudget};
+
+    let mut budget = PreviewWorkBudget::with_pages(100, 2);
+    let refused: Option<()> = budget.probe_page(|page_work| {
+        *page_work = page_work.checked_sub(101)?;
+        Some(())
+    });
+    assert_eq!(refused, None);
+    assert_eq!(budget.remaining, 200, "a checked_sub refusal leaves the work untouched");
+
+    let defaults = PreviewWorkBudget::new(&crate::ExtractionConfig::default());
+    assert_eq!(defaults.per_page, 10_000_000 * PREVIEW_WORK_PER_ITERATION);
+    assert_eq!(defaults.remaining, defaults.per_page * PREVIEW_FULL_BUDGET_PAGES);
+
+    let mut unbounded = PreviewWorkBudget::with_pages(usize::MAX, PREVIEW_FULL_BUDGET_PAGES);
+    assert_eq!(
+        unbounded.remaining,
+        usize::MAX,
+        "the ceiling saturates instead of overflowing"
+    );
+    assert_eq!(unbounded.probe_page(|page_work| *page_work), usize::MAX);
+}
+
+#[test]
+fn the_ocr_security_limit_lowers_the_preview_budget() {
+    use super::{PREVIEW_WORK_PER_ITERATION, PreviewWorkBudget};
+    use crate::extractors::security::SecurityLimits;
+
+    let limited = |top: usize, ocr: Option<usize>| crate::ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_iterations: top,
+            ..Default::default()
+        }),
+        ocr: Some(crate::OcrConfig {
+            security_limits: ocr.map(|max_iterations| SecurityLimits {
+                max_iterations,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let per_page = |config: crate::ExtractionConfig| PreviewWorkBudget::new(&config).per_page;
+    assert_eq!(
+        per_page(limited(5_000, Some(1_000))),
+        1_000 * PREVIEW_WORK_PER_ITERATION
+    );
+    assert_eq!(
+        per_page(limited(5_000, Some(9_000))),
+        5_000 * PREVIEW_WORK_PER_ITERATION
+    );
+    assert_eq!(per_page(limited(5_000, None)), 5_000 * PREVIEW_WORK_PER_ITERATION);
+}
+
+#[test]
+fn the_document_ceiling_stops_the_probe_after_the_pages_it_buys() {
+    use super::PreviewWorkBudget;
+
+    let bytes = include_bytes!("../../../../../tests/fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
+    let doc = super::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
+    let page_cost = {
+        let mut work = usize::MAX / 2;
+        let start = work;
+        assert_eq!(
+            super::needs_ocr(&doc, 0, 100 * 1024 * 1024, &mut work, || false),
+            Some(false)
+        );
+        start - work
+    };
+    // Each page may draw 1.2 page costs and the ceiling is two of those, 2.4 costs: two pages
+    // fit and leave 0.4 of a cost, so the third is refused and so is the fourth.
+    let per_page = page_cost + page_cost / 5;
+    let mut budget = PreviewWorkBudget::with_pages(per_page, 2);
+    let verdicts: Vec<Option<bool>> = (0..4)
+        .map(|page| budget.probe_page(|work| super::needs_ocr(&doc, page, 100 * 1024 * 1024, work, || false)))
+        .collect();
+    assert_eq!(verdicts, [Some(false), Some(false), None, None]);
+}
+
+#[test]
 fn only_an_audited_covered_layer_that_is_not_judged_plausible_prose_is_probed() {
     use super::probes_page;
 

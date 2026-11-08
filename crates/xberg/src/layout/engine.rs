@@ -154,6 +154,12 @@ impl LayoutEngine {
         self.config == *config && self.thread_budget == thread_budget.max(1)
     }
 
+    /// Display name of the loaded detection model, for diagnostics and tests.
+    #[must_use]
+    pub fn model_name(&self) -> &str {
+        self.model.name()
+    }
+
     /// Create a layout engine from a full config.
     ///
     /// `ModelBackend::RtDetr` and `CustomModelVariant::RtDetr` work on either engine
@@ -692,6 +698,30 @@ mod cache_key_tests {
 
         assert!(error.to_string().contains("6000x6000"));
         assert!(error.to_string().contains("security_limits.max_content_size"));
+    }
+
+    #[cfg(all(
+        feature = "layout-detection",
+        any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+    ))]
+    #[test]
+    fn pooled_engine_is_reused_only_for_the_same_selected_model() {
+        use crate::core::config::layout::{LayoutDetectionConfig, LayoutDetectionModel};
+
+        let rtdetr_config = crate::layout::config_from_extraction(&LayoutDetectionConfig::default());
+        let engine = LayoutEngine {
+            model: Box::new(NeverCalledModel),
+            config: rtdetr_config.clone(),
+            thread_budget: 1,
+        };
+        let v3_config = crate::layout::config_from_extraction(&LayoutDetectionConfig {
+            model: LayoutDetectionModel::PpDocLayoutV3,
+            ..LayoutDetectionConfig::default()
+        });
+
+        assert_eq!(v3_config.backend, ModelBackend::PpDocLayoutV3);
+        assert!(engine.matches_config(&rtdetr_config, 1));
+        assert!(!engine.matches_config(&v3_config, 1));
     }
 
     #[test]
