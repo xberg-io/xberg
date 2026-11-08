@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
-  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
-  The gate is not yet wired into the release workflow because the PHP macOS build still needs a single-file codec design.
+  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`, any libheif or codec import, a deployment target above macOS 15.0, and missing or altered license notices; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
+  The release workflow now runs it on every macOS PHP archive.
 
 - **(ocr): Read a scan's embedded JPEG at the resolution its placement proves.** (#2530)
   When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Unproven placements keep the previous behavior, a read the recognition-noise check rejects keeps the original refusal, and a retry that still recovers nothing reports why each image failed beside the original error.
@@ -69,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
+  The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.
 
 - **(pdf): Reduce allocations in native text extraction.** (#2429)
   Reuse ordered spans directly when the text pass does not need character records.
@@ -206,10 +209,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
+
+- **(ocr): Compare a table read's escaped cell pipes with their iterator words (Refs #2534).**
+  The table renderer writes a `|` inside a cell as `\|`, so a cell word that starts with a bar differed from the Tesseract iterator word and the page never reached the native-ink proof. The escape is now undone before the comparison; the native-agreement share is unchanged. Intel SDM page 4311 returns its 298 native words instead of 874.
+
+- **(ocr): Keep the native page when automatic OCR reads it as a table of the same words (Refs #2534).**
+  A read that Tesseract laid out as a table is compared with its own iterator words with the table markup and ruling bars set aside, and it yields to the native text under the same unchanged 0.85 native-agreement share and glyph-ink proof as a plain read. The native page was followed by its whole OCR table (1315 words for 550 on Intel SDM page 815).
+
+- **(php,elixir): Make the macOS PHP extension and Elixir NIF load without Homebrew's libheif.** (#2547)
+  The v1.3.10 and earlier macOS releases linked `/opt/homebrew/opt/libheif/lib/libheif.1.dylib` by absolute path and did not ship it, so the whole binding failed to load on a Mac without it.
+  PIE installs one file, so the PHP extension now links libheif, libde265 and libaom (decode only, no x265 or other encoder) statically, built from pinned sources at the macOS 15.0 floor; the archive ships their upstream notices, the GPL-3.0 text and a source inventory, the release loads it in PHP and decodes HEIC and AVIF before upload, and HEIF output is unavailable there.
+  The Elixir NIF archive ships its four codec libraries as `@loader_path` siblings, staged and load-tested in the release job.
+  See `THIRD_PARTY_LICENSES.md` for the licenses and how to relink the LGPL components.
+
+- **(pdf): Join a ligature drawn as its own run to the rest of its word in Plain and Markdown output.** (#2322)
+  The rich text assembler split `di` + `ﬀ` + `erent` at the ligature whenever the kerning gap passed 0.15 em; it now applies the same wider ligature-boundary threshold as the native extractor. OCR text keeps its string-level repair of a space after a ligature. The OCR structure heuristic's character-retention gate now counts a ligature as its letters, so a page with a ligature is no longer rejected.
+
+- **(pdf): Keep an authored space after a ligature in Plain and Markdown output.** (#2322)
+  A space following a ligature glyph ("staﬀ only") was removed by a string-level repair, welding two words into "staffonly". Word boundaries after a ligature now come only from the extractor's glyph geometry.
+
 - **(ocr): Apply `max_threads` to PaddleOCR ONNX Runtime sessions.** (#2649)
   Sessions now take the installed process thread budget instead of the host default, and keep their intra-op and inter-op limits when an execution provider (including explicit CPU) is configured.
 
 - **(pdf): Recover prose behind grayscale ICC page images (#2313).** A page whose only content is a full-page 8-bit gray image with a bounded display ICC profile now takes the visible-raster OCR route, so the prose in the image is no longer dropped in favour of the near-empty native text.
+
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
@@ -236,6 +259,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
   A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
+
+- **(pdf): Keep any native page the configured OCR languages cannot read, also through a Tesseract pipeline, and warn when a scan is in such a script.** (#2536)
+  The kept-page rule now also keeps an unmarked page in Khmer, Thai, Lao, Myanmar or an Indic script when its combining signs attach to letters as the script requires, and applies when `ocr.pipeline` is set: the native layer is kept when any Tesseract stage cannot read the script, while a PaddleOCR, VLM or custom stage, or a `vlm_fallback`, means no claim and leaves the page to OCR. A scanned page in such a script is still read, and an `ocr` warning now tells the caller which model to add. Glyphs with no Unicode value stay unrecovered without the right model.
 
 - **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
   The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.

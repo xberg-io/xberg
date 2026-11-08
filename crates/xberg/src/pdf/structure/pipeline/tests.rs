@@ -42,6 +42,7 @@ fn should_preserve_repeated_margin_body_text_with_deferred_model_classification_
             include_footnotes: false,
             include_watermarks: false,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
@@ -117,6 +118,7 @@ fn native_chart_legend_yields_to_real_page_layout_hints() {
                 include_footnotes: true,
                 include_watermarks: true,
                 used_structure_tree,
+                ocr_text: false,
                 image_positions: &[],
                 images: None,
                 inject_placeholders: false,
@@ -270,6 +272,7 @@ fn table_hint_document_with(
             include_footnotes: true,
             include_watermarks: true,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
@@ -4321,6 +4324,7 @@ fn extract_heading_test_document(
             include_footnotes: true,
             include_watermarks: true,
             used_structure_tree,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
@@ -4342,6 +4346,95 @@ fn extract_heading_test_document(
         },
     )
     .expect("document structure extraction must succeed")
+}
+
+fn ligature_space_document(pages: Vec<Vec<SegmentData>>, ocr_text: bool) -> crate::types::internal::InternalDocument {
+    extract_document_structure_from_segments(
+        pages,
+        SegmentStructureConfig {
+            k_clusters: 4,
+            tables: &[],
+            outline_entries: &[],
+            strip_repeating_text: false,
+            include_headers: true,
+            include_footers: true,
+            include_footnotes: true,
+            include_watermarks: true,
+            used_structure_tree: false,
+            ocr_text,
+            image_positions: &[],
+            images: None,
+            inject_placeholders: false,
+            layout_hints: None,
+            allow_single_column: true,
+            cancel_token: None,
+            #[cfg(feature = "layout-detection")]
+            layout_images: None,
+            #[cfg(feature = "layout-detection")]
+            layout_results: None,
+            #[cfg(feature = "layout-detection")]
+            table_model: crate::core::config::layout::TableModel::Disabled,
+            #[cfg(feature = "layout-detection")]
+            table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+            #[cfg(feature = "layout-detection")]
+            acceleration: None,
+            #[cfg(feature = "layout-detection")]
+            session_thread_budget: 0,
+        },
+    )
+    .expect("document structure extraction must succeed")
+}
+
+fn ligature_space_text(text: &str, ocr_text: bool) -> String {
+    let document = ligature_space_document(vec![vec![seg(text, 72.0, 200.0)]], ocr_text);
+    document
+        .elements
+        .iter()
+        .map(|e| e.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Extracted PDF text keeps a space after a ligature: the extractor placed it from
+/// glyph geometry or the author wrote it (#2322).
+///
+/// Neutralisation that must break this test: pass `true` for `absorb_space` in
+/// `fused_text_repairs` regardless of `witnesses.ocr_text`.
+#[test]
+fn extracted_pdf_text_keeps_the_space_after_a_ligature() {
+    assert_eq!(
+        ligature_space_text("sta\u{FB00} only and \u{FB01} nal", false),
+        "staff only and fi nal"
+    );
+}
+
+/// A geometry-joined ligature stays joined: there is no space to keep or remove.
+#[test]
+fn extracted_pdf_text_with_a_tight_ligature_stays_joined() {
+    assert_eq!(
+        ligature_space_text("di\u{FB00}erent de\u{FB01}nes", false),
+        "different defines"
+    );
+}
+
+/// OCR places no glyph geometry, so a ligature emitted as its own word is rejoined.
+///
+/// Neutralisation that must break this test: ignore `ocr_text` in `fused_text_repairs`.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_segments_rejoin_a_ligature_emitted_as_its_own_word() {
+    let mut paragraph = para_with_font_size(12.0);
+    paragraph.lines = vec![line(vec![seg("the \u{FB01} eld of \u{FB02} owers", 72.0, 200.0)])];
+    let pages = crate::pdf::structure::adapters::segments_from_ocr_pages(&[vec![paragraph]]);
+    assert!(pages[0].iter().any(|segment| segment.text.contains('\u{FB01}')));
+    let document = ligature_space_document(pages, true);
+    let text = document
+        .elements
+        .iter()
+        .map(|e| e.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(text, "the field of flowers");
 }
 
 fn element_kind_for(
@@ -5515,6 +5608,7 @@ fn segments_to_paragraphs_preserves_a_witnessed_ligature_space_boundary() {
     let witnesses = TextRepairWitnesses {
         hyphens: HyphenWitnesses::default(),
         words: ["bedrijf".to_string()].into_iter().collect(),
+        ocr_text: false,
     };
 
     let paragraphs = segments_to_paragraphs(segments, &[(11.0, None)], &[], &witnesses);
@@ -5804,6 +5898,7 @@ fn should_preserve_eight_distinct_body_paragraphs_through_native_structure() {
             include_footnotes: true,
             include_watermarks: true,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
