@@ -387,7 +387,7 @@ pub use layout::model_manager::ModelManifestEntry;
 pub use cache::CacheStats;
 
 #[cfg(feature = "layout-types")]
-pub use core::config::{LayoutDetectionConfig, LayoutStrategy, TableModel};
+pub use core::config::{LayoutDetectionConfig, LayoutDetectionModel, LayoutStrategy, TableModel};
 
 #[cfg(feature = "layout-types")]
 pub use layout::types::{BBox, DetectionResult, LayoutClass, LayoutDetection};

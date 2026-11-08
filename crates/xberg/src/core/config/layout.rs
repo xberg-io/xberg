@@ -172,6 +172,47 @@ impl fmt::Display for LayoutStrategy {
     }
 }
 
+/// Which layout detection model runs on each page.
+///
+/// Wire format is snake_case in all serializers (JSON, TOML, YAML).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutDetectionModel {
+    /// RT-DETR v2 -- default, 17 classes. Runs on the ORT and pure-Rust tract engines.
+    #[default]
+    RtDetr,
+    /// PP-DocLayout-V3 -- experimental, 25 classes mapped to the canonical labels (~131MB download).
+    ///
+    /// Requires the ORT-backed `layout-detection` feature: selecting it on a tract-only
+    /// or WASM build is an error, never a silent fallback to RT-DETR. Only the
+    /// bounding boxes and classes are used; the model's masks and reading-order
+    /// output are ignored. Quality relative to RT-DETR has not been qualified.
+    PpDocLayoutV3,
+}
+
+impl std::str::FromStr for LayoutDetectionModel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "rt_detr" => Ok(Self::RtDetr),
+            "pp_doc_layout_v3" => Ok(Self::PpDocLayoutV3),
+            other => Err(format!(
+                "unknown layout model: '{other}'. Valid: rt_detr, pp_doc_layout_v3"
+            )),
+        }
+    }
+}
+
+impl fmt::Display for LayoutDetectionModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LayoutDetectionModel::RtDetr => write!(f, "rt_detr"),
+            LayoutDetectionModel::PpDocLayoutV3 => write!(f, "pp_doc_layout_v3"),
+        }
+    }
+}
+
 /// Layout detection configuration.
 ///
 /// Controls layout detection behavior in the extraction pipeline.
@@ -188,6 +229,13 @@ pub struct LayoutDetectionConfig {
     /// cannot help.
     #[serde(default)]
     pub strategy: LayoutStrategy,
+
+    /// Layout detection model.
+    ///
+    /// Defaults to [`LayoutDetectionModel::RtDetr`]. [`LayoutDetectionModel::PpDocLayoutV3`]
+    /// is experimental, ORT-only and bbox-only.
+    #[serde(default)]
+    pub model: LayoutDetectionModel,
 
     /// Confidence threshold override (None = use model default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -243,6 +291,7 @@ impl Default for LayoutDetectionConfig {
     fn default() -> Self {
         Self {
             strategy: LayoutStrategy::default(),
+            model: LayoutDetectionModel::default(),
             confidence_threshold: None,
             apply_heuristics: true,
             table_model: TableModel::default(),
@@ -251,6 +300,24 @@ impl Default for LayoutDetectionConfig {
             acceleration: None,
             enable_chart_understanding: false,
         }
+    }
+}
+
+impl LayoutDetectionConfig {
+    /// Reject a model selection this build cannot run.
+    ///
+    /// PP-DocLayout-V3 needs the ORT-backed `layout-detection` feature; without it the
+    /// layout runner is compiled out, so accepting the selection would silently skip layout.
+    #[cfg(feature = "layout-types")]
+    pub(crate) fn validate_backend(&self) -> Result<(), crate::XbergError> {
+        #[cfg(not(feature = "layout-detection"))]
+        if self.model == LayoutDetectionModel::PpDocLayoutV3 {
+            return Err(crate::XbergError::validation(
+                "layout.model = pp_doc_layout_v3 requires the ORT-backed `layout-detection` feature; \
+                 this build only has the pure-Rust tract engine (RT-DETR only)",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -269,6 +336,38 @@ mod tests {
         assert_eq!(config.table_model, TableModel::Tatr);
         assert!(config.apply_heuristics);
         assert!(config.confidence_threshold.is_none());
+    }
+
+    #[test]
+    fn layout_model_defaults_to_rtdetr_when_field_absent() {
+        assert_eq!(LayoutDetectionConfig::default().model, LayoutDetectionModel::RtDetr);
+        let config: LayoutDetectionConfig = serde_json::from_str("{}").expect("empty config must deserialize");
+        assert_eq!(config.model, LayoutDetectionModel::RtDetr);
+    }
+
+    #[test]
+    fn layout_model_roundtrips_through_json_and_toml() {
+        let config: LayoutDetectionConfig =
+            serde_json::from_str(r#"{"model":"pp_doc_layout_v3"}"#).expect("json must deserialize");
+        assert_eq!(config.model, LayoutDetectionModel::PpDocLayoutV3);
+        let json = serde_json::to_string(&config).expect("config must serialize");
+        assert!(json.contains(r#""model":"pp_doc_layout_v3""#), "{json}");
+        let back: LayoutDetectionConfig = serde_json::from_str(&json).expect("roundtrip must deserialize");
+        assert_eq!(back.model, LayoutDetectionModel::PpDocLayoutV3);
+
+        let from_toml: LayoutDetectionConfig = toml::from_str("model = \"rt_detr\"").expect("toml must deserialize");
+        assert_eq!(from_toml.model, LayoutDetectionModel::RtDetr);
+    }
+
+    #[test]
+    fn layout_model_rejects_unknown_names() {
+        assert!(serde_json::from_str::<LayoutDetectionConfig>(r#"{"model":"yolo"}"#).is_err());
+        assert!("yolo".parse::<LayoutDetectionModel>().is_err());
+        assert_eq!(
+            "pp_doc_layout_v3".parse::<LayoutDetectionModel>(),
+            Ok(LayoutDetectionModel::PpDocLayoutV3)
+        );
+        assert_eq!(LayoutDetectionModel::PpDocLayoutV3.to_string(), "pp_doc_layout_v3");
     }
 
     #[test]
