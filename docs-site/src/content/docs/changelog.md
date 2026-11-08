@@ -220,7 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(ocr): Limit the glued-cell veto's leader exemption to the gap at the leader (#2704).**
-  A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` and `‥` count as leaders.
+  A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` counts as a leader and `‥` counts toward one.
 
 - **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
   The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that joins read words a cell apart now keeps the OCR read.
