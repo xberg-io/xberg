@@ -134,3 +134,51 @@ fn caller_selected_policy_keeps_its_requested_densityless_jpeg_upscale() {
         .to_string();
     assert!(error.contains("native image workspace"), "{error}");
 }
+
+/// A real colour page: the receipt is not gray, so it is charged the colour contrast peak (about 17 bytes
+/// per pixel) and an engine-selected upscale to 300 DPI cannot fit the default workspace. It shrinks to the
+/// largest size that does, instead of failing the retry as a caller-selected policy does. ~keep
+#[test]
+fn a_real_colour_receipt_shrinks_its_engine_selected_upscale_to_the_default_workspace() {
+    let Some(receipt) = crate::utils::read_test_fixture("images/cord_receipt_02.jpg") else {
+        return;
+    };
+    let policy = crate::types::ImagePreprocessingConfig {
+        deskew: false,
+        contrast_enhance: true,
+        binarization_method: "none".into(),
+        ..Default::default()
+    };
+    let prepare = |allow| {
+        super::encoded_image::prepare_with_dpi_policy(
+            &receipt,
+            &SecurityLimits::default(),
+            &TesseractConfig {
+                preprocessing: Some(policy.clone()),
+                ..Default::default()
+            },
+            None,
+            false,
+            allow,
+        )
+    };
+    let prepared = prepare(true).expect("the engine-selected upscale shrinks to fit");
+    let requested = (3067, 4089);
+    assert!(
+        prepared.width > 960 && prepared.width < requested.0,
+        "{}x{}",
+        prepared.width,
+        prepared.height
+    );
+    assert!(
+        prepared.height > 1280 && prepared.height < requested.1,
+        "{}x{}",
+        prepared.width,
+        prepared.height
+    );
+    let error = prepare(false)
+        .err()
+        .expect("a caller-selected upscale keeps its refusal")
+        .to_string();
+    assert!(error.contains("native image workspace"), "{error}");
+}

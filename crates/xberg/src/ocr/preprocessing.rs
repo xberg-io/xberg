@@ -46,11 +46,9 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     let gray = pix
         .to_grayscale()
         .map_err(preprocessing_error("convert to grayscale"))?;
-    // Non-binarized contrast enhances the gray raster. Only the unmodelled combination with
-    // normalize_shaded_rows still re-reads the color source, so release it otherwise before
-    // thresholding or sharpening allocates full-page tiles and sampling copies. ~keep
-    let contrast = !binarization_enabled && config.contrast_enhance;
-    let contrast_source = if contrast && config.normalize_shaded_rows {
+    // Only non-binarized contrast re-reads the color source. Release it before
+    // thresholding allocates full-page grayscale tiles and sampling copies. ~keep
+    let contrast_source = if !binarization_enabled && config.contrast_enhance {
         Some(pix)
     } else {
         drop(pix);
@@ -90,8 +88,6 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     } else if let Some(pix) = contrast_source {
         drop(gray);
         enhance_non_binarized(pix, should_invert)?
-    } else if contrast {
-        enhance_gray(gray, should_invert)?
     } else if should_invert {
         gray.invert().map_err(preprocessing_error("invert colors"))?
     } else {
@@ -114,6 +110,63 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
     Ok(deskew_if_enabled(processed, config.deskew))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+/// Whether every pixel of packed RGB has equal channels, i.e. the raster carries only gray.
+pub(crate) fn rgb_is_gray(rgb: &[u8]) -> bool {
+    rgb.as_chunks::<3>()
+        .0
+        .iter()
+        .all(|pixel| pixel[0] == pixel[1] && pixel[1] == pixel[2])
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// [`preprocess_pix`] for the non-binarized contrast policy on a gray `rgb` raster, without a 32-bit Pix:
+/// the plane becomes an 8-bit Pix and `rgb` is freed before background normalization and sharpening.
+/// For equal channels the colour path's per-channel normalization and sharpening are the same operation on
+/// each channel, so the result is pixel-identical. Until the 8-bit Pix exists `rgb` is untouched and an
+/// error leaves the caller its raw fallback; afterwards every step keeps the best Pix already built.
+pub(crate) fn preprocess_gray_contrast(
+    rgb: &mut Vec<u8>,
+    width: u32,
+    height: u32,
+    config: &ImagePreprocessingConfig,
+) -> Result<Pix, OcrError> {
+    crate::core::config_validation::validate_image_preprocessing_config(config)
+        .map_err(|error| OcrError::InvalidConfiguration(error.to_string()))?;
+    let plane: Vec<u8> = rgb.as_chunks::<3>().0.iter().map(|pixel| pixel[0]).collect();
+    let gray = Pix::from_grayscale_bytes(&plane, width, height).map_err(preprocessing_error("create gray raster"))?;
+    drop(plane);
+    drop(std::mem::take(rgb));
+    Ok(enhance_gray_contrast(gray, config.invert_colors))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn enhance_gray_contrast(gray: Pix, invert_colors: bool) -> Pix {
+    let should_invert = match gray.grayscale_stats(LIGHT_PIXEL_VALUE_THRESHOLD, POLARITY_SAMPLE_STRIDE) {
+        Ok((mean, light_fraction)) => should_invert_for_polarity(mean, light_fraction, invert_colors),
+        Err(_) => invert_colors,
+    };
+    enhance_gray_steps(gray, should_invert, Pix::background_normalize, |pix| {
+        pix.unsharp_mask(UNSHARP_HALF_WIDTH, UNSHARP_FRACTION)
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn enhance_gray_steps(
+    gray: Pix,
+    invert: bool,
+    normalize: impl FnOnce(&Pix) -> xberg_tesseract::Result<Pix>,
+    sharpen: impl FnOnce(&Pix) -> xberg_tesseract::Result<Pix>,
+) -> Pix {
+    let source = if invert {
+        apply_optional(gray, "invert colors", Pix::invert)
+    } else {
+        gray
+    };
+    let normalized = apply_optional(source, "normalize background", normalize);
+    apply_optional(normalized, "sharpen", sharpen)
+}
+
 fn deskew_if_enabled(pix: Pix, enabled: bool) -> Pix {
     if !enabled || pix.depth() != 1 {
         return pix;
@@ -124,25 +177,6 @@ fn deskew_if_enabled(pix: Pix, enabled: bool) -> Pix {
         geometry_evidence::record(output.as_ref().is_ok_and(|result| result.as_ptr() == source.as_ptr()));
         output
     })
-}
-
-/// Background normalization and sharpening on the 8-bit raster: Tesseract reads gray, and the
-/// 32-bit intermediates of the color path cost four times the memory for the same result.
-fn enhance_gray(gray: Pix, invert: bool) -> Result<Pix, OcrError> {
-    let source = if invert {
-        let inverted = gray.invert().map_err(preprocessing_error("invert colors"))?;
-        drop(gray);
-        inverted
-    } else {
-        gray
-    };
-    let normalized = source
-        .background_normalize()
-        .map_err(preprocessing_error("normalize background"))?;
-    drop(source);
-    normalized
-        .unsharp_mask(UNSHARP_HALF_WIDTH, UNSHARP_FRACTION)
-        .map_err(preprocessing_error("sharpen"))
 }
 
 fn enhance_non_binarized(pix: Pix, invert: bool) -> Result<Pix, OcrError> {
@@ -719,5 +753,80 @@ pub(crate) mod geometry_evidence {
                 assert!(GeometryEvidence::requested().is_none());
             }
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod gray_route_tests {
+    use super::*;
+
+    fn contrast_config(invert_colors: bool) -> ImagePreprocessingConfig {
+        ImagePreprocessingConfig {
+            binarization_method: "none".to_owned(),
+            contrast_enhance: true,
+            deskew: false,
+            denoise: false,
+            normalize_shaded_rows: false,
+            invert_colors,
+            ..Default::default()
+        }
+    }
+
+    /// Gray text-like strokes over a gradient, 160x120.
+    fn gray_page(dark_background: bool) -> Vec<u8> {
+        let mut rgb = Vec::new();
+        for y in 0..120u32 {
+            for x in 0..160u32 {
+                let ink = (x / 6 + y / 5) % 4 == 0 && (x % 6) < 3;
+                let base = 150 + (x / 4) as u8;
+                let value = if ink { 40 + (y % 7) as u8 } else { base };
+                let value = if dark_background { 255 - value } else { value };
+                rgb.extend([value; 3]);
+            }
+        }
+        rgb
+    }
+
+    #[test]
+    fn gray_route_is_pixel_identical_to_the_colour_path_for_gray_input() {
+        for (dark, invert) in [(false, false), (true, false), (false, true)] {
+            let rgb = gray_page(dark);
+            assert!(rgb_is_gray(&rgb));
+            let config = contrast_config(invert);
+            let coloured = preprocess_pix(Pix::from_raw_rgb(&rgb, 160, 120).unwrap(), &config).expect("colour path");
+            let mut owned = rgb.clone();
+            let gray = preprocess_gray_contrast(&mut owned, 160, 120, &config).expect("gray route");
+            assert!(owned.is_empty(), "the RGB is freed");
+            assert_eq!(
+                gray.grayscale_bytes().unwrap(),
+                coloured.grayscale_bytes().unwrap(),
+                "dark={dark} invert={invert}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_tinted_raster_is_not_gray_and_keeps_the_colour_path() {
+        let mut rgb = gray_page(false);
+        rgb[1] = rgb[1].wrapping_add(1);
+        assert!(!rgb_is_gray(&rgb));
+    }
+
+    #[test]
+    fn a_failed_step_keeps_the_best_raster_already_built() {
+        let rgb = gray_page(false);
+        let plane: Vec<u8> = rgb.as_chunks::<3>().0.iter().map(|pixel| pixel[0]).collect();
+        let build = || Pix::from_grayscale_bytes(&plane, 160, 120).unwrap();
+        let failing = || -> xberg_tesseract::Result<Pix> { Err(xberg_tesseract::TesseractError::NullPointerError) };
+        let kept = enhance_gray_steps(build(), false, |_| failing(), |_| failing());
+        assert_eq!(
+            kept.grayscale_bytes().unwrap(),
+            plane,
+            "both steps failed: the gray Pix survives"
+        );
+        let normalized = build().background_normalize().unwrap().grayscale_bytes().unwrap();
+        let after_sharpen_failure = enhance_gray_steps(build(), false, Pix::background_normalize, |_| failing());
+        assert_eq!(after_sharpen_failure.grayscale_bytes().unwrap(), normalized);
+        assert_ne!(normalized, plane, "the fixture must exercise normalization");
     }
 }

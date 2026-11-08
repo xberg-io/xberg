@@ -18,10 +18,32 @@ pub(super) fn known_phase_peak(
     encoded_bytes: usize,
     preprocessing: Option<&ImagePreprocessingConfig>,
 ) -> crate::Result<Option<u64>> {
+    phase_peak(width, height, encoded_bytes, preprocessing, false)
+}
+
+/// [`known_phase_peak`] for a raster whose channels are equal in every pixel: the contrast path then
+/// takes the 8-bit route (`preprocess_gray_contrast`), which frees the RGB. Other policies are unchanged.
+pub(super) fn known_gray_phase_peak(
+    width: u32,
+    height: u32,
+    encoded_bytes: usize,
+    preprocessing: Option<&ImagePreprocessingConfig>,
+) -> crate::Result<Option<u64>> {
+    phase_peak(width, height, encoded_bytes, preprocessing, true)
+}
+
+fn phase_peak(
+    width: u32,
+    height: u32,
+    encoded_bytes: usize,
+    preprocessing: Option<&ImagePreprocessingConfig>,
+    gray_input: bool,
+) -> crate::Result<Option<u64>> {
     if preprocessing.is_some_and(|options| !no_binarization_contrast(options) && !plain_binarization(options)) {
         return Ok(None);
     }
-    calculate_phase_peak(width, height, encoded_bytes, preprocessing)
+    let gray_route = gray_input && preprocessing.is_some_and(releases_source_rgb);
+    calculate_phase_peak(width, height, encoded_bytes, preprocessing, gray_route)
         .map(Some)
         .ok_or_else(|| crate::XbergError::validation("OCR native image workspace calculation overflowed"))
 }
@@ -31,6 +53,7 @@ fn calculate_phase_peak(
     height: u32,
     encoded_bytes: usize,
     preprocessing: Option<&ImagePreprocessingConfig>,
+    gray_route: bool,
 ) -> Option<u64> {
     let rgba = pix_bytes(width, height, 32)?;
     // SetImage(raw) creates a 32-bpp Pix and SetImage(Pix) copies it. ~keep
@@ -38,30 +61,23 @@ fn calculate_phase_peak(
     let rgb = u64::from(width)
         .checked_mul(u64::from(height))?
         .checked_mul(RGB_CHANNELS)?;
-    // The source RGB stays live beside the native phases, except for the gray contrast path, which
-    // releases it as soon as its Pix exists (see `releases_source_rgb`). ~keep
-    let mut retained_rgb = rgb;
+    if gray_route {
+        return gray_route_peak(width, height, rgb, rgba, encoded_bytes);
+    }
     let native = match preprocessing {
         None => raw_native,
-        Some(options) if releases_source_rgb(options) => {
-            retained_rgb = 0;
+        Some(options) if no_binarization_contrast(options) => {
             let gray = pix_bytes(width, height, 8)?.max(pix_bytes(height, width, 8)?);
-            // preprocess_pix builds the 32-bpp input Pix from the RGB and frees the RGB, converts the Pix
-            // to 8 bpp and frees it, then (enhance_gray) optionally inverts, background-normalizes and
-            // sharpens the 8-bpp raster. No 32-bpp intermediate outlives the conversion.
-            let creation = rgb.checked_add(rgba)?;
-            let conversion = rgba.checked_add(gray)?;
+            // enhance_non_binarized keeps source32 and normalized32. The third-channel
+            // pixUnsharpMaskingGray peak adds two prior sharpened8 outputs, input8,
+            // convolution8, result8 and a 32-bpp accumulator (enhance.c).
+            let sharpening = rgba.checked_mul(3)?.checked_add(gray.checked_mul(5)?)?;
             let map_width = width.div_ceil(BACKGROUND_REDUCTION).checked_add(MORPH_BORDER)?;
             let map_height = height.div_ceil(BACKGROUND_REDUCTION).checked_add(MORPH_BORDER)?;
             let maps = pix_bytes(map_width, map_height, 16)?
                 .max(pix_bytes(map_height, map_width, 16)?)
                 .checked_mul(8)?;
-            let normalization = gray.checked_mul(2)?.checked_add(maps)?;
-            // pixUnsharpMasking on 8 bpp keeps the input, the first-pass output and the convolution
-            // beside a 32-bpp block-convolution accumulator (enhance.c); the measured peak of the
-            // production helper is exactly this (`reduced_jpeg_memory_tests::contrast`).
-            let sharpening = gray.checked_mul(3)?.checked_add(rgba)?;
-            creation.max(conversion).max(normalization).max(sharpening)
+            sharpening.checked_add(maps)?.max(raw_native)
         }
         Some(options) if plain_binarization(options) => binarized::plain_binarization_peak(width, height, options)?,
         Some(_) => return None,
@@ -69,8 +85,48 @@ fn calculate_phase_peak(
     // Retain the encoded source and allow another encoded-size allocation, matching
     // decoder admission. Pix headers are included separately from row-aligned pixels.
     native
-        .checked_add(retained_rgb)?
+        .checked_add(rgb)?
         .checked_add((encoded_bytes as u64).checked_mul(2)?)
+}
+
+/// The peak of `preprocess_gray_contrast`: the RGB is read into a gray plane and an 8-bpp Pix, then freed;
+/// the Pix is background-normalized (maps beside input and output) and sharpened, which keeps its input,
+/// first-pass output and convolution beside a 32-bpp block-convolution accumulator (enhance.c).
+fn gray_route_peak(width: u32, height: u32, rgb: u64, rgba: u64, encoded_bytes: usize) -> Option<u64> {
+    let gray = pix_bytes(width, height, 8)?.max(pix_bytes(height, width, 8)?);
+    let creation = rgb.checked_add(gray.checked_mul(2)?)?;
+    let map_width = width.div_ceil(BACKGROUND_REDUCTION).checked_add(MORPH_BORDER)?;
+    let map_height = height.div_ceil(BACKGROUND_REDUCTION).checked_add(MORPH_BORDER)?;
+    let maps = pix_bytes(map_width, map_height, 16)?
+        .max(pix_bytes(map_height, map_width, 16)?)
+        .checked_mul(8)?;
+    let normalization = gray.checked_mul(2)?.checked_add(maps)?;
+    let sharpening = gray.checked_mul(3)?.checked_add(rgba)?;
+    creation
+        .max(normalization)
+        .max(sharpening)
+        .checked_add((encoded_bytes as u64).checked_mul(2)?)
+}
+
+/// The native (Leptonica) part of [`gray_route_peak`], for the measurement test.
+#[cfg(test)]
+pub(super) fn gray_route_native_peak(width: u32, height: u32) -> Option<u64> {
+    let gray = pix_bytes(width, height, 8)?.max(pix_bytes(height, width, 8)?);
+    let rgba = pix_bytes(width, height, 32)?;
+    let map_width = width.div_ceil(BACKGROUND_REDUCTION).checked_add(MORPH_BORDER)?;
+    let map_height = height.div_ceil(BACKGROUND_REDUCTION).checked_add(MORPH_BORDER)?;
+    let maps = pix_bytes(map_width, map_height, 16)?
+        .max(pix_bytes(map_height, map_width, 16)?)
+        .checked_mul(8)?;
+    gray.max(gray.checked_mul(2)?.checked_add(maps)?)
+        .max(gray.checked_mul(3)?.checked_add(rgba)?)
+        .into()
+}
+
+/// Whether the non-binarized contrast policy has a gray route. The route applies only to a raster whose
+/// channels are equal in every pixel; the caller checks that.
+pub(super) fn releases_source_rgb(options: &ImagePreprocessingConfig) -> bool {
+    no_binarization_contrast(options)
 }
 
 fn plain_binarization(options: &ImagePreprocessingConfig) -> bool {
@@ -81,12 +137,6 @@ fn plain_binarization(options: &ImagePreprocessingConfig) -> bool {
         && !options.denoise
         && !options.contrast_enhance
         && !options.normalize_shaded_rows
-}
-
-/// Whether the non-binarized contrast path consumes the prepared RGB: it moves it into a Pix and
-/// frees it before the native phases, so the workspace model does not charge it again.
-pub(super) fn releases_source_rgb(options: &ImagePreprocessingConfig) -> bool {
-    no_binarization_contrast(options)
 }
 
 fn no_binarization_contrast(options: &ImagePreprocessingConfig) -> bool {
@@ -209,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn contrast_releases_the_rgb_and_enhances_the_eight_bit_raster() {
+    fn gray_contrast_route_frees_the_rgb_and_is_charged_for_the_eight_bit_raster() {
         let (width, height) = (3000, 4000);
         let options = ImagePreprocessingConfig {
             contrast_enhance: true,
@@ -222,18 +272,22 @@ mod tests {
         let gray = pix_bytes(width, height, 8).unwrap();
         let rgba = pix_bytes(width, height, 32).unwrap();
         let rgb = u64::from(width) * u64::from(height) * RGB_CHANNELS;
-        let expected = (rgb + rgba).max(3 * gray + rgba) + 2000;
+        let colour = known_phase_peak(width, height, 1000, Some(&options)).unwrap().unwrap();
+        let on_gray = known_gray_phase_peak(width, height, 1000, Some(&options))
+            .unwrap()
+            .unwrap();
+        assert_eq!(on_gray, (rgb + 2 * gray).max(3 * gray + rgba) + 2000);
+        assert!(on_gray < colour / 2, "{on_gray} vs {colour}");
+        let binarized = ImagePreprocessingConfig::default();
         assert_eq!(
-            known_phase_peak(width, height, 1000, Some(&options)).unwrap(),
-            Some(expected)
+            known_gray_phase_peak(width, height, 1000, Some(&binarized)).unwrap(),
+            known_phase_peak(width, height, 1000, Some(&binarized)).unwrap(),
+            "only the contrast policy has a gray route",
         );
-        let old_color_peak = 3 * rgba + 5 * gray + rgb + 2000;
-        assert!(expected < old_color_peak / 2, "{expected} vs {old_color_peak}");
-        assert!(!releases_source_rgb(&ImagePreprocessingConfig::default()));
     }
 
     #[test]
-    fn contrast_phase_exceeds_28_mib_but_fits_32_mib_at_the_required_dimensions() {
+    fn contrast_phase_exceeds_40_mib_but_fits_96_mib_at_the_required_dimensions() {
         let options = ImagePreprocessingConfig {
             contrast_enhance: true,
             binarization_method: "none".to_owned(),
@@ -244,7 +298,7 @@ mod tests {
         let peak = known_phase_peak(2048, 2048, 655360, Some(&options))
             .expect("addressable phase")
             .expect("known contrast phase");
-        assert!(peak > 28 * 1024 * 1024);
-        assert!(peak <= 32 * 1024 * 1024);
+        assert!(peak > 40 * 1024 * 1024);
+        assert!(peak <= 96 * 1024 * 1024);
     }
 }

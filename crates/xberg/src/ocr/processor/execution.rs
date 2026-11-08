@@ -2336,37 +2336,39 @@ pub(super) fn perform_ocr(
         }
     }
 
-    let processed_pix: Option<xberg_tesseract::Pix> =
-        if let (true, Some(preprocessing)) = (prepared_image.apply_pix_preprocessing, preprocessing.as_ref()) {
-            match xberg_tesseract::Pix::from_raw_rgb(&image_data, width, height) {
-                Ok(pix) => {
-                    // The gray contrast path is admitted without the RGB, so free it before the native
-                    // phases; the raw fallback below then has nothing to read. ~keep
-                    let released = native_image_budget::releases_source_rgb(preprocessing);
-                    if released {
-                        image_data = Vec::new();
-                    }
-                    match preprocess_pix(pix, preprocessing) {
-                        Ok(processed) => Some(processed),
-                        Err(error) if released => {
-                            return Err(OcrError::ProcessingFailed(format!(
-                                "Leptonica contrast preprocessing failed: {error}"
-                            )));
-                        }
-                        Err(error) => {
-                            tracing::debug!(%error, "Leptonica preprocessing failed; using raw image");
-                            None
-                        }
-                    }
+    let processed_pix: Option<xberg_tesseract::Pix> = if let (true, Some(preprocessing)) =
+        (prepared_image.apply_pix_preprocessing, preprocessing.as_ref())
+    {
+        // A gray raster on the contrast policy takes the 8-bit route, which frees the RGB (the
+        // workspace model's `known_gray_phase_peak`); anything else keeps the colour path. ~keep
+        if native_image_budget::releases_source_rgb(preprocessing)
+            && crate::ocr::preprocessing::rgb_is_gray(&image_data)
+        {
+            match crate::ocr::preprocessing::preprocess_gray_contrast(&mut image_data, width, height, preprocessing) {
+                Ok(processed) => Some(processed),
+                Err(error) => {
+                    tracing::debug!(%error, "Leptonica gray preprocessing failed; using raw image");
+                    None
                 }
+            }
+        } else {
+            match xberg_tesseract::Pix::from_raw_rgb(&image_data, width, height) {
+                Ok(pix) => match preprocess_pix(pix, preprocessing) {
+                    Ok(processed) => Some(processed),
+                    Err(error) => {
+                        tracing::debug!(%error, "Leptonica preprocessing failed; using raw image");
+                        None
+                    }
+                },
                 Err(error) => {
                     tracing::debug!(%error, "Leptonica Pix creation failed; using raw image");
                     None
                 }
             }
-        } else {
-            None
-        };
+        }
+    } else {
+        None
+    };
 
     if let Some(ref pix) = processed_pix {
         api.set_image_2(pix.as_ptr())
