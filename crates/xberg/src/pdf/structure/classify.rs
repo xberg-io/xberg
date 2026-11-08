@@ -1162,7 +1162,7 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
         && matches!(bytes[roman_end], b'.' | b' ' | b')')
         && is_valid_roman(&t[..roman_end])
     {
-        return true;
+        return !starts_with_math_operator(&t[roman_end..]);
     }
 
     let mut levels = 0usize;
@@ -1194,11 +1194,24 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
         idx += 1;
     }
     let remainder = t[idx..].trim_start();
-    remainder.chars().any(|c| c.is_alphabetic())
+    !starts_with_math_operator(remainder)
+        && remainder.chars().any(|c| c.is_alphabetic())
         && remainder
             .chars()
             .filter(|c| c.is_alphabetic())
             .all(|c| c.is_uppercase())
+}
+
+/// Whether `rest`, after an enumerator and its separator, opens with a math
+/// operator (`X = Y`, `V + W`, `I < N`). An enumerator is followed by a title,
+/// never by an operator, so such a line is a formula. A hyphen is excluded: `IV - Results`
+/// is a heading. See #2688.
+fn starts_with_math_operator(rest: &str) -> bool {
+    rest.trim_start_matches(['.', ')'])
+        .trim_start()
+        .chars()
+        .next()
+        .is_some_and(|c| is_math_character(c) || matches!(c, '<' | '>' | '*' | '/' | '\u{2212}'))
 }
 
 /// A leading section keyword is a word, not a preposition. Without a floor,
@@ -3746,6 +3759,21 @@ mod numbered_section_heading_tests {
         assert!(is_numbered_section_heading("IV. Results"));
         assert!(is_numbered_section_heading("II) Scope"));
         assert!(is_numbered_section_heading("I INTRODUCTION"));
+    }
+
+    /// GH#2688: `X`, `V` and `I` are roman numerals and also ordinary variables,
+    /// so a math line opening with one must not read as an enumerated heading.
+    #[test]
+    fn a_roman_numeral_before_a_math_operator_is_not_a_heading() {
+        assert!(!is_numbered_section_heading("X = Y"));
+        assert!(!is_numbered_section_heading("V + W"));
+        assert!(!is_numbered_section_heading("I < N"));
+        assert!(!is_numbered_section_heading("X \u{2264} Y"));
+        assert!(!is_numbered_section_heading("1 = Y"));
+        assert!(is_numbered_section_heading("X. Results"));
+        assert!(is_numbered_section_heading("IV. Results"));
+        assert!(is_numbered_section_heading("II Methods"));
+        assert!(is_numbered_section_heading("IV - Results"));
     }
 
     #[test]

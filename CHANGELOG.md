@@ -205,6 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Stop a math line such as `X = Y` from reading as a numbered heading (#2688).**
+  A bare roman numeral or number followed by a space matched the heading enumerator even when an operator came next, so a variable like `X`, `V` or `I` opening a formula became a heading. An enumerator followed by a math operator is no longer a heading; `IV. Results` and `II Methods` still are.
+
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
 
