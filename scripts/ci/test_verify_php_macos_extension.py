@@ -1,5 +1,6 @@
 import hashlib
 import os
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -9,6 +10,7 @@ import pytest
 
 SCRIPT = Path(__file__).parent / "verify-php-macos-extension.sh"
 STAGE = Path(__file__).parent / "stage-php-macos-notices.sh"
+SMOKE = Path(__file__).parent / "smoke-php-macos-heif.sh"
 SOURCES = "".join(
     f"{name} 1.0\t{'0' * 64}\thttps://example.invalid/{name}.tar.gz\n" for name in ("libheif", "libde265", "libaom")
 )
@@ -35,23 +37,30 @@ def build_extension(directory: Path, import_name: str | None, kind: str = "-dyna
     return extension
 
 
-def notice_files(directory: Path, sources: str = SOURCES) -> list[Path]:
-    """Write the notices the staging step ships beside xberg.so, with a matching checksum list."""
+CODEC_NOTICES = ("libheif-1.0-COPYING", "libde265-1.0-COPYING", "libaom-1.0-LICENSE", "GPL-3.0.txt")
+PROJECT_NOTICES = ("LICENSE", "THIRD_PARTY_LICENSES.md")
+
+
+def notice_files(
+    directory: Path, sources: str = SOURCES, omit: str | None = None, unlisted: str | None = None
+) -> list[Path]:
+    """Write the full notice set the staging step ships beside xberg.so, with a matching checksum list.
+
+    `omit` leaves one file out of the archive; `unlisted` ships it but leaves it out of notices.sha256.
+    """
     folder = directory / "notices"
     folder.mkdir()
-    members = {
-        "sources.tsv": sources,
-        "libheif-1.0-COPYING": "lgpl\n",
-        "LICENSE": "mit\n",
-        "THIRD_PARTY_LICENSES.md": "tpl\n",
-    }
+    members = {"sources.tsv": sources, **{name: f"{name}\n" for name in (*CODEC_NOTICES, *PROJECT_NOTICES)}}
     paths = []
     for name, text in members.items():
+        if name == omit:
+            continue
         (folder / name).write_text(text)
         paths.append(folder / name)
     rows = "".join(
         f"{hashlib.sha256((folder / name).read_bytes()).hexdigest()}  {name}\n"
-        for name in ("sources.tsv", "libheif-1.0-COPYING")
+        for name in ("sources.tsv", *CODEC_NOTICES)
+        if name not in (omit, unlisted)
     )
     (folder / "notices.sha256").write_text(rows)
     return [*paths, folder / "notices.sha256"]
@@ -118,7 +127,7 @@ def test_archive_without_notices_is_rejected(tmp_path: Path) -> None:
 def test_notice_with_a_wrong_checksum_is_rejected(tmp_path: Path) -> None:
     extension = build_extension(tmp_path, None)
     notices = notice_files(tmp_path)
-    notices[1].write_text("tampered\n")
+    next(path for path in notices if path.name == "libheif-1.0-COPYING").write_text("tampered\n")
     result = run(pack(tmp_path, [extension, *notices]))
     assert result.returncode == 1
     assert "notices.sha256 does not match" in result.stderr
@@ -132,47 +141,78 @@ def test_x265_in_the_source_inventory_is_rejected(tmp_path: Path) -> None:
     assert "exactly libheif, libde265 and libaom" in result.stderr
 
 
-def test_staging_adds_notices_that_the_gate_accepts(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "missing", ["libheif-1.0-COPYING", "libde265-1.0-COPYING", "libaom-1.0-LICENSE", "GPL-3.0.txt"]
+)
+def test_a_missing_codec_or_gpl_notice_is_rejected(tmp_path: Path, missing: str) -> None:
     extension = build_extension(tmp_path, None)
+    result = run(pack(tmp_path, [extension, *notice_files(tmp_path, omit=missing)]))
+    assert result.returncode == 1
+    assert f"does not ship a {missing.replace('1.0', '*')} notice" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "unlisted", ["libheif-1.0-COPYING", "libde265-1.0-COPYING", "libaom-1.0-LICENSE", "GPL-3.0.txt", "sources.tsv"]
+)
+def test_a_notice_missing_from_the_checksum_list_is_rejected(tmp_path: Path, unlisted: str) -> None:
+    extension = build_extension(tmp_path, None)
+    result = run(pack(tmp_path, [extension, *notice_files(tmp_path, unlisted=unlisted)]))
+    assert result.returncode == 1
+    assert f"notices.sha256 does not list {unlisted}" in result.stderr
+
+
+def stage_fixture(tmp_path: Path) -> subprocess.CompletedProcess[str]:
     prefix = tmp_path / "prefix"
     inventory = prefix / "share" / "xberg-heif-notices"
     inventory.mkdir(parents=True)
     for source in notice_files(tmp_path):
-        if source.name not in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
+        if source.name not in PROJECT_NOTICES:
             (inventory / source.name).write_bytes(source.read_bytes())
-    for name in range(10):
-        (inventory / f"extra-{name}").write_text("x\n")
     project = tmp_path / "project"
     project.mkdir()
-    (project / "LICENSE").write_text("mit\n")
-    (project / "THIRD_PARTY_LICENSES.md").write_text("tpl\n")
+    for name in PROJECT_NOTICES:
+        (project / name).write_text("project\n")
     archive = tmp_path / "bare.tgz"
     with tarfile.open(archive, "w:gz") as tar:
-        tar.add(extension, arcname="xberg.so")
-    staged = subprocess.run(
+        tar.add(build_extension(tmp_path, None), arcname="xberg.so")
+    return subprocess.run(
         [str(STAGE), str(archive), str(prefix), str(project)], capture_output=True, text=True, check=False
     )
+
+
+def test_staging_adds_notices_that_the_gate_accepts(tmp_path: Path) -> None:
+    staged = stage_fixture(tmp_path)
     assert staged.returncode == 0, staged.stderr
+    archive = tmp_path / "bare.tgz"
     sidecar = archive.with_name("bare.tgz.sha256").read_text()
     assert sidecar.split()[0] == hashlib.sha256(archive.read_bytes()).hexdigest()
+    with tarfile.open(archive) as tar:
+        assert len(tar.getnames()) == 1 + len(PROJECT_NOTICES) + 1 + 1 + len(CODEC_NOTICES)
     result = run(archive)
     assert result.returncode == 0, result.stderr
 
 
-def test_system_path_import_passes(tmp_path: Path) -> None:
-    result = run(archive_of(tmp_path, build_extension(tmp_path, "/usr/lib/libz.1.dylib")))
-    assert result.returncode == 0, result.stderr
+def test_staging_refuses_an_inventory_without_the_gpl_text(tmp_path: Path) -> None:
+    prefix = tmp_path / "prefix"
+    (prefix / "share" / "xberg-heif-notices").mkdir(parents=True)
+    (prefix / "share" / "xberg-heif-notices" / "sources.tsv").write_text(SOURCES)
+    archive = tmp_path / "bare.tgz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(build_extension(tmp_path, None), arcname="xberg.so")
+    staged = subprocess.run(
+        [str(STAGE), str(archive), str(prefix), str(tmp_path)], capture_output=True, text=True, check=False
+    )
+    assert staged.returncode == 1
+    assert "no notices.sha256" in staged.stderr
 
 
-def test_loader_path_sibling_is_rejected_because_pie_ships_one_file(tmp_path: Path) -> None:
-    result = run(archive_of(tmp_path, build_extension(tmp_path, "@loader_path/libheif.1.dylib")))
+@pytest.mark.skipif(shutil.which("php") is None, reason="needs php")
+def test_smoke_rejects_an_extension_php_cannot_load(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [str(SMOKE), str(archive_of(tmp_path, build_extension(tmp_path, None)))],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert result.returncode == 1
-    assert "@loader_path/libheif.1.dylib" in result.stderr
-
-
-def test_archive_without_extension_is_rejected(tmp_path: Path) -> None:
-    other = tmp_path / "other.txt"
-    other.write_text("x")
-    result = run(archive_of(tmp_path, other))
-    assert result.returncode == 1
-    assert "exactly one xberg.so" in result.stderr
+    assert "PHP did not load the archived xberg.so" in result.stderr

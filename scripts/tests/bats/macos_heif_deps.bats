@@ -290,12 +290,20 @@ setup() {
 	local inventory="$XBERG_HEIF_PREFIX/share/xberg-heif-notices"
 	[ "$(wc -l <"$inventory/sources.tsv" | tr -d ' ')" = 3 ]
 	! grep -q x265 "$inventory/sources.tsv"
-	[ "$(find "$inventory" -type f | wc -l | tr -d ' ')" = 12 ]
+	[ "$(find "$inventory" -type f | wc -l | tr -d ' ')" = 13 ]
+	cmp "$inventory/GPL-3.0.txt" "$REPO_ROOT/scripts/ci/notices/GPL-3.0.txt"
+	grep -q '^[0-9a-f]\{64\}  GPL-3.0.txt$' "$inventory/notices.sha256"
 	(cd "$inventory" && shasum -a 256 -c notices.sha256)
 
 	run env XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'already present'
+
+	printf 'altered\n' >"$inventory/GPL-3.0.txt"
+	run env XBERG_HEIF_PROFILE=php-static "$BASH" "$SCRIPT"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'missing or altered GPL-3.0.txt'
+	cp "$REPO_ROOT/scripts/ci/notices/GPL-3.0.txt" "$inventory/GPL-3.0.txt"
 
 	rm -rf "$XBERG_HEIF_PREFIX"
 	run env XBERG_HEIF_PROFILE=php-static XBERG_TEST_MINOS=26.0 "$BASH" "$SCRIPT"

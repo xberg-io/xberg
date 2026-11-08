@@ -31,6 +31,12 @@ trap 'rm -rf "$workdir"' EXIT
 tar -xzf "$archive" -C "$workdir"
 [ -f "$workdir/xberg.so" ] || die "xberg.so is not at the archive root"
 
+# The gate requires these; fail here with the cause rather than after repacking. ~keep
+required=(sources.tsv notices.sha256 GPL-3.0.txt 'libheif-*-COPYING' 'libde265-*-COPYING' 'libaom-*-LICENSE')
+for pattern in "${required[@]}"; do
+  compgen -G "$inventory/$pattern" >/dev/null || die "no $pattern in $inventory"
+done
+inventory_count="$(find "$inventory" -maxdepth 1 -type f | wc -l | tr -d ' ')"
 cp "$inventory"/* "$workdir/"
 for notice in LICENSE THIRD_PARTY_LICENSES.md; do
   [ -s "$root/$notice" ] || die "missing project notice $root/$notice"
@@ -41,7 +47,8 @@ entries=()
 while IFS= read -r entry; do
   entries+=("$entry")
 done < <(cd "$workdir" && find . -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | sort)
-[ "${#entries[@]}" -ge 15 ] || die "refusing to repack ${#entries[@]} entries"
+# xberg.so, LICENSE and THIRD_PARTY_LICENSES.md plus every staged notice, nothing else.
+[ "${#entries[@]}" = "$((inventory_count + 3))" ] || die "refusing to repack ${#entries[@]} entries, expected $((inventory_count + 3))"
 
 rm -f "$archive"
 COPYFILE_DISABLE=1 tar -czf "$archive" -C "$workdir" "${entries[@]}"

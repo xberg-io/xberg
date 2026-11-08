@@ -52,7 +52,10 @@ def test_php_macos_extension_links_the_decode_only_heif_stack_statically() -> No
     notices = block.index("bash .release-tools/scripts/ci/stage-php-macos-notices.sh")
     gate = block.index("bash .release-tools/scripts/ci/verify-php-macos-extension.sh")
     upload = block.index("actions/upload-artifact@v7", gate)
-    assert build_stack < build < package < notices < gate < upload
+    smoke = block.index("bash .release-tools/scripts/ci/smoke-php-macos-heif.sh")
+    assert build_stack < build < package < notices < gate < smoke < upload
+    assert "scripts/ci/smoke-php-macos-heif.sh\n" in block[: block.index("Build the static HEIF stack")]
+    assert "scripts/ci/notices/GPL-3.0.txt\n" in block[: block.index("Build the static HEIF stack")]
 
     step = block[build_stack : block.index("\n      # ~keep", build_stack)]
     assert "export XBERG_HEIF_PROFILE=php-static" in step

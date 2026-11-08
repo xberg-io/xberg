@@ -80,9 +80,11 @@ every target via the pure-Rust `nom-exif` integration. See the
 **dynamically** (via `pkg-config`/system shared library), except in the
 macOS PHP extension, which PIE installs as a single file and which
 therefore links `libheif` and `libde265` (also LGPL) statically from
-pinned upstream sources; its archive ships the license texts and the
-source inventory, and the extension can be relinked from the public build
-script. Container images redistribute the unmodified upstream `libheif` as
+pinned upstream sources; its archive ships the license texts (including
+the GPL-3.0 text) and the source inventory, and the extension can be
+relinked by following the steps in `THIRD_PARTY_LICENSES.md`. That
+extension decodes HEIC and AVIF but cannot write HEIF output: HEIF output
+is unavailable in the macOS PHP extension. Container images redistribute the unmodified upstream `libheif` as
 a separate shared object (`libheif.so`), which you may replace with your own
 build to satisfy LGPL §6. See
 [`THIRD_PARTY_LICENSES.md`](https://github.com/xberg-io/xberg/blob/main/THIRD_PARTY_LICENSES.md)

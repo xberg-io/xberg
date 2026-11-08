@@ -204,7 +204,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(php,elixir): Make the macOS PHP extension and Elixir NIF load without Homebrew's libheif.** (#2547)
   The v1.3.10 and earlier macOS releases linked `/opt/homebrew/opt/libheif/lib/libheif.1.dylib` by absolute path and did not ship it, so the whole binding failed to load on a Mac without it.
-  PIE installs one file, so the PHP extension now links libheif, libde265 and libaom (decode only, no x265 or other encoder) statically, built from pinned sources at the macOS 15.0 floor; the archive ships their upstream notices and source inventory, and HEIF output is unavailable there.
+  PIE installs one file, so the PHP extension now links libheif, libde265 and libaom (decode only, no x265 or other encoder) statically, built from pinned sources at the macOS 15.0 floor; the archive ships their upstream notices, the GPL-3.0 text and a source inventory, the release loads it in PHP and decodes HEIC and AVIF before upload, and HEIF output is unavailable there.
   The Elixir NIF archive ships its four codec libraries as `@loader_path` siblings, staged and load-tested in the release job.
   See `THIRD_PARTY_LICENSES.md` for the licenses and how to relink the LGPL components.
 

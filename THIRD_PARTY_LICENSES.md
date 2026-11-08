@@ -52,7 +52,13 @@ platform's `libheif` build links it.
 The macOS Elixir NIF archive ships `libheif`, `libde265`, `libaom` and `libx265`
 (built from the pinned sources with both encoders) as separate sibling dylibs
 resolved through `@loader_path`, beside the upstream license texts and a checksum
-inventory. They remain separate, replaceable shared objects.
+inventory. They remain separate, replaceable shared objects. Pinned versions:
+libheif 1.23.7, libde265 1.1.3, libaom 3.15.3 (encoder enabled) and x265 4.3.
+`libx265` is licensed **GPL-2.0-or-later**; its exact source is the release
+tarball <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz>
+(SHA-256 `83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121`),
+also listed in `sources.tsv` inside the archive with its `COPYING`. The macOS PHP
+extension does not contain it.
 
 ## PHP macOS extension: static HEIF stack
 
@@ -80,17 +86,38 @@ unaffected.
   [`scripts/ci/build-macos-heif-deps.sh`](scripts/ci/build-macos-heif-deps.sh)
   (profile `php-static`) and in `sources.tsv`, shipped inside each macOS PHP
   archive beside the upstream license texts (`libheif-*-COPYING`,
-  `libde265-*-COPYING`, `libaom-*-LICENSE`, `libaom-*-PATENTS`) and a
-  `notices.sha256` list. Xberg's own `LICENSE` and this file ship there too.
+  `libde265-*-COPYING`, `libaom-*-LICENSE`, `libaom-*-PATENTS`), the GNU GPL
+  v3 text (`GPL-3.0.txt`, which LGPL-3.0 §4(b) requires beside the LGPL text
+  for the combined work) and a `notices.sha256` list. Xberg's own `LICENSE` and
+  this file ship there too.
 - **Relinking (LGPL-3.0 §4):** the complete source of the extension is public
-  (<https://github.com/xberg-io/xberg>, `crates/xberg-php`, MIT). To relink it
-  against your own modified `libheif` or `libde265`, build the static archives
-  with your sources (`XBERG_HEIF_PROFILE=php-static`
-  `XBERG_HEIF_PREFIX=<dir>` `MACOSX_DEPLOYMENT_TARGET=15.0`
-  `bash scripts/ci/build-macos-heif-deps.sh`, after changing the pinned URL and
-  checksum), then rebuild with `PKG_CONFIG_PATH=<dir>/lib/pkgconfig`
-  `SYSTEM_DEPS_LIBHEIF_LINK=static` `cargo build --release -p xberg-php` and
-  install the resulting `xberg.so` in place of the shipped one.
+  (<https://github.com/xberg-io/xberg>, `crates/xberg-php`, MIT). To rebuild it
+  against your own modified `libheif` or `libde265`, reproduce the release job
+  `php-extension` in
+  [`.github/workflows/publish.yaml`](.github/workflows/publish.yaml) on an
+  Apple Silicon Mac with macOS 15 or later:
+  1. Check out the release tag (`git checkout v<version>`) and install the
+     PHP version you target (8.3, 8.4 or 8.5, non-thread-safe), Rust from
+     `rust-toolchain.toml` and Xcode command-line tools.
+  2. Replace the pinned tarball URL and `*_SHA256` of the library you changed
+     in `scripts/ci/build-macos-heif-deps.sh`, then build the static stack into
+     an empty directory: `XBERG_HEIF_PROFILE=php-static
+     XBERG_HEIF_PREFIX=<new empty dir> MACOSX_DEPLOYMENT_TARGET=15.0 bash
+     scripts/ci/build-macos-heif-deps.sh`. The script requires arm64, that
+     exact deployment target and a fresh prefix, and fails otherwise.
+  3. Export `PKG_CONFIG_PATH=<prefix>/lib/pkgconfig` and
+     `SYSTEM_DEPS_LIBHEIF_LINK=static`, then build the extension the way the
+     release does: `scripts/build-out-of-workspace.sh xberg-php xberg_php
+     <checkout>` from the `build-php-extension` action of
+     [`xberg-io/actions`](https://github.com/xberg-io/actions) (`v1`). It copies
+     `crates/xberg-php` out of the workspace, resolves its dependencies from
+     crates.io at the release version and builds the `xberg_php` library with
+     the crate's default features; the resulting `libxberg_php.dylib` is the
+     `xberg.so` the archive carries.
+  4. Check it with `scripts/ci/verify-php-macos-extension.sh` (it needs an
+     archive; `scripts/ci/stage-php-macos-notices.sh` builds one around your
+     binary) and load it with `php -d extension=/path/to/xberg.so`, replacing
+     the file PIE installed.
 - **Gate:** the release workflow runs `scripts/ci/verify-php-macos-extension.sh`
   on every macOS PHP archive. It rejects any import outside `/usr/lib` and
   `/System/Library` (including Homebrew paths), any libheif or codec import, a

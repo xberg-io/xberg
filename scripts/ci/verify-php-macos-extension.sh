@@ -71,12 +71,24 @@ while read -r arch actual; do
   fi
 done <<<"$slices"
 
-# The statically linked LGPL libraries (libheif, libde265) require their license texts and
-# the pinned source inventory to travel with the binary. ~keep
+# The statically linked LGPL libraries (libheif, libde265) require their license texts, the GPL-3.0
+# text LGPL-3.0 section 4(b) pairs with them, and the pinned source inventory to travel with the
+# binary. Each must exist and be listed in notices.sha256, so a checksum file that omits a notice
+# cannot pass. ~keep
 extension_dir="$(dirname "$extension")"
 for notice in LICENSE THIRD_PARTY_LICENSES.md sources.tsv notices.sha256; do
   [ -s "$extension_dir/$notice" ] || die "the archive does not ship $notice"
 done
+for pattern in 'libheif-*-COPYING' 'libde265-*-COPYING' 'libaom-*-LICENSE' 'GPL-3.0.txt'; do
+  found="$(cd "$extension_dir" && find . -maxdepth 1 -type f -name "$pattern" -size +0 | sed 's|^\./||' | sort)"
+  [ -n "$found" ] || die "the archive does not ship a $pattern notice"
+  while IFS= read -r notice; do
+    awk -v n="$notice" '$2 == n { found = 1 } END { exit !found }' "$extension_dir/notices.sha256" ||
+      die "notices.sha256 does not list $notice"
+  done <<<"$found"
+done
+awk '$2 == "sources.tsv" { found = 1 } END { exit !found }' "$extension_dir/notices.sha256" ||
+  die "notices.sha256 does not list sources.tsv"
 [ "$(wc -l <"$extension_dir/sources.tsv" | tr -d ' ')" = 3 ] || die "sources.tsv must list exactly libheif, libde265 and libaom"
 for source in libheif libde265 libaom; do
   grep -q "^$source " "$extension_dir/sources.tsv" || die "sources.tsv does not pin $source"

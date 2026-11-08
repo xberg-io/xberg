@@ -1397,6 +1397,8 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             scripts/ci/build-macos-heif-deps.sh
+            scripts/ci/notices/GPL-3.0.txt
+            scripts/ci/smoke-php-macos-heif.sh
             scripts/ci/stage-php-macos-notices.sh
             scripts/ci/verify-php-macos-extension.sh
             scripts/lib/retry.sh
@@ -1547,6 +1549,22 @@ jobs:
           }
           bash .release-tools/scripts/ci/stage-php-macos-notices.sh "${archives[0]}" "$XBERG_HEIF_PREFIX" "$GITHUB_WORKSPACE"
           bash .release-tools/scripts/ci/verify-php-macos-extension.sh "${archives[0]}"
+
+      # The import gate proves what the extension does not need; this proves it still works. It
+      # loads the archived binary with the job's PHP and decodes the upstream HEIC and AVIF
+      # examples through it. ~keep
+      - name: Load the macOS extension and decode HEIC and AVIF
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/php-package/php_*.tgz)
+          [ "${#archives[@]}" = 1 ] || {
+            echo "::error::expected exactly one PHP macOS archive, found ${#archives[@]}"
+            exit 1
+          }
+          bash .release-tools/scripts/ci/smoke-php-macos-heif.sh "${archives[0]}"
 
       # xberg.so carries DT_NEEDED libonnxruntime.so.1 with a $ORIGIN rpath. The archive
       # holds only xberg.so, so add the runtime beside it and refresh the checksum sidecar.

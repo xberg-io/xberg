@@ -20,6 +20,9 @@ LIBAOM_SHA256=67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc
 LIBHEIF_VERSION=1.23.7
 LIBHEIF_SHA256=f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475
 
+GPL_NOTICE=GPL-3.0.txt
+GPL_SHA256=3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986
+
 X265_VERSION=4.3
 X265_SHA256=83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121
 
@@ -275,6 +278,19 @@ codec_notices() {
       return 1
     }
   done
+  # LGPL-3.0 section 4(b) wants the GPL-3.0 text beside the LGPL texts of a statically linked
+  # work. The upstream tarballs carry only the LGPL, so a pinned copy ships from the repository. ~keep
+  if [ "$PROFILE" = php-static ]; then
+    file="$inventory/$GPL_NOTICE"
+    if [ "$mode" = stage ]; then
+      cp "$REPO_ROOT/scripts/ci/notices/$GPL_NOTICE" "$file"
+    fi
+    checked+=("$GPL_NOTICE")
+    if [ ! -s "$file" ] || [ "$(shasum -a 256 <"$file" | awk '{print $1}')" != "$GPL_SHA256" ]; then
+      echo "::error::missing or altered $GPL_NOTICE" >&2
+      return 1
+    fi
+  fi
   if ! source_inventory | cmp -s - "$inventory/sources.tsv"; then
     echo "::error::missing or mismatched codec source inventory" >&2
     return 1
