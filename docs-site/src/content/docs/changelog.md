@@ -13,9 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **(layout): Compare PP-DocLayoutV3 runtimes modulo exact reading-order ties and boundary mask logits.** (#2284)
-  `scripts/ci/v3_cross_runtime.py` accepts a rank difference only inside a run of exactly equal sort keys both runtimes agree on, and a mask-bit flip only when the gathered logit is within 1e-4 of zero in both; any other difference fails.
-  On the two frozen pages the 24 rank differences are exact ties and the 5 flips come from three logits of at most 6.0e-5.
+- **(ci): Add a PP-DocLayoutV3 cross-runtime comparison helper, not yet wired into the replay runner.** (#2284)
+  `scripts/ci/v3_cross_runtime.py` is a test utility; it ships in no product and no runner calls it yet. It accepts a reading-order rank difference only inside a run of exactly equal sort keys and a mask-bit flip only when both gathered logits are within 1e-4 of zero, an epsilon fitted on two development pages that held-out pages must re-check.
 
 - **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
   `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`, any libheif or codec import, a deployment target above macOS 15.0, and missing or altered license notices; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.

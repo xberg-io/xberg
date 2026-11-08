@@ -1,11 +1,14 @@
 import json
+import math
 from pathlib import Path
 
 import pytest
 import v3_cross_runtime as contract
 
-FROZEN = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_frozen.json").read_text())
-PAGE_ONE, PAGE_TWO = FROZEN
+FIXTURE = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_frozen.json").read_text())
+MASK_SHAPE = FIXTURE["mask_shape"]
+PAGE_ONE, PAGE_TWO = FIXTURE["pages"]
+EPSILON = contract.MASK_LOGIT_EPSILON
 
 
 def logits(page: dict) -> dict[tuple[int, int, int], tuple[float, float]]:
@@ -20,6 +23,19 @@ def rank_args(page: dict) -> tuple[list[int], list[int], list[float], list[float
     return page["reference_ranks"], page["actual_ranks"], page["reference_keys"], page["actual_keys"]
 
 
+def masks(flips: list, table: dict, **overrides: object) -> int:
+    arguments = {"differing_bits": len(flips), "reference_shape": MASK_SHAPE, "actual_shape": MASK_SHAPE}
+    return contract.compare_masks(flips, table, **{**arguments, **overrides})
+
+
+def fails(reason: str, call, *args: object, **kwargs: object) -> None:  # noqa: ANN001
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        call(*args, **kwargs)
+
+
+FLIP = [(0, 0, 0, 1, 0)]
+
+
 def test_frozen_page_one_rank_differences_are_all_exact_ties() -> None:
     reference, actual, _, _ = rank_args(PAGE_ONE)
     assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 24
@@ -31,86 +47,151 @@ def test_frozen_page_two_ranks_are_identical() -> None:
     assert contract.compare_ranks(*rank_args(PAGE_TWO)) == 0
 
 
+def test_frozen_page_ranks_are_not_a_permutation() -> None:
+    assert len(set(PAGE_ONE["reference_ranks"])) == 128 < len(PAGE_ONE["reference_ranks"]) == 300
+
+
 def test_frozen_page_two_flips_are_boundary_logits() -> None:
     assert len(PAGE_TWO["mask_mismatches"]) == 5
-    assert len({logits(PAGE_TWO)[key] for key in logits(PAGE_TWO)}) == 3
-    assert contract.compare_masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 5
+    assert len(set(logits(PAGE_TWO).values())) == 3
+    assert masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 5
 
 
-def test_a_real_reorder_of_non_tied_rows_fails() -> None:
+def test_frozen_page_one_has_no_flips() -> None:
+    assert masks([], {}) == 0
+
+
+def test_a_real_reorder_of_non_tied_rows_fails_on_the_tie_run() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
-    first, second = 0, 1
-    assert ref_keys[first] != ref_keys[second]
-    swapped = [second if r == first else first if r == second else r for r in actual]
-    with pytest.raises(ValueError, match="rank_mismatch"):
-        contract.compare_ranks(reference, swapped, ref_keys, act_keys)
+    assert ref_keys[0] != ref_keys[1]
+    swapped = [1 if r == 0 else 0 if r == 1 else r for r in actual]
+    fails("rank_outside_tie_run", contract.compare_ranks, reference, swapped, ref_keys, act_keys)
 
 
 def test_a_swap_between_near_equal_but_unequal_keys_fails() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
     near = next(r for r in range(len(ref_keys) - 1) if 0 < ref_keys[r + 1] - ref_keys[r] < 0.05)
     swapped = [near + 1 if r == near else near if r == near + 1 else r for r in actual]
-    with pytest.raises(ValueError, match="rank_mismatch"):
-        contract.compare_ranks(reference, swapped, ref_keys, act_keys)
+    fails("rank_outside_tie_run", contract.compare_ranks, reference, swapped, ref_keys, act_keys)
 
 
-def test_ties_are_compared_exactly_not_by_epsilon() -> None:
+def test_a_nudged_tie_key_is_not_a_tie() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
     moved = next(r for r, a in zip(reference, actual, strict=True) if r != a)
     nudged = list(ref_keys)
-    nudged[moved] = nudged[moved] + 1e-9
-    with pytest.raises(ValueError, match="rank_mismatch"):
-        contract.compare_ranks(reference, actual, nudged, act_keys)
+    nudged[contract.tie_run(ref_keys, moved)[1]] += 1e-9
+    fails("tie_structure_mismatch", contract.compare_ranks, reference, actual, nudged, act_keys)
 
 
 def test_a_tie_the_other_runtime_does_not_share_fails() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
     moved = next(a for r, a in zip(reference, actual, strict=True) if r != a)
     split = list(act_keys)
-    split[moved] = split[moved] + 1.0
-    with pytest.raises(ValueError, match="rank_mismatch"):
-        contract.compare_ranks(reference, actual, ref_keys, split)
+    split[moved] += 1.0
+    fails("tie_structure_mismatch", contract.compare_ranks, reference, actual, ref_keys, split)
 
 
-def test_two_rows_cannot_collapse_onto_one_rank() -> None:
-    with pytest.raises(ValueError, match="rank_mismatch"):
-        contract.compare_ranks([0, 1], [0, 0], [5.0, 5.0], [5.0, 5.0])
+def test_unmoved_keys_may_differ_numerically_but_not_in_tie_structure() -> None:
+    assert contract.compare_ranks([0, 1], [0, 1], [1.0, 2.0], [1.0, 9.0]) == 0
+    fails("tie_structure_mismatch", contract.compare_ranks, [0, 1], [0, 1], [1.0, 2.0], [9.0, 9.0])
+
+
+def test_one_rank_cannot_map_to_two_ranks() -> None:
+    fails("rank_forward_conflict", contract.compare_ranks, [0, 0], [0, 1], [5.0, 5.0], [5.0, 5.0])
+
+
+def test_two_ranks_cannot_collapse_onto_one() -> None:
+    fails("rank_backward_conflict", contract.compare_ranks, [0, 1], [0, 0], [5.0, 5.0], [5.0, 5.0])
 
 
 def test_a_tie_inside_one_run_may_order_either_way() -> None:
     assert contract.compare_ranks([0, 1, 2], [1, 0, 2], [5.0, 5.0, 7.0], [5.0, 5.0, 7.0]) == 2
 
 
+def test_repeated_ranks_for_one_query_are_allowed() -> None:
+    assert contract.compare_ranks([0, 0, 1], [1, 1, 0], [5.0, 5.0, 7.0], [5.0, 5.0, 7.0]) == 3
+
+
+@pytest.mark.parametrize(
+    ("args", "reason"),
+    [
+        (([], [], [], []), "empty_input"),
+        (([0], [0], [], []), "empty_input"),
+        (([0], [0], [1.0, 2.0], [1.0]), "keys_length_mismatch"),
+        (([0, 1], [0], [1.0, 2.0], [1.0, 2.0]), "ranks_length_mismatch"),
+        (([0, 1, 0], [0, 1, 0], [1.0, 2.0], [1.0, 2.0]), "more_rows_than_positions"),
+        (([0, 1], [0, 1], [math.nan, math.nan], [1.0, 2.0]), "keys_not_finite_floats"),
+        (([0, 1], [0, 1], [1.0, 2.0], [1.0, math.inf]), "keys_not_finite_floats"),
+        (([0, 1], [0, 1], [3.0, 2.0], [3.0, 2.0]), "keys_not_ascending"),
+        (([0, 1], [0, 1], [1.0, 2.0], [2.0, 1.0]), "keys_not_ascending"),
+        (([True, 1], [True, 1], [1.0, 2.0], [1.0, 2.0]), "rank_not_int"),
+        (([0.0, 1], [0.0, 1], [1.0, 2.0], [1.0, 2.0]), "rank_not_int"),
+        (([0, 1], [0, 1.0], [1.0, 2.0], [1.0, 2.0]), "rank_not_int"),
+        (([0, 2], [0, 2], [1.0, 2.0], [1.0, 2.0]), "rank_out_of_range"),
+        (([0, -1], [0, -1], [1.0, 2.0], [1.0, 2.0]), "rank_out_of_range"),
+    ],
+)
+def test_malformed_rank_input_fails_with_its_own_reason(args: tuple, reason: str) -> None:
+    fails(reason, contract.compare_ranks, *args)
+
+
 def test_a_mask_flip_far_from_the_threshold_fails() -> None:
-    far = [(0, 1, 1, 1, 0)]
-    with pytest.raises(ValueError, match="mask_mismatch"):
-        contract.compare_masks(far, {(0, 1, 1): (0.01, -0.01)})
+    fails("mask_logit_beyond_epsilon", masks, FLIP, {(0, 0, 0): (0.01, -0.01)})
 
 
 def test_a_flip_near_zero_on_one_runtime_only_fails() -> None:
-    with pytest.raises(ValueError, match="mask_mismatch"):
-        contract.compare_masks([(0, 1, 1, 1, 0)], {(0, 1, 1): (1e-6, -0.5)})
+    fails("mask_logit_beyond_epsilon", masks, FLIP, {(0, 0, 0): (1e-6, -0.5)})
+    fails("mask_logit_beyond_epsilon", masks, FLIP, {(0, 0, 0): (0.5, -1e-6)})
 
 
 def test_the_epsilon_bound_is_inclusive_and_tight() -> None:
-    edge = contract.MASK_LOGIT_EPSILON
-    assert contract.compare_masks([(0, 0, 0, 1, 0)], {(0, 0, 0): (edge, -edge)}) == 1
-    with pytest.raises(ValueError, match="mask_mismatch"):
-        contract.compare_masks([(0, 0, 0, 1, 0)], {(0, 0, 0): (edge * 1.01, -edge)})
+    assert masks(FLIP, {(0, 0, 0): (EPSILON, -EPSILON)}) == 1
+    fails("mask_logit_beyond_epsilon", masks, FLIP, {(0, 0, 0): (EPSILON * 1.01, -EPSILON)})
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+def test_a_non_finite_logit_on_either_side_fails(bad: float) -> None:
+    fails("mask_logit_not_finite", masks, FLIP, {(0, 0, 0): (1e-6, bad)})
+    fails("mask_logit_not_finite", masks, FLIP, {(0, 0, 0): (bad, -1e-6)})
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, 0.0, -1e-4, True, None])
+def test_an_invalid_epsilon_fails(bad: object) -> None:
+    fails("epsilon_invalid", masks, FLIP, {(0, 0, 0): (1e-6, -1e-6)}, epsilon=bad)
 
 
 def test_a_flip_without_logit_evidence_fails() -> None:
-    with pytest.raises(ValueError, match="mask_mismatch"):
-        contract.compare_masks([(0, 0, 0, 1, 0)], {})
+    fails("mask_logit_missing", masks, FLIP, {})
 
 
 def test_evidence_that_disagrees_with_the_bits_fails() -> None:
-    with pytest.raises(ValueError, match="mask_mismatch"):
-        contract.compare_masks([(0, 0, 0, 1, 0)], {(0, 0, 0): (-1e-6, -2e-6)})
+    fails("mask_bit_logit_disagree", masks, FLIP, {(0, 0, 0): (-1e-6, -2e-6)})
+
+
+def test_equal_bits_are_not_a_flip() -> None:
+    fails("mask_not_a_flip", masks, [(0, 0, 0, 1, 1)], {(0, 0, 0): (1e-6, 2e-6)})
+
+
+def test_duplicate_mismatch_entries_fail() -> None:
+    fails("mask_duplicate_entry", masks, FLIP * 3, {(0, 0, 0): (1e-6, -1e-6)})
+
+
+def test_a_truncated_mismatch_list_fails() -> None:
+    fails("mask_list_incomplete", masks, FLIP, {(0, 0, 0): (1e-6, -1e-6)}, differing_bits=100)
+
+
+def test_mask_shapes_must_match_and_be_three_dimensional() -> None:
+    table = {(0, 0, 0): (1e-6, -1e-6)}
+    fails("mask_shape_mismatch", masks, FLIP, table, actual_shape=[300, 200, 199])
+    fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[], actual_shape=[])
+    fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[200, 200], actual_shape=[200, 200])
+
+
+def test_a_position_outside_the_mask_fails() -> None:
+    fails("mask_position_out_of_range", masks, [(300, 0, 0, 1, 0)], {(300, 0, 0): (1e-6, -1e-6)})
 
 
 def test_a_perturbed_frozen_flip_fails() -> None:
     page = json.loads(json.dumps(PAGE_TWO))
     page["mask_mismatches"][0]["reference_logit"] = 0.001
-    with pytest.raises(ValueError, match="mask_mismatch"):
-        contract.compare_masks(mismatches(page), logits(page))
+    fails("mask_logit_beyond_epsilon", masks, mismatches(page), logits(page))
