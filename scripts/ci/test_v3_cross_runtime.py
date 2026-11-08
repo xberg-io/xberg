@@ -12,6 +12,7 @@ import generate_v3_cross_runtime_synthetic as generator
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_synthetic.json").read_text())
 MASK_SHAPE = FIXTURE["mask_shape"]
+ROWS, HEIGHT, WIDTH = MASK_SHAPE
 PAGE_ONE, PAGE_TWO = FIXTURE["pages"]
 EPSILON = contract.MASK_LOGIT_EPSILON
 
@@ -225,18 +226,25 @@ def test_a_truncated_mismatch_list_fails() -> None:
 
 def test_mask_shapes_must_match_and_be_three_dimensional() -> None:
     table = {(0, 0, 0): (1e-6, -1e-6)}
-    fails("mask_shape_mismatch", masks, FLIP, table, actual_shape=[300, 200, 199])
+    fails("mask_shape_mismatch", masks, FLIP, table, actual_shape=[ROWS, HEIGHT, WIDTH - 1])
     fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[], actual_shape=[])
     fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[200, 200], actual_shape=[200, 200])
 
 
 def test_a_zero_or_non_integer_mask_dimension_fails() -> None:
-    for shape in ([0, 200, 200], [300, 0, 200], [300, 200, -1], [300.0, 200, 200], [300, 200, 200.5]):
+    bad_shapes = (
+        [0, HEIGHT, WIDTH],
+        [ROWS, 0, WIDTH],
+        [ROWS, HEIGHT, -1],
+        [float(ROWS), HEIGHT, WIDTH],
+        [ROWS, HEIGHT, WIDTH + 0.5],
+    )
+    for shape in bad_shapes:
         fails("mask_shape_invalid", masks, [], {}, reference_shape=shape, actual_shape=shape)
 
 
 def test_a_position_outside_the_mask_fails() -> None:
-    fails("mask_position_out_of_range", masks, [(300, 0, 0, 1, 0)], {(300, 0, 0): (1e-6, -1e-6)})
+    fails("mask_position_out_of_range", masks, [(ROWS, 0, 0, 1, 0)], {(ROWS, 0, 0): (1e-6, -1e-6)})
 
 
 def test_a_perturbed_synthetic_flip_fails() -> None:
