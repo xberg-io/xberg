@@ -4,7 +4,7 @@ FRACTIONS.
 
 The multipliers, that is, the quotients obtained by dividing 12 by 4, 3, and 12, are 3, 4, and 1.
 
-Hence the sum of the fractions equals 9 b 8 4b + 4c 4c 9 b 8 + 4b 4c 4c 2 8b 8c 4b 4c
+Hence the sum of the fractions equals
 
 | 9a − 12b | 8a − 4b + 4c | a − 4c |
 | --- | --- | --- |

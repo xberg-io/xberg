@@ -43,9 +43,9 @@ Additional useful variables are defined as follows: Combination of equations (32
 
 *I--*
 
-# () [isen, perf] (36)
+()
 
-=._,lv *P=_* [therm pert] (29b)
+[isen, perf] (36) =._,lv *P=_* [therm pert] (29b)
 
 **RELATIONSBETWEENLOCALAND** FREE-STREAM **CONDITIONS**
 
@@ -53,13 +53,15 @@ _49.0 n/_' ft/sec for air
 
 **With** the aid **of the foregoing equations**
 
-it **can** be shown that if *T* is in degrees Rankine *T ,* _--1
+it **can** be shown that if *T* is in degrees Rankine *T ,* _--1 *V*
 
 **2**
 
 (=degrees Fahrenheit +459.6) (29c)
 
-# M: V [adiab, perf] (37) Mach number V
+# M:
+
+[adiab, perf] (37) Mach number *V*
 
 \!
 
@@ -125,7 +127,7 @@ The three reference speeds *at, a,,* and *V,,* are related by .P={I+ 3"-1 *M* _)
 
 1 1
 
-## (v.y= z
+### (v.y= z
 
 [adiab, pert] (46) *at]* 3"--1 _=(1--I-_-
 

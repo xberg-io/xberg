@@ -27,11 +27,7 @@ The annual average COMEX copper price was projected to be about $3.90 per pound 
 | Other countries | 2,850 | 3,100 | 2,830 | 2,900 | 180,000 |
 | World total (rounded) | 21,900 | 22,000 | 25,900 | 27,000 | 1,000,000 |
 
-**World Resources:5** The most recent U.S. Geological Survey assessment of global copper resources indicated that, as of 2015, identified resources contained 2.1 billion tons of copper and undiscovered resources contained an estimated 3.5 billion tons.
-
-7
-
-**Substitutes:** Aluminum substitutes for copper in automobile radiators, cooling and refrigeration tube, electrical equipment, and power cable. Optical fiber substitutes for copper in telecommunications applications, and plastics substitute for copper in drain pipe, plumbing fixtures, and water pipe. Titanium and steel are used in heat exchangers.
+**World Resources:**<sup>**5**</sup> The most recent U.S. Geological Survey assessment of global copper resources indicated that, as of 2015, identified resources contained 2.1 billion tons of copper and undiscovered resources contained an estimated 3.5 billion tons.<sup>7</sup> **Substitutes:** Aluminum substitutes for copper in automobile radiators, cooling and refrigeration tube, electrical equipment, and power cable. Optical fiber substitutes for copper in telecommunications applications, and plastics substitute for copper in drain pipe, plumbing fixtures, and water pipe. Titanium and steel are used in heat exchangers.
 
 e
 

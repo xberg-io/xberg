@@ -2,64 +2,76 @@ For example, if *n = 20* , *M = Q = 3* , and ε *= 01011001001010101101* , then 
 
  *n* 
 
-into N = = 2 matrices of cardinality M
+into N =   = 2 matrices of cardinality M
 
 - Q (3
 - 3 = 9). Note that the last two bits (0 and 1)
 
-   *3* · *3* 
+ *3* · *3* 
 
 *0 1 0 0 1 0* will be discarded. The two matrices are *1 1 0* and *1 0 1* . Note that the first matrix *0 1 0 0 1 1* consists of the first three bits in row 1, the second set of three bits in row 2, and the third set of three bits in row 3. The second matrix is similarly constructed using the next nine bits in the sequence.
 
-- (2) Determine the binary rank ( *R* ) of each matrix, where  = 1,..., *N* . The method for determining
+- (2) Determine the binary rank ( *R*~~) of each matrix, where  = 1,..., *N* . The method for determining the rank is described in Appendix A.
 
-
+For the example in this section, the rank of the first matrix is 2 ( *R*~*1*~ *= 2* ), and the rank of the second matrix is 3 ( *R*~*2*~ *= 3* ).
 
-the rank is described in Appendix A.
+- (3) Let *F*~*M*~ = the number of matrices with *R*~~= *M* (full rank),
 
-For the example in this section, the rank of the first matrix is 2 ( *R1 = 2* ), and the rank of the second matrix is 3 ( *R2 = 3* ).
+*F*~*M-1*~ = the number of matrices with *R*~~= *M-1* (full rank - 1), *N – F*~*M*~ *- F*~*M-1*~ = the number of matrices remaining.
 
-- (3) Let *FM* = the number of matrices with *R*  = *M* (full rank),
+For the example in this section, *F*~*M*~ *= F*~*3*~ *= 1* ( *R*~*2*~ has the full rank of 3 *), F*~*M-1*~ *= F*~*2*~ *= 1* ( *R*~*1*~ has rank 2), and no matrix has any lower rank.
 
-*FM-1* = the number of matrices with *R* = *M-1* (full rank - 1),
+- (4) Compute
 
-
+2 2
 
-*N – FM - FM-1* = the number of matrices remaining.
+( *F* − 0.2888 *N* ) ( *F* − 0.5776 *N* ) ( *N* − *F* − *F* − 0.1336 *N* )<sup>2</sup>
 
-For the example in this section, *FM = F3 = 1* ( *R2* has the full rank of 3 *), FM-1 = F2 = 1* ( *R1* has rank 2), and no matrix has any lower rank.
+2 *M M* −1 *M M* −1
 
-- (4) Compute ( *F* − 0.2888 *N* )
-
-2 ( *F* − 0.5776 *N* ) 2 ( *N* − *F* − *F* − 0.1336 *N* ) 2 *M M* −1 *M M* −1
-
-χ 2 ( *obs* ) = + + .
+χ ( *obs* ) = + + .
 
 0.2888 *N* 0.5776 *N* 0.1336 *N*
 
-For the example in this section,
+2
 
-( 1 − 0.2888
+χ ( *obs* ) = For the example in this section,
 
-- 2 ) 2 ( 1 − 0.5776
-- 2 ) 2 ( 2 − 1 − 1 − 0.1336
-- 2 ) 2
+2
 
-χ 2( *obs* ) = + + *= 0.596953.*
+# (~1~− 0.2888· 2)
 
-0.2888
+\+
 
-- 2 0.5776
-- 2 0.1336
-- 2
+0.2888· 2
 
-2 *obs* ) / 2
+2 −χ ( *obs* ) / 2
 
-- (5) Compute *P* − *value* = *e* −χ (
+- (5) Compute *P* − *value* = *e*
 
-. Since there are 3 classes in the example, the *P-value* for the  χ
+2
 
-2( *obs* )  example is equal to *igamc* 1,  .   2 
+example is equal to *igamc* 1,  
+
+2
+
+# (~1~− 0.5776 · 2)
+
+\+
+
+0.5776 · 2
+
+ χ ( *obs* )   . 2 
+
+2
+
+# (~2~ −1−1− 0.1336 · 2)
+
+*= 0.596953.*
+
+0.1336 · 2
+
+. Since there are 3 classes in the example, the *P-value* for the
 
 For the example in this section, *P-value = e*
 

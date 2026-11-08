@@ -34,7 +34,7 @@ It can be shown that ----c_
 
 **?--cp**
 
-*dp* 7-. *( pY 5u*
+*dp*7-. *( pY 5u*
 
 ## _T\\_/.
 
