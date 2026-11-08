@@ -13,7 +13,7 @@ use crate::extractors::security::SecurityLimits;
 use crate::inference::InferenceTensor;
 use crate::inference::recording::{Captures, record_session, with_profile};
 
-const MODEL_SHA256: &str = "93d1197e55f1c9cb6720275a89684e7ea61cd5830008a837d8c51b19d47926c1";
+const MODEL_SHA256: &str = "45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba";
 const PAGE_COUNT: usize = 2;
 const TENSORS_PER_FORWARD: usize = 3;
 
