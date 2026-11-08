@@ -10,9 +10,7 @@ Here ⟨xy⟩ are the nearest neighbor site pairs, c , c are the creation and an
 
 †
 
-operator n = c c. It is simulable by meron clusters for
-
-V ≥ 2t [45, 48]. In this Letter, we extend the meron cluster method to physically interesting Hamiltonians involving gauge fields, which are lower-dimensional versions of quantum electrodynamics (QED) [60, 61]. The Z~2~- and U(1)-gauge symmetric families are given by:
+operator n = c c. It is simulable by meron clusters for V ≥ 2t [45, 48]. In this Letter, we extend the meron cluster method to physically interesting Hamiltonians involving gauge fields, which are lower-dimensional versions of quantum electrodynamics (QED) [60, 61]. The Z~2~- and U(1)-gauge symmetric families are given by:
 
 N~f~
 
@@ -50,9 +48,7 @@ fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and b
 
 3
 
-− ts~xy,f~ (n~y,f~ − n~x,f~) + 4 These terms serve a similar role as the V = 2t term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric
-
-V ≥ 0 term can be added to the models here in a signproblem-free way. In the Z~2~ gauge theory, the gauge field
+− ts~xy,f~ (n~y,f~ − n~x,f~) + 4 These terms serve a similar role as the V = 2t term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric V ≥ 0 term can be added to the models here in a signproblem-free way. In the Z~2~ gauge theory, the gauge field
 
 1 1
 
