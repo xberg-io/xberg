@@ -1384,6 +1384,40 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      # PIE installs one file, so on macOS the HEIF stack (libheif, libde265, libaom: decode
+      # only) is linked into xberg.so statically rather than shipped as sibling dylibs, which
+      # PIE would drop (#2547). Tagged source retries use this workflow revision's tools. ~keep
+      - name: Checkout macOS HEIF tools
+        if: runner.os == 'macOS'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/build-macos-heif-deps.sh
+            scripts/ci/notices/GPL-3.0.txt
+            scripts/ci/smoke-php-macos-heif.sh
+            scripts/ci/stage-php-macos-notices.sh
+            scripts/ci/verify-php-macos-extension.sh
+            scripts/lib/retry.sh
+            scripts/lib/macho.sh
+
+      - name: Build the static HEIF stack at the macOS floor
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XBERG_HEIF_PROFILE=php-static
+          export XBERG_HEIF_PREFIX="$RUNNER_TEMP/xberg-php-heif"
+          bash .release-tools/scripts/ci/build-macos-heif-deps.sh
+          {
+            echo "XBERG_HEIF_PREFIX=$XBERG_HEIF_PREFIX"
+            echo "PKG_CONFIG_PATH=$XBERG_HEIF_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+            echo "SYSTEM_DEPS_LIBHEIF_LINK=static"
+          } >> "$GITHUB_ENV"
+
       # ~keep ext-php-rs bindgen uses the runner's libclang 18. Zig 0.17 ships newer
       # ARM headers that libclang 18 cannot parse (`__mfp8` and NEON type failures).
       # Zig 0.13 uses LLVM 18 headers while retaining glibc-versioned targets; the job's
@@ -1497,6 +1531,40 @@ jobs:
           windows-compiler: ${{ contains(matrix.platform.target, 'windows') && 'vs17' || '' }}
           version: ${{ needs.prepare.outputs.version }}
           output-dir: dist/php-package
+
+      # The static stack's LGPL components (libheif, libde265) need their license texts and the
+      # pinned source inventory to travel with the binary. The gate then rejects any archive whose
+      # xberg.so imports a non-system library, imports any HEIF or codec library, or targets above
+      # the floor. ~keep
+      - name: Ship codec notices and verify the macOS extension imports no codec
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/php-package/php_*.tgz)
+          [ "${#archives[@]}" = 1 ] || {
+            echo "::error::expected exactly one PHP macOS archive, found ${#archives[@]}"
+            exit 1
+          }
+          bash .release-tools/scripts/ci/stage-php-macos-notices.sh "${archives[0]}" "$XBERG_HEIF_PREFIX" "$GITHUB_WORKSPACE"
+          bash .release-tools/scripts/ci/verify-php-macos-extension.sh "${archives[0]}"
+
+      # The import gate proves what the extension does not need; this proves it still works. It
+      # loads the archived binary with the job's PHP and decodes the upstream HEIC and AVIF
+      # examples through it. ~keep
+      - name: Load the macOS extension and decode HEIC and AVIF
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/php-package/php_*.tgz)
+          [ "${#archives[@]}" = 1 ] || {
+            echo "::error::expected exactly one PHP macOS archive, found ${#archives[@]}"
+            exit 1
+          }
+          bash .release-tools/scripts/ci/smoke-php-macos-heif.sh "${archives[0]}"
 
       # xberg.so carries DT_NEEDED libonnxruntime.so.1 with a $ORIGIN rpath. The archive
       # holds only xberg.so, so add the runtime beside it and refresh the checksum sidecar.
@@ -2561,6 +2629,48 @@ jobs:
         shell: bash
         run: echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
+      # The NIF links libheif, which Homebrew installs at an absolute path no user Mac has. Build
+      # the encoder codec stack from source at the macOS floor and ship it as archive siblings
+      # resolved through @loader_path (#2547). Tagged source retries use this workflow revision's
+      # tools. ~keep
+      - name: Checkout macOS closure tools
+        if: runner.os == 'macOS'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/build-macos-heif-deps.sh
+            scripts/ci/macos_elixir_archive.py
+            scripts/ci/smoke_macos_elixir_archive.exs
+            scripts/ci/vendor-native-closure-macos.sh
+            scripts/lib/retry.sh
+            scripts/lib/macho.sh
+            mise.toml
+            mise.lock
+
+      - name: Setup Python for the macOS closure tools
+        if: runner.os == 'macOS'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          working-directory: .release-tools
+          tools: python
+
+      - name: Build the encoder codec stack at the macOS floor
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XBERG_HEIF_PROFILE=elixir-encoders
+          export XBERG_HEIF_PREFIX="$RUNNER_TEMP/xberg-elixir-heif"
+          bash .release-tools/scripts/ci/build-macos-heif-deps.sh
+          {
+            echo "XBERG_HEIF_PREFIX=$XBERG_HEIF_PREFIX"
+            echo "PKG_CONFIG_PATH=$XBERG_HEIF_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          } >> "$GITHUB_ENV"
+
       # Windows falls through to pyke's default download strategy, which
       # always imports DirectML.dll on Windows (xberg-io/xberg#1456), so
       # force ORT_STRATEGY=system so that import is never introduced. The
@@ -2582,6 +2692,44 @@ jobs:
           nif-version: ${{ needs.prepare.outputs.version }}
           nif-api-version: ${{ matrix.nif }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+
+      - name: Stage, audit and load the macOS Elixir NIF archive
+        if: runner.os == 'macOS' && needs.prepare.outputs.dry_run != 'true'
+        shell: bash
+        timeout-minutes: 15
+        env:
+          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/elixir-natives/*.tar.gz)
+          [ "${#archives[@]}" = 1 ] || {
+            echo "::error::expected exactly one macOS NIF archive, found ${#archives[@]}"
+            exit 1
+          }
+          raw="${archives[0]}"
+          name="$(basename "$raw")"
+          work="$(mktemp -d "$RUNNER_TEMP/xberg-elixir-stage.XXXXXXXX")"
+          work="$(cd "$work" && pwd -P)"
+          mkdir "$work/final" "$work/positive" "$work/negative" "$work/home" "$work/cache"
+          tools=.release-tools/scripts/ci
+          python3 "$tools/macos_elixir_archive.py" stage "$raw" \
+            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE" --output-dir "$work/final"
+          python3 "$tools/macos_elixir_archive.py" verify "$work/final/$name" \
+            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE"
+          beam_path="$(dirname "$(command -v elixir)"):$(dirname "$(command -v erl)"):/usr/bin:/bin:/usr/sbin:/sbin"
+          probe=(env -i "PATH=$beam_path" "HOME=$work/home" "XBERG_CACHE_DIR=$work/cache"
+            XBERG_EXPECT_HOSTED_BEAM=1 elixir "$tools/smoke_macos_elixir_archive.exs")
+          native="$GITHUB_WORKSPACE/packages/elixir/lib/xberg/native.ex"
+          "${probe[@]}" encode-decode "$work/final/$name" "$native" "$work/positive"
+          if "${probe[@]}" missing-x265 "$work/final/$name" "$native" "$work/negative" >"$work/negative.log" 2>&1; then
+            echo "::error::The missing-x265 control unexpectedly loaded"
+            exit 1
+          fi
+          grep -Fq "Library not loaded: @loader_path/libx265." "$work/negative.log"
+          rm -f "$raw"
+          cp "$work/final/$name" "dist/elixir-natives/$name"
+          echo "Staged and loaded $name with four relocated codec siblings." >> "$GITHUB_STEP_SUMMARY"
 
       # Retries of older source tags must use closure tools from this workflow revision. ~keep
       - name: Checkout Windows release closure tools

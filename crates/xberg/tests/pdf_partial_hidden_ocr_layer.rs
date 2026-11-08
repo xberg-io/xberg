@@ -160,6 +160,8 @@ fn default_tesseract() -> ExtractionConfig {
 }
 
 async fn extract(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
+    // Every test installs the one global subscriber before its first event, so none is cached off.
+    probe_log();
     let mut batch = xberg::extract(
         ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", None),
         config,
@@ -538,4 +540,298 @@ async fn tighter_global_or_ocr_probe_limit_recovers_only_the_first_partial_page(
         assert_page_words(&document, 0, &expected(COMPLETE));
         assert_page_words(&document, 1, &cut_words());
     }
+}
+
+fn rot(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            'a'..='z' => (b'a' + (c as u8 - b'a' + 13) % 26) as char,
+            'A'..='Z' => (b'A' + (c as u8 - b'A' + 13) % 26) as char,
+            '0'..='9' => (b'0' + (c as u8 - b'0' + 5) % 10) as char,
+            other => other,
+        })
+        .collect()
+}
+
+fn junk_layer_scan(raster: &Stream, rows: &[usize], render_mode: u8) -> Vec<u8> {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, rows, 1.0, 0.0, render_mode, None);
+    for &index in rows {
+        let text = LINES[index].1;
+        assert_eq!(operators.matches(&format!("({text})")).count(), 1);
+        operators = operators.replace(&format!("({text})"), &format!("({})", rot(text)));
+    }
+    page_pdf(operators, Some(raster.clone()))
+}
+
+fn junk_words(rows: &[usize]) -> Vec<String> {
+    expected(rows).into_iter().map(rot).collect()
+}
+
+#[tokio::test]
+async fn confident_ocr_replaces_an_invisible_layer_that_shares_no_words_with_the_picture() {
+    let raster = make_raster();
+    let pdf = junk_layer_scan(&raster, PARTIAL, 3);
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    assert_eq!(words(&native), junk_words(PARTIAL));
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(automatic.metadata.ocr_used);
+    assert_eq!(words(&automatic), expected(COMPLETE));
+    assert!(automatic.tables.is_empty());
+}
+
+#[tokio::test]
+async fn a_visible_layer_that_disagrees_with_the_picture_is_never_replaced() {
+    let raster = make_raster();
+    let pdf = junk_layer_scan(&raster, PARTIAL, 0);
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    let kept = words(&automatic);
+    for word in junk_words(PARTIAL) {
+        assert!(kept.contains(&word.as_str()), "visible native word {word} was dropped");
+    }
+}
+
+#[tokio::test]
+async fn an_invisible_layer_that_mostly_matches_the_picture_keeps_its_unmatched_words() {
+    let raster = make_raster();
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, PARTIAL, 1.0, 0.0, 3, Some("Sealed voucher X512"));
+    let pdf = page_pdf(operators, Some(raster));
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(!automatic.metadata.ocr_used);
+    assert!(words(&automatic).contains(&"X512"));
+}
+
+// Averaging 4x4 blocks leaves the lines readable at mean confidence 0.30, below the 0.75 gate.
+fn blocky(raster: &Stream, factor: usize) -> Stream {
+    let (width, height) = (RASTER_WIDTH as usize, RASTER_HEIGHT as usize);
+    let mut blurred = raster.clone();
+    for top in (0..height).step_by(factor) {
+        for left in (0..width).step_by(factor) {
+            let (rows, columns) = (top..(top + factor).min(height), left..(left + factor).min(width));
+            for channel in 0..3 {
+                let at = |y: usize, x: usize| (y * width + x) * 3 + channel;
+                let sum: usize = rows
+                    .clone()
+                    .flat_map(|y| columns.clone().map(move |x| (y, x)))
+                    .map(|(y, x)| usize::from(raster.content[at(y, x)]))
+                    .sum();
+                let mean = (sum / (rows.len() * columns.len())) as u8;
+                for y in rows.clone() {
+                    for x in columns.clone() {
+                        blurred.content[at(y, x)] = mean;
+                    }
+                }
+            }
+        }
+    }
+    blurred
+}
+
+#[tokio::test]
+async fn low_confidence_ocr_does_not_replace_an_invisible_layer() {
+    let pdf = junk_layer_scan(&blocky(&make_raster(), 4), PARTIAL, 3);
+    let forced = extract(
+        &pdf,
+        &ExtractionConfig {
+            force_ocr: true,
+            pages: Some(xberg::core::config::PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ..default_tesseract()
+        },
+    )
+    .await;
+    let confidence = forced.pages.as_ref().and_then(|pages| pages[0].ocr_confidence.as_ref());
+    let score = confidence
+        .and_then(|confidence| confidence.score)
+        .expect("calibrated score");
+    assert!(score < 0.75, "{score}");
+    assert!(
+        forced.content.split_whitespace().count() > 60,
+        "the picture is still readable"
+    );
+
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(!automatic.metadata.ocr_used);
+    assert_eq!(words(&automatic), junk_words(PARTIAL));
+}
+
+const OTHER_PROSE: &[&str] = &[
+    "Quarterly shipping volumes rose steadily across several northern ports",
+    "while regional freight rates remained broadly unchanged for most carriers",
+    "Analysts expected demand to soften once seasonal contracts were renewed",
+    "although warehouse capacity continued to tighten in coastal districts",
+    "Municipal planners approved a new bridge connecting two growing suburbs",
+    "after months of debate about funding, traffic projections and safety",
+    "Engineers noted that construction would begin early next spring if permits",
+    "arrived on schedule and suppliers delivered the promised steel on time",
+    "Local businesses welcomed the announcement and predicted busier weekends",
+    "as commuters discovered shorter routes between residential neighborhoods",
+    "Officials promised regular public updates throughout the entire project",
+];
+
+fn covered_prose_layer_scan(raster: &Stream) -> Vec<u8> {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\nBT /F1 4 Tf 3 Tr\n".to_owned();
+    for (index, text) in OTHER_PROSE.iter().enumerate() {
+        let y = PAGE_HEIGHT - LINES[index].0 * 72.0 / RASTER_DPI as f32;
+        for segment in 0..3 {
+            let x = 67.2 + 160.0 * segment as f32;
+            writeln!(operators, "1 0 0 1 {x} {y} Tm ({text}) Tj").expect("write covering prose");
+        }
+    }
+    operators.push_str("ET\n");
+    page_pdf(operators, Some(raster.clone()))
+}
+
+#[tokio::test]
+async fn a_covered_invisible_layer_that_the_language_check_cannot_judge_is_read_and_replaced() {
+    let raster = make_raster();
+    let pdf = junk_layer_scan(&raster, COMPLETE, 3);
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(automatic.metadata.ocr_used);
+    assert_eq!(words(&automatic), expected(COMPLETE));
+}
+
+#[tokio::test]
+async fn a_covered_invisible_layer_judged_plausible_prose_does_not_run_the_probe() {
+    let raster = make_raster();
+    let pdf = covered_prose_layer_scan(&raster);
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    assert!(
+        native.content.len() > 2000,
+        "enough prose for the language check to judge"
+    );
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    let Some(xberg::FormatMetadata::Pdf(metadata)) = &automatic.metadata.format else {
+        panic!("PDF metadata");
+    };
+    assert_eq!(metadata.implausible_text_pages.as_deref(), Some(&[][..]));
+    assert!(
+        !automatic
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("holds enough prose")),
+        "the language check must judge the layer, not abstain"
+    );
+    // Forced OCR reads none of this prose, so only the probe could replace the layer.
+    assert!(!automatic.metadata.ocr_used);
+    assert_eq!(automatic.content, native.content);
+}
+
+#[derive(Default)]
+struct Fields(std::collections::BTreeMap<String, String>);
+
+impl tracing::field::Visit for Fields {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.insert(field.name().to_owned(), format!("{value:?}"));
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0.insert(field.name().to_owned(), value.to_owned());
+    }
+}
+
+struct Case(String);
+
+/// Probe decisions by the `case` span that was current when they were logged.
+#[derive(Clone, Default)]
+struct ProbeDecisions(std::sync::Arc<std::sync::Mutex<Vec<(String, Fields)>>>);
+
+impl<S> tracing_subscriber::Layer<S> for ProbeDecisions
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::Id,
+        context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut fields = Fields::default();
+        attrs.record(&mut fields);
+        if let Some(case) = fields.0.remove("case") {
+            context
+                .span(id)
+                .expect("new span exists")
+                .extensions_mut()
+                .insert(Case(case));
+        }
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, context: tracing_subscriber::layer::Context<'_, S>) {
+        let mut fields = Fields::default();
+        event.record(&mut fields);
+        if fields.0.get("message").map(String::as_str) != Some("Hidden PDF text probe decision") {
+            return;
+        }
+        let case = context
+            .event_scope(event)
+            .and_then(|scope| {
+                scope
+                    .from_root()
+                    .find_map(|span| span.extensions().get::<Case>().map(|c| c.0.clone()))
+            })
+            .unwrap_or_default();
+        self.0.lock().expect("decision lock").push((case, fields));
+    }
+}
+
+fn probe_log() -> &'static ProbeDecisions {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    static LOG: std::sync::OnceLock<ProbeDecisions> = std::sync::OnceLock::new();
+    LOG.get_or_init(|| {
+        let log = ProbeDecisions::default();
+        let subscriber = tracing_subscriber::registry().with(log.clone());
+        tracing::subscriber::set_global_default(subscriber).expect("the only subscriber in this test binary");
+        // Tests that ran earlier cached "no subscriber" as every call site's interest.
+        tracing::callsite::rebuild_interest_cache();
+        log
+    })
+}
+
+async fn probe_decisions(case: &str, pdf: &[u8]) -> Vec<(String, String, String)> {
+    use tracing::Instrument as _;
+    let log = probe_log();
+    extract(pdf, &default_tesseract())
+        .instrument(tracing::info_span!("probe", case = case))
+        .await;
+    log.0
+        .lock()
+        .expect("decision lock")
+        .iter()
+        .filter(|(logged, _)| logged == case)
+        .map(|(_, fields)| {
+            (
+                fields.0["page"].clone(),
+                fields.0["plausible"].clone(),
+                fields.0["probed"].clone(),
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn the_probe_decision_follows_the_language_check_on_a_covered_layer() {
+    let raster = make_raster();
+    let judged = probe_decisions("prose", &covered_prose_layer_scan(&raster)).await;
+    assert_eq!(judged, [("1".into(), "true".into(), "false".into())]);
+
+    let abstained = probe_decisions("junk", &junk_layer_scan(&raster, COMPLETE, 3)).await;
+    assert_eq!(abstained, [("1".into(), "false".into(), "true".into())]);
 }

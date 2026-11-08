@@ -44,6 +44,39 @@ def test_php_linux_artifacts_are_floor_built_and_verified() -> None:
     assert 'bash "$GITHUB_WORKSPACE/.release-tools/scripts/ci/smoke-test-php-debian12.sh"' in block
 
 
+def test_php_macos_extension_links_the_decode_only_heif_stack_statically() -> None:
+    block = job_block(WORKFLOW.read_text(), "php-extension")
+    build_stack = block.index("Build the static HEIF stack at the macOS floor")
+    build = block.index("xberg-io/actions/build-php-extension@v1")
+    package = block.index("xberg-io/actions/package-php-pie@v1")
+    notices = block.index("bash .release-tools/scripts/ci/stage-php-macos-notices.sh")
+    gate = block.index("bash .release-tools/scripts/ci/verify-php-macos-extension.sh")
+    upload = block.index("actions/upload-artifact@v7", gate)
+    smoke = block.index("bash .release-tools/scripts/ci/smoke-php-macos-heif.sh")
+    assert build_stack < build < package < notices < gate < smoke < upload
+    assert "scripts/ci/smoke-php-macos-heif.sh\n" in block[: block.index("Build the static HEIF stack")]
+    assert "scripts/ci/notices/GPL-3.0.txt\n" in block[: block.index("Build the static HEIF stack")]
+
+    step = block[build_stack : block.index("\n      # ~keep", build_stack)]
+    assert "export XBERG_HEIF_PROFILE=php-static" in step
+    assert "SYSTEM_DEPS_LIBHEIF_LINK=static" in step
+    assert "PKG_CONFIG_PATH=$XBERG_HEIF_PREFIX/lib/pkgconfig" in step
+    assert "x265" not in step
+    assert block.count("if: runner.os == 'macOS'") >= 3
+
+
+def test_elixir_macos_nif_ships_the_codec_closure_and_loads_it() -> None:
+    block = job_block(WORKFLOW.read_text(), "elixir-natives")
+    build_stack = block.index("Build the encoder codec stack at the macOS floor")
+    build = block.index("xberg-io/actions/build-elixir-natives@v1")
+    stage = block.index('macos_elixir_archive.py" stage')
+    load = block.index("missing-x265")
+    upload = block.index("actions/upload-artifact@v7", load)
+    assert build_stack < build < stage < load < upload
+    assert "export XBERG_HEIF_PROFILE=elixir-encoders" in block
+    assert block.count('macos_elixir_archive.py" verify') == 1
+
+
 def test_php_release_requires_every_supported_php_version_on_every_platform() -> None:
     block = job_block(WORKFLOW.read_text(), "verify-assets")
     expected = {
