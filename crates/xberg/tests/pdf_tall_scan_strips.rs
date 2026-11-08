@@ -8,6 +8,7 @@
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod, extract as extract_public};
 
 const TALL_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf");
+const MIXED_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-mixed.pdf");
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
 const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
 const TALL_PREDICTOR: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/predictor-mixed.pdf");
@@ -212,8 +213,10 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
     }
 }
 
+/// A single-page scan takes the whole-document route, which reads no embedded image after a render
+/// refusal: Djot output has no strip recovery, so it keeps the refusal as it is.
 #[test]
-fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
+fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false,
         "output_format": "djot",
@@ -231,7 +234,7 @@ fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
     let error = match outcome {
         Err(error) => error,
         Ok(result) => panic!(
-            "the noisy retry read must not be reported as the page text: {:?}",
+            "the refused page must not be reported as read: {:?}",
             result
                 .results
                 .first()
@@ -245,13 +248,38 @@ fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
     else {
         panic!("expected the typed render refusal, got {error:?}");
     };
-    assert!(message.contains("the retry read was rejected as noise"), "{message}");
+    assert!(message.contains("image working budget"), "{message}");
     let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
         source
             .source()
             .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
     });
     assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
+}
+
+/// The retry of a refused page on its embedded image runs on the mixed route, where a native page
+/// precedes the scan. The dimension clamp leaves the read illegible, so the page stays unread and
+/// its failure names the noise instead of reporting the read as the page text.
+#[test]
+fn tall_gray_jpeg_page_read_as_noise_is_reported_as_a_failure_not_adopted() {
+    let document = extract(MIXED_JPEG, &extraction_config());
+    let native = "The native page remains unchanged.\n".repeat(10);
+    assert_eq!(words(&document.content), words(&native));
+    let pages = document.pages.as_ref().expect("two original PDF pages");
+    assert_eq!(pages.len(), 2);
+    assert!(pages[1].content.trim().is_empty(), "{:?}", pages[1].content);
+    let failures = document
+        .ocr_page_failures
+        .as_ref()
+        .expect("the refused page is recorded");
+    let [failure] = failures.as_slice() else {
+        panic!("expected one page failure, got {failures:?}");
+    };
+    assert_eq!(failure.page, 2);
+    assert!(!failure.recovered);
+    for part in ["image working budget", "the retry read was rejected as noise"] {
+        assert!(failure.error.contains(part), "{part}: {}", failure.error);
+    }
 }
 
 fn assert_exact_tall_source_text(source: &[u8]) {
