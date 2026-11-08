@@ -225,16 +225,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
   Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
 
+- **(ocr): Limit the glued-cell veto's leader exemption to the gap at the leader (#2704).**
+  A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` counts as a leader and `‥` counts toward one.
+
+- **(ocr): Run no-binarization contrast preprocessing on the 8-bit plane for genuinely gray input.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which shrank or refused the sparse-retry fallback's upscale. A raster whose channels are equal in every pixel now becomes an 8-bit Pix and frees its RGB before background normalization and sharpening; the result is pixel-identical to the colour path, and the native phases peak at 7.0 bytes per pixel as measured with Leptonica's allocator (29,360,128 bytes at 2048x2048 against a modelled 29,360,384). Colour input keeps the colour path and its model, a step that fails after the RGB is freed keeps the best Pix already built, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does. The receipt OCR test is ignored until #2699 is resolved: its expected spelling does not reproduce at default limits and the cause is not isolated.
+
 - **(pdf): Honor graphics-state dash patterns and zero-opacity strokes in native PDF path extraction.** (#2332)
   All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour for clamped zero opacity; this prevents false HTML headers from those separators.
   Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
   Partial stroke opacity, fill opacity (`ca`), soft masks (`SMask`) and blend modes (`BM`) remain unmodelled in path-based header visibility proof.
 
 - **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
-  The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that spans more than one read word now keeps the OCR read.
+  The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that joins read words a cell apart now keeps the OCR read.
 
 - **(pdf): Stop a math line such as `X = Y` from reading as a numbered heading (#2688).**
   A leading roman numeral or number matched the heading enumerator whatever followed it, so a formula opening with a variable (`X = Y`, `2 + ...`), a decimal (`0.03 ± 0.01`, `1.5 = x`) or a DOI tail (`10.1109/IPIN.2018`) became a heading and split its paragraph. An enumerator now fails to be a heading when a math operator (`= + < > ^ ± ≤ −` and the like) follows it, or when `/` or `*` is followed directly by an operand, as in `12/1996`. So `3.2 ± 0.1`, `4.1 × Scaling` and `1.2/1.3 Results` are no longer headings, while `IV. Results`, `II Methods`, `1/ INTRODUCTION` and `IV - Results` still are.
+
+- **(ocr): Recover tall scans after OCR preprocessing reduces their read resolution.** (#2502)
+  Neutral RGB tall scans no longer require unfiltered page-paint streams: raw, Flate and ASCII85+Flate wrappers
+  are eligible only after the decoded full-page draw and every RGB sample's neutrality are certified.
+  Line geometry scales up with source density while preserving the prior limits below 150 DPI;
+  memory, reading-order and recognition-quality checks remain in force.
+  Original read-frame diagnostics survive automatic per-page OCR and document rebuilding, with accepted page IDs
+  retained in order and the existing single-frame metadata object preserved for compatibility.
 
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.

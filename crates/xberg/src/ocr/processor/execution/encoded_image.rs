@@ -17,6 +17,9 @@ struct Preparation<'a> {
     images: Option<&'a ImageExtractionConfig>,
     ci_debug_enabled: bool,
     allow_bounded_inferred_upscale: bool,
+    /// Whether the candidate being prepared is a genuinely gray raster on the gray contrast path, so the
+    /// workspace model charges that path's own peak. Reset when a candidate is decoded. ~keep
+    gray_input: std::cell::Cell<bool>,
 }
 
 struct Assessment {
@@ -58,6 +61,7 @@ pub(super) fn prepare_with_dpi_policy(
         // A caller-selected preprocessing policy keeps its requested raster budget; a policy
         // the engine chose may fall back to the largest upscale that fits. ~keep
         allow_bounded_inferred_upscale: allow_bounded_inferred_upscale || config.preprocessing.is_none(),
+        gray_input: std::cell::Cell::new(false),
     };
     let mut assessment = Assessment {
         policy: config
@@ -91,6 +95,7 @@ impl Preparation<'_> {
     }
 
     fn decode(&self, assessment: &Assessment) -> crate::Result<DecodedOcrImage> {
+        self.gray_input.set(false);
         let planned = self.config.preprocessing.clone().unwrap_or_default();
         let dpi_config = ocr_dpi_config(&planned, self.images);
         let rejected_policy = std::cell::Cell::new(false);
@@ -175,15 +180,27 @@ impl Preparation<'_> {
         })
     }
 
+    fn phase_peak(
+        &self,
+        width: u32,
+        height: u32,
+        preprocessing: Option<&ImagePreprocessingConfig>,
+    ) -> crate::Result<Option<u64>> {
+        if self.gray_input.get() {
+            native_image_budget::known_gray_phase_peak(width, height, self.bytes.len(), preprocessing)
+        } else {
+            native_image_budget::known_phase_peak(width, height, self.bytes.len(), preprocessing)
+        }
+    }
+
     fn known_native_fits(
         &self,
         dimensions: (u32, u32),
         preprocessing: Option<&ImagePreprocessingConfig>,
     ) -> crate::Result<bool> {
-        Ok(
-            native_image_budget::known_phase_peak(dimensions.0, dimensions.1, self.bytes.len(), preprocessing)?
-                .is_none_or(|peak| peak <= self.limits.max_content_size as u64),
-        )
+        Ok(self
+            .phase_peak(dimensions.0, dimensions.1, preprocessing)?
+            .is_none_or(|peak| peak <= self.limits.max_content_size as u64))
     }
 
     fn prepare_candidate(&self, decoded: DecodedOcrImage) -> crate::Result<Candidate> {
@@ -199,6 +216,10 @@ impl Preparation<'_> {
             self.config.known_full_page_scan,
         );
         let policy = preprocessing.as_deref();
+        self.gray_input.set(
+            policy.is_some_and(native_image_budget::releases_source_rgb)
+                && super::super::super::preprocessing::rgb_is_gray(decoded.image.as_raw()),
+        );
         self.check_reduced_policy(&decoded, policy)?;
         let dpi = match self.candidate_dpi(&decoded, policy) {
             Ok(dpi) => dpi,
@@ -238,6 +259,23 @@ impl Preparation<'_> {
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
     }
 
+    /// PNG and TIFF always may. A full-size JPEG may only when the engine chose the policy and the
+    /// resolution is inferred: the caller's requested upscale keeps its refusal, and a reduced
+    /// decode has no inferred resolution of the original to scale. ~keep
+    fn can_shrink_upscale(&self, decoded: &DecodedOcrImage) -> bool {
+        match image::guess_format(self.bytes) {
+            Ok(image::ImageFormat::Png | image::ImageFormat::Tiff) => true,
+            Ok(image::ImageFormat::Jpeg) => {
+                self.allow_bounded_inferred_upscale
+                    && decoded.scale_denominator == 1
+                    && self
+                        .source_dpi(decoded.original_width, decoded.original_height)
+                        .is_none()
+            }
+            _ => false,
+        }
+    }
+
     fn budgeted_upscale(
         &self,
         decoded: &DecodedOcrImage,
@@ -250,11 +288,7 @@ impl Preparation<'_> {
             || source_dpi <= 0.0
             || normalized.0 <= width
             || normalized.1 <= height
-            || self.is_jpeg()
-            || !matches!(
-                image::guess_format(self.bytes),
-                Ok(image::ImageFormat::Png | image::ImageFormat::Tiff)
-            )
+            || !self.can_shrink_upscale(decoded)
             || (!self.allow_bounded_inferred_upscale && self.source_dpi(width, height).is_none())
             || self.known_native_fits(normalized, Some(policy))?
         {
@@ -265,7 +299,8 @@ impl Preparation<'_> {
         let source = decoded.image.as_raw();
         let source_extra = source.capacity().saturating_sub(source.len());
         let resize_limit = self.limits.max_content_size.saturating_sub(source_extra);
-        if native_image_budget::known_phase_peak(width, height, self.bytes.len(), Some(policy))?
+        if self
+            .phase_peak(width, height, Some(policy))?
             .is_none_or(|peak| peak > resize_limit as u64)
         {
             return Ok(None);
@@ -284,8 +319,7 @@ impl Preparation<'_> {
         dpi_workspace::largest_feasible_upscale(lower, upper, |target| {
             dpi_config.target_dpi = target;
             let dimensions = normalized_image_dimensions(width, height, &dpi_config, Some(source_dpi));
-            let native_peak =
-                native_image_budget::known_phase_peak(dimensions.0, dimensions.1, self.bytes.len(), Some(policy))?;
+            let native_peak = self.phase_peak(dimensions.0, dimensions.1, Some(policy))?;
             let native_limit = if dimensions == (width, height) {
                 resize_limit
             } else {
@@ -332,12 +366,7 @@ impl Preparation<'_> {
             Some(source_dpi),
         );
         let extra_capacity = prepared.data.capacity().saturating_sub(prepared.data.len()) as u64;
-        let peak = native_image_budget::known_phase_peak(
-            prepared.width,
-            prepared.height,
-            self.bytes.len(),
-            prepared.preprocessing.as_ref(),
-        )?;
+        let peak = self.phase_peak(prepared.width, prepared.height, prepared.preprocessing.as_ref())?;
         if peak
             .and_then(|peak| peak.checked_add(extra_capacity))
             .is_none_or(|peak| peak > self.limits.max_content_size as u64)

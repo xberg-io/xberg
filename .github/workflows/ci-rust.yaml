@@ -18,6 +18,8 @@ on:
       - "mise.lock"
       - "mise-tasks/rust.toml"
       - "mise-tasks/rust/**"
+      - "mise-tasks/nli/**"
+      - "tools/benchmark-harness/nli_qualification/**"
       - "scripts/ci/rust/**"
       - "scripts/ci/install-system-deps/**"
       - ".github/actions/install-system-deps/**"
@@ -122,6 +124,11 @@ jobs:
       - name: Verify system Tesseract dynamic linking
         if: matrix.os == 'ubuntu-latest'
         run: mise run rust:check:tesseract-dynamic
+        shell: bash
+
+      - name: Verify NLI qualification contracts and runtime
+        if: matrix.os == 'ubuntu-latest'
+        run: mise run nli:ci
         shell: bash
 
       - name: Run clippy
