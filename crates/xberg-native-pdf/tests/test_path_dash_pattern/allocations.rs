@@ -51,15 +51,31 @@ impl Drop for CountingScope {
     }
 }
 
-fn extraction_allocations(states: usize) -> usize {
+#[derive(Clone, Copy, Debug)]
+enum StateStorage {
+    Inline,
+    IndirectDictionary,
+    IndirectState,
+}
+
+fn extraction_allocations(states: usize, storage: StateStorage) -> usize {
     const GS_OPERATORS: usize = 128;
     let states = (0..states)
         .map(|index| format!("/S{index} << /CA 1 >>"))
         .collect::<Vec<_>>()
         .join(" ");
     let content = format!("{}0 700 m 300 700 l S", "/S0 gs ".repeat(GS_OPERATORS));
-    let resources = format!("/ExtGState << {states} >>");
-    let document = document_with_resource_objects(content.as_bytes(), &resources, &[]);
+    let (resources, objects) = match storage {
+        StateStorage::Inline => (format!("/ExtGState << {states} >>"), vec![]),
+        StateStorage::IndirectDictionary => ("/ExtGState 5 0 R".to_owned(), vec![format!("<< {states} >>")]),
+        // Unknown keys are legal extension data and still get deep-cloned by load_object.
+        StateStorage::IndirectState => (
+            "/ExtGState << /S0 5 0 R >>".to_owned(),
+            vec![format!("<< /CA 1 /Unused << {states} >> >>")],
+        ),
+    };
+    let objects = objects.iter().map(String::as_str).collect::<Vec<_>>();
+    let document = document_with_resource_objects(content.as_bytes(), &resources, &objects);
     assert_eq!(document.extract_paths(0).unwrap().len(), 1);
     ALLOCATIONS.set(0);
     COUNTING.set(true);
@@ -70,15 +86,29 @@ fn extraction_allocations(states: usize) -> usize {
     ALLOCATIONS.get()
 }
 
-#[test]
-fn should_not_clone_all_inline_states_for_each_gs_operator() {
+fn assert_bounded_state_allocations(storage: StateStorage) {
     const EXTRA_STATES: usize = 63;
     // One-time resource copies can grow with states; 128 gs operators must not multiply them.
     const ALLOCATIONS_PER_EXTRA_STATE: usize = 16;
-    let small = extraction_allocations(1);
-    let large = extraction_allocations(1 + EXTRA_STATES);
+    let small = extraction_allocations(1, storage);
+    let large = extraction_allocations(1 + EXTRA_STATES, storage);
     assert!(
         large <= small + EXTRA_STATES * ALLOCATIONS_PER_EXTRA_STATE,
-        "inline-state copies multiplied by gs count: one state={small}, 64 states={large}"
+        "{storage:?} copies multiplied by gs count: one state={small}, 64 states={large}"
     );
+}
+
+#[test]
+fn should_not_clone_all_inline_states_for_each_gs_operator() {
+    assert_bounded_state_allocations(StateStorage::Inline);
+}
+
+#[test]
+fn should_not_clone_indirect_extgstate_dictionary_for_each_gs_operator() {
+    assert_bounded_state_allocations(StateStorage::IndirectDictionary);
+}
+
+#[test]
+fn should_not_clone_indirect_named_state_for_each_gs_operator() {
+    assert_bounded_state_allocations(StateStorage::IndirectState);
 }

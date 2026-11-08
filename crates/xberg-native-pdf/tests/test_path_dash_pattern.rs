@@ -265,7 +265,7 @@ fn an_extgstate_empty_dash_array_overrides_an_earlier_dash() {
 #[test]
 fn a_form_solid_opaque_override_preserves_the_page_state_and_restore() {
     let paths = paths_with_form_resources(
-        b"q /GS gs /X1 Do 0 700 m 300 700 l S Q 0 690 m 300 690 l S",
+        b"q /GS gs /X1 Do /GS gs 0 700 m 300 700 l S Q 0 690 m 300 690 l S",
         b"/GS gs 0 50 m 100 50 l S",
         "[1 0 0 1 0 0]",
         "/ExtGState << /GS << /D [[3 2] 0] /CA 0 >> >>",
@@ -346,4 +346,72 @@ fn finite_positive_ca_outside_f32_range_clamps_to_one() {
     );
     assert_eq!(paths.len(), 1);
     assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+}
+
+#[test]
+fn repeated_dash_only_state_preserves_the_current_inherited_alpha() {
+    let paths = paths_with_extgstate(
+        b"/Dash gs /Clear gs /Dash gs 0 700 m 300 700 l S /Visible gs /Dash gs 0 690 m 300 690 l S",
+        "/Dash << /D [[3 2] 1] >> /Clear << /CA 0 >> /Visible << /CA 1 >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].stroke_color, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[1].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+}
+
+#[test]
+fn repeated_alpha_only_state_preserves_the_current_inherited_dash() {
+    let paths = paths_with_extgstate(
+        b"/Visible gs [7 1] 2 d /Visible gs 0 700 m 300 700 l S [] 0 d /Visible gs 0 690 m 300 690 l S",
+        "/Visible << /CA 1 >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].dash_pattern, Some((vec![7.0, 1.0], 2.0)));
+    assert_eq!(paths[1].dash_pattern, None);
+    for path in paths {
+        assert_eq!(path.stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    }
+}
+
+#[test]
+fn missing_page_state_does_not_shadow_form_override_or_leak_back_after_restore() {
+    let paths = paths_with_form_resources(
+        b"/GS gs /X1 Do /GS gs 0 700 m 300 700 l S",
+        b"/GS gs 0 50 m 100 50 l S",
+        "[1 0 0 1 0 0]",
+        "",
+        "/Resources << /ExtGState << /GS << /CA 0 >> >> >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].stroke_color, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[1].dash_pattern, None);
+}
+
+#[test]
+fn warmed_page_state_is_not_reused_inside_form_resources_without_extgstate() {
+    let paths = paths_with_form_resources(
+        b"/GS gs q [] 0 d /Visible gs /X1 Do Q /Visible gs 0 700 m 300 700 l S",
+        b"/GS gs 0 50 m 100 50 l S",
+        "[1 0 0 1 0 0]",
+        "/ExtGState << /GS << /D [[3 2] 1] /CA 0 >> /Visible << /CA 1 >> >>",
+        "/Resources << >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[0].dash_pattern, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[1].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+}
+
+#[test]
+fn repeated_extgstate_dash_uses_the_current_matrix_not_the_lookup_matrix() {
+    let paths = paths_with_extgstate(
+        b"/GS gs q 2 0 0 2 0 0 cm /GS gs 0 350 m 150 350 l S Q /GS gs 0 690 m 300 690 l S",
+        "/GS << /D [[3 2] 1] >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].dash_pattern, Some((vec![6.0, 4.0], 2.0)));
+    assert_eq!(paths[1].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
 }

@@ -392,33 +392,33 @@ impl PdfDocument {
         extractor: &mut crate::extractors::paths::PathExtractor,
         stack: &mut crate::extractors::paths::PathGraphicsStateStack,
     ) {
-        let Some(states) = extractor
-            .current_resources()
-            .and_then(|resources| resources.as_dict()?.get("ExtGState"))
-            .and_then(|states| self.path_state_object(states))
-        else {
+        if extractor.apply_cached_path_extgstate(name, stack.current_mut()) {
             return;
-        };
-        let Some(dictionary) = states
+        }
+        let patch = self
+            .resolve_path_extgstate(name, extractor.current_resources())
+            .unwrap_or_default();
+        extractor.cache_path_extgstate(name, patch);
+        extractor.apply_cached_path_extgstate(name, stack.current_mut());
+    }
+
+    fn resolve_path_extgstate(
+        &self,
+        name: &str,
+        resources: Option<&crate::object::Object>,
+    ) -> Option<crate::extractors::paths::PathGraphicsPatch> {
+        let states = resources
+            .and_then(|resources| resources.as_dict()?.get("ExtGState"))
+            .and_then(|states| self.path_state_object(states))?;
+        let dictionary = states
             .as_dict()
             .and_then(|states| states.get(name))
-            .and_then(|state| self.path_state_object(state))
-        else {
-            return;
-        };
-        let Some(dictionary) = dictionary.as_dict() else { return };
-        let dash = dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash));
-        let alpha = dictionary.get("CA").and_then(|alpha| self.path_stroke_alpha(alpha));
-        let state = stack.current_mut();
-        if let Some((lengths, phase)) = dash {
-            state.dash.0.clone_from(&lengths);
-            state.dash.1 = phase;
-            extractor.set_dash(lengths, phase);
-        }
-        if let Some(alpha) = alpha {
-            state.stroke_alpha = alpha;
-            extractor.set_stroke_alpha(state.stroke_alpha);
-        }
+            .and_then(|state| self.path_state_object(state))?;
+        let dictionary = dictionary.as_dict()?;
+        Some(crate::extractors::paths::PathGraphicsPatch {
+            dash: dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash)),
+            stroke_alpha: dictionary.get("CA").and_then(|alpha| self.path_stroke_alpha(alpha)),
+        })
     }
 
     fn path_stroke_alpha(&self, object: &crate::object::Object) -> Option<f32> {

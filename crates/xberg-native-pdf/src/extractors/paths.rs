@@ -133,6 +133,13 @@ pub enum FillRule {
     EvenOdd,
 }
 
+/// Cache source fields only: omitted fields must inherit the state at each application. ~keep
+#[derive(Debug, Default)]
+pub(crate) struct PathGraphicsPatch {
+    pub(crate) dash: Option<(Vec<f32>, f32)>,
+    pub(crate) stroke_alpha: Option<f32>,
+}
+
 /// Path extractor for accumulating path operations from content streams.
 ///
 /// This struct maintains state during content stream processing and accumulates
@@ -183,6 +190,7 @@ pub struct PathExtractor {
     max_xobject_depth: usize,
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
     cached_xobject_dict: Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
+    cached_extgstates: std::collections::HashMap<String, PathGraphicsPatch>,
     /// Stack of active Optional Content Group (PDF "layer") names. Each
     /// `BDC`/`BMC` operator (any tag) pushes one entry and each `EMC` pops
     /// one, so the depth tracks the marked-content nesting precisely
@@ -216,6 +224,7 @@ impl PathExtractor {
             processed_xobjects: std::collections::HashSet::new(),
             max_xobject_depth: 100,
             cached_xobject_dict: None,
+            cached_extgstates: std::collections::HashMap::new(),
             oc_layer_stack: Vec::new(),
         }
     }
@@ -269,6 +278,7 @@ impl PathExtractor {
     /// Set the page resources for XObject resolution.
     pub fn set_resources(&mut self, resources: crate::object::Object) {
         self.resources = Some(resources);
+        self.cached_extgstates.clear();
     }
 
     /// The resource dictionary currently in scope — the page resources, or
@@ -281,7 +291,8 @@ impl PathExtractor {
 
     /// Swap in a new resource scope for `Do` name lookups and return the
     /// previous (resources, cached_dict) pair so the caller can restore it
-    /// after descending into a nested Form XObject. Clears the name→ref
+    /// after descending into a nested Form XObject. Parsed ExtGState patches
+    /// are discarded on both scope switches and restoration. Clears the name→ref
     /// cache so the next `resolve_xobject_ref` call rebuilds it against the
     /// new scope.
     ///
@@ -297,6 +308,7 @@ impl PathExtractor {
         Option<crate::object::Object>,
         Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
     ) {
+        self.cached_extgstates.clear();
         let prev_resources = std::mem::replace(&mut self.resources, new_resources);
         let prev_cache = self.cached_xobject_dict.take();
         (prev_resources, prev_cache)
@@ -311,8 +323,31 @@ impl PathExtractor {
             Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
         ),
     ) {
+        self.cached_extgstates.clear();
         self.resources = saved.0;
         self.cached_xobject_dict = saved.1;
+    }
+
+    pub(crate) fn cache_path_extgstate(&mut self, name: &str, patch: PathGraphicsPatch) {
+        self.cached_extgstates.insert(name.to_owned(), patch);
+    }
+
+    pub(crate) fn apply_cached_path_extgstate(&mut self, name: &str, state: &mut PathGraphicsState) -> bool {
+        let Some(patch) = self.cached_extgstates.get(name) else {
+            return false;
+        };
+        let alpha = patch.stroke_alpha;
+        if let Some((lengths, phase)) = &patch.dash {
+            state.dash.0.clone_from(lengths);
+            state.dash.1 = *phase;
+            self.current_dash.0.clone_from(lengths);
+            self.current_dash.1 = *phase;
+        }
+        if let Some(alpha) = alpha {
+            state.stroke_alpha = alpha;
+            self.set_stroke_alpha(alpha);
+        }
+        true
     }
 
     /// Resolve an XObject name to its ObjectRef, caching the XObject dict on first call.
