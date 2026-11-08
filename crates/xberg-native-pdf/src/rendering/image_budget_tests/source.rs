@@ -9,6 +9,22 @@ pub(super) fn jpeg(dimension: u32) -> Vec<u8> {
     bytes
 }
 
+/// A header-valid four-component sequential JPEG: an RGB frame whose SOF0 declares four components.
+/// Only the headers are read for admission.
+pub(super) fn cmyk_jpeg(dimension: u32) -> Vec<u8> {
+    let mut bytes = jpeg(dimension);
+    let frame = bytes.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    let length = usize::from(u16::from_be_bytes([bytes[frame + 2], bytes[frame + 3]]));
+    let mut segment = vec![0xff, 0xc0, 0, 8 + 4 * 3, 8];
+    segment.extend(&bytes[frame + 5..frame + 9]);
+    segment.push(4);
+    for id in 1..=4 {
+        segment.extend([id, 0x11, 0]);
+    }
+    bytes.splice(frame..frame + 2 + length, segment);
+    bytes
+}
+
 fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
     let mut output = format!("<< {entries} /Length {} >>\nstream\n", bytes.len()).into_bytes();
     output.extend(bytes);

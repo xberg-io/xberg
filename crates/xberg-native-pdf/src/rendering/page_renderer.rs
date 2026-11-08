@@ -3731,9 +3731,10 @@ impl PageRenderer {
         let color_space_map = self.color_spaces.clone();
         let pdf_image = extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?;
         let mut reduction = 1;
+        let mut canvas = 0;
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
-            let canvas = sidecar.saturating_add(pixmap.data().len() as u64);
+            canvas = sidecar.saturating_add(pixmap.data().len() as u64);
             // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
             if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
                 budget.admit_jpeg(&pdf_image, canvas)?;
@@ -3743,7 +3744,15 @@ impl PageRenderer {
             }
         }
         let dynamic_image = match pdf_image.data() {
-            ImageData::Jpeg(bytes) if reduction > 1 => image_budget::decode_reduced_jpeg(bytes, reduction)?,
+            ImageData::Jpeg(bytes) if reduction > 1 => match image_budget::decode_reduced_jpeg(bytes, reduction) {
+                Ok(image) => image,
+                Err(error) => {
+                    if let Some(budget) = self.source_image_budget.as_mut() {
+                        budget.refuse_failed_reduction(&pdf_image, canvas);
+                    }
+                    return Err(error);
+                }
+            },
             _ => pdf_image.to_dynamic_image()?,
         };
         let mut rgba_image = dynamic_image.to_rgba8();

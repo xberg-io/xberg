@@ -3,10 +3,10 @@ use super::*;
 mod source;
 
 const LIMIT: usize = 8 * 1024 * 1024;
-/// Refuses the 4096 px fixtures even at 1/8 (about 1.8 MiB of rasters) while admitting the 32 px page.
 /// Canvas pixels the 32 pt fixture pages are painted over at 72 dpi, far below any reduced scale of
 /// the oversized fixtures.
 const DEVICE: (f32, f32) = (32.0, 32.0);
+/// Refuses the 4096 px fixtures even at 1/8 (about 1.8 MiB of rasters) while admitting the 32 px page.
 const TIGHT: usize = 1024 * 1024;
 const LARGE: u32 = 4096;
 
@@ -405,16 +405,13 @@ fn a_reduced_decode_never_drops_far_below_the_canvas_resolution() {
     );
     let admit = |device| image_budget::ImageBudget::new(LIMIT).admit_jpeg_reducing(&image, 0, device);
     assert_eq!(admit((600.0, 600.0)).unwrap(), 2);
-    assert_eq!(
-        admit((660.0, 640.0)).unwrap(),
-        2,
-        "a 10% upscale of the reduced raster is accepted"
-    );
-    assert!(
-        admit((700.0, 700.0)).is_err(),
-        "1/2 would paint 600 px over 700 canvas pixels"
-    );
-    assert!(admit((600.0, 700.0)).is_err());
+    // reduced >= 0.9 * painted - 1, so a 600 px axis accepts a painted extent up to 667.78 px.
+    assert_eq!(admit((667.0, 667.0)).unwrap(), 2);
+    assert_eq!(admit((667.0, 600.0)).unwrap(), 2);
+    assert_eq!(admit((600.0, 667.0)).unwrap(), 2);
+    assert!(admit((668.0, 600.0)).is_err(), "width 668 is the first refused extent");
+    assert!(admit((600.0, 668.0)).is_err(), "height 668 is the first refused extent");
+    assert!(admit((700.0, 700.0)).is_err());
 }
 
 #[test]
@@ -430,7 +427,7 @@ fn a_jpeg_that_fits_keeps_its_full_size_decode() {
 }
 
 #[test]
-fn progressive_and_cmyk_jpegs_are_refused_not_reduced() {
+fn a_progressive_jpeg_is_refused_not_reduced() {
     use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
     let mut progressive = source::jpeg(1200);
     let frame = progressive.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
@@ -439,18 +436,60 @@ fn progressive_and_cmyk_jpegs_are_refused_not_reduced() {
     let mut budget = image_budget::ImageBudget::new(LIMIT);
     assert!(budget.admit_jpeg_reducing(&image, 0, DEVICE).is_err());
     assert!(budget.exceeded());
+}
+
+#[test]
+fn a_cmyk_jpeg_is_refused_not_reduced() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
     let cmyk = PdfImage::new(
         1200,
         1200,
         ColorSpace::DeviceCMYK,
         8,
-        ImageData::Jpeg(source::jpeg(1200)),
+        ImageData::Jpeg(source::cmyk_jpeg(1200)),
+    );
+    let ImageData::Jpeg(bytes) = cmyk.data() else {
+        unreachable!()
+    };
+    assert!(
+        image_budget::jpeg_frame(bytes).is_ok(),
+        "the fixture is a readable four-component frame"
     );
     assert!(
-        image_budget::ImageBudget::new(LIMIT)
-            .admit_jpeg_reducing(&cmyk, 0, DEVICE)
-            .is_err()
+        !image_budget::reducible_jpeg(&cmyk, bytes),
+        "CMYK is excluded from reduction"
     );
+    let mut budget = image_budget::ImageBudget::new(LIMIT);
+    assert!(budget.admit_jpeg_reducing(&cmyk, 0, DEVICE).is_err());
+    assert!(
+        budget.exceeded(),
+        "the refusal is the budget class, not an unqualified source"
+    );
+}
+
+#[test]
+fn a_truncated_jpeg_whose_reduced_decode_fails_is_refused_not_rendered_blank() {
+    let mut truncated = source::jpeg(LARGE);
+    let scan = truncated.windows(2).position(|pair| pair == [0xff, 0xda]).unwrap();
+    truncated.truncate(scan + 16);
+    let document = source::document(&truncated, LARGE, false);
+    let (error, exceeded) = super::super::render_png_page_with_budget_evidence(&document, 0, 72, 72, LIMIT)
+        .err()
+        .expect("a page whose only image cannot be decoded must be refused, not rendered white");
+    assert!(matches!(error, crate::Error::Image(_)), "{error}");
+    assert!(exceeded);
+    let inline = source::inline_document(&truncated_gray(), LARGE);
+    assert!(
+        super::super::render_png_page_with_budget_evidence(&inline, 0, 72, 72, LIMIT).is_err(),
+        "the inline image path records the same refusal"
+    );
+}
+
+fn truncated_gray() -> Vec<u8> {
+    let mut bytes = source::gray_jpeg(LARGE);
+    let scan = bytes.windows(2).position(|pair| pair == [0xff, 0xda]).unwrap();
+    bytes.truncate(scan + 16);
+    bytes
 }
 
 #[test]
@@ -462,15 +501,11 @@ fn a_page_whose_source_jpeg_exceeds_the_budget_renders_from_a_reduced_decode() {
         is_black_somewhere(&image),
         "the reduced decode must still paint the source"
     );
-    let inline = source::inline_document(&source::gray_jpeg(LARGE), LARGE);
+    let inline = source::inline_document(&source::gray_jpeg_of(LARGE, 0), LARGE);
     let (image, _) = renderer().render_page_with_budget(0, &inline, budget()).unwrap();
     assert!(
-        image
-            .data
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|pixel| pixel[..3] == [255, 255, 255])
+        is_black_somewhere(&image),
+        "the inline reduced decode must paint the dark image"
     );
 }
 

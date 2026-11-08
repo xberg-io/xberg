@@ -39,9 +39,10 @@ impl ImageBudget {
 
     /// Admit `image`, or the IDCT-scaled decode that keeps its rasters within the budget when the
     /// full-size decode does not. Returns the scale denominator to decode at (1, 2, 4 or 8): the
-    /// finest scale that fits, provided the reduced raster needs at most a 10% linear upscale
-    /// ([`MIN_PAINTED_COVERAGE`]) to span the `device` extent (in canvas pixels) the image is painted at. An image that
-    /// cannot be reduced that way is refused exactly as [`Self::admit_jpeg`] refuses it.
+    /// finest scale that fits, provided each axis of the reduced raster is at least
+    /// [`MIN_PAINTED_COVERAGE`] of the `device` extent (in canvas pixels) the image is painted at,
+    /// less one pixel of slack (`reduced >= 0.9 * device - 1`). An image that cannot be reduced that
+    /// way is refused exactly as [`Self::admit_jpeg`] refuses it.
     pub(super) fn admit_jpeg_reducing(
         &mut self,
         image: &PdfImage,
@@ -90,6 +91,19 @@ impl ImageBudget {
         };
         let retained = parent_image_bytes(parent, dynamic, paint, retained_canvas);
         self.admit_required(retained.and_then(|retained| jpeg_image_bytes(image, bytes, bytes.capacity(), retained, 1)))
+    }
+
+    /// Record the refusal for an image whose reduced decode failed after admission, which reads
+    /// headers only. The page is then refused as the full-size decode would have been, not rendered
+    /// without the image.
+    pub(super) fn refuse_failed_reduction(&mut self, image: &PdfImage, retained_canvas: u64) {
+        if let ImageData::Jpeg(bytes) = image.data() {
+            let full = jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4);
+            let _ = self.admit_required(full);
+            if self.failure.is_none() {
+                self.failure = Some(Failure::Unqualified("the reduced JPEG decode failed".into()));
+            }
+        }
     }
 
     fn admit_required(&mut self, required: std::result::Result<u64, String>) -> Result<()> {
@@ -186,9 +200,10 @@ const COEFFICIENT_BLOCK_BYTES: u64 = 64 * 2;
 /// Largest vertical sampling factor, in blocks per MCU column.
 const MAX_VERTICAL_BLOCKS: u64 = 4;
 
-/// Whether `bytes` is a sequential, non-CMYK JPEG. A progressive scan keeps every coefficient of the full-resolution image, so a reduced
-/// decode would not lower its peak; CMYK takes a separate conversion path.
-fn reducible_jpeg(image: &PdfImage, bytes: &[u8]) -> bool {
+/// Whether `bytes` is a sequential, non-CMYK JPEG. A progressive scan keeps every coefficient of the
+/// full-resolution image, so a reduced decode would not lower its peak; CMYK takes a separate
+/// conversion path.
+pub(super) fn reducible_jpeg(image: &PdfImage, bytes: &[u8]) -> bool {
     image.color_space().components() != 4 && sequential_frame(bytes)
 }
 
@@ -215,19 +230,21 @@ fn sequential_frame(bytes: &[u8]) -> bool {
 }
 
 /// The frame dimensions of the JPEG itself, which the decoder allocates from, not the image dictionary's.
-fn jpeg_frame(bytes: &[u8]) -> std::result::Result<(u32, u32), String> {
+pub(super) fn jpeg_frame(bytes: &[u8]) -> std::result::Result<(u32, u32), String> {
     let mut decoder = jpeg_decoder::Decoder::new(bytes);
     decoder.read_info().map_err(|error| error.to_string())?;
     let info = decoder.info().ok_or("missing JPEG frame header")?;
     Ok((u32::from(info.width), u32::from(info.height)))
 }
 
-/// Fraction of the painted canvas extent a reduced raster must still span, i.e. at most a 10% linear
-/// upscale. It keeps a page whose canvas sits just above a 1/2 scale from being refused.
+/// Fraction of the painted canvas extent a reduced raster must still span, before the one pixel of
+/// slack `covers_device` allows. It keeps a page whose canvas sits just above a 1/2 scale from being
+/// refused.
 const MIN_PAINTED_COVERAGE: f32 = 0.9;
 
-/// Whether a frame of `frame` pixels at `denominator` still spans [`MIN_PAINTED_COVERAGE`] of the canvas
-/// pixels it is painted over.
+/// Whether a frame of `frame` pixels at `denominator` still spans [`MIN_PAINTED_COVERAGE`] of the
+/// canvas pixels it is painted over on both axes: `reduced >= painted * 0.9 - 1`. For a 600 px reduced
+/// axis that accepts a painted extent up to 667 px and refuses 668 px.
 fn covers_device(frame: (u32, u32), denominator: u8, (width, height): (f32, f32)) -> bool {
     let covers = |pixels: u32, painted: f32| {
         painted.is_finite() && reduced_dimension(pixels, denominator) as f32 >= painted * MIN_PAINTED_COVERAGE - 1.0
@@ -318,6 +335,8 @@ pub(super) fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<image
             actual.0, actual.1
         )));
     }
+    // The decoder compares this limit with the finished output only after all scans, so it does not
+    // bound the decode; the admission arithmetic is the guard. ~keep
     let output = usize::from(width) * usize::from(height) * info.pixel_format.pixel_bytes();
     decoder.set_max_decoding_buffer_size(output);
     let pixels = decoder.decode().map_err(failed)?;

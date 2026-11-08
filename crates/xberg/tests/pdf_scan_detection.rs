@@ -67,7 +67,7 @@ async fn scanned_fixtures_report_high_confidence() {
         let (confidence, pages, content) = scan_document(fixture, &config).await;
         let confidence = confidence.unwrap_or_else(|| panic!("{fixture}: no scanned_confidence"));
         assert!(
-            content.split_whitespace().count() > 50,
+            !cfg!(any(feature = "ocr", feature = "ocr-pipeline")) || content.split_whitespace().count() > 50,
             "{fixture}: a scan must come back with its text, got {} chars",
             content.len()
         );
@@ -82,6 +82,30 @@ async fn scanned_fixtures_report_high_confidence() {
             "{fixture}: page 1 should be a scan"
         );
     }
+}
+
+/// nougat_010's page JPEG overflows the default content budget at full size; the render must still
+/// reach the requested resolution (a budget-driven retry at a lower DPI would not), which only the
+/// reduced JPEG decode allows.
+#[test]
+fn nougat_010_renders_at_the_requested_dpi_from_a_reduced_jpeg() {
+    const DPI: u32 = 50;
+    let bytes = std::fs::read(corpus("pdf_scanned/nougat_010_scanned.pdf")).unwrap();
+    let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).unwrap();
+    let limit = xberg::extractors::security::SecurityLimits::default().max_content_size;
+    let (image, dpi, _) =
+        xberg_native_pdf::rendering::render_png_page_with_budget_evidence(&document, 0, DPI, DPI, limit)
+            .unwrap_or_else(|(error, exceeded)| panic!("budget refusal (exceeded: {exceeded}): {error}"));
+    assert_eq!(dpi, DPI, "the render must not fall back to a lower DPI");
+    assert!(
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3] != [255, 255, 255]),
+        "the scan must be painted, not a blank page"
+    );
 }
 
 /// A full-bleed background image with *visible* text over it is not a scan.
