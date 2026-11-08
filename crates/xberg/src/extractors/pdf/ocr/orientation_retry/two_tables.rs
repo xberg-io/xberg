@@ -35,7 +35,7 @@ pub(super) fn complete_text(
     let read = result.ocr_elements.as_deref()?;
     let primary = original.ocr_elements.as_deref()?;
     if !within_budget([first, second], [result, original], read, primary, limits)
-        || !super::recognition::primary_supported(original)
+        || !super::recognition::primary_covers_output(original)
         || first.page_number == 0
         || first.page_number != second.page_number
         || read
@@ -319,6 +319,32 @@ mod tests {
             .metadata
             .additional
             .insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), 201.into());
+        assert_eq!(prove(&primary), None);
+    }
+
+    #[test]
+    fn accepts_primary_evidence_that_covers_a_filtered_output_and_refuses_uncovered_text() {
+        let (candidate, mut primary) = two_table_candidate();
+        let prove = |primary: &ExtractedDocument| {
+            complete_text(&candidate, primary, &Default::default(), &Default::default(), 0.5)
+        };
+        let mut dropped = primary.ocr_elements.as_ref().unwrap()[0].clone();
+        dropped.text = "zz".into();
+        dropped.confidence.recognition = 0.10;
+        primary.ocr_elements.as_mut().unwrap().push(dropped.clone());
+        assert_eq!(prove(&primary).as_deref(), Some(candidate.content.as_str()));
+        let mut confident_outside = dropped;
+        confident_outside.confidence.recognition = 0.95;
+        confident_outside.text = "77".into();
+        let OcrBoundingGeometry::Rectangle { left, .. } = &mut confident_outside.geometry else {
+            unreachable!()
+        };
+        *left = 200;
+        primary.ocr_elements.as_mut().unwrap().push(confident_outside);
+        assert_eq!(prove(&primary), None);
+        primary.ocr_elements.as_mut().unwrap().pop();
+        primary.content = "49 50".into();
+        primary.metadata.additional.insert("word_count".into(), 2.into());
         assert_eq!(prove(&primary), None);
     }
 

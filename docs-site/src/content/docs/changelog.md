@@ -222,6 +222,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Recover a sideways page with two tables when the first read held extra filtered words.** (#2497)
+  The implicit orientation retry refused two rotated tables unless the first read's iterator word count equalled its reported count, so dictionary-filtered words left the page on its noise read. It now accepts iterator words that include every retained token (extra filtered words only widen the protection check), with the same exact table, geometry and protected-word proofs.
+
 - **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
   Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
 

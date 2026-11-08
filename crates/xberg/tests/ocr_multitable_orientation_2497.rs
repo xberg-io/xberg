@@ -9,7 +9,7 @@ use std::{env, fs, process::Command};
 use sha2::{Digest, Sha256};
 use xberg::{BoundingBox, ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig};
 
-const CASE: &str = "implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence";
+const CASE: &str = "implicit_rotation_recovers_two_tables_when_primary_iterator_words_cover_its_output";
 const CHILD: &str = "XBERG_MULTITABLE_2497_CHILD";
 const MODEL_CACHE_PATH: &str = concat!(
     "models--xberg-io--paddleocr-onnx-models/snapshots/bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8/",
@@ -159,7 +159,7 @@ fn assert_detached_upright_structure(document: &ExtractedDocument) {
 }
 
 #[tokio::test]
-async fn implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence() {
+async fn implicit_rotation_recovers_two_tables_when_primary_iterator_words_cover_its_output() {
     if !in_pinned_child(CASE) {
         return;
     }
@@ -188,16 +188,12 @@ async fn implicit_rotation_retains_primary_when_two_tables_lack_complete_primary
         .await;
         assert_tables(&forced, &expected, (792., 612.48));
         let disabled = extract(rotated, Some(OcrConfig::default())).await;
+        assert!(disabled.tables.is_empty(), "an explicit false rotation keeps its read");
         let implicit = extract(rotated, None).await;
-        assert!(implicit.tables.is_empty());
-        assert!(implicit.ocr_elements.is_none());
-        assert_eq!(implicit.content, disabled.content);
-        assert!(
-            implicit
-                .processing_warnings
-                .iter()
-                .any(|warning| warning.message.contains("recognition noise"))
-        );
+        assert_tables(&implicit, &expected, (792., 612.48));
+        for (actual, control) in implicit.tables.iter().zip(&forced.tables) {
+            assert_eq!(actual.bounding_box, control.bounding_box);
+        }
     }
 
     let expected: Vec<Vec<Vec<String>>> = serde_json::from_str(include_str!(
