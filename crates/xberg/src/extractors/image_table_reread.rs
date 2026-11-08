@@ -1,9 +1,11 @@
-//! Geometry evidence for re-reading a standalone picture as one uniform block (#2503, #2432).
+//! The decision to read a standalone picture a second time as one uniform block, and to keep
+//! that read (#2503, #2432).
 //!
-//! Whether a picture is re-read depends on word boxes only: the first pass must show a column
-//! structure. Whether the re-read is kept compares both reads row by row: the text of every row
-//! must be identical except for leader dots, and the re-read must put more whole rows on the
-//! shared columns.
+//! Admission is geometry only: the first read's word boxes must form a lattice table. Four or
+//! more rows share a few column edges with wide gaps between at least three columns, the words
+//! come out row by row, and the page is not a lattice of dozens of edges. Nothing depends on what
+//! a word says. The second read is then adopted as a caller-forced PSM 6 would be, so a token it
+//! misreads is kept; only a read that failed outright is discarded (see [`second_read_is_usable`]).
 
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrBoundingGeometry, OcrElementLevel};
@@ -181,26 +183,27 @@ fn emits_row_by_row(words: &[WordBox], tolerance: u32) -> bool {
 
 /// The first pass shows a lattice table: enough rows sit on a handful of shared column edges
 /// with wide gaps between columns, and the words come out row by row. A lattice of words on
-/// dozens of edges is a grid of cells, not a table.
+/// dozens of edges is a grid of cells, not a table. Every refusal is logged with the counts.
 pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
     let (rows, edges) = column_structure(doc);
     if edges > MAX_SHARED_EDGES {
         tracing::debug!(
+            rows,
             edges,
             "standalone table re-read skipped: a lattice of words, not a table"
         );
         return false;
     }
     if rows < MIN_ROWS_PER_COLUMN {
-        if rows > 0 {
-            tracing::debug!(
-                rows,
-                "standalone table re-read skipped: too few rows share the column edges"
-            );
-        }
+        tracing::debug!(
+            rows,
+            edges,
+            "standalone table re-read skipped: too few rows share the column edges"
+        );
         return false;
     }
     let Some(words) = word_boxes(doc) else {
+        tracing::debug!("standalone table re-read skipped: the first read has no word boxes");
         return false;
     };
     let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
@@ -211,7 +214,8 @@ pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
     true
 }
 
-/// Letters and digits in the word elements of a read.
+/// Letters and digits (Unicode alphanumerics, so any script's digits) in the word elements of a
+/// read; lines, blocks and pages are not counted again.
 fn alphanumeric_count(doc: &InternalDocument) -> usize {
     doc.prebuilt_ocr_elements
         .iter()
@@ -221,13 +225,16 @@ fn alphanumeric_count(doc: &InternalDocument) -> usize {
         .sum()
 }
 
-/// A read that came back empty, or with less than three quarters of the letters and digits of the first,
-/// failed to read the picture; any other second read is adopted as is, like a caller-forced PSM 6.
+/// A second read with no letters or digits in its word elements, or with less than three quarters
+/// of the first read's, failed to read the picture; any other second read is adopted as is, like a
+/// caller-forced PSM 6. A first read with none is replaced by any second read that has some. A
+/// second read with more is not capped: a block read legitimately recovers text the sparse read
+/// missed, and the guard only separates a failed read from a read.
 pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalDocument) -> Result<(), &'static str> {
     let (before, after) = (alphanumeric_count(first), alphanumeric_count(second));
     tracing::debug!(before, after, "standalone table re-read: letters and digits per read");
     if after == 0 {
-        return Err("the second read is empty");
+        return Err("the second read has no letters or digits in its word elements");
     }
     if after * MIN_RETAINED.1 < before * MIN_RETAINED.0 {
         return Err("the second read kept too few letters and digits");
@@ -381,13 +388,57 @@ mod tests {
         assert_eq!(second_read_is_usable(&first, &doc(changed)), Ok(()));
     }
 
+    fn reads_of(first: &str, second: &str) -> Result<(), &'static str> {
+        second_read_is_usable(
+            &doc(vec![element(first, 0, 0, 10)]),
+            &doc(vec![element(second, 0, 0, 10)]),
+        )
+    }
+
     #[test]
-    fn an_empty_or_far_smaller_re_read_is_refused() {
+    fn an_empty_re_read_is_refused() {
         let first = doc(table(6));
+        let reason = "the second read has no letters or digits in its word elements";
+        assert_eq!(second_read_is_usable(&first, &doc(Vec::new())), Err(reason));
+        assert_eq!(reads_of("abcd", "...."), Err(reason));
+        let mut lines_only = element("abcd", 0, 0, 10);
+        lines_only.level = OcrElementLevel::Line;
+        assert_eq!(second_read_is_usable(&first, &doc(vec![lines_only])), Err(reason));
+    }
+
+    #[test]
+    fn the_retention_boundary_is_exactly_three_quarters() {
+        assert_eq!(reads_of("abcdefgh", "abcdef"), Ok(()), "6 of 8 is exactly 3/4");
+        assert!(reads_of("abcdefgh", "abcde").is_err(), "5 of 8 is under 3/4");
+        assert_eq!(reads_of("abcd", "abc"), Ok(()), "3 of 4");
+        assert!(reads_of("abcdefghi", "abcdef").is_err(), "6 of 9 is under 3/4");
+    }
+
+    #[test]
+    fn a_first_read_without_letters_or_digits_is_replaced_by_any_second_read_that_has_some() {
+        assert_eq!(reads_of("---", "ab"), Ok(()));
+        assert!(reads_of("---", "...").is_err());
+    }
+
+    #[test]
+    fn a_longer_second_read_is_not_capped() {
+        assert_eq!(reads_of("ab", "abcdefghijklmnopqrstuvwxyz0123456789"), Ok(()));
+    }
+
+    #[test]
+    fn digits_and_letters_of_any_script_count() {
         assert_eq!(
-            second_read_is_usable(&first, &doc(Vec::new())),
-            Err("the second read is empty")
+            reads_of("\u{661}\u{662}\u{663}\u{664}", "\u{661}\u{662}\u{663}"),
+            Ok(())
         );
+        assert!(reads_of("\u{661}\u{662}\u{663}\u{664}", "\u{661}").is_err());
+        assert_eq!(reads_of("\u{ff11}\u{ff12}", "\u{ff11}\u{ff12}"), Ok(()));
+        assert!(reads_of("\u{5de5}\u{4e8b}\u{8a18}\u{8f09}", "\u{5de5}").is_err());
+    }
+
+    #[test]
+    fn a_far_smaller_re_read_is_refused() {
+        let first = doc(table(6));
         let mut sparse = table(6);
         sparse.retain(|word| word.text == "12");
         assert!(second_read_is_usable(&first, &doc(sparse)).is_err());

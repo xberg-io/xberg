@@ -3038,6 +3038,17 @@ fn single_block_table_config(
     mime_type: &str,
     first: &InternalDocument,
 ) -> Option<ExtractionConfig> {
+    // Cheap configuration gates run before the geometry pass over the first read's words.
+    if mime_type.to_lowercase().contains("tiff") {
+        return None;
+    }
+    let mut ocr = config.ocr.clone().unwrap_or_default();
+    if !is_implicit_horizontal_tesseract(&ocr)
+        || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
+        || ocr.pipeline.is_some()
+    {
+        return None;
+    }
     // Requested document structure and layout keep the first pass's blocks untouched. ~keep
     if config.include_document_structure {
         return None;
@@ -3046,12 +3057,7 @@ fn single_block_table_config(
     if config.layout.is_some() {
         return None;
     }
-    let mut ocr = config.ocr.clone().unwrap_or_default();
-    if ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled || ocr.pipeline.is_some() {
-        return None;
-    }
-    let table_like = first.tables.is_empty() && image_table_reread::shows_column_structure(first);
-    if !is_implicit_horizontal_tesseract(&ocr) || !table_like || mime_type.to_lowercase().contains("tiff") {
+    if !first.tables.is_empty() || !image_table_reread::shows_column_structure(first) {
         return None;
     }
     enable_image_ocr_elements(&mut ocr, true);
@@ -3101,32 +3107,51 @@ impl ImageExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let first = self.extract_with_ocr_pass(content, mime_type, config).await?;
-        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        {
-            let Some(single_block) = single_block_table_config(config, mime_type, &first) else {
-                return Ok(first);
-            };
-            tracing::debug!("standalone table re-read: reading the picture again as one block");
-            return match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-                Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
-                    Ok(()) => {
-                        tracing::debug!("standalone table re-read adopted");
-                        Ok(second)
-                    }
-                    Err(reason) => {
-                        tracing::debug!(reason, "standalone table re-read rejected");
-                        Ok(first)
-                    }
-                },
-                Err(error @ crate::XbergError::Cancelled) => Err(error),
-                Err(error) => {
-                    tracing::debug!(%error, "standalone table re-read failed; keeping the first read");
+        self.reread_standalone_table(content, mime_type, config, first).await
+    }
+
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    async fn reread_standalone_table(
+        &self,
+        _content: &[u8],
+        _mime_type: &str,
+        _config: &ExtractionConfig,
+        first: InternalDocument,
+    ) -> Result<InternalDocument> {
+        Ok(first)
+    }
+
+    /// The PSM 6 re-read of a standalone lattice table; returns `first` when the picture is not
+    /// admitted or the re-read is not usable.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    async fn reread_standalone_table(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+        first: InternalDocument,
+    ) -> Result<InternalDocument> {
+        let Some(single_block) = single_block_table_config(config, mime_type, &first) else {
+            return Ok(first);
+        };
+        tracing::debug!("standalone table re-read: reading the picture again as one block");
+        match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
+            Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
+                Ok(()) => {
+                    tracing::debug!("standalone table re-read adopted");
+                    Ok(second)
+                }
+                Err(reason) => {
+                    tracing::debug!(reason, "standalone table re-read rejected");
                     Ok(first)
                 }
-            };
+            },
+            Err(error @ crate::XbergError::Cancelled) => Err(error),
+            Err(error) => {
+                tracing::warn!(%error, "standalone table re-read failed; keeping the first read");
+                Ok(first)
+            }
         }
-        #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-        Ok(first)
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
@@ -5066,6 +5091,18 @@ mod tests {
             let mut layout = config.clone();
             layout.layout = Some(Default::default());
             assert!(single_block_table_config(&layout, "image/png", &first).is_none());
+        }
+
+        for psm in [3, 4, 6, 11] {
+            let mut explicit = config.clone();
+            explicit.ocr.get_or_insert_default().tesseract_config = Some(crate::types::TesseractConfig {
+                psm: Some(psm),
+                ..Default::default()
+            });
+            assert!(
+                single_block_table_config(&explicit, "image/png", &first).is_none(),
+                "psm {psm}"
+            );
         }
 
         let mut vertical = config.clone();
