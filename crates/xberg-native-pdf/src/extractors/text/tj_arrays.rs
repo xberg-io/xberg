@@ -394,6 +394,7 @@ impl<'doc> TextExtractor<'doc> {
         // Check if buffer ends with space BEFORE flushing
         // This prevents double spaces when TJ processor inserts space
         // AND span merging would insert space at the same boundary. ~keep
+        let pen_set_back_into_drawn_run = self.pen_set_back_into_drawn_run();
         let buffer_ends_with_space = !buffer.unicode.is_empty()
             && buffer
                 .unicode
@@ -420,7 +421,7 @@ impl<'doc> TextExtractor<'doc> {
             false
         };
 
-        if !buffer_ends_with_space && !next_element_starts_with_space {
+        if !buffer_ends_with_space && !next_element_starts_with_space && !pen_set_back_into_drawn_run {
             self.insert_space_as_span()?;
         }
 
@@ -438,6 +439,47 @@ impl<'doc> TextExtractor<'doc> {
             self.cached_current_font.clone(),
             &self.font_provenance_cache,
         ))
+    }
+
+    /// Set the text matrix and the text line matrix for a positioning operator (`BT`, `Tm`, `Td`, `TD`,
+    /// `T*`). If a glyph or an offset moved the pen since the last such operator, the old pen is the end
+    /// of what the content stream drew last. ~keep
+    pub(super) fn position_pen(&mut self, line_matrix: Matrix) {
+        let state = self.state_stack.current_mut();
+        if self.positioned_pen != Some(state.text_matrix) {
+            self.drawn_end = Some(state.text_matrix);
+        }
+        state.text_line_matrix = line_matrix;
+        state.text_matrix = line_matrix;
+        self.positioned_pen = Some(line_matrix);
+    }
+
+    /// Whether a word-boundary offset stands at a pen that a positioning operator set back into the run
+    /// drawn last: no glyph and no offset moved the pen since that operator, the pen is on the baseline
+    /// of that run, and it lies more than a quarter em before the end of that run. A space span there
+    /// would sort into a word that is already drawn and cut it (GH#2322). The offset then adds no space
+    /// span: the pen moves by the offset, and the gap test between the real glyphs decides. ~keep
+    fn pen_set_back_into_drawn_run(&self) -> bool {
+        let state = self.state_stack.current();
+        let (Some(pen), Some(end)) = (self.positioned_pen, self.drawn_end) else {
+            return false;
+        };
+        if pen != state.text_matrix {
+            return false;
+        }
+        let user = |m: &Matrix, x: f32| {
+            let p = m.transform_point(x, 0.0);
+            state.ctm.transform_point(p.x, p.y)
+        };
+        let (origin, unit, end) = (user(&pen, 0.0), user(&pen, 1.0), user(&end, 0.0));
+        let (dx, dy) = (unit.x - origin.x, unit.y - origin.y);
+        // A degenerate matrix gives a scale of 0 and NaN distances, and every comparison below is false. ~keep
+        let scale = dx.hypot(dy);
+        let em = state.font_size * scale;
+        let (ex, ey) = (end.x - origin.x, end.y - origin.y);
+        let along = (ex * dx + ey * dy) / scale;
+        let across = (ey * dx - ex * dy).abs() / scale;
+        along > 0.25 * em && across < 0.5 * em
     }
 
     /// Process TJ array using primary detection mode.

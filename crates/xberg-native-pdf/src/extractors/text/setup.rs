@@ -82,6 +82,8 @@ impl<'doc> TextExtractor<'doc> {
             tj_stats_len: 0,
             tj_character_array: Vec::new(),
             current_x_position: 0.0,
+            positioned_pen: None,
+            drawn_end: None,
             word_boundary_mode,
             cached_current_font: None,
             extraction_width_tables: HashMap::new(),

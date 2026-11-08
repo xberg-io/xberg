@@ -1,5 +1,5 @@
-//! A word-boundary `TJ` offset at a pen that a positioning operator set adds no space span (GH#2322).
-//! Where a glyph or an offset moved the pen first, the space span stays. ~keep
+//! A word-boundary `TJ` offset at a pen that a positioning operator set back into the run drawn last adds
+//! no space span (GH#2322). Elsewhere, or where a glyph or an offset moved the pen first, it stays. ~keep
 
 use super::super::*;
 use super::extraction_and_rotation::create_test_font;
@@ -31,8 +31,14 @@ fn span_texts(stream: &str) -> Vec<String> {
 }
 
 #[test]
-fn offset_after_each_positioning_operator_adds_no_space_span() {
-    for position in ["1 0 0 1 80 700 Tm", "8 0 Td", "8 0 TD", "T*", "ET BT"] {
+fn offset_after_a_pen_set_back_into_the_drawn_run_adds_no_space_span() {
+    // "abc" ends at x = 87. Two positioning operators in a row keep the end of the run drawn last.
+    for position in [
+        "1 0 0 1 80 700 Tm",
+        "8 0 Td",
+        "8 0 TD",
+        "1 0 0 1 80 700 Tm 1 0 0 1 81 700 Tm",
+    ] {
         let stream = format!("BT /F1 10 Tf 12 TL 72 700 Td (abc) Tj {position} [-3000 (def)] TJ ET");
         assert_eq!(span_texts(&stream), ["abc", "def"], "after {position}");
     }
@@ -40,9 +46,31 @@ fn offset_after_each_positioning_operator_adds_no_space_span() {
 
 /// The size in `Tf` against a scaled `Tm`: the rule reads the matrix, not the size.
 #[test]
-fn offset_after_a_scaled_tm_adds_no_space_span() {
+fn offset_after_a_scaled_tm_back_into_the_drawn_run_adds_no_space_span() {
     let stream = "BT 11 0 0 11 72 700 Tm /F1 1 Tf (abc) Tj 11 0 0 11 80 700 Tm [-3000 (def)] TJ ET";
     assert_eq!(span_texts(stream), ["abc", "def"]);
+}
+
+/// A pen at the end of the run, less than a quarter em before it, past it, or on another line.
+#[test]
+fn offset_after_a_pen_set_outside_the_drawn_run_keeps_the_space_span() {
+    for position in [
+        "1 0 0 1 87 700 Tm",
+        "1 0 0 1 85 700 Tm",
+        "1 0 0 1 95 700 Tm",
+        "T*",
+        "ET BT",
+    ] {
+        let stream = format!("BT /F1 10 Tf 12 TL 72 700 Td (abc) Tj {position} [-3000 (def)] TJ ET");
+        assert_eq!(span_texts(&stream), ["abc", " ", "def"], "after {position}");
+    }
+}
+
+/// With the size in `Tm`, a pen 1.5 units before the end of the run is less than a quarter em before it.
+#[test]
+fn offset_after_a_scaled_tm_just_before_the_end_keeps_the_space_span() {
+    let stream = "BT 11 0 0 11 72 700 Tm /F1 1 Tf (abc) Tj 11 0 0 11 87 700 Tm [-3000 (def)] TJ ET";
+    assert_eq!(span_texts(stream), ["abc", " ", "def"]);
 }
 
 #[test]

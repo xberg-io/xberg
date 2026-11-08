@@ -2385,6 +2385,12 @@ pub struct TextExtractor<'doc> {
     /// Updated as each character in a TJ array is processed. Used to calculate
     /// x_position for CharacterInfo entries (not used after character collection).
     current_x_position: f32,
+    /// The text matrix that the last `BT`, `Tm`, `Td`, `TD` or `T*` set. While the current text matrix
+    /// still equals it, no glyph and no offset has moved the pen since that operator. ~keep
+    positioned_pen: Option<Matrix>,
+    /// The text matrix where the pen stood when a positioning operator moved it away from a place that a
+    /// glyph or an offset reached: the end of what the content stream drew last. ~keep
+    drawn_end: Option<Matrix>,
     /// Word boundary detection mode
     ///
     /// Controls whether WordBoundaryDetector is used as:
