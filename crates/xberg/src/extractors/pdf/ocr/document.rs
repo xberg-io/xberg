@@ -206,7 +206,8 @@ pub(crate) fn layer_lines_absent_from_ocr<'a>(layer: &'a str, ocr_text: &str) ->
             continue;
         }
         let key = line_key(line);
-        if let Some(at) = (0..ocr.len()).find(|at| !used[*at] && ocr_row_misreads_native_row(&key, &ocr[*at])) {
+        let misreads = misread_of(&key, true);
+        if let Some(at) = (0..ocr.len()).find(|at| !used[*at] && misreads(&ocr[*at])) {
             used[at] = true;
             misread.push(ocr[at].clone());
         }
@@ -226,6 +227,17 @@ pub(crate) fn layer_lines_absent_from_ocr<'a>(layer: &'a str, ocr_text: &str) ->
 pub(crate) struct RowsToRestore<'a> {
     pub(crate) rows: Vec<&'a str>,
     pub(crate) misread: Vec<String>,
+}
+/// The test of whether an OCR row misreads the native row `key` and so is not printed beside it:
+/// a misread by `ocr_row_misreads_native_row`, or a row that glued the read of a lost symbol
+/// glyph at a word edge to the word (`glued_symbol_row_pattern`), such as `oyes no` for
+/// `<s>yes no`. `whole` as for `marked_row_pattern`. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn misread_of<'a>(key: &'a str, whole: bool) -> impl Fn(&str) -> bool + 'a {
+    let glued = glued_symbol_row_pattern(key, whole);
+    move |ocr_key: &str| {
+        ocr_row_misreads_native_row(key, ocr_key) || glued.as_ref().is_some_and(|pattern| pattern.is_match(ocr_key))
+    }
 }
 /// The least similarity of the folded characters of two rows at which an OCR row reads as a
 /// misread of a native row. ~keep
@@ -314,33 +326,63 @@ pub(crate) fn ocr_payload_of_page(_: Option<&crate::types::internal::InternalDoc
 fn layer_source_rows(layer: &str) -> impl Iterator<Item = &str> {
     layer.lines().map(str::trim).filter(|line| {
         line.chars()
-            .any(|c| !c.is_whitespace() && c != super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
+            .any(|c| !c.is_whitespace() && !super::super::unmapped_glyphs::is_lost_glyph(c))
     })
 }
 /// The pattern an OCR row key must match to read a marked layer row key: each run of markers is one
 /// unknown run of characters with no space inside it, which may be empty and takes the space on
 /// each side of it. So `approved <m> the` reads as `approved - the` and as `approved the`, and
-/// `nor<m>hern` reads as `northern`. Every other character must be equal and in order. `whole`
-/// anchors the pattern at both ends of the OCR row; otherwise it may match any run of whole words
-/// inside it. `None` for a key without a marker. ~keep
+/// `nor<m>hern` reads as `northern`. A run of symbol-font markers at a word edge (`<s>yes`,
+/// `yes <s>`) is a glyph that is no letter of the word: it reads as one optional whole OCR token,
+/// so `o yes` and `yes` read `<s>yes` and `oyes` does not. Every other character must be equal and
+/// in order. `whole` anchors the pattern at both ends of the OCR row; otherwise it may match any
+/// run of whole words inside it. `None` for a key without a marker. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn marked_row_pattern(key: &str, whole: bool) -> Option<regex::Regex> {
+    marked_row_pattern_reading(key, whole, false)
+}
+/// The pattern of a marked row key with each symbol run read as a text run, which lets an OCR row
+/// glue the glyph's read to a word: that row is the misread of the native row, not its cover.
+/// `None` for a key without a symbol run. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn glued_symbol_row_pattern(key: &str, whole: bool) -> Option<regex::Regex> {
+    key.contains(super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER)
+        .then(|| marked_row_pattern_reading(key, whole, true))
+        .flatten()
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn marked_row_pattern_reading(key: &str, whole: bool, symbols_glue: bool) -> Option<regex::Regex> {
     const UNKNOWN_RUN: &str = " ?[^ ]* ?";
-    let marker = super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
-    if !key.contains(marker) {
+    let is_lost_glyph = super::super::unmapped_glyphs::is_lost_glyph;
+    let symbol_marker = super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER;
+    if !key.contains(is_lost_glyph) {
         return None;
     }
-    let pieces: Vec<&str> = key.split(marker).collect();
     let mut pattern = String::from(if whole { "^" } else { "(?:^| )" });
-    pattern.push_str(&regex::escape(pieces[0].trim()));
-    for (at, piece) in pieces.iter().enumerate().skip(1) {
-        // An empty piece between two markers is inside one run. ~keep
-        if piece.is_empty() && at + 1 < pieces.len() {
-            continue;
-        }
-        pattern.push_str(UNKNOWN_RUN);
-        pattern.push_str(&regex::escape(piece.trim()));
+    let mut rest = key.trim();
+    while let Some(start) = rest.find(is_lost_glyph) {
+        let end = rest[start..]
+            .find(|c: char| !is_lost_glyph(c))
+            .map_or(rest.len(), |run| start + run);
+        let (before, run, after) = (&rest[..start], &rest[start..end], &rest[end..]);
+        let at_word_edge = before.is_empty() || before.ends_with(' ') || after.is_empty() || after.starts_with(' ');
+        pattern.push_str(&regex::escape(before.trim()));
+        let token = if before.trim().is_empty() {
+            "(?:[^ ]+ )?"
+        } else if after.trim().is_empty() {
+            "(?: [^ ]+)?"
+        } else {
+            "(?: [^ ]+)? "
+        };
+        let symbol = run.chars().all(|c| c == symbol_marker);
+        pattern.push_str(if symbol && at_word_edge && !symbols_glue {
+            token
+        } else {
+            UNKNOWN_RUN
+        });
+        rest = after;
     }
+    pattern.push_str(&regex::escape(rest.trim()));
     pattern.push_str(if whole { "$" } else { "(?: |$)" });
     regex::Regex::new(&pattern).ok()
 }
@@ -689,9 +731,9 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
 /// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
-    use super::super::unmapped_glyphs::{LOST_GLYPH_MARKER, strip_native_fragment};
+    use super::super::unmapped_glyphs::{is_lost_glyph, strip_native_fragment};
 
-    if !native.contains(LOST_GLYPH_MARKER) {
+    if !native.contains(is_lost_glyph) {
         return false;
     }
     let mut cleaned = native.to_owned();
@@ -982,7 +1024,7 @@ fn layer_lines_missing_and_owned<'a>(layer: &'a str, boxes: &PageLineBoxes) -> R
                     read.spend(at, &key);
                 } else {
                     missing.push((row, line));
-                    if ocr_row_misreads_native_row(&key, &boxes.ocr[at].key) {
+                    if misread_of(&key, false)(&boxes.ocr[at].key) {
                         misread.push(boxes.ocr[at].key.clone());
                     }
                 }
@@ -998,8 +1040,8 @@ fn layer_lines_missing_and_owned<'a>(layer: &'a str, boxes: &PageLineBoxes) -> R
             continue;
         }
         missing.push((row, line));
-        let misreads = |at: &usize| !ocr_used[*at] && ocr_row_misreads_native_row(&key, &boxes.ocr[*at].key);
-        if let Some(at) = (0..boxes.ocr.len()).find(misreads) {
+        let misreads = misread_of(&key, false);
+        if let Some(at) = (0..boxes.ocr.len()).find(|at| !ocr_used[*at] && misreads(&boxes.ocr[*at].key)) {
             ocr_used[at] = true;
             misread.push(boxes.ocr[at].key.clone());
         }
@@ -1026,7 +1068,7 @@ impl<'a> OcrRowSpans<'a> {
     /// The first untaken run of the words of `key` in OCR row `at`, marked taken. A row with
     /// lost-glyph markers takes no words: its match is a pattern, not a word run. ~keep
     fn spend(&mut self, at: usize, key: &str) -> bool {
-        if key.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+        if key.contains(super::super::unmapped_glyphs::is_lost_glyph) {
             return true;
         }
         let words: Vec<&str> = key.split_whitespace().collect();
@@ -1915,27 +1957,42 @@ pub(crate) fn merge_ocr_pages_into_native(
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
 ) -> String {
-    let accepted =
-        accepted_ocr_page_replacements(native_text, boundaries, ocr_results, &OcrQualityThresholds::default());
+    let accepted = accepted_ocr_page_replacements(
+        native_text,
+        boundaries,
+        ocr_results,
+        &OcrQualityThresholds::default(),
+        true,
+    );
     apply_ocr_page_replacements(native_text, boundaries, &accepted)
 }
+/// Whether the OCR text of a page would discard most of a healthy native text layer, as the
+/// alnum count the page held and the count OCR read. With `judge_marked_pages`, a page with
+/// lost-glyph markers is judged on its readable text, and each lost glyph is a character the page
+/// holds and the readable text lacks, so the page is judged against what it held, not against what
+/// survived. Without it, the markers count as the garble they are, so a marked page is judged as
+/// before the markers were kept: the pipelines that do not preserve native text keep their
+/// replacement. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn destructive_ocr_information_loss(
     native_page: &str,
     ocr_text: &str,
     thresholds: &OcrQualityThresholds,
+    judge_marked_pages: bool,
 ) -> Option<(usize, usize)> {
-    let lost_glyphs = native_page
-        .matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
-        .count();
-    let readable = super::super::unmapped_glyphs::readable_text(native_page);
+    let (readable, lost_glyphs) = if judge_marked_pages {
+        let lost = native_page
+            .matches(super::super::unmapped_glyphs::is_lost_glyph)
+            .count();
+        (super::super::unmapped_glyphs::readable_text(native_page), lost)
+    } else {
+        (std::borrow::Cow::Borrowed(native_page), 0)
+    };
     let native_decision = evaluate_native_text_for_ocr(&readable, Some(1), thresholds);
     if native_decision.fallback {
         return None;
     }
 
-    // Each lost glyph is a character the page holds and the readable text lacks, so the page is
-    // judged against what it held, not against what survived. ~keep
     let page_alnum = native_decision.stats.alnum.saturating_add(lost_glyphs);
     let ocr_stats = NativeTextStats::compute(ocr_text, thresholds);
     let retained_ratio = ocr_stats.alnum as f64 / page_alnum.max(1) as f64;
@@ -1943,12 +2000,15 @@ pub(super) fn destructive_ocr_information_loss(
 }
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
+/// `judge_marked_pages` as for `destructive_ocr_information_loss`: true when the run preserves
+/// native text. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn accepted_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
     thresholds: &OcrQualityThresholds,
+    judge_marked_pages: bool,
 ) -> ahash::AHashMap<u32, String> {
     let mut page_counts = std::collections::HashMap::new();
     for boundary in boundaries {
@@ -2018,7 +2078,8 @@ pub(super) fn accepted_ocr_page_replacements(
                 return false;
             }
             let native_page = &native_text[byte_start..byte_end];
-            if let Some((native_alnum, ocr_alnum)) = destructive_ocr_information_loss(native_page, text, thresholds) {
+            let loss = destructive_ocr_information_loss(native_page, text, thresholds, judge_marked_pages);
+            if let Some((native_alnum, ocr_alnum)) = loss {
                 tracing::warn!(
                     page = **page,
                     native_alnum,
@@ -3787,6 +3848,7 @@ mod public_ocr_handoff_tests {
             &boundaries,
             &ahash::AHashMap::from_iter([(1, text.into())]),
             &Default::default(),
+            true,
         )
     }
 

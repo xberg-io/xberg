@@ -20,7 +20,7 @@ pub(super) fn covers_complete_native_page(
     layer: &str,
     read: &ExtractedDocument,
 ) -> bool {
-    if layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+    if layer.contains(super::super::unmapped_glyphs::is_lost_glyph) {
         return false;
     }
     let Some(elements) = read.ocr_elements.as_deref() else {
@@ -199,16 +199,16 @@ fn lost_glyphs_leave_native_text(
     lost: usize,
     read_words: &[(String, LineBox)],
 ) -> bool {
-    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+    use super::super::unmapped_glyphs::is_lost_glyph;
 
     let lost_words: Vec<_> = lines
         .iter()
         .flat_map(|line| &line.words)
-        .filter(|word| word.text.contains(LOST_GLYPH_MARKER))
+        .filter(|word| word.text.contains(is_lost_glyph))
         .collect();
     let located: usize = lost_words
         .iter()
-        .map(|word| word.text.matches(LOST_GLYPH_MARKER).count())
+        .map(|word| word.text.matches(is_lost_glyph).count())
         .sum();
     located == lost
         && !lost_glyphs_recovered_by_read(&lost_words, |gap| {
@@ -241,7 +241,7 @@ fn ink_is_glyph_ink(
         && native_words
             .iter()
             .filter(|(text, _)| {
-                !alnum_key(text).is_empty() || text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
+                !alnum_key(text).is_empty() || text.contains(super::super::unmapped_glyphs::is_lost_glyph)
             })
             .all(|(_, word)| glyph_ink_in(rasters, word, media, scale))
 }
@@ -410,7 +410,7 @@ fn read_on_native_lines(
     let word_boxes: Vec<LineBox> = lines
         .iter()
         .flat_map(|line| &line.words)
-        .filter(|word| !word.text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
+        .filter(|word| !word.text.contains(super::super::unmapped_glyphs::is_lost_glyph))
         .map(|word| native_box(word.bbox))
         .collect();
     read_boxes
@@ -442,10 +442,7 @@ struct LostGlyphKind<'a> {
 
 impl<'a> LostGlyphKind<'a> {
     fn of(word: &'a xberg_native_pdf::layout::Word, markers: usize) -> Self {
-        let alone = word
-            .text
-            .chars()
-            .all(|c| c == super::super::unmapped_glyphs::LOST_GLYPH_MARKER);
+        let alone = word.text.chars().all(super::super::unmapped_glyphs::is_lost_glyph);
         Self {
             font: word.dominant_font.as_str(),
             size: (word.avg_font_size / SIZE_STEP_PT).round() as i32,
@@ -478,10 +475,7 @@ fn lost_glyphs_recovered_by_read(
 ) -> bool {
     let mut kinds: std::collections::HashMap<LostGlyphKind<'_>, (usize, usize)> = std::collections::HashMap::new();
     for word in lost_words {
-        let markers = word
-            .text
-            .matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
-            .count();
+        let markers = word.text.matches(super::super::unmapped_glyphs::is_lost_glyph).count();
         let (places, read) = kinds.entry(LostGlyphKind::of(word, markers)).or_default();
         *places += markers;
         if is_read_as_text_at(&native_box(word.bbox)) {

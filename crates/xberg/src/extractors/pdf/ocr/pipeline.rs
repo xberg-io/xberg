@@ -2488,8 +2488,18 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
-    let mut accepted_replacements =
-        accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
+    let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
+    #[cfg(feature = "layout-detection")]
+    let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
+    // A marked page is judged on the text it held only when the run preserves native text; the
+    // pipelines that replace the page keep the replacement. ~keep
+    let mut accepted_replacements = accepted_ocr_page_replacements(
+        native_text,
+        boundaries,
+        &ocr_results,
+        &ocr_output_thresholds,
+        native_preservation_enabled,
+    );
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if probing_hidden_layer || !pages.preserve_native.is_empty() {
         for boundary in boundaries {
@@ -2528,9 +2538,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // lacks first. A page it keeps native stays as it was. ~keep
     let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
     let mut complete_native_pages = std::collections::HashSet::new();
-    let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
-    #[cfg(feature = "layout-detection")]
-    let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), feature = "layout-detection"))]
     let ink_proof_layout_free = resolved_layout_inputs.is_none();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), not(feature = "layout-detection")))]
@@ -2766,13 +2773,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             if native_ink_owned_pages.contains(&page)
                 && ink_proof_layout_free
                 && page_count == 1
-                && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
+                && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::is_lost_glyph))
                 && accepted_replacements.contains_key(&page)
                 && !noise_verdict_pages.contains(&page)
             {
                 complete_native_pages.insert(page);
                 let lost = native.map_or(0, |native| {
-                    native.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count()
+                    native.matches(super::super::unmapped_glyphs::is_lost_glyph).count()
                 });
                 lost_glyph_ink_pages.insert(page, lost);
             }
@@ -6011,7 +6018,7 @@ pub(super) async fn extract_with_ocr_for_page(
             .as_ref()
             .and_then(|hints| hints.single_native_type0_page.as_deref())
             .map_or(0, |native| {
-                native.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count()
+                native.matches(super::super::unmapped_glyphs::is_lost_glyph).count()
             });
         return Err(lost_glyph_ocr_rejection(lost));
     }

@@ -1,6 +1,8 @@
 #![cfg(feature = "pdf")]
 
 use super::super::document::{LayerFirst, LineAt, put_layer_first_in_document};
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use crate::extractors::pdf::unmapped_glyphs::is_lost_glyph;
 use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
@@ -638,10 +640,10 @@ fn ocr_that_drops_the_readable_words_of_a_marked_page_is_not_accepted() {
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
     let page = readable_page_with_lost_glyphs();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds);
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, true);
     assert!(accepted.is_empty(), "OCR keeps under half of the readable words");
     let all_lost = "\u{FFFD} ".repeat(20);
-    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds);
+    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds, true);
     assert!(
         accepted.contains_key(&1),
         "control: a page with no readable word keeps no protection"
@@ -799,7 +801,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
     let native: Vec<SegmentData> = native
         .iter()
         .enumerate()
-        .flat_map(|(row, text)| match text.find('\u{FFFD}') {
+        .flat_map(|(row, text)| match text.find(is_lost_glyph) {
             Some(at) if at > 0 => vec![
                 segment(&text[..at], row, 0.0, 250.0),
                 segment(&text[at..], row, 250.0, 250.0),
@@ -843,7 +845,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
     let boxes =
         super::super::document::page_line_boxes(&native, &[paragraph], (1.0, 1.0)).expect("both sides have rows");
     assert!(
-        boxes.layer.iter().all(|row| !row.key.contains('\u{FFFD}')),
+        boxes.layer.iter().all(|row| !row.key.contains(is_lost_glyph)),
         "a native box is keyed on its readable text"
     );
     boxes
@@ -1106,6 +1108,7 @@ fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
         &one_page(&native),
         &[(1, ocr_reads_forty_percent.clone())].into_iter().collect(),
         &thresholds,
+        true,
     );
     assert!(
         accepted.is_empty(),
@@ -1117,6 +1120,7 @@ fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
         &one_page(&native),
         &[(1, ocr_reads_all)].into_iter().collect(),
         &thresholds,
+        true,
     );
     assert!(
         accepted.contains_key(&1),
@@ -1148,7 +1152,7 @@ fn only_the_marked_page_of_a_document_keeps_its_native_text() {
     ];
     let stray = "two stray words only".to_string();
     let read = [(1, stray.clone()), (2, stray)].into_iter().collect();
-    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds);
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, true);
     assert!(
         accepted.is_empty(),
         "both pages are readable, so OCR that keeps a few words replaces neither"
@@ -1167,7 +1171,7 @@ fn only_the_marked_page_of_a_document_keeps_its_native_text() {
             page_number: 2,
         },
     ];
-    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds);
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, true);
     assert_eq!(
         accepted.keys().copied().collect::<Vec<_>>(),
         vec![2],
@@ -1402,5 +1406,109 @@ fn a_whole_document_run_drops_the_misread_row_on_a_plain_page_only() {
             assert_eq!(texts, ["total 12 cm3 of water"]);
         }
         assert_eq!(page_texts[0], text);
+    }
+}
+
+/// Forty rows whose row 0 begins with a lost glyph (`marker`, a checkbox before the text), and the
+/// rows as OCR reads them, with `glyph` for what OCR made of the checkbox. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn checkbox_rows(marker: char, glyph: &str) -> (Vec<String>, Vec<String>) {
+    let (mut native, mut read) = (forty_rows(), forty_rows());
+    native[0] = format!("{marker}{}", native[0]);
+    read[0] = format!("{glyph}{}", read[0]);
+    (native, read)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_symbol_glyph_the_ocr_glued_to_a_word_puts_the_native_row_first_without_the_glued_row() {
+    let (native, read) = checkbox_rows('\u{FDD0}', "o");
+    let boxes = row_boxes(&native, &read);
+    let expected = format!("{}\n\n{}", forty_rows()[0], read[1..].join("\n"));
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read.join("\n"), boxes),
+            expected,
+            "geometry: {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_symbol_glyph_the_ocr_read_as_its_own_token_or_not_at_all_is_a_whole_read() {
+    for glyph in ["o ", "", "☐ "] {
+        let (native, read) = checkbox_rows('\u{FDD0}', glyph);
+        let boxes = row_boxes(&native, &read);
+        let read = read.join("\n");
+        for boxes in [None, Some(&boxes)] {
+            assert_eq!(merged_page(&native.join("\n"), &read, boxes), read, "glyph {glyph:?}");
+        }
+    }
+}
+
+/// A lost glyph whose font is unknown may be a letter of the word, so the OCR read wins. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_lost_glyph_of_an_unknown_font_glued_by_the_ocr_is_a_whole_read() {
+    let (native, read) = checkbox_rows('\u{FFFD}', "o");
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(merged_page(&native.join("\n"), &read, boxes), read);
+    }
+}
+
+/// The native text lost a ligature inside a word; OCR read the word whole, so the page is the OCR
+/// read, whichever font the lost glyph had. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_word_with_a_lost_glyph_inside_comes_from_the_ocr_that_read_it_whole() {
+    let mut native = forty_rows();
+    native[0] = native[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    native[1] = native[1].replacen("approved", "appr\u{FDD0}ved", 1);
+    let read = forty_rows();
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(merged_page(&native.join("\n"), &read, boxes), read);
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
+    use super::super::document::{accepted_ocr_page_replacements, clean_native_page_layers};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let page = "\u{FDD0} #%& \u{FFFD} @!* ~~ \u{FDD0}\u{FDD0} |||\n".repeat(30);
+    assert!(
+        !clean_native_page_layers(&page, &one_page(&page), None, &thresholds).contains_key(&1),
+        "nothing readable remains to keep"
+    );
+    let read = [(1, "two stray words only".to_string())].into_iter().collect();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, true);
+    assert!(accepted.contains_key(&1), "the OCR text replaces the page");
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn the_marked_page_judgement_is_off_when_native_preservation_is_off() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
+    let page = readable_page_with_lost_glyphs();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, false);
+    assert!(
+        accepted.contains_key(&1),
+        "a pipeline that replaces pages judges the marked page as before: its markers are garble"
+    );
+    let clean = format!("{}\n", forty_rows()[..20].join("\n"));
+    for judge in [false, true] {
+        let accepted = accepted_ocr_page_replacements(&clean, &one_page(&clean), &read, &thresholds, judge);
+        assert!(
+            accepted.is_empty(),
+            "control: a clean page keeps its text under either arm ({judge})"
+        );
     }
 }

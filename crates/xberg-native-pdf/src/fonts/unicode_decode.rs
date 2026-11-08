@@ -554,6 +554,11 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3
     }
 }
 
+/// The marker a preserved decode leaves for a glyph without a Unicode value when its font is a
+/// symbol font ([`FontInfo::is_symbol_font`]): a noncharacter, so no text layer holds it. Every
+/// other preserved loss stays U+FFFD. ~keep
+pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FDD0}';
+
 pub(crate) fn decode_text_to_unicode(
     bytes: &[u8],
     font: Option<&FontInfo>,
@@ -572,7 +577,17 @@ pub(crate) fn decode_text_to_unicode(
         decode_latin1_fallback(bytes)
     };
 
-    filter_decoded_text(&raw_result, policy)
+    filter_decoded_text(&mark_symbol_font_losses(raw_result, font, policy), policy)
+}
+
+/// A preserved U+FFFD of a symbol font becomes [`LOST_SYMBOL_GLYPH_MARKER`]. Runs after the
+/// drop branch of each decoder, so a decode that drops unmapped glyphs never sees it. ~keep
+fn mark_symbol_font_losses(decoded: String, font: Option<&FontInfo>, policy: DecodePolicy) -> String {
+    if policy.preserve_unmapped && font.is_some_and(FontInfo::is_symbol_font) && decoded.contains('\u{FFFD}') {
+        decoded.replace('\u{FFFD}', &LOST_SYMBOL_GLYPH_MARKER.to_string())
+    } else {
+        decoded
+    }
 }
 
 /// Decode `bytes` for a simple (non-Type0) font via its precomputed
@@ -790,6 +805,47 @@ mod tests {
             cjk_substitution: None,
             embedded_cid_map: None,
         }
+    }
+
+    fn symbol_font(base_font: &str) -> FontInfo {
+        FontInfo {
+            base_font: base_font.to_string(),
+            ..utf8_cmap_font()
+        }
+    }
+
+    /// A preserved loss of a symbol font is the symbol marker; a text font, a decode that drops
+    /// losses, and a font-less decode keep U+FFFD.
+    #[test]
+    fn a_preserved_loss_of_a_symbol_font_is_the_symbol_marker() {
+        let preserve = DecodePolicy {
+            preserve_unmapped: true,
+            ..DecodePolicy::default()
+        };
+        let lost = "a\u{FFFD}b \u{FFFD}\u{FFFD}".to_string();
+        for name in [
+            "ABCDEF+Wingdings-Regular",
+            "Webdings",
+            "ZapfDingbats",
+            "SymbolMT",
+            "Marlett",
+        ] {
+            assert_eq!(
+                mark_symbol_font_losses(lost.clone(), Some(&symbol_font(name)), preserve),
+                "a\u{FDD0}b \u{FDD0}\u{FDD0}",
+                "{name}"
+            );
+        }
+        assert_eq!(
+            mark_symbol_font_losses(lost.clone(), Some(&symbol_font("ABCDEF+Calibri")), preserve),
+            lost
+        );
+        assert_eq!(
+            mark_symbol_font_losses(lost.clone(), Some(&symbol_font("Wingdings")), DecodePolicy::default()),
+            lost
+        );
+        assert_eq!(mark_symbol_font_losses(lost.clone(), None, preserve), lost);
+        assert_eq!(LOST_SYMBOL_GLYPH_MARKER.len_utf8(), '\u{FFFD}'.len_utf8());
     }
 
     /// UTF-8-CMap codes are lead-byte-width segmented; an invalid lead byte

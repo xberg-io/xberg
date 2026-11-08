@@ -220,7 +220,7 @@ fn enforce_page_limit(content: &[u8], config: &ExtractionConfig) -> Result<()> {
 /// propagates the identical error with `?`.
 ///
 /// Whitespace-only counts as nothing: a document yielding `"\n\n  "` is as total a loss as `""`.
-/// So does text of only U+FFFD: it is the same predicate that sends the page to OCR. ~keep
+/// So does text of only lost-glyph markers: it is the same predicate that sends the page to OCR. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
     native_text_holds_no_content(native_text)
@@ -901,12 +901,14 @@ fn scanned_page_quality_gate_enabled(config: &ExtractionConfig) -> bool {
         .unwrap_or(config.ocr.is_some())
 }
 
-/// True when the native text is blank or holds only U+FFFD. The extractor keeps one U+FFFD for
-/// each Type0 glyph without a Unicode value, so a page that lost every glyph reads as U+FFFD
-/// and must count as absent text. ~keep
+/// True when the native text is blank or holds only lost-glyph markers. The extractor keeps one
+/// marker for each Type0 glyph without a Unicode value, so a page that lost every glyph reads as
+/// markers and must count as absent text. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn native_text_holds_no_content(native_text: &str) -> bool {
-    native_text.chars().all(|c| c.is_whitespace() || c == '\u{FFFD}')
+    native_text
+        .chars()
+        .all(|c| c.is_whitespace() || unmapped_glyphs::is_lost_glyph(c))
 }
 
 /// Whether the `Auto` near-empty fallback branch runs for this document.
@@ -2440,7 +2442,7 @@ fn whole_document_ocr_hints(
         && let Some([boundary]) = boundaries
         && boundary.page_number == 1
         && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
-        && native.contains(unmapped_glyphs::LOST_GLYPH_MARKER)
+        && native.contains(unmapped_glyphs::is_lost_glyph)
     {
         hints.get_or_insert_with(Default::default).single_native_type0_page = Some(native.into());
     }

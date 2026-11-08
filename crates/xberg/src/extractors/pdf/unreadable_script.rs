@@ -170,7 +170,7 @@ fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Scri
     let mut covered_chars = 0usize;
     for character in text.chars().filter(|character| {
         !character.is_whitespace()
-            && *character != super::unmapped_glyphs::LOST_GLYPH_MARKER
+            && !super::unmapped_glyphs::is_lost_glyph(*character)
             && !character.is_numeric()
             && !character.is_ascii_punctuation()
             && !matches!(*character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
@@ -482,6 +482,9 @@ pub(super) fn retain_unreadable_script_pages(
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
+            if !text.contains(super::unmapped_glyphs::is_lost_glyph) {
+                return None;
+            }
             stages
                 .iter()
                 .find_map(|languages| Some((*page, judged_scripts(text, languages)?, languages.as_slice())))

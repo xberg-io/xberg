@@ -45,7 +45,12 @@ impl PdfDocument {
         let total = chars.len().max(1);
         let bad = chars
             .iter()
-            .filter(|&&c| c == '\u{FFFD}' || c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c))
+            .filter(|&&c| {
+                c == '\u{FFFD}'
+                    || c == crate::LOST_SYMBOL_GLYPH_MARKER
+                    || c.is_control()
+                    || ('\u{E000}'..='\u{F8FF}').contains(&c)
+            })
             .count();
         let garbled_ratio = bad as f32 / total as f32;
         let word_text: String = self

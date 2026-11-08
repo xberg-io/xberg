@@ -22,12 +22,14 @@ pub(super) const PUA_RANGE_END: u32 = 0xF8FF;
 pub(super) const MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO: f64 = 0.5;
 /// Returns `true` for characters that indicate a broken glyph-to-Unicode mapping rather
 /// than legible text: Unicode Private Use Area codepoints (a common fallback target for
-/// undecodable CID/glyph indices), the replacement character (U+FFFD), and non-whitespace
+/// undecodable CID/glyph indices), the lost-glyph markers (U+FFFD, U+FDD0), and non-whitespace
 /// control characters. Ordinary symbols, punctuation, and emoji are unaffected.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn is_undecodable_char(ch: char) -> bool {
     let code = ch as u32;
-    (PUA_RANGE_START..=PUA_RANGE_END).contains(&code) || ch == '\u{FFFD}' || (ch.is_control() && !ch.is_whitespace())
+    (PUA_RANGE_START..=PUA_RANGE_END).contains(&code)
+        || super::super::unmapped_glyphs::is_lost_glyph(ch)
+        || (ch.is_control() && !ch.is_whitespace())
 }
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Default)]
@@ -37,7 +39,7 @@ pub struct NativeTextStats {
     pub alnum: usize,
     pub meaningful_words: usize,
     pub alnum_ratio: f64,
-    /// Count of Unicode replacement characters (U+FFFD) indicating encoding failures.
+    /// Count of lost-glyph markers (U+FFFD, and U+FDD0 for a symbol font) indicating encoding failures.
     pub garbage_char_count: usize,
     /// Fraction of whitespace-delimited words that are 1-2 characters (0.0-1.0).
     /// High values indicate fragmented/garbled text extraction.
@@ -138,7 +140,7 @@ impl NativeTextStats {
         let mut undecodable_count = 0usize;
 
         for ch in text.chars() {
-            if ch == '\u{FFFD}' {
+            if super::super::unmapped_glyphs::is_lost_glyph(ch) {
                 garbage_char_count += 1;
             }
             if is_undecodable_char(ch) {

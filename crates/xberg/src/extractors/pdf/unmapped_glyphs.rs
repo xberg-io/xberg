@@ -1,11 +1,12 @@
 //! Glyphs without a Unicode value in native PDF text.
 //!
-//! The native extractor keeps one U+FFFD for each Type0 glyph that has no Unicode value, so the
-//! OCR routing gates can count the loss. A page that OCR does not replace must not show the
-//! marker to the caller. This module replaces each run of markers with one space between the
-//! characters that survive, so that `A<marker>B` and `1<marker>2` do not fuse into `AB` and `12`.
-//! It does this after the routing decision, keeps every byte offset that points into the text
-//! correct, and builds the warning for a document that still lacks characters. ~keep
+//! The native extractor keeps one marker for each Type0 glyph that has no Unicode value (U+FFFD,
+//! or U+FDD0 for a glyph of a symbol font), so the OCR routing gates can count the loss. A page
+//! that OCR does not replace must not show a marker to the caller. This module replaces each run
+//! of markers with one space between the characters that survive, so that `A<marker>B` and
+//! `1<marker>2` do not fuse into `AB` and `12`. It does this after the routing decision, keeps
+//! every byte offset that points into the text correct, and builds the warning for a document
+//! that still lacks characters. ~keep
 
 use crate::core::config::ExtractionConfig;
 use crate::types::internal::InternalDocument;
@@ -13,6 +14,17 @@ use crate::types::{PageBoundary, PageContent, ProcessingWarning, Table};
 
 /// The marker the native extractor leaves for a glyph without a Unicode value.
 pub(super) const LOST_GLYPH_MARKER: char = '\u{FFFD}';
+
+/// The marker the native extractor leaves for a glyph without a Unicode value from a symbol font
+/// (a checkbox, a bullet): `xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER`, repeated here because
+/// this module also builds without the `pdf` feature. Such a glyph is no letter of the word next
+/// to it. ~keep
+pub(super) const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FDD0}';
+
+/// Whether `c` is a lost-glyph marker of either kind.
+pub(super) fn is_lost_glyph(c: char) -> bool {
+    c == LOST_GLYPH_MARKER || c == LOST_SYMBOL_GLYPH_MARKER
+}
 
 /// A run of consecutive markers in a text, and what replaces it. One lost glyph, or several in a
 /// row, stands for characters that exist on the page, so the run leaves a single space between
@@ -34,17 +46,16 @@ impl MarkerRuns {
 
     /// The runs made of markers that lie outside every protected byte range.
     fn outside(text: &str, protected: &[(usize, usize)]) -> Option<Self> {
-        let width = LOST_GLYPH_MARKER.len_utf8();
         let mut runs: Vec<Run> = Vec::new();
-        for (at, _) in text.match_indices(LOST_GLYPH_MARKER) {
+        for (at, marker) in text.match_indices(is_lost_glyph) {
             if protected.iter().any(|&(start, end)| (start..end).contains(&at)) {
                 continue;
             }
             match runs.last_mut() {
-                Some(run) if run.end == at => run.end = at + width,
+                Some(run) if run.end == at => run.end = at + marker.len(),
                 _ => runs.push(Run {
                     start: at,
-                    end: at + width,
+                    end: at + marker.len(),
                     replacement: "",
                 }),
             }
@@ -109,7 +120,7 @@ pub(super) fn strip_native_fragment(text: &mut String) -> usize {
 /// The text itself keeps its markers. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn readable_text(text: &str) -> std::borrow::Cow<'_, str> {
-    if !text.contains(LOST_GLYPH_MARKER) {
+    if !text.contains(is_lost_glyph) {
         return std::borrow::Cow::Borrowed(text);
     }
     let mut readable = text.to_owned();
@@ -162,21 +173,21 @@ pub(super) fn strip_document(doc: &mut InternalDocument) -> usize {
 /// Remove every marker from a page: its text, its hierarchy blocks and its tables.
 /// A page whose text becomes blank is marked blank.
 pub(super) fn strip_page(page: &mut PageContent) -> usize {
-    let mut removed = page.content.matches(LOST_GLYPH_MARKER).count();
+    let mut removed = page.content.matches(is_lost_glyph).count();
     if removed > 0 {
         page.content = without_markers(&page.content);
         page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
     }
     if let Some(hierarchy) = page.hierarchy.as_mut() {
         for block in &mut hierarchy.blocks {
-            removed += block.text.matches(LOST_GLYPH_MARKER).count();
+            removed += block.text.matches(is_lost_glyph).count();
             block.text = without_markers(&block.text);
         }
     }
     for table in &mut page.tables {
-        if table.markdown.contains(LOST_GLYPH_MARKER)
-            || table.cells.iter().flatten().any(|c| c.contains(LOST_GLYPH_MARKER))
-            || table.columns.iter().flatten().any(|c| c.contains(LOST_GLYPH_MARKER))
+        if table.markdown.contains(is_lost_glyph)
+            || table.cells.iter().flatten().any(|c| c.contains(is_lost_glyph))
+            || table.columns.iter().flatten().any(|c| c.contains(is_lost_glyph))
         {
             removed += strip_table(std::sync::Arc::make_mut(table));
         }
@@ -186,7 +197,7 @@ pub(super) fn strip_page(page: &mut PageContent) -> usize {
 
 /// Remove every marker from the cells and the Markdown of a table.
 pub(super) fn strip_table(table: &mut Table) -> usize {
-    let mut removed = table.markdown.matches(LOST_GLYPH_MARKER).count();
+    let mut removed = table.markdown.matches(is_lost_glyph).count();
     table.markdown = without_markers(&table.markdown);
     for cell in table
         .cells
@@ -194,7 +205,7 @@ pub(super) fn strip_table(table: &mut Table) -> usize {
         .flatten()
         .chain(table.columns.iter_mut().flatten())
     {
-        removed += cell.matches(LOST_GLYPH_MARKER).count();
+        removed += cell.matches(is_lost_glyph).count();
         *cell = without_markers(cell);
     }
     removed
@@ -235,6 +246,31 @@ mod tests {
         assert_eq!(readable_text(&format!("1{MARK}2")), "1 2");
         assert_eq!(readable_text(&format!("the {MARK} cafe{MARK}")), "the  cafe");
         assert!(matches!(readable_text("no loss"), std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn a_lost_symbol_glyph_is_stripped_and_counted_like_a_lost_glyph() {
+        const SYMBOL: &str = "\u{FDD0}";
+        assert_eq!(
+            LOST_SYMBOL_GLYPH_MARKER.len_utf8(),
+            LOST_GLYPH_MARKER.len_utf8(),
+            "a run counts its glyphs by one marker length"
+        );
+        assert!(is_lost_glyph(LOST_SYMBOL_GLYPH_MARKER) && is_lost_glyph(LOST_GLYPH_MARKER));
+        assert!(!is_lost_glyph('\u{FDD1}') && !is_lost_glyph(' '));
+        assert_eq!(readable_text(&format!("{SYMBOL}yes no")), "yes no");
+        assert_eq!(readable_text(&format!("A{SYMBOL}B")), "A B");
+        let mut text = format!("ab{SYMBOL}cd{MARK}{SYMBOL}ef{SYMBOL}");
+        let removed = strip_text(&mut text, None, &[]);
+        assert_eq!(removed, 4, "each marker of either kind counts");
+        assert_eq!(text, "ab cd ef");
+    }
+
+    /// The marker the native extractor emits is the one this module strips. ~keep
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn the_symbol_marker_is_the_one_the_native_extractor_emits() {
+        assert_eq!(LOST_SYMBOL_GLYPH_MARKER, xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER);
     }
 
     #[test]
