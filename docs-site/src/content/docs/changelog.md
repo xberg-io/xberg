@@ -75,6 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
   The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.
+- **(pdf): Native PDF text returns the letters of every ligature.** (GH#2322)
+  A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters in every output format, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next minor release.
 
 - **(pdf): Reduce allocations in native text extraction.** (#2429)
   Reuse ordered spans directly when the text pass does not need character records.
@@ -267,6 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Recover prose behind grayscale ICC page images (#2313).** A page whose only content is a full-page 8-bit gray image with a bounded display ICC profile now takes the visible-raster OCR route, so the prose in the image is no longer dropped in favour of the near-empty native text.
 
+- **(pdf): Join a word that a ligature glyph split in two.** (GH#2322)
+  A space drawn inside a ligature's box (the pen is pulled back by the space width) no longer counts as a word break: the gap between the real letters decides. A space with its own room stays, because the page shows a gap there. A ToUnicode value of U+0000 for a ligature now falls back to the `/Differences` glyph name of the font.
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
