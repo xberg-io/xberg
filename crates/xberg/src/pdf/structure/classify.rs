@@ -2025,10 +2025,13 @@ fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
 /// the far side of the text, and at least a US Letter page. The left and bottom edge are at zero.
 fn page_extent(page: &[PdfParagraph]) -> (f32, f32) {
     use super::pipeline::{FALLBACK_PAGE_HEIGHT_PTS, FALLBACK_PAGE_WIDTH_PTS};
-    let segments = page.iter().flat_map(|para| para.lines.iter().flat_map(|line| line.segments.iter()));
-    segments.fold((FALLBACK_PAGE_WIDTH_PTS, FALLBACK_PAGE_HEIGHT_PTS), |(right, top), s| {
-        (right.max(s.x + s.width), top.max(s.y + s.height))
-    })
+    let segments = page
+        .iter()
+        .flat_map(|para| para.lines.iter().flat_map(|line| line.segments.iter()));
+    segments.fold(
+        (FALLBACK_PAGE_WIDTH_PTS, FALLBACK_PAGE_HEIGHT_PTS),
+        |(right, top), s| (right.max(s.x + s.width), top.max(s.y + s.height)),
+    )
 }
 
 /// Whether the paragraphs are the parts of one margin stamp. All parts are drawn with one rotation and

@@ -4335,17 +4335,23 @@ mod annotation_text_repair_tests {
     }
 
     #[test]
-    fn a_ligature_code_point_before_a_space_still_joins_its_word_on_the_text_repair_paths() {
-        // Native text expands ligatures at decode, so this pass serves text that arrives with the
-        // code point (OCR and structure-tree text). Both repair paths must still reach it.
-        assert_eq!(normalized("\u{FB01} eld", Vec::new()).text, "field");
-        let annotated = normalized(
-            "\u{FB01} eld",
-            vec![annotation("\u{FB01} eld", "eld", AnnotationKind::Bold)],
-        );
-        assert_eq!(annotated.text, "field");
-        let witnesses = super::WordWitnesses::default();
-        assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), "field");
+    fn a_ligature_code_point_before_a_space_joins_its_word_only_in_ocr_text_on_both_repair_paths() {
+        // Native text expands ligatures at decode, so this pass sees the code point only in OCR and
+        // structure-tree text. OCR has no glyph geometry, so its space is absorbed; other text keeps it.
+        for (ocr_text, expected) in [(true, "field"), (false, "fi eld")] {
+            assert_eq!(normalized_from("\u{FB01} eld", Vec::new(), ocr_text).text, expected);
+            let annotated = normalized_from(
+                "\u{FB01} eld",
+                vec![annotation("\u{FB01} eld", "eld", AnnotationKind::Bold)],
+                ocr_text,
+            );
+            assert_eq!(annotated.text, expected);
+            let witnesses = super::TextRepairWitnesses {
+                ocr_text,
+                ..Default::default()
+            };
+            assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), expected);
+        }
     }
 
     #[test]
