@@ -205,6 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep the native page when automatic OCR reads it as a table of the same words (Refs #2534).**
+  A read that Tesseract laid out as a table is compared with its own iterator words with the table markup and ruling bars set aside, and it yields to the native text under the same unchanged 0.85 native-agreement share and glyph-ink proof as a plain read. The native page was followed by its whole OCR table (1315 words for 550 on Intel SDM page 815).
+
 - **(php,elixir): Make the macOS PHP extension and Elixir NIF load without Homebrew's libheif.** (#2547)
   The v1.3.10 and earlier macOS releases linked `/opt/homebrew/opt/libheif/lib/libheif.1.dylib` by absolute path and did not ship it, so the whole binding failed to load on a Mac without it.
   PIE installs one file, so the PHP extension now links libheif, libde265 and libaom (decode only, no x265 or other encoder) statically, built from pinned sources at the macOS 15.0 floor; the archive ships their upstream notices, the GPL-3.0 text and a source inventory, the release loads it in PHP and decodes HEIC and AVIF before upload, and HEIF output is unavailable there.
