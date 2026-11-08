@@ -80,3 +80,17 @@ fn should_paint_a_code_that_decodes_to_a_letter_and_an_accent_by_cid() {
         "a code that decodes to a letter and a combining accent must be painted by CID, not shaped"
     );
 }
+
+#[test]
+fn should_paint_a_code_that_decodes_to_no_characters_by_cid() {
+    // The code of `e` decodes to a control character, which the decoder drops with no drop record, so the run
+    // has fewer characters than codes. Shaping that run would skip every `e`; the CID route paints it. ~keep
+    let reference = raster(PLAIN_DIRECT);
+    assert_seven_lines_have_ink(&reference);
+    let actual = raster(include_bytes!("fixtures/ligature_advance_2322/fewer.pdf"));
+    assert_seven_lines_have_ink(&actual);
+    assert!(
+        actual.as_raw() == reference.as_raw(),
+        "a code that decodes to no characters must be painted by CID, not shaped without its glyph"
+    );
+}

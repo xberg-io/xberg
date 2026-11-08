@@ -1,6 +1,6 @@
 """Regenerate the issue #2322 ligature-advance fixtures with the lock-pinned fonttools.
 
-Usage: python3 generate.py OUTPUT.pdf MODE, MODE one of direct, letters, codepoint, plain, plain_direct, accent.
+Usage: python3 generate.py OUTPUT.pdf MODE, MODE one of direct, letters, codepoint, plain, plain_direct, accent, fewer.
 """
 
 import io
@@ -12,7 +12,7 @@ from fontTools.ttLib import TTFont
 
 output = Path(sys.argv[1])
 mode = sys.argv[2]
-if mode not in ("direct", "letters", "codepoint", "plain", "plain_direct", "accent"):
+if mode not in ("direct", "letters", "codepoint", "plain", "plain_direct", "accent", "fewer"):
     raise ValueError(f"unknown mode {mode}")
 
 SENT = [
@@ -60,6 +60,12 @@ order = tt.getGlyphOrder()
 cm = tt.getBestCmap()
 used = sorted(set("".join(lines)))
 gid = {c: order.index(cm[ord(c)]) for c in used}
+if mode == "fewer":
+    # The cmap maps U+0001 to the glyph of e and ToUnicode has no entry for it, so the reverse cmap decodes the
+    # code of e to a control character, which the decoder drops with no drop record: one code, no characters.
+    for table in tt["cmap"].tables:
+        if ord("e") in table.cmap:
+            table.cmap[1] = table.cmap.pop(ord("e"))
 if mode in ("direct", "plain_direct"):
     del tt["cmap"]  # no font cmap: the direct CID route paints every run, the reference raster
 buf = io.BytesIO()
@@ -80,9 +86,10 @@ def unicode_of(c):
 tu = (
     "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /X def "
     "/CMapType 2 def 1 begincodespacerange <0000> <FFFF> endcodespacerange\n"
-    f"{len(gid)} beginbfchar\n"
+    f"{len(gid) - (mode == 'fewer')} beginbfchar\n"
 )
-tu += "".join(f"<{g:04X}> <{unicode_of(c)}>\n" for g, c in sorted((g, c) for c, g in gid.items()))
+tu_gid = {c: g for c, g in gid.items() if not (mode == "fewer" and c == "e")}
+tu += "".join(f"<{g:04X}> <{unicode_of(c)}>\n" for g, c in sorted((g, c) for c, g in tu_gid.items()))
 tu += "endbfchar endcmap end end"
 
 
