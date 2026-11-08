@@ -1,50 +1,44 @@
 # PLOS COMPUTATIONAL BIOLOGY
 
-Estkmatkng rarameter dkstrkbutkons wktj rereated cross-sectkonal data
+Estimating parameter distributions with repeated cross-sectional data
 
-**Fkg 5. Estkmatkon results on tje rarameter dkstrkbutkon for a target cell-lkmkted model wktj dela{ed vkrus rroductkon.** Tjks model descrkbes four comronents T, I3, I2, and V over tkme. We ezrlore tjree dkfferent rarameter dkstrkbutkons: unkmodal *a+, bkmodal *b+, and trkmodal *c+. For eacj case, we used RCS data for four rorulatkons *left+ and rresented estkmatkon results for two rarameters p and K
+**Fig 5. Estimation results on the parameter distribution for a target cell-limited model with delayed virus production.** This model describes four components T, I~1~, I~2~, and V over time. We explore three different parameter distributions: unimodal (a), bimodal (b), and trimodal (c). For each case, we used RCS data for four populations (left) and presented estimation results for two parameters p and K~*δ*~(right) among the six parameters in the model.
 
-*δ* *rkgjt+ among tje skz rarameters kn tje model.
+https://doi.org/10.1371/journal.pcbi.1012696.g005
 
-jttrs://dok.org/32.3373/journal.rcbk.32326;6.g225
+substrate complex and free enzyme remain constant, the system can be expressed as follows: d½S K~cat~½E~0~½S ¼ *;* dt K~m~ þ½S d½P K~cat~½E~0~½S ¼ *;* dt K~m~ þ½S where K~cat~is the catalytic rate constant, [E~0~] is the total enzyme concentration, and K~m~is the
 
-substrate comrlez and free enz{me remakn constant, tje s{stem can be ezrressed as follows: d½S Kcat½E2½S ¼ *;* dt Km þ½S d½P K ½E2½S ¼
+# Michaelis constant. To validate the performance of EPD in the Michaelis-Menten equation,
 
-cat
+we designed three different observations (Fig 6, Observation) with a known [E~0~] value of
 
-# ; dt Km þ½S
+5.0 × 10<sup>−4</sup>. Specifically, we obtained RCS data from 12 trajectories of S(t) and P(t) which were
 
-wjere Kcat ks tje catal{tkc rate constant, [E2] ks tje total enz{me concentratkon, and Km ks tje
+**Table 1. Parameter values for different distribution types within the target cell-limited model using synthetic data.**
 
-# Mkcjaelks constant. To valkdate tje rerformance of ERD kn tje Mkcjaelks-Menten esuatkon,
-
-we deskgned tjree dkfferent observatkons *Fkg 6, Observatkon+ wktj a known [E2] value of
-
-5.2 × 32−4. Sreckfkcall{, we obtakned RCS data from 32 trajectorkes of Sttt+ and Pttt+ wjkcj were
-
-**Table 3. Rarameter values for dkfferent dkstrkbutkon t{res wktjkn tje target cell-lkmkted model uskng s{ntjetkc data.**
-
-**Dkstrkbutkon t{re K *×324+**
-
-***δ***
-
-| β *×32−4+ | p | c *×323+ | κ | δ *×326+ |
+| β (×10−4) | p | c (×101) | κ | δ (×106) |
 | --- | --- | --- | --- | --- |
-| 2.42 | 3.62 | 3.32 | 4.22 | 3.62 |
-| 2.:: | 3.44 | 3.:2 | 5.22 | 3.2: |
-| 2.36 | 2.2: | 2.;3 | 3.22 | 3.76 |
-| 2.:: | 3.32 | 3.56 | 4.22 | 3.44 |
-| 3.6: | 2.24 | 3.:2 | 5.62 | 3.62 |
-| 2.36 | 2.2: | 2.7: | 2.42 | 3.;2 |
+| 2.40 | 1.60 | 1.30 | 4.00 | 1.60 |
+| 2.88 | 1.44 | 1.82 | 5.20 | 1.28 |
+| 2.16 | 2.08 | 0.91 | 3.20 | 1.76 |
+| 2.88 | 1.12 | 1.56 | 4.00 | 1.44 |
+| 1.68 | 2.24 | 1.82 | 5.60 | 1.60 |
+| 2.16 | 2.08 | 0.78 | 2.40 | 1.92 |
 
-Unkmodal 4.52
+**1 6**
 
-Bkmodal 3.35 4.;5
+**Distribution type K**~***δ***~**(×10**<sup>**4**</sup>**)**
 
-Trkmodal 4.52
+Unimodal 4.50
 
-7.22
+Bimodal 3.15
 
-2.25 jttrs://dok.org/32.3373/journal.rcbk.32326;6.t223
+4.95
 
-RLOS Comrutatkonal Bkolog{ | jttrs://dok.org/32.3373/journal.rcbk.32326;6 December 23, 2224 : / 22
+Trimodal 4.50
+
+7.20
+
+2.25 https://doi.org/10.1371/journal.pcbi.1012696.t001
+
+PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1012696 December 23, 2024 8 / 22

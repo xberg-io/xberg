@@ -14,9 +14,11 @@ If these files are not properly created, then it is most probably due to the ina
 
 ### 5.4.3 Test Data Files
 
-Six sample files have been created and are contained in the **data/** subdirectory. Four of these files correspond to the Mathematica
+Six sample files have been created and are contained in the **data/** subdirectory. Four of these files
 
-9 generated binary expansion of several classical numbers for over 1,000,000 bits. These files are *data.e* , *data.pi* , *data.sqrt2* , and *data.sqrt3* . The Mathematica program used in creating these files can be found in Appendix F. A fifth file, *data* . *sha1* , was constructed utilizing the SHA-1 hash function. The final sample file is one produced by a biased PRNG and is intended to fail certain statistical tests.
+9
+
+correspond to the Mathematica generated binary expansion of several classical numbers for over 1,000,000 bits. These files are *data.e* , *data.pi* , *data.sqrt2* , and *data.sqrt3* . The Mathematica program used in creating these files can be found in Appendix F. A fifth file, *data* . *sha1* , was constructed utilizing the SHA-1 hash function. The final sample file is one produced by a biased PRNG and is intended to fail certain statistical tests.
 
 ### 5.5 Program Layout
 

@@ -77,6 +77,7 @@ values = [
   ".agents/plugins/marketplace.json",
   "/.ai-rulez-generated.json",
   "tools/benchmark-harness/cohorts/**",
+  "crates/xberg/tests/fixtures/pdf/regression_pages/**",
   "skills/**",
   "adrs/**",
 ]
@@ -158,6 +159,7 @@ values = [
   ".agents/plugins/marketplace.json",
   ".ai-rulez-generated.json",
   "tools/benchmark-harness/cohorts/**",
+  "crates/xberg/tests/fixtures/pdf/regression_pages/**",
   "skills/**",
   "adrs/**",
   "packages/swift/Sources/RustBridge/xberg-swift.swift",
@@ -232,6 +234,7 @@ values = [
   ".agents/plugins/marketplace.json",
   ".ai-rulez-generated.json",
   "tools/benchmark-harness/cohorts/**",
+  "crates/xberg/tests/fixtures/pdf/regression_pages/**",
   "skills/**",
   "adrs/**",
 ]
@@ -303,6 +306,7 @@ values = [
   ".agents/plugins/marketplace.json",
   ".ai-rulez-generated.json",
   "tools/benchmark-harness/cohorts/**",
+  "crates/xberg/tests/fixtures/pdf/regression_pages/**",
   "skills/**",
   "adrs/**",
 ]

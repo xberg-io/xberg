@@ -4,84 +4,78 @@ This test rejects sequences which show too many or too few occurrences of *m* -r
 
 To implement this test, parameters *M* and *N* are determined so that *n* = *MN* , i.e., the original string is partitioned into *N* blocks, each of length *M* .
 
-˜ ˜
+Let *W* ˜ = *W* ˜ *m* , *n* be the number of (possibly overlapping) runs of ones of length *m* in the jth block.
 
-Let *W* = *W*
+*j j* ( )
 
-( *m* , *n* ) be the number of (possibly overlapping) runs of ones of length *m* in the jth block.
+The asymptotic distribution of *W*~*j*~ is the compound Poisson distribution (the so-called Pòlya-Aeppli law, see[1]):
 
-*j j*
+
 
-The asymptotic distribution of *Wj* is the compound Poisson distribution (the so-called Pòlya-Aeppli law, see[1]):
+*t*
 
-λ
+ λ(<sup>*e*</sup> −1)<sup></sup> *E* exp *tW* ˜ → exp (5)
 
-*t* 1
+{
 
-# ( e − ) E exp{   (5)
+*j* }
 
-*tW* ˜ *j* } → exp  2 − *et*    when ( *M* − *m* + 1)2− *m* →λ \> 0 ( *t* is a real variable).
+  *t*  2 − *e*   
 
-The corresponding probabilities can be expressed in terms of the confluent hypergeometric function Φ = *F* . If *U* denotes a random variable with the compound Poisson asymptotic distribution, then for u ≥
+− *m*
 
-1 1
+when (<sup>*M*</sup> − *m* + 1)<sup>2</sup> → λ \> 0 ( *t* is a real variable).
 
-1 with η = λ/2.
+The corresponding probabilities can be expressed in terms of the confluent hypergeometric function Φ = *F* . If *U* denotes a random variable with the compound Poisson asymptotic distribution, then for u ≥ 1 1 1 with η = λ/2.
 
-*u*
+−η *u l* −2η
 
-  *l e* −η *u* −1 η ηe
+*e*  *u* −1η ηe *P* (<sup>*U*</sup> = *u*)<sup>=</sup>
 
-−2η
+∑~~
 
-*P* ( *U* = *u* ) =
-
-∑  = Φ(
-
-*u* +1,2,η). 2
+ = Φ(<sup>*u*</sup> +1,2,η)<sup>.</sup>
 
 *u*
 
- *l* −1 *l* \! 2
+2<sup>*u*</sup>  *l* −1 *l* \! 2
 
-*u l* =1
+*l* =1
 
-For example, *P* ( *U* = 0) = *e* −η, η *P* ( *U* = 1) = *e*
+For example,
 
-−η, 2 ηe−η
+−η
 
-*P* ( *U* = 2) =
+*P* ( <sup>*U*</sup> = 0)<sup>=</sup> *e* , η
 
-## [η + 2]
+−η
 
-, 8 
+*P* (<sup>*U*</sup> = 1)<sup>=</sup> *e* , 2
+
+−η
+
+ηe *P* ( <sup>*U*</sup> = 2)<sup>=</sup> [<sup>η</sup> + 2]<sup>,</sup> 8
+
+−η
+
+
 
 2
 
-ηe 
+ηe η  *P* ( <sup>*U*</sup> = 3)<sup>=</sup>  + η + 1, 8  6 
 
-−η η *P* (
+−η
 
-*U* = 3) =  + η + 1, 8  6  
+
 
 3
 
-ηe 
+ηe η η<sup>2</sup> 3η  *P* (<sup>*U*</sup> = 4)<sup>=</sup>  + + + 1. 16 24 2 2  More accurate, but also more complicated, expressions are given in [3]. These expressions yield the following probabilities:
 
-−η η η2 3η *P* (
-
-*U* = 4) =  + + + 1.
-
-following probabilities:
-
-16 24 2 2  More accurate, but also more complicated, expressions are given in [3]. These expressions yield the
-
-| π 0 | 0.364091 |
+| π ~0~ | 0.364091 |
 | --- | --- |
 | π 1 | 0.185659 |
 | π2 | 0.139381 |
 | π 3 | 0.100571 |
 | π4 | 0.0704323 |
 | π 5 | 0.139865 |
-
-2 4

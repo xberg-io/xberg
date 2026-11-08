@@ -22,9 +22,9 @@ Sensing Letters, Article vol. 4, no. 1, pp. 75-79, Jan 2007.
 
 and Wideband Radio Interference Artifacts in Single-Look Complex SAR but it is susceptible to intentional and unintentional RFIs. For Images," Ieee Transactions on Geoscience and Remote Sensing, Article image inpainting networks, although they have achieved vol. 60, 2022.
 
-- T. Bollian, et al."Adaptive Antenna Pattern Notching of Interference in
+- [9] T. Bollian, et al."Adaptive Antenna Pattern Notching of Interference in
 
-excellent results, their generalization is unclear. To address [9] Synthetic Aperture Radar Data Using Digital Beamforming," Remote this problem, through time-frequency analysis of interference Sensing, Article vol. 11, no. 11, Jun 1 2019, Art. no. 1346. signals, we find that interference holds domain invariant
+excellent results, their generalization is unclear. To address Synthetic Aperture Radar Data Using Digital Beamforming," Remote this problem, through time-frequency analysis of interference Sensing, Article vol. 11, no. 11, Jun 1 2019, Art. no. 1346. signals, we find that interference holds domain invariant
 
 - [10] M. Tao et al., "Interference Mitigation for Synthetic Aperture Radar Data using Tensor Representation and Low-Rank Approximation," in 33rd
 
@@ -58,9 +58,11 @@ inspire self-supervised learning, as the segmented time- Radio Frequency Interfe
 
 Recognition (CVPR), New Orleans, LA, 2022, pp. 17662-17672, 2022.
 
-- Z. Liu et al., "Swin Transformer: Hierarchical Vision Transformer using
+- [15] Z. Liu et al., "Swin Transformer: Hierarchical Vision Transformer using
 
-# Thank you to the School of Electronic Science, National [15] Shifted Windows," in 18th IEEE/CVF International Conference on
+# Thank you to the School of Electronic Science, National
+
+Shifted Windows," in 18th IEEE/CVF International Conference on
 
 # University of Defense Technology for your support of this
 

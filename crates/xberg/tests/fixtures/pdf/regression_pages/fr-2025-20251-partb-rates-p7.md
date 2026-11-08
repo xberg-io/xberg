@@ -1,8 +1,8 @@
-# Federal Register / Vol. 90, No. 221 / Wednesday, November 19, 2025 / Notices
+## Federal Register / Vol. 90, No. 221 / Wednesday, November 19, 2025 / Notices
 
 # 52069
 
-# FULL PART B COVERAGE
+## FULL PART B COVERAGE
 
 Income-related Beneficiaries who file individual tax returns with modified Beneficiaries who file joint tax returns with modified Total monthly monthly adjustment adjusted gross income: adjusted gross income: premium amount amount
 
@@ -16,7 +16,7 @@ Income-related Beneficiaries who file individual tax returns with modified Benef
 
 For beneficiaries with heads of households, qualifying widows the entire taxable year) or joint tax immunosuppressive drug only Part B or widowers with dependent children, returns, the 2026 Part B monthly coverage who file either individual tax or married individuals filing separately premium rates are as follows: returns (and are single individuals, who lived apart from their spouses for
 
-# PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
+## PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
 
 Income-related Beneficiaries who file individual tax returns with modified Beneficiaries who file joint tax returns with modified Total monthly monthly adjustment adjusted gross income: adjusted gross income: premium amount amount
 
@@ -30,13 +30,13 @@ Income-related Beneficiaries who file individual tax returns with modified Benef
 
 In addition, the monthly premium who are married and lived with their year, but who file separate tax returns rates to be paid by (or on behalf of) spouses at any time during the taxable from their spouses, are as follows: beneficiaries with full Part B coverage
 
-# FULL PART B COVERAGE
+## FULL PART B COVERAGE
 
 Income-related Beneficiaries who are married and lived with their spouses at any time during the year, but who file separate tax returns Total monthly monthly adjustment from their spouses, with modified adjusted gross income: premium amount amount Less than or equal to $109,000 ................................................................................................................................................ $0.00 $202.90 Greater than $109,000 and less than $391,000 ....................................................................................................................... 446.30 649.20 Greater than or equal to $391,000 ........................................................................................................................................... 487.00 689.90
 
 The monthly premium rates to be B coverage who are married and lived tax returns from their spouses, are as paid by (or on behalf of) beneficiaries with their spouses at any time during follows: with immunosuppressive drug only Part the taxable year, but who file separate
 
-# PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
+## PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
 
 Income-related Beneficiaries who are married and lived with their spouses at any time during the year, but who file separate tax returns Total monthly monthly adjustment from their spouses, with modified adjusted gross income:
 
@@ -44,7 +44,9 @@ Less than or equal to $109,000 .................................................
 
 The Part B annual deductible for 2026 is $283.00 for all beneficiaries.
 
-# TABLE 2—PROJECTION FACTORS 1 [12-Month Periods Ending December 31 of 2023–2026 (in percent)]
+## TABLE 2—PROJECTION FACTORS<sup>1</sup>
+
+### [12-Month Periods Ending December 31 of 2023–2026 (in percent)]
 
 Physician Durable Physician- Other Home
 
@@ -54,15 +56,7 @@ premium amount amount $0.00 $121.60
 
 486.50 608.10
 
-Other Practitioner Outpatient Hospital Managed Calendar year fee medical administered practitioner health institutional Lab
-
-2
-
-hospital lab 4 care schedule equipment drugs services
-
-3
-
-agency services 5
+Other Practitioner Outpatient Hospital Managed Calendar year fee medical administered practitioner health institutional Lab<sup>2</sup> hospital lab<sup>4</sup> care schedule equipment drugs services<sup>3</sup> agency services<sup>5</sup>
 
 | Aged: |  |  |  |  |  |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

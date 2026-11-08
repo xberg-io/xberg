@@ -7,7 +7,9 @@
 |  | Low | Intermediate |  |  | High |
 | (in trillions of dollars) | 2.7 |  | 3.7 |  | 4.7 |
 
-1 Annual growth rate is the aggregate cost of providing covered health care services to beneficiaries. The low and high scenarios assume that costs increase 1.0 percent slower or faster, respectively, than the intermediate assumption. Source: Centers for Medicare & Medicaid Services
+1
+
+Annual growth rate is the aggregate cost of providing covered health care services to beneficiaries. The low and high scenarios assume that costs increase 1.0 percent slower or faster, respectively, than the intermediate assumption. Source: Centers for Medicare & Medicaid Services
 
 The table above shows the effects of various assumptions about the growth in health care costs on the PV of estimated Part B and D expenditures in excess of income in the terms of government-wide resources needed due to the financing mechanism (General Fund transfers) for Medicare Parts B and D. As with Part A, net Part B and D expenditures are very sensitive to the health care cost growth assumption. If a slower growth rate is attained government-wide resources needed for Part B would decrease by $14.3 trillion and Part D by $2.2 trillion; if the growth rate is higher, government-wide resources needed would increase to $22.5 trillion for Part B and to $3.4 trillion for Part D.
 

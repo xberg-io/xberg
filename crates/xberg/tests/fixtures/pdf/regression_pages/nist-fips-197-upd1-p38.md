@@ -26,7 +26,11 @@
 
 ## This section contains the key expansion of the following key:
 
-Key = 8e 73 b0 f7 da 0e 64 52 c8 10 f3 2b 80 90 79 e5 62 f8 ea d2 52 2c 6b 7b for Nk = 6, which results in w~0~ = 8e73b0f7 w~1~ = da0e6452 w~2~ = c810f32b w~3~ = 809079e5 w~4~ = 62f8ead2 w~5~ = 522c6b7b
+Key = 8e 73 b0 f7 da 0e 64 52 c8 10 f3 2b 80 90 79 e5 62 f8 ea d2 52 2c 6b 7b for Nk = 6, which results in
+
+w~0~ = 8e73b0f7 w~1~ = da0e6452 w~2~ = c810f32b
+
+w~3~ = 809079e5 w~4~ = 62f8ead2 w~5~ = 522c6b7b
 
 w[i] = i After After After XOR temp Rcon[i/Nk] w[i−Nk] temp⊕
 

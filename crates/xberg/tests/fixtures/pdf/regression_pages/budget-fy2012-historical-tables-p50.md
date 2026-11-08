@@ -8,11 +8,11 @@ THE BUDGET FOR FISCAL YEAR 2012, HISTORICAL TABLES
 
 2
 
-Gift Taxes Proposals Federal Customs Receipts" Fees Total Reserve All Other Duties and All Other Deposits
+Gift Taxes Proposals Federal Customs Receipts" Fees Total Reserve All Other Duties and All Other
 
 1
 
-Fees
+Deposits Fees
 
 | 1994 ................................................................................. | 58,427 | 15,225 | 20,099 | 23,103 | 18,023 | 5,081 | .......... | 677 | 450 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
