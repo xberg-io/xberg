@@ -43,7 +43,7 @@ fn recorded_psm(result: &ExtractedDocument) -> String {
         .to_string()
 }
 
-fn row_lines<'a>(content: &'a str, row: &str) -> usize {
+fn row_lines(content: &str, row: &str) -> usize {
     let fields: Vec<_> = row.split('\t').collect();
     let [label, values @ ..] = fields.as_slice() else {
         panic!("empty fixture row");
