@@ -210,7 +210,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A ToUnicode entry for the ligature still wins, and a ligature whose rules disagree or whose components have no ToUnicode entry keeps the old output.
   The shaping forms of complex scripts, such as Khmer below-base forms, are not read, because their components are not in reading order.
   A ligature drawn by its own show operator under a text matrix that scales the glyphs no longer leaves a space after it ("defi ne" for "define"): the run that holds it is now as wide as its glyph.
-  A word that a standard font with no /Widths array draws in two shows, the second touching the first, no longer gets a space inside it ("Char lie" for "Charlie"): the Adobe metrics of the font give the glyph widths, so the gap needs no fallback-width correction.
+  A word drawn in two shows under text matrices that differ only in their horizontal scale, the second show starting at or just before the pen of the first, no longer gets a space inside it ("Char lie" for "Charlie"): the run continues under the second matrix, in its unit.
+  A line written as several TJ arrays, each placed by a Td with no line move back to the pen of the previous array, no longer gets a space at the seam between two arrays ("bro wn" for "brown") when the font gives its glyph widths.
 
 - **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
   One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.

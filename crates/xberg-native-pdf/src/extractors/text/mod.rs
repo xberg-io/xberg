@@ -908,8 +908,7 @@ impl SpanMergingConfig {
 /// that displacement reaches the font's space advance. We measure it from
 /// the bounding boxes (`raw_gap = next.x − prev.right_edge`).
 ///
-/// When the previous span's font has no explicit `/Widths` array and no
-/// standard-14 Adobe metrics,
+/// When the previous span's font has no explicit `/Widths` array,
 /// `FontInfo` substitutes a fixed fallback advance (~0.55 em) that
 /// systematically OVER-reports proportional Latin glyphs. That inflates
 /// `bbox.width`, pushing `prev.right_edge` past the real glyph end so it can
@@ -935,9 +934,7 @@ fn corrected_space_gap(
 ) -> f32 {
     // Two rounded edge coordinates can differ by a couple of ULPs even when
     // source glyph advances touch. Do not amplify that uncertainty into a word gap. ~keep
-    const EDGE_ROUNDING_ULPS: f32 = 2.0;
-    let coordinate = position_magnitude.abs();
-    let rounding_error = EDGE_ROUNDING_ULPS * (coordinate.next_up() - coordinate);
+    let rounding_error = edge_rounding_error(position_magnitude);
     if !reliable_widths && raw_gap < -rounding_error && bbox_width > 0.0 && !text_empty {
         raw_gap + bbox_width * (1.0 - 1.0 / 1.22)
     } else {
@@ -1853,6 +1850,51 @@ struct TjBuffer {
     /// Whether the last glyph stood for more than one letter (a ligature). Only such a glyph has a
     /// box that a space can start inside of.
     ligature_tail: bool,
+    /// Whether this run starts where the previous `TJ` array left the pen (see [`PenSeam`]). The span
+    /// it flushes to is recorded in `TextExtractor::pen_continuations`.
+    pen_continuation: bool,
+}
+
+/// The seam between a `TJ` array and the text after it, kept for one operator only (GH#2664).
+///
+/// A producer that marks its word spaces with `TJ` offsets writes a long line as several arrays, each
+/// placed by a `Td` with no line move back to the pen the previous array left. The merge would read
+/// that seam through the fallback-width correction and tear the word. The `TJ` arm sets
+/// `TjArrayEnd` when the array flushed a word boundary and the font gives its glyph widths; the
+/// `Td` or `TD` arm with `ty == 0` turns it into `ContinuesPen`; the next `TJ` arm consumes it. Any
+/// other operator in between drops it, so a `BT`, a `Tj` or a line move ends the chain. ~keep
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PenSeam {
+    TjArrayEnd,
+    ContinuesPen,
+}
+
+/// The identity of a span before the merge: its sequence number and the bits of its x coordinate.
+///
+/// Sequence numbers are unique within one extraction, but a cached form XObject replays spans with
+/// the sequence numbers of an earlier extraction, so the key holds the x coordinate too. The y
+/// coordinate is not part of the key: the script snap moves it before the merge. ~keep
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SpanKey {
+    sequence: usize,
+    x_bits: u32,
+}
+
+impl SpanKey {
+    fn of(span: &TextSpan) -> Self {
+        SpanKey {
+            sequence: span.sequence,
+            x_bits: span.bbox.x.to_bits(),
+        }
+    }
+}
+
+/// How far two rounded edge coordinates of size `coordinate` can differ when the source glyph
+/// advances touch: two ULPs at that magnitude. Gaps inside this error are no gap at all. ~keep
+fn edge_rounding_error(coordinate: f32) -> f32 {
+    const EDGE_ROUNDING_ULPS: f32 = 2.0;
+    let coordinate = coordinate.abs();
+    EDGE_ROUNDING_ULPS * (coordinate.next_up() - coordinate)
 }
 
 /// The share of a space glyph that must lie inside the previous glyph's box before the space
@@ -1987,6 +2029,7 @@ impl TjBuffer {
             render_mode: state.render_mode,
             pullback: 0.0,
             ligature_tail: false,
+            pen_continuation: false,
         }
     }
 
@@ -2361,6 +2404,11 @@ pub struct TextExtractor<'doc> {
     /// Used as a tie-breaker when sorting spans by Y-coordinate. Ensures
     /// that spans with identical Y-coordinates maintain extraction order.
     span_sequence_counter: usize,
+    /// The seam the last operator left, if it was a `TJ` array or a `Td` right after one.
+    pen_seam: Option<PenSeam>,
+    /// The spans that start where the previous `TJ` array left the pen. The merge reads their gap
+    /// raw, without the fallback-width correction. Reset with `span_sequence_counter`. ~keep
+    pen_continuations: Vec<SpanKey>,
     /// History of TJ array offsets for statistical analysis
     ///
     /// Tracks TJ offset values to detect justified vs. normal text through

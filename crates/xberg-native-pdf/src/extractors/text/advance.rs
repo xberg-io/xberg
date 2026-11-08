@@ -769,6 +769,57 @@ impl<'doc> TextExtractor<'doc> {
         dx / start.a
     }
 
+    /// Whether a `Tm` that changes the horizontal scale of an upright run from `start.a` to `a` puts its
+    /// origin `e` at the run's pen (GH#2664): within `[severe_overlap_pt, 0]` of it in user space, with
+    /// the rounding error of the coordinate allowed above zero, and forward of the run's start, as
+    /// the continuation under an unchanged matrix requires. The caller has checked that `b`, `c`,
+    /// `d` and the line are unchanged. ~keep
+    pub(super) fn stretched_tm_starts_at_the_pen(buffer: &TjBuffer, a: f32, e: f32, severe_overlap_pt: f32) -> bool {
+        let start = buffer.start_matrix;
+        if buffer.is_empty() || buffer.wmode != 0 || start.b != 0.0 || start.a <= 0.0 || a <= 0.0 || a == start.a {
+            return false;
+        }
+        if e < start.e {
+            return false;
+        }
+        let gap = (Self::text_space_advance(start, 0, e) - buffer.accumulated_width) * buffer.user_h_scale;
+        gap >= severe_overlap_pt && gap <= edge_rounding_error(e)
+    }
+
+    /// Restate the run in the unit of the new horizontal scale `a`, so that the glyphs it holds keep
+    /// their user-space width and the glyphs to come are measured in the new unit: the widths scale by
+    /// the old `a` over the new one, the user-space scale by the inverse, and the pen reads from `e`
+    /// under the new matrix. ~keep
+    pub(super) fn restate_run_under_stretched_tm(buffer: &mut TjBuffer, a: f32, e: f32) {
+        let ratio = buffer.start_matrix.a / a;
+        for width in &mut buffer.char_widths {
+            *width *= ratio;
+        }
+        buffer.pullback *= ratio;
+        buffer.user_h_scale /= ratio;
+        buffer.start_matrix.a = a;
+        buffer.accumulated_width = Self::text_space_advance(buffer.start_matrix, 0, e);
+        // A new matrix sets the pen again: the pull-back after a ligature no longer refers to the
+        // glyph that ends the run. ~keep
+        buffer.ligature_tail = false;
+    }
+
+    /// A `Td` or `TD` with no line move right after a `TJ` array that marked a word boundary keeps the
+    /// array's pen for the next `TJ` (see `PenSeam`). ~keep
+    pub(super) fn carry_pen_seam(&mut self, seam: Option<PenSeam>, ty: f32) {
+        if ty == 0.0 && seam == Some(PenSeam::TjArrayEnd) {
+            self.pen_seam = Some(PenSeam::ContinuesPen);
+        }
+    }
+
+    /// Whether the current font gives the width of its glyphs, from a `/Widths` array or from the
+    /// Adobe metrics of a standard font, so that the extractor's pen is the producer's pen. ~keep
+    pub(super) fn current_font_gives_widths(&self) -> bool {
+        self.cached_current_font
+            .as_deref()
+            .is_some_and(|font| font.has_explicit_widths() || font.has_standard_font_metrics())
+    }
+
     /// Flush accumulated Tj span buffer into a single TextSpan.
     ///
     /// This is similar to flush_tj_buffer but works with the tj_span_buffer field
