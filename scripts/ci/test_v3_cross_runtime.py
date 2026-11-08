@@ -1,11 +1,12 @@
 import json
 import math
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
 import v3_cross_runtime as contract
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_frozen.json").read_text())
+FIXTURE = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_synthetic.json").read_text())
 MASK_SHAPE = FIXTURE["mask_shape"]
 PAGE_ONE, PAGE_TWO = FIXTURE["pages"]
 EPSILON = contract.MASK_LOGIT_EPSILON
@@ -36,42 +37,52 @@ def fails(reason: str, call, *args: object, **kwargs: object) -> None:  # noqa: 
 FLIP = [(0, 0, 0, 1, 0)]
 
 
-def test_frozen_page_one_rank_differences_are_all_exact_ties() -> None:
+def test_synthetic_page_one_rank_differences_are_all_exact_ties() -> None:
     reference, actual, _, _ = rank_args(PAGE_ONE)
-    assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 24
-    assert contract.compare_ranks(*rank_args(PAGE_ONE)) == 24
+    assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 16
+    assert contract.compare_ranks(*rank_args(PAGE_ONE)) == 16
 
 
-def test_frozen_page_two_ranks_are_identical() -> None:
+def test_synthetic_page_two_ranks_are_identical() -> None:
     assert PAGE_TWO["reference_ranks"] == PAGE_TWO["actual_ranks"]
     assert contract.compare_ranks(*rank_args(PAGE_TWO)) == 0
 
 
-def test_frozen_page_ranks_are_not_a_permutation() -> None:
-    assert len(set(PAGE_ONE["reference_ranks"])) == 128 < len(PAGE_ONE["reference_ranks"]) == 300
+def test_synthetic_page_ranks_are_not_a_permutation() -> None:
+    assert len(set(PAGE_ONE["reference_ranks"])) == 132 < len(PAGE_ONE["reference_ranks"]) == 300
 
 
-def test_frozen_page_two_flips_are_boundary_logits() -> None:
+def test_synthetic_page_two_flips_are_boundary_logits() -> None:
     assert len(PAGE_TWO["mask_mismatches"]) == 5
     assert len(set(logits(PAGE_TWO).values())) == 3
     assert masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 5
 
 
-def test_frozen_page_one_has_no_flips() -> None:
+def test_synthetic_page_one_has_no_flips() -> None:
     assert masks([], {}) == 0
+
+
+def untied_pair(reference: list[int], keys: list[float]) -> tuple[int, int]:
+    present = sorted(set(reference))
+    return next((p, q) for p, q in pairwise(present) if keys[p] != keys[q])
+
+
+def swap_values(ranks: list[int], first: int, second: int) -> list[int]:
+    return [second if r == first else first if r == second else r for r in ranks]
 
 
 def test_a_real_reorder_of_non_tied_rows_fails_on_the_tie_run() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
-    assert ref_keys[0] != ref_keys[1]
-    swapped = [1 if r == 0 else 0 if r == 1 else r for r in actual]
+    first, second = untied_pair(reference, ref_keys)
+    swapped = swap_values(actual, first, second)
     fails("rank_outside_tie_run", contract.compare_ranks, reference, swapped, ref_keys, act_keys)
 
 
-def test_a_swap_between_near_equal_but_unequal_keys_fails() -> None:
+def test_a_swap_between_adjacent_unequal_keys_fails() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
-    near = next(r for r in range(len(ref_keys) - 1) if 0 < ref_keys[r + 1] - ref_keys[r] < 0.05)
-    swapped = [near + 1 if r == near else near if r == near + 1 else r for r in actual]
+    present = sorted(set(reference))
+    first, second = next((p, p + 1) for p in present if p + 1 in present and ref_keys[p] != ref_keys[p + 1])
+    swapped = swap_values(actual, first, second)
     fails("rank_outside_tie_run", contract.compare_ranks, reference, swapped, ref_keys, act_keys)
 
 
@@ -87,13 +98,37 @@ def test_a_tie_the_other_runtime_does_not_share_fails() -> None:
     reference, actual, ref_keys, act_keys = rank_args(PAGE_ONE)
     moved = next(a for r, a in zip(reference, actual, strict=True) if r != a)
     split = list(act_keys)
-    split[moved] += 1.0
+    split[contract.tie_run(act_keys, moved)[1]] += 1.0
     fails("tie_structure_mismatch", contract.compare_ranks, reference, actual, ref_keys, split)
 
 
 def test_unmoved_keys_may_differ_numerically_but_not_in_tie_structure() -> None:
     assert contract.compare_ranks([0, 1], [0, 1], [1.0, 2.0], [1.0, 9.0]) == 0
     fails("tie_structure_mismatch", contract.compare_ranks, [0, 1], [0, 1], [1.0, 2.0], [9.0, 9.0])
+
+
+def test_more_rows_than_positions_are_allowed_when_a_query_repeats() -> None:
+    assert contract.compare_ranks([0, 1, 0], [0, 1, 0], [1.0, 2.0], [1.0, 2.0]) == 0
+
+
+def test_a_one_ulp_near_tie_fails_closed() -> None:
+    tied = [1.0, 1.0]
+    near = [1.0, math.nextafter(1.0, 2.0)]
+    fails("tie_structure_mismatch", contract.compare_ranks, [0, 1], [1, 0], tied, near)
+    fails("tie_structure_mismatch", contract.compare_ranks, [0, 1], [1, 0], near, tied)
+
+
+def test_numpy_scalars_are_accepted() -> None:
+    np = pytest.importorskip("numpy")
+    ranks = [np.int64(0), np.int64(1)]
+    keys = [np.float64(5.0), np.float32(5.0)]
+    assert contract.compare_ranks(ranks, [np.int64(1), np.int64(0)], keys, keys) == 2
+    flips = [(0, 0, 0, np.int32(1), np.int32(0))]
+    shape = [np.int64(n) for n in MASK_SHAPE]
+    table = {(0, 0, 0): (np.float32(1e-6), np.float64(-1e-6))}
+    assert masks(flips, table, differing_bits=np.int64(1), reference_shape=shape, actual_shape=shape) == 1
+    fails("mask_logit_not_finite", masks, flips, {(0, 0, 0): (np.float32(1e-6), np.float64("nan"))})
+    fails("rank_not_int", contract.compare_ranks, [np.float64(0.0)], [np.float64(0.0)], [1.0], [1.0])
 
 
 def test_one_rank_cannot_map_to_two_ranks() -> None:
@@ -119,7 +154,6 @@ def test_repeated_ranks_for_one_query_are_allowed() -> None:
         (([0], [0], [], []), "empty_input"),
         (([0], [0], [1.0, 2.0], [1.0]), "keys_length_mismatch"),
         (([0, 1], [0], [1.0, 2.0], [1.0, 2.0]), "ranks_length_mismatch"),
-        (([0, 1, 0], [0, 1, 0], [1.0, 2.0], [1.0, 2.0]), "more_rows_than_positions"),
         (([0, 1], [0, 1], [math.nan, math.nan], [1.0, 2.0]), "keys_not_finite_floats"),
         (([0, 1], [0, 1], [1.0, 2.0], [1.0, math.inf]), "keys_not_finite_floats"),
         (([0, 1], [0, 1], [3.0, 2.0], [3.0, 2.0]), "keys_not_ascending"),
@@ -191,7 +225,7 @@ def test_a_position_outside_the_mask_fails() -> None:
     fails("mask_position_out_of_range", masks, [(300, 0, 0, 1, 0)], {(300, 0, 0): (1e-6, -1e-6)})
 
 
-def test_a_perturbed_frozen_flip_fails() -> None:
+def test_a_perturbed_synthetic_flip_fails() -> None:
     page = json.loads(json.dumps(PAGE_TWO))
     page["mask_mismatches"][0]["reference_logit"] = 0.001
     fails("mask_logit_beyond_epsilon", masks, mismatches(page), logits(page))
