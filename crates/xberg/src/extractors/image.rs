@@ -3026,7 +3026,7 @@ fn apply_numeric_repair_to_standalone_image_ocr(
 
 /// The config for the PSM 6 re-read of a standalone table picture, or `None` when the first
 /// pass does not call for one: the caller chose a PSM, the language is vertical, the image is
-/// multi-frame, or the first pass either found a table (its detectors already certified the rows)
+/// multi-frame, a VLM fallback or explicit pipeline is configured, or the first pass either found a table (its detectors already certified the rows)
 /// or shows no column structure in its word boxes.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn single_block_table_config(
@@ -3043,6 +3043,9 @@ fn single_block_table_config(
         return None;
     }
     let mut ocr = config.ocr.clone().unwrap_or_default();
+    if ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled || ocr.pipeline.is_some() {
+        return None;
+    }
     let table_like = first.tables.is_empty() && image_table_reread::shows_column_structure(first);
     if !is_implicit_horizontal_tesseract(&ocr) || !table_like || mime_type.to_lowercase().contains("tiff") {
         return None;
@@ -5024,6 +5027,32 @@ mod tests {
             .expect("whole-image OCR must materialize Tesseract configuration");
         assert_eq!(tesseract_config.psm, Some(VERTICAL_BLOCK_TESSERACT_PSM));
         assert_eq!(tesseract_config.language, vec!["jpn_vert"]);
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn table_reread_applies_only_without_a_vlm_fallback_or_pipeline() {
+        let first = image_table_reread::sample_table_document();
+        let config = ExtractionConfig::default();
+        assert!(single_block_table_config(&config, "image/png", &first).is_some());
+
+        let mut fallback = config.clone();
+        fallback.ocr.get_or_insert_default().vlm_fallback = crate::core::config::VlmFallbackPolicy::Always;
+        assert!(single_block_table_config(&fallback, "image/png", &first).is_none());
+
+        let mut piped = config.clone();
+        piped.ocr.get_or_insert_default().pipeline = Some(crate::core::config::ocr::OcrPipelineConfig {
+            stages: Vec::new(),
+            quality_thresholds: Default::default(),
+        });
+        assert!(single_block_table_config(&piped, "image/png", &first).is_none());
+
+        let mut explicit = config;
+        explicit.ocr.get_or_insert_default().tesseract_config = Some(crate::types::TesseractConfig {
+            psm: Some(4),
+            ..Default::default()
+        });
+        assert!(single_block_table_config(&explicit, "image/png", &first).is_none());
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]

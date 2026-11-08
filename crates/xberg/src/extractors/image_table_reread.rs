@@ -135,6 +135,11 @@ fn column_structure(doc: &InternalDocument) -> (usize, usize) {
 /// column edges. A lattice of words on dozens of edges is a grid of cells, not a table.
 pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
     let (rows, edges) = column_structure(doc);
+    if edges > MAX_SHARED_EDGES {
+        tracing::debug!(edges, "standalone re-read skipped: a lattice of words, not a table");
+    } else if rows < MIN_ROWS_PER_COLUMN && rows > 0 {
+        tracing::debug!(rows, "standalone re-read skipped: too few rows share the column edges");
+    }
     rows >= MIN_ROWS_PER_COLUMN && edges <= MAX_SHARED_EDGES
 }
 
@@ -212,24 +217,36 @@ pub(super) fn second_read_keeps_more_rows(first: &InternalDocument, second: &Int
         })
     };
     let second_words = placed_words(second);
-    let same_row = |candidate: &Placed, word: &Placed| candidate.boxed.center.abs_diff(word.boxed.center) <= tolerance;
     placed_words(first)
         .iter()
         .filter(|word| on_edge(&word.boxed))
         .all(|word| {
-            let covered = second_words.iter().any(|candidate| {
-                same_row(candidate, word)
-                    && candidate.boxed.left <= word.boxed.left.saturating_add(tolerance)
-                    && candidate.boxed.right.saturating_add(tolerance) >= word.boxed.right
-            });
-            covered
-                || word.text.split_whitespace().all(|token| {
-                    second_words.iter().any(|candidate| {
-                        same_row(candidate, word)
-                            && candidate.text.split_whitespace().any(|found| found.starts_with(token))
-                    })
+            let mut over: Vec<&Placed> = second_words
+                .iter()
+                .filter(|candidate| {
+                    let middle = candidate.boxed.left / 2 + candidate.boxed.right / 2;
+                    candidate.boxed.center.abs_diff(word.boxed.center) <= tolerance
+                        && word.boxed.left.saturating_sub(tolerance) <= middle
+                        && middle <= word.boxed.right.saturating_add(tolerance)
                 })
+                .collect();
+            over.sort_unstable_by_key(|candidate| candidate.boxed.left);
+            let second_text: String = over.iter().map(|candidate| alphanumerics(candidate.text)).collect();
+            second_text.contains(&alphanumerics(word.text))
         })
+}
+
+/// Comparison normalization only: dropping punctuation lets `Label` match `Label.........`
+/// where a block read prints a leader. It is not a text-shape condition on a recovery rule
+/// (#2616); the digits and letters themselves must match.
+fn alphanumerics(text: &str) -> String {
+    text.chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
+/// A first-pass document whose words form an eight-row, four-column table.
+#[cfg(test)]
+pub(super) fn sample_table_document() -> InternalDocument {
+    tests::doc(tests::table(8))
 }
 
 #[cfg(test)]
@@ -255,14 +272,14 @@ mod tests {
         }
     }
 
-    fn doc(elements: Vec<OcrElement>) -> InternalDocument {
+    pub(super) fn doc(elements: Vec<OcrElement>) -> InternalDocument {
         InternalDocument {
             prebuilt_ocr_elements: Some(elements),
             ..Default::default()
         }
     }
 
-    fn table(rows: usize) -> Vec<OcrElement> {
+    pub(super) fn table(rows: usize) -> Vec<OcrElement> {
         (0..rows)
             .flat_map(|row| {
                 let top = 10 + row as u32 * 40;
@@ -337,6 +354,22 @@ mod tests {
         let mut second = table(6);
         second[0] = element("Label.........", 10, 10, 200);
         assert!(second_read_keeps_more_rows(&doc(first), &with_lines(second, 6)));
+    }
+
+    #[test]
+    fn a_second_read_that_misreads_a_digit_in_the_same_box_is_refused() {
+        let first = doc(table(6));
+        let mut second = table(6);
+        second[2] = element("345,679", 420, 10, 90);
+        assert!(!second_read_keeps_more_rows(&first, &with_lines(second, 6)));
+    }
+
+    #[test]
+    fn a_second_read_that_shortens_a_word_to_a_prefix_elsewhere_on_the_row_is_refused() {
+        let first = doc(table(6));
+        let mut second = table(6);
+        second[1] = element("1", 300, 10, 30);
+        assert!(!second_read_keeps_more_rows(&first, &with_lines(second, 6)));
     }
 
     #[test]
