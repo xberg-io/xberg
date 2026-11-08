@@ -43,8 +43,8 @@ FLIP = [(0, 0, 0, 1, 0)]
 
 def test_synthetic_page_one_rank_differences_are_all_exact_ties() -> None:
     reference, actual, _, _ = rank_args(PAGE_ONE)
-    assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 16
-    assert contract.compare_ranks(*rank_args(PAGE_ONE)) == 16
+    assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 14
+    assert contract.compare_ranks(*rank_args(PAGE_ONE)) == 14
 
 
 def test_synthetic_page_two_ranks_are_identical() -> None:
@@ -53,13 +53,13 @@ def test_synthetic_page_two_ranks_are_identical() -> None:
 
 
 def test_synthetic_page_ranks_are_not_a_permutation() -> None:
-    assert len(set(PAGE_ONE["reference_ranks"])) == 132 < len(PAGE_ONE["reference_ranks"]) == 300
+    assert len(set(PAGE_ONE["reference_ranks"])) == 96 < len(PAGE_ONE["reference_ranks"]) == 240
 
 
 def test_synthetic_page_two_flips_are_boundary_logits() -> None:
-    assert len(PAGE_TWO["mask_mismatches"]) == 5
-    assert len(set(logits(PAGE_TWO).values())) == 3
-    assert masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 5
+    assert len(PAGE_TWO["mask_mismatches"]) == 7
+    assert len(set(logits(PAGE_TWO).values())) == 4
+    assert masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 7
 
 
 def test_synthetic_page_one_has_no_flips() -> None:
