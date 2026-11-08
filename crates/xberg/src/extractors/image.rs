@@ -5454,7 +5454,9 @@ mod tests {
         /// The gate must not keep such a re-read, whatever the scale. ~keep
         #[test]
         fn should_reject_fallback_that_read_no_words() {
-            assert!(!has_robust_word_confidence_distribution(&result_with_word_confidences(&[])));
+            assert!(!has_robust_word_confidence_distribution(&result_with_word_confidences(
+                &[]
+            )));
         }
 
         #[test]
@@ -5462,7 +5464,12 @@ mod tests {
             let distributions: [&[f64]; 3] = [&[0.95, 0.9, 0.85, 0.4], &[0.95, 0.2, 0.2, 0.9], &[0.31; 4]];
             for base in distributions {
                 let verdict = |copies: usize| {
-                    let confidences = base.iter().copied().cycle().take(base.len() * copies).collect::<Vec<_>>();
+                    let confidences = base
+                        .iter()
+                        .copied()
+                        .cycle()
+                        .take(base.len() * copies)
+                        .collect::<Vec<_>>();
                     has_robust_word_confidence_distribution(&result_with_word_confidences(&confidences))
                 };
                 assert_eq!(verdict(1), verdict(4), "{base:?}");
