@@ -202,8 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Draw every digit of a page number that a form XObject paints.** (GH#2685)
-  A form whose resource dictionary is a separate PDF object never had its fonts loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. OCR then read no page number on the page. The renderer now resolves the form's resource dictionary before it loads the fonts.
+- **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
+  A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
 
 - **(ocr): Do not crash when the process exits while a thread is still recognizing.**
   The Tesseract exit cleanup freed every engine, including one an OCR thread still used, so a document that hit the extraction timeout could abort or segfault and lose all its text.
