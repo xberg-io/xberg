@@ -211,6 +211,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Stop OCR from splitting words at a ligature such as "fi nancial".** (GH#2322)
+  A page that OCR reads is first drawn by the native renderer. A glyph code in an embedded TrueType font
+  can decode to several letters, as a ligature does, and the renderer gave each later glyph the width of a
+  later glyph. That opened a gap after the ligature, and OCR read it as a space. The renderer now draws each
+  run (one show string) that holds such a code glyph by glyph from the font, each at its own width.
+  Markdown, HTML and Djot output of OCR pages change too.
 - **(pdf): Recover a page of outlined prose with eight or more drawn rows beside a native header and footer.** (GH#2313)
   The outlined-prose check refused a page that painted more than about seven rows of outlined text.
   Such a page kept only its native header and footer. The check now accepts a full page of outlined rows.
