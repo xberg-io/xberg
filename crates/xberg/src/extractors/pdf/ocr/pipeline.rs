@@ -754,7 +754,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let probe_doc = std::sync::Arc::clone(&render_doc);
         let cancel = config.cancel_token.clone();
         let page_limit = super::hidden_layer::preview_page_limit(config);
-        let work_limit = super::hidden_layer::preview_work_limit(config);
+        let work_budget = super::hidden_layer::PreviewWorkBudget::new(config);
         // An audited page whose invisible layer covers its picture is read only when the
         // language check did not judge that layer plausible prose: it abstained or flagged it.
         // The check runs inside the blocking closure, and only for such pages, on the same page
@@ -778,19 +778,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
-            let mut remaining_ccitt_work = work_limit;
+            let mut work_budget = work_budget;
             let mut decisions = Vec::new();
             for index in page_indices.into_iter().take(page_limit) {
                 if is_cancelled() {
                     break;
                 }
-                let needed = super::hidden_layer::needs_ocr(
-                    &probe_doc,
-                    index,
-                    byte_limit,
-                    &mut remaining_ccitt_work,
-                    is_cancelled,
-                );
+                let needed = work_budget.probe_page(|page_work| {
+                    super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, page_work, is_cancelled)
+                });
                 let plausible = needed == Some(false)
                     && layer_texts.get(&index).is_some_and(|text| {
                         let boundary = crate::types::PageBoundary {

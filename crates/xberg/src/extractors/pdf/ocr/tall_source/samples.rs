@@ -21,18 +21,16 @@ impl GrayPacking {
     }
 }
 
-pub(super) fn flate_packing(
-    dict: &std::collections::HashMap<String, Object>,
-    width: u32,
-    unfiltered_paint: bool,
-) -> Option<GrayPacking> {
+/// The caller certifies the decoded full-page q/cm/Do/Q paint before choosing image packing.
+/// Its compression cannot change that transform or the per-sample RGB neutrality proof below.
+pub(super) fn flate_packing(dict: &std::collections::HashMap<String, Object>, width: u32) -> Option<GrayPacking> {
     let color = dict.get("ColorSpace")?;
     let depth = dict.get("BitsPerComponent")?.as_integer()?;
     let parameters = dict.get("DecodeParms");
     match (color.as_name(), depth, parameters) {
         (Some("DeviceGray"), 8, None) => Some(GrayPacking::Byte),
         (Some("DeviceGray"), 1, None) => Some(GrayPacking::Bilevel),
-        (Some("DeviceRGB"), 8, None) if unfiltered_paint => Some(GrayPacking::NeutralRgb),
+        (Some("DeviceRGB"), 8, None) => Some(GrayPacking::NeutralRgb),
         (Some("DeviceGray"), 8, Some(Object::Dictionary(parameters))) => {
             image_predictor(parameters, width, 1).map(|params| GrayPacking::PngPredictor(params.predictor))
         }
@@ -238,36 +236,27 @@ mod tests {
             ("BitsPerComponent".into(), Object::Integer(8)),
             ("DecodeParms".into(), Object::Dictionary(parameters.clone())),
         ]);
-        assert!(matches!(
-            flate_packing(&image, 3, true),
-            Some(GrayPacking::PngPredictor(12))
-        ));
+        assert!(matches!(flate_packing(&image, 3), Some(GrayPacking::PngPredictor(12))));
         let mut defaults = parameters.clone();
         defaults.remove("Colors");
         defaults.remove("BitsPerComponent");
         image.insert("DecodeParms".into(), Object::Dictionary(defaults.clone()));
-        assert!(matches!(
-            flate_packing(&image, 3, true),
-            Some(GrayPacking::PngPredictor(12))
-        ));
+        assert!(matches!(flate_packing(&image, 3), Some(GrayPacking::PngPredictor(12))));
         defaults.remove("Columns");
         image.insert("DecodeParms".into(), Object::Dictionary(defaults));
-        assert!(flate_packing(&image, 3, true).is_none());
-        assert!(matches!(
-            flate_packing(&image, 1, true),
-            Some(GrayPacking::PngPredictor(12))
-        ));
+        assert!(flate_packing(&image, 3).is_none());
+        assert!(matches!(flate_packing(&image, 1), Some(GrayPacking::PngPredictor(12))));
         for (key, invalid) in [("Predictor", 2), ("Columns", 4), ("Colors", 3), ("BitsPerComponent", 1)] {
             let mut malformed = parameters.clone();
             malformed.insert(key.into(), Object::Integer(invalid));
             image.insert("DecodeParms".into(), Object::Dictionary(malformed));
-            assert!(flate_packing(&image, 3, true).is_none(), "{key}");
+            assert!(flate_packing(&image, 3).is_none(), "{key}");
         }
         for key in ["Predictor", "Columns", "Colors", "BitsPerComponent", "Unknown"] {
             let mut malformed = parameters.clone();
             malformed.insert(key.into(), Object::Name("invalid".into()));
             image.insert("DecodeParms".into(), Object::Dictionary(malformed));
-            assert!(flate_packing(&image, 3, true).is_none(), "{key}");
+            assert!(flate_packing(&image, 3).is_none(), "{key}");
         }
     }
 

@@ -119,8 +119,43 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
 /// not for two.
 const PREVIEW_WORK_PER_ITERATION: usize = 16;
 
-pub(super) fn preview_work_limit(config: &ExtractionConfig) -> usize {
-    preview_page_limit(config).saturating_mul(PREVIEW_WORK_PER_ITERATION)
+/// Per-page budgets in the document ceiling: 6 x `16 * max_iterations`, or 960 million units at
+/// the default, 6x the shared budget this replaces. Decoding measured 1.1 to 2.5 ms per million
+/// units optimized (about 5 ms pessimistic), so the worst case is 1 to 5 s while 10 audited 300 dpi
+/// pages (88 million each) still fit (#2694).
+const PREVIEW_FULL_BUDGET_PAGES: usize = 6;
+
+/// Preview work for one document: each page may spend up to the per-page limit derived from
+/// `max_iterations`, and all pages together up to [`PREVIEW_FULL_BUDGET_PAGES`] per-page limits.
+pub(super) struct PreviewWorkBudget {
+    per_page: usize,
+    remaining: usize,
+}
+
+impl PreviewWorkBudget {
+    pub(super) fn new(config: &ExtractionConfig) -> Self {
+        Self::with_pages(
+            preview_page_limit(config).saturating_mul(PREVIEW_WORK_PER_ITERATION),
+            PREVIEW_FULL_BUDGET_PAGES,
+        )
+    }
+
+    fn with_pages(per_page: usize, pages: usize) -> Self {
+        Self {
+            per_page,
+            remaining: per_page.saturating_mul(pages),
+        }
+    }
+
+    /// Run one page's probe under the per-page limit, capped by what the document has left, and
+    /// charge the document for the work the page debited. A refused charge debits nothing.
+    pub(super) fn probe_page<R>(&mut self, probe: impl FnOnce(&mut usize) -> R) -> R {
+        let mut page_work = self.per_page.min(self.remaining);
+        let granted = page_work;
+        let result = probe(&mut page_work);
+        self.remaining = self.remaining.saturating_sub(granted.saturating_sub(page_work));
+        result
+    }
 }
 
 /// Whether the OCR probe reads a page. `needed` is the coverage verdict of [`needs_ocr`]: `None`

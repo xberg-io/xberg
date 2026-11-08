@@ -20,9 +20,13 @@ use xberg_native_pdf::object::Object;
 pub(super) mod augmentation;
 mod policy;
 pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports, unsupported_reason};
+#[cfg(test)]
+#[path = "tall_source/geometry_tests.rs"]
+mod geometry_tests;
 mod gray_jpeg;
 mod indexed;
 mod ordered;
+mod read_geometry;
 mod samples;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
 use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
@@ -61,6 +65,7 @@ struct Attempt<'a> {
     document: &'a PdfDocument,
     page: usize,
     raster: Option<(u32, u32, usize)>,
+    read_width: Option<u32>,
     byte_limit: usize,
     max_strips: usize,
     cancel: Option<&'a CancellationToken>,
@@ -89,6 +94,7 @@ impl<'a> Attempt<'a> {
             document,
             page,
             raster,
+            read_width: raster.map(|raster| raster.0),
             byte_limit,
             max_strips,
             cancel: config.cancel_token.as_ref(),
@@ -112,12 +118,17 @@ pub(super) async fn try_replace(
     let Some(quality) = RecognitionQuality::from_result(original) else {
         return Ok(false);
     };
-    let attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
+    let mut attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
+    let Some(read_width) = read_geometry::select_read_width(original, (*width, *height)) else {
+        return Ok(false);
+    };
+    attempt.read_width = Some(read_width);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     let why = match recover(attempt, backend, ocr).await? {
         Some((recovered, strips))
             if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
         {
+            read_geometry::record_original_frame(original, (*width, *height), page);
             apply_recovery(original, recovered, page, strips);
             note_flat_structure(original, config, page);
             return Ok(true);
@@ -172,7 +183,9 @@ fn apply_recovery(original: &mut ExtractedDocument, recovered: TextAccumulator, 
 
     original.content = recovered.text;
     original.ocr_elements = None;
-    original.ocr_internal_document = Some(super::document::flat_ocr_page_document(&original.content));
+    let mut document = super::document::flat_ocr_page_document(&original.content);
+    super::document::copy_source_strip_frames(&original.metadata, &mut document.metadata);
+    original.ocr_internal_document = Some(document);
     original.metadata.image_preprocessing = None;
     let additional = &mut original.metadata.additional;
     // Neither the old raster frame nor the old word percentiles describe the recovered text. ~keep
@@ -369,12 +382,7 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
         .byte_limit
         .checked_sub(normal_bytes)?
         .checked_sub(FIXED_WORK_BYTES)?;
-    let source = certify(
-        attempt.document,
-        attempt.page,
-        attempt.raster.map(|raster| raster.0),
-        available,
-    )?;
+    let source = certify(attempt.document, attempt.page, attempt.read_width, available)?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
     let mut bands = source.blank_bands(&cancelled, if source.certify_rows { 1 } else { MIN_BLANK_ROWS })?;
     let ink_rows = if source.certify_rows
@@ -425,7 +433,6 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
     if dict.contains_key("DecodeParms") {
         return None;
     }
-    let unfiltered_paint = !dict.contains_key("Filter");
     let filters = stream_filters(dict.get("Filter"))?;
     let paint = decode_probe_stream(&data, filters, 4096, byte_limit)?;
     let name = image_name(&paint, frame)?;
@@ -462,7 +469,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         {
             None
         }
-        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width, unfiltered_paint)?),
+        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width)?),
         _ => return None,
     };
     if !source_density_allowed(dpi, packing) {
@@ -521,7 +528,7 @@ impl Source {
     fn blank_bands(&self, cancelled: impl Fn() -> bool, min_rows: u32) -> Option<Vec<Range<u32>>> {
         let mut bands = Vec::new();
         let mut start = None;
-        let mut line = LineFootprint::new(self.width as usize);
+        let mut line = LineFootprint::new(self.width as usize, self.dpi);
         for (y, row) in self.samples.chunks_exact(self.width as usize).enumerate() {
             if cancelled() {
                 return None;
@@ -555,11 +562,17 @@ struct LineFootprint {
     columns: Vec<bool>,
     first_ink: Option<usize>,
     rows: u32,
+    max_rows: u32,
+    max_gap: usize,
 }
 
 impl LineFootprint {
-    fn new(width: usize) -> Self {
+    fn new(width: usize, dpi: f64) -> Self {
+        // Retain the existing low-density certificate bounds instead of tightening them. ~keep
+        let scale = (dpi / MIN_STANDARD_SOURCE_DPI).max(1.0);
         Self {
+            max_rows: (f64::from(MAX_LINE_ROWS) * scale).floor() as u32,
+            max_gap: (MAX_COLUMN_GAP as f64 * scale).ceil() as usize,
             columns: vec![false; width],
             first_ink: None,
             rows: 0,
@@ -568,7 +581,7 @@ impl LineFootprint {
 
     fn add(&mut self, row: &[u8]) -> Option<()> {
         self.rows += 1;
-        if self.rows > MAX_LINE_ROWS {
+        if self.rows > self.max_rows {
             return None;
         }
         for (column, &sample) in self.columns.iter_mut().zip(row) {
@@ -584,10 +597,10 @@ impl LineFootprint {
         let left = self.columns.iter().position(|&ink| ink)?;
         let right = self.columns.iter().rposition(|&ink| ink)?;
         let first = *self.first_ink.get_or_insert(left);
-        if left.abs_diff(first) >= MAX_COLUMN_GAP
+        if left.abs_diff(first) >= self.max_gap
             || self.columns[left..=right]
                 .split(|&ink| ink)
-                .any(|gap| gap.len() >= MAX_COLUMN_GAP)
+                .any(|gap| gap.len() >= self.max_gap)
         {
             return None;
         }
@@ -907,31 +920,13 @@ mod tests {
     }
 
     #[test]
-    fn two_columns_and_staggered_line_starts_refuse_ordering() {
-        let mut line = LineFootprint::new(200);
-        let mut row = vec![255; 200];
-        row[10..30].fill(0);
-        row[150..170].fill(0);
-        assert_eq!(line.add(&row), Some(()));
-        assert_eq!(line.finish(), None);
-
-        let mut line = LineFootprint::new(200);
-        row[150..170].fill(255);
-        assert_eq!(line.add(&row), Some(()));
-        assert_eq!(line.finish(), Some(()));
-        row[10..30].fill(255);
-        row[150..170].fill(0);
-        assert_eq!(line.add(&row), Some(()));
-        assert_eq!(line.finish(), None);
-    }
-
-    #[test]
     fn source_and_normal_raster_are_charged_before_strip_buffers() {
         let document = PdfDocument::from_bytes(TALL_FIXTURE.to_vec()).expect("real source image fixture");
         let mut attempt = Attempt {
             document: &document,
             page: 0,
             raster: Some((1100, 7765, 128_000)),
+            read_width: Some(1100),
             byte_limit: 100 * 1024 * 1024,
             max_strips: MAX_STRIPS,
             cancel: None,
@@ -968,6 +963,7 @@ mod tests {
             document: &doc,
             page: 0,
             raster: Some((1100, 7765, 128_000)),
+            read_width: Some(1100),
             byte_limit: 100 * 1024 * 1024,
             max_strips: MAX_STRIPS,
             cancel: Some(&token),
