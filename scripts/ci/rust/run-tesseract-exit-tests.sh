@@ -3,7 +3,8 @@ set -euo pipefail
 
 # The exit cleanup tests build only with `bundle-tessdata-eng` (`required-features` in
 # crates/xberg-tesseract/Cargo.toml). A test leg without that feature skips both files and still
-# passes, so this check names the features itself and requires all three tests to run and pass. ~keep
+# passes, so this check requires all three tests to run and pass. It enables every feature, as the
+# workspace leg that calls it does, so it links the system Tesseract and builds no vendored copy. ~keep
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 [ -f "$REPO_ROOT/Cargo.toml" ] || {
@@ -13,7 +14,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 cd "$REPO_ROOT"
 
 expected=3
-cargo_args=(test --locked -p xberg-tesseract --features build-tesseract,bundle-tessdata-eng
+cargo_args=(test --locked -p xberg-tesseract --all-features
   --test exit_cleanup_leak --test exit_cleanup_race)
 
 listed="$(cargo "${cargo_args[@]}" -- --list --color never)"
