@@ -173,7 +173,10 @@ fn tj_lead_after_a_tm_back_into_the_run_ends_the_run_at_its_drawn_width() {
     let drawn_at_the_pen = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm (d) Tj ET");
     assert_eq!(drawn_at_the_pen, [("abcd".to_string(), 72.0, 13.0)]);
     let shown_at_the_pen = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [(d)] TJ ET");
-    assert_eq!(shown_at_the_pen, [("abc".to_string(), 72.0, 8.0), ("d".to_string(), 80.0, 5.0)]);
+    assert_eq!(
+        shown_at_the_pen,
+        [("abc".to_string(), 72.0, 8.0), ("d".to_string(), 80.0, 5.0)]
+    );
 }
 
 /// The words of the spans after the merge, for a stream drawn in `font`.
