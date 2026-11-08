@@ -111,7 +111,7 @@ fn split_source_audit_requires_independently_complete_paint_and_hidden_text() {
             data: bytes::Bytes::copy_from_slice(bytes),
         });
         let joined = audit_split_contents(&doc, &streams, byte_limit, &mut work)?;
-        audit_hidden_text_image(&joined, true, |font| font == "F")
+        audit_hidden_text_image(&joined, true, super::MAX_OPERATORS, |font| font == "F")
     };
     let paint = b"q 612 0 0 792 0 0 cm /Scan Do Q";
     let hidden = b"BT /F 12 Tf 3 Tr\n1 0 0 1 20 20 Tm (layer) Tj\nET";
@@ -457,7 +457,7 @@ fn filtered_split_source_audit_accepts_hidden_text_and_paint_in_either_order() {
     };
     let audit = |streams: &[Object], byte_limit, mut work| {
         let joined = audit_filtered_contents(&doc, streams, byte_limit, &mut work)?;
-        audit_hidden_text_image(&joined, false, |font| font == "F")
+        audit_hidden_text_image(&joined, false, super::MAX_AUDIT_OPERATORS, |font| font == "F")
     };
     let paint = b"q 612 0 0 792 0 0 cm /Scan Do Q";
     let hidden = b"BT /F 12 Tf 3 Tr\n0 0 TD (layer) Tj 5 0 TD (more) Tj\nET";
@@ -487,23 +487,22 @@ fn filtered_split_source_audit_accepts_hidden_text_and_paint_in_either_order() {
 }
 
 #[test]
-fn source_audit_operator_limit_follows_the_content_byte_limit() {
-    let mut content = b"q 612 0 0 792 0 0 cm /Scan Do Q BT /F 12 Tf 3 Tr\n".to_vec();
-    let long_enough = super::MAX_OPERATORS + 1;
-    for _ in 0..long_enough {
-        content.extend_from_slice(b"1 0 TD ");
-    }
-    content.extend_from_slice(b"(layer) Tj ET");
-    assert_eq!(
-        hidden_text_image_name(&content, |font| font == "F").as_deref(),
-        Some("Scan")
-    );
-    let mut over_limit = b"BT /F 12 Tf 3 Tr ".to_vec();
-    for _ in 0..super::MAX_AUDIT_OPERATORS {
-        over_limit.extend_from_slice(b"1 0 TD ");
-    }
-    over_limit.extend_from_slice(b"(layer) Tj ET /Scan Do");
-    assert!(hidden_text_image_name(&over_limit, |font| font == "F").is_none());
+fn only_the_filtered_two_stream_audit_allows_more_than_the_single_stream_operator_limit() {
+    use super::source_audit::audit_hidden_text_image;
+
+    let many = |count: usize| {
+        let mut content = b"q 612 0 0 792 0 0 cm /Scan Do Q BT /F 12 Tf 3 Tr\n".to_vec();
+        for _ in 0..count {
+            content.extend_from_slice(b"1 0 TD ");
+        }
+        content.extend_from_slice(b"(layer) Tj ET");
+        content
+    };
+    let audit = |content: &[u8], limit| audit_hidden_text_image(content, false, limit, |font| font == "F");
+    let long = many(super::MAX_OPERATORS + 1);
+    assert!(hidden_text_image_name(&long, |font| font == "F").is_none());
+    assert_eq!(audit(&long, super::MAX_AUDIT_OPERATORS).as_deref(), Some("Scan"));
+    assert!(audit(&many(super::MAX_AUDIT_OPERATORS), super::MAX_AUDIT_OPERATORS).is_none());
 }
 
 #[test]
@@ -539,4 +538,32 @@ fn a_layer_yields_to_ocr_only_when_nearly_disjoint_from_it() {
         "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
         "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
     ));
+}
+
+#[test]
+fn naca_1135_p25_reaches_the_coverage_check_within_the_default_preview_budget() {
+    use sha2::{Digest, Sha256};
+
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../test_documents/pdf/regression_pages/nasa-naca-report-1135-p25.pdf");
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
+        panic!("NACA 1135 p25 fixture {path:?} is missing ({e}). Fetch the corpus: python3 test_documents/scripts/fetch_corpus.py")
+    });
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "1696465613177c9059fea2edd8a109c753c649fdfb80cf33712d9d890f0a3ed0"
+    );
+    let doc = super::PdfDocument::from_bytes(bytes).unwrap();
+    let byte_limit = 100 * 1024 * 1024;
+    // Two Flate streams (text, then picture), ~6.7k operators, a 300 dpi Group 4 image with
+    // /Decode [0 1] and no /Rows or /BlackIs1; its junk glyph boxes cover every ink band.
+    let default_work = 10_000_000 * super::PREVIEW_WORK_PER_ITERATION;
+    assert_eq!(
+        super::needs_ocr(&doc, 0, byte_limit, &mut { default_work }, || false),
+        Some(false)
+    );
+    assert_eq!(
+        super::needs_ocr(&doc, 0, byte_limit, &mut { 10_000_000 }, || false),
+        None
+    );
 }

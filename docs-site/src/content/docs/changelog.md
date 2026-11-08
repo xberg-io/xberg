@@ -1279,7 +1279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   box no longer add a tab before its text. (#2152)
 
 - **(ocr): Let a confident OCR read replace an invisible text layer that shares almost no words with the page picture.** (#2425)
-  A layer painted only in render mode 3 over a page-covering scan is replaced when the read repeats at most 15% of its words (NACA 1135 p25: 5%, 21 of 424) and passes the recognition-noise and confidence checks; visible text and layers that match the picture keep their text. A 300 dpi CCITT Group 4 scan with `/Decode [0 1]`, no `/Rows` or `/BlackIs1`, and hidden text and picture in two Flate content streams is now audited, and a layer whose words average over 12 characters is read against its picture. The CCITT preview budget is 16 work units per `max_iterations`, enough for one such page at the default limit.
+  A layer painted only in render mode 3 over a page-covering scan is replaced when the read repeats at most 15% of its words and passes the confidence check; visible text and layers that match the picture keep their text. The hidden-layer probe now also audits a text stream and a picture stream that are both Flate-compressed, in either order, and decodes a 300 dpi CCITT Group 4 picture with `/Decode [0 1]` and no `/Rows` or `/BlackIs1`. Its CCITT preview budget is 16 work units per `max_iterations`.
 
 ## [1.3.11] - 2026-10-16
 

@@ -755,17 +755,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let cancel = config.cancel_token.clone();
         let page_limit = super::hidden_layer::preview_page_limit(config);
         let work_limit = super::hidden_layer::preview_work_limit(config);
-        // Geometry cannot expose an invisible layer that sits exactly on the ink but spells
-        // something else, so a layer of implausible words is read against its raster as well. ~keep
-        let implausible_layers: std::collections::HashSet<usize> = boundaries
-            .iter()
-            .filter(|boundary| {
-                native_text
-                    .get(boundary.byte_start..boundary.byte_end)
-                    .is_some_and(super::hidden_layer::layer_words_are_implausible)
-            })
-            .filter_map(|boundary| usize::try_from(boundary.page_number).ok()?.checked_sub(1))
-            .collect();
         super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
@@ -783,7 +772,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         is_cancelled,
                     );
                     tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
-                    needed == Some(true) || (needed == Some(false) && implausible_layers.contains(&index))
+                    needed == Some(true)
                 })
                 .collect::<Vec<_>>();
             Ok(selected)

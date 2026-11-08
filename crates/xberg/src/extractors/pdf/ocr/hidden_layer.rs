@@ -26,13 +26,13 @@ pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 mod ccitt_params;
 use ccitt_params::{decode_is_inverted, supported_group4_params};
 mod layer_judgement;
-pub(super) use layer_judgement::{layer_words_are_implausible, ocr_supersedes_disjoint_layer};
+pub(super) use layer_judgement::ocr_supersedes_disjoint_layer;
 mod source_audit;
 use source_audit::audited_image_name;
 
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_OPERATORS: usize = 4096;
-// Bounds the operator visits of an audited stream: an average of four bytes per operator in MAX_CONTENT_BYTES.
+// Operator limit of the filtered two-stream audit: an average of four bytes per operator in MAX_CONTENT_BYTES.
 const MAX_AUDIT_OPERATORS: usize = MAX_CONTENT_BYTES / 4;
 const MAX_PREVIEW_PIXELS: usize = 1024 * 1024;
 const MIN_TRAILING_INK_RUNS: usize = 4;

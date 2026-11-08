@@ -12,22 +12,24 @@ pub(super) fn audited_image_name(
     byte_limit: usize,
     remaining_work: &mut usize,
 ) -> Option<String> {
-    let (bytes, split) = if let Some(streams) = content.as_array() {
+    let (bytes, split, operator_limit) = if let Some(streams) = content.as_array() {
         match audit_split_contents(doc, streams, byte_limit, remaining_work) {
-            Some(bytes) => (bytes, true),
+            Some(bytes) => (bytes, true, MAX_OPERATORS),
             None => (
                 audit_filtered_contents(doc, streams, byte_limit, remaining_work)?,
                 false,
+                MAX_AUDIT_OPERATORS,
             ),
         }
     } else {
         (
             decode_content_stream(content, MAX_CONTENT_BYTES.min(byte_limit / 4), byte_limit)?,
             false,
+            MAX_OPERATORS,
         )
     };
     let fonts = simple_font_resources(doc, page)?;
-    let source = audit_hidden_text_image(&bytes, split, |font| fonts.contains_key(font))?;
+    let source = audit_hidden_text_image(&bytes, split, operator_limit, |font| fonts.contains_key(font))?;
     (doc.get_page_content_data(page).ok()? == bytes).then_some(source)
 }
 
@@ -203,12 +205,13 @@ fn plain_literal(token: &str) -> bool {
 
 #[cfg(test)]
 pub(super) fn hidden_text_image_name(content: &[u8], font_is_known: impl Fn(&str) -> bool) -> Option<String> {
-    audit_hidden_text_image(content, false, font_is_known)
+    audit_hidden_text_image(content, false, MAX_OPERATORS, font_is_known)
 }
 
 pub(super) fn audit_hidden_text_image(
     content: &[u8],
     split: bool,
+    operator_limit: usize,
     font_is_known: impl Fn(&str) -> bool,
 ) -> Option<String> {
     let mut mode = 0;
@@ -218,7 +221,7 @@ pub(super) fn audit_hidden_text_image(
     let mut image = None;
     let mut hidden = false;
     let mut index = 0;
-    let complete = visit_complete_content_stream(content, MAX_AUDIT_OPERATORS, |op| {
+    let complete = visit_complete_content_stream(content, operator_limit, |op| {
         if split && !split_operator_in_sequence(index, inside_text, &op) {
             return false;
         }
