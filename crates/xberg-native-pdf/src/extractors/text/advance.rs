@@ -677,20 +677,20 @@ impl<'doc> TextExtractor<'doc> {
     /// not apply in vertical mode. The matrix-side axis-swap lives in
     /// `advance_text_matrix`.
     pub(super) fn advance_position_for_offset(&mut self, offset: f32) -> Result<()> {
-        let state = self.state_stack.current();
-        let font_size = state.font_size;
-        let horizontal_scaling = state.horizontal_scaling;
-        let wmode = state.text_wmode;
-
-        let tx = if wmode == 0 {
-            -offset / 1000.0 * font_size * horizontal_scaling / 100.0
-        } else {
-            -offset / 1000.0 * font_size
-        };
-
+        let tx = self.tj_offset_advance(offset);
         self.state_stack.current_mut().advance_text_matrix(tx);
 
         Ok(())
+    }
+
+    /// The shift along the active writing axis, in text space, of a TJ offset value. ~keep
+    pub(super) fn tj_offset_advance(&self, offset: f32) -> f32 {
+        let state = self.state_stack.current();
+        if state.text_wmode == 0 {
+            -offset / 1000.0 * state.font_size * state.horizontal_scaling / 100.0
+        } else {
+            -offset / 1000.0 * state.font_size
+        }
     }
 
     /// Fold a sub-threshold TJ offset into the active buffer's advance record

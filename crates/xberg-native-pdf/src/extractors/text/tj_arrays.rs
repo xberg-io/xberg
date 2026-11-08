@@ -173,6 +173,12 @@ impl<'doc> TextExtractor<'doc> {
         } else {
             None
         };
+        if matches!(array.first(), Some(TextElement::Offset(lead)) if *lead < 0.0)
+            && let Some(mut run) = self.tj_span_buffer.take()
+        {
+            self.end_set_back_run_at_drawn_end(&mut run);
+            self.tj_span_buffer = Some(run);
+        }
         self.flush_tj_span_buffer()?;
         match self.word_boundary_mode {
             WordBoundaryMode::Tiebreaker => self.process_tj_array_tiebreaker(array, carried),
@@ -394,7 +400,7 @@ impl<'doc> TextExtractor<'doc> {
         // Check if buffer ends with space BEFORE flushing
         // This prevents double spaces when TJ processor inserts space
         // AND span merging would insert space at the same boundary. ~keep
-        let pen_set_back_into_drawn_run = self.pen_set_back_into_drawn_run();
+        let set_back_depth = self.pen_set_back_depth();
         let buffer_ends_with_space = !buffer.unicode.is_empty()
             && buffer
                 .unicode
@@ -421,8 +427,11 @@ impl<'doc> TextExtractor<'doc> {
             false
         };
 
-        if !buffer_ends_with_space && !next_element_starts_with_space && !pen_set_back_into_drawn_run {
-            self.insert_space_as_span()?;
+        if !buffer_ends_with_space && !next_element_starts_with_space {
+            match set_back_depth {
+                None => self.insert_space_as_span()?,
+                Some(depth) => self.insert_space_past_drawn_run(offset, depth)?,
+            }
         }
 
         // Apply the TJ offset to the text matrix BEFORE
@@ -445,41 +454,90 @@ impl<'doc> TextExtractor<'doc> {
     /// `T*`). If a glyph or an offset moved the pen since the last such operator, the old pen is the end
     /// of what the content stream drew last. ~keep
     pub(super) fn position_pen(&mut self, line_matrix: Matrix) {
+        self.drawn_end = self.current_drawn_end();
         let state = self.state_stack.current_mut();
-        if self.positioned_pen != Some(state.text_matrix) {
-            self.drawn_end = Some(state.text_matrix);
-        }
         state.text_line_matrix = line_matrix;
         state.text_matrix = line_matrix;
         self.positioned_pen = Some(line_matrix);
     }
 
-    /// Whether a word-boundary offset stands at a pen that a positioning operator set back into the run
-    /// drawn last: no glyph and no offset moved the pen since that operator, the pen is on the baseline
-    /// of that run, and it lies more than a quarter em before the end of that run. A space span there
-    /// would sort into a word that is already drawn and cut it (GH#2322). The offset then adds no space
-    /// span: the pen moves by the offset, and the gap test between the real glyphs decides. ~keep
-    fn pen_set_back_into_drawn_run(&self) -> bool {
-        let state = self.state_stack.current();
-        let (Some(pen), Some(end)) = (self.positioned_pen, self.drawn_end) else {
-            return false;
-        };
-        if pen != state.text_matrix {
-            return false;
+    /// The end of what the content stream drew last: the pen itself if a glyph or an offset moved it
+    /// since the last positioning operator, else the end that operator kept. ~keep
+    fn current_drawn_end(&self) -> Option<Matrix> {
+        let pen = self.state_stack.current().text_matrix;
+        if self.positioned_pen != Some(pen) {
+            Some(pen)
+        } else {
+            self.drawn_end
         }
+    }
+
+    /// The set-back depth of the pen, when a positioning operator set it back into the run drawn last and
+    /// no glyph and no offset moved it since that operator. ~keep
+    fn pen_set_back_depth(&self) -> Option<f32> {
+        let pen = self.state_stack.current().text_matrix;
+        if self.positioned_pen != Some(pen) {
+            return None;
+        }
+        self.set_back_depth(pen)
+    }
+
+    /// A word-boundary offset at a pen set back into the run drawn last, `depth` before its end. A space
+    /// span at the pen would sort into a word that is already drawn and cut it (GH#2322). Only the part of
+    /// the offset past the end of that run is a gap: when that part is a word-boundary offset too, the
+    /// space span goes at the end of the run, as after a pen set to that end. ~keep
+    fn insert_space_past_drawn_run(&mut self, offset: f32, depth: f32) -> Result<()> {
+        let past_end = self.tj_offset_advance(offset) - depth;
+        let pen = self.state_stack.current().text_matrix;
+        match self.current_drawn_end() {
+            Some(end) if past_end > self.tj_offset_advance(self.calculate_adaptive_tj_threshold()) => {
+                self.state_stack.current_mut().text_matrix = end;
+                let inserted = self.insert_space_as_span();
+                self.state_stack.current_mut().text_matrix = pen;
+                inserted
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// A `Tm` that set the pen back into the open run continued it with the width of the pen move, narrower
+    /// than its glyphs (GH#2690). When a `TJ` lead follows at that pen, the producer reaches the next glyph
+    /// from there, so the run holds only glyphs drawn before that `Tm` and ends at the end of what the content
+    /// stream drew last. Glyphs drawn at the pen itself keep the pen move: their place says where the run
+    /// before them ends. ~keep
+    fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
+        if self.pen_set_back_depth().is_some()
+            && let Some(end) = self.current_drawn_end()
+            && buffer.user_h_scale > 0.0
+        {
+            let (along, _, _) = self.baseline_reach(buffer.start_matrix, end);
+            buffer.accumulated_width = along / buffer.user_h_scale;
+        }
+    }
+
+    /// How far the run drawn last reaches past `pen`, in text space along the baseline of `pen`, when `pen`
+    /// is on the baseline of that run and more than a quarter em before its end. ~keep
+    fn set_back_depth(&self, pen: Matrix) -> Option<f32> {
+        let end = self.current_drawn_end()?;
+        let (along, across, scale) = self.baseline_reach(pen, end);
+        let em = self.state_stack.current().font_size * scale;
+        (along > 0.25 * em && across < 0.5 * em).then_some(along / scale)
+    }
+
+    /// The user-space distance from the origin of `from` to the origin of `to`, along and across the baseline
+    /// of `from`, and the user-space length of one text-space unit of `from`. ~keep
+    fn baseline_reach(&self, from: Matrix, to: Matrix) -> (f32, f32, f32) {
+        let ctm = self.state_stack.current().ctm;
         let user = |m: &Matrix, x: f32| {
             let p = m.transform_point(x, 0.0);
-            state.ctm.transform_point(p.x, p.y)
+            ctm.transform_point(p.x, p.y)
         };
-        let (origin, unit, end) = (user(&pen, 0.0), user(&pen, 1.0), user(&end, 0.0));
+        let (origin, unit, end) = (user(&from, 0.0), user(&from, 1.0), user(&to, 0.0));
         let (dx, dy) = (unit.x - origin.x, unit.y - origin.y);
-        // A degenerate matrix gives a scale of 0 and NaN distances, and every comparison below is false. ~keep
+        // A degenerate matrix gives a scale of 0 and NaN distances, and every comparison with them is false. ~keep
         let scale = dx.hypot(dy);
-        let em = state.font_size * scale;
         let (ex, ey) = (end.x - origin.x, end.y - origin.y);
-        let along = (ex * dx + ey * dy) / scale;
-        let across = (ey * dx - ex * dy).abs() / scale;
-        along > 0.25 * em && across < 0.5 * em
+        ((ex * dx + ey * dy) / scale, (ey * dx - ex * dy).abs() / scale, scale)
     }
 
     /// Process TJ array using primary detection mode.
