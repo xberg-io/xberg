@@ -111,6 +111,11 @@ def test_unmoved_keys_may_differ_numerically_but_not_in_tie_structure() -> None:
     fails("tie_structure_mismatch", contract.compare_ranks, [0, 1], [0, 1], [1.0, 2.0], [9.0, 9.0])
 
 
+def test_a_bool_sort_key_is_not_a_float_key() -> None:
+    fails("keys_not_finite_floats", contract.compare_ranks, [0, 1], [0, 1], [False, True], [0.0, 1.0])
+    fails("keys_not_finite_floats", contract.compare_ranks, [0, 1], [0, 1], [0.0, 1.0], [0.0, True])
+
+
 def test_more_rows_than_positions_are_allowed_when_a_query_repeats() -> None:
     assert contract.compare_ranks([0, 1, 0], [0, 1, 0], [1.0, 2.0], [1.0, 2.0]) == 0
 
@@ -223,6 +228,11 @@ def test_mask_shapes_must_match_and_be_three_dimensional() -> None:
     fails("mask_shape_mismatch", masks, FLIP, table, actual_shape=[300, 200, 199])
     fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[], actual_shape=[])
     fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[200, 200], actual_shape=[200, 200])
+
+
+def test_a_zero_or_non_integer_mask_dimension_fails() -> None:
+    for shape in ([0, 200, 200], [300, 0, 200], [300, 200, -1], [300.0, 200, 200], [300, 200, 200.5]):
+        fails("mask_shape_invalid", masks, [], {}, reference_shape=shape, actual_shape=shape)
 
 
 def test_a_position_outside_the_mask_fails() -> None:
