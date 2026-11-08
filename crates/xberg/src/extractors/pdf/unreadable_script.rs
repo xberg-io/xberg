@@ -229,40 +229,122 @@ fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> 
     })
 }
 
-/// The languages every stage of the OCR route reads with, or `None` when some stage's reading
-/// cannot be described by a Tesseract model list. Only Tesseract stages make a language claim:
-/// PaddleOCR, Sceptre, VLM and custom backends are "no claim", so a route that can reach one is
-/// never judged. A pipeline's stages are pooled, because a stage that reads the script is enough
-/// for OCR to be worth running.
-fn route_languages(ocr: &crate::OcrConfig) -> Option<Vec<String>> {
-    if !ocr.enabled {
+/// The language lists of the stages that could accept an OCR result, one list per stage, or `None`
+/// when some stage makes no claim. Only Tesseract stages make a claim: PaddleOCR, Sceptre, VLM and
+/// custom backends, an empty pipeline, and a `vlm_fallback` other than `Disabled` are "no claim", so
+/// a route that can reach one is never judged. A stage's own languages are pooled within it; stages
+/// are not pooled with each other, because any stage may accept its result first.
+fn stage_languages(ocr: &crate::OcrConfig) -> Option<Vec<Vec<String>>> {
+    if !ocr.enabled || ocr.vlm_fallback != VlmFallbackPolicy::Disabled {
         return None;
     }
     let Some(pipeline) = &ocr.pipeline else {
-        return (ocr.backend == "tesseract" && ocr.vlm_fallback == VlmFallbackPolicy::Disabled)
-            .then(|| ocr.effective_tesseract_language());
+        return (ocr.backend == "tesseract").then(|| vec![ocr.effective_tesseract_language()]);
     };
     if pipeline.stages.is_empty() {
         return None;
     }
-    let mut languages = Vec::new();
-    for stage in &pipeline.stages {
-        if !stage.backend.eq_ignore_ascii_case("tesseract") {
-            return None;
+    pipeline
+        .stages
+        .iter()
+        .map(|stage| {
+            stage.backend.eq_ignore_ascii_case("tesseract").then(|| {
+                crate::core::config::ocr::effective_tesseract_language_for(
+                    stage.language.as_ref().unwrap_or(&ocr.language),
+                    stage.tesseract_config.as_ref().or(ocr.tesseract_config.as_ref()),
+                )
+            })
+        })
+        .collect()
+}
+
+/// Tells a letter that starts a cluster from a sign that attaches to one, for the scripts whose
+/// orthography fixes where signs may stand.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Part {
+    Base,
+    Sign,
+    Other,
+}
+
+type Ranges = &'static [(u32, u32)];
+
+fn part_of(script: Script, character: char) -> Part {
+    use Script::*;
+    let code = character as u32;
+    let (bases, signs): (Ranges, Ranges) = match script {
+        Khmer => (&[(0x1780, 0x17B3)], &[(0x17B4, 0x17D3), (0x17DD, 0x17DD)]),
+        Thai => (
+            &[(0x0E01, 0x0E2E), (0x0E40, 0x0E46)],
+            &[(0x0E30, 0x0E3A), (0x0E47, 0x0E4E)],
+        ),
+        Lao => (
+            &[(0x0E81, 0x0EAE), (0x0EC0, 0x0EC4)],
+            &[(0x0EB0, 0x0EBD), (0x0EC8, 0x0ECD)],
+        ),
+        Myanmar => (&[(0x1000, 0x102A)], &[(0x102B, 0x103E), (0x1056, 0x1059)]),
+        Devanagari | Bengali | Gurmukhi | Gujarati | Oriya | Tamil | Telugu | Kannada | Malayalam => {
+            let block = code & !0x7F;
+            return match code - block {
+                0x04..=0x39 | 0x58..=0x5F => Part::Base,
+                0x00..=0x03 | 0x3C..=0x4D | 0x62..=0x63 => Part::Sign,
+                _ => Part::Other,
+            };
         }
-        let parent = &ocr.language;
-        let own = stage.language.as_ref().unwrap_or(parent);
-        for language in crate::core::config::ocr::effective_tesseract_language_for(
-            own,
-            stage.tesseract_config.as_ref().or(ocr.tesseract_config.as_ref()),
-        ) {
-            if !languages.contains(&language) {
-                languages.push(language);
+        _ => return Part::Other,
+    };
+    if bases.iter().any(|(low, high)| (*low..=*high).contains(&code)) {
+        Part::Base
+    } else if signs.iter().any(|(low, high)| (*low..=*high).contains(&code)) {
+        Part::Sign
+    } else {
+        Part::Other
+    }
+}
+
+/// Fewest signs a layer needs for its cluster structure to be judged.
+const MIN_SIGNS: usize = 4;
+/// Most signs one cluster carries (a Khmer base takes a subscript, a vowel, a shift and a final).
+const MAX_SIGNS_PER_CLUSTER: usize = 4;
+/// Share of a script's signs that must stand in a cluster that starts with a letter of the script.
+/// Text in the script has all of them there; random code points of its block have about half.
+const MIN_VALID_SIGN_SHARE: f64 = 0.95;
+
+/// Whether the signs of `script` in `text` attach to letters of the script the way its orthography
+/// requires, so the layer is the script's text and not other text decoded to its code points. Only
+/// scripts [`part_of`] knows can be judged; any other script returns `false`.
+fn clusters_are_valid(text: &str, script: Script) -> bool {
+    let (mut signs, mut valid) = (0usize, 0usize);
+    let mut run: Option<usize> = None;
+    for character in text.chars() {
+        match part_of(script, character) {
+            Part::Base => run = Some(0),
+            Part::Sign => {
+                signs += 1;
+                run = run.map(|count| count + 1);
+                if run.is_some_and(|count| count <= MAX_SIGNS_PER_CLUSTER) {
+                    valid += 1;
+                }
             }
+            Part::Other => run = None,
         }
     }
-    Some(languages)
+    signs >= MIN_SIGNS && valid as f64 >= MIN_VALID_SIGN_SHARE * signs as f64
 }
+
+/// The scripts of `text` that no language in `languages` reads, for the pages the guard may keep.
+/// A layer with lost-glyph markers qualifies on script evidence alone. A layer without them also
+/// qualifies when every one of its scripts has checkable cluster structure and the layer passes
+/// [`clusters_are_valid`]: other text decoded through a wrong map reaches Greek, Han or Cyrillic
+/// code points without markers, and OCR is the only reader of it.
+fn judged_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
+    let scripts = unreadable_scripts(text, languages)?;
+    let marked = text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER);
+    (marked || scripts.iter().all(|script| clusters_are_valid(text, *script))).then_some(scripts)
+}
+
+/// A failing page, the unreadable scripts of its layer and the stage languages that cannot read them.
+type Candidate<'a> = (u32, Vec<Script>, &'a [String]);
 
 fn describe(pages: &[(u32, Vec<Script>)]) -> String {
     pages
@@ -299,8 +381,8 @@ fn kept_pages_warning(kept: &[(u32, Vec<Script>)], languages: &[String]) -> crat
 fn read_pages_warning(read: &[(u32, Vec<Script>)], languages: &[String]) -> crate::types::ProcessingWarning {
     warning(format!(
         "The native text of {} is in a script the configured OCR languages ({}) cannot read, and the \
-         page is read by OCR because it carries a picture. Text that OCR reads in this script will be \
-         wrong. Add a model for this script, for example the one named, to ocr.language.",
+         page is read by OCR because it carries a picture. Text that OCR reads in this script is \
+         likely to be wrong. Add a model for this script, for example the one named, to ocr.language.",
         describe(read),
         languages.join("+")
     ))
@@ -340,16 +422,18 @@ pub(super) fn retain_unreadable_script_pages(
     }) else {
         return Vec::new();
     };
-    let Some(languages) = route_languages(ocr) else {
+    let Some(stages) = stage_languages(ocr) else {
         return Vec::new();
     };
-    let candidates: Vec<(u32, Vec<Script>)> = decision
+    let candidates: Vec<Candidate> = decision
         .failing_pages
         .iter()
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
-            Some((*page, unreadable_scripts(text, &languages)?))
+            stages
+                .iter()
+                .find_map(|languages| Some((*page, judged_scripts(text, languages)?, languages.as_slice())))
         })
         .collect();
     if candidates.is_empty() {
@@ -362,8 +446,17 @@ pub(super) fn retain_unreadable_script_pages(
             return Vec::new();
         }
     };
+    let mut languages: Vec<String> = Vec::new();
+    for (_, _, judged) in &candidates {
+        for language in *judged {
+            if !languages.contains(language) {
+                languages.push(language.clone());
+            }
+        }
+    }
     let (read, kept): (Vec<_>, Vec<_>) = candidates
         .into_iter()
+        .map(|(page, scripts, _)| (page, scripts))
         .partition(|(page, _)| page_is_scan(&document, *page as usize - 1));
     let mut warnings = Vec::new();
     if !kept.is_empty() {
@@ -679,23 +772,37 @@ mod tests {
     }
 
     #[test]
-    fn a_pipeline_of_stages_that_cannot_read_the_script_keeps_the_native_page() {
-        let config = pipeline_config(serde_json::json!({"stages": [
-            {"backend": "tesseract", "priority": 100},
-            {"backend": "tesseract", "priority": 50, "language": ["eng", "deu"]},
-        ]}));
-        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
-        assert!(decision.failing_pages.is_empty());
-        assert_eq!(warnings.len(), 1);
-        assert!(warnings[0].message.contains("(eng+deu)"), "{}", warnings[0].message);
+    fn a_pipeline_keeps_the_native_page_when_any_stage_cannot_read_the_script() {
+        for stages in [
+            serde_json::json!([{"backend": "tesseract", "priority": 100}]),
+            serde_json::json!([
+                {"backend": "tesseract", "priority": 100},
+                {"backend": "tesseract", "priority": 50, "language": ["eng", "deu"]},
+            ]),
+            serde_json::json!([
+                {"backend": "tesseract", "priority": 100},
+                {"backend": "tesseract", "priority": 50, "language": ["khm"]},
+            ]),
+            serde_json::json!([
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+                {"backend": "tesseract", "priority": 50},
+            ]),
+        ] {
+            let config = pipeline_config(serde_json::json!({ "stages": stages }));
+            let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
+            assert!(decision.failing_pages.is_empty(), "{stages}");
+            assert_eq!(warnings.len(), 1, "{stages}");
+            assert!(warnings[0].message.contains("(eng"), "{}", warnings[0].message);
+        }
     }
 
     #[test]
-    fn a_pipeline_stage_that_reads_the_script_or_makes_no_claim_leaves_the_page_to_ocr() {
+    fn a_pipeline_is_left_to_ocr_when_every_stage_reads_the_script_or_one_makes_no_claim() {
         for pipeline in [
+            serde_json::json!({"stages": [{"backend": "tesseract", "priority": 100, "language": ["eng", "khm"]}]}),
             serde_json::json!({"stages": [
-                {"backend": "tesseract", "priority": 100},
-                {"backend": "tesseract", "priority": 50, "language": ["khm"]},
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+                {"backend": "tesseract", "priority": 50, "language": ["eng", "khm"]},
             ]}),
             serde_json::json!({"stages": [
                 {"backend": "tesseract", "priority": 100},
@@ -707,6 +814,92 @@ mod tests {
             let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &pipeline_config(pipeline.clone()));
             assert_eq!(decision.failing_pages, [1], "{pipeline}");
             assert!(warnings.is_empty(), "{pipeline}");
+        }
+    }
+
+    #[test]
+    fn a_vlm_fallback_on_the_pipeline_path_is_no_claim() {
+        let mut config = pipeline_config(serde_json::json!({"stages": [{"backend": "tesseract", "priority": 100}]}));
+        config.ocr.as_mut().unwrap().vlm_fallback = VlmFallbackPolicy::Always;
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty());
+    }
+
+    fn forced_failing(page: &str, languages: &[&str]) -> (OcrFallbackDecision, Vec<crate::types::ProcessingWarning>) {
+        let (text, boundaries) = page_text(&[page]);
+        let mut decision = decision_for(&text, &boundaries);
+        decision.failing_pages = vec![1];
+        decision.fallback = true;
+        decision.whole_doc_failure = true;
+        let warnings = retain_unreadable_script_pages(
+            &mut decision,
+            &text,
+            Some(&boundaries),
+            Some(1),
+            ONE_PAGE,
+            &config_with(languages),
+        );
+        (decision, warnings)
+    }
+
+    #[test]
+    fn unmarked_code_points_of_scripts_without_checkable_structure_stay_with_ocr() {
+        let han = "今天天气很好我们去公园散步图书馆的新书放在二楼的左边".repeat(3);
+        let greek = "ηελλο ωορλδ τηισ ισ α τεστ οφ γρεεκ λεττερσ ".repeat(4);
+        let cyrillic = "привет мир это проверка русского текста ".repeat(4);
+        for (name, page) in [("han", han), ("greek", greek), ("cyrillic", cyrillic)] {
+            let (decision, warnings) = forced_failing(&page, &["eng"]);
+            assert_eq!(decision.failing_pages, [1], "{name}");
+            assert!(warnings.is_empty(), "{name}");
+        }
+    }
+
+    #[test]
+    fn marked_pages_in_scripts_without_checkable_structure_are_still_kept() {
+        let marked = format!(
+            "{}\u{FFFD}",
+            "今天天气很好我们去公园散步图书馆的新书放在二楼的左边".repeat(3)
+        );
+        let (decision, warnings) = forced_failing(&marked, &["eng"]);
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn random_khmer_code_points_are_not_a_khmer_layer() {
+        let mut state = 0x2545_F491_u32;
+        let page: String = (0..400)
+            .map(|index| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                if index % 7 == 6 {
+                    ' '
+                } else {
+                    char::from_u32(0x1780 + (state >> 16) % 0x60).unwrap()
+                }
+            })
+            .collect();
+        assert!(
+            unreadable_scripts(&page, &langs(&["eng"])).is_some(),
+            "the script is detected"
+        );
+        assert!(judged_scripts(&page, &langs(&["eng"])).is_none());
+        let (decision, warnings) = forced_failing(&page, &["eng"]);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn real_text_of_each_checkable_script_has_valid_clusters() {
+        for (script, text) in [
+            (Script::Khmer, "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ"),
+            (Script::Thai, "สวัสดีครับ ผมชอบกินข้าวผัดกระเพรา ประเทศไทย"),
+            (Script::Lao, "ສະບາຍດີ ຂ້ອຍມັກກິນເຂົ້າ ປະເທດລາວ"),
+            (Script::Myanmar, "မင်္ဂလာပါ ကျွန်တော် မြန်မာနိုင်ငံ"),
+            (Script::Devanagari, "नमस्ते मुझे हिन्दी भाषा पसंद है भारत देश"),
+            (Script::Tamil, "வணக்கம் நான் தமிழ் மொழியை விரும்புகிறேன்"),
+        ] {
+            assert!(clusters_are_valid(text, script), "{script:?}");
         }
     }
 
@@ -754,7 +947,7 @@ mod tests {
     }
 
     #[test]
-    fn english_decoded_through_a_greek_symbol_font_is_outside_what_script_evidence_can_tell() {
+    fn english_decoded_through_a_greek_symbol_font_is_kept_only_when_a_lost_glyph_marks_it() {
         let english = "The committee reviewed the annual report and approved the budget for the next fiscal year. \
                        Members discussed staffing, equipment purchases and the schedule of public meetings. ";
         let symbol_font: String = english
@@ -787,12 +980,14 @@ mod tests {
             })
             .collect::<String>()
             .repeat(3);
+        let (unmarked_decision, unmarked_warnings) = forced_failing(&symbol_font, &["eng"]);
+        assert_eq!(unmarked_decision.failing_pages, [1]);
+        assert!(unmarked_warnings.is_empty());
         let marked = format!("{symbol_font}\u{FFFD}");
         let (text, boundaries) = page_text(&[&marked]);
-        // The language check abstains on Greek-letter gibberish, so nothing flags this layer. Script
-        // evidence cannot tell it from real Greek text: the filter keeps the page, as it would any
-        // layer that reads as one unconfigured script. A wrongly decoded layer in a script the user
-        // did not configure is therefore out of scope; a flagged one is returned to OCR (see
+        // The language check abstains on Greek-letter gibberish, so nothing flags this layer, and
+        // script evidence cannot tell it from real Greek. Without a lost-glyph marker the page stays
+        // with OCR (above); with one it is kept, as on main, unless a flag returns it (see
         // `a_flagged_mis_decode_returns_to_ocr_after_the_filter`).
         let scan = super::super::ocr::scan_text_plausibility(&text, Some(&boundaries), Some(1), &Default::default());
         assert_eq!(

@@ -168,3 +168,19 @@ fn a_scanned_page_with_a_khmer_layer_read_with_english_warns_to_add_khm() {
     assert!(warnings[0].message.contains("khm") && warnings[0].message.contains("page 1"));
     assert!(automatic.content.contains("20,000 bottles of water"));
 }
+
+#[test]
+fn an_english_stage_before_a_khmer_stage_cannot_replace_the_khmer_layer() {
+    let models = english_model();
+    let native = extract(COMPLETE, models.path(), |config| config.disable_ocr = true);
+    let pipeline = serde_json::json!({"stages": [
+        {"backend": "tesseract", "priority": 100, "language": ["eng"]},
+        {"backend": "tesseract", "priority": 50, "language": ["khm"]},
+    ]});
+    let automatic = extract(COMPLETE, models.path(), |config| {
+        config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
+    });
+    assert_eq!(khmer_count(&native.content), 222);
+    assert_eq!(automatic.content, native.content);
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+}
