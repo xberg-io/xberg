@@ -151,6 +151,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Docker and CI use Tesseract 5.5.4, Leptonica 1.87.0, libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2.
   Windows builds verified Tesseract source; Linux and macOS provisioning checks selected runtimes and real decoding.
 
+- **(pdf): The OCR structure heuristic's retention gate reads ligature code points through the text repair's ligature table (#2689).**
+  The gate carried its own copy of the U+FB00..FB06 mapping; behavior is unchanged.
+
 ### Security
 
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
