@@ -77,11 +77,14 @@ every target via the pure-Rust `nom-exif` integration. See the
 
 :::caution[libheif license (LGPL)]
 `libheif` is licensed under the GNU **LGPL**. Xberg links it
-**dynamically** (via `pkg-config`/system shared library) and never
-statically — the `heic` feature is optional and is omitted from the
-standalone CLI release binaries. Container images redistribute the
-unmodified upstream `libheif` as a separate shared object (`libheif.so`),
-which you may replace with your own build to satisfy LGPL §6. See
+**dynamically** (via `pkg-config`/system shared library), except in the
+macOS PHP extension, which PIE installs as a single file and which
+therefore links `libheif` and `libde265` (also LGPL) statically from
+pinned upstream sources; its archive ships the license texts and the
+source inventory, and the extension can be relinked from the public build
+script. Container images redistribute the unmodified upstream `libheif` as
+a separate shared object (`libheif.so`), which you may replace with your own
+build to satisfy LGPL §6. See
 [`THIRD_PARTY_LICENSES.md`](https://github.com/xberg-io/xberg/blob/main/THIRD_PARTY_LICENSES.md)
 for the full notice and source pointer.
 :::

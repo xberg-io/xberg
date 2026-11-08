@@ -221,6 +221,7 @@ Pre-built binaries available for:
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "php" %}
 - **PHP 8.3+** required
+- macOS arm64: HEIC and AVIF decoding is built into the extension (libheif, libde265 and libaom linked statically, decode only), so PIE installs a single self-contained file; no Homebrew libheif is needed
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% elif language == "csharp" %}

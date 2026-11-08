@@ -3,7 +3,9 @@
 # MACOSX_DEPLOYMENT_TARGET, into a prefix that macOS artifacts bundle instead
 # of Homebrew bottles, which target the runner's own macOS (#1243).
 # Decode-only by default, mirroring the manylinux build-libheif step. The
-# Elixir arm64 profile includes the HEVC and AV1 encoders. ~keep
+# elixir-encoders profile adds the HEVC and AV1 encoders as shared libraries.
+# The php-static profile builds the same decode-only stack as static archives
+# for the PHP extension, which PIE installs as a single file (#2547). ~keep
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -178,8 +180,34 @@ verify_encoder_links() {
   done
 }
 
+# Every object in the static archives must target the floor, and no dylib may exist for the
+# linker to prefer over an archive. ~keep
+verify_static_prefix() {
+  local lib floors dylibs
+  for lib in libheif libde265 libaom; do
+    [ -f "$PREFIX/lib/$lib.a" ] || {
+      echo "::error::missing $lib.a"
+      return 1
+    }
+    floors="$(otool -arch arm64 -l "$PREFIX/lib/$lib.a" | awk '$1 == "minos" { print $2 }' | sort -u)"
+    if [ "$floors" != "$TARGET" ]; then
+      echo "::error::$lib.a objects declare macOS '$floors', expected only $TARGET" >&2
+      return 1
+    fi
+  done
+  dylibs="$(find "$PREFIX/lib" -name '*.dylib' | wc -l | tr -d ' ')"
+  if [ "$dylibs" != 0 ]; then
+    echo "::error::the static prefix contains $dylibs dylibs the linker could prefer" >&2
+    return 1
+  fi
+}
+
 verify_prefix() {
   local lib fail=0 checked=0
+  if [ "$PROFILE" = php-static ]; then
+    verify_static_prefix
+    return
+  fi
   local required=(libheif libde265 libaom)
   [ "$PROFILE" = elixir-encoders ] && required+=(libx265)
   for lib in "${required[@]}"; do
@@ -229,8 +257,8 @@ codec_notices() {
     "libaom-$LIBAOM_VERSION/third_party/fastfeat/LICENSE"
     "libaom-$LIBAOM_VERSION/third_party/libyuv/LICENSE"
     "libaom-$LIBAOM_VERSION/third_party/vector/LICENSE"
-    "x265_$X265_VERSION/COPYING"
   )
+  [ "$PROFILE" = elixir-encoders ] && notices+=("x265_$X265_VERSION/COPYING")
   if [ "$mode" = stage ]; then
     mkdir -p "$inventory"
     source_inventory >"$inventory/sources.tsv"
@@ -263,8 +291,10 @@ source_inventory() {
   printf '%s\t%s\t%s\n' \
     "libheif $LIBHEIF_VERSION" "$LIBHEIF_SHA256" "$LIBHEIF_URL" \
     "libde265 $LIBDE265_VERSION" "$LIBDE265_SHA256" "$LIBDE265_URL" \
-    "libaom $LIBAOM_VERSION" "$LIBAOM_SHA256" "$LIBAOM_URL" \
-    "x265 $X265_VERSION" "$X265_SHA256" "$X265_URL"
+    "libaom $LIBAOM_VERSION" "$LIBAOM_SHA256" "$LIBAOM_URL"
+  if [ "$PROFILE" = elixir-encoders ]; then
+    printf '%s\t%s\t%s\n' "x265 $X265_VERSION" "$X265_SHA256" "$X265_URL"
+  fi
 }
 
 build_stack() {
@@ -275,6 +305,15 @@ build_stack() {
     heif_encoders=ON
     heif_extra=(-DENABLE_PLUGIN_LOADING=OFF -DWITH_X264=OFF -DWITH_OpenH264_DECODER=OFF)
     build_dep x265 "$X265_VERSION" "$X265_URL" "$X265_SHA256"
+  elif [ "$PROFILE" = php-static ]; then
+    # HEVC (libde265) and AV1 (libaom decoder) only: no encoder, no other optional codec. ~keep
+    heif_extra=(
+      -DENABLE_PLUGIN_LOADING=OFF -DWITH_DAV1D=OFF -DWITH_RAV1E=OFF -DWITH_SvtEnc=OFF -DWITH_X264=OFF
+      -DWITH_KVAZAAR=OFF -DWITH_JPEG_DECODER=OFF -DWITH_JPEG_ENCODER=OFF -DWITH_OpenJPEG_DECODER=OFF
+      -DWITH_OpenJPEG_ENCODER=OFF -DWITH_OPENJPH_ENCODER=OFF -DWITH_FFMPEG_DECODER=OFF
+      -DWITH_OpenH264_DECODER=OFF -DWITH_UVG266=OFF -DWITH_VVDEC=OFF -DWITH_VVENC=OFF
+      -DWITH_LIBSHARPYUV=OFF
+    )
   fi
 
   build_dep libde265 "$LIBDE265_VERSION" "$LIBDE265_URL" "$LIBDE265_SHA256" -DENABLE_SDL=OFF
@@ -289,7 +328,7 @@ build_stack() {
     -DENABLE_DOCS=0 -DENABLE_TOOLS=0 ${aom_cpu_arg[@]+"${aom_cpu_arg[@]}"}
 
   # Pin dependency discovery to this prefix so no Homebrew library leaks in. ~keep
-  if [ "$PROFILE" = elixir-encoders ]; then
+  if [ "$PROFILE" != decode ]; then
     local PKG_CONFIG_PATH=""
     export PKG_CONFIG_PATH
   fi
@@ -322,26 +361,41 @@ main() {
     receipt="$receipt profile=$PROFILE x265=$X265_VERSION"
     CMAKE_COMMON+=(-DCMAKE_OSX_ARCHITECTURES=arm64)
     ;;
+  php-static)
+    if [ "$arch" != arm64 ] || [ "$TARGET" != 15.0 ]; then
+      echo "::error::php-static requires arm64 and MACOSX_DEPLOYMENT_TARGET=15.0" >&2
+      return 1
+    fi
+    if [ -z "${XBERG_HEIF_PREFIX:-}" ]; then
+      echo "::error::php-static requires an explicit XBERG_HEIF_PREFIX" >&2
+      return 1
+    fi
+    receipt="$receipt profile=$PROFILE"
+    CMAKE_COMMON=("${CMAKE_COMMON[@]/-DBUILD_SHARED_LIBS=ON/-DBUILD_SHARED_LIBS=OFF}")
+    CMAKE_COMMON+=(-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_POSITION_INDEPENDENT_CODE=ON)
+    ;;
   *)
     echo "::error::unknown XBERG_HEIF_PROFILE: $PROFILE" >&2
     return 1
     ;;
   esac
-  if [ -f "$PREFIX/lib/libheif.dylib" ] &&
+  local heif_artifact=libheif.dylib
+  [ "$PROFILE" = php-static ] && heif_artifact=libheif.a
+  if [ -f "$PREFIX/lib/$heif_artifact" ] &&
     [ -f "$PREFIX/.xberg-heif-versions" ] &&
     [ "$(cat "$PREFIX/.xberg-heif-versions")" = "$receipt" ] && verify_versions; then
     verify_prefix
-    if [ "$PROFILE" = elixir-encoders ]; then
+    if [ "$PROFILE" != decode ]; then
       codec_notices verify
     fi
     echo "Verified libheif stack already present in $PREFIX, skipping build"
     return 0
   fi
-  if [ "$PROFILE" = elixir-encoders ]; then
+  if [ "$PROFILE" != decode ]; then
     mkdir -p "$PREFIX"
     contents="$(ls -A "$PREFIX")"
     if [ -n "$contents" ]; then
-      echo "::error::elixir-encoders requires a fresh prefix: $PREFIX" >&2
+      echo "::error::$PROFILE requires a fresh prefix: $PREFIX" >&2
       return 1
     fi
     touch "$PREFIX/.xberg-heif-encoder-profile"
@@ -354,7 +408,7 @@ main() {
   build_stack
   verify_versions
   verify_prefix
-  if [ "$PROFILE" = elixir-encoders ]; then
+  if [ "$PROFILE" != decode ]; then
     codec_notices stage
   fi
   printf '%s\n' "$receipt" >"$PREFIX/.xberg-heif-versions"
