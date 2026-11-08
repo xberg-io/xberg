@@ -4,12 +4,14 @@
 //! using xberg_native_pdf (pure Rust). Supports both native text extraction and OCR fallback.
 
 mod extraction;
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-mod khmer_retention;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod unreadable_script;
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
+pub(crate) use layout_runner::inherit_test_selected_page_detections;
 pub(crate) mod ocr;
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 mod outline_ocr;
@@ -1350,8 +1352,72 @@ async fn run_ocr_with_layout_pages(
 
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let ocr_images_absent = {
+        #[cfg(feature = "layout-detection")]
+        let absent = ocr_images.is_none();
+        #[cfg(not(feature = "layout-detection"))]
+        let absent = true;
+        absent
+    };
 
-    if let Some(pipeline) = ocr_config.effective_pipeline() {
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut accepted_first_pass = None;
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    if ocr_config.pipeline.is_none()
+        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        && ocr_config.backend == "tesseract"
+        && ocr_images_absent
+        && let Some(pipeline) = ocr_config.effective_pipeline()
+    {
+        accepted_first_pass = ocr::accepted_single_page_first_pass(
+            content,
+            config,
+            path,
+            page_ocr_hints.clone(),
+            &pipeline.quality_thresholds,
+        )
+        .await;
+    }
+
+    #[cfg(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let has_accepted_first_pass = accepted_first_pass.is_some();
+    #[cfg(not(all(
+        paddle_ocr,
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )))]
+    let has_accepted_first_pass = false;
+
+    if let Some(pipeline) = ocr_config.effective_pipeline()
+        && !has_accepted_first_pass
+    {
         #[cfg(paddle_ocr)]
         // The synthesized classical pipeline is an automatic page-quality fallback. Running
         // it here as one document lets a good page's score hide a bad page, so use the same
@@ -1476,19 +1542,42 @@ async fn run_ocr_with_layout_pages(
             ocr_confidence,
         ),
         discarded_visible_native_page,
-    ) = Box::pin(ocr::extract_with_ocr_with_page_hints_and_evidence(
-        Some(content),
-        #[cfg(feature = "layout-detection")]
-        ocr_images,
-        #[cfg(not(feature = "layout-detection"))]
-        None,
-        #[cfg(feature = "layout-detection")]
-        layout_detections,
-        config,
-        path,
-        page_ocr_hints,
-    ))
-    .await?;
+    ) = {
+        #[cfg(all(
+            paddle_ocr,
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let first_pass = accepted_first_pass;
+        #[cfg(not(all(
+            paddle_ocr,
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )))]
+        let first_pass: Option<_> = None;
+        match first_pass {
+            Some(output) => output,
+            None => {
+                Box::pin(ocr::extract_with_ocr_with_page_hints_and_evidence(
+                    Some(content),
+                    #[cfg(feature = "layout-detection")]
+                    ocr_images,
+                    #[cfg(not(feature = "layout-detection"))]
+                    None,
+                    #[cfg(feature = "layout-detection")]
+                    layout_detections,
+                    config,
+                    path,
+                    page_ocr_hints,
+                ))
+                .await?
+            }
+        }
+    };
     // GH#1892: same repair as the pipeline branch above -- this is the other half of the
     // whole-document route, the one `force_ocr` and the near-empty `Auto` fallback reach. ~keep
     if ocr::numeric_repair_enabled(config) {
@@ -1549,203 +1638,7 @@ fn formula_regions_in_reading_order(
 mod layout_page_selection_tests;
 
 #[cfg(all(test, feature = "formula-recognition", feature = "layout-detection"))]
-mod formula_region_tests {
-    use super::formula_regions_in_reading_order;
-    use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
-
-    fn det(class: LayoutClass, x1: f32, y1: f32) -> LayoutDetection {
-        LayoutDetection {
-            class_name: class,
-            confidence: 0.9,
-            bbox: BBox {
-                x1,
-                y1,
-                x2: x1 + 10.0,
-                y2: y1 + 10.0,
-            },
-        }
-    }
-
-    #[test]
-    fn orders_formulas_top_to_bottom_then_left_to_right() {
-        let page = DetectionResult {
-            page_width: 100,
-            page_height: 100,
-            detections: vec![
-                det(LayoutClass::Formula, 50.0, 40.0),
-                det(LayoutClass::Text, 0.0, 0.0),
-                det(LayoutClass::Formula, 10.0, 40.0),
-                det(LayoutClass::Formula, 10.0, 5.0),
-            ],
-        };
-        let ordered = formula_regions_in_reading_order(&page);
-        let coords: Vec<(f32, f32)> = ordered.iter().map(|d| (d.bbox.y1, d.bbox.x1)).collect();
-        assert_eq!(coords, vec![(5.0, 10.0), (40.0, 10.0), (40.0, 50.0)]);
-    }
-
-    #[test]
-    fn pages_without_formulas_yield_no_regions() {
-        let page = DetectionResult {
-            page_width: 100,
-            page_height: 100,
-            detections: vec![det(LayoutClass::Text, 0.0, 0.0), det(LayoutClass::Table, 5.0, 5.0)],
-        };
-        assert!(formula_regions_in_reading_order(&page).is_empty());
-    }
-
-    fn pt_box(x0: f64, y0: f64, x1: f64, y1: f64) -> crate::types::BoundingBox {
-        crate::types::BoundingBox { x0, y0, x1, y1 }
-    }
-
-    #[test]
-    fn matching_counts_without_geometry_pair_positionally() {
-        let assigned = super::assign_formula_slots(2, &[None, None], None);
-        assert_eq!(assigned, vec![Some(0), Some(1)]);
-    }
-
-    #[test]
-    fn matching_counts_without_slot_bboxes_pair_positionally() {
-        let regions = [pt_box(10.0, 100.0, 200.0, 130.0), pt_box(10.0, 10.0, 200.0, 40.0)];
-        let assigned = super::assign_formula_slots(2, &[None, None], Some(&regions));
-        assert_eq!(assigned, vec![Some(0), Some(1)]);
-    }
-
-    #[test]
-    fn mismatched_counts_pair_by_overlap_and_leave_the_rest_unassigned() {
-        // Three regions, two slots; slots overlap regions 0 and 2.
-        let regions = [
-            pt_box(10.0, 100.0, 200.0, 130.0),
-            pt_box(10.0, 50.0, 200.0, 80.0),
-            pt_box(10.0, 10.0, 200.0, 40.0),
-        ];
-        let slots = [
-            Some(pt_box(12.0, 12.0, 190.0, 38.0)),
-            Some(pt_box(12.0, 102.0, 190.0, 128.0)),
-        ];
-        let assigned = super::assign_formula_slots(3, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(1), None, Some(0)]);
-    }
-
-    #[test]
-    fn matching_counts_pair_by_geometry_not_by_position() {
-        // Two formulas on one line; the right one sits slightly higher, so it sorts first.
-        let regions = [pt_box(180.5, 339.8, 190.0, 351.0), pt_box(119.5, 340.0, 150.0, 350.5)];
-        let slots = [
-            Some(pt_box(120.2, 340.2, 149.4, 350.2)),
-            Some(pt_box(181.6, 340.2, 188.7, 350.2)),
-        ];
-        let assigned = super::assign_formula_slots(2, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(1), Some(0)]);
-    }
-
-    #[test]
-    fn matching_counts_pair_positionally_when_a_region_overlaps_nothing() {
-        // Region 0 overlaps slot 1; region 1 overlaps neither a missing box nor a distant one.
-        let regions = [pt_box(10.0, 100.0, 200.0, 130.0), pt_box(10.0, 10.0, 200.0, 40.0)];
-        let near = Some(pt_box(12.0, 102.0, 190.0, 128.0));
-        for slots in [[None, near], [Some(pt_box(300.0, 300.0, 400.0, 330.0)), near]] {
-            let assigned = super::assign_formula_slots(2, &slots, Some(&regions));
-            assert_eq!(assigned, vec![Some(0), Some(1)]);
-        }
-    }
-
-    #[test]
-    fn best_overlap_pairs_first_regardless_of_region_order() {
-        // Region 0 overlaps slot 0 by 0.8 and slot 1 by 0.6; region 1 covers slot 0 exactly.
-        let regions = [pt_box(2.0, 0.0, 16.0, 10.0), pt_box(0.0, 0.0, 10.0, 10.0)];
-        let slots = [Some(pt_box(0.0, 0.0, 10.0, 10.0)), Some(pt_box(10.0, 0.0, 20.0, 10.0))];
-        let assigned = super::assign_formula_slots(2, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(1), Some(0)]);
-    }
-
-    #[test]
-    fn matching_counts_find_a_complete_geometric_assignment_before_falling_back() {
-        let regions = [pt_box(10.0, 0.0, 25.0, 10.0), pt_box(5.0, 0.0, 15.0, 10.0)];
-        let slots = [Some(pt_box(10.0, 0.0, 20.0, 10.0)), Some(pt_box(20.0, 0.0, 30.0, 10.0))];
-        let assigned = super::assign_formula_slots(2, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(1), Some(0)]);
-    }
-
-    #[test]
-    fn matching_counts_complete_a_chain_of_contested_slots() {
-        let regions = [
-            pt_box(10.0, 0.0, 25.0, 10.0),
-            pt_box(20.0, 0.0, 35.0, 10.0),
-            pt_box(5.0, 0.0, 15.0, 10.0),
-        ];
-        let slots = [
-            Some(pt_box(10.0, 0.0, 20.0, 10.0)),
-            Some(pt_box(20.0, 0.0, 30.0, 10.0)),
-            Some(pt_box(30.0, 0.0, 40.0, 10.0)),
-        ];
-        let assigned = super::assign_formula_slots(3, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(1), Some(2), Some(0)]);
-    }
-
-    #[test]
-    fn mismatched_counts_give_a_contested_slot_to_the_best_overlap() {
-        // Region 0 overlaps the slot by 0.6 (IoU 0.43); region 1 contains it (IoU 0.25).
-        let regions = [pt_box(4.0, 0.0, 14.0, 10.0), pt_box(0.0, 0.0, 40.0, 10.0)];
-        let slots = [Some(pt_box(0.0, 0.0, 10.0, 10.0))];
-        let assigned = super::assign_formula_slots(2, &slots, Some(&regions));
-        assert_eq!(assigned, vec![None, Some(0)]);
-    }
-
-    #[test]
-    fn a_region_keeps_the_slot_it_overlaps_most() {
-        let regions = [pt_box(0.0, 0.0, 10.0, 10.0)];
-        let slots = [Some(pt_box(0.0, 0.0, 10.0, 10.0)), Some(pt_box(3.0, 0.0, 13.0, 10.0))];
-        let assigned = super::assign_formula_slots(1, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(0)]);
-    }
-
-    #[test]
-    fn nested_boxes_tied_on_overlap_pair_by_iou() {
-        // Each region contains or sits inside both slots, so every overlap is 1.0.
-        let regions = [pt_box(0.0, 0.0, 100.0, 20.0), pt_box(10.0, 5.0, 20.0, 15.0)];
-        let slots = [Some(pt_box(10.0, 5.0, 20.0, 15.0)), Some(pt_box(0.0, 0.0, 98.0, 20.0))];
-        let assigned = super::assign_formula_slots(2, &slots, Some(&regions));
-        assert_eq!(assigned, vec![Some(1), Some(0)]);
-    }
-
-    #[test]
-    fn mismatched_counts_without_geometry_assign_nothing() {
-        let slots = [Some(pt_box(0.0, 0.0, 10.0, 10.0))];
-        let assigned = super::assign_formula_slots(3, &slots, None);
-        assert_eq!(assigned, vec![None, None, None]);
-    }
-
-    #[test]
-    fn slots_without_bboxes_stay_unassigned_on_mismatch() {
-        let regions = [pt_box(0.0, 0.0, 100.0, 30.0)];
-        let assigned = super::assign_formula_slots(1, &[None, None], Some(&regions));
-        assert_eq!(assigned, vec![None]);
-    }
-
-    #[test]
-    fn synthesis_needs_geometry_when_the_page_carries_formula_text() {
-        // No geometry, no text: a scanned page OCR'd to plain text synthesizes.
-        assert!(super::formula_synthesis_allowed(false, 0, 0));
-        // No geometry, text present: synthesis would duplicate it.
-        assert!(!super::formula_synthesis_allowed(false, 1, 0));
-        assert!(!super::formula_synthesis_allowed(false, 0, 2));
-        // With geometry, unpaired regions synthesize regardless of text.
-        assert!(super::formula_synthesis_allowed(true, 3, 1));
-    }
-
-    #[test]
-    fn overlap_ratio_is_intersection_over_smaller_area() {
-        let big = pt_box(0.0, 0.0, 100.0, 100.0);
-        let small = pt_box(50.0, 50.0, 150.0, 150.0);
-        assert!((super::bbox_overlap_ratio(&big, &small) - 0.25).abs() < 1e-9);
-        let contained = pt_box(10.0, 10.0, 20.0, 20.0);
-        assert!((super::bbox_overlap_ratio(&big, &contained) - 1.0).abs() < 1e-9);
-        assert_eq!(
-            super::bbox_overlap_ratio(&big, &pt_box(200.0, 200.0, 300.0, 300.0)),
-            0.0
-        );
-    }
-}
+mod formula_region_tests;
 
 /// A page raster the formula recognizer can crop, however the flow stores it.
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
@@ -2342,6 +2235,32 @@ fn update_formula_container_stack(open: &mut Vec<ElementKind>, kind: ElementKind
     }
 }
 
+/// Put a picture's OCR text anchor after the last element of its own page, so the recovered
+/// text reads before the next page instead of after the whole document.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn insert_image_ocr_text_anchor(doc: &mut InternalDocument, anchor: InternalElement) {
+    let next_page = anchor.page.and_then(|page| {
+        doc.elements
+            .iter()
+            .position(|element| element.page.is_some_and(|other| other > page))
+    });
+    let Some(at) = next_page else {
+        doc.push_element(anchor);
+        return;
+    };
+    for relationship in &mut doc.relationships {
+        if relationship.source >= at as u32 {
+            relationship.source += 1;
+        }
+        if let crate::types::internal::RelationshipTarget::Index(target) = &mut relationship.target
+            && *target >= at as u32
+        {
+            *target += 1;
+        }
+    }
+    doc.elements.insert(at, anchor);
+}
+
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
 fn insert_formula_document_element(doc: &mut InternalDocument, at: usize, mut element: InternalElement) {
     // ~keep Insertion positions can be reused after shifts; allocate a fresh identity without renumbering old IDs.
@@ -2571,7 +2490,7 @@ impl InternalDocumentExtractor for PdfExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        self.extract_core(content, mime_type, config, None).await
+        crate::pdf::render::with_task_render_warnings(self.extract_core(content, mime_type, config, None)).await
     }
 
     #[cfg(feature = "tokio-runtime")]
@@ -2581,7 +2500,9 @@ impl InternalDocumentExtractor for PdfExtractor {
         // Async on native (non-blocking tokio::fs); sync fallback on wasm32 where tokio's `fs`
         // feature is unavailable. See `core::io::read_file_async`. ~keep
         let bytes = crate::core::io::read_file_async(path).await?;
-        let result = self.extract_core(&bytes, mime_type, config, Some(path)).await;
+        let result =
+            crate::pdf::render::with_task_render_warnings(self.extract_core(&bytes, mime_type, config, Some(path)))
+                .await;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(None);
         result
@@ -3193,6 +3114,17 @@ impl PdfExtractor {
                 pdf_metadata.pdf_specific.page_count,
                 &thresholds,
             );
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            if let Some(warning) = unreadable_script::retain_unreadable_script_pages(
+                &mut decision,
+                &native_text,
+                boundaries.as_deref(),
+                pdf_metadata.pdf_specific.page_count,
+                content,
+                config,
+            ) {
+                ocr_fallback_warnings.push(warning);
+            }
 
             // `NativeTextStats`' character-class checks cannot see a font whose mapping
             // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
@@ -3303,25 +3235,13 @@ impl PdfExtractor {
                     // silently suppress page OCR on scanned PDFs, leaving `pages[].content`
                     // empty (#1576). `RunFallbackOnPages` below has never read this field;
                     // this now matches it. ~keep
-                    let hints = whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config);
-                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    let khmer_retention =
-                        khmer_retention::KhmerRetention::for_automatic_page(config, &pdf_metadata, &native_text);
-                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    let hints = {
-                        let mut hints = hints;
-                        if let Some(retention) = &khmer_retention {
-                            hints.get_or_insert_with(Default::default).khmer_retention = Some(retention.clone());
-                        }
-                        hints
-                    };
                     match run_ocr_with_layout_pages(
                         content,
                         config,
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
-                            hints,
+                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
                         },
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_images.take(),
@@ -3354,12 +3274,6 @@ impl PdfExtractor {
                             for warning in layout_glyph_drop_warnings {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                             }
-                            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                            let preserve_known_khmer = khmer_retention
-                                .as_ref()
-                                .is_some_and(khmer_retention::KhmerRetention::confirmed);
-                            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-                            let preserve_known_khmer = false;
                             let preserve_native_after_discard = discarded_visible_native_page
                                 && pdf_metadata
                                     .pdf_specific
@@ -3371,7 +3285,7 @@ impl PdfExtractor {
                                     .implausible_text_pages
                                     .as_ref()
                                     .is_some_and(Vec::is_empty);
-                            if preserve_known_khmer || preserve_native_after_discard {
+                            if preserve_native_after_discard {
                                 let (warnings, failures) = ocr_doc
                                     .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                     .unwrap_or_default();
@@ -3803,10 +3717,10 @@ impl PdfExtractor {
         doc.processing_warnings.append(&mut pdf_extraction_warnings);
 
         // #340: drain any xberg_native_pdf glyph-drop warnings captured while this
-        // document's pages were rendered on *this* thread (OCR rasterization
+        // document's pages were rendered by *this* task (OCR rasterization
         // and any other call routed through `render_page_capturing_glyph_drops`
-        // in `crate::pdf::render` that runs inline on the extracting task's
-        // thread). The drain is unconditionally cheap and correct even when
+        // in `crate::pdf::render` that runs inline on it;
+        // `with_task_render_warnings` keeps them with the task). The drain is unconditionally cheap and correct even when
         // nothing was ever captured: `install_pdf_render_diagnostics` is
         // opt-in and only an embedding application calls it (a library must
         // not seize the process-global `log` backend on its own — see
@@ -3950,7 +3864,10 @@ impl PdfExtractor {
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
                     if image_anchor == extraction::ImageAnchor::OcrTextOnly {
                         if !page_text_is_from_ocr {
-                            doc.push_element(InternalElement::image_ocr_text_anchor(idx as u32, img.page_number));
+                            insert_image_ocr_text_anchor(
+                                &mut doc,
+                                InternalElement::image_ocr_text_anchor(idx as u32, img.page_number),
+                            );
                         }
                         continue;
                     }

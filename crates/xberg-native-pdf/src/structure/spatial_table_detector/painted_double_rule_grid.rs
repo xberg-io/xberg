@@ -210,7 +210,7 @@ pub(super) fn recover(
     if !(config.min_table_columns.max(3)..WIDE_GRID_COLUMNS).contains(&columns) || columns > config.max_table_columns {
         return None;
     }
-    let tables = finalize_intersection_tables(rows, &indices, spans, config, columns);
+    let tables = finalize_intersection_tables(rows, &indices, spans, config, columns, None);
     let [table] = tables.try_into().ok()?;
     if !is_valid_table(&table)
         || !table.is_real_grid()

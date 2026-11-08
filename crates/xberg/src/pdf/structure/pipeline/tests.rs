@@ -2884,6 +2884,61 @@ fn a_short_run_is_not_carried_by_digits_straddling_two_cells() {
     );
 }
 
+/// A superscript marker or a multiplication sign splits one printed cell into separate segments,
+/// while the grid holds the cell whole. Each piece is a short run inside one cell, so it is the
+/// grid's text, not a second copy to emit as prose.
+#[test]
+fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
+    let coverage = vec![TableCoverage::from_rows(
+        crate::types::BoundingBox {
+            x0: 30.0,
+            y0: 300.0,
+            x1: 560.0,
+            y1: 400.0,
+        },
+        [
+            vec!["PICCOLO21", "854\u{d7}480 and 1920\u{d7}1080", "ASU-Mayo17"],
+            vec!["KUMC22", "various"],
+            vec!["Wei Yang", "Counsel"],
+            vec!["COVID 19 cases", "Q 4"],
+            vec!["A 1", "total"],
+            vec!["1.0", "13,000"],
+        ],
+    )];
+    let segments = vec![
+        column_seg("PICCOLO", 40.0, 40.0, 380.0),
+        column_seg("21", 82.0, 6.0, 383.0),
+        column_seg("854", 300.0, 14.0, 380.0),
+        column_seg("480", 318.0, 14.0, 380.0),
+        column_seg("22", 82.0, 6.0, 363.0),
+        column_seg("Wei Y", 40.0, 30.0, 340.0),
+        column_seg("COVID-19", 40.0, 40.0, 335.0),
+        column_seg("Q4", 40.0, 10.0, 330.0),
+        column_seg("A1", 40.0, 10.0, 325.0),
+        column_seg("ASU-Mayo", 40.0, 30.0, 320.0),
+        column_seg("0", 40.0, 6.0, 315.0),
+        column_seg("000", 40.0, 18.0, 310.0),
+        column_seg("0001", 40.0, 20.0, 350.0),
+    ];
+    let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+        .into_iter()
+        .map(|seg| seg.text)
+        .collect();
+    assert_eq!(
+        kept,
+        vec![
+            "Wei Y".to_string(),
+            "COVID-19".to_string(),
+            "Q4".to_string(),
+            "A1".to_string(),
+            "0".to_string(),
+            "000".to_string(),
+            "0001".to_string()
+        ],
+        "a run that cuts through a cell's word is not that cell's text, and neither is one no cell holds"
+    );
+}
+
 /// A form's line-item cells: every word of the printed instruction on lines 43 and 44 of IRS
 /// Form 8829 occurs in them, but no row holds the instruction, as a run or as its words.
 fn form_line_coverage() -> Vec<TableCoverage> {
@@ -3309,6 +3364,114 @@ fn a_bare_marker_does_not_adopt_a_block_on_another_baseline() {
         !paragraphs[1].is_list_item,
         "a block on its own baseline must not be turned into a list item"
     );
+}
+
+/// A bullet set in a larger symbol font sits on its first line's baseline. The text run beside it
+/// is a smaller font on a baseline a fraction of a point off, which is the shape of a script run,
+/// so the bullet was taken as the row's base and every later line of the item, a plain text line
+/// of the same size as the first, read as a font change and broke the item after one line.
+#[test]
+fn a_list_item_wraps_onto_later_lines_though_its_bullet_is_set_larger() {
+    let line = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let segments = vec![
+        line("\u{2022}", 60.0, 4.0, 12.0, 722.36),
+        line(
+            "The original use of the property must begin with",
+            72.0,
+            230.0,
+            10.0,
+            722.84,
+        ),
+        line(
+            "you after April 11, 2005. Original use means the",
+            72.0,
+            230.0,
+            10.0,
+            711.34,
+        ),
+        line("first use to which the property is put.", 72.0, 180.0, 10.0, 699.84),
+    ];
+
+    let paragraphs = blocks_to_paragraphs(segments, &[(10.0, None)], &[]);
+
+    assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
+    assert!(paragraphs[0].is_list_item);
+    assert_eq!(paragraphs[0].lines.len(), 3, "the bullet shares the first printed line");
+}
+
+/// A bare label such as `(0)` reads as a list marker but is text: a smaller raised run beside it,
+/// as on a chart axis, is its script, unlike the run beside a bullet glyph.
+#[test]
+fn a_bare_label_carries_a_script_run_but_a_bullet_glyph_does_not() {
+    let run = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let label = run("(0)", 100.0, 14.0, 12.0, 500.0);
+    let bullet = run("\u{2022}", 100.0, 14.0, 12.0, 500.0);
+    let script = run("i", 114.0, 3.0, 8.0, 498.0);
+    assert!(ParagraphVisualRow::new(&label).carries_script(&script));
+    assert!(!ParagraphVisualRow::new(&bullet).carries_script(&script));
+}
+
+/// A producer may draw an item's body before its bullet. The bullet then follows the body's
+/// first line in segment order, was taken for the start of the next printed line, and made the
+/// item's wrapped line a separate paragraph.
+#[test]
+fn a_bullet_drawn_after_its_body_still_leads_that_item() {
+    let line = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let segments = vec![
+        line(
+            "Basis adjustment for advanced manufacturing invest-",
+            332.0,
+            200.0,
+            10.0,
+            295.76,
+        ),
+        line("\u{2022}", 321.0, 4.0, 12.0, 295.28),
+        line("ment credit property. See section 48D.", 332.0, 180.0, 10.0, 284.26),
+    ];
+
+    let paragraphs = blocks_to_paragraphs(segments, &[(10.0, None)], &[]);
+
+    assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
+    assert!(paragraphs[0].is_list_item);
 }
 
 /// Helper: create a segment with positional data.

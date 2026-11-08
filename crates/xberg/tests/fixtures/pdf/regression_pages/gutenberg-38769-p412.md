@@ -17,13 +17,15 @@ dx Φ(ξ) = , x
 | Φ( ξ ) \> | = |  | + | + · · · + |  | . |
 | 1 | x | 1 x | 2 | x | 2 n − 1 | x |
 
-But by putting x = 2ru we obtain Z Z
+r
 
-2r+1 2
+But by putting x = 2 u we obtain Z r+1 Z 2
+
+2
 
 dx du = ,
 
-2r
+2<sup>r</sup>
 
 x
 
@@ -41,33 +43,56 @@ Examples LXXI. 1. Prove by an argument similar to that used above, Z
 
 ξ
 
-dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity xs
+dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity x<sup>s</sup>
 
 1
 
 with ξ. P P P
 
-2 /10
+−2 −3/2 −11/10
 
-- 2\. The series n−2, n−3/ , n−11
+2. The series n , n , n are convergent, and their sumsP P
 
-are convergent, and their sumsP P
+−1/2 −10/11
 
-2 /11
+are not greater than 2, 3, 11 respectively. The series n , n are divergent. P
 
-are not greater than 2, 3, 11 respectively. The series n−1/ , n−10 are divergent. P
+s t
 
-- 3\. The series ns/(nt + a), where a \> 0, is convergent or divergent ac-P cording as t \> 1 + s or t ≦ 1 + s. [Compare with ns
+3. The series n /(n + a), where a \> 0, is convergent or divergent ac-P
 
-−t.]
+s−t
 
-- 4\. Discuss the convergence or divergence of the series
+cording as t \> 1 + s or t ≦ 1 + s. [Compare with n .]
 
-P (a1ns
+4. Discuss the convergence or divergence of the series
 
-1 + a 2 ns 2 +
+P
 
-- \+ a k nsk ) / ( b 1 nt 1 + b 2 nt 2 +
-- \+ b l ntl ) ,
+s s s t t t
+
+(a~1~n
+
+1
+
+\+ a~2~n
+
+2
+
+\+
+
+- \+ a k n
+
+k)/(b~1~n 1
+
+\+ b~2~n
+
+2
+
+\+
+
+- \+ b l n
+
+l),
 
 where all the letters denote positive numbers and the s's and t's are rational and arranged in descending order of magnitude.

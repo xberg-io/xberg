@@ -12,16 +12,16 @@ The idea of subtraction accordingly presents no fresh difficulties.
 
 Examples V. 1. Prove that α + (−α) = 0.
 
-- 2\. Prove that α + 0 = 0 + α = α.
-- 3\. Prove that α + β = β + α. [This follows at once from the fact that the classes (a + b) and (b + a), or (A + B) and (B + A), are the same, since, e.g., a + b = b + a when a and b are rational.]
-- 4\. Prove that α + (β + γ) = (α + β) + γ.
-- 5\. Prove that α − α = 0.
-- 6\. Prove that α − β = −(β − α).
-- 7\. From the definition of subtraction, and Exs. 4, 1, and 2 above, it follows that
+2. Prove that α + 0 = 0 + α = α.
+3. Prove that α + β = β + α. [This follows at once from the fact that the classes (a + b) and (b + a), or (A + B) and (B + A), are the same, since, e.g., a + b = b + a when a and b are rational.]
+4. Prove that α + (β + γ) = (α + β) + γ.
+5. Prove that α − α = 0.
+6. Prove that α − β = −(β − α).
+7. From the definition of subtraction, and Exs. 4, 1, and 2 above, it follows that
 
 (α − β) + β = {α + (−β)} + β = α + {(−β) + β} = α + 0 = α.
 
 We might therefore define the difference α − β = γ by the equation γ + β = α.
 
-- 8\. Prove that α − (β − γ) = α − β + γ.
-- 9\. Give a definition of subtraction which does not depend upon a previous definition of addition. [To define γ = α − β, form the classes (c), (C) for which
+8. Prove that α − (β − γ) = α − β + γ.
+9. Give a definition of subtraction which does not depend upon a previous definition of addition. [To define γ = α − β, form the classes (c), (C) for which

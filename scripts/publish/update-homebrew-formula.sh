@@ -31,8 +31,7 @@ echo "Updating Homebrew formula for xberg ${version} (tag ${tag})"
 
 if [[ "$dry_run" == "true" ]]; then
   echo "[dry-run] target formula: $formula"
-  echo "[dry-run] would download $github_archive once"
-  echo "[dry-run] would upload it as release asset $asset_name on $tag"
+  echo "[dry-run] would reuse release asset $asset_name on $tag, or download $github_archive once and upload it"
   echo "[dry-run] would set url to: $tarball_url and pin its sha256"
   echo "[dry-run] would drop the stale bottle DSL block (homebrew-merge-bottles re-adds a fresh one)"
   exit 0
@@ -57,19 +56,26 @@ if [[ -n "$checked_out" && "$commit_before" != "$checked_out" ]]; then
   exit 1
 fi
 
-echo "Fetching source tarball from ${github_archive}..."
-curl -fsSL "$github_archive" -o "${workdir}/${asset_name}"
-local_sha=$(shasum -a 256 "${workdir}/${asset_name}" | awk '{print $1}')
+# Once published, the asset's bytes are pinned elsewhere (homebrew-core), so a retried run
+# reuses them; replacing the asset would break every pinned sha256. ~keep
+local_sha=""
+if gh release view "$tag" --repo xberg-io/xberg --json assets --jq '.assets[].name' | grep -qxF "$asset_name"; then
+  echo "Reusing existing release asset ${asset_name}"
+else
+  echo "Fetching source tarball from ${github_archive}..."
+  curl -fsSL "$github_archive" -o "${workdir}/${asset_name}"
+  local_sha=$(shasum -a 256 "${workdir}/${asset_name}" | awk '{print $1}')
 
-echo "Publishing stable source tarball as release asset ${asset_name}..."
-gh release upload "$tag" "${workdir}/${asset_name}" --repo xberg-io/xberg --clobber
+  echo "Publishing stable source tarball as release asset ${asset_name}..."
+  gh release upload "$tag" "${workdir}/${asset_name}" --repo xberg-io/xberg
+fi
 
 # Pin the sha256 of the asset as it now exists on the release (that is what the formula
 # url serves), not of the pre-upload download. ~keep
 mkdir "${workdir}/published"
 gh release download "$tag" --repo xberg-io/xberg --pattern "$asset_name" --dir "${workdir}/published"
 sha256=$(shasum -a 256 "${workdir}/published/${asset_name}" | awk '{print $1}')
-if [[ "$sha256" != "$local_sha" ]]; then
+if [[ -n "$local_sha" && "$sha256" != "$local_sha" ]]; then
   echo "Published asset sha256 ${sha256} differs from uploaded ${local_sha}" >&2
   exit 1
 fi

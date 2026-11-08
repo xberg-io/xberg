@@ -1,4 +1,4 @@
-#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng", not(paddle_ocr)))]
+#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
 
 mod helpers;
 
@@ -75,11 +75,12 @@ fn assert_preserves_mapped_occurrences(source: &[u8], mapped: usize, config: &Ex
     assert!(
         automatic.processing_warnings.iter().any(|warning| {
             warning.source == "ocr"
-                && warning.message.contains("suspected OCR recognition noise")
-                && warning.message.contains("the existing Khmer text was retained")
-                && !warning.message.contains("its text was retained")
+                && warning.message.contains("page 1")
+                && warning.message.contains("Khmer")
+                && warning.message.contains("khm")
         }),
-        "automatic English OCR still ran and reported its poor result"
+        "the kept page is reported: {:?}",
+        automatic.processing_warnings
     );
     assert_eq!(khmer_count(&automatic), mapped);
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));

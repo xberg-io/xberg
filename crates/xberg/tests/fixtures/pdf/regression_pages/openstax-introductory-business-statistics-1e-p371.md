@@ -1,6 +1,6 @@
 Chapter 8 | Confidence Intervals 363
 
-- 107\. The Federal Election Commission (FEC) collects information about campaign contributions and disbursements for candidates and political committees each election cycle. A political action committee (PAC) is a committee formed to raise money for candidates and campaigns. A Leadership PAC is a PAC formed by a federal politician (senator or representative) to raise money to help other candidates' campaigns.
+107. The Federal Election Commission (FEC) collects information about campaign contributions and disbursements for candidates and political committees each election cycle. A political action committee (PAC) is a committee formed to raise money for candidates and campaigns. A Leadership PAC is a PAC formed by a federal politician (senator or representative) to raise money to help other candidates' campaigns.
 
 The FEC has reported financial information for 556 Leadership PACs that operating during the 2011–2012 election cycle. The following table shows the total receipts during this cycle for a random selection of 30 Leadership PACs.
 
@@ -16,7 +16,7 @@ The FEC has reported financial information for 556 Leadership PACs that operatin
 
 \- *x* = *$* 251, 854.23 *s* = *$* 521, 130.41 Use this sample data to construct a 95% confidence interval for the mean amount of money raised by all Leadership PACs during the 2011–2012 election cycle. Use the Student's t-distribution.
 
-- 108\. *Forbes* magazine published data on the best small firms in 2012. These were firms that had been publicly traded for at least a year, have a stock price of at least $5 per share, and have reported annual revenue between $5 million and $1 billion. The
+108. *Forbes* magazine published data on the best small firms in 2012. These were firms that had been publicly traded for at least a year, have a stock price of at least $5 per share, and have reported annual revenue between $5 million and $1 billion. The
 
 **Table 8.4** shows the ages of the corporate CEOs for a random sample of these firms.
 
@@ -26,13 +26,20 @@ The FEC has reported financial information for 556 Leadership PACs that operatin
 
 Use this sample data to construct a 90% confidence interval for the mean age of CEO's for these top small firms. Use the Student's t-distribution.
 
-- 109\. Unoccupied seats on flights cause airlines to lose revenue. Suppose a large airline wants to estimate its mean number of unoccupied seats per flight over the past year. To accomplish this, the records of 225 flights are randomly selected and the number of unoccupied seats is noted for each of the sampled flights. The sample mean is 11.6 seats and the sample standard deviation is 4.1 seats. -
-- a. i. *x* = __________
-- ii. *sx* = __________
+109. Unoccupied seats on flights cause airlines to lose revenue. Suppose a large airline wants to estimate its mean number of unoccupied seats per flight over the past year. To accomplish this, the records of 225 flights are randomly selected and the number of unoccupied seats is noted for each of the sampled flights. The sample mean is 11.6 seats and the sample standard deviation is 4.1 seats. -
+
+a. i. *x* = __________
+
+- ii. *s*~*x*~ = __________
 - iii. *n* = __________
 - iv. *n* -1 = __________ -
-- b. Define the random variables *X* and *X* in words.
-- c. Which distribution should you use for this problem? Explain your choice.
-- d. Construct a 92% confidence interval for the population mean number of unoccupied seats per flight.
-- i. State the confidence interval.
+
+b. Define the random variables *X* and *X* in words.
+
+c. Which distribution should you use for this problem? Explain your choice.
+
+d. Construct a 92% confidence interval for the population mean number of unoccupied seats per flight.
+
+i. State the confidence interval.
+
 - ii. Sketch the graph.

@@ -17,9 +17,9 @@ Chapter 4 | Discrete Random Variables 239
 
 1 − *p* 1 − 0.25
 
-- ii. Standard Deviation = σ = = ≈ 3.4641 *p2* 0.25
+- ii. Standard Deviation = σ = = ≈ 3.4641
 
-2
+*p*<sup>2</sup> 0.25<sup>2</sup>
 
 - c. *P* ( *x* = 10) = 0.0188
 - d. *P* ( *x* = 20) = 0.0011

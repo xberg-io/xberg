@@ -60,6 +60,14 @@ compile_error!("`sceptre-ocr-ort` supports desktop and server targets only; use 
 ))]
 compile_error!("`paddle-ocr-ort` supports desktop and server targets only; use `paddle-ocr-tract` on mobile");
 
+#[cfg(all(
+    feature = "classification-onnx",
+    any(target_arch = "wasm32", target_os = "android", target_os = "ios")
+))]
+compile_error!(
+    "`classification-onnx` supports desktop and server targets only; use `classification-onnx-types` for portable DTOs"
+);
+
 pub mod cache;
 pub(crate) mod cache_dir;
 pub mod cancellation;
@@ -69,9 +77,12 @@ pub mod error;
 /// Format-specific document extraction implementations and office metadata types.
 pub mod extraction;
 pub mod extractors;
-#[cfg(all(
-    feature = "layout-detection",
-    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+#[cfg(any(
+    feature = "classification-onnx",
+    all(
+        feature = "layout-detection",
+        any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+    )
 ))]
 pub mod model_cache;
 pub mod plugins;
@@ -256,6 +267,10 @@ pub mod transcription;
 
 #[cfg(feature = "captioning")]
 pub mod captioning;
+
+/// Experimental Rust-only CPU natural-language-inference classification with caller-pinned artifacts.
+#[cfg(feature = "classification-onnx-types")]
+pub mod local_classification;
 
 // NOTE: `CancellationToken` is intentionally NOT re-exported here.
 pub use error::{Result, XbergError};

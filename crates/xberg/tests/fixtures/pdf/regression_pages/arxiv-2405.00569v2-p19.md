@@ -106,18 +106,38 @@ x x x x
 
 Figure 9. Analysis of filter at N = 40, t = 0.1 for Example 7.2.
 
-where ϵ = 10−4. The solution is simulated over the interval t ∈ [0, 4] using periodic boundary conditions, employing eighth-order TDCNCS and TDCCS schemes with a grid size of N = 150 and time step ∆t = 0.5∆x
+−4
 
-2
+where ϵ = 10 . The solution is simulated over the interval t ∈ [0, 4] using periodic boundary conditions,
 
-as in [11]. Figure (12) illustrates the solution at time instances t = 0, 1, 2, and its contour plot up to t = 4. Notably, TDCNCS exhibits small-scale numerical oscillations, whereas TDCCS produces a smooth numerical solution. To address the presence of high-frequency oscillations, we apply a 12th-order periodic filter with α = 0.4 every 20 steps for TDCNCS and every 50 steps for TDCCS (time steps = 20000). Our experiments indicate that filtering every 50 steps does not sufficiently eliminate the small oscillations in TDCNCS.
+employing eighth-order TDCNCS and TDCCS schemes with a grid size of N = 150 and time step ∆t = 0.5∆x<sup>2</sup> as in [11]. Figure (12) illustrates the solution at time instances t = 0, 1, 2, and its contour plot up to t = 4. Notably, TDCNCS exhibits small-scale numerical oscillations, whereas TDCCS produces a smooth numerical solution. To address the presence of high-frequency oscillations, we apply a 12th-order periodic filter with α = 0.4 every 20 steps for TDCNCS and every 50 steps for TDCCS (time steps = 20000). Our experiments indicate that filtering every 50 steps does not sufficiently eliminate the small oscillations in TDCNCS.
 
 **Example 7.4.** In this example, we investigate the zero dispersion limit of conservation laws, specifically the
 
-KdV equation (7.3) with the continuous initial condition 1 (7.7) u0(x) = 2 + sin(2πx), x ∈ [0, 1], 2 with periodic boundary conditions. Theoretical and numerical analysis concerning the limit as ϵ → 0
+KdV equation (7.3) with the continuous initial condition 1 (7.7) u~0~(x) = 2 + sin(2πx), x ∈ [0, 1], 2
 
-\+ are available in [
+with periodic boundary conditions. Theoretical and numerical analysis concerning the limit as ϵ → 0<sup>+</sup> are available in [ **?** ] and [64]. The primary goal is assessing our numerical method capability to resolve small-scale solution structures in this limit when ϵ is small. To address this, we compute solutions for t = 0.5 with
 
-**?** ] and [64]. The primary goal is assessing our numerical method capability to resolve small-scale solution structures in this limit when ϵ is small. To address this, we compute solutions for t = 0.5 with ϵ = 10
+−4 −7
 
-−4, 10−5, 10−6, and 10−7 using eighth-order TDCNCS and TDCCS, with a step size ∆t = ∆x2 as in [11]. Since the exact solution is not known for this problem, we utilize a reference solution acquired through a significantly higher number of grid points (N = 1000) using TDCNCS. For ϵ = 10−4 (with N = 100) and ϵ = 10−5 (with N = 200), Figures (13)(a) and (13)(b) depict the solutions obtained by TDCNCS (in red), TDCCS (in blue), in comparison with the reference solution (in black). Similarly, for ϵ = 10−6 (with N = 800) and ϵ = 10−7 (with N = 1600) using both TDCNCS and TDCCS, Figures (13)(c)-(f) showcase these solutions, confirmed as "converged", exhibiting physical oscillations typical in dispersive limits [64]. Moreover, inadequate mesh refinement results in failure to achieve a converged solution. For instance, when ϵ = 10−6, we observed that numerical solutions obtained with 200, 300, 400, and even 600 uniform cells did
+ϵ = 10 , 10<sup>−5</sup>, 10<sup>−6</sup>, and 10 using eighth-order TDCNCS and TDCCS, with a step size ∆t = ∆x<sup>2</sup> as in [11]. Since the exact solution is not known for this problem, we utilize a reference solution acquired through
+
+−4
+
+a significantly higher number of grid points (N = 1000) using TDCNCS. For ϵ = 10 (with N = 100)
+
+−5
+
+and ϵ = 10 (with N = 200), Figures (13)(a) and (13)(b) depict the solutions obtained by TDCNCS (in
+
+−6
+
+red), TDCCS (in blue), in comparison with the reference solution (in black). Similarly, for ϵ = 10 (with
+
+−7
+
+N = 800) and ϵ = 10 (with N = 1600) using both TDCNCS and TDCCS, Figures (13)(c)-(f) showcase these solutions, confirmed as "converged", exhibiting physical oscillations typical in dispersive limits [64]. Moreover, inadequate mesh refinement results in failure to achieve a converged solution. For instance, when
+
+−6
+
+ϵ = 10 , we observed that numerical solutions obtained with 200, 300, 400, and even 600 uniform cells did

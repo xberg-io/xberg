@@ -315,7 +315,8 @@ fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
         true
     };
     same_context(base, script)
-        && base.text.chars().any(char::is_alphanumeric)
+        // A closing bracket carries a raised exponent as well, as in `(x + 3y)2`. ~keep
+        && (base.text.chars().any(char::is_alphanumeric) || base.text.ends_with([')', ']']))
         && !base.text.ends_with(char::is_whitespace)
         && (super::INLINE_SCRIPT_MIN_FONT_RATIO..=super::INLINE_SCRIPT_MAX_FONT_RATIO).contains(&ratio)
         && shift > base.font_size * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR

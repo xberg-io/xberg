@@ -18,16 +18,16 @@
 |  | e | e1 | f8 | 98 | 11 | 69 | d9 | 8e | 94 | 9b | 1e | 87 | e9 | ce | 55 | 28 | df |
 |  | f | 8c | a1 | 89 | 0d | bf | e6 | 42 | 68 | 41 | 99 | 2d | 0f | b0 | 54 | bb | 16 |
 
-the substitution value would be determined by the intersection of the row with index '5' and the column with index '3' in Table 4, so that sr
+the substitution value would be determined by the intersection of the row with index '5' and the
 
-0,c
+0
 
-= { ed }.
+column with index '3' in Table 4, so that s~r,~c = { ed }.
 
 **5.1.2 SHIFTROWS()**
 
-SHIFTROWS() is a transformation of the state in which the bytes in the last three rows of the state are cyclically shifted. The number of positions by which the bytes are shifted depends on the row index r, as follows: sr
+SHIFTROWS() is a transformation of the state in which the bytes in the last three rows of the state are cyclically shifted. The number of positions by which the bytes are shifted depends on the row index r, as follows:
 
-0,c
+0
 
-= sr,(c+r) mod 4 for 0 ≤ r \< 4 and 0 ≤ c \< 4. (5.5) SHIFTROWS() is illustrated in Figure 3. In that representation of the state, the effect is to move each byte by r positions to the left in the row, cycling the left-most r bytes around to the right end of the row. The frst row, where r = 0, is unchanged.
+s~r,~c = s~r,~(c+r) mod 4 for 0 ≤ r \< 4 and 0 ≤ c \< 4. (5.5) SHIFTROWS() is illustrated in Figure 3. In that representation of the state, the effect is to move each byte by r positions to the left in the row, cycling the left-most r bytes around to the right end of the row. The frst row, where r = 0, is unchanged.

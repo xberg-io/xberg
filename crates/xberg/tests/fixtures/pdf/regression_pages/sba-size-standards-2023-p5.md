@@ -4,6 +4,10 @@
 
 # Sector 23 – Construction
 
+**Size standards in number of employees**
+
+1,150
+
 | NAICS Codes | NAICS Industry Description | Size | Size |
 | --- | --- | --- | --- |
 |  |  | standards in | standards in |
@@ -29,9 +33,3 @@
 | 238150 | Glass and Glazing Contractors | $19.0 |  |
 | 238160 | Roofing Contractors | $19.0 |  |
 | 238170 | Siding Contractors | $19.0 |  |
-
-2
-
-**Size standards in number of employees**
-
-1,150

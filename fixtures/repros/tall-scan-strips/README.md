@@ -42,3 +42,14 @@ padding bits on each row to the black index.
 uv run --no-project --with pillow==11.3.0 python generate.py . \
   ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --predictor-indexed-only
 ```
+
+The 120 DPI variants (bilevel, neutral RGB, Indexed and grayscale JPEG) are rendered
+at 1020 × 9600 px with the same 40 lines at 0.8 of the 150 DPI glyph size, on a
+612 × 5760 pt page. Regenerate them with Pillow 13.0.0 and the bundled DejaVu Sans font:
+
+```sh
+uv run --no-project --with pillow==13.0.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --lower-density-only
+```
+
+Of these, only the Indexed scan reads back as all 440 source words; the others pin the 150 DPI floor.
