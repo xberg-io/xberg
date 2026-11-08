@@ -276,16 +276,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
-- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
+- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2443).**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 
-- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text.**
+- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text (GH#2616).**
   The full-scan leader recovery no longer requires an all-letter header and label or digit-only values. Rows are still refused unless every leader is proved as regular dots on the raster, each value lies in its header column and the hOCR words match exactly.
 
-- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (#2616).**
+- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (GH#2616).**
   The hOCR row claim no longer requires an all-letter label and digit-only values; a value such as "$1,010" or "3.2%" or a label with a digit now keeps its one claimed row. The row's words must still equal the table cells and the leader must still sit alone between the label and the first value.
 
-- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (#2616).**
+- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (GH#2616).**
   The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. Instead the region needs a median line thickness above a page-relative floor, at most a small share of marks thinner than a third of that median, mostly word-shaped (not stroke-shaped) boxes and mostly tokens carrying a letter, all measured in the upright frame.
 
 - **(ocr): Give an explicitly rotated table in-page bounds on the per-page route.** (#2497)
