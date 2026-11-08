@@ -3141,7 +3141,7 @@ mod tests {
 
     #[test]
     fn should_strip_an_arxiv_watermark_without_joining_the_next_block() {
-        let watermark = "$5. arXiv:2301.00001v1";
+        let watermark = "$5. arXiv:2301.00001v1 [cs.CL] 9 Jan 2024";
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(watermark, vec![], None, None);
         push_math_paragraph(&mut builder, "Let $x^2$ hold.", &["$x^2$"]);
