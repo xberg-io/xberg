@@ -116,13 +116,12 @@ impl JobStore {
         self.finished.get(job_id)
     }
 
-    /// Transition a pending job to the `Running` state.
+    /// Transition a live job to the `Running` state.
     ///
-    /// A no-op for any other job, so a job cancelled before its task started stays cancelled.
+    /// A finished job is no longer in `active`, so this is a no-op for it and a job
+    /// cancelled before its task started stays cancelled.
     pub fn set_running(&self, job_id: &str, timestamp: String) {
-        if let Some(job) = self.active.lock().get_mut(job_id)
-            && job.status.state == JobState::Pending
-        {
+        if let Some(job) = self.active.lock().get_mut(job_id) {
             job.status.state = JobState::Running;
             job.status.updated_at = timestamp;
         }
@@ -611,5 +610,44 @@ fn test_concurrent_cancel_and_complete_finish_once() {
             CancelOutcome::Conflict(_) => assert_eq!(final_state, JobState::Completed),
             CancelOutcome::NotFound => panic!("the job must be found in one of the stores"),
         }
+    }
+}
+
+/// A poll that runs while the job finishes must never see it missing: `get()` reads
+/// `active` first, and a job leaves `active` only after it is in `finished`.
+#[test]
+fn test_concurrent_poll_never_misses_finishing_job() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    for _ in 0..200 {
+        let store = Arc::new(JobStore::new());
+        let job_id = store.create_job().expect("slot available");
+        let barrier = Arc::new(Barrier::new(2));
+
+        let store_a = Arc::clone(&store);
+        let job_id_a = job_id.clone();
+        let barrier_a = Arc::clone(&barrier);
+        let finish_thread = thread::spawn(move || {
+            barrier_a.wait();
+            store_a.complete(&job_id_a, serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+        });
+
+        let store_b = Arc::clone(&store);
+        let job_id_b = job_id.clone();
+        let poll_thread = thread::spawn(move || {
+            barrier.wait();
+            loop {
+                let status = store_b
+                    .get(&job_id_b)
+                    .expect("a live or finished job is always visible");
+                if status.state == JobState::Completed {
+                    break;
+                }
+            }
+        });
+
+        finish_thread.join().unwrap();
+        poll_thread.join().unwrap();
     }
 }

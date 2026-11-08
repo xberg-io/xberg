@@ -2476,23 +2476,46 @@ mod tests {
         assert_eq!(job_store.active_count(), 0);
     }
 
-    /// A task dropped before its first poll (runtime shutdown) must still release
-    /// the job's slot, which is why the guard is built before the future.
+    /// A task dropped before its first poll (runtime shutdown right after the
+    /// submission) must still release the job's slot, which is why the guard is
+    /// built before the future is spawned.
     #[cfg(feature = "api")]
-    #[tokio::test]
-    async fn test_dropping_unpolled_job_future_fails_job() {
+    #[test]
+    fn test_extract_async_task_dropped_before_first_poll_fails_job() {
         use crate::api::types::JobState;
 
         let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
-        let job_id = job_store.create_job().expect("slot available");
-        let guard = JobAbortGuard {
-            store: std::sync::Arc::clone(&job_store),
-            job_id: job_id.clone(),
-        };
+        let app = test_router_with_store(std::sync::Arc::clone(&job_store));
+        let body = serde_json::json!({"inputs": [{"uri": "https://example.com/doc.pdf"}]});
 
-        let fut = run_extraction_job(guard, Vec::new(), crate::ExtractionConfig::default(), false, 600);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime builds");
+        let job_id = runtime.block_on(async {
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract-async")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .expect("valid request"),
+                )
+                .await
+                .expect("handler responded");
+            assert_eq!(response.status(), StatusCode::ACCEPTED);
+            let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body bytes readable");
+            serde_json::from_slice::<AsyncJobResponse>(&bytes)
+                .expect("response parses")
+                .job_id
+        });
+
+        // The task was spawned but never polled: it has not moved the job to Running. ~keep
         assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Pending);
-        drop(fut);
+        drop(runtime);
 
         assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Failed);
         assert_eq!(job_store.active_count(), 0);
