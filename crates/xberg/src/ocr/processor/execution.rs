@@ -6679,6 +6679,54 @@ mod tests {
         }
     }
 
+    /// Ink of each line of a debugger listing: black, dark blue and green in the lower mode, pure blue and grey above
+    /// it, as in the screenshot-shaped page. ~keep
+    const LISTING_INKS: [[u8; 3]; 12] = [
+        [0; 3],
+        [0, 0, 255],
+        [0, 0, 132],
+        [0; 3],
+        [0, 0, 255],
+        [0, 129, 0],
+        [0; 3],
+        [129; 3],
+        [0, 0, 132],
+        [0; 3],
+        [0, 0, 255],
+        [0; 3],
+    ];
+
+    /// The repeated-line text at half size as a 1-bit screenshot: every glyph pixel takes the ink of its line, with
+    /// no anti-aliasing, and the paper is pale blue. At full size Tesseract drops letters from the raw pixels. ~keep
+    fn coloured_listing() -> Option<image::RgbImage> {
+        let full = repeated_line_raster(LISTING_INKS.len(), false)?;
+        let mut raster = image::imageops::resize(
+            &full,
+            full.width() / 2,
+            full.height() / 2,
+            image::imageops::FilterType::Lanczos3,
+        );
+        for (y, row) in raster.enumerate_rows_mut() {
+            let ink = LISTING_INKS[(y / (REPEATED_LINE_PITCH / 2)) as usize];
+            for (_, _, pixel) in row {
+                pixel.0 = if pixel.0[0] < 128 { ink } else { [224, 224, 255] };
+            }
+        }
+        Some(raster)
+    }
+
+    #[tokio::test]
+    async fn coloured_screenshot_listing_reads_every_line_from_its_raw_pixels() {
+        let raster = coloured_listing().expect(CORPUS_TEXT_LINE);
+        assert_dark_mean(raster.as_raw());
+        let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+        assert_repeated_line_text(&result, LISTING_INKS.len(), "11");
+        assert!(
+            result.metadata.image_preprocessing.is_none(),
+            "the coloured screenshot must reach OCR with its raw pixels"
+        );
+    }
+
     #[test]
     fn dense_unstructured_or_shadowed_rasters_keep_raw_pixels() {
         let Some(raster) = repeated_line_raster(REPEATED_LINE_COUNT, false) else {
