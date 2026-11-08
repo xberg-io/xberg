@@ -8,12 +8,17 @@ publish models, fetch artifacts, train a head, or call a provider.
 The separate package avoids enabling the extraction harness's `xberg/full`
 dependency for contract tests. It uses the SDK's local configuration, result and
 model-identity types, and follows the repository's vendored sysinfo override.
-The implementation decisions and observed checks are recorded in [VALIDATION.md](VALIDATION.md).
 
 ## Commands
 
-Run contract and CLI tests with `mise run nli:test`. Runtime builds additionally
-need the runtime feature; build them offline using the committed leaf lockfile:
+Run contract, CLI and CPU parser tests with `mise run nli:test`. The task inherits
+Cargo target, job and profile settings from the caller and requires cached Cargo
+dependencies. `mise run nli:ci` fetches locked Cargo dependencies, runs all contract
+tests with an executed-count guard, compiles the optional runtime, and lints all
+leaf targets with warnings denied. The existing focused PR matrix and Linux Rust
+CI job run this task. No model artifacts are fetched or loaded by these checks.
+Runtime builds additionally need the runtime feature; build them offline using
+the committed leaf lockfile:
 
 ```sh
 CARGO_NET_OFFLINE=true ORT_OFFLINE=1 HF_HUB_OFFLINE=1 cargo build --offline --locked \
@@ -78,7 +83,11 @@ duration, accepted labels (possibly an abstention), and the SDK's effective
 model identity. Empty, missing, duplicated, unexpected or skipped work fails
 validation. A result with a different artifact, backend, runtime, plan, invalid
 probability or label also fails. Synthetic report files can exercise the
-validator but do not prove inference occurred; only the runner calls the SDK.
+validator. Validation proves accounting consistency, not that inference ran:
+rows, timings and `runner_sha256` are self-reported and can be hand-written.
+Only executing the runner calls the SDK; a successful `validate` command does
+not authenticate that execution. `qualified: false` remains mandatory until a
+separate measured qualification process exists.
 
 ## Remaining qualification inputs
 
