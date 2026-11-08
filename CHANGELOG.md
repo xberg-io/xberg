@@ -205,6 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Join a word split around a ligature decoded to letters in rich text output (#2689).**
+  Rich span assembly relaxed the word gap only for a ligature code point on the preceding run, so `di` + `ff` + `erent` split after `ff`; it now reads a run of ligature letters the same on both sides. The OCR character-retention gate reads ligatures through the text repair's table instead of a copy.
+
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
 

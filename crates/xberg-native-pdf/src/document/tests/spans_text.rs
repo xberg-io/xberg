@@ -742,3 +742,32 @@ fn test_should_insert_space_after_a_word_final_ligature_uses_the_ordinary_gap() 
     let next = make_test_span("only", 99.5, 700.0, 20.0, 12.0); // 2.5pt = 0.21em gap ~keep
     assert!(PdfDocument::should_insert_space(&word, &next));
 }
+
+/// A decoded ligature arrives as letters when the font maps the glyph to them. The run
+/// "ff" inside "di" + "ff" + "erent" must read as a ligature on the preceding side too (#2689).
+#[test]
+fn test_should_insert_space_keeps_a_ligature_run_of_letters_inside_a_word() {
+    let before = make_test_span("di", 72.0, 700.0, 10.0, 12.0);
+    let ligature = make_test_span("ff", 84.0, 700.0, 7.0, 12.0); // 2pt = 0.17em gap ~keep
+    let after = make_test_span("erent", 93.0, 700.0, 30.0, 12.0); // 2pt gap ~keep
+    assert!(!PdfDocument::should_insert_space(&before, &ligature));
+    assert!(!PdfDocument::should_insert_space(&ligature, &after));
+}
+
+/// "oﬃce" drawn as "o" + "ffi" + "ce" with the ligature decoded to letters stays one word.
+#[test]
+fn test_should_insert_space_keeps_an_ffi_ligature_run_of_letters_inside_a_word() {
+    let before = make_test_span("o", 72.0, 700.0, 7.0, 12.0);
+    let ligature = make_test_span("ffi", 81.0, 700.0, 10.0, 12.0); // 2pt = 0.17em gap ~keep
+    let after = make_test_span("ce", 93.0, 700.0, 12.0, 12.0); // 2pt gap ~keep
+    assert!(!PdfDocument::should_insert_space(&before, &ligature));
+    assert!(!PdfDocument::should_insert_space(&ligature, &after));
+}
+
+/// A plain word that merely is "ff" or "fi" elsewhere still separates at a real space gap.
+#[test]
+fn test_should_insert_space_separates_a_letters_ligature_run_from_the_next_word_at_a_space_gap() {
+    let ligature = make_test_span("ff", 72.0, 700.0, 7.0, 12.0);
+    let next = make_test_span("only", 82.0, 700.0, 20.0, 12.0); // 3pt = 0.25em gap ~keep
+    assert!(PdfDocument::should_insert_space(&ligature, &next));
+}

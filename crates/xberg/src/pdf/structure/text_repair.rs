@@ -491,6 +491,19 @@ fn is_common_short_word(word: &str) -> bool {
     )
 }
 
+/// The letters a Latin ligature code point (U+FB00–U+FB06) stands for.
+pub(crate) fn ligature_letters(ch: char) -> Option<&'static str> {
+    match ch {
+        '\u{FB00}' => Some("ff"),
+        '\u{FB01}' => Some("fi"),
+        '\u{FB02}' => Some("fl"),
+        '\u{FB03}' => Some("ffi"),
+        '\u{FB04}' => Some("ffl"),
+        '\u{FB05}' | '\u{FB06}' => Some("st"),
+        _ => None,
+    }
+}
+
 /// Expand Unicode ligature characters (U+FB00–U+FB06) to their letters.
 ///
 /// With `absorb_space`, a space between a ligature glyph and the alphanumeric run after
@@ -514,18 +527,9 @@ pub(super) fn expand_ligatures_mapped(text: &str, record: bool, absorb_space: bo
     let mut replacements = Vec::new();
     let mut chars = text.char_indices().peekable();
     while let Some((offset, ch)) = chars.next() {
-        let expansion = match ch {
-            '\u{FB00}' => "ff",
-            '\u{FB01}' => "fi",
-            '\u{FB02}' => "fl",
-            '\u{FB03}' => "ffi",
-            '\u{FB04}' => "ffl",
-            '\u{FB05}' => "st",
-            '\u{FB06}' => "st",
-            _ => {
-                result.push(ch);
-                continue;
-            }
+        let Some(expansion) = ligature_letters(ch) else {
+            result.push(ch);
+            continue;
         };
         let output_start = result.len();
         result.push_str(expansion);
