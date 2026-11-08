@@ -89,7 +89,11 @@ fn mask_document_with_filter(mask: &[u8], dimension: u32, soft: bool, filter: &s
 }
 
 pub(super) fn gray_jpeg(dimension: u32) -> Vec<u8> {
-    let pixels = vec![255; dimension as usize * dimension as usize];
+    gray_jpeg_of(dimension, 255)
+}
+
+pub(super) fn gray_jpeg_of(dimension: u32, value: u8) -> Vec<u8> {
+    let pixels = vec![value; dimension as usize * dimension as usize];
     let mut bytes = Vec::new();
     image::codecs::jpeg::JpegEncoder::new(&mut bytes)
         .encode(&pixels, dimension, dimension, image::ExtendedColorType::L8)

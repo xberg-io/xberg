@@ -3,8 +3,9 @@ use super::*;
 mod source;
 
 const LIMIT: usize = 8 * 1024 * 1024;
-/// Too small for any image of the oversized fixtures even at a 1/8 decode.
-/// Extent a fixture is painted at: far below any reduced scale of the oversized fixtures.
+/// Refuses the 4096 px fixtures even at 1/8 (about 1.8 MiB of rasters) while admitting the 32 px page.
+/// Canvas pixels the 32 pt fixture pages are painted over at 72 dpi, far below any reduced scale of
+/// the oversized fixtures.
 const DEVICE: (f32, f32) = (32.0, 32.0);
 const TIGHT: usize = 1024 * 1024;
 const LARGE: u32 = 4096;
@@ -106,7 +107,16 @@ fn prior_unbounded_render_cannot_bypass_a_later_source_image_budget() {
 #[test]
 fn jpeg_header_dimensions_cannot_hide_behind_a_smaller_xobject_dictionary() {
     let document = source::document(&source::jpeg(LARGE), 32, false);
-    assert_refused(&mut renderer(), &document);
+    // The 4096 px frame would fit at 1/2 of the dictionary's 32 px if the dictionary were trusted; a
+    // mismatch is refused outright instead of reduced.
+    let error = renderer()
+        .render_page_with_budget(0, &document, budget())
+        .err()
+        .expect("a frame that disagrees with its dictionary is refused");
+    assert!(
+        error.to_string().contains("disagree with the image dictionary"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -352,8 +362,13 @@ fn wrapped_jpeg_contrast_probe_charges_filters_and_actual_codestream_pixels() {
     // The probe reserves its own raster and sixteen copies of the stored stream before the source
     // budget; leave 512 KiB, too little for any reduced decode of the fixture. ~keep
     let error = probe(&large, 16 * large.len() + (1 << 20) + TIGHT / 2).unwrap_err();
-    assert!(error.to_string().contains("JPEG source image rasters"), "{error}");
-    assert!(error.to_string().contains("working budget"), "{error}");
+    // The fixture's 32 px dictionary hides the 4096 px frame, which the budget refuses either way. ~keep
+    let message = error.to_string();
+    assert!(message.contains("JPEG source image"), "{error}");
+    assert!(
+        message.contains("working budget") || message.contains("disagree with the image dictionary"),
+        "{error}"
+    );
 }
 
 fn is_black_somewhere(image: &crate::rendering::RenderedImage) -> bool {
@@ -461,4 +476,30 @@ fn a_page_whose_source_jpeg_exceeds_the_budget_renders_from_a_reduced_decode() {
             .iter()
             .all(|pixel| pixel[..3] == [255, 255, 255])
     );
+}
+
+#[test]
+fn a_frame_the_decoder_would_scale_differently_is_never_admitted_at_that_scale() {
+    use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
+    // `jpeg-decoder` reaches a one-pixel-wide request on either axis, so at 1/2 and 1/4 it would pick 1/8.
+    let encoded = {
+        let pixels = vec![0; 4096 * 3];
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+            .encode(&pixels, 1, 4096, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        bytes
+    };
+    let image = PdfImage::new(1, 4096, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(encoded.clone()));
+    let limit = 20_000;
+    assert!(image_budget::ImageBudget::new(limit).admit_jpeg(&image, 0).is_err());
+    let admit = |device| image_budget::ImageBudget::new(limit).admit_jpeg_reducing(&image, 0, device);
+    assert_eq!(admit((1.0, 100.0)).unwrap(), 8);
+    let mut budget = image_budget::ImageBudget::new(limit);
+    assert!(budget.admit_jpeg_reducing(&image, 0, (1.0, 2000.0)).is_err());
+    assert!(
+        budget.exceeded(),
+        "a refusal must be the budget refusal, not a decode error"
+    );
+    assert_eq!(image_budget::decode_reduced_jpeg(&encoded, 8).unwrap().height(), 512);
 }

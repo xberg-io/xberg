@@ -57,8 +57,19 @@ impl ImageBudget {
             return Ok(1);
         }
         if reducible_jpeg(image, bytes) {
+            let (frame_width, frame_height) = match jpeg_frame(bytes) {
+                Ok(frame) if frame == (image.width(), image.height()) => frame,
+                Ok(_) => {
+                    return self
+                        .admit_required(Err(
+                            "the JPEG frame dimensions disagree with the image dictionary".into()
+                        ))
+                        .map(|()| 1);
+                }
+                Err(reason) => return self.admit_required(Err(reason)).map(|()| 1),
+            };
             for denominator in REDUCED_DENOMINATORS {
-                if !covers_device(image, denominator, device) {
+                if !covers_device((frame_width, frame_height), denominator, device) {
                     break;
                 }
                 let reduced = reduced_jpeg_image_bytes(bytes, capacity, retained_canvas, denominator);
@@ -179,8 +190,7 @@ const COEFFICIENT_BLOCK_BYTES: u64 = 64 * 2;
 /// Largest vertical sampling factor, in blocks per MCU column.
 const MAX_VERTICAL_BLOCKS: u64 = 4;
 
-/// Whether `bytes` is an 8-bit sequential RGB or grayscale JPEG whose dictionary agrees with its
-/// frame. A progressive scan keeps every coefficient of the full-resolution image, so a reduced
+/// Whether `bytes` is a sequential, non-CMYK JPEG. A progressive scan keeps every coefficient of the full-resolution image, so a reduced
 /// decode would not lower its peak; CMYK takes a separate conversion path.
 fn reducible_jpeg(image: &PdfImage, bytes: &[u8]) -> bool {
     image.color_space().components() != 4 && sequential_frame(bytes)
@@ -208,12 +218,20 @@ fn sequential_frame(bytes: &[u8]) -> bool {
     false
 }
 
-/// Whether the raster of `image` at `denominator` has at least the canvas pixels it is painted over.
-fn covers_device(image: &PdfImage, denominator: u8, (width, height): (f32, f32)) -> bool {
+/// The frame dimensions of the JPEG itself, which the decoder allocates from, not the image dictionary's.
+fn jpeg_frame(bytes: &[u8]) -> std::result::Result<(u32, u32), String> {
+    let mut decoder = jpeg_decoder::Decoder::new(bytes);
+    decoder.read_info().map_err(|error| error.to_string())?;
+    let info = decoder.info().ok_or("missing JPEG frame header")?;
+    Ok((u32::from(info.width), u32::from(info.height)))
+}
+
+/// Whether a frame of `frame` pixels at `denominator` has at least the canvas pixels it is painted over.
+fn covers_device(frame: (u32, u32), denominator: u8, (width, height): (f32, f32)) -> bool {
     let covers = |pixels: u32, painted: f32| {
         painted.is_finite() && reduced_dimension(pixels, denominator) as f32 >= painted - 1.0
     };
-    covers(image.width(), width) && covers(image.height(), height)
+    covers(frame.0, width) && covers(frame.1, height)
 }
 
 fn reduced_dimension(dimension: u32, denominator: u8) -> u64 {
@@ -223,6 +241,12 @@ fn reduced_dimension(dimension: u32, denominator: u8) -> u64 {
 /// The JPEG working set at `denominator`: the larger of the paint phase (scaled raster plus its
 /// RGBA conversion) and the decode phase (component planes, output and one MCU row of
 /// coefficients), on top of the encoded bytes and the retained canvas.
+///
+/// The one-MCU-row bound holds because `jpeg-decoder` converts each coefficient row as it is read:
+/// its `rayon` worker (enabled for this crate on every target that supports it) and its immediate
+/// worker (the only one on wasm32) both do. The default thread-per-component worker queues
+/// full-resolution rows without a bound, so this crate must not build `jpeg-decoder` without
+/// `rayon` on a threaded target.
 fn reduced_jpeg_image_bytes(
     bytes: &[u8],
     encoded_capacity: usize,
@@ -238,8 +262,21 @@ fn reduced_jpeg_image_bytes(
     ) {
         return Err("only 8-bit grayscale and RGB JPEG sources can be decoded at a reduced scale".into());
     }
-    let pixels = reduced_dimension(u32::from(info.width), denominator)
-        .checked_mul(reduced_dimension(u32::from(info.height), denominator))
+    let (width, height) = (
+        reduced_dimension(u32::from(info.width), denominator),
+        reduced_dimension(u32::from(info.height), denominator),
+    );
+    // `scale` picks the finest size reaching the request on either axis, so a thin frame can land on a
+    // size other than the one admitted here; such a scale is not admitted. ~keep
+    let chosen = u16::try_from(width)
+        .ok()
+        .zip(u16::try_from(height).ok())
+        .and_then(|(width, height)| decoder.scale(width, height).ok());
+    if chosen.map(|(w, h)| (u64::from(w), u64::from(h))) != Some((width, height)) {
+        return Err("the decoder would not decode this frame at the admitted reduced size".into());
+    }
+    let pixels = width
+        .checked_mul(height)
         .ok_or("reduced JPEG raster arithmetic overflow")?;
     let components = info.pixel_format.pixel_bytes() as u64;
     let decoded = pixels * components;
