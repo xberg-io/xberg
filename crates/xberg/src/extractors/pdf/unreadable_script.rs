@@ -1,9 +1,11 @@
 //! Keep a native text layer whose script the configured OCR languages cannot read.
 //!
 //! OCR with a model that does not cover a script reads that script as letters of another one, so
-//! replacing a marked native page with such a read loses its text. The decision rests on script
-//! evidence only: the scripts of the page's native letters against the scripts the OCR languages
-//! cover.
+//! replacing a native page with such a read loses its text. A page with lost-glyph markers is
+//! judged on script evidence: the scripts of its native letters against the scripts the OCR
+//! languages cover. A page without markers is also judged on whether its signs attach to letters as
+//! the script's orthography requires, because other text decoded through a wrong map reaches the
+//! same code points.
 
 use crate::core::config::{ExtractionConfig, VlmFallbackPolicy};
 use crate::extractors::pdf::ocr::OcrFallbackDecision;
@@ -144,7 +146,18 @@ const MIN_KNOWN_SHARE: f64 = 0.9;
 /// [`MIN_SCRIPT_CHARS`] must be in uncovered known scripts and they must make up
 /// [`MIN_KNOWN_SHARE`] of it. They must also outnumber the letters of covered scripts: a mostly
 /// covered page (an English page with a few Greek symbols) is one OCR can read. A configured language this module does not know means no claim.
+#[cfg(test)]
 fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
+    Some(
+        uncovered_script_counts(text, languages)?
+            .into_iter()
+            .map(|(script, _)| script)
+            .collect(),
+    )
+}
+
+/// [`unreadable_scripts`] with the number of letters each script holds, largest first.
+fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Script, usize)>> {
     if languages.is_empty() {
         return None;
     }
@@ -179,7 +192,7 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
         return None;
     }
     counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
-    Some(counts.into_iter().map(|(script, _)| script).collect())
+    Some(counts)
 }
 
 /// The tessdata model that reads `script`, for the user-facing hint.
@@ -233,7 +246,11 @@ fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> 
 /// when some stage makes no claim. Only Tesseract stages make a claim: PaddleOCR, Sceptre, VLM and
 /// custom backends, an empty pipeline, and a `vlm_fallback` other than `Disabled` are "no claim", so
 /// a route that can reach one is never judged. A stage's own languages are pooled within it; stages
-/// are not pooled with each other, because any stage may accept its result first.
+/// are not pooled with each other. The executor (`run_ocr_pipeline_stages`) runs the stages by
+/// descending priority and accepts the first result that clears `pipeline_min_quality`; a stage that
+/// fails, is unavailable or scores below the gate hands over to the next, and when none clears the
+/// gate the best-scoring result of any stage is returned. So a stage that cannot read the script can
+/// still produce the page's text whatever its position, and one such stage is enough to keep the layer.
 fn stage_languages(ocr: &crate::OcrConfig) -> Option<Vec<Vec<String>>> {
     if !ocr.enabled || ocr.vlm_fallback != VlmFallbackPolicy::Disabled {
         return None;
@@ -267,6 +284,7 @@ enum Part {
     Other,
 }
 
+/// Inclusive code point ranges of one kind of character.
 type Ranges = &'static [(u32, u32)];
 
 fn part_of(script: Script, character: char) -> Part {
@@ -304,19 +322,31 @@ fn part_of(script: Script, character: char) -> Part {
 
 /// Fewest signs a layer needs for its cluster structure to be judged.
 const MIN_SIGNS: usize = 4;
-/// Most signs one cluster carries (a Khmer base takes a subscript, a vowel, a shift and a final).
+/// Most signs one cluster carries in these scripts: a stacked subscript, a vowel sign, a tone or
+/// shift mark and a final mark.
 const MAX_SIGNS_PER_CLUSTER: usize = 4;
 /// Share of a script's signs that must stand in a cluster that starts with a letter of the script.
 /// Text in the script has all of them there; random code points of its block have about half.
 const MIN_VALID_SIGN_SHARE: f64 = 0.95;
+/// Share of a script's characters that must be signs. These scripts write most syllables with a
+/// sign (Thai text runs about a quarter), while another script's text shifted into the block puts
+/// letters where the signs are only by chance.
+const MIN_SIGN_DENSITY: f64 = 0.15;
 
 /// Whether the signs of `script` in `text` attach to letters of the script the way its orthography
 /// requires, so the layer is the script's text and not other text decoded to its code points. Only
-/// scripts [`part_of`] knows can be judged; any other script returns `false`.
+/// scripts [`part_of`] knows can be judged; any other script returns `false`. Zero-width joiners
+/// and non-joiners sit inside Indic clusters and do not end one.
 fn clusters_are_valid(text: &str, script: Script) -> bool {
-    let (mut signs, mut valid) = (0usize, 0usize);
+    let (mut characters, mut signs, mut valid) = (0usize, 0usize, 0usize);
     let mut run: Option<usize> = None;
     for character in text.chars() {
+        if matches!(character, '\u{200C}' | '\u{200D}') {
+            continue;
+        }
+        if script_of(character) == Some(script) {
+            characters += 1;
+        }
         match part_of(script, character) {
             Part::Base => run = Some(0),
             Part::Sign => {
@@ -329,18 +359,39 @@ fn clusters_are_valid(text: &str, script: Script) -> bool {
             Part::Other => run = None,
         }
     }
-    signs >= MIN_SIGNS && valid as f64 >= MIN_VALID_SIGN_SHARE * signs as f64
+    signs >= MIN_SIGNS
+        && valid as f64 >= MIN_VALID_SIGN_SHARE * signs as f64
+        && signs as f64 >= MIN_SIGN_DENSITY * characters as f64
 }
+
+/// Share of a page's uncovered letters below which a script is a stray (a `μ` in a unit, a name in
+/// another script) and does not decide whether the layer is structured text. A page with
+/// at most one such letter in ten (a four-letter word in a fifty-letter page) is one the dominant
+/// script describes; a script above
+/// it, such as a Greek passage in a Khmer page, is a second language the check cannot vouch for.
+const MINOR_SCRIPT_SHARE: f64 = 0.10;
 
 /// The scripts of `text` that no language in `languages` reads, for the pages the guard may keep.
 /// A layer with lost-glyph markers qualifies on script evidence alone. A layer without them also
-/// qualifies when every one of its scripts has checkable cluster structure and the layer passes
-/// [`clusters_are_valid`]: other text decoded through a wrong map reaches Greek, Han or Cyrillic
-/// code points without markers, and OCR is the only reader of it.
+/// qualifies when every script that carries weight in it (see [`MINOR_SCRIPT_SHARE`]) has checkable
+/// cluster structure and the layer passes [`clusters_are_valid`] for it: other text decoded through
+/// a wrong map reaches Greek, Han or Cyrillic code points without markers, and OCR is the only
+/// reader of it. A substantial script without checkable structure leaves the page to OCR.
 fn judged_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
-    let scripts = unreadable_scripts(text, languages)?;
-    let marked = text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER);
-    (marked || scripts.iter().all(|script| clusters_are_valid(text, *script))).then_some(scripts)
+    let counts = uncovered_script_counts(text, languages)?;
+    if text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+        return Some(counts.into_iter().map(|(script, _)| script).collect());
+    }
+    let total: usize = counts.iter().map(|(_, count)| count).sum();
+    let weighty: Vec<Script> = counts
+        .into_iter()
+        .filter(|(_, count)| *count as f64 >= MINOR_SCRIPT_SHARE * total as f64)
+        .map(|(script, _)| script)
+        .collect();
+    weighty
+        .iter()
+        .all(|script| clusters_are_valid(text, *script))
+        .then_some(weighty)
 }
 
 /// A failing page, the unreadable scripts of its layer and the stage languages that cannot read them.
@@ -996,5 +1047,82 @@ mod tests {
         );
         let (decision, _) = run(&[&marked], ONE_PAGE, &config_with(&["eng"]));
         assert!(decision.failing_pages.is_empty());
+    }
+
+    const KHMER_UNMARKED: &str = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ ក្រុង សៀវភៅ សាលារៀន";
+
+    #[test]
+    fn a_stray_character_of_another_script_does_not_block_a_valid_layer() {
+        for stray in ["μ", "я", "今", "שלום", "α β"] {
+            let page = format!("{KHMER_UNMARKED} {stray}");
+            assert!(judged_scripts(&page, &langs(&["eng"])).is_some(), "{stray}");
+        }
+        let (decision, warnings) = forced_failing(&format!("{KHMER_UNMARKED} 5 μm"), &["eng"]);
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn a_substantial_second_script_leaves_the_page_to_ocr() {
+        let greek = "Η γρήγορη καφέ αλεπού πηδά πάνω από το τεμπέλικο σκυλί";
+        let page = format!("{KHMER_UNMARKED} {greek}");
+        assert!(judged_scripts(&page, &langs(&["eng"])).is_none());
+        let (decision, warnings) = forced_failing(&page, &["eng"]);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty());
+    }
+
+    fn random_block(start: u32, span: u32) -> String {
+        let mut state = 0x2545_F491_u32;
+        (0..400)
+            .map(|index| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                if index % 7 == 6 {
+                    ' '
+                } else {
+                    char::from_u32(start + (state >> 16) % span).unwrap()
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn random_thai_and_myanmar_code_points_are_not_a_layer() {
+        for (name, start, span) in [("thai", 0x0E01, 0x5B), ("myanmar", 0x1000, 0x5F)] {
+            let page = random_block(start, span);
+            assert!(unreadable_scripts(&page, &langs(&["eng"])).is_some(), "{name}");
+            assert!(judged_scripts(&page, &langs(&["eng"])).is_none(), "{name}");
+        }
+    }
+
+    #[test]
+    fn english_shifted_into_the_thai_block_is_not_a_thai_layer() {
+        let english = "the committee reviewed the annual report and approved the budget for the next fiscal year \
+                       members discussed staffing equipment purchases and the schedule of public meetings";
+        let shifted: String = english
+            .chars()
+            .map(|c| {
+                if c == ' ' {
+                    ' '
+                } else {
+                    char::from_u32(c as u32 - 0x61 + 0x0E01).unwrap()
+                }
+            })
+            .collect();
+        assert!(unreadable_scripts(&shifted, &langs(&["eng"])).is_some());
+        assert!(judged_scripts(&shifted, &langs(&["eng"])).is_none());
+    }
+
+    #[test]
+    fn a_layer_with_few_signs_is_not_judged() {
+        let consonants = "កខគឃងចឆជឈញ".repeat(12);
+        let page = format!("{consonants} ខ្ញុំ ស្រ ក្រ ប្រ");
+        assert!(!clusters_are_valid(&page, Script::Khmer));
+    }
+
+    #[test]
+    fn joiners_inside_an_indic_cluster_do_not_end_it() {
+        let text = "क्\u{200D}ष र्\u{200D}क ज्\u{200C}ञ त्\u{200D}र नमस्ते हिन्दी";
+        assert!(clusters_are_valid(text, Script::Devanagari));
     }
 }
