@@ -199,7 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): Join a ligature drawn as its own run to the rest of its word in Plain and Markdown output.** (#2322)
-  The rich text assembler split `di` + `ﬀ` + `erent` at the ligature whenever the kerning gap passed 0.15 em; it now applies the same wider ligature-boundary threshold as the native extractor. OCR text keeps its string-level repair of a space after a ligature.
+  The rich text assembler split `di` + `ﬀ` + `erent` at the ligature whenever the kerning gap passed 0.15 em; it now applies the same wider ligature-boundary threshold as the native extractor. OCR text keeps its string-level repair of a space after a ligature. The OCR structure heuristic's character-retention gate now counts a ligature as its letters, so a page with a ligature is no longer rejected.
 
 - **(pdf): Keep an authored space after a ligature in Plain and Markdown output.** (#2322)
   A space following a ligature glyph ("staﬀ only") was removed by a string-level repair, welding two words into "staffonly". Word boundaries after a ligature now come only from the extractor's glyph geometry.

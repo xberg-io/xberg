@@ -2973,10 +2973,20 @@ pub(super) fn heuristically_restructured_ocr_pages(
 const MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION: f64 = 1.0;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+/// Ligature codepoints count as their letters: the restructured text expands them, and the
+/// retention gate would otherwise reject every page that carries one.
 fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
     text.chars()
         .filter(|character| character.is_alphanumeric())
-        .flat_map(char::to_lowercase)
+        .flat_map(|character| match character {
+            '\u{FB00}' => vec!['f', 'f'],
+            '\u{FB01}' => vec!['f', 'i'],
+            '\u{FB02}' => vec!['f', 'l'],
+            '\u{FB03}' => vec!['f', 'f', 'i'],
+            '\u{FB04}' => vec!['f', 'f', 'l'],
+            '\u{FB05}' | '\u{FB06}' => vec!['s', 't'],
+            other => other.to_lowercase().collect(),
+        })
         .collect()
 }
 

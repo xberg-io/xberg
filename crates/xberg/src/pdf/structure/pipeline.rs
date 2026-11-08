@@ -23,9 +23,9 @@ use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEAD
 use super::lines::{is_cjk_char, segments_need_space};
 use super::paragraphs::{merge_continuation_paragraphs, split_embedded_list_items};
 use super::text_repair::{
-    MIN_LIGATURE_WITNESS_WORD_LEN, RepairedText, TextReplacement, WordWitnesses, apply_to_all_segments,
-    clean_duplicate_punctuation, collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped,
-    normalize_text_encoding, normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
+    MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
+    collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
+    normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
     repair_contextual_ligatures_mapped, repair_ligature_spaces,
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
@@ -4315,6 +4315,7 @@ mod annotation_text_repair_tests {
     #[test]
     fn contraction_and_ligature_expansion_preserve_script_ranges() {
         let source = "‘ﬁ eld’ 231";
+        // The space stays: a known limit of extractor text, which cannot be told from an authored space.
         let expected = "'fi eld' 231";
         let result = normalized(
             source,

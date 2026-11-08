@@ -1096,6 +1096,8 @@ mod tests {
     #[test]
     fn test_expand_ligatures_keeps_the_space_after_a_ligature() {
         assert_eq!(expand_ligatures("sta\u{FB00} only", false), "staff only");
+        // Known limit, not the wanted output: a space the extractor placed inside a word after a
+        // ligature ("ﬁ eld") stays, because the string cannot tell it from an authored space.
         assert_eq!(expand_ligatures("\u{FB01} eld", false), "fi eld");
         assert_eq!(expand_ligatures("e \u{FB00} ect", false), "e ff ect");
         assert_eq!(expand_ligatures("\u{FB01} .", false), "fi .");
