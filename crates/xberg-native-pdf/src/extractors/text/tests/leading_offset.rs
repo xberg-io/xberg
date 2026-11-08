@@ -90,3 +90,23 @@ fn offset_after_an_offset_keeps_the_space_span() {
     let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj 8 0 Td [-3000 -3000 (def)] TJ ET";
     assert_eq!(span_texts(stream), ["abc", " ", "def"]);
 }
+
+/// `Tm` back to the start of a drawn word, then a lead that ends past that word: the gap between the
+/// real glyphs is a word gap at either scale of the text matrix. ~keep
+#[test]
+fn offset_after_a_tm_back_into_the_run_to_a_word_gap_keeps_the_gap() {
+    let words = |stream: &str| -> Vec<String> {
+        let mut extractor = extractor();
+        let spans = extractor.extract_text_spans(stream.as_bytes()).unwrap();
+        let text = spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("");
+        text.split_whitespace().map(str::to_string).collect()
+    };
+    // "the word" is 41.25 points wide at 11 points; "word" starts at 91.25 and ends at 113.25. ~keep
+    for (setup, back) in [
+        ("BT /F1 11 Tf 72 700 Td", "1 0 0 1 91.25 700 Tm"),
+        ("BT 11 0 0 11 72 700 Tm /F1 1 Tf", "11 0 0 11 91.25 700 Tm"),
+    ] {
+        let stream = format!("{setup} (the word) Tj {back} [-2250 (next)] TJ ( more) Tj ET");
+        assert_eq!(words(&stream), ["the", "word", "next", "more"], "{setup}");
+    }
+}
