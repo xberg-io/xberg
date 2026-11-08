@@ -2,7 +2,9 @@
 
 Since the *P-value* obtained in step 5 of Section 2.5.4 is ≥ 0.01 ( *P-value* = 0.741948), the conclusion is that the sequence is random.
 
-Note that large values of χ *2( obs )* (and hence, small *P-values* ) would have indicated a deviation of the rank distribution from that corresponding to a random sequence.
+*2*
+
+Note that large values of χ *( obs )* (and hence, small *P-values* ) would have indicated a deviation of the rank distribution from that corresponding to a random sequence.
 
 ### 2.5.7 Input Size Recommendation
 
@@ -18,11 +20,11 @@ The probabilities for *M = Q = 32* have been calculated and inserted into the te
 
 ### 2.6.1 Test Purpose
 
-*N* = 97 *F* = 23, *F* = 60, N – F – *FM-1* = 14
+*N* = 97 *F*~*M*~ = 23, *F*~*M-1*~ = 60, N – F~M~ – *F*~*M-1*~= 14
 
-*M M-1* M
+*2*
 
-χ *2* = 1.2619656 *P-value* = 0.532069 Since *P-value* ≥ *0.01* , accept the sequence as random.
+χ = 1.2619656 *P-value* = 0.532069 Since *P-value* ≥ *0.01* , accept the sequence as random.
 
 ### 2.6 Discrete Fourier Transform (Spectral) Test
 

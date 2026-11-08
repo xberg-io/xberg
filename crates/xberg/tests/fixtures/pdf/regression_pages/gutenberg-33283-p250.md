@@ -6,20 +6,12 @@ which is the solution desired.
 
 239
 
-2πnb , a2 + 4π
-
-2n2b2 a . a2 + 4π2n2b2
-
-cos ϕ
+2πnb , a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup> a . a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup> cos ϕ
 
 - sin 2 πnt − sin ϕ
-- cos 2 πnt √ , a2 + 4 π
+- cos 2 πnt √ , a 2 + 4 π 2 n 2 b 2
 
-2n2b2
-
-sin(2πnt − ϕ) y = g√ , a2 + 4π
-
-2n2b2
+sin(2πnt − ϕ) y = g√ , a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup>
 
 This is indeed none other than the equation of an alternating electric current, where g represents the amplitude of the electromotive force, n the frequency, a the resistance, b the coefficient of self-induction of
 

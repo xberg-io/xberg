@@ -2,21 +2,15 @@ network to learn domain invariant features, thereby ignoring targets. So, the lo
 
 2
 
-*l* = ( *HX pixel* −+ *Ypixel* ) ε (13)
+*l* = (<sup>*HX*</sup> ~*pixel*~ −+ *Y*~*pixel*~) ε (13)
 
 - III. EXPERIMENTS
 
 To validate the effectiveness of the proposed method, experiments are conducted on both MiniSAR dataset and Sentinel-1 dataset. The resolution of MiniSAR is 0.1m, while the resolution of Sentinel-1 is 520m. All training data comes from MiniSAR, and the testing data comes from MiniSAR and Sentinel-1. The cross-sensor and cross-resolution experiments can be used to verify the generalization.
 
-- A. *Evaluation Metrics* To reasonably evaluate the test results, this paper adopts pixel accuracy (PA), intersection over union (IoU), PSNR [18] and ME [12] as evaluation metric. PA and IoU are used to evaluate the DIFNet, and PSNR and ME is used to evaluate image quality. ME is defined as follows: *ME* = Ent ( (14)
+- A. *Evaluation Metrics* To reasonably evaluate the test results, this paper adopts pixel accuracy (PA), intersection over union (IoU), PSNR [18] and ME [12] as evaluation metric. PA and IoU are used to evaluate the DIFNet, and PSNR and ME is used to evaluate image quality. ME is defined as follows: *ME* = Ent ( <sup>Xˆ</sup> ) <sup>Mean</sup>( <sup>Xˆ</sup>) (14)
 
-Xˆ ) Mean( Xˆ )
-
-Ent ( ， Mean
-
-Xˆ ) is the entropy
-
-( Xˆ ) is the mean value. A smaller entropy indicates that the pixel values of the image are concentrated within a smaller range. A smaller mean value indicates a lower amplitude, suggesting that most of the
+Ent ( <sup>Xˆ</sup>) <sup>is the entropy</sup>， Mean ( <sup>Xˆ</sup>) <sup>is the mean value. A</sup> smaller entropy indicates that the pixel values of the image are concentrated within a smaller range. A smaller mean value indicates a lower amplitude, suggesting that most of the
 
 interference has been filtered out. Therefore, a smaller ME indicates a better filtering result.
 

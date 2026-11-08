@@ -3,7 +3,7 @@
 |  |  | standards in | standards in |
 |  |  | millions of | number of |
 |  |  | dollars | employees |
-| 335999 | All Other Miscellaneous Electrical Equipment and Component Manufacturing6 |  | 600 |
+| 335999 | All Other Miscellaneous Electrical Equipment and Component Manufacturing<sup>6</sup> |  | 600 |
 | 336110 | Automobile and Light Duty Motor Vehicle Manufacturing6 |  | 1,500 |
 | 336120 | Heavy Duty Truck Manufacturing6 |  | 1,500 |
 | 336211 | Motor Vehicle Body Manufacturing6 |  | 1,000 |
@@ -30,7 +30,3 @@
 | 336991 | Motorcycle, Bicycle and Parts Manufacturing6 |  | 1,050 |
 | 336992 | Military Armored Vehicle, Tank and Tank Component Manufacturing6 |  | 1,500 |
 | 336999 | All Other Transportation Equipment Manufacturing6 |  | 1,000 |
-
-6
-
-6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6,7 6 6 6 6 6 6 6 6 6

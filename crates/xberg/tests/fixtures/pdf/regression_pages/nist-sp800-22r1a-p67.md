@@ -1,20 +1,18 @@
-K=6, M=10000 1 =11}
+K=6, M=10000
+
+2
 
 | classes | probabilities |
 | --- | --- |
 | {ν≤ 10} | π 0 = 0.0882 |
 | {ν=11} | = 0.2092 π1 |
 | {ν=12} | π 2 = 0.2483 |
-| {ν=13} | π 3 = 0.1933 |
+| {ν=13} | π ~3~ = 0.1933 |
 | {ν=14} | π 4 = 0.1208 |
 | {ν=15} | = 0.0675 π5 |
 | {ν≥ 16} | = 0.0727 π6 |
 
-1
-
-5 6
-
-Large values of Χ2 indicate that the sequence has clusters of ones; the generation of "random'" sequences by humans tends to lead to small values of ν *n* (see [3, p. 55]).
+Large values of Χ indicate that the sequence has clusters of ones; the generation of "random'" sequences by humans tends to lead to small values of ν~*n*~ (see [3, p. 55]).
 
 **References for Test**
 
@@ -28,22 +26,22 @@ Another approach to testing for randomness is to check for linear dependence amo
 
 This test is a specification of one of the tests coming from the DIEHARD [1] battery of tests. It is based on the result of Kovalenko [2] and also formulated by Marsaglia and Tsay [3]. The result states that the rank *R* of the *M x Q* random binary matrix takes values *r* = 0, 1, 2, …, *m* where *m* ≡ *min* ( *M* , *Q* ) with probabilities
 
-*r r* −1 *M* − *r* )− *MQ*
+*r* −1 *i* − *Q i* − *M* (<sup>1</sup>− 2 )(<sup>1</sup>− 2 ) *r* ( *Q* + *M* − *r* )− *MQ*
 
-*p* = 2 *r* ( *Q* +
+*p*~*r*~ = 2 .
 
 ∏
 
-*i* = 0
-
-# (1− 2 i − Q )(
-
-## 1− 2 i − M )
-
-. 1− 2
-
 *i* − *r*
 
-The probability values are fixed in the test suite code for *M* = *Q* = 32. The number *M* is then a parameter of this test, so that ideally *n* = *M2N* , where *N* is the new "sample size." In practice, values for *M* and *N* are chosen so that the discarded part of the string, *n* - *NM2* , is fairly small.
+# 1− 2
+
+*i* = 0
+
+The probability values are fixed in the test suite code for *M* = *Q* = 32. The number *M* is then a parameter
+
+of this test, so that ideally *n* = *M*<sup>*2*</sup>*N* , where *N* is the new "sample size." In practice, values for *M* and *N* are
+
+chosen so that the discarded part of the string, *n* - *NM*<sup>*2*</sup> , is fairly small.
 
 The rationale for this choice is that

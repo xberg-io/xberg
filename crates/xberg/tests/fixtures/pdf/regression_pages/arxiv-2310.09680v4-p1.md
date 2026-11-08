@@ -2,19 +2,21 @@
 
 **by Semantic Lattice Rescoring**
 
-Ankitha Sudarshan1, Vinay Samuel2, Parth Patwa3, Ibtihel Amara4, Aman Chadha5,6†
+1 2 4 5,6†
 
-1
+## Ankitha Sudarshan , Vinay Samuel , Parth Patwa<sup>3</sup>, Ibtihel Amara , Aman Chadha
 
-## Purdue University 2Carnegie Mellon University 3University of California Los Angeles
+1 2 3
 
-4
+## Purdue University Carnegie Mellon University University of California Los Angeles
 
-## McGill University 5Stanford University 6Amazon AI
+4 5 6
 
-1 ,6
+## McGill University Stanford University Amazon AI
 
-sudarsh0@purdue.edu 5 hi@aman.ai
+1 5,6
+
+sudarsh0@purdue.edu hi@aman.ai
 
 ## Abstract
 

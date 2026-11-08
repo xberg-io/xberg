@@ -1,6 +1,6 @@
 FIRST STEPS IN ALGEBRA.
 
-132 c c c c
+132
 
 | 2a | 3b | 5c |  | x2 y2 + 3xy | 2c + 1 |  |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -16,34 +16,34 @@ FIRST STEPS IN ALGEBRA.
 | 8. |  | × | . | 12. | ÷ | . |
 | x2 − 4a2 |  | x − a |  | 16a 2 − 9b2 | 4a − 3b |  |
 
-abc bx y 25 16 x2 − 49 x + 7
+x<sup>2</sup> − 49 x + 7
 
-- 13\. ÷ . (a + b)
+13. ÷ . (a + b)<sup>2</sup> − c<sup>2</sup> (a + b) − c
 
-2 − c2 (a + b) − c
+x<sup>2</sup> + 2x + 1 x + 1
 
-x2 + 2x + 1 x + 1
+14. ÷ . x<sup>2</sup> − 25 x<sup>2</sup> + 5x
 
-- 14\. ÷ . x2 − 25 x2 + 5x
+a<sup>2</sup> + 3a + 2 a<sup>2</sup> + 7a + 12
 
-a2 + 3a + 2 a2 + 7a + 12
+15. × . a<sup>2</sup> + 5a + 6 a<sup>2</sup> + 9a + 20
 
-- 15\. × . a2 + 5a + 6 a2 + 9a + 20
+y<sup>2</sup> − y − 30 y<sup>2</sup> − y − 2 y<sup>2</sup> + 6y
 
-y2 − y − 30 y2 − y − 2 y2 + 6y
-
-- 16\. × × . y2 − 36 y2 + 3y − 10 y2 + y
-
-x2 − 2x + 1 x2 + 2xy + y2 x2 − 1
-
-- 17\. × ÷ . x2 − y2 x − 1 x2 − xy
-
-a2 − b2 ab − 2b2 (a − b)2
-
-- 18\. × ÷ . a2 − 3ab + 2b
+16. × × .
 
 2
 
-a2 + ab a(a − b) (a + b)2 − c2 a2b2c2 b2c2
+y<sup>2</sup> − 36 y<sup>2</sup> + 3y − 10 y + y
 
-- 19\. × ÷ . a2 + ab − ac a2 + ab + ac abc
+x<sup>2</sup> − 2x + 1 x<sup>2</sup> + 2xy + y<sup>2</sup> x<sup>2</sup> − 1
+
+17. × ÷ . x<sup>2</sup> − y<sup>2</sup> x − 1 x<sup>2</sup> − xy
+
+a<sup>2</sup> − b<sup>2</sup> ab − 2b<sup>2</sup> (a − b)<sup>2</sup>
+
+18. × ÷ . a<sup>2</sup> − 3ab + 2b<sup>2</sup> a<sup>2</sup> + ab a(a − b)
+
+(a + b)<sup>2</sup> − c<sup>2</sup> a<sup>2</sup>b<sup>2</sup>c<sup>2</sup> b<sup>2</sup>c<sup>2</sup>
+
+19. × ÷ . a<sup>2</sup> + ab − ac a<sup>2</sup> + ab + ac abc

@@ -1,35 +1,63 @@
 PLOS COMPUTATIONAL BIOLOGY
 
-Cdjoknt sensktkvktkes at stead{-state kn ODE models of bkocjemkcal reactkon networks
+Adjoint sensitivities at steady-state in ODE models of biochemical reaction networks
 
-a stead{ state. Tjks comes at a jkgj comrutatkonal cost and scales roorl{ wktj tje number of states and rarameters, as one jas to skmulate a s{stem of ODEs wktj tje dkmenskon *nx + 3+nθ. Tje ezkstkng adjoknt metjod for rre- and rost-esuklkbratkon skmulates tje model untkl arrrozkmate convergence to a stead{ state, and tjen solves tje corresrondkng backward esuatkon for tje same tkme knterval [32, 27]. Tjks ks comrutatkonall{ costl{ as well but rossesses, kn contrast to tje forward metjod, kmrroved scalabklkt{; jere, one jas to sesuentkall{ skmulate two s{stems of tje skze nx. Jowever, tje forward metjod can be easkl{ adarted to ezrlokt stead{-state constraknts. One can fknd state sensktkvktkes at stead{ state wktjout numerkcal kntegratkon, b{ solvkng a s{stem of lknear esuatkons rer rarameter *see, e.g., [22]+. Tje downskde ks tjat tjks arrroacj ks not arrlkcable for s{stems wktj skngular Jacobkans. C corresrondkng arrroacj for adjoknt metjods ks currentl{ mksskng. Kn tjks rarer, we kntroduce a novel adjoknt metjod for tje comrutatkon of objectkve functkon gradkents for rroblems wktj stead{-state constraknts. Tje rrorosed metjod ezrlokts tje stead{-state constraknt to ckrcumvent numerkcal backward kntegratkon for rre- and rost-esuklkbratkon. Knstead, a s{stem of esuatkons ks solved to comrute rarts of tje objectkve functkon gradkent. We rrovkde an kmrlementatkon of tje metjod kn tje oren-source toolboz CMKCK and knvestkgate kts accurac{ and effkckenc{ on tjree real-world rroblems. Our stud{ demonstrates tjat tje new metjod acjkeves a substantkal sreedur for gradkent comrutatkon, wjkcj ks rartkcularl{ valuable for large models.
+a steady state. This comes at a high computational cost and scales poorly with the number of states and parameters, as one has to simulate a system of ODEs with the dimension (n~x~+ 1)n~θ~. The existing adjoint method for pre- and post-equilibration simulates the model until approximate convergence to a steady state, and then solves the corresponding backward equation for the same time interval [12, 27]. This is computationally costly as well but possesses, in contrast to the forward method, improved scalability; here, one has to sequentially simulate two systems of the size n~x~. However, the forward method can be easily adapted to exploit steady-state constraints. One can find state sensitivities at steady state without numerical integration, by solving a system of linear equations per parameter (see, e.g., [20]). The downside is that this approach is not applicable for systems with singular Jacobians. A corresponding approach for adjoint methods is currently missing. In this paper, we introduce a novel adjoint method for the computation of objective function gradients for problems with steady-state constraints. The proposed method exploits the steady-state constraint to circumvent numerical backward integration for pre- and post-equilibration. Instead, a system of equations is solved to compute parts of the objective function gradient. We provide an implementation of the method in the open-source toolbox AMICI and investigate its accuracy and efficiency on three real-world problems. Our study demonstrates that the new method achieves a substantial speedup for gradient computation, which is particularly valuable for large models.
 
-**Metjods**
+**Methods**
 
-Kn tjks sectkon, we kntroduce tje conskdered classes of matjematkcal models and rarameter estkmatkon rroblems. Subsesuentl{, we descrkbe tje establksjed metjod for gradkent calculatkon vka adjoknt sensktkvkt{ anal{sks *CSC+ and rrorose a new formulatkon for tje stead{-state case. We dkscuss jow tje metjod can be arrlked to models of bkocjemkcal reactkon networks. Tje metjod, jowever, ks not restrkcted to tje fkeld of comrutatkonal bkolog{. Kt can be used for an{ model of tje form descrkbed kn tjks sectkon wktj rre- or rost-esuklkbratkon, or botj.
+In this section, we introduce the considered classes of mathematical models and parameter estimation problems. Subsequently, we describe the established method for gradient calculation via adjoint sensitivity analysis (ASA) and propose a new formulation for the steady-state case. We discuss how the method can be applied to models of biochemical reaction networks. The method, however, is not restricted to the field of computational biology. It can be used for any model of the form described in this section with pre- or post-equilibration, or both.
 
-**Matjematkcal modelkng and skmulatkon**
+**Mathematical modeling and simulation**
 
-We conskder ODE models of tje form
+We consider ODE models of the form
 
 **x**
 
-_ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt** 2Þ¼ **x2** ðθ *;* **uÞ** *;* ð3Þ kn wjkcj **xðt** *;* **θ** *;* **uÞ** 2 Rnx ks tje vector of state varkables, **θ** 2 Rn{ ks tje rarameter vector, **u** 2
+_ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt**~0~Þ¼ **x**~0~ðθ *;* **uÞ** *;* ð1Þ
 
-þ þ
+n n
 
-Rnu ks tje vector of constant knruts and t 2 R ks tje tkme. Tje vector fkeld of tje ODE model ks
+in which **xðt** *;* **θ** *;* **uÞ** 2 R
 
-þ
+x
 
-**f** : Rnx Rn{ Rnu \# Rnx, wjkcj ks Lkrscjktz-contknuous wktj resrect to z, and tje knktkal
+is the vector of state variables, **θ** 2 R
 
-þ þ þ þ
+y
 
-condktkon at t2 ks **x2** : Rnþ{ Rnuþ \# Rnxþ . Tje ODE model determknes tje tkme evolutkon of tje state varkables, gkven tje rarameters. Kn case of bkocjemkcal reactkon networks, tjks can be e.g., concentratkons of bkocjemkcal sreckes and reactkon rate constants, resrectkvel{. Tje knruts * **u** + descrkbe ezrerkmental condktkons, e.g., regkme of admknkstratkon of a drug or comrosktkon of a cell culture medkum. Kn man{ models, tje state varkables arrroacj a stead{-state **z** * **θ** , **u** + for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x2** ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
+is the parameter vector, **u** 2
 
-t\#3
+þ þ n
 
-Kn tjks rarer we assume tjat for eacj knktkal condktkon * **z2** * **θ** , **u** ++ tjere ezksts an ezronentkall{ stable stead{ state. Botj rre- and rost-esuklkbratkon cases assume ezkstence of a stead{ state tjat tje d{namkcal s{stem can reacj fast enougj to arrrorrkatel{ descrkbe tje modeled
+R
 
-RLOS Comrutatkonal Bkolog{ | jttrs://dok.org/32.3373/journal.rcbk.32327:3 Januar{ 3, 2223 4 / 3;
+u
+
+is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is
+
+þ n n n n
+
+**f** : R
+
+x
+
+R
+
+y
+
+R
+
+u
+
+\! R
+
+x, which is Lipschitz-continuous with respect to x, and the initial þ þ þ þ n n n
+
+condition at t~0~is **x**~0~ : R~þ~ y R~þ~ u \! R~þ~ x. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs ( **u** ) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** ( **θ** , **u** ) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
+
+t\!1
+
+In this paper we assume that for each initial condition ( **x**~0~( **θ** , **u** )) there exists an exponentially stable steady state. Both pre- and post-equilibration cases assume existence of a steady state that the dynamical system can reach fast enough to appropriately describe the modeled
+
+PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1010783 January 3, 2023 4 / 19
