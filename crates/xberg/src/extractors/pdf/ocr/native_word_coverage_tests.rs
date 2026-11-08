@@ -215,13 +215,87 @@ mod glued_cells {
     fn should_veto_a_wide_gap_elsewhere_in_a_token_that_holds_a_leader_run() {
         let read = [("ab", at(0.0, 20.0)), ("cd", at(60.0, 80.0)), ("ef", at(120.0, 140.0))];
         assert!(glues_token("ab___cdef", at(0.0, 140.0), &read));
+    }
+
+    #[test]
+    fn should_not_veto_the_gap_at_the_run_of_a_token_that_holds_one() {
         let at_run_only = [("ab", at(0.0, 20.0)), ("cdef", at(60.0, 100.0))];
         assert!(!glues_token("ab___cdef", at(0.0, 100.0), &at_run_only));
-        assert!(!glues_token(
-            "PMC0___PMC1",
-            at(0.0, 100.0),
-            &[("PMC0", at(0.0, 20.0)), ("PMC1", at(80.0, 100.0))]
-        ));
+        let pmc = [("PMC0", at(0.0, 20.0)), ("PMC1", at(80.0, 100.0))];
+        assert!(!glues_token("PMC0___PMC1", at(0.0, 100.0), &pmc));
+    }
+
+    fn split_read<'a>(first: &'a str, second: &'a str) -> [(&'a str, LineBox); 2] {
+        [(first, at(0.0, 20.0)), (second, at(80.0, 100.0))]
+    }
+
+    #[test]
+    fn should_count_only_letters_and_digits_before_a_run() {
+        for (token, first, second) in [
+            ("a.b...cd", "ab", "cd"),
+            ("(ab)...cd", "ab", "cd"),
+            ("a-b---c", "ab", "c"),
+            ("a_b___c", "ab", "c"),
+        ] {
+            assert!(
+                !glues_token(token, at(0.0, 100.0), &split_read(first, second)),
+                "{token}"
+            );
+        }
+        assert!(glues_token("a.b...cd", at(0.0, 100.0), &split_read("a", "bcd")));
+        assert!(glues_token("(ab)...cd", at(0.0, 100.0), &split_read("abc", "d")));
+    }
+
+    #[test]
+    fn should_place_a_run_at_the_start_or_end_of_a_token_outside_every_gap() {
+        assert!(glues_token("...abc", at(0.0, 100.0), &split_read("a", "bc")));
+        assert!(glues_token("abc...", at(0.0, 100.0), &split_read("ab", "c")));
+    }
+
+    #[test]
+    fn should_exempt_the_gap_at_each_of_two_runs_in_one_token() {
+        let read = [("ab", at(0.0, 20.0)), ("cd", at(60.0, 80.0)), ("ef", at(120.0, 140.0))];
+        assert!(!glues_token("ab___cd___ef", at(0.0, 140.0), &read));
+        let off = [("abc", at(0.0, 30.0)), ("d", at(70.0, 80.0)), ("ef", at(120.0, 140.0))];
+        assert!(glues_token("ab___cd___ef", at(0.0, 140.0), &off));
+    }
+
+    #[test]
+    fn should_treat_mixed_leader_characters_as_one_run() {
+        assert!(!glues_token("a.._b", at(0.0, 100.0), &split_read("a", "b")));
+        assert!(glues_token("a.._bc", at(0.0, 100.0), &split_read("ab", "c")));
+    }
+
+    #[test]
+    fn should_count_a_letter_that_lowercases_to_two_characters_once() {
+        let read = [("\u{130}", at(0.0, 20.0)), ("x", at(80.0, 100.0))];
+        assert!(!glues_token("\u{130}___x", at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_keep_the_ocr_read_when_a_miscounted_letter_precedes_a_dropped_leader() {
+        let read = [("Itern", at(0.0, 50.0)), ("5", at(90.0, 100.0))];
+        assert!(glues_token("Item...5", at(0.0, 100.0), &read));
+        let exact = [("Item", at(0.0, 40.0)), ("5", at(90.0, 100.0))];
+        assert!(!glues_token("Item...5", at(0.0, 100.0), &exact));
+    }
+
+    #[test]
+    fn should_let_a_read_leader_box_overlap_a_neighbour_by_a_tenth_of_the_line_height() {
+        let leader = |left: f32, right: f32| [("ab", at(0.0, 40.0)), ("...", at(left, right)), ("cd", at(55.0, 100.0))];
+        assert!(!glues(at(0.0, 100.0), &leader(39.0, 56.0)));
+        assert!(glues(at(0.0, 100.0), &leader(38.0, 53.0)));
+        assert!(glues(at(0.0, 100.0), &leader(41.0, 57.0)));
+    }
+
+    #[test]
+    fn should_not_close_a_gap_with_a_lone_two_dot_leader() {
+        let read = [
+            ("ab", at(0.0, 40.0)),
+            ("\u{2025}", at(42.0, 53.0)),
+            ("cd", at(55.0, 100.0)),
+        ];
+        assert!(glues(at(0.0, 100.0), &read));
     }
 
     #[test]

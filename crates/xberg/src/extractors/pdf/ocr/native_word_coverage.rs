@@ -283,6 +283,11 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
     if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
 }
 
+/// How far, as a share of the line height, a read leader's box may reach into a neighbouring read
+/// word and still count as lying in the gap: OCR boxes of a leader and its neighbours overlap by a
+/// pixel or two.
+const LEADER_BOX_SLACK: f32 = 0.1;
+
 /// The fewest leader characters that make a run a leader rather than punctuation.
 const MIN_LEADER_RUN: usize = 3;
 
@@ -340,7 +345,10 @@ fn leader_run_offsets(token: &str) -> Vec<usize> {
 /// through the word. A native token that holds a leader run is a label and its value joined by a
 /// leader whether or not the read kept the dots (`Introduction.........12`), so only the gap at
 /// the run, found by counting the letters and digits before it, is exempt and any other gap in
-/// the token still vetoes. Words set sideways stack their read words vertically and are out of
+/// the token still vetoes. That position is a count, so a read that miscounts the letters before
+/// the run (`rn` for `m`) while dropping the dots no longer matches it and keeps the OCR read,
+/// the safe side. Gaps are measured between read words only; a leader never moves the edge a
+/// gap is measured from. Words set sideways stack their read words vertically and are out of
 /// scope. ~keep
 fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
     native.iter().any(|(text, place)| {
@@ -352,23 +360,30 @@ fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(Strin
         let mut parts: Vec<(&LineBox, usize, bool)> = read
             .iter()
             .filter(|(word, at)| place.owns(at) && !word.trim().is_empty())
-            .map(|(word, at)| (at, alnum_key(word).chars().count(), is_leader_run(word)))
+            .map(|(word, at)| {
+                (
+                    at,
+                    word.chars().filter(|c| c.is_alphanumeric()).count(),
+                    is_leader_run(word),
+                )
+            })
             .filter(|(_, letters, is_leader)| *letters > 0 || *is_leader)
             .collect();
         parts.sort_by(|a, b| a.0.left.total_cmp(&b.0.left));
         let mut reach = f32::NEG_INFINITY;
         let mut letters_before: Option<usize> = None;
         let mut leader_right = f32::INFINITY;
+        let slack = height * LEADER_BOX_SLACK;
         for (part, letters, is_leader) in parts {
             if is_leader {
-                if part.left >= reach {
+                if part.left >= reach - slack {
                     leader_right = leader_right.min(part.right);
                 }
                 continue;
             }
             if let Some(before) = letters_before
                 && part.left - reach > height
-                && leader_right > part.left
+                && leader_right > part.left + slack
                 && !run_offsets.contains(&before)
             {
                 return true;
