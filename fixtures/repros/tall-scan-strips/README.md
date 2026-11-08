@@ -71,10 +71,14 @@ The public API tests also losslessly compress the existing neutral RGB fixture's
 page-paint stream, verifying identical decoded instructions before extraction.
 An additional-drawing variant exercises refusal of pages that are not one scan.
 
-Successful source-strip recovery retains the original rendered and processed frame
-in the page-numbered `ocr_source_strip_original_frame` backend diagnostic. The
-public tests check the actual 154 × 4096 processed frame against the retained native
-render dimensions at both source densities. They exercise raw, Flate and
+Successful source-strip recovery retains the original rendered and processed frames
+in `ocr_source_strip_original_frames`, ordered by accepted document page number.
+Detached-stage page IDs are rebound to those document pages. The existing
+`ocr_source_strip_original_frame` object remains a compatibility view of the first
+entry. These historical dimensions survive both whole-document and automatic
+per-page OCR projection; they are not the recovered text's current coordinate frame.
+The public tests check both keys and the actual 154 × 4096 processed frame against
+the retained native render dimensions at both source densities. They exercise raw, Flate and
 ASCII85+Flate page-paint streams, including separately serialized extra-paint
 controls that must report an uncertified source. The low-density geometry tests
 retain the pre-existing 80-row inclusive and 48-column exclusive limits at 120 DPI.

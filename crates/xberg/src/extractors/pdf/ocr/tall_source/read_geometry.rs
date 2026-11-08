@@ -1,6 +1,7 @@
 use crate::ocr_metadata_keys::{
     OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY, OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY,
     OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY, OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY,
+    OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY, OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY,
 };
 use crate::types::ExtractedDocument;
 
@@ -42,7 +43,11 @@ pub(super) fn record_original_frame(original: &mut ExtractedDocument, (width, he
         "processed_width": metadata.get(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY),
         "processed_height": metadata.get(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY),
     });
-    metadata.insert("ocr_source_strip_original_frame".into(), frame);
+    metadata.insert(OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY.into(), frame.clone());
+    metadata.insert(
+        OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY.into(),
+        serde_json::json!([frame]),
+    );
 }
 
 #[cfg(test)]
@@ -180,11 +185,15 @@ mod frame_tests {
             .insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), json!(4096));
         record_original_frame(&mut original, (450, 12000), 1);
         assert_eq!(
-            original.metadata.additional["ocr_source_strip_original_frame"],
+            original.metadata.additional[OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY],
             json!({
                 "page_number": 2, "rendered_width": 450, "rendered_height": 12000,
                 "processed_width": 154, "processed_height": 4096,
             })
+        );
+        assert_eq!(
+            original.metadata.additional[OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY],
+            json!([original.metadata.additional[OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY]])
         );
         assert_eq!(
             original.metadata.additional[OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY],

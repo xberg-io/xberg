@@ -228,6 +228,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are eligible only after the decoded full-page draw and every RGB sample's neutrality are certified.
   Line geometry scales up with source density while preserving the prior limits below 150 DPI;
   memory, reading-order and recognition-quality checks remain in force.
+  Original read-frame diagnostics survive automatic per-page OCR and document rebuilding, with accepted page IDs
+  retained in order and the existing single-frame metadata object preserved for compatibility.
 
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.

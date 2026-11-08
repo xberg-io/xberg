@@ -183,7 +183,9 @@ fn apply_recovery(original: &mut ExtractedDocument, recovered: TextAccumulator, 
 
     original.content = recovered.text;
     original.ocr_elements = None;
-    original.ocr_internal_document = Some(super::document::flat_ocr_page_document(&original.content));
+    let mut document = super::document::flat_ocr_page_document(&original.content);
+    super::document::copy_source_strip_frames(&original.metadata, &mut document.metadata);
+    original.ocr_internal_document = Some(document);
     original.metadata.image_preprocessing = None;
     let additional = &mut original.metadata.additional;
     // Neither the old raster frame nor the old word percentiles describe the recovered text. ~keep

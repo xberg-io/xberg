@@ -208,7 +208,13 @@ fn assert_large_text_recovery(input: &[u8], source_width: u64) {
     let pages = result.pages.as_ref().unwrap();
     assert_eq!(pages.len(), 1);
     assert_eq!(words(&pages[0].content), expected);
-    let frame = &result.metadata.additional["ocr_source_strip_original_frame"];
+    let frames = result.metadata.additional["ocr_source_strip_original_frames"]
+        .as_array()
+        .unwrap();
+    assert_eq!(frames.len(), 1);
+    let frame = &frames[0];
+    assert_eq!(frame["page_number"], 1);
+    assert_eq!(&result.metadata.additional["ocr_source_strip_original_frame"], frame);
     assert_eq!(frame["processed_width"], 154);
     assert_eq!(frame["processed_height"], 4096);
     let rendered = frame["rendered_width"].as_u64().unwrap();
