@@ -223,7 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
   One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.
   A reference such as `[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].`, a versioned citation without a date, and a sentence that ends at a bare identifier are kept whole.
-  A stamp drawn in parts that the extractor reads as separate paragraphs (identifier, category, date) is removed when the parts on the page make one whole stamp, so its date no longer shows as a heading.
+  A stamp drawn in parts that the extractor reads as separate paragraphs (identifier, category, date) is removed when the parts on the page make one whole stamp, so its date no longer shows as a heading. The parts must read identifier, category, date (or the reverse), share one rotation and line up on one side of the page. A page that reads category, identifier, date keeps its parts.
   A stamp that ends a paragraph is removed alone; the words before it stay.
 
 - **(ocr): Do not crash when the process exits while a thread is still recognizing.**

@@ -1980,10 +1980,12 @@ pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
 }
 
 /// Mark as furniture the paragraphs of a page that each hold only part of an arXiv stamp, when
-/// together they make one whole stamp. The parts are joined in reading order and reversed, because
-/// the rotated stamp reads from the bottom of the page up. A stamp holds three components and each
-/// part holds at least one, so the joined parts make a whole stamp only for two or three parts. With
-/// any other count nothing is marked, and no count check is needed.
+/// together they make one whole stamp and sit in one margin. The parts are joined in reading order
+/// and reversed, because the rotated stamp reads from the bottom of the page up. Only the order
+/// identifier, category, date (or its reverse) makes a stamp, so a page that reads category,
+/// identifier, date keeps its parts. A stamp holds three components and each part holds at least
+/// one, so the joined parts make a whole stamp only for two or three parts. With any other count
+/// nothing is marked, and no count check is needed.
 fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
     let parts: Vec<(usize, String)> = page
         .iter()
@@ -2008,11 +2010,47 @@ fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
     if trailing_stamp_start(&forward) != Some(0) && trailing_stamp_start(&reversed) != Some(0) {
         return;
     }
+    if !share_one_margin(parts.iter().map(|(index, _)| &page[*index])) {
+        return;
+    }
     tracing::trace!(stamp = %forward, "marking a split arXiv stamp as furniture");
     for (index, _) in parts {
         page[index].is_page_furniture = true;
         page[index].heading_level = None;
     }
+}
+
+/// Whether the paragraphs are drawn with one rotation and line up on one axis, as the strings of one
+/// margin stamp do: their page-space boxes share a band of x values (a rotated stamp read along the
+/// side of the page) or a band of y values (a stamp read along the top or the bottom).
+fn share_one_margin<'a>(paragraphs: impl Iterator<Item = &'a PdfParagraph>) -> bool {
+    /// Rotations closer than this many degrees are one rotation.
+    const SAME_ROTATION_DEGREES: f32 = 0.5;
+    let mut rotation: Option<f32> = None;
+    let mut x = (f32::NEG_INFINITY, f32::INFINITY);
+    let mut y = (f32::NEG_INFINITY, f32::INFINITY);
+    for paragraph in paragraphs {
+        let segments: Vec<_> = paragraph.lines.iter().flat_map(|line| line.segments.iter()).collect();
+        if segments.is_empty() {
+            return false;
+        }
+        for segment in &segments {
+            if rotation.is_some_and(|known| (known - segment.rotation_degrees).abs() > SAME_ROTATION_DEGREES) {
+                return false;
+            }
+            rotation.get_or_insert(segment.rotation_degrees);
+        }
+        let left = segments.iter().map(|s| s.x).fold(f32::INFINITY, f32::min);
+        let right = segments.iter().map(|s| s.x + s.width).fold(f32::NEG_INFINITY, f32::max);
+        let bottom = segments.iter().map(|s| s.y).fold(f32::INFINITY, f32::min);
+        let top = segments
+            .iter()
+            .map(|s| s.y + s.height)
+            .fold(f32::NEG_INFINITY, f32::max);
+        x = (x.0.max(left), x.1.min(right));
+        y = (y.0.max(bottom), y.1.min(top));
+    }
+    x.0 <= x.1 || y.0 <= y.1
 }
 
 /// Remove the last `count` white-space separated words from the text of a paragraph.
@@ -2454,6 +2492,45 @@ mod tests {
             "Body words stay",
         ];
         assert_eq!(furniture_of(&texts), [false; 5]);
+    }
+
+    /// The three parts of a stamp with a position and a rotation for each: `(x, y, rotation)`.
+    fn placed_stamp_parts(places: [(f32, f32, f32); 3]) -> Vec<bool> {
+        let texts = ["arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"];
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| paragraph_with_text(text)).collect();
+        for (para, (x, y, rotation)) in page.iter_mut().zip(places) {
+            let segment = &mut para.lines[0].segments[0];
+            (segment.x, segment.y, segment.rotation_degrees) = (x, y, rotation);
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_marks_stamp_parts_that_stack_in_one_rotated_margin() {
+        let marked = placed_stamp_parts([(20.0, 600.0, 90.0), (20.0, 400.0, 90.0), (22.0, 200.0, 90.0)]);
+        assert_eq!(marked, [true; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_that_sit_far_apart_on_the_page() {
+        let marked = placed_stamp_parts([(50.0, 700.0, 0.0), (300.0, 400.0, 0.0), (500.0, 100.0, 0.0)]);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_that_differ_in_rotation() {
+        let marked = placed_stamp_parts([(20.0, 600.0, 90.0), (20.0, 400.0, 0.0), (20.0, 200.0, 90.0)]);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_that_read_category_first() {
+        assert_eq!(
+            furniture_of(&["[hep-ph]", "arXiv:2312.13591v2", "6 Dec 2023"]),
+            [false; 3]
+        );
     }
 
     #[test]
