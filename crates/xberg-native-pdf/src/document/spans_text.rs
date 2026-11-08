@@ -753,8 +753,13 @@ impl PdfDocument {
         // This aligns with the text extractor's font-aware threshold (~50% of space width). ~keep
         // Only a ligature drawn as its own run is relaxed; a word-final ligature inside a
         // longer run sits next to a real word gap that is nearly as narrow. ~keep
-        let bare_ligature_run = crate::extractors::text::starts_with_agl_ligature(&prev.text)
-            || crate::extractors::text::starts_with_agl_ligature(&current.text);
+        let mut prev_chars = prev.text.chars();
+        let prev_is_bare_ligature = matches!(
+            (prev_chars.next(), prev_chars.next()),
+            (Some(c), None) if ('\u{FB00}'..='\u{FB06}').contains(&c)
+        );
+        let bare_ligature_run =
+            prev_is_bare_ligature || crate::extractors::text::starts_with_agl_ligature(&current.text);
         let space_threshold = if bare_ligature_run {
             font_size * 0.15 * crate::extractors::text::LIGATURE_BOUNDARY_GAP_FACTOR
         } else {

@@ -150,6 +150,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Docker and CI use Tesseract 5.5.4, Leptonica 1.87.0, libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2.
   Windows builds verified Tesseract source; Linux and macOS provisioning checks selected runtimes and real decoding.
 
+- **(pdf): The OCR structure heuristic's retention gate reads ligature code points through the text repair's ligature table (#2689).**
+  The gate carried its own copy of the U+FB00..FB06 mapping; behavior is unchanged.
+
 ### Security
 
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
@@ -206,9 +209,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
-
-- **(pdf): Join a word split around a ligature decoded to letters in rich text output (#2689).**
-  Rich span assembly relaxed the word gap only for a ligature code point on the preceding run, so `di` + `ff` + `erent` split after `ff`; it now reads a run of ligature letters the same on both sides. The OCR character-retention gate reads ligatures through the text repair's table instead of a copy.
 
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.

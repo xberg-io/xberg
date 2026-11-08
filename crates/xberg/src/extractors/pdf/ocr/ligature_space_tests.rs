@@ -1,4 +1,4 @@
-use super::document::{heuristically_restructured_ocr_pages, ocr_structure_heuristic_canonical_chars};
+use super::document::{heuristically_restructured_ocr_pages, ocr_structure_heuristic_char_retention};
 use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::pdf::structure::adapters::{OcrFontSizeScale, ocr_doc_to_paragraphs};
 use crate::pdf::structure::types::PdfParagraph;
@@ -99,11 +99,11 @@ fn heuristically_restructured_ocr_pages_absorbs_the_space_after_a_ligature() {
     );
 }
 
-/// The retention gate counts every ligature code point as the letters the text repair expands it
-/// to, so the two tables cannot drift apart (#2689).
+/// The retention gate must read each ligature code point as the letters it stands for, checked
+/// against hand-written spellings and not against the table the gate itself calls (#2689).
 #[test]
-fn ocr_retention_gate_reads_each_ligature_as_the_letters_the_repair_expands_it_to() {
-    for (ligature, letters) in [
+fn ocr_retention_gate_reads_each_ligature_as_its_letters() {
+    for (ligature, spelled) in [
         ('\u{FB00}', "ff"),
         ('\u{FB01}', "fi"),
         ('\u{FB02}', "fl"),
@@ -112,17 +112,15 @@ fn ocr_retention_gate_reads_each_ligature_as_the_letters_the_repair_expands_it_t
         ('\u{FB05}', "st"),
         ('\u{FB06}', "st"),
     ] {
-        assert_eq!(
-            ocr_structure_heuristic_canonical_chars(&ligature.to_string()),
-            letters.chars().collect::<Vec<_>>(),
-            "U+{:04X}",
-            ligature as u32
-        );
-        assert_eq!(
-            crate::pdf::structure::ligature_letters(ligature),
-            Some(letters),
-            "U+{:04X}",
-            ligature as u32
-        );
+        let glyph = format!("o{ligature}ce");
+        let letters = format!("o{spelled}ce");
+        for (baseline, restructured) in [(&glyph, &letters), (&letters, &glyph)] {
+            assert_eq!(
+                ocr_structure_heuristic_char_retention(restructured, baseline),
+                1.0,
+                "U+{:04X}: {baseline:?} against {restructured:?}",
+                ligature as u32
+            );
+        }
     }
 }

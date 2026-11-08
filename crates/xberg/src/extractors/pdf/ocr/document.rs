@@ -3089,7 +3089,7 @@ const MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION: f64 = 1.0;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 /// Ligature codepoints count as their letters: the restructured text expands them, and the
 /// retention gate would otherwise reject every page that carries one.
-pub(super) fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
+fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
     text.chars()
         .filter(|character| character.is_alphanumeric())
         .flat_map(|character| match crate::pdf::structure::ligature_letters(character) {
@@ -3106,7 +3106,7 @@ pub(super) fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
 /// this is only the second call site (`avoid-duplication`: extract after the third). Unlike
 /// that word-token version, this compares characters (see the constant's doc comment for why).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn ocr_structure_heuristic_char_retention(restructured_text: &str, baseline_text: &str) -> f64 {
+pub(super) fn ocr_structure_heuristic_char_retention(restructured_text: &str, baseline_text: &str) -> f64 {
     let baseline_chars = ocr_structure_heuristic_canonical_chars(baseline_text);
     if baseline_chars.is_empty() {
         return 1.0;
