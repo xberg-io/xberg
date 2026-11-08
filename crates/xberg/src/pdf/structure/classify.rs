@@ -1186,6 +1186,9 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
     if levels == 0 {
         return false;
     }
+    if starts_with_math_operator(&t[idx..]) {
+        return false;
+    }
     if levels >= 2 {
         return true;
     }
@@ -1194,24 +1197,36 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
         idx += 1;
     }
     let remainder = t[idx..].trim_start();
-    !starts_with_math_operator(remainder)
-        && remainder.chars().any(|c| c.is_alphabetic())
+    remainder.chars().any(|c| c.is_alphabetic())
         && remainder
             .chars()
             .filter(|c| c.is_alphabetic())
             .all(|c| c.is_uppercase())
 }
 
-/// Whether `rest`, after an enumerator and its separator, opens with a math
-/// operator (`X = Y`, `V + W`, `I < N`). An enumerator is followed by a title,
-/// never by an operator, so such a line is a formula. A hyphen is excluded: `IV - Results`
+/// Whether `rest`, the text right after an enumerator, opens with a math
+/// operator (`X = Y`, `V + W`, `I < N`, `1.5 = x`). An enumerator is followed by
+/// a title, never by an operator, so such a line is a formula.
+///
+/// `/` and `*` also appear as ordinary punctuation after a numbered title
+/// (`1/ INTRODUCTION`, `IV * Results`), so they count only when an operand follows
+/// with no space, as in `12/1996`. A hyphen or en dash never counts: `IV - Results`
 /// is a heading. See #2688.
 fn starts_with_math_operator(rest: &str) -> bool {
-    rest.trim_start_matches(['.', ')'])
-        .trim_start()
-        .chars()
-        .next()
-        .is_some_and(|c| is_math_character(c) || matches!(c, '<' | '>' | '*' | '/' | '\u{2212}'))
+    let after = rest.trim_start_matches(['.', ')']);
+    let mut chars = after.chars();
+    match chars.next() {
+        Some('/' | '*') => chars.next().is_some_and(|c| !c.is_whitespace()),
+        Some(c) => {
+            let c = if c.is_whitespace() {
+                after.trim_start().chars().next().unwrap_or(' ')
+            } else {
+                c
+            };
+            (is_math_character(c) && !is_greek_letter(c)) || matches!(c, '<' | '>' | '\u{2212}')
+        }
+        None => false,
+    }
 }
 
 /// A leading section keyword is a word, not a preposition. Without a floor,
@@ -3767,9 +3782,23 @@ mod numbered_section_heading_tests {
     fn a_roman_numeral_before_a_math_operator_is_not_a_heading() {
         assert!(!is_numbered_section_heading("X = Y"));
         assert!(!is_numbered_section_heading("V + W"));
+        assert!(!is_numbered_section_heading("X ^ Y"));
         assert!(!is_numbered_section_heading("I < N"));
+        assert!(!is_numbered_section_heading("I > N"));
+        assert!(!is_numbered_section_heading("X \u{2212} Y"));
         assert!(!is_numbered_section_heading("X \u{2264} Y"));
+        assert!(!is_numbered_section_heading("2*X"));
+        assert!(!is_numbered_section_heading("2/X"));
         assert!(!is_numbered_section_heading("1 = Y"));
+        assert!(!is_numbered_section_heading("1 > Y"));
+        assert!(!is_numbered_section_heading("12/1996\u{2013}P"));
+        assert!(!is_numbered_section_heading("1.5 = X"));
+        assert!(!is_numbered_section_heading("3.2.1 + X"));
+        assert!(is_numbered_section_heading("1/ INTRODUCTION"));
+        assert!(is_numbered_section_heading("IV * Results"));
+        assert!(is_numbered_section_heading("1.5 Results"));
+        assert!(is_numbered_section_heading("II \u{0394} Methods"));
+        assert!(is_numbered_section_heading("IV \u{2013} Results"));
         assert!(is_numbered_section_heading("X. Results"));
         assert!(is_numbered_section_heading("IV. Results"));
         assert!(is_numbered_section_heading("II Methods"));
