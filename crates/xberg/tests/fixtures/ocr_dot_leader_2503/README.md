@@ -4,3 +4,5 @@ with dot leaders. The TSV values are the generator inputs, independently of OCR.
 
 - `14.png` SHA-256 `89d90ef545561abf853817691e3082ee27e37cc72876a3419c37125371b6ace5`
 - `20.png` SHA-256 `f1321bb2850e33e519ed02a8682df6b1d74c02106e256e52ae544361add769f2`
+
+`two_column.png` is a generated two-column justified prose page (Pillow, DejaVu Sans 20 px, invented words), SHA-256 `c7d67a400423f94d2ec3b7617b98f9729b181b4f03cf3e6d37012416889e84f4`; it must never be re-read as a table.
