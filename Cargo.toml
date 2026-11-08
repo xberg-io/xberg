@@ -24,6 +24,7 @@ exclude = [
     "e2e/rust",
     "packages/elixir/native/xberg_nif",
     "packages/ruby/ext/xberg_rb",
+    "tools/benchmark-harness/nli_qualification",
     "vendored/sysinfo",
 ]
 default-members = ["crates/xberg", "crates/xberg-cli"]
