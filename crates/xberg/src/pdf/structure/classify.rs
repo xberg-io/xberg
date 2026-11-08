@@ -5,7 +5,7 @@
 // these needs compiler-in-the-loop verification, not a mechanical pass. Delete this
 // note and the file's baseline entry together once it goes green. Help wanted.
 
-use crate::rendering::arxiv_stamp::trailing_stamp_start;
+use crate::rendering::arxiv_stamp::{is_partial_stamp, trailing_stamp_start};
 
 use super::constants::{
     MAX_BOLD_HEADING_WORD_COUNT, MAX_HEADING_DISTANCE_MULTIPLIER, MAX_HEADING_WORD_COUNT, MAX_TITLE_WORD_COUNT,
@@ -1952,9 +1952,11 @@ fn is_greek_letter(c: char) -> bool {
 /// (the extractor concatenated the rotated margin text with body text) loses the stamp and keeps
 /// every body word. A citation that names an identifier is body text: the stamp rule in
 /// `rendering::arxiv_stamp` needs the version, the category and the date, and the Markdown renderer
-/// calls the same rule.
+/// calls the same rule. A stamp drawn in parts that each became a paragraph is handled by
+/// `mark_split_arxiv_stamp`.
 pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
     for page in all_pages.iter_mut().take(2) {
+        mark_split_arxiv_stamp(page);
         for para in page.iter_mut() {
             if para.is_page_furniture {
                 continue;
@@ -1974,6 +1976,46 @@ pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
                 drop_trailing_words_from_paragraph(para, stamp.split_whitespace().count());
             }
         }
+    }
+}
+
+/// The most paragraphs one stamp can be split over: identifier, category and date.
+const MAX_STAMP_PARTS: usize = 3;
+
+/// Mark as furniture the paragraphs of a page that each hold only part of an arXiv stamp, when
+/// together they make one whole stamp. The parts are joined in reading order and reversed, because
+/// the rotated stamp reads from the bottom of the page up.
+fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
+    let parts: Vec<(usize, String)> = page
+        .iter()
+        .enumerate()
+        .filter(|(_, para)| !para.is_page_furniture)
+        .filter_map(|(index, para)| {
+            let text = paragraph_plain_text(para);
+            is_partial_stamp(&text).then(|| (index, text.trim().to_string()))
+        })
+        .collect();
+    if !(2..=MAX_STAMP_PARTS).contains(&parts.len()) {
+        return;
+    }
+    let forward = parts
+        .iter()
+        .map(|(_, text)| text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let reversed = parts
+        .iter()
+        .rev()
+        .map(|(_, text)| text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if trailing_stamp_start(&forward) != Some(0) && trailing_stamp_start(&reversed) != Some(0) {
+        return;
+    }
+    tracing::trace!(stamp = %forward, "marking a split arXiv stamp as furniture");
+    for (index, _) in parts {
+        page[index].is_page_furniture = true;
+        page[index].heading_level = None;
     }
 }
 
@@ -2356,6 +2398,54 @@ mod tests {
         mark_arxiv_noise(&mut pages);
         assert!(!pages[0][0].is_page_furniture);
         assert_eq!(paragraph_plain_text(&pages[0][0]).trim(), "Body words stay");
+    }
+
+    fn furniture_of(texts: &[&str]) -> Vec<bool> {
+        let mut pages = vec![texts.iter().map(|text| paragraph_with_text(text)).collect::<Vec<_>>()];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_stamp_whose_parts_are_paragraphs_in_reading_order() {
+        let texts = [
+            "Body words stay",
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "More",
+        ];
+        assert_eq!(furniture_of(&texts), [false, true, true, true, false]);
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_stamp_whose_parts_read_bottom_to_top_between_body_paragraphs() {
+        let texts = [
+            "6 Dec 2023",
+            "Body words stay",
+            "[hep-ph]",
+            "More body words",
+            "arXiv:2312.13591v2",
+        ];
+        assert_eq!(furniture_of(&texts), [true, false, true, false, true]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_date_paragraph_after_a_citation() {
+        let texts = ["[12] A. Author, A title, arXiv:2107.09275v2 [hep-ph]", "6 Dec 2023"];
+        assert_eq!(furniture_of(&texts), [false, false]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_parts_that_do_not_make_one_stamp() {
+        assert_eq!(
+            furniture_of(&["arXiv:2312.13591v2", "Body words stay", "[hep-ph]"]),
+            [false; 3]
+        );
+        assert_eq!(
+            furniture_of(&["6 Dec 2023", "[hep-ph]", "7 Dec 2023", "arXiv:2312.13591v2"]),
+            [false; 4]
+        );
     }
 
     #[test]

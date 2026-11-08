@@ -180,7 +180,23 @@ fn rotated_stamp() -> String {
     "q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 32 237 Tm (arXiv:2107.09275v2  [hep-ph]  6 Dec 2023) Tj ET Q\n".to_string()
 }
 
+/// The same stamp drawn as three strings far apart along the margin, so the extractor reads its
+/// identifier, its category and its date as three paragraphs.
+fn split_stamp() -> String {
+    [
+        (150.0, "arXiv:2311.04567v3"),
+        (400.0, "[hep-ph]"),
+        (520.0, "6 Dec 2023"),
+    ]
+    .map(|(y, part)| format!("q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 32 {y} Tm ({part}) Tj ET Q\n"))
+    .concat()
+}
+
 fn extract_rotated(output_format: OutputFormat, include_watermarks: bool) -> String {
+    extract_with_stamp(&rotated_stamp(), output_format, include_watermarks)
+}
+
+fn extract_with_stamp(stamp: &str, output_format: OutputFormat, include_watermarks: bool) -> String {
     let config = ExtractionConfig {
         output_format,
         disable_ocr: true,
@@ -191,7 +207,7 @@ fn extract_rotated(output_format: OutputFormat, include_watermarks: bool) -> Str
         }),
         ..Default::default()
     };
-    let content = page_content().replace(&text_at("F1", 9.0, 20.0, 300.0, STAMP), &rotated_stamp());
+    let content = page_content().replace(&text_at("F1", 9.0, 20.0, 300.0, STAMP), stamp);
     let bytes = build_pdf(&content);
     let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("fixture must extract");
     collapse(&result.content)
@@ -216,6 +232,31 @@ fn plain_output_removes_a_rotated_stamp() {
     let content = extract_rotated(OutputFormat::Plain, false);
     assert!(!content.contains("6 Dec 2023"), "{content:?}");
     assert!(content.contains(BARE_IDENTIFIER_SENTENCE), "{content:?}");
+}
+
+#[test]
+fn a_split_stamp_is_extracted_when_watermarks_are_kept() {
+    let content = extract_with_stamp(&split_stamp(), OutputFormat::Markdown, true);
+    for part in ["arXiv:2311.04567v3", "[hep-ph]", "6 Dec 2023"] {
+        assert!(content.contains(part), "control: {part:?} missing from {content:?}");
+    }
+}
+
+#[test]
+fn markdown_output_removes_a_stamp_split_across_paragraphs() {
+    let content = extract_with_stamp(&split_stamp(), OutputFormat::Markdown, false);
+    assert!(!content.contains("6 Dec 2023"), "{content:?}");
+    assert!(!content.contains("arXiv:2311.04567v3"), "{content:?}");
+    assert!(content.contains(BARE_IDENTIFIER_SENTENCE), "{content:?}");
+    assert!(content.contains(VERSIONED_CITATION), "{content:?}");
+}
+
+#[test]
+fn plain_output_removes_a_stamp_split_across_paragraphs() {
+    let content = extract_with_stamp(&split_stamp(), OutputFormat::Plain, false);
+    assert!(!content.contains("6 Dec 2023"), "{content:?}");
+    assert!(!content.contains("arXiv:2311.04567v3"), "{content:?}");
+    assert!(content.contains(VERSIONED_CITATION), "{content:?}");
 }
 
 /// First pages of real arXiv papers from the regression page corpus, each with its rotated margin stamp.
