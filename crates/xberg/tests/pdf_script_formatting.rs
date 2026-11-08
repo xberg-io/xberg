@@ -381,10 +381,19 @@ fn should_use_the_source_gap_for_a_raised_isotope_like_prefix() {
 }
 
 fn regression_page_markdown(name: &str) -> Option<String> {
-    let path = helpers::get_test_file_path(&format!("pdf/regression_pages/{name}.pdf"));
-    if !path.exists() {
+    let skip = std::env::var_os("XBERG_REGRESSION_PAGES_SKIP").is_some_and(|value| value == "1");
+    if skip {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "XBERG_REGRESSION_PAGES_SKIP=1 must not be set in CI"
+        );
         return None;
     }
+    let path = helpers::get_test_file_path(&format!("pdf/regression_pages/{name}.pdf"));
+    assert!(
+        path.exists(),
+        "{name}.pdf is missing. The corpus is fetched with: python3 test_documents/scripts/fetch_corpus.py"
+    );
     let config = ExtractionConfig {
         disable_ocr: true,
         use_cache: false,
@@ -413,6 +422,10 @@ fn should_keep_raised_exponents_inside_their_line_on_a_real_page() {
     let Some(markdown) = regression_page_markdown("gutenberg-36670-p106") else {
         return;
     };
+    assert!(
+        markdown.contains("(x + 3y)<sup>2</sup> − 16a<sup>2</sup>"),
+        "{markdown}"
+    );
     let plain = markdown.replace("<sup>", "").replace("</sup>", "");
     assert!(
         plain.contains("Therefore (x + 3y)2 − 16a2 = (x + 3y + 4a)(x + 3y − 4a)."),

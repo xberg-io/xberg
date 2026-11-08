@@ -514,3 +514,32 @@ fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
         .expect("write owner context");
     }
 }
+
+fn bracket_pair(base_text: &str, script_text: &str) -> Vec<TextSpan> {
+    let mut base = span(base_text, 100.0, 700.0, 10.0, 12.0);
+    base.sequence = 30;
+    base.provenance = Some(MappingProvenance::ToUnicode);
+    let mut script = span(script_text, 110.5, 704.5, 4.0, 8.0);
+    script.sequence = 31;
+    script.provenance = base.provenance;
+    vec![base, script]
+}
+
+#[test]
+fn should_attach_a_raised_suffix_to_a_closing_bracket_base() {
+    for (base, script) in [(")", "2"), ("]", "2"), ("(x + 3y)", "2")] {
+        assert_eq!(page(bracket_pair(base, script)).owners.len(), 1, "{base}{script}");
+    }
+}
+
+#[test]
+fn should_not_attach_a_raised_mark_to_an_opening_bracket_or_bare_symbol() {
+    for base in ["(", "[", "−", "="] {
+        assert!(page(bracket_pair(base, "1")).owners.is_empty(), "{base}");
+    }
+}
+
+#[test]
+fn should_attach_a_raised_suffix_to_a_parenthesized_label_as_before() {
+    assert_eq!(page(bracket_pair("(1)", "2")).owners.len(), 1);
+}

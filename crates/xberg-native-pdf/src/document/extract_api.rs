@@ -16,36 +16,53 @@ enum ScriptGeometry {
 /// same bound as the shared script-run predicate. Wider shifts stay on their raw baseline.
 const ORDERING_MAX_SCRIPT_SHIFT_EM: f32 = 0.35;
 
-/// Reorders `spans` with `order` as if each raised mark sat on the baseline of the span it follows.
+/// Internal bridge: reorders `spans` with `order` as if each raised mark sat on the baseline of the
+/// span it follows.
 ///
 /// Preserved script geometry keeps a mark off its base line, so a row sort or column cut on it
-/// lifts the mark out of its sentence. `order` must only permute `spans`; the raw baselines are
-/// put back afterwards, keyed by each span's position before the call.
+/// lifts the mark out of its sentence. `order` must only permute `spans`. Only `bbox.y` of a snapped
+/// mark changes while it runs, and the raw value is put back afterwards, matched on the span's
+/// text, x, snapped y, size and `sequence`, so `sequence` itself stays the content-stream order
+/// that the ordering passes read.
+#[doc(hidden)]
 pub fn order_on_script_base_lines(
     spans: &mut Vec<crate::layout::TextSpan>,
     order: impl FnOnce(&mut Vec<crate::layout::TextSpan>),
 ) {
+    use std::collections::HashMap;
+
+    type Key = (String, u32, u32, usize, u32);
+    fn key(span: &crate::layout::TextSpan) -> Key {
+        (
+            span.text.clone(),
+            span.bbox.x.to_bits(),
+            span.bbox.y.to_bits(),
+            span.sequence,
+            span.font_size.to_bits(),
+        )
+    }
+
     let snapshot: Vec<_> = spans
         .iter()
         .map(|span| (span.bbox.x, span.bbox.y, span.bbox.width, span.font_size))
         .collect();
     let snapped = crate::extractors::text::snapped_script_baselines(&snapshot, ORDERING_MAX_SCRIPT_SHIFT_EM);
-    let originals: Vec<(usize, f32)> = spans
-        .iter_mut()
-        .zip(snapped)
-        .enumerate()
-        .map(|(index, (span, base_y))| {
-            let original = (span.sequence, span.bbox.y);
-            span.sequence = index;
-            if let Some(base_y) = base_y {
-                span.bbox.y = base_y;
-            }
-            original
-        })
-        .collect();
+    let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
+    for (span, base_y) in spans.iter_mut().zip(snapped) {
+        if let Some(base_y) = base_y {
+            let raw_y = span.bbox.y;
+            span.bbox.y = base_y;
+            raw_by_key.entry(key(span)).or_default().push(raw_y);
+        }
+    }
     order(spans);
-    for span in spans {
-        (span.sequence, span.bbox.y) = originals[span.sequence];
+    for span in spans.iter_mut() {
+        if let Some(raw_y) = raw_by_key
+            .get_mut(&key(span))
+            .and_then(|raws| (!raws.is_empty()).then(|| raws.remove(0)))
+        {
+            span.bbox.y = raw_y;
+        }
     }
 }
 
@@ -2186,5 +2203,78 @@ impl PdfDocument {
             .insert(page_index, std::sync::Arc::clone(&content_data));
 
         Ok(content_data)
+    }
+}
+
+#[cfg(test)]
+mod order_on_script_base_lines_tests {
+    use super::*;
+    use crate::layout::TextSpan;
+
+    fn span(text: &str, x: f32, y: f32, width: f32, font_size: f32, sequence: usize) -> TextSpan {
+        TextSpan {
+            text: text.to_string(),
+            bbox: crate::geometry::Rect::new(x, y, width, font_size),
+            font_size,
+            sequence,
+            ..Default::default()
+        }
+    }
+
+    fn page() -> Vec<TextSpan> {
+        vec![
+            span("near-mark", 110.0, 703.0, 4.0, 8.0, 5),
+            span("near-other", 500.0, 702.0, 20.0, 12.0, 5),
+            span("near-base", 100.0, 700.0, 10.0, 12.0, 1),
+            span("far-mark", 210.0, 605.5, 4.0, 8.0, 5),
+            span("far-other", 500.0, 602.0, 20.0, 12.0, 5),
+            span("far-base", 200.0, 600.0, 10.0, 12.0, 2),
+        ]
+    }
+
+    fn by_row(spans: &mut [TextSpan]) {
+        spans.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y).then(a.bbox.x.total_cmp(&b.bbox.x)));
+    }
+
+    fn texts(spans: &[TextSpan]) -> Vec<&str> {
+        spans.iter().map(|span| span.text.as_str()).collect()
+    }
+
+    #[test]
+    fn should_order_a_mark_within_035em_with_its_base_and_leave_a_wider_one_raw() {
+        let mut spans = page();
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(
+            texts(&spans),
+            [
+                "near-other",
+                "near-base",
+                "near-mark",
+                "far-mark",
+                "far-other",
+                "far-base"
+            ]
+        );
+    }
+
+    #[test]
+    fn should_restore_raw_baselines_and_keep_sequence_while_ordering() {
+        let mut spans = page();
+        let sequences: Vec<_> = spans.iter().map(|span| (span.text.clone(), span.sequence)).collect();
+        order_on_script_base_lines(&mut spans, |spans| {
+            for span in spans.iter() {
+                assert!(
+                    sequences.contains(&(span.text.clone(), span.sequence)),
+                    "{} had its sequence rewritten while ordering",
+                    span.text
+                );
+            }
+            by_row(spans);
+        });
+        let raw: std::collections::HashMap<_, _> = page().into_iter().map(|span| (span.text, span.bbox.y)).collect();
+        for span in &spans {
+            assert_eq!(span.bbox.y, raw[&span.text], "{} raw baseline", span.text);
+        }
+        assert_eq!(spans.iter().filter(|span| span.sequence == 5).count(), 4);
     }
 }
