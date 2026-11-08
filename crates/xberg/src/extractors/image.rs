@@ -3025,9 +3025,13 @@ fn apply_numeric_repair_to_standalone_image_ocr(
 }
 
 /// The config for the PSM 6 re-read of a standalone table picture, or `None` when the first
-/// pass does not call for one: the caller chose a PSM, the language is vertical, the image is
-/// multi-frame, a VLM fallback or explicit pipeline is configured, or the first pass either found a table (its detectors already certified the rows)
-/// or shows no column structure in its word boxes.
+/// pass does not call for one. No re-read happens when:
+/// - the caller chose a PSM, or the language is vertical;
+/// - the image is a TIFF (single or multi-frame);
+/// - a VLM fallback or an explicit pipeline is configured;
+/// - document structure or layout detection is requested;
+/// - the first pass found a table, whose detectors already certified the rows;
+/// - the first pass shows no column structure in its word boxes.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn single_block_table_config(
     config: &ExtractionConfig,
@@ -3086,8 +3090,9 @@ impl ImageExtractor {
     /// A standalone picture is read with the sparse-text default first. When that pass finds no
     /// table but its word boxes share column edges across rows, and the caller chose no PSM, the
     /// picture is read once more as one uniform block (PSM 6), whose row recovery keeps
-    /// dot-leader table rows whole (#2503, #2432); the second read is kept only when it puts more
-    /// whole rows across those columns and drops no word the first read placed on them.
+    /// dot-leader table rows whole (#2503, #2432). The second read is kept only when it puts more
+    /// whole rows across those columns and every row reads the same apart from leader dots; see
+    /// [`image_table_reread::judge_second_read`].
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     async fn extract_with_ocr(
         &self,
@@ -3101,10 +3106,23 @@ impl ImageExtractor {
             let Some(single_block) = single_block_table_config(config, mime_type, &first) else {
                 return Ok(first);
             };
+            tracing::debug!("standalone table re-read: reading the picture again as one block");
             return match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-                Ok(second) if image_table_reread::second_read_keeps_more_rows(&first, &second) => Ok(second),
+                Ok(second) => match image_table_reread::judge_second_read(&first, &second) {
+                    Ok(()) => {
+                        tracing::debug!("standalone table re-read adopted");
+                        Ok(second)
+                    }
+                    Err(reason) => {
+                        tracing::debug!(reason, "standalone table re-read rejected");
+                        Ok(first)
+                    }
+                },
                 Err(error @ crate::XbergError::Cancelled) => Err(error),
-                Ok(_) | Err(_) => Ok(first),
+                Err(error) => {
+                    tracing::debug!(%error, "standalone table re-read failed; keeping the first read");
+                    Ok(first)
+                }
             };
         }
         #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
@@ -5027,6 +5045,38 @@ mod tests {
             .expect("whole-image OCR must materialize Tesseract configuration");
         assert_eq!(tesseract_config.psm, Some(VERTICAL_BLOCK_TESSERACT_PSM));
         assert_eq!(tesseract_config.language, vec!["jpn_vert"]);
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn table_reread_is_skipped_for_tiff_structure_layout_vertical_and_known_tables() {
+        let first = image_table_reread::sample_table_document();
+        let config = ExtractionConfig::default();
+        for mime in ["image/tiff", "image/TIFF", "image/x-tiff"] {
+            assert!(single_block_table_config(&config, mime, &first).is_none(), "{mime}");
+        }
+        assert!(single_block_table_config(&config, "image/jpeg", &first).is_some());
+
+        let mut structured = config.clone();
+        structured.include_document_structure = true;
+        assert!(single_block_table_config(&structured, "image/png", &first).is_none());
+
+        #[cfg(feature = "layout-types")]
+        {
+            let mut layout = config.clone();
+            layout.layout = Some(Default::default());
+            assert!(single_block_table_config(&layout, "image/png", &first).is_none());
+        }
+
+        let mut vertical = config.clone();
+        vertical.ocr.get_or_insert_default().language = vec!["jpn_vert".to_string()];
+        assert!(single_block_table_config(&vertical, "image/png", &first).is_none());
+
+        let mut with_table = image_table_reread::sample_table_document();
+        with_table.tables.push(Default::default());
+        assert!(single_block_table_config(&config, "image/png", &with_table).is_none());
+
+        assert!(single_block_table_config(&config, "image/png", &InternalDocument::default()).is_none());
     }
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
