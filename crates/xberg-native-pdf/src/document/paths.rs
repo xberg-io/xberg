@@ -31,12 +31,10 @@ impl PdfDocument {
             );
             match op {
                 // An image paints no path, so the page-local paths stay complete; a form may hold paths. ~keep
-                Operator::Do { name } => {
-                    page_resources
-                        .get_or_insert_with(|| self.get_page_resources(page_index).ok())
-                        .as_ref()
-                        .is_some_and(|resources| self.is_image_xobject(resources, &name))
-                }
+                Operator::Do { name } => page_resources
+                    .get_or_insert_with(|| self.get_page_resources(page_index).ok())
+                    .as_ref()
+                    .is_some_and(|resources| self.is_image_xobject(resources, &name)),
                 Operator::InlineImage { .. } | Operator::ClipNonZero | Operator::ClipEvenOdd => false,
                 _ => true,
             }

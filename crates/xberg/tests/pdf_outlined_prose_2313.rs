@@ -241,8 +241,16 @@ fn vector_inventory_abstains_at_a_form_xobject() {
             .unwrap()
             .len()
     };
-    assert_eq!(paths("Image"), 1, "an image XObject leaves the page-local outline readable");
-    assert_eq!(paths("Form"), 0, "a form XObject can hold paths the page stream does not show");
+    assert_eq!(
+        paths("Image"),
+        1,
+        "an image XObject leaves the page-local outline readable"
+    );
+    assert_eq!(
+        paths("Form"),
+        0,
+        "a form XObject can hold paths the page stream does not show"
+    );
 }
 
 #[test]
