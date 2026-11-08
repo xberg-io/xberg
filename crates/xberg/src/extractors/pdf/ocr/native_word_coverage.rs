@@ -165,7 +165,8 @@ pub(super) fn native_text_paints_all_read_ink(
     ) else {
         return false;
     };
-    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+    !native_word_glues_separate_cells(&native_words, &read_words)
+        && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
         && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
 }
 
@@ -280,6 +281,25 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
         }
     }
     if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
+}
+
+/// Whether a native word glues read words that stand a cell apart. The native text joins cells
+/// that touch in its glyph stream (`1ThreadOvf_PMC1`) although the page sets them a column apart,
+/// so the words the read separates are not words of the native text, and the share cannot credit
+/// the token for them: the joined read words contain it, yet a reader of the native text never
+/// sees `Ovf_PMC1`. A gap under one line height is a break inside a word, such as the read
+/// splitting at an underscore or a bracket, which the native text keeps as one word. ~keep
+fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
+    native.iter().any(|(_, place)| {
+        let mut parts: Vec<&LineBox> = read
+            .iter()
+            .filter(|(word, at)| place.owns(at) && !alnum_key(word).is_empty())
+            .map(|(_, at)| at)
+            .collect();
+        parts.sort_by(|a, b| a.left.total_cmp(&b.left));
+        let height = place.bottom - place.top;
+        parts.windows(2).any(|pair| pair[1].left - pair[0].right > height.abs())
+    })
 }
 
 fn pixel_window(

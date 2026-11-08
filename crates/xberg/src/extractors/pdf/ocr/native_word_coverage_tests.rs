@@ -309,6 +309,56 @@ mod ink_ownership {
         assert!(owns(&pdf, Some(&["rnov", "eax.", "ebx", "ca11", "puts"])));
     }
 
+    /// The read of `pdf` with its widest native word read as two words at its two ends, `apart`
+    /// or touching in the middle of the word.
+    fn read_splitting_widest_word(pdf: &PdfDocument, apart: bool) -> ExtractedDocument {
+        let boxes = native_word_boxes(pdf);
+        let widest = (0..boxes.len())
+            .max_by(|a, b| boxes[*a].1.width.total_cmp(&boxes[*b].1.width))
+            .unwrap();
+        let words = boxes
+            .iter()
+            .enumerate()
+            .flat_map(|(at, (text, placed))| {
+                if at != widest {
+                    return vec![iterator_word(text, *placed)];
+                }
+                let piece = if apart { placed.width * 0.2 } else { placed.width / 2.0 };
+                let (head, tail) = text.split_at(text.len() / 2);
+                vec![
+                    iterator_word(
+                        head,
+                        Rect {
+                            width: piece,
+                            ..*placed
+                        },
+                    ),
+                    iterator_word(
+                        tail,
+                        Rect {
+                            x: placed.x + placed.width - piece,
+                            width: piece,
+                            ..*placed
+                        },
+                    ),
+                ]
+            })
+            .collect();
+        read_of(words)
+    }
+
+    #[test]
+    fn should_not_own_a_native_word_that_glues_read_words_a_cell_apart() {
+        let pdf = pdf_with("");
+        assert!(!ink_owned(&pdf, LAYER, &read_splitting_widest_word(&pdf, true)));
+    }
+
+    #[test]
+    fn should_own_a_native_word_whose_read_words_touch() {
+        let pdf = pdf_with("");
+        assert!(ink_owned(&pdf, LAYER, &read_splitting_widest_word(&pdf, false)));
+    }
+
     #[test]
     fn should_not_own_a_word_over_a_fill_that_ends_inside_it() {
         let pdf = pdf_between("0.6 g 72 696 10 14 re f 0 g", "");

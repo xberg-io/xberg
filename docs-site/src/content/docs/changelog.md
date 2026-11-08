@@ -207,6 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
+  The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that spans more than one read word now keeps the OCR read.
+
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
 

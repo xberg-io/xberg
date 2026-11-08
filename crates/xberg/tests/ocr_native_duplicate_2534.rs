@@ -200,3 +200,30 @@ async fn automatic_ocr_returns_a_table_page_once_when_a_cell_starts_with_a_pipe(
     );
     assert_eq!(automatic[1], native[1]);
 }
+
+const GLUED_TOKEN_TABLE_PAGE: u32 = 4443;
+
+#[tokio::test]
+async fn automatic_ocr_keeps_words_that_a_glued_native_token_hides_on_a_table_page() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(SDM, GLUED_TOKEN_TABLE_PAGE);
+    let (native, _) = pages_of(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    for word in ["Ovf_PMC1", "Ovf_PMC2", "Ovf_PMC3"] {
+        let held = |page: &str| page.split_whitespace().any(|token| token == word);
+        assert!(!held(&native[1]), "the native text glues `{word}` into a longer token");
+        assert!(held(&automatic[1]), "automatic OCR keeps `{word}`");
+    }
+}
