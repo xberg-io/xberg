@@ -51,6 +51,7 @@ pub(crate) struct PathGraphicsState {
     pub stroke_color_rgb: (f32, f32, f32),
     pub fill_color_rgb: (f32, f32, f32),
     pub line_width: f32,
+    pub stroke_alpha: f32,
     pub line_cap: u8,
     pub line_join: u8,
     /// `d` operand: on/off lengths in user space and phase; an empty array is solid.
@@ -64,6 +65,7 @@ impl PathGraphicsState {
             stroke_color_rgb: (0.0, 0.0, 0.0),
             fill_color_rgb: (0.0, 0.0, 0.0),
             line_width: 1.0,
+            stroke_alpha: 1.0,
             line_cap: 0,
             line_join: 0,
             dash: (Vec::new(), 0.0),
@@ -131,6 +133,13 @@ pub enum FillRule {
     EvenOdd,
 }
 
+/// Cache source fields only: omitted fields must inherit the state at each application. ~keep
+#[derive(Debug, Default)]
+pub(crate) struct PathGraphicsPatch {
+    pub(crate) dash: Option<(Vec<f32>, f32)>,
+    pub(crate) stroke_alpha: Option<f32>,
+}
+
 /// Path extractor for accumulating path operations from content streams.
 ///
 /// This struct maintains state during content stream processing and accumulates
@@ -162,6 +171,7 @@ pub struct PathExtractor {
     current_stroke_color: Option<Color>,
     current_fill_color: Option<Color>,
     current_line_width: f32,
+    current_stroke_alpha: f32,
     current_line_cap: LineCap,
     current_line_join: LineJoin,
     current_dash: (Vec<f32>, f32),
@@ -180,6 +190,7 @@ pub struct PathExtractor {
     max_xobject_depth: usize,
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
     cached_xobject_dict: Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
+    cached_extgstates: std::collections::HashMap<String, PathGraphicsPatch>,
     /// Stack of active Optional Content Group (PDF "layer") names. Each
     /// `BDC`/`BMC` operator (any tag) pushes one entry and each `EMC` pops
     /// one, so the depth tracks the marked-content nesting precisely
@@ -203,6 +214,7 @@ impl PathExtractor {
             current_stroke_color: Some(Color::black()),
             current_fill_color: Some(Color::black()),
             current_line_width: 1.0,
+            current_stroke_alpha: 1.0,
             current_line_cap: LineCap::Butt,
             current_line_join: LineJoin::Miter,
             current_dash: (Vec::new(), 0.0),
@@ -212,6 +224,7 @@ impl PathExtractor {
             processed_xobjects: std::collections::HashSet::new(),
             max_xobject_depth: 100,
             cached_xobject_dict: None,
+            cached_extgstates: std::collections::HashMap::new(),
             oc_layer_stack: Vec::new(),
         }
     }
@@ -265,6 +278,7 @@ impl PathExtractor {
     /// Set the page resources for XObject resolution.
     pub fn set_resources(&mut self, resources: crate::object::Object) {
         self.resources = Some(resources);
+        self.cached_extgstates.clear();
     }
 
     /// The resource dictionary currently in scope — the page resources, or
@@ -277,7 +291,8 @@ impl PathExtractor {
 
     /// Swap in a new resource scope for `Do` name lookups and return the
     /// previous (resources, cached_dict) pair so the caller can restore it
-    /// after descending into a nested Form XObject. Clears the name→ref
+    /// after descending into a nested Form XObject. Parsed ExtGState patches
+    /// are discarded on both scope switches and restoration. Clears the name→ref
     /// cache so the next `resolve_xobject_ref` call rebuilds it against the
     /// new scope.
     ///
@@ -293,6 +308,7 @@ impl PathExtractor {
         Option<crate::object::Object>,
         Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
     ) {
+        self.cached_extgstates.clear();
         let prev_resources = std::mem::replace(&mut self.resources, new_resources);
         let prev_cache = self.cached_xobject_dict.take();
         (prev_resources, prev_cache)
@@ -307,8 +323,31 @@ impl PathExtractor {
             Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
         ),
     ) {
+        self.cached_extgstates.clear();
         self.resources = saved.0;
         self.cached_xobject_dict = saved.1;
+    }
+
+    pub(crate) fn cache_path_extgstate(&mut self, name: &str, patch: PathGraphicsPatch) {
+        self.cached_extgstates.insert(name.to_owned(), patch);
+    }
+
+    pub(crate) fn apply_cached_path_extgstate(&mut self, name: &str, state: &mut PathGraphicsState) -> bool {
+        let Some(patch) = self.cached_extgstates.get(name) else {
+            return false;
+        };
+        let alpha = patch.stroke_alpha;
+        if let Some((lengths, phase)) = &patch.dash {
+            state.dash.0.clone_from(lengths);
+            state.dash.1 = *phase;
+            self.current_dash.0.clone_from(lengths);
+            self.current_dash.1 = *phase;
+        }
+        if let Some(alpha) = alpha {
+            state.stroke_alpha = alpha;
+            self.set_stroke_alpha(alpha);
+        }
+        true
     }
 
     /// Resolve an XObject name to its ObjectRef, caching the XObject dict on first call.
@@ -405,6 +444,7 @@ impl PathExtractor {
     pub fn update_from_state(&mut self, state: &GraphicsState) {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
+        self.current_stroke_alpha = state.stroke_alpha;
 
         // Convert line cap (0=butt, 1=round, 2=square) ~keep
         self.current_line_cap = match state.line_cap {
@@ -432,6 +472,7 @@ impl PathExtractor {
     pub(crate) fn update_from_path_state(&mut self, state: &PathGraphicsState) {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
+        self.current_stroke_alpha = state.stroke_alpha;
         self.current_line_cap = match state.line_cap {
             1 => LineCap::Round,
             2 => LineCap::Square,
@@ -452,6 +493,10 @@ impl PathExtractor {
     /// Set the line dash pattern (`d` operator); an empty array restores a solid line.
     pub fn set_dash(&mut self, array: Vec<f32>, phase: f32) {
         self.current_dash = (array, phase);
+    }
+
+    pub(crate) fn set_stroke_alpha(&mut self, alpha: f32) {
+        self.current_stroke_alpha = alpha;
     }
 
     /// Set stroke color.
@@ -632,7 +677,7 @@ impl PathExtractor {
         let mut path = PathContent::new(bbox);
         path.operations = std::mem::take(&mut self.current_operations);
 
-        if stroke {
+        if stroke && self.current_stroke_alpha > 0.0 {
             path.stroke_color = self.current_stroke_color;
             // The `w` operand is in user space while the path coordinates
             // above were CTM-transformed (§8.4.3.2: the line width is
