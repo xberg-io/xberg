@@ -3805,6 +3805,22 @@ mod numbered_section_heading_tests {
         assert!(is_numbered_section_heading("IV - Results"));
     }
 
+    /// GH#2688: a number followed by a measurement operator or a DOI/ratio tail
+    /// is data, not an enumerated heading. The multi-level cases are headings
+    /// without the operator guard, so each operator is pinned on its own.
+    #[test]
+    fn a_number_before_a_measurement_operator_or_tail_is_not_a_heading() {
+        assert!(!is_numbered_section_heading("2.3 \u{00B1} 0.1"));
+        assert!(!is_numbered_section_heading("3.2 \u{00B1} Error"));
+        assert!(!is_numbered_section_heading("240 \u{00D7} 10"));
+        assert!(!is_numbered_section_heading("4.1 \u{00D7} Scaling"));
+        assert!(!is_numbered_section_heading("3 \u{00F7} 2"));
+        assert!(!is_numbered_section_heading("3.1 \u{00F7} Scale"));
+        assert!(!is_numbered_section_heading("10.1109/IPIN.2018.8533777"));
+        assert!(!is_numbered_section_heading("1.2/1.3 Results"));
+        assert!(is_numbered_section_heading("4.1 Scaling"));
+    }
+
     #[test]
     fn single_number_with_all_caps_remainder_is_heading() {
         assert!(is_numbered_section_heading("1. INTRODUCTION"));
