@@ -101,3 +101,109 @@ fn source_header_bands_and_merged_label_reach_the_html_and_public_grid() {
     assert!(!lower.cells.iter().any(|cell| cell.row == 1 && cell.col == 0));
     assert_eq!(lower.cells.iter().filter(|cell| cell.row >= 2).count(), 27);
 }
+
+#[test]
+#[ignore = "requires the reference-only ParseBench source PDF outside Git"]
+fn parsebench_survey_leaf_band_remains_a_header_below_group_labels() {
+    let bytes = parsebench_source();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    let [_, survey] = result.tables.as_slice() else {
+        panic!("expected exactly the two source tables");
+    };
+    assert_eq!(survey.cells.len(), 9);
+    assert_eq!(
+        survey.cells[1],
+        ["Department", "2024", "2025", "Voluntary Turnover", "Avg Tenure (yrs)"]
+    );
+    assert_eq!(survey.cells[2], ["Engineering", "4.2", "4.5", "8.1%", "3.8"]);
+    assert_eq!(survey.cells[8], ["Company-wide", "3.9", "4.1", "9.9%", "3.9"]);
+    let survey_html = survey_html(&result.content);
+    assert!(survey_html.contains("<th colspan=\"2\">Satisfaction Score</th>"));
+    assert!(survey_html.contains("<th colspan=\"2\">Retention</th>"));
+    assert!(survey_html.contains("<td>Engineering</td>"));
+    assert!(survey_html.contains("<td>Company-wide</td>"));
+    for label in &survey.cells[1] {
+        assert_eq!(
+            survey_html.matches(&format!(">{label}</th>")).count(),
+            1,
+            "source leaf label {label:?} must be a header in survey HTML:\n{survey_html}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires the reference-only ParseBench source PDF outside Git"]
+fn parsebench_survey_bold_leaves_without_a_visible_separator_stay_body_cells() {
+    let bytes = rewrite_parsebench_source(|source| {
+        let separator = ".7 .7 .7 RG\nn 0 154 m 406.8 154 l S";
+        assert_eq!(source.matches(separator).count(), 1);
+        source.replace(separator, "1 1 1 RG\nn 0 154 m 406.8 154 l S")
+    });
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    let survey_html = survey_html(&result.content);
+    assert!(survey_html.contains("<th colspan=\"2\">Satisfaction Score</th>"));
+    assert!(survey_html.contains("<td>Department</td>"));
+    assert!(survey_html.contains("<td>Company-wide</td>"));
+}
+
+#[test]
+#[ignore = "requires the reference-only ParseBench source PDF outside Git"]
+fn parsebench_survey_keeps_distinct_baselines_in_the_ruled_leaf_band() {
+    let bytes = rewrite_parsebench_source(|source| {
+        let label = "BT 1 0 0 1 194.504 163 Tm (2025) Tj T* ET";
+        assert_eq!(source.matches(label).count(), 1);
+        source.replace(
+            label,
+            &format!("{label}\nBT 1 0 0 1 126.104 157 Tm (North) Tj T* ET\nBT 1 0 0 1 194.504 157 Tm (South) Tj T* ET"),
+        )
+    });
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    let [_, survey] = result.tables.as_slice() else {
+        panic!("expected exactly the two source tables");
+    };
+    assert_eq!(survey.cells.len(), 10);
+    assert_eq!(survey.cells[1][1..3], ["2024", "2025"]);
+    assert_eq!(survey.cells[2][1..3], ["North", "South"]);
+    assert!(survey_html(&result.content).contains("<td>Department</td>"));
+}
+
+fn rewrite_parsebench_source(rewrite: impl FnOnce(&str) -> String) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(&parsebench_source()).unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let source = String::from_utf8(pdf.get_page_content(page)).unwrap();
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(rewrite(&source).into_bytes());
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn parsebench_source() -> Vec<u8> {
+    let path = std::env::var_os("XBERG_PARSEBENCH_2332_SOURCE").expect("provide the pinned ParseBench source PDF");
+    let bytes = std::fs::read(path).expect("read the ParseBench reference PDF");
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "021397de9fc37d73c1412c47627e19dc3292dfa47d4b521610f653c4366254a4"
+    );
+    bytes
+}
+
+fn parsebench_html_config() -> ExtractionConfig {
+    ExtractionConfig {
+        disable_ocr: true,
+        use_cache: false,
+        enable_quality_processing: false,
+        output_format: OutputFormat::Html,
+        ..Default::default()
+    }
+}
+
+fn survey_html(content: &str) -> &str {
+    let tables = content.split("<table").skip(1).collect::<Vec<_>>();
+    assert_eq!(tables.len(), 2);
+    tables[1].split_once("</table>").expect("complete survey HTML table").0
+}

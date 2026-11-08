@@ -81,6 +81,11 @@ impl<T> SecondaryDictionaries<T> {
         entry.api.get()
     }
 
+    /// The secondary handles created so far.
+    pub(super) fn initialized(&self) -> impl Iterator<Item = &T> {
+        self.entries.iter().filter_map(|entry| entry.api.get())
+    }
+
     fn for_call(&self) -> DictionaryLookups<'_, T> {
         DictionaryLookups {
             dictionaries: self,

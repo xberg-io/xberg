@@ -48,6 +48,12 @@ depends = ["os:require linux darwin"]
 env = { CARGO_TERM_COLOR = "always" }
 run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
 
+["rust:test:focused-pr"]
+description = "Run the exact PDF/OCR or API jobs checks used on pull requests"
+depends = ["os:require linux darwin"]
+usage = 'arg "<suite>" help="Fixed suite: pdf-ocr or api-jobs"'
+run = 'bash scripts/ci/rust/run-focused-pr-tests.sh "$usage_suite"'
+
 ["rust:test:jpeg-recovery"]
 description = "Qualify nine real OCR recovery controls with verified English"
 depends = ["os:require linux darwin"]
@@ -60,7 +66,7 @@ run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usag
 ["rust:test:explicit-sideways"]
 description = "Qualify explicit sideways OCR with pinned offline model artifacts"
 depends = ["os:require linux darwin"]
-usage = 'arg "<profile>" help="Use warm for thirteen controls or native for seven classifier-free controls"'
+usage = 'arg "<profile>" help="Use warm for fifteen controls or native for nine classifier-free controls"'
 run = 'bash scripts/ci/rust/run-explicit-sideways-tests.sh "$usage_profile"'
 
 ["rust:test:khmer-native-retention"]

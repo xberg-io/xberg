@@ -16,14 +16,16 @@ expected_names=()
 case "$profile" in
 warm)
   features+=",auto-rotate-tract"
-  expected=13
+  expected=15
   expected_names=(
+    caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
     cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     prose::explicit_language_block_abstains_on_extra_prose_regions
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
     explicit_language_block_recovers_the_counterclockwise_source_grid
+    explicit_language_block_recovers_the_upside_down_source_grid
     explicit_language_block_retains_the_sideways_source_table
     explicit_osd_retains_the_original_source_grid_without_rotating_pixels
     helpers::tests::test_get_test_documents_dir
@@ -41,14 +43,16 @@ warm)
   fi
   ;;
 native)
-  expected=7
+  expected=9
   expected_names=(
+    caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
     cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     prose::explicit_language_block_abstains_on_extra_prose_regions
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
     explicit_language_block_recovers_the_counterclockwise_source_grid
+    explicit_language_block_recovers_the_upside_down_source_grid
     explicit_language_block_recovers_without_classifier_features
   )
   filters=(--exact "${expected_names[@]}")

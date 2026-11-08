@@ -15,28 +15,32 @@ const SECOND: &str =
     "industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and";
 const THIRD: &str = "scrambled it to make a type specimen book";
 const ORDINALS: [char; 6] = ['1', '2', '3', '1', '2', '3'];
-const DOCUMENT_SHA: &str = "89b055edbdfb99a7cf707b5d15c1bf65c2460ddddf9c9a6bfb54bc79d786d1f7";
-const PAGE_SHA: &str = "1d6b45f0322b7f2c3bc19ef3b0e0ad099112d14ad79e61c0109441ae7bd9900b";
 
 fn sha(bytes: impl AsRef<[u8]>) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 
-fn assert_projection(content: &str, original_len: usize, cut: usize, original_sha: &str) {
-    assert!(content.len() > original_len, "right-column recovery absent");
-    let end = cut + content.len() - original_len;
+// The stock read comes from the same run, because Tesseract's low-confidence text on this page
+// differs between x86_64 and aarch64. Only the recovery's effect on that text is pinned. ~keep
+fn assert_projection(content: &str, stock: &str) {
+    assert!(content.len() > stock.len(), "right-column recovery absent");
+    let cut: usize = content
+        .chars()
+        .zip(stock.chars())
+        .take_while(|(left, right)| left == right)
+        .map(|(character, _)| character.len_utf8())
+        .sum();
+    let end = cut + content.len() - stock.len();
     let inserted = &content[cut..end];
-    assert_eq!(
-        sha([&content.as_bytes()[..cut], &content.as_bytes()[end..]].concat()),
-        original_sha
-    );
+    let original = [&content[..cut], &content[end..]].concat();
+    assert_eq!(original, stock, "OCR text around the recovered lines changed");
     let lines: Vec<_> = inserted
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect();
     assert_eq!(lines.len(), 18);
-    for (row, number) in lines.chunks_exact(3).zip(ORDINALS) {
+    for (row, number) in lines.as_chunks::<3>().0.iter().zip(ORDINALS) {
         let marked = row[0].strip_prefix(number).expect("exact source ordinal");
         let body = marked.strip_prefix(['.', ',']).unwrap_or(marked);
         assert_eq!(body.strip_prefix(' '), Some(FIRST));
@@ -129,6 +133,11 @@ fn pinned_config(use_cache: bool, use_ocr_cache: bool, tessdata: &std::path::Pat
     config
 }
 
+async fn read_stock(bytes: &[u8], tessdata: &std::path::Path) -> xberg::types::ExtractedDocument {
+    let config = pinned_config(true, true, tessdata);
+    read_pinned(&xberg::engine::Engine::new_default(), bytes, &config).await
+}
+
 async fn read_pinned(
     engine: &xberg::engine::Engine,
     bytes: &[u8],
@@ -150,10 +159,15 @@ async fn read_pinned(
 async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original_projections() {
     let tessdata = tempfile::tempdir().expect("private tessdata directory");
     write_english_model(tessdata.path());
+    let bytes = pinned_page();
     let config = pinned_config(false, false, tessdata.path());
-    let doc = read_pinned(&xberg::engine::Engine::new_default(), &pinned_page(), &config).await;
+    let doc = read_pinned(&xberg::engine::Engine::new_default(), &bytes, &config).await;
+    let stock = read_stock(&bytes, tessdata.path()).await;
     let [page] = doc.pages.as_ref().unwrap().as_slice() else {
         panic!("exactly one page")
+    };
+    let [stock_page] = stock.pages.as_ref().unwrap().as_slice() else {
+        panic!("exactly one stock page")
     };
     assert_eq!(page.page_number, 1);
     let [table] = doc.tables.as_slice() else {
@@ -167,11 +181,11 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
         serde_json::to_value(page_table.as_ref()).unwrap()
     );
     assert_eq!(
-        table.cells[0],
-        ["Palo alte Netware,", "the plbaleypersecurty lender", "gah ne"]
+        serde_json::to_value(&doc.tables).unwrap(),
+        serde_json::to_value(&stock.tables).unwrap()
     );
-    assert_projection(&doc.content, 2321, 2267, DOCUMENT_SHA);
-    assert_projection(&page.content, 2316, 2266, PAGE_SHA);
+    assert_projection(&doc.content, &stock.content);
+    assert_projection(&page.content, &stock_page.content);
 }
 
 #[derive(Default)]
@@ -210,8 +224,12 @@ async fn cached_pdf_recovers_the_same_certified_strips_on_cold_and_warm_reads() 
         .with_cache_backend(cache.clone())
         .build();
     let cold = read_pinned(&engine, &bytes, &config).await;
-    assert_projection(&cold.content, 2321, 2267, DOCUMENT_SHA);
-    assert_projection(&cold.pages.as_deref().unwrap()[0].content, 2316, 2266, PAGE_SHA);
+    let stock = read_stock(&bytes, tessdata.path()).await;
+    assert_projection(&cold.content, &stock.content);
+    assert_projection(
+        &cold.pages.as_deref().unwrap()[0].content,
+        &stock.pages.as_deref().unwrap()[0].content,
+    );
     assert_eq!(cache.hits.load(Ordering::SeqCst), 0);
     assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
 
@@ -233,8 +251,8 @@ async fn explicit_inner_ocr_cache_keeps_both_stock_projections() {
     let [page] = doc.pages.as_ref().unwrap().as_slice() else {
         panic!("exactly one page")
     };
-    assert_eq!(sha(&doc.content), DOCUMENT_SHA);
-    assert_eq!(sha(&page.content), PAGE_SHA);
+    assert!(!doc.content.contains(FIRST), "the inner OCR cache skips the recovery");
+    assert!(!page.content.contains(FIRST), "the inner OCR cache skips the recovery");
     assert_eq!(doc.tables.len(), 1);
     assert_eq!(page.tables.len(), 1);
 }

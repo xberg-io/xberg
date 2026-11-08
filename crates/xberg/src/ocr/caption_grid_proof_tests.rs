@@ -1,6 +1,6 @@
-use super::certify_figure_caption;
+use super::{Rect, SourceElement, certify_figure_caption, certify_figure_caption_rows, follows_wrapped_caption_shape};
 use crate::extractors::security::SecurityLimits;
-use crate::types::formats::OcrTable;
+use crate::types::formats::{OcrTable, OcrTableBoundingBox};
 use crate::types::{OcrBoundingGeometry, OcrElement, OcrElementLevel};
 
 const FRAME: (u32, u32) = (2586, 3346);
@@ -173,4 +173,293 @@ fn refuses_more_than_the_fixed_capture_limit_even_with_a_generous_caller_budget(
     }
     assert_eq!(source.elements.len(), 1025);
     assert!(!accepts(&source));
+}
+
+fn assert_exact_lines(source: &Source, frame: (u32, u32)) {
+    let proof = certify_figure_caption(&source.table, &source.elements, frame, &SecurityLimits::default())
+        .expect("complete caption rows with exact cell and word ownership");
+    let expected: Vec<_> = source
+        .elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Line)
+        .map(|line| line.text.as_str())
+        .collect();
+    assert_eq!(proof.lines(), expected);
+    assert_eq!(
+        proof.lines().iter().flat_map(|line| line.split_whitespace()).count(),
+        85
+    );
+}
+
+#[test]
+fn wrapped_caption_ownership_is_independent_of_the_label_and_punctuation() {
+    for (label, number) in [("Fig.", "4:"), ("Fig", "4:"), ("Table", "4:"), ("Figure", "4")] {
+        let mut source = source();
+        let original = "Figure 4:";
+        let replacement = format!("{label} {number}");
+        assert_eq!(source.table.cells[0][0], original);
+        assert_eq!(source.elements[1].text, "Figure");
+        assert_eq!(source.elements[2].text, "4:");
+        source.table.cells[0][0].clone_from(&replacement);
+        source.elements[0].text = source.elements[0].text.replacen(original, &replacement, 1);
+        source.elements[1].text = label.to_owned();
+        source.elements[2].text = number.to_owned();
+        assert_exact_lines(&source, FRAME);
+    }
+
+    let mut source = source();
+    let last_cell = &mut source.table.cells[5][0];
+    assert!(last_cell.ends_with("(C)."));
+    last_cell.pop();
+    let last_line = source
+        .elements
+        .iter_mut()
+        .rfind(|element| element.level == OcrElementLevel::Line)
+        .unwrap();
+    assert!(last_line.text.ends_with("(C)."));
+    last_line.text.pop();
+    let last_word = source.elements.last_mut().unwrap();
+    assert_eq!(last_word.text, "(C).");
+    last_word.text.pop();
+    assert_exact_lines(&source, FRAME);
+}
+
+#[test]
+fn accepts_a_short_full_line_edge_at_equivalent_raster_scales() {
+    for scale in [1, 2, 3] {
+        let mut source = source();
+        let shortened_line = source
+            .elements
+            .iter()
+            .enumerate()
+            .filter(|(_, element)| element.level == OcrElementLevel::Line)
+            .nth(2)
+            .unwrap()
+            .0;
+        let shortened_word = source.elements[shortened_line + 1..]
+            .iter()
+            .position(|element| element.level == OcrElementLevel::Line)
+            .unwrap()
+            + shortened_line;
+        assert_eq!(source.elements[shortened_word].text, "(B),");
+        for (index, element) in source.elements.iter_mut().enumerate() {
+            let OcrBoundingGeometry::Rectangle {
+                left,
+                top,
+                width,
+                height,
+            } = &mut element.geometry
+            else {
+                panic!("axis-aligned source geometry");
+            };
+            if index == shortened_line || index == shortened_word {
+                *width -= 5;
+            }
+            *left *= scale;
+            *top *= scale;
+            *width *= scale;
+            *height *= scale;
+        }
+        let region = source.table.bounding_box.as_mut().unwrap();
+        region.left *= scale;
+        region.top *= scale;
+        region.right *= scale;
+        region.bottom *= scale;
+        assert_exact_lines(&source, (FRAME.0 * scale, FRAME.1 * scale));
+    }
+}
+
+#[test]
+fn keeps_staggered_unruled_cells_without_an_intact_intervening_line() {
+    let mut source = source();
+    for (row, word_count) in [(2, 4), (3, 8)] {
+        let cells = &mut source.table.cells[row];
+        assert!(cells[1..].iter().all(String::is_empty));
+        let words: Vec<_> = cells[0].split_whitespace().collect();
+        let first = words[..word_count].join(" ");
+        let second = words[word_count..].join(" ");
+        cells[0] = first;
+        cells[1] = second;
+    }
+    assert!(!accepts(&source));
+}
+
+#[test]
+fn keeps_a_cell_boundary_without_a_whole_word_crossing_its_gap() {
+    let mut source = source();
+    let word = source
+        .elements
+        .iter_mut()
+        .find(|element| element.level == OcrElementLevel::Word && element.text == "guarantees")
+        .unwrap();
+    let OcrBoundingGeometry::Rectangle { left, width, .. } = &mut word.geometry else {
+        panic!("axis-aligned source word");
+    };
+    assert_eq!((*left, *left + *width), (572, 750));
+    *width = 620 - *left;
+    assert!(!accepts(&source));
+}
+
+fn shift_left_edge(source: &mut Source, lines: &[usize], delta: u32) {
+    let mut current = None;
+    let mut first_word = false;
+    for element in &mut source.elements {
+        let shift = match element.level {
+            OcrElementLevel::Line => {
+                current = Some(current.map_or(0, |index| index + 1));
+                first_word = true;
+                lines.contains(&current.unwrap())
+            }
+            OcrElementLevel::Word => {
+                std::mem::take(&mut first_word) && current.is_some_and(|index| lines.contains(&index))
+            }
+            _ => false,
+        };
+        if shift {
+            let OcrBoundingGeometry::Rectangle { left, width, .. } = &mut element.geometry else {
+                panic!("axis-aligned source geometry");
+            };
+            *left += delta;
+            *width -= delta;
+        }
+    }
+}
+
+#[test]
+fn refuses_middle_lines_that_start_beyond_the_margin_tolerance() {
+    let line_height = 39;
+    let tolerance = line_height / 6;
+    // The first and second lines already differ by 1 px, so delta + 1 is the measured offset.
+    let within = tolerance - 1;
+    let mut source = source();
+    shift_left_edge(&mut source, &[1, 2, 3], within);
+    assert!(accepts(&source), "middle lines offset by exactly the tolerance");
+    for delta in [tolerance, line_height] {
+        let mut source = self::source();
+        shift_left_edge(&mut source, &[1, 2, 3], delta);
+        assert!(!accepts(&source), "middle lines {delta} px further right are ragged");
+    }
+}
+
+fn synthetic_line(left: u32, top: u32, right: u32, height: u32) -> SourceElement<'static> {
+    SourceElement {
+        text: "",
+        bounds: Rect {
+            left,
+            top,
+            right,
+            bottom: top + height,
+        },
+    }
+}
+
+#[test]
+fn margin_tolerance_never_drops_below_one_pixel_on_small_rasters() {
+    let block = |last_left| {
+        vec![
+            synthetic_line(10, 0, 100, 5),
+            synthetic_line(11, 6, 100, 5),
+            synthetic_line(10, 12, 99, 5),
+            synthetic_line(last_left, 18, 40, 5),
+        ]
+    };
+    assert!(
+        follows_wrapped_caption_shape(&block(11)),
+        "1 px off the margin on a 5 px line"
+    );
+    assert!(
+        !follows_wrapped_caption_shape(&block(12)),
+        "2 px off the margin on a 5 px line"
+    );
+}
+
+#[test]
+fn one_short_line_does_not_shrink_the_margin_tolerance_of_the_block() {
+    let block = vec![
+        synthetic_line(100, 0, 1000, 60),
+        synthetic_line(108, 65, 1000, 12),
+        synthetic_line(100, 80, 1000, 60),
+        synthetic_line(100, 145, 400, 60),
+    ];
+    assert!(
+        follows_wrapped_caption_shape(&block),
+        "8 px is within a sixth of the 60 px median line"
+    );
+}
+
+struct Synthetic {
+    cells: Vec<Vec<String>>,
+    elements: Vec<OcrElement>,
+}
+
+fn synthetic_block(last_line: &[(&'static str, u32, u32)]) -> Synthetic {
+    type Word = (&'static str, u32, u32);
+    let rows: [(&[Word], usize); 4] = [
+        (&[("a", 100, 300), ("b", 310, 660), ("c", 680, 1000)], 2),
+        (
+            &[("x", 100, 400), ("y", 410, 640), ("z", 650, 760), ("t", 770, 1000)],
+            0,
+        ),
+        (&[("a", 100, 300), ("b", 310, 720), ("c", 740, 1000)], 2),
+        (last_line, 0),
+    ];
+    let mut cells = Vec::new();
+    let mut elements = Vec::new();
+    let element = |text: &str, level, left: u32, top: u32, right: u32| OcrElement {
+        text: text.to_owned(),
+        geometry: OcrBoundingGeometry::Rectangle {
+            left,
+            top,
+            width: right - left,
+            height: 40,
+        },
+        level,
+        page_number: 1,
+        ..OcrElement::default()
+    };
+    for (index, (words, split)) in rows.iter().enumerate() {
+        let top = 100 + index as u32 * 50;
+        let text = words.iter().map(|word| word.0).collect::<Vec<_>>().join(" ");
+        let (left, right) = (words[0].1, words[words.len() - 1].2);
+        elements.push(element(&text, OcrElementLevel::Line, left, top, right));
+        for &(word, l, r) in *words {
+            elements.push(element(word, OcrElementLevel::Word, l, top, r));
+        }
+        let texts: Vec<&str> = words.iter().map(|word| word.0).collect();
+        cells.push(if *split == 0 {
+            vec![texts.join(" "), String::new()]
+        } else {
+            vec![texts[..*split].join(" "), texts[*split..].join(" ")]
+        });
+    }
+    Synthetic { cells, elements }
+}
+
+fn certifies(block: &Synthetic) -> bool {
+    let bounds = OcrTableBoundingBox {
+        left: 100,
+        top: 100,
+        right: 1000,
+        bottom: 290,
+    };
+    certify_figure_caption_rows(
+        &block.cells,
+        1,
+        bounds,
+        &block.elements,
+        (1200, 400),
+        &SecurityLimits::default(),
+    )
+    .is_some()
+}
+
+#[test]
+fn refuses_a_two_column_block_whose_last_line_is_justified_to_the_full_width() {
+    let ragged_last = synthetic_block(&[("p", 100, 400)]);
+    assert!(
+        certifies(&ragged_last),
+        "the same block with a short last line is a wrapped caption"
+    );
+    let justified_last = synthetic_block(&[("p", 100, 500), ("q", 510, 1000)]);
+    assert!(!certifies(&justified_last));
 }

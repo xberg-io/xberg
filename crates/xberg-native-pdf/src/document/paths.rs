@@ -209,6 +209,10 @@ impl PdfDocument {
                     };
                     extractor.set_line_cap(cap);
                 }
+                Operator::SetDash { array, phase } => {
+                    state_stack.current_mut().dash = (array.clone(), phase);
+                    extractor.set_dash(array, phase);
+                }
                 Operator::SetLineJoin { join_style } => {
                     state_stack.current_mut().line_join = join_style;
                     let join = match join_style {
@@ -661,6 +665,10 @@ impl PdfDocument {
                         _ => LineCap::Butt,
                     };
                     extractor.set_line_cap(cap);
+                }
+                Operator::SetDash { array, phase } => {
+                    state_stack.current_mut().dash = (array.clone(), phase);
+                    extractor.set_dash(array, phase);
                 }
                 Operator::SetLineJoin { join_style } => {
                     state_stack.current_mut().line_join = join_style;

@@ -408,6 +408,68 @@ pub fn render_png_page_with_budget_evidence(
     render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(budget))
 }
 
+/// One page rendered twice at the same size: as drawn, and with every glyph left unpainted.
+#[doc(hidden)]
+pub struct TextInkRasters {
+    pub width: u32,
+    pub height: u32,
+    /// Row-major luminance of the page as drawn, top-left origin.
+    pub drawn: Vec<u8>,
+    /// Row-major luminance of the same raster with glyph ink removed.
+    pub without_glyphs: Vec<u8>,
+}
+
+/// Internal Core bridge. `None` when `cancelled` fired between renders. Where the two rasters differ,
+/// glyph paints made the pixel; where `without_glyphs` varies, something other than glyphs did.
+#[doc(hidden)]
+pub fn render_text_ink_rasters(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+    cancelled: impl Fn() -> bool,
+) -> Result<Option<TextInkRasters>> {
+    let render = |without_glyphs: bool| -> Result<(u32, u32, Vec<u8>)> {
+        let budget = page_renderer::PngRenderBudget {
+            max_working_bytes,
+            minimum_dpi: dpi,
+        };
+        let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(dpi).as_raw());
+        if without_glyphs {
+            renderer = renderer.without_text_ink();
+        }
+        let (image, _) = renderer.render_page_with_budget(page_num, doc, Some(budget))?;
+        let luminance = image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(text_contrast_probe::luminance)
+            .collect();
+        Ok((image.width, image.height, luminance))
+    };
+    if cancelled() {
+        return Ok(None);
+    }
+    let (width, height, drawn) = render(false)?;
+    if cancelled() {
+        return Ok(None);
+    }
+    let (without_width, without_height, without_glyphs) = render(true)?;
+    if (width, height) != (without_width, without_height) {
+        return Err(crate::Error::InvalidOperation(
+            "glyph-free render differs in size from the drawn render".to_string(),
+        ));
+    }
+    Ok(Some(TextInkRasters {
+        width,
+        height,
+        drawn,
+        without_glyphs,
+    }))
+}
+
 /// Check for actual pixel contrast in each glyph region of an audited literal text show.
 #[doc(hidden)]
 pub fn exact_text_show_has_contrast(
@@ -446,6 +508,9 @@ pub fn exact_text_show_has_contrast(
     renderer.render_page_with_budget(0, doc, Some(budget))?;
     Ok(renderer.text_contrast_probe.is_some_and(|probe| probe.visible()))
 }
+
+#[cfg(test)]
+mod text_ink_tests;
 
 #[tracing::instrument(name = "pdf.render_page", skip_all, fields(page = page_num, dpi = options.dpi))]
 fn render_page_impl(
