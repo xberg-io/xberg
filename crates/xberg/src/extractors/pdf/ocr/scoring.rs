@@ -284,7 +284,7 @@ fn native_text_definitively_failed(
 /// layer beside OCR text that is judged recognition noise. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn native_layer_is_clean(native_text: &str, thresholds: &OcrQualityThresholds) -> bool {
-    let readable = super::super::unmapped_glyphs::dropping_markers(native_text);
+    let readable = super::super::unmapped_glyphs::readable_text(native_text);
     let trimmed = readable.trim();
     if trimmed.is_empty() {
         return false;

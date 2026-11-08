@@ -427,8 +427,15 @@ fn should_restore_native_rows_without_deleting_unproved_ocr_alternatives() {
     let misread: Vec<String> = HARBOUR_LAYER.iter().map(|line| misread_longest_word(line)).collect();
     let read = misread.join("\n");
     let boxes = page_boxes(&HARBOUR_LAYER, &lines_at_rows(&read, &[0, 1, 2, 3, 4, 5]));
-    let first = layer_lines_to_put_first(&layer, &read, false, &OcrQualityThresholds::default(), Some(&boxes))
-        .expect("all source rows lack complete literal OCR coverage");
+    let first = layer_lines_to_put_first(
+        &layer,
+        &read,
+        false,
+        &OcrQualityThresholds::default(),
+        Some(&boxes),
+        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+    )
+    .expect("all source rows lack complete literal OCR coverage");
     assert_eq!(first.lines, layer);
     assert_eq!(text_with_layer_first(&read, &first), format!("{layer}\n\n{read}"));
 }
@@ -521,8 +528,15 @@ fn should_not_drop_an_exact_ocr_line_as_the_copy_of_its_near_twin_in_the_layer()
     // The twin sits on the first line's row: it owns the exact OCR line's place. ~keep
     let mut boxes = page_boxes(&HARBOUR_LAYER, &lines_at_rows(&ocr_text, &[0, 1, 2, 3]));
     boxes.layer.push(super::super::document::LineAt::new(&twin, row_box(0)));
-    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds, Some(&boxes))
-        .expect("the OCR text confirms the layer, and the twin and two more lines are absent from it");
+    let first = layer_lines_to_put_first(
+        &layer,
+        &ocr_text,
+        false,
+        &thresholds,
+        Some(&boxes),
+        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+    )
+    .expect("the OCR text confirms the layer, and the twin and two more lines are absent from it");
     assert!(
         first.lines.lines().any(|line| line == twin),
         "the twin comes back: {:?}",

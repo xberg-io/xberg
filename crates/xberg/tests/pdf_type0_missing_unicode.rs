@@ -336,3 +336,20 @@ fn mixed_pages_clean_native_page_but_keep_the_ocr_marker() {
         "{result:?}"
     );
 }
+
+#[test]
+#[serial_test::serial]
+fn a_two_page_document_keeps_the_no_unicode_warning_when_a_marked_layer_is_kept() {
+    let source = source_with_marker_oracle(Fixture::Mixed, 2);
+    let (result, calls) = extract(&source, &config(OutputFormat::Plain), false);
+    let result = result.unwrap();
+    assert!(calls > 0, "actual custom OCR must execute");
+    assert!(result.content.contains("A B"), "the marked layer is kept: {result:?}");
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "pdf" && warning.message.contains("no Unicode")),
+        "{result:?}"
+    );
+}

@@ -2586,16 +2586,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 complete_native_pages.insert(*page_number);
             }
             if let Some(layer) = layers.get(page_number)
-                && let Some(mut first) = super::document::layer_lines_to_put_first(
+                && let Some(first) = super::document::layer_lines_to_put_first(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
                     boxes.as_ref(),
+                    super::document::ocr_payload_of_page(structured_ocr_pages.get(page_number), None),
                 )
             {
-                let lost = super::super::unmapped_glyphs::strip_native_fragment(&mut first.lines);
-                if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
+                if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(first.lost_glyphs, config) {
                     crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
                 }
                 if first.lines.is_empty() {
@@ -7296,10 +7296,11 @@ struct RunLayerSources<'a> {
     raw_page_paragraphs: &'a [RunPageParagraphs],
 }
 
-/// The OCR paragraphs of one page of a whole-document run, in the pixels of the raster the page
-/// was read from, and the factor per axis that takes that raster to PDF points (the page's
-/// MediaBox over the raster). The factor is `None` when the run rendered no PDF page (an image
-/// run): the layer merge of that page then removes nothing (rule 3). ~keep
+/// The OCR paragraphs of one page of a whole-document run, in the pixels of the frame the page
+/// was read in (the raster, or the size preprocessing resampled it to), and the factor per axis
+/// that takes that frame to PDF points (the page's MediaBox over the frame). The factor is
+/// `None` when the run rendered no PDF page (an image run): the layer merge of that page then
+/// removes nothing (rule 3). ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Debug, Default)]
 pub(super) struct RunPageParagraphs {
@@ -7316,8 +7317,9 @@ fn processed_frame_px(metadata: &crate::types::ImagePreprocessingMetadata) -> Op
     Some((u32::try_from(resized.width).ok()?, u32::try_from(resized.height).ok()?))
 }
 
-/// The factor per axis from the raster a page of a whole-document run was read from to PDF
-/// points, the same conversion the mixed route applies to its pipeline pages. `None` when the
+/// The factor per axis from the frame of the OCR paragraphs of a page of a whole-document run
+/// (the raster, or the size preprocessing resampled it to) to PDF points, the same conversion
+/// the mixed route applies to its pipeline pages. `None` when the
 /// run rendered no PDF page or the raster is empty. ~keep
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
@@ -8677,6 +8679,10 @@ mod first_pass_route_tests;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
 mod budget_refusal_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/layer_lost_glyph_tests.rs"]
+mod layer_lost_glyph_tests;
 
 #[cfg(all(
     test,

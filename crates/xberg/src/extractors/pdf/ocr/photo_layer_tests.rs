@@ -1,7 +1,7 @@
 //! A replaced page keeps its readable text layer first when its OCR text is judged recognition
 //! noise, or when its OCR text confirms a layer that passes the per-page quality check.
 
-use super::document::{clean_native_page_layers, layer_lines_absent_from_ocr};
+use super::document::clean_native_page_layers;
 use super::scoring::native_layer_is_clean;
 use crate::core::config::OcrQualityThresholds;
 use crate::types::PageBoundary;
@@ -22,6 +22,11 @@ fn should_not_call_empty_or_symbol_only_text_a_clean_layer() {
     let thresholds = OcrQualityThresholds::default();
     assert!(!native_layer_is_clean("   \n ", &thresholds));
     assert!(!native_layer_is_clean("-- | ~ ..", &thresholds));
+}
+
+/// The native rows of `layer` that the OCR text lacks, one per line. ~keep
+fn layer_lines_absent_from_ocr(layer: &str, ocr: &str) -> Option<String> {
+    super::document::layer_lines_absent_from_ocr(layer, ocr).map(|restore| restore.rows.join("\n"))
 }
 
 #[test]
@@ -673,6 +678,8 @@ fn misread_longest_word(line: &str) -> String {
 fn layer_first_fixture(layer: &str) -> super::document::LayerFirst {
     super::document::LayerFirst {
         lines: layer.to_string(),
+        lost_glyphs: 0,
+        misread_ocr_rows: Vec::new(),
     }
 }
 

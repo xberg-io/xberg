@@ -227,8 +227,15 @@ fn should_preserve_both_ocr_alternatives_for_one_native_row() {
     );
     // The early misread sits on the layer line's row; the late one on a row of its own. ~keep
     let boxes = page_boxes(&HARBOUR_LAYER, &lines_at_rows(&ocr_text, &[0, 1, 2, 5, 3, 4, 6]));
-    let first = layer_lines_to_put_first(&layer, &ocr_text, false, &thresholds, Some(&boxes))
-        .expect("the OCR text confirms the layer and lacks its last line");
+    let first = layer_lines_to_put_first(
+        &layer,
+        &ocr_text,
+        false,
+        &thresholds,
+        Some(&boxes),
+        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+    )
+    .expect("the OCR text confirms the layer and lacks its last line");
     let text = text_with_layer_first(&ocr_text, &first);
     assert!(text.contains(early.as_str()), "the first alternative stays: {text:?}");
     assert!(text.contains(late.as_str()), "the second misread stays: {text:?}");
@@ -399,8 +406,15 @@ fn should_remove_nothing_without_ownership_or_without_boxes() {
         "{page:?}"
     );
     let thresholds = OcrQualityThresholds::default();
-    let first = layer_lines_to_put_first(&MINUTES.join("\n"), &ocr.join("\n"), false, &thresholds, None)
-        .expect("the OCR text confirms the layer and lacks one line");
+    let first = layer_lines_to_put_first(
+        &MINUTES.join("\n"),
+        &ocr.join("\n"),
+        false,
+        &thresholds,
+        None,
+        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+    )
+    .expect("the OCR text confirms the layer and lacks one line");
     assert_eq!(first.lines, "Total 100");
 }
 
@@ -453,8 +467,15 @@ fn should_bound_the_matching_work_to_the_band_of_each_layer_line() {
                 "the band holds the row and its neighbours: {band:?}"
             );
             let start = std::time::Instant::now();
-            let first = layer_lines_to_put_first(&layer.join("\n"), &ocr_text, false, &thresholds, Some(&boxes))
-                .expect("every layer line is missing");
+            let first = layer_lines_to_put_first(
+                &layer.join("\n"),
+                &ocr_text,
+                false,
+                &thresholds,
+                Some(&boxes),
+                crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+            )
+            .expect("every layer line is missing");
             let ms = start.elapsed().as_millis();
             println!("SCALING n={n} missing={} ms={ms}", first.lines.lines().count());
             assert_eq!(first.lines.lines().count(), n, "every native row remains recoverable");

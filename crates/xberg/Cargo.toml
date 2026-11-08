@@ -1487,6 +1487,8 @@ sha2 = { version = "0.11", optional = true }
 simdutf8 = { version = "0.1", optional = true }
 similar = { workspace = true, optional = true }
 snap = { version = "1.1", optional = true }
+# The character similarity that tells an OCR row that misreads a native row from another row. ~keep
+strsim = "0.11.1"
 strum = { version = "0.28", features = ["derive"], optional = true }
 # Symphonia: pure-Rust audio decoder for mp3, wav, m4a/mp4, webm etc.
 # MPL-2.0 (file-scoped copyleft, safe for our use). Exception granted in deny.toml.

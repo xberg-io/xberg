@@ -94,19 +94,6 @@ impl MarkerRuns {
     }
 }
 
-/// The text as the extractor gave it before it kept markers: each lost glyph dropped, nothing put
-/// in its place. The garble gates judge whether a page is readable on this text, so a marker that
-/// OCR routing has already read does not also make the readable words of the page look like
-/// garbage. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn dropping_markers(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(LOST_GLYPH_MARKER) {
-        std::borrow::Cow::Owned(text.replace(LOST_GLYPH_MARKER, ""))
-    } else {
-        std::borrow::Cow::Borrowed(text)
-    }
-}
-
 fn without_markers(text: &str) -> String {
     MarkerRuns::of(text).map_or_else(|| text.to_string(), |runs| runs.apply(text))
 }
@@ -115,6 +102,19 @@ fn without_markers(text: &str) -> String {
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn strip_native_fragment(text: &mut String) -> usize {
     strip_text(text, None, &[])
+}
+
+/// The text a quality gate or a comparison reads: the native text with each run of markers
+/// stripped by [`strip_native_fragment`], so `caf<marker>e` reads as `caf e` and not as `cafe`.
+/// The text itself keeps its markers. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn readable_text(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains(LOST_GLYPH_MARKER) {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut readable = text.to_owned();
+    strip_native_fragment(&mut readable);
+    std::borrow::Cow::Owned(readable)
 }
 
 /// Remove the markers that native extraction left in `text`. `boundaries` index `text` by byte and
@@ -227,6 +227,15 @@ mod tests {
     use crate::types::internal::{ElementKind, InternalElement};
 
     const MARK: &str = "\u{FFFD}";
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn readable_text_keeps_a_space_where_a_glyph_inside_a_word_was_lost() {
+        assert_eq!(readable_text(&format!("caf{MARK}e")), "caf e");
+        assert_eq!(readable_text(&format!("1{MARK}2")), "1 2");
+        assert_eq!(readable_text(&format!("the {MARK} cafe{MARK}")), "the  cafe");
+        assert!(matches!(readable_text("no loss"), std::borrow::Cow::Borrowed(_)));
+    }
 
     #[test]
     fn strip_text_removes_markers_and_moves_page_boundaries() {
