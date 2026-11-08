@@ -754,10 +754,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let probe_doc = std::sync::Arc::clone(&render_doc);
         let cancel = config.cancel_token.clone();
         let page_limit = super::hidden_layer::preview_page_limit(config);
+        let work_limit = super::hidden_layer::preview_work_limit(config);
+        // Geometry cannot expose an invisible layer that sits exactly on the ink but spells
+        // something else, so a layer of implausible words is read against its raster as well. ~keep
+        let implausible_layers: std::collections::HashSet<usize> = boundaries
+            .iter()
+            .filter(|boundary| {
+                native_text
+                    .get(boundary.byte_start..boundary.byte_end)
+                    .is_some_and(super::hidden_layer::layer_words_are_implausible)
+            })
+            .filter_map(|boundary| usize::try_from(boundary.page_number).ok()?.checked_sub(1))
+            .collect();
         super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
-            let mut remaining_ccitt_work = page_limit;
+            let mut remaining_ccitt_work = work_limit;
             let selected = page_indices
                 .into_iter()
                 .take(page_limit)
@@ -771,7 +783,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         is_cancelled,
                     );
                     tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
-                    needed == Some(true)
+                    needed == Some(true) || (needed == Some(false) && implausible_layers.contains(&index))
                 })
                 .collect::<Vec<_>>();
             Ok(selected)
@@ -786,6 +798,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // Pages whose OCR text got the recognition-noise verdict and was not discarded. The caller
     // decides each page on its OCR text alone and puts the layer first only on a replaced page.
     let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    // Pages whose calibrated mean confidence fell below `min_ocr_mean_confidence`.
+    let mut low_confidence_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
     // The readable text layers that a replaced page keeps first when its OCR text is judged
     // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
     // none. ~keep
@@ -2409,6 +2423,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             if acceptance.verdict.is_some() && !acceptance.discarded {
                 noise_verdict_pages.insert(*page_number);
             }
+            if acceptance.verdict.is_some_and(|verdict| verdict.low_confidence) {
+                low_confidence_pages.insert(*page_number);
+            }
             *text = acceptance.content;
         }
     }
@@ -2446,6 +2463,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 && (probing_hidden_layer
                                     || super::hidden_layer::keeps_native_lines_in_order(native, text))
                         }))
+                // Every probed page passed the hidden-text audit: all of its native text is render
+                // mode 3. A calibrated confidence above the threshold, not the fragmentation
+                // signal, makes a read confident: a table of numbers is mostly short tokens. ~keep
+                && !(probing_hidden_layer
+                    && !low_confidence_pages.contains(&page)
+                    && ocr_confidence_by_page
+                        .get(&page)
+                        .is_some_and(|confidence| confidence.score.is_some())
+                    && native_text
+                        .get(boundary.byte_start..boundary.byte_end)
+                        .is_some_and(|native| super::hidden_layer::ocr_supersedes_disjoint_layer(native, text)))
             {
                 accepted_replacements.remove(&page);
             }

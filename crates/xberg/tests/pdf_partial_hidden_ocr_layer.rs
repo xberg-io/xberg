@@ -539,3 +539,126 @@ async fn tighter_global_or_ocr_probe_limit_recovers_only_the_first_partial_page(
         assert_page_words(&document, 1, &cut_words());
     }
 }
+
+fn rot(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            'a'..='z' => (b'a' + (c as u8 - b'a' + 13) % 26) as char,
+            'A'..='Z' => (b'A' + (c as u8 - b'A' + 13) % 26) as char,
+            '0'..='9' => (b'0' + (c as u8 - b'0' + 5) % 10) as char,
+            other => other,
+        })
+        .collect()
+}
+
+fn junk_layer_scan(raster: &Stream, rows: &[usize], render_mode: u8) -> Vec<u8> {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, rows, 1.0, 0.0, render_mode, None);
+    for &index in rows {
+        let text = LINES[index].1;
+        assert_eq!(operators.matches(&format!("({text})")).count(), 1);
+        operators = operators.replace(&format!("({text})"), &format!("({})", rot(text)));
+    }
+    page_pdf(operators, Some(raster.clone()))
+}
+
+fn junk_words(rows: &[usize]) -> Vec<String> {
+    expected(rows).into_iter().map(rot).collect()
+}
+
+#[tokio::test]
+async fn confident_ocr_replaces_an_invisible_layer_that_shares_no_words_with_the_picture() {
+    let raster = make_raster();
+    let pdf = junk_layer_scan(&raster, PARTIAL, 3);
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    assert_eq!(words(&native), junk_words(PARTIAL));
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(automatic.metadata.ocr_used);
+    assert_eq!(words(&automatic), expected(COMPLETE));
+    assert!(automatic.tables.is_empty());
+}
+
+#[tokio::test]
+async fn a_visible_layer_that_disagrees_with_the_picture_is_never_replaced() {
+    let raster = make_raster();
+    let pdf = junk_layer_scan(&raster, PARTIAL, 0);
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    let kept = words(&automatic);
+    for word in junk_words(PARTIAL) {
+        assert!(kept.contains(&word.as_str()), "visible native word {word} was dropped");
+    }
+}
+
+#[tokio::test]
+async fn an_invisible_layer_that_mostly_matches_the_picture_keeps_its_unmatched_words() {
+    let raster = make_raster();
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\n".to_owned();
+    add_text(&mut operators, PARTIAL, 1.0, 0.0, 3, Some("Sealed voucher X512"));
+    let pdf = page_pdf(operators, Some(raster));
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(!automatic.metadata.ocr_used);
+    assert!(words(&automatic).contains(&"X512"));
+}
+
+// Averaging 4x4 blocks leaves the lines readable at mean confidence 0.30, below the 0.75 gate.
+fn blocky(raster: &Stream, factor: usize) -> Stream {
+    let (width, height) = (RASTER_WIDTH as usize, RASTER_HEIGHT as usize);
+    let mut blurred = raster.clone();
+    for top in (0..height).step_by(factor) {
+        for left in (0..width).step_by(factor) {
+            let (rows, columns) = (top..(top + factor).min(height), left..(left + factor).min(width));
+            for channel in 0..3 {
+                let at = |y: usize, x: usize| (y * width + x) * 3 + channel;
+                let sum: usize = rows
+                    .clone()
+                    .flat_map(|y| columns.clone().map(move |x| (y, x)))
+                    .map(|(y, x)| usize::from(raster.content[at(y, x)]))
+                    .sum();
+                let mean = (sum / (rows.len() * columns.len())) as u8;
+                for y in rows.clone() {
+                    for x in columns.clone() {
+                        blurred.content[at(y, x)] = mean;
+                    }
+                }
+            }
+        }
+    }
+    blurred
+}
+
+#[tokio::test]
+async fn low_confidence_ocr_does_not_replace_an_invisible_layer() {
+    let pdf = junk_layer_scan(&blocky(&make_raster(), 4), PARTIAL, 3);
+    let forced = extract(
+        &pdf,
+        &ExtractionConfig {
+            force_ocr: true,
+            pages: Some(xberg::core::config::PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ..default_tesseract()
+        },
+    )
+    .await;
+    let confidence = forced.pages.as_ref().and_then(|pages| pages[0].ocr_confidence.as_ref());
+    let score = confidence
+        .and_then(|confidence| confidence.score)
+        .expect("calibrated score");
+    assert!(score < 0.75, "{score}");
+    assert!(
+        forced.content.split_whitespace().count() > 60,
+        "the picture is still readable"
+    );
+
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(!automatic.metadata.ocr_used);
+    assert_eq!(words(&automatic), junk_words(PARTIAL));
+}
