@@ -115,7 +115,7 @@ pub(super) fn native_text_paints_all_read_ink(
     let words = || elements.iter().filter(|element| element.level == OcrElementLevel::Word);
     if words().next().is_none()
         || !words().all(is_iterator_word)
-        || !read.content.split_whitespace().eq(words().map(|word| word.text.trim()))
+        || !content_holds_exactly_the_read_words(&read.content, words().map(|word| word.text.trim()))
     {
         return false;
     }
@@ -166,7 +166,27 @@ pub(super) fn native_text_paints_all_read_ink(
         return false;
     };
     agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
-        && ink_is_glyph_ink(&rasters, media, &placed, &native_words)
+        && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
+}
+
+/// Whether the read's text is the iterator words and nothing else. A read that Tesseract laid out
+/// as a table renders the same words in cell order inside markdown pipes and separator rows, and
+/// leaves out the iterator words that are only a ruling mark, so such a read is compared as a
+/// multiset of its words with the table markup set aside. ~keep
+fn content_holds_exactly_the_read_words<'a>(content: &str, words: impl Iterator<Item = &'a str> + Clone) -> bool {
+    if content.split_whitespace().eq(words.clone()) {
+        return true;
+    }
+    let is_table_markup = |token: &str| token.chars().all(|c| matches!(c, '|' | '-' | '\\'));
+    let sorted = |tokens: &mut dyn Iterator<Item = &str>| {
+        let mut kept: Vec<String> = tokens
+            .filter(|token| !is_table_markup(token))
+            .map(str::to_owned)
+            .collect();
+        kept.sort_unstable();
+        kept
+    };
+    content.contains('|') && sorted(&mut content.split_whitespace()) == sorted(&mut words.clone())
 }
 
 /// Whether every lost glyph of the layer sits in a located native word and the read does not
@@ -201,12 +221,16 @@ fn ink_is_glyph_ink(
     rasters: &xberg_native_pdf::rendering::TextInkRasters,
     media: Rect,
     placed: &[(LineBox, bool)],
+    read_words: &[(String, LineBox)],
     native_words: &[(String, LineBox)],
 ) -> bool {
+    debug_assert_eq!(placed.len(), read_words.len());
     let scale = INK_PROOF_DPI as f32 / 72.0;
     let shown: Option<Vec<bool>> = placed
         .iter()
-        .map(|(word, over_native_word)| {
+        .zip(read_words)
+        .filter(|(_, (text, _))| !is_ruling_bar(text))
+        .map(|((word, over_native_word), _)| {
             word_ink(rasters, word, media, scale).filter(|shows_glyph| *shows_glyph || !over_native_word)
         })
         .collect();
@@ -217,6 +241,12 @@ fn ink_is_glyph_ink(
                 !alnum_key(text).is_empty() || text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
             })
             .all(|(_, word)| glyph_ink_in(rasters, word, media, scale))
+}
+
+/// A read word that is only vertical bars is how Tesseract reads a table's ruling. It holds no
+/// text, so it neither needs glyph ink nor counts against the page being glyph ink. ~keep
+fn is_ruling_bar(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|c| c == '|')
 }
 
 fn alnum_key(text: &str) -> String {
@@ -468,6 +498,20 @@ pub(super) fn has_only_certified_tesseract_text(doc: &InternalDocument) -> bool 
 /// Whether the page's final structure only cuts a certified Tesseract read into blocks.
 pub(super) fn only_segments_certified_tesseract_text(doc: &InternalDocument, read: &str) -> bool {
     doc.prebuilt_ocr_elements.is_none() && ocr_page_only_segments_text_with(doc, read, is_hocr_bookkeeping)
+}
+
+/// Whether the page's final structure cuts a certified Tesseract read into blocks and tables
+/// without adding anything else (see [`only_segments_certified_tesseract_text`]).
+pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDocument, read: &str) -> bool {
+    doc.prebuilt_ocr_elements.is_none()
+        && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
+}
+
+fn is_hocr_bookkeeping_with_tables(key: &str, value: &serde_json::Value) -> bool {
+    match key {
+        "tables_detected" | "table_count" | "table_rows" | "table_cols" => value.as_u64().is_some(),
+        _ => is_hocr_bookkeeping(key, value),
+    }
 }
 
 fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {
