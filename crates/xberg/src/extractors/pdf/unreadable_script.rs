@@ -1049,6 +1049,22 @@ mod tests {
         assert!(decision.failing_pages.is_empty());
     }
 
+    #[test]
+    fn a_lost_symbol_glyph_marks_a_layer_like_any_lost_glyph() {
+        let greek_gibberish = "αβχδ εφγη ικλμ νοπθ ρστυ ωξψ ".repeat(6);
+        assert!(
+            judged_scripts(&greek_gibberish, &langs(&["eng"])).is_none(),
+            "control: no marker, no script evidence alone"
+        );
+        for marker in ['\u{FFFD}', '\u{FFFF}'] {
+            let marked = format!("{greek_gibberish}{marker}");
+            assert!(
+                judged_scripts(&marked, &langs(&["eng"])).is_some(),
+                "a page with {marker:?} is kept on script evidence"
+            );
+        }
+    }
+
     const KHMER_UNMARKED: &str = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ ក្រុង សៀវភៅ សាលារៀន";
 
     #[test]
