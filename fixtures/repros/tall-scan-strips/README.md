@@ -53,3 +53,20 @@ uv run --no-project --with pillow==13.0.0 python generate.py . \
 ```
 
 Of these, only the Indexed scan reads back as all 440 source words; the others pin the 150 DPI floor.
+
+## Source geometry at different densities
+
+`large-text-150.pdf` and `large-text-300.pdf` contain the same physical scan on
+216 × 5760 pt pages. The 450 × 12000 grayscale raster is enlarged by exact
+2 × 2 pixel replication to 900 × 24000; no new glyphs or OCR-derived text
+are introduced. A 64 px source line precedes forty 20 px prose lines.
+`large-text-expected.txt` comes directly from the strings drawn by the generator.
+The source font is the repository's DejaVu Sans, checked by SHA-256 in the script.
+
+```sh
+mise exec -- uv run --no-project --with pillow==13.0.0 python generate-scaled.py
+```
+
+The public API tests also losslessly compress the existing neutral RGB fixture's
+page-paint stream, verifying identical decoded instructions before extraction.
+An additional-drawing variant exercises refusal of pages that are not one scan.

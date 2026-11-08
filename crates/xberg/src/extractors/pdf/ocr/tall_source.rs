@@ -20,6 +20,9 @@ use xberg_native_pdf::object::Object;
 pub(super) mod augmentation;
 mod policy;
 pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports, unsupported_reason};
+#[cfg(test)]
+#[path = "tall_source/geometry_tests.rs"]
+mod geometry_tests;
 mod gray_jpeg;
 mod indexed;
 mod ordered;
@@ -61,6 +64,7 @@ struct Attempt<'a> {
     document: &'a PdfDocument,
     page: usize,
     raster: Option<(u32, u32, usize)>,
+    read_width: Option<u32>,
     byte_limit: usize,
     max_strips: usize,
     cancel: Option<&'a CancellationToken>,
@@ -89,6 +93,7 @@ impl<'a> Attempt<'a> {
             document,
             page,
             raster,
+            read_width: raster.map(|raster| raster.0),
             byte_limit,
             max_strips,
             cancel: config.cancel_token.as_ref(),
@@ -112,7 +117,17 @@ pub(super) async fn try_replace(
     let Some(quality) = RecognitionQuality::from_result(original) else {
         return Ok(false);
     };
-    let attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
+    let mut attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
+    if let Some(read_width) = original
+        .metadata
+        .additional
+        .get(crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY)
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|width| u32::try_from(width).ok())
+        .filter(|&read_width| read_width > 0 && read_width <= *width)
+    {
+        attempt.read_width = Some(read_width);
+    }
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     let why = match recover(attempt, backend, ocr).await? {
         Some((recovered, strips))
@@ -369,12 +384,7 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
         .byte_limit
         .checked_sub(normal_bytes)?
         .checked_sub(FIXED_WORK_BYTES)?;
-    let source = certify(
-        attempt.document,
-        attempt.page,
-        attempt.raster.map(|raster| raster.0),
-        available,
-    )?;
+    let source = certify(attempt.document, attempt.page, attempt.read_width, available)?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
     let mut bands = source.blank_bands(&cancelled, if source.certify_rows { 1 } else { MIN_BLANK_ROWS })?;
     let ink_rows = if source.certify_rows
@@ -425,7 +435,6 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
     if dict.contains_key("DecodeParms") {
         return None;
     }
-    let unfiltered_paint = !dict.contains_key("Filter");
     let filters = stream_filters(dict.get("Filter"))?;
     let paint = decode_probe_stream(&data, filters, 4096, byte_limit)?;
     let name = image_name(&paint, frame)?;
@@ -462,7 +471,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         {
             None
         }
-        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width, unfiltered_paint)?),
+        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width)?),
         _ => return None,
     };
     if !source_density_allowed(dpi, packing) {
@@ -521,7 +530,7 @@ impl Source {
     fn blank_bands(&self, cancelled: impl Fn() -> bool, min_rows: u32) -> Option<Vec<Range<u32>>> {
         let mut bands = Vec::new();
         let mut start = None;
-        let mut line = LineFootprint::new(self.width as usize);
+        let mut line = LineFootprint::new(self.width as usize, self.dpi);
         for (y, row) in self.samples.chunks_exact(self.width as usize).enumerate() {
             if cancelled() {
                 return None;
@@ -555,11 +564,16 @@ struct LineFootprint {
     columns: Vec<bool>,
     first_ink: Option<usize>,
     rows: u32,
+    max_rows: u32,
+    max_gap: usize,
 }
 
 impl LineFootprint {
-    fn new(width: usize) -> Self {
+    fn new(width: usize, dpi: f64) -> Self {
+        let scale = dpi / MIN_STANDARD_SOURCE_DPI;
         Self {
+            max_rows: (f64::from(MAX_LINE_ROWS) * scale).floor() as u32,
+            max_gap: (MAX_COLUMN_GAP as f64 * scale).ceil() as usize,
             columns: vec![false; width],
             first_ink: None,
             rows: 0,
@@ -568,7 +582,7 @@ impl LineFootprint {
 
     fn add(&mut self, row: &[u8]) -> Option<()> {
         self.rows += 1;
-        if self.rows > MAX_LINE_ROWS {
+        if self.rows > self.max_rows {
             return None;
         }
         for (column, &sample) in self.columns.iter_mut().zip(row) {
@@ -584,10 +598,10 @@ impl LineFootprint {
         let left = self.columns.iter().position(|&ink| ink)?;
         let right = self.columns.iter().rposition(|&ink| ink)?;
         let first = *self.first_ink.get_or_insert(left);
-        if left.abs_diff(first) >= MAX_COLUMN_GAP
+        if left.abs_diff(first) >= self.max_gap
             || self.columns[left..=right]
                 .split(|&ink| ink)
-                .any(|gap| gap.len() >= MAX_COLUMN_GAP)
+                .any(|gap| gap.len() >= self.max_gap)
         {
             return None;
         }
@@ -907,31 +921,13 @@ mod tests {
     }
 
     #[test]
-    fn two_columns_and_staggered_line_starts_refuse_ordering() {
-        let mut line = LineFootprint::new(200);
-        let mut row = vec![255; 200];
-        row[10..30].fill(0);
-        row[150..170].fill(0);
-        assert_eq!(line.add(&row), Some(()));
-        assert_eq!(line.finish(), None);
-
-        let mut line = LineFootprint::new(200);
-        row[150..170].fill(255);
-        assert_eq!(line.add(&row), Some(()));
-        assert_eq!(line.finish(), Some(()));
-        row[10..30].fill(255);
-        row[150..170].fill(0);
-        assert_eq!(line.add(&row), Some(()));
-        assert_eq!(line.finish(), None);
-    }
-
-    #[test]
     fn source_and_normal_raster_are_charged_before_strip_buffers() {
         let document = PdfDocument::from_bytes(TALL_FIXTURE.to_vec()).expect("real source image fixture");
         let mut attempt = Attempt {
             document: &document,
             page: 0,
             raster: Some((1100, 7765, 128_000)),
+            read_width: Some(1100),
             byte_limit: 100 * 1024 * 1024,
             max_strips: MAX_STRIPS,
             cancel: None,
@@ -968,6 +964,7 @@ mod tests {
             document: &doc,
             page: 0,
             raster: Some((1100, 7765, 128_000)),
+            read_width: Some(1100),
             byte_limit: 100 * 1024 * 1024,
             max_strips: MAX_STRIPS,
             cancel: Some(&token),

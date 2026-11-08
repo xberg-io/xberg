@@ -205,6 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Recover tall scans after OCR preprocessing reduces their read resolution.** (#2502, #2426)
+  Source strips also accept losslessly compressed page paint for neutral RGB scans and preserve physical line geometry across source densities, while retaining the existing memory, reading-order and recognition-quality checks.
+
 - **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
   Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
 
