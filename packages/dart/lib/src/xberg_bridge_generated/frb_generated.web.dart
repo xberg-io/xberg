@@ -1599,6 +1599,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LayoutDetectionConfig dco_decode_layout_detection_config(dynamic raw);
 
   @protected
+  LayoutDetectionModel dco_decode_layout_detection_model(dynamic raw);
+
+  @protected
   LayoutRegion dco_decode_layout_region(dynamic raw);
 
   @protected
@@ -4596,6 +4599,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LayoutDetectionConfig sse_decode_layout_detection_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  LayoutDetectionModel sse_decode_layout_detection_model(
     SseDeserializer deserializer,
   );
 
@@ -8580,6 +8588,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_layout_detection_config(
     LayoutDetectionConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_layout_detection_model(
+    LayoutDetectionModel self,
     SseSerializer serializer,
   );
 
