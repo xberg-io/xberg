@@ -662,3 +662,72 @@ async fn low_confidence_ocr_does_not_replace_an_invisible_layer() {
     assert!(!automatic.metadata.ocr_used);
     assert_eq!(words(&automatic), junk_words(PARTIAL));
 }
+
+const OTHER_PROSE: &[&str] = &[
+    "Quarterly shipping volumes rose steadily across several northern ports",
+    "while regional freight rates remained broadly unchanged for most carriers",
+    "Analysts expected demand to soften once seasonal contracts were renewed",
+    "although warehouse capacity continued to tighten in coastal districts",
+    "Municipal planners approved a new bridge connecting two growing suburbs",
+    "after months of debate about funding, traffic projections and safety",
+    "Engineers noted that construction would begin early next spring if permits",
+    "arrived on schedule and suppliers delivered the promised steel on time",
+    "Local businesses welcomed the announcement and predicted busier weekends",
+    "as commuters discovered shorter routes between residential neighborhoods",
+    "Officials promised regular public updates throughout the entire project",
+];
+
+fn covered_prose_layer_scan(raster: &Stream) -> Vec<u8> {
+    let mut operators = "q 612 0 0 792 0 0 cm /Scan Do Q\nBT /F1 4 Tf 3 Tr\n".to_owned();
+    for (index, text) in OTHER_PROSE.iter().enumerate() {
+        let y = PAGE_HEIGHT - LINES[index].0 * 72.0 / RASTER_DPI as f32;
+        for segment in 0..3 {
+            let x = 67.2 + 160.0 * segment as f32;
+            writeln!(operators, "1 0 0 1 {x} {y} Tm ({text}) Tj").expect("write covering prose");
+        }
+    }
+    operators.push_str("ET\n");
+    page_pdf(operators, Some(raster.clone()))
+}
+
+#[tokio::test]
+async fn a_covered_invisible_layer_that_the_language_check_cannot_judge_is_read_and_replaced() {
+    let raster = make_raster();
+    let pdf = junk_layer_scan(&raster, COMPLETE, 3);
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    assert!(automatic.metadata.ocr_used);
+    assert_eq!(words(&automatic), expected(COMPLETE));
+}
+
+#[tokio::test]
+async fn a_covered_invisible_layer_judged_plausible_prose_does_not_run_the_probe() {
+    let raster = make_raster();
+    let pdf = covered_prose_layer_scan(&raster);
+    let native = extract(
+        &pdf,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..default_tesseract()
+        },
+    )
+    .await;
+    assert!(
+        native.content.len() > 2000,
+        "enough prose for the language check to judge"
+    );
+    let automatic = extract(&pdf, &default_tesseract()).await;
+    let Some(xberg::FormatMetadata::Pdf(metadata)) = &automatic.metadata.format else {
+        panic!("PDF metadata");
+    };
+    assert_eq!(metadata.implausible_text_pages.as_deref(), Some(&[][..]));
+    assert!(
+        !automatic
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("holds enough prose")),
+        "the language check must judge the layer, not abstain"
+    );
+    // Forced OCR reads none of this prose, so only the probe could replace the layer.
+    assert!(!automatic.metadata.ocr_used);
+    assert_eq!(automatic.content, native.content);
+}

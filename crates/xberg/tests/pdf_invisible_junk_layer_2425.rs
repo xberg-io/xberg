@@ -50,7 +50,6 @@ fn words(document: &xberg::ExtractedDocument) -> Vec<&str> {
 }
 
 #[tokio::test]
-#[ignore = "#2425: no signal sends this covered layer to OCR; the plausibility check abstains on a numeric table"]
 async fn automatic_ocr_replaces_the_junk_invisible_layer_over_the_ccitt_scan() {
     let native = read(ExtractionConfig {
         disable_ocr: true,

@@ -567,3 +567,21 @@ fn naca_1135_p25_reaches_the_coverage_check_within_the_default_preview_budget() 
         None
     );
 }
+
+#[test]
+fn only_an_audited_covered_layer_that_is_not_judged_plausible_prose_is_probed() {
+    use super::probes_page;
+
+    assert!(probes_page(Some(true), true), "uncovered ink is always read");
+    assert!(probes_page(Some(true), false));
+    assert!(
+        probes_page(Some(false), false),
+        "the language check abstained or flagged the layer"
+    );
+    assert!(
+        !probes_page(Some(false), true),
+        "a plausible covering layer is kept without a read"
+    );
+    assert!(!probes_page(None, false), "an unaudited page is never probed");
+    assert!(!probes_page(None, true));
+}

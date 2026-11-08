@@ -122,6 +122,13 @@ pub(super) fn preview_work_limit(config: &ExtractionConfig) -> usize {
     preview_page_limit(config).saturating_mul(PREVIEW_WORK_PER_ITERATION)
 }
 
+/// Whether the OCR probe reads a page. `needed` is the coverage verdict of [`needs_ocr`]: `None`
+/// when the source audit refused the page, `Some(false)` when the invisible layer covers every ink
+/// band. A covered layer is read unless the language check judged it plausible prose.
+pub(super) fn probes_page(needed: Option<bool>, layer_judged_plausible: bool) -> bool {
+    needed == Some(true) || (needed == Some(false) && !layer_judged_plausible)
+}
+
 pub(super) fn needs_ocr(
     doc: &PdfDocument,
     page: usize,

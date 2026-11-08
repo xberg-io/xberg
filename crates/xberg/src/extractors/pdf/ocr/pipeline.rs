@@ -755,6 +755,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let cancel = config.cancel_token.clone();
         let page_limit = super::hidden_layer::preview_page_limit(config);
         let work_limit = super::hidden_layer::preview_work_limit(config);
+        // An audited page whose invisible layer covers its picture is read only when the
+        // language check did not judge that layer plausible prose: it abstained or flagged it.
+        // `record_implausible_text_pages` runs this same scan on the same text. ~keep
+        let plausible_pages: std::collections::HashSet<u32> = super::plausibility::scan_text_plausibility(
+            native_text,
+            Some(boundaries),
+            None,
+            &config
+                .ocr
+                .as_ref()
+                .map(|ocr| ocr.effective_thresholds())
+                .unwrap_or_default(),
+        )
+        .plausible
+        .into_iter()
+        .collect();
         super::super::ensure_pdf_not_cancelled(config)?;
         page_indices = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
@@ -772,7 +788,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         is_cancelled,
                     );
                     tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
-                    needed == Some(true)
+                    super::hidden_layer::probes_page(needed, plausible_pages.contains(&(index as u32 + 1)))
                 })
                 .collect::<Vec<_>>();
             Ok(selected)
