@@ -68,7 +68,13 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
     assert_eq!(psm(TWO_COLUMN_PROSE), "11", "the page keeps its first read");
     let prose = events.0.lock().unwrap().clone();
     assert!(
-        prose.is_empty(),
+        !prose
+            .iter()
+            .any(|event| event.contains("reading the picture again") || event.contains("adopted")),
         "a page with one gutter must not be read twice: {prose:?}"
+    );
+    assert!(
+        prose.iter().any(|event| event.contains("skipped")),
+        "the page is refused by the geometry admission: {prose:?}"
     );
 }

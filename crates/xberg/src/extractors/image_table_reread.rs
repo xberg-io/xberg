@@ -14,6 +14,10 @@ const MIN_ROWS_PER_COLUMN: usize = 4;
 const MIN_COLUMNS_PER_ROW: usize = 3;
 /// Shared edges beyond which a page is a lattice of words rather than a table.
 const MAX_SHARED_EDGES: usize = 12;
+/// A second read must keep at least this fraction of the first read's letters and digits. On the
+/// #2432 set the useful re-reads keep 0.87 or more and the failed ones 0.42 or less (the 7 px
+/// pictures at 0.50 and 0.59 gain no rows either way).
+const MIN_RETAINED: (usize, usize) = (3, 4);
 /// Edge tolerance and row-membership tolerance, as a fraction of the median word height.
 const TOLERANCE_NUMERATOR: u32 = 1;
 const TOLERANCE_DENOMINATOR: u32 = 2;
@@ -143,101 +147,6 @@ fn column_structure(doc: &InternalDocument) -> (usize, usize) {
     (on_columns, edges.len())
 }
 
-/// The first pass shows a table's column structure: enough rows sit on a handful of shared
-/// column edges. A lattice of words on dozens of edges is a grid of cells, not a table.
-pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
-    let (rows, edges) = column_structure(doc);
-    if edges > MAX_SHARED_EDGES {
-        tracing::debug!(edges, "standalone re-read skipped: a lattice of words, not a table");
-    } else if rows < MIN_ROWS_PER_COLUMN && rows > 0 {
-        tracing::debug!(rows, "standalone re-read skipped: too few rows share the column edges");
-    }
-    rows >= MIN_ROWS_PER_COLUMN && edges <= MAX_SHARED_EDGES
-}
-
-struct Placed<'a> {
-    text: &'a str,
-    boxed: WordBox,
-}
-
-fn placed_words(doc: &InternalDocument) -> Vec<Placed<'_>> {
-    doc.prebuilt_ocr_elements
-        .iter()
-        .flatten()
-        .filter(|element| element.level == OcrElementLevel::Word && !element.text.trim().is_empty())
-        .filter_map(|element| match element.geometry {
-            OcrBoundingGeometry::Rectangle {
-                left,
-                top,
-                width,
-                height,
-            } if width > 0 && height > 0 => Some(Placed {
-                text: element.text.trim(),
-                boxed: WordBox {
-                    left,
-                    right: left.saturating_add(width),
-                    center: top.saturating_add(height / 2),
-                    height,
-                },
-            }),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Line elements whose box reaches across at least [`MIN_COLUMNS_PER_ROW`] of the shared column
-/// edges: a whole table row read as one line.
-fn lines_spanning_columns(doc: &InternalDocument, edges: &[(u32, bool)], tolerance: u32) -> usize {
-    doc.prebuilt_ocr_elements
-        .iter()
-        .flatten()
-        .filter(|element| element.level == OcrElementLevel::Line)
-        .filter(|element| match element.geometry {
-            OcrBoundingGeometry::Rectangle { left, width, .. } => {
-                let right = left.saturating_add(width);
-                edges
-                    .iter()
-                    .filter(|(edge, _)| {
-                        left.saturating_sub(tolerance) <= *edge && *edge <= right.saturating_add(tolerance)
-                    })
-                    .count()
-                    >= MIN_COLUMNS_PER_ROW
-            }
-            _ => false,
-        })
-        .count()
-}
-
-/// Dots a block read prints for a leader are not a word: a trailing run is dropped from a word
-/// and a word made only of dots is dropped entirely. A word of at least [`MIN_LEADER_DOTS`] trailing
-/// dots also absorbs the first-pass fragments inside the span those dots occupy.
-const MIN_LEADER_DOTS: usize = 3;
-
-fn trailing_dots(text: &str) -> usize {
-    text.chars().rev().take_while(|c| *c == '.').count()
-}
-
-/// The text of a word without its trailing leader dots and without whitespace, so that
-/// `Tree planting` and `Tree` + `planting..........` compare equal while `(9.10)` and `9.10` do not.
-fn comparable(text: &str) -> String {
-    text.trim_end_matches('.')
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect()
-}
-
-/// The horizontal span the trailing dots of `word` occupy, from its width shared by character.
-fn leader_span(word: &Placed) -> Option<(u32, u32)> {
-    let dots = trailing_dots(word.text);
-    if dots < MIN_LEADER_DOTS {
-        return None;
-    }
-    let chars = u32::try_from(word.text.chars().count()).ok()?;
-    let dots = u32::try_from(dots).ok()?;
-    let width = word.boxed.right - word.boxed.left;
-    Some((word.boxed.right - width * dots / chars, word.boxed.right))
-}
-
 /// The row of the first read a word belongs to, by the nearest row centre within tolerance.
 fn row_of(centers: &[u32], word: &WordBox, tolerance: u32) -> Option<usize> {
     centers
@@ -249,68 +158,79 @@ fn row_of(centers: &[u32], word: &WordBox, tolerance: u32) -> Option<usize> {
         .map(|(index, _)| index)
 }
 
-/// Whether the second read may replace the first, or the reason it may not.
-///
-/// It must read more whole rows across the first read's shared columns, and its words must say
-/// the same thing as the first read's, row by row: equal text in x order apart from leader dots.
-/// First-read fragments lying inside a leader the second read printed are absorbed by it. The
-/// first read's emission order must be row by row, otherwise the second read would reorder
-/// columns of text into rows.
-pub(super) fn judge_second_read(first: &InternalDocument, second: &InternalDocument) -> Result<(), &'static str> {
-    let first_words = placed_words(first);
-    let second_words = placed_words(second);
-    let boxes: Vec<WordBox> = first_words.iter().map(|word| word.boxed).collect();
-    if boxes.is_empty() {
-        return Err("the first read has no word boxes");
-    }
-    let tolerance = median_height(&boxes) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
-    let table_rows = rows(&boxes, tolerance);
-    let edges = column_edges(&table_rows, tolerance);
-    if lines_spanning_columns(second, &edges, tolerance) <= lines_spanning_columns(first, &edges, tolerance) {
-        return Err("the second read has no more rows across the shared columns");
-    }
+/// Whether the words come out row by row. A page read column by column would be reordered into
+/// interleaved rows by a block read, so it is not re-read.
+fn emits_row_by_row(words: &[WordBox], tolerance: u32) -> bool {
+    let table_rows = rows(words, tolerance);
     let centers: Vec<u32> = table_rows
         .iter()
         .map(|row| row.iter().map(|word| word.center).sum::<u32>() / row.len() as u32)
         .collect();
-
     let mut furthest = 0;
-    let mut first_by_row: Vec<Vec<&Placed>> = vec![Vec::new(); centers.len()];
-    for word in &first_words {
-        let Some(row) = row_of(&centers, &word.boxed, tolerance) else {
-            return Err("a first-read word belongs to no row");
+    for word in words {
+        let Some(row) = row_of(&centers, word, tolerance) else {
+            return false;
         };
         if row < furthest {
-            return Err("the first read emits its words column by column");
+            return false;
         }
         furthest = row;
-        first_by_row[row].push(word);
     }
-    let mut second_by_row: Vec<Vec<&Placed>> = vec![Vec::new(); centers.len()];
-    for word in &second_words {
-        let Some(row) = row_of(&centers, &word.boxed, tolerance) else {
-            return Err("a second-read word belongs to no row of the first read");
-        };
-        second_by_row[row].push(word);
+    true
+}
+
+/// The first pass shows a lattice table: enough rows sit on a handful of shared column edges
+/// with wide gaps between columns, and the words come out row by row. A lattice of words on
+/// dozens of edges is a grid of cells, not a table.
+pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
+    let (rows, edges) = column_structure(doc);
+    if edges > MAX_SHARED_EDGES {
+        tracing::debug!(
+            edges,
+            "standalone table re-read skipped: a lattice of words, not a table"
+        );
+        return false;
     }
-    for (mut before, mut after) in first_by_row.into_iter().zip(second_by_row) {
-        before.sort_unstable_by_key(|word| word.boxed.left);
-        after.sort_unstable_by_key(|word| word.boxed.left);
-        let leaders: Vec<(u32, u32)> = after.iter().filter_map(|word| leader_span(word)).collect();
-        let absorbed = |word: &Placed| {
-            leaders.iter().any(|(start, end)| {
-                word.boxed.left.saturating_add(tolerance) >= *start && word.boxed.right <= end.saturating_add(tolerance)
-            })
-        };
-        let kept: String = before
-            .iter()
-            .filter(|word| !absorbed(word))
-            .map(|word| comparable(word.text))
-            .collect();
-        let reread: String = after.iter().map(|word| comparable(word.text)).collect();
-        if kept != reread {
-            return Err("a row reads differently in the second read");
+    if rows < MIN_ROWS_PER_COLUMN {
+        if rows > 0 {
+            tracing::debug!(
+                rows,
+                "standalone table re-read skipped: too few rows share the column edges"
+            );
         }
+        return false;
+    }
+    let Some(words) = word_boxes(doc) else {
+        return false;
+    };
+    let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
+    if !emits_row_by_row(&words, tolerance) {
+        tracing::debug!("standalone table re-read skipped: the first read emits its words column by column");
+        return false;
+    }
+    true
+}
+
+/// Letters and digits in the word elements of a read.
+fn alphanumeric_count(doc: &InternalDocument) -> usize {
+    doc.prebuilt_ocr_elements
+        .iter()
+        .flatten()
+        .filter(|element| element.level == OcrElementLevel::Word)
+        .map(|element| element.text.chars().filter(|c| c.is_alphanumeric()).count())
+        .sum()
+}
+
+/// A read that came back empty, or with less than three quarters of the letters and digits of the first,
+/// failed to read the picture; any other second read is adopted as is, like a caller-forced PSM 6.
+pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalDocument) -> Result<(), &'static str> {
+    let (before, after) = (alphanumeric_count(first), alphanumeric_count(second));
+    tracing::debug!(before, after, "standalone table re-read: letters and digits per read");
+    if after == 0 {
+        return Err("the second read is empty");
+    }
+    if after * MIN_RETAINED.1 < before * MIN_RETAINED.0 {
+        return Err("the second read kept too few letters and digits");
     }
     Ok(())
 }
@@ -402,129 +322,6 @@ mod tests {
         assert!(!shows_column_structure(&prose), "{:?}", column_structure(&prose));
     }
 
-    fn with_lines(mut elements: Vec<OcrElement>, rows: usize) -> InternalDocument {
-        for row in 0..rows {
-            let mut line = element("row", 10, 10 + row as u32 * 40, 670);
-            line.level = OcrElementLevel::Line;
-            elements.push(line);
-        }
-        doc(elements)
-    }
-
-    fn reread(first: Vec<OcrElement>, second: Vec<OcrElement>) -> Result<(), &'static str> {
-        judge_second_read(&doc(first), &with_lines(second, 6))
-    }
-
-    /// Replaces the text of the first word at `left` in row `row` of a `table(6)`-shaped list.
-    fn reword(mut words: Vec<OcrElement>, row: u32, left: u32, text: &str) -> Vec<OcrElement> {
-        let top = 10 + row * 40;
-        let target = words
-            .iter_mut()
-            .find(|word| {
-                matches!(word.geometry, OcrBoundingGeometry::Rectangle { left: l, top: t, .. } if l == left && t == top)
-            })
-            .expect("word at that position");
-        target.text = text.to_string();
-        words
-    }
-
-    #[test]
-    fn an_identical_read_with_more_whole_rows_is_kept() {
-        assert_eq!(reread(table(6), table(6)), Ok(()));
-    }
-
-    #[test]
-    fn a_second_read_without_more_whole_rows_is_refused() {
-        assert!(judge_second_read(&doc(table(6)), &doc(table(6))).is_err());
-    }
-
-    #[test]
-    fn a_dropped_sign_or_parenthesis_is_refused() {
-        for (first_text, second_text) in [("(9.10)", "9.10"), ("-12", "12"), ("$5", "5"), ("1,204", "1.204")] {
-            let first = reword(table(6), 2, 600, first_text);
-            let second = reword(table(6), 2, 600, second_text);
-            assert!(reread(first, second).is_err(), "{first_text} -> {second_text}");
-        }
-    }
-
-    #[test]
-    fn a_word_without_letters_or_digits_cannot_be_dropped() {
-        let first = reword(table(6), 1, 300, "\u{2014}");
-        let mut second = reword(table(6), 1, 300, "\u{2014}");
-        second.retain(|word| word.text != "\u{2014}");
-        assert!(reread(first, second).is_err());
-    }
-
-    #[test]
-    fn an_appended_or_prefixed_digit_is_refused() {
-        for second_text in ["123", "912", "1"] {
-            let second = reword(table(6), 3, 300, second_text);
-            assert!(reread(table(6), second).is_err(), "12 -> {second_text}");
-        }
-    }
-
-    #[test]
-    fn a_misread_digit_is_refused_even_when_a_neighbour_cell_holds_the_new_digit() {
-        let first = reword(reword(table(6), 4, 300, "8"), 4, 420, "18");
-        let second = reword(reword(table(6), 4, 300, "3"), 4, 420, "18");
-        assert!(reread(first, second).is_err());
-    }
-
-    #[test]
-    fn a_misread_digit_in_the_same_box_is_refused() {
-        let second = reword(table(6), 0, 420, "345,679");
-        assert!(reread(table(6), second).is_err());
-    }
-
-    #[test]
-    fn a_misread_in_a_column_without_a_shared_edge_is_refused() {
-        let off_edge = |text: &str| -> Vec<OcrElement> {
-            [0_u32, 7, 3, 11, 5, 9]
-                .into_iter()
-                .enumerate()
-                .flat_map(|(row, offset)| {
-                    let row = row as u32;
-                    let mut cells = table_row(row).to_vec();
-                    cells.insert(2, element(text, 200 + offset, 10 + row * 40, 30));
-                    cells
-                })
-                .collect()
-        };
-        assert_eq!(reread(off_edge("77"), off_edge("77")), Ok(()));
-        assert!(reread(off_edge("77"), off_edge("71")).is_err());
-    }
-
-    fn with_fragments(leader: bool) -> (Vec<OcrElement>, Vec<OcrElement>) {
-        let first = (0..6_u32)
-            .flat_map(|row| {
-                let mut cells = table_row(row).to_vec();
-                cells.insert(1, element("ee", 100, 10 + row * 40, 40));
-                cells
-            })
-            .collect();
-        let second = (0..6_u32)
-            .flat_map(|row| {
-                let mut cells = table_row(row).to_vec();
-                if leader {
-                    cells[0] = element("Label.........", 10, 10 + row * 40, 200);
-                }
-                cells
-            })
-            .collect();
-        (first, second)
-    }
-
-    #[test]
-    fn fragments_inside_a_printed_leader_are_absorbed_and_otherwise_count_as_lost_words() {
-        let (first, second) = with_fragments(true);
-        assert_eq!(reread(first, second), Ok(()));
-        let (first, second) = with_fragments(false);
-        assert!(
-            reread(first, second).is_err(),
-            "a fragment with no leader over it is a lost word"
-        );
-    }
-
     fn two_columns(row_major: bool) -> Vec<OcrElement> {
         let cell = |row: u32, column: u32, word: u32| {
             let left = 10 + column * 400 + word * 120;
@@ -548,21 +345,57 @@ mod tests {
         assert!(!shows_column_structure(&doc(two_columns(false))));
     }
 
+    /// A four-column table whose words are emitted column by column instead of row by row.
+    fn table_by_column(rows: u32) -> Vec<OcrElement> {
+        (0..4)
+            .flat_map(|column| (0..rows).map(move |row| table_row(row)[column].clone()))
+            .collect()
+    }
+
     #[test]
-    fn a_two_column_page_read_column_by_column_is_not_reordered_into_rows() {
-        let page = doc(two_columns(false));
-        let mut second = two_columns(false);
-        for row in 0..8 {
-            let mut line = element("row", 10, 10 + row * 40, 800);
-            line.level = OcrElementLevel::Line;
-            second.push(line);
-        }
+    fn a_table_emitted_column_by_column_is_not_re_read_but_the_same_table_by_rows_is() {
+        assert!(shows_column_structure(&doc(table(6))));
+        assert!(!shows_column_structure(&doc(table_by_column(6))));
+    }
+
+    #[test]
+    fn a_table_with_too_few_rows_is_not_re_read() {
+        assert!(!shows_column_structure(&doc(table(3))));
+    }
+
+    #[test]
+    fn a_two_column_table_with_one_wide_gap_is_not_re_read() {
+        let two: Vec<_> = table(8)
+            .into_iter()
+            .filter(|word| word.text == "Label" || word.text == "12")
+            .collect();
+        assert!(!shows_column_structure(&doc(two)));
+    }
+
+    #[test]
+    fn a_re_read_that_changes_a_token_is_adopted() {
+        let first = doc(table(6));
+        let mut changed = table(6);
+        changed[1].text = "17".to_string();
+        changed[3].text = "9.10".to_string();
+        assert_eq!(second_read_is_usable(&first, &doc(changed)), Ok(()));
+    }
+
+    #[test]
+    fn an_empty_or_far_smaller_re_read_is_refused() {
+        let first = doc(table(6));
         assert_eq!(
-            judge_second_read(&page, &doc(second.clone())),
-            Err("the first read emits its words column by column")
+            second_read_is_usable(&first, &doc(Vec::new())),
+            Err("the second read is empty")
         );
-        let mut row_major = two_columns(true);
-        row_major.extend(second.into_iter().filter(|word| word.level == OcrElementLevel::Line));
-        assert_eq!(judge_second_read(&doc(two_columns(true)), &doc(row_major)), Ok(()));
+        let mut sparse = table(6);
+        sparse.retain(|word| word.text == "12");
+        assert!(second_read_is_usable(&first, &doc(sparse)).is_err());
+        let mut lost_label = table(6);
+        lost_label.retain(|word| word.text != "Label");
+        assert!(second_read_is_usable(&first, &doc(lost_label)).is_err());
+        let mut lost_count = table(6);
+        lost_count.retain(|word| word.text != "12");
+        assert_eq!(second_read_is_usable(&first, &doc(lost_count)), Ok(()));
     }
 }

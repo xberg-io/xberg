@@ -3090,9 +3090,9 @@ impl ImageExtractor {
     /// A standalone picture is read with the sparse-text default first. When that pass finds no
     /// table but its word boxes share column edges across rows, and the caller chose no PSM, the
     /// picture is read once more as one uniform block (PSM 6), whose row recovery keeps
-    /// dot-leader table rows whole (#2503, #2432). The second read is kept only when it puts more
-    /// whole rows across those columns and every row reads the same apart from leader dots; see
-    /// [`image_table_reread::judge_second_read`].
+    /// dot-leader table rows whole (#2503, #2432). The second read is adopted as is, like a
+    /// caller-forced PSM 6, unless it is empty or kept too few letters and digits; see
+    /// [`image_table_reread::second_read_is_usable`].
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     async fn extract_with_ocr(
         &self,
@@ -3108,7 +3108,7 @@ impl ImageExtractor {
             };
             tracing::debug!("standalone table re-read: reading the picture again as one block");
             return match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-                Ok(second) => match image_table_reread::judge_second_read(&first, &second) {
+                Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
                     Ok(()) => {
                         tracing::debug!("standalone table re-read adopted");
                         Ok(second)
