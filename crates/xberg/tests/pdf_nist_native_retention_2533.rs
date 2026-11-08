@@ -25,7 +25,7 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
         hex::encode(Sha256::digest(&bytes)),
         "71c2a76af332a9b796899a78e99ce2d835026d624048cf239069276fcacce79b"
     );
-    let native_pdf = xberg_native_pdf::PdfDocument::open_from_bytes(bytes.clone()).unwrap();
+    let native_pdf = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
     let page = native_pdf.extract_page_text(0).unwrap();
     assert_eq!(
         page.spans
