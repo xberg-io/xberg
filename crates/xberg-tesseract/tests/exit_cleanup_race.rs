@@ -7,7 +7,7 @@
 //! the worker. The engine loads the bundled English model, so `required-features` in
 //! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
-#![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
+#![cfg(all(unix, not(target_arch = "wasm32")))]
 #![allow(clippy::print_stdout)] // ~keep: the child reports its progress on stdout by design
 
 use std::os::unix::process::ExitStatusExt;

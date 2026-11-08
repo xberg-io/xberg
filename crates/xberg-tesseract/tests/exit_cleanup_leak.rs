@@ -4,7 +4,7 @@
 //! an engine alive. The engine loads the bundled English model, so `required-features` in
 //! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
-#![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
+#![cfg(all(unix, not(target_arch = "wasm32")))]
 
 use std::path::PathBuf;
 use std::process::Command;
