@@ -4,12 +4,12 @@
 //! using xberg_native_pdf (pure Rust). Supports both native text extraction and OCR fallback.
 
 mod extraction;
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-mod khmer_retention;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod unreadable_script;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
 pub(crate) use layout_runner::inherit_test_selected_page_detections;
 pub(crate) mod ocr;
@@ -2235,6 +2235,32 @@ fn update_formula_container_stack(open: &mut Vec<ElementKind>, kind: ElementKind
     }
 }
 
+/// Put a picture's OCR text anchor after the last element of its own page, so the recovered
+/// text reads before the next page instead of after the whole document.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn insert_image_ocr_text_anchor(doc: &mut InternalDocument, anchor: InternalElement) {
+    let next_page = anchor.page.and_then(|page| {
+        doc.elements
+            .iter()
+            .position(|element| element.page.is_some_and(|other| other > page))
+    });
+    let Some(at) = next_page else {
+        doc.push_element(anchor);
+        return;
+    };
+    for relationship in &mut doc.relationships {
+        if relationship.source >= at as u32 {
+            relationship.source += 1;
+        }
+        if let crate::types::internal::RelationshipTarget::Index(target) = &mut relationship.target
+            && *target >= at as u32
+        {
+            *target += 1;
+        }
+    }
+    doc.elements.insert(at, anchor);
+}
+
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
 fn insert_formula_document_element(doc: &mut InternalDocument, at: usize, mut element: InternalElement) {
     // ~keep Insertion positions can be reused after shifts; allocate a fresh identity without renumbering old IDs.
@@ -3088,6 +3114,17 @@ impl PdfExtractor {
                 pdf_metadata.pdf_specific.page_count,
                 &thresholds,
             );
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            if let Some(warning) = unreadable_script::retain_unreadable_script_pages(
+                &mut decision,
+                &native_text,
+                boundaries.as_deref(),
+                pdf_metadata.pdf_specific.page_count,
+                content,
+                config,
+            ) {
+                ocr_fallback_warnings.push(warning);
+            }
 
             // `NativeTextStats`' character-class checks cannot see a font whose mapping
             // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
@@ -3198,25 +3235,13 @@ impl PdfExtractor {
                     // silently suppress page OCR on scanned PDFs, leaving `pages[].content`
                     // empty (#1576). `RunFallbackOnPages` below has never read this field;
                     // this now matches it. ~keep
-                    let hints = whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config);
-                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    let khmer_retention =
-                        khmer_retention::KhmerRetention::for_automatic_page(config, &pdf_metadata, &native_text);
-                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    let hints = {
-                        let mut hints = hints;
-                        if let Some(retention) = &khmer_retention {
-                            hints.get_or_insert_with(Default::default).khmer_retention = Some(retention.clone());
-                        }
-                        hints
-                    };
                     match run_ocr_with_layout_pages(
                         content,
                         config,
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
-                            hints,
+                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
                         },
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_images.take(),
@@ -3249,12 +3274,6 @@ impl PdfExtractor {
                             for warning in layout_glyph_drop_warnings {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                             }
-                            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                            let preserve_known_khmer = khmer_retention
-                                .as_ref()
-                                .is_some_and(khmer_retention::KhmerRetention::confirmed);
-                            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-                            let preserve_known_khmer = false;
                             let preserve_native_after_discard = discarded_visible_native_page
                                 && pdf_metadata
                                     .pdf_specific
@@ -3266,7 +3285,7 @@ impl PdfExtractor {
                                     .implausible_text_pages
                                     .as_ref()
                                     .is_some_and(Vec::is_empty);
-                            if preserve_known_khmer || preserve_native_after_discard {
+                            if preserve_native_after_discard {
                                 let (warnings, failures) = ocr_doc
                                     .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                     .unwrap_or_default();
@@ -3845,7 +3864,10 @@ impl PdfExtractor {
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
                     if image_anchor == extraction::ImageAnchor::OcrTextOnly {
                         if !page_text_is_from_ocr {
-                            doc.push_element(InternalElement::image_ocr_text_anchor(idx as u32, img.page_number));
+                            insert_image_ocr_text_anchor(
+                                &mut doc,
+                                InternalElement::image_ocr_text_anchor(idx as u32, img.page_number),
+                            );
                         }
                         continue;
                     }

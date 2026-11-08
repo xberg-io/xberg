@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
+  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
+  The gate is not yet wired into the release workflow because the PHP macOS build still needs a single-file codec design.
+
 - **(ocr): Read a scan's embedded JPEG at the resolution its placement proves.** (#2530)
   When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Unproven placements keep the previous behavior, a read the recognition-noise check rejects keeps the original refusal, and a retry that still recovers nothing reports why each image failed beside the original error.
 
@@ -203,6 +207,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The cleanup now frees only engines that are parked in the idle pool and skips an engine in use. Each engine has its own id, so a new engine at the address of a freed one is never mistaken for the old engine. A direct user of the `xberg-tesseract` crate who never calls `mark_idle` gets tesseract's leak report on stderr at exit instead of a crash.
 - **(pdf): Join a word that a ligature glyph split in two, and return the letters of every ligature.** (GH#2322)
   A space drawn inside a ligature's box (the pen is pulled back by the space width) no longer counts as a word break: the gap between the real letters decides. A ToUnicode value of U+0000 for a ligature now falls back to the `/Differences` glyph name of the font. A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next release.
+- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
+  Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
+
+- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text.**
+  The full-scan leader recovery no longer requires an all-letter header and label or digit-only values. Rows are still refused unless every leader is proved as regular dots on the raster, each value lies in its header column and the hOCR words match exactly.
+
+- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (#2616).**
+  The hOCR row claim no longer requires an all-letter label and digit-only values; a value such as "$1,010" or "3.2%" or a label with a digit now keeps its one claimed row. The row's words must still equal the table cells and the leader must still sit alone between the label and the first value.
+
+- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (#2616).**
+  The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. Instead the region needs a median line thickness above a page-relative floor, at most a small share of marks thinner than a third of that median, mostly word-shaped (not stroke-shaped) boxes and mostly tokens carrying a letter, all measured in the upright frame.
+
+- **(ocr): Give an explicitly rotated table in-page bounds on the per-page route.** (#2497)
+  An explicit `auto_rotate` read on the per-page route kept its table box in the upscaled OCR frame, so the box was twice as large as the page; it is now scaled to the render frame.
+
+- **(ocr): Recover an implicitly rotated table together with a heading or prose.** (#2497)
+  A sideways read of one table is accepted with text above or below it when every outside word is a separate Tesseract word lying wholly above or below the table and their row-by-row order is the returned text.
+
+- **(ocr): Recover more tall scans: Indexed scans at 120 DPI, Markdown output and an explicit Tesseract page mode, and report when strips were not used.** (#2502)
+  Indexed sources down to 120 DPI use source-image strips, each of which must match its source ink rows; bilevel, neutral RGB and JPEG scans rendered at 120 DPI did not read back as their source words and keep the 150 DPI floor. A Tesseract page mode such as PSM 3 no longer turns recovery off, and Markdown output recovers the words as plain paragraphs with a warning that no Markdown structure was rebuilt. Strips now join as separate paragraphs. A page read from a render downscaled below 150 DPI carries a warning that names why its strips were not used.
+
+- **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
+  A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
+
+- **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
+  The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.
+
+- **(pdf): Table rows are no longer repeated as prose when a marker or sign splits a cell.** (#2443)
+  A short run inside one table cell, such as a superscript citation or either side of a multiplication sign, is now treated as that cell's text instead of being emitted a second time beside the table.
+
+- **(pdf): Rules that belong to another section no longer split a ruled band into columns.** (#2443)
+  A column rule lying wholly beyond the ruled rows is no longer projected across them when other rules run through them, so a list column beside a section divider is not read as a two-column table that swallows the page heading.
+
+- **(ocr): Keep a wrapped figure caption as text instead of splitting it into table cells.**
+  A caption that spans several lines and whose cell grid a heuristic invented is now certified by its line geometry alone: the last line is at most half the first line's width, the left and right margins of the middle lines agree within a sixth of the median line height, and a whole word in an intact interior line crosses every proposed column cut. The `Figure N:` label and the closing period are no longer required, and a two-column block of text is still kept as a table (#2616).
+  This rewrite still runs only with `use_cache: false`, Plain output and English Tesseract defaults, so a default extraction does not reach it.
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
@@ -212,6 +252,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(redaction): Run external-redaction extraction on the shared 16 MiB runtime.**
   The poll chain of `extract_with_external_redaction` needs about 2.2 MB, which overflowed the roughly 2 MB host thread of an FFI caller such as the JVM and crashed the process. Dropping the call still cancels the work.
+
+- **(ocr): Keep certified table rows on one line in Markdown and Djot output of a standalone image.** (#2432)
+  The sparse-row recovery that already served Plain output now also serves Markdown and Djot; the recognized words and amounts are unchanged.
+
+- **(pdf): Return a native page's text once when automatic OCR only re-reads its ink.** (#2534)
+  When every word Tesseract read lies on a native text line, shows glyph ink and sits on a background that only glyphs vary, the native page replaces the read even where the words differ.
+  Words over rasters, outlines, rules, partial fills or overpaint keep their OCR alternative.
+  The proof also runs on the direct Tesseract route used when PaddleOCR is not compiled in.
+  A native word that no glyph paint shows (under a fill, clipped or invisible) or a native layer that the read contradicts at more than 15% of its words keeps the OCR page.
+
+- **(pdf): Keep a one-page native text layer whose lost glyphs the automatic OCR read does not recover.** (#2533)
+  The ink-ownership proof now accepts a layer with glyphs that have no Unicode value when each sits in a located native word and no kind of lost glyph (by font, size and advance) of three places or more is read as letters or digits at half its places, tolerates read words only on flat blank paper between native words, requires glyph ink in every located lost glyph and native word, and lets Markdown block structure yield to the native page. A read that sees a kind of three or more lost glyphs as text at half its places, or any word over a raster, outline, rule or fill, keeps the OCR page.
 
 - **(pdf): Recover a verified embedded prose line with automatic Tesseract segmentation.** (#2327)
   When both caches are off, the resize retry can add the missing line to Plain page text while preserving the original nested OCR result.
@@ -234,10 +286,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Preserve caller rotation and segmentation choices, original word geometry and protected primary content.
   Recover counterclockwise table rows when native line membership proves the source geometry.
   Recover a single sideways prose paragraph when native lines prove the complete text and geometry.
+  Recover an upside-down table by reading the half-turned raster once Tesseract reports every text block rotated 180 degrees, returning geometry in the original frame.
   Bind result caches and native handles to observed orientation model revisions, including explicit pipeline stages.
 
 - **(ocr): Correct detached two-table PDF reading order and coordinates.** (#2497)
   Keep the recognized cells and convert their render bounds to PDF points before returning the tables.
+
+- **(ocr): Keep source-proven dot-leader scan rows together in Auto OCR.** (Refs #2503)
+  A page-wide scan table whose leader runs are confirmed as regular dots in the recognition raster is returned as one table with every label and value kept and the leader dots left out.
 
 - **(ocr): Remove duplicate dot-leader rows from standalone Tesseract PSM 6 output.** (#2503)
   Require matching text and geometry while preserving numeric cells, default OCR, and PDF output.
@@ -251,6 +307,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep source-ruled numeric cells separate in fallback tables.** (#2376)
   Repeated painted separators constrain column clustering while preserving each accepted table's ordered words.
   Fractional rules can refine existing cells when the original word bounds clear the full painted stroke.
+
+- **(pdf): Admit fully source-ruled wide tables with merged index cells.** (#2376)
+  Certify 16-18 column grids only when every cell, merged span and word is proven by plain painted rules on the page.
 
 - **(pdf): Keep certified side-by-side panel lines in source order in plain output.** (#2537)
   Preserve complete rows and page boundaries in documents that mix panels with ordinary text.
@@ -313,6 +372,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Retain independently shaded source table headers and ruled cell boundaries.** (#2332)
   Keep nested text backgrounds from creating extra columns while preserving separate table records.
+
+- **(pdf): Preserve source-proven grouped leaf headers in ruled tables.** (#2332)
+  Two bold group bands over a bold leaf band stay header rows only when dark solid rules, which may be split into collinear segments, underline both. Path extraction now records the `d` dash pattern on stroked paths, so dashed rules are told apart from solid ones; a dash or transparency set through an ExtGState (`gs`) is not yet seen. A grid whose body rows are ruled in the same colour and weight as the leaf rule keeps no header from this path, and gridline detection in recovered diagrams groups lines by colour as well as by colour and dash style.
 
 
 - **(ocr): Require dense glyph evidence before preprocessing dark-mean images by default.** (#2515)
@@ -460,6 +522,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Recover verified embedded PDF prose with caching enabled.** (#2327)
   Preserve the primary cache identity and bypass the cache for the private source-DPI retry.
+
+- **(pdf): Recover a missing embedded prose line on any page of a multi-page PDF.** (#2327)
+  The source-DPI retry was limited to single-page documents; it now follows the page that holds the single last-painted picture, checks the native text of that page only, and an unrecovered picture's OCR text is placed after its own page instead of after the document.
 
 - **(pdf): Recover full-page grayscale raster prose beside visible native stubs.** (#2313)
   Bound the source paint audit and keep the native lines in order.

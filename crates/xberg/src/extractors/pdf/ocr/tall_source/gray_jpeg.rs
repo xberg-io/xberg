@@ -24,6 +24,7 @@ pub(in crate::extractors::pdf::ocr) async fn recover_after_gray_jpeg_render_fail
     let Some(psm) = recovered.psm else { return Ok(None) };
     let mut result = ExtractedDocument::default();
     apply_recovery(&mut result, recovered, 0, strips);
+    super::note_flat_structure(&mut result, config, 0);
     Ok(Some((result, psm)))
 }
 

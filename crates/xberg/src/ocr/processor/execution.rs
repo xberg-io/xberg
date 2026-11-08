@@ -1052,15 +1052,11 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
     if split == 0
         || values.len() < 2
         || row.len() != split + 1 + values.len()
-        || !label_words.clone().all(|word| word.chars().all(char::is_alphabetic))
         || !row[..split].iter().map(|word| word.text.as_str()).eq(label_words)
-        || !row[split + 1..].iter().zip(values).all(|(word, value)| {
-            word.text == *value
-                && value.bytes().any(|byte| byte.is_ascii_digit())
-                && value
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || b",.()+-".contains(&byte))
-        })
+        || !row[split + 1..]
+            .iter()
+            .zip(values)
+            .all(|(word, value)| word.text == *value)
     {
         return false;
     }
@@ -1071,6 +1067,7 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
     dots.text.len() >= MIN_DOT_LEADER_LENGTH
         && dots.text.bytes().all(|byte| byte == b'.')
         && dots.width > left.height.max(right.height)
+        && dots.height.saturating_mul(2) <= left.height.min(right.height)
         && left.left.saturating_add(left.width) < dots.left
         && dots.left.saturating_add(dots.width) < right.left
         && dots.top >= left.top.max(right.top)
@@ -2381,6 +2378,22 @@ pub(super) fn perform_ocr(
         )
         .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set image: {error}")))?;
     }
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    let leader_raster = processed_pix.filter(|pix| {
+        config.known_full_page_scan
+            && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+            && config.enable_table_detection
+            && config.output_format == "markdown"
+            && full_scan_table::uses_default_table_thresholds(config)
+            && full_scan_table::can_hold_leader_raster(
+                pix,
+                (width, height),
+                image_bytes.len(),
+                preprocessing.as_ref(),
+                &security_limits,
+            )
+    });
+    #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
     drop(processed_pix);
 
     api.set_source_resolution(source_dpi)
@@ -2673,16 +2686,19 @@ pub(super) fn perform_ocr(
     let mut tables = Vec::new();
     let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    let mut standalone_claimed = false;
+    let mut fully_claimed = false;
     #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
-    let standalone_claimed = false;
+    let fully_claimed = false;
 
     if config.enable_table_detection {
         let tsv_data = tsv_data_for_tables.as_ref().unwrap();
 
         let words = extract_table_words_from_tsv(tsv_data, config.table_min_confidence, &table_mark_symbols)?;
 
-        let oriented = recognition_orientation::tables(
+        let recognition_orientation::Oriented {
+            tables: oriented,
+            page_down,
+        } = recognition_orientation::tables(
             &api,
             tsv_data,
             &words,
@@ -2690,6 +2706,12 @@ pub(super) fn perform_ocr(
             (ocr_image_width, ocr_image_height),
             &security_limits,
         );
+        if page_down {
+            metadata.insert(
+                crate::ocr_metadata_keys::OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY.to_string(),
+                serde_json::Value::Bool(true),
+            );
+        }
         let regions = if oriented.is_some() {
             Vec::new()
         } else {
@@ -2832,15 +2854,33 @@ pub(super) fn perform_ocr(
                                 cleaned.as_deref(),
                             )
                         });
-                    standalone_claimed |= recovered.is_some();
+                    fully_claimed |= recovered.is_some();
                     recovered.or(cleaned)
                 } else {
                     cleaned
                 };
                 cleaned.or_else(|| {
-                    can_prove_scan_grid
-                        .then(|| full_scan_table::recover(tsv_data, &content, &bbox, &security_limits))
-                        .flatten()
+                    if !can_prove_scan_grid {
+                        return None;
+                    }
+                    let stock = full_scan_table::recover(tsv_data, &content, &bbox, &security_limits);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if stock.is_none()
+                        && let Some(raster) = leader_raster.as_ref()
+                        && let Some(source) = hocr_for_tables.as_deref().zip(hocr_document.as_ref())
+                        && let Some(cells) = full_scan_table::recover_dot_leader_rows(
+                            tsv_data,
+                            &content,
+                            &bbox,
+                            &security_limits,
+                            source,
+                            raster,
+                        )
+                    {
+                        fully_claimed = true;
+                        return Some(cells);
+                    }
+                    stock
                 })
             };
             #[cfg(not(feature = "pdf"))]
@@ -2892,6 +2932,9 @@ pub(super) fn perform_ocr(
         }
     }
 
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    drop(leader_raster);
+
     // Restore supported lines before paragraphs are flattened or claimed by accepted tables. ~keep
     if let Some(hocr) = hocr_for_tables.as_deref().filter(|_| !rejected_regions.is_empty()) {
         let restored =
@@ -2911,7 +2954,7 @@ pub(super) fn perform_ocr(
             hocr_document = Some(restored.document);
         }
     }
-    if let Some(document) = hocr_document.as_mut().filter(|_| standalone_claimed) {
+    if let Some(document) = hocr_document.as_mut().filter(|_| fully_claimed) {
         document.elements.clear();
         document.ocr_text_claimed_by_tables = true;
     } else if let Some(document) = hocr_document.as_mut() {
@@ -4007,6 +4050,55 @@ mod tests {
             changed[2].width = width;
             assert!(!accepts(&changed), "must reject leader box {left},{top},{width}");
         }
+    }
+
+    #[test]
+    fn dot_leader_row_ownership_does_not_depend_on_label_letters_or_value_digits() {
+        let accepts = |label: [&str; 2], values: [&str; 2]| {
+            let cells = [
+                format!("{} {}", label[0], label[1]),
+                values[0].to_owned(),
+                values[1].to_owned(),
+            ];
+            let mut words = positioned_dot_leader_row();
+            words[0].text = label[0].to_owned();
+            words[1].text = label[1].to_owned();
+            words[3].text = values[0].to_owned();
+            words[4].text = values[1].to_owned();
+            let accepted = row_has_only_extra_dot_leader(&words.each_ref(), &cells);
+            for (index, token) in [(0, "Other"), (3, "x"), (4, "3.2")] {
+                let mut changed = words.clone();
+                changed[index].text = token.to_owned();
+                assert!(
+                    !row_has_only_extra_dot_leader(&changed.each_ref(), &cells),
+                    "source token changed to {token:?}"
+                );
+            }
+            let mut overlapping = words.clone();
+            overlapping[2].left = 95;
+            assert!(!row_has_only_extra_dot_leader(&overlapping.each_ref(), &cells));
+            accepted
+        };
+        assert!(accepts(["Signal", "timing"], ["-64", "143.92"]));
+        assert!(accepts(["Item", "4(b)"], ["$1,010", "3.2%"]));
+        assert!(accepts(["Total:", "net"], ["alpha", "beta"]));
+    }
+
+    #[test]
+    fn dot_leader_box_is_at_most_half_the_text_height() {
+        let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
+        let mut words = positioned_dot_leader_row();
+        words[2].top = 30;
+        words[2].height = 5;
+        assert!(
+            row_has_only_extra_dot_leader(&words.each_ref(), &cells),
+            "half of 10 is the limit"
+        );
+        words[2].height = 6;
+        assert!(
+            !row_has_only_extra_dot_leader(&words.each_ref(), &cells),
+            "a box taller than half the text inside the shared band is a stroke, not leader dots"
+        );
     }
 
     #[test]

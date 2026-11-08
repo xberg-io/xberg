@@ -560,6 +560,7 @@ async fn run_pipeline_impl(
             && let Some(native) = crate::extraction::image_ocr::pdf_gap::native_anchor_text(&doc, &placement)
             && let Some(backend) = crate::extraction::image_ocr::pdf_gap::stock_backend(config)
         {
+            let page = placement.page();
             let (image, addition) = Box::pin(crate::extraction::image_ocr::pdf_gap::process(
                 doc.images[0].clone(),
                 placement,
@@ -570,7 +571,7 @@ async fn run_pipeline_impl(
             ))
             .await?;
             doc.images[0] = image;
-            image_gap_text = addition;
+            image_gap_text = addition.map(|text| (page, text));
             Vec::new()
         } else {
             image_positions
@@ -616,7 +617,7 @@ async fn run_pipeline_impl(
             feature = "tokio-runtime",
             not(target_arch = "wasm32")
         ))]
-        image_gap_text.as_deref(),
+        image_gap_text.as_ref().map(|(page, text)| (*page, text.as_str())),
     );
 
     // After the fold: a marker follows each page break, and the fold removes the page break
@@ -1384,7 +1385,7 @@ fn fold_embedded_image_ocr_text_with_gap(
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    image_gap_text: Option<&str>,
+    image_gap_text: Option<(u32, &str)>,
 ) {
     use crate::types::internal::{ElementKind, InternalElement, RelationshipTarget};
 
@@ -1417,7 +1418,7 @@ fn fold_embedded_image_ocr_text_with_gap(
             not(target_arch = "wasm32")
         ))]
         let text = match (anchored_image, page_number, text, image_gap_text) {
-            (Some(0), Some(1), Some(_), Some(addition)) => Some(addition),
+            (Some(0), Some(page), Some(_), Some((gap_page, addition))) if page == gap_page => Some(addition),
             _ => text,
         };
 

@@ -17,13 +17,16 @@ if ! grep -qF 'test result: ok. 7 passed; 0 failed; 0 ignored;' "$log"; then
   exit 1
 fi
 
-case_name=implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence
-# The strict two-table certificate is exercised on the direct Tesseract route.
+# The strict two-table and heading-plus-table certificates are exercised on the direct Tesseract route.
 direct_features=pdf,ocr,auto-rotate-tract,bundle-tessdata-eng,tokio-runtime
-cargo test --locked -p xberg --no-default-features --features "$direct_features" \
-  --test ocr_multitable_orientation_2497 -- --exact "$case_name" --color never 2>&1 | tee "$log"
-if ! grep -qF "test $case_name ... ok" "$log" ||
-  ! grep -qF 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$log"; then
-  echo "Expected the pinned two-table orientation test to execute" >&2
-  exit 1
-fi
+for case_name in \
+  implicit_rotation_retains_primary_when_two_tables_lack_complete_primary_evidence \
+  implicit_sideways_heading_recovers_exact_source_and_table_bounds; do
+  cargo test --locked -p xberg --no-default-features --features "$direct_features" \
+    --test ocr_multitable_orientation_2497 -- --exact "$case_name" --color never 2>&1 | tee "$log"
+  if ! grep -qF "test $case_name ... ok" "$log" ||
+    ! grep -qF 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$log"; then
+    echo "Expected the pinned orientation test $case_name to execute" >&2
+    exit 1
+  fi
+done
