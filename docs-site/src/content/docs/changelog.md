@@ -235,6 +235,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
   A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
 
+- **(pdf): Keep any native page the configured OCR languages cannot read, also through a Tesseract pipeline, and warn when a scan is in such a script.** (#2536)
+  The kept-page rule no longer needs lost-glyph markers and now also applies when `ocr.pipeline` is set, provided every stage is Tesseract with languages that do not cover the script; a PaddleOCR, VLM or custom stage means no claim and leaves the page to OCR. A scanned page in such a script is still read, and an `ocr` warning now tells the caller which model to add. Glyphs with no Unicode value stay unrecovered without the right model.
+
 - **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
   The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.
 

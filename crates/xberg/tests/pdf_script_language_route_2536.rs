@@ -10,6 +10,7 @@ const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-
 const PARTIAL: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/genuinely-partial-mapped.pdf");
 const SCANNED_ENGLISH_KHMER_OVERLAY: &[u8] =
     include_bytes!("fixtures/pdf/khmer-cluster-2536/scanned-english-khmer-overlay.pdf");
+const KHMER_SHORT_FULLY_MAPPED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-short-fully-mapped.pdf");
 const KHMER_TEXT_WITH_FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 const KHMER_THEN_SCANNED_ENGLISH: &[u8] =
     include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
@@ -123,4 +124,47 @@ fn automatic_english_ocr_keeps_a_text_heavy_khmer_page_that_carries_a_figure() {
     assert!(automatic.content.starts_with(native.content.trim_end()));
     assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content));
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+}
+
+#[test]
+fn automatic_english_ocr_keeps_a_short_fully_mapped_khmer_page() {
+    let models = english_model();
+    let native = extract(KHMER_SHORT_FULLY_MAPPED, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    assert!(!native.content.contains('\u{FFFD}'), "{:?}", native.content);
+    let khmer = khmer_count(&native.content);
+    assert!(khmer >= 8, "{:?}", native.content);
+    let automatic = extract(KHMER_SHORT_FULLY_MAPPED, models.path(), |_| {});
+    assert_eq!(khmer_count(&automatic.content), khmer, "{:?}", automatic.content);
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+}
+
+#[test]
+fn automatic_ocr_through_an_english_only_pipeline_keeps_the_khmer_page() {
+    let models = english_model();
+    let pipeline = serde_json::json!({"stages": [
+        {"backend": "tesseract", "priority": 100},
+        {"backend": "tesseract", "priority": 50, "language": ["eng"]},
+    ]});
+    let native = extract(COMPLETE, models.path(), |config| config.disable_ocr = true);
+    let automatic = extract(COMPLETE, models.path(), |config| {
+        config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
+    });
+    assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content));
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+}
+
+#[test]
+fn a_scanned_page_with_a_khmer_layer_read_with_english_warns_to_add_khm() {
+    let models = english_model();
+    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    let warnings: Vec<_> = automatic
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Khmer"))
+        .collect();
+    assert_eq!(warnings.len(), 1, "{:?}", automatic.processing_warnings);
+    assert!(warnings[0].message.contains("khm") && warnings[0].message.contains("page 1"));
+    assert!(automatic.content.contains("20,000 bottles of water"));
 }

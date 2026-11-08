@@ -229,8 +229,43 @@ fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> 
     })
 }
 
-fn kept_pages_warning(kept: &[(u32, Vec<Script>)], languages: &[String]) -> crate::types::ProcessingWarning {
-    let described = kept
+/// The languages every stage of the OCR route reads with, or `None` when some stage's reading
+/// cannot be described by a Tesseract model list. Only Tesseract stages make a language claim:
+/// PaddleOCR, Sceptre, VLM and custom backends are "no claim", so a route that can reach one is
+/// never judged. A pipeline's stages are pooled, because a stage that reads the script is enough
+/// for OCR to be worth running.
+fn route_languages(ocr: &crate::OcrConfig) -> Option<Vec<String>> {
+    if !ocr.enabled {
+        return None;
+    }
+    let Some(pipeline) = &ocr.pipeline else {
+        return (ocr.backend == "tesseract" && ocr.vlm_fallback == VlmFallbackPolicy::Disabled)
+            .then(|| ocr.effective_tesseract_language());
+    };
+    if pipeline.stages.is_empty() {
+        return None;
+    }
+    let mut languages = Vec::new();
+    for stage in &pipeline.stages {
+        if !stage.backend.eq_ignore_ascii_case("tesseract") {
+            return None;
+        }
+        let parent = &ocr.language;
+        let own = stage.language.as_ref().unwrap_or(parent);
+        for language in crate::core::config::ocr::effective_tesseract_language_for(
+            own,
+            stage.tesseract_config.as_ref().or(ocr.tesseract_config.as_ref()),
+        ) {
+            if !languages.contains(&language) {
+                languages.push(language);
+            }
+        }
+    }
+    Some(languages)
+}
+
+fn describe(pages: &[(u32, Vec<Script>)]) -> String {
+    pages
         .iter()
         .map(|(page, scripts)| {
             let names = scripts.iter().map(|script| format!("{script:?}")).collect::<Vec<_>>();
@@ -241,26 +276,45 @@ fn kept_pages_warning(kept: &[(u32, Vec<Script>)], languages: &[String]) -> crat
             )
         })
         .collect::<Vec<_>>()
-        .join(", ");
+        .join(", ")
+}
+
+fn warning(message: String) -> crate::types::ProcessingWarning {
     crate::types::ProcessingWarning {
         source: std::borrow::Cow::Borrowed("ocr"),
-        message: std::borrow::Cow::Owned(format!(
-            "OCR was skipped for {described}: the native text is in a script the configured OCR languages \
-             ({}) cannot read, so it was kept as extracted, and glyphs it has no Unicode value for stay lost. \
-             Add a model for this script, for example the one named, to ocr.language to OCR it.",
-            languages.join("+")
-        )),
+        message: std::borrow::Cow::Owned(message),
     }
 }
 
+fn kept_pages_warning(kept: &[(u32, Vec<Script>)], languages: &[String]) -> crate::types::ProcessingWarning {
+    warning(format!(
+        "OCR was skipped for {}: the native text is in a script the configured OCR languages \
+         ({}) cannot read, so it was kept as extracted, and glyphs it has no Unicode value for stay lost. \
+         Add a model for this script, for example the one named, to ocr.language to OCR it.",
+        describe(kept),
+        languages.join("+")
+    ))
+}
+
+fn read_pages_warning(read: &[(u32, Vec<Script>)], languages: &[String]) -> crate::types::ProcessingWarning {
+    warning(format!(
+        "The native text of {} is in a script the configured OCR languages ({}) cannot read, and the \
+         page is read by OCR because it carries a picture. Text that OCR reads in this script will be \
+         wrong. Add a model for this script, for example the one named, to ocr.language.",
+        describe(read),
+        languages.join("+")
+    ))
+}
+
 /// Remove from the quality gate's failing pages every page that OCR with the configured
-/// languages cannot improve: a page whose native text carries lost-glyph markers and is written
-/// in one script none of the languages covers (see [`unreadable_script`]). Pages that stay
-/// failing are unchanged, and the document-level flags follow from what remains.
+/// languages cannot improve: a page whose native text is written in a script none of the
+/// languages covers (see [`unreadable_scripts`]). Pages that stay failing are unchanged, and the
+/// document-level flags follow from what remains.
 ///
 /// A page that is a scan or carries one (see [`page_is_scan`]) stays failing: its text layer says
-/// nothing about the picture, which OCR is the only reader of. Returns an `ocr` warning for the
-/// kept pages.
+/// nothing about the picture, which OCR is the only reader of. Returns `ocr` warnings: one for the
+/// kept pages and one for the pages that stay failing although their layer is in an unreadable
+/// script, so a caller whose scan is in Khmer is told to add `khm`. A page is in at most one.
 ///
 /// The filter runs before the provenance and plausibility flags are merged into the decision, so
 /// a page whose layer is flagged as a mis-decode (all-Greek English from a symbol font, for
@@ -272,59 +326,58 @@ pub(super) fn retain_unreadable_script_pages(
     page_count: Option<u32>,
     content: &[u8],
     config: &ExtractionConfig,
-) -> Option<crate::types::ProcessingWarning> {
-    let ocr = config.ocr.as_ref()?;
-    let boundaries = boundaries.filter(|boundaries| {
+) -> Vec<crate::types::ProcessingWarning> {
+    let Some(ocr) = config.ocr.as_ref() else {
+        return Vec::new();
+    };
+    let Some(boundaries) = boundaries.filter(|boundaries| {
         !decision.failing_pages.is_empty()
             && page_count.is_some_and(|count| count as usize == boundaries.len())
             && boundaries
                 .iter()
                 .enumerate()
                 .all(|(index, boundary)| boundary.page_number as usize == index + 1)
-    })?;
-    if !(ocr.enabled
-        && ocr.backend == "tesseract"
-        && ocr.pipeline.is_none()
-        && ocr.vlm_fallback == VlmFallbackPolicy::Disabled)
-    {
-        return None;
-    }
-    let languages = ocr.effective_tesseract_language();
+    }) else {
+        return Vec::new();
+    };
+    let Some(languages) = route_languages(ocr) else {
+        return Vec::new();
+    };
     let candidates: Vec<(u32, Vec<Script>)> = decision
         .failing_pages
         .iter()
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
-            if !text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
-                return None;
-            }
             Some((*page, unreadable_scripts(text, &languages)?))
         })
         .collect();
     if candidates.is_empty() {
-        return None;
+        return Vec::new();
     }
     let document = match xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) {
         Ok(document) => document,
         Err(error) => {
             tracing::debug!(%error, "script evidence skipped: the PDF could not be opened to check for pictures");
-            return None;
+            return Vec::new();
         }
     };
-    let kept: Vec<(u32, Vec<Script>)> = candidates
+    let (read, kept): (Vec<_>, Vec<_>) = candidates
         .into_iter()
-        .filter(|(page, _)| !page_is_scan(&document, *page as usize - 1))
-        .collect();
-    if kept.is_empty() {
-        return None;
+        .partition(|(page, _)| page_is_scan(&document, *page as usize - 1));
+    let mut warnings = Vec::new();
+    if !kept.is_empty() {
+        decision
+            .failing_pages
+            .retain(|page| !kept.iter().any(|(kept_page, _)| kept_page == page));
+        decision.fallback = !decision.failing_pages.is_empty();
+        decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
+        warnings.push(kept_pages_warning(&kept, &languages));
     }
-    decision
-        .failing_pages
-        .retain(|page| !kept.iter().any(|(kept_page, _)| kept_page == page));
-    decision.fallback = !decision.failing_pages.is_empty();
-    decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
-    Some(kept_pages_warning(&kept, &languages))
+    if !read.is_empty() {
+        warnings.push(read_pages_warning(&read, &languages));
+    }
+    warnings
 }
 
 #[cfg(test)]
@@ -386,10 +439,10 @@ mod tests {
         pages: &[&str],
         content: &[u8],
         config: &ExtractionConfig,
-    ) -> (OcrFallbackDecision, Option<crate::types::ProcessingWarning>) {
+    ) -> (OcrFallbackDecision, Vec<crate::types::ProcessingWarning>) {
         let (text, boundaries) = page_text(pages);
         let mut decision = decision_for(&text, &boundaries);
-        let warning = retain_unreadable_script_pages(
+        let warnings = retain_unreadable_script_pages(
             &mut decision,
             &text,
             Some(&boundaries),
@@ -397,7 +450,7 @@ mod tests {
             content,
             config,
         );
-        (decision, warning)
+        (decision, warnings)
     }
 
     #[test]
@@ -519,11 +572,12 @@ mod tests {
 
     #[test]
     fn marked_page_in_an_unreadable_script_leaves_the_failing_pages_with_a_warning() {
-        let (decision, warning) = run(&[KHMER_MARKED, ""], TWO_PAGES, &config_with(&["eng"]));
+        let (decision, warnings) = run(&[KHMER_MARKED, ""], TWO_PAGES, &config_with(&["eng"]));
         assert_eq!(decision.failing_pages, [2]);
         assert!(decision.fallback);
         assert!(!decision.whole_doc_failure);
-        let warning = warning.expect("the kept page is reported");
+        assert_eq!(warnings.len(), 1);
+        let warning = &warnings[0];
         assert_eq!(warning.source, "ocr");
         for part in ["page 1", "Khmer", "for example khm", "(eng)", "lost"] {
             assert!(warning.message.contains(part), "{part}: {}", warning.message);
@@ -533,19 +587,23 @@ mod tests {
 
     #[test]
     fn single_marked_page_in_an_unreadable_script_needs_no_fallback() {
-        let (decision, warning) = run(&[KHMER_MARKED], ONE_PAGE, &config_with(&["eng"]));
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config_with(&["eng"]));
         assert!(decision.failing_pages.is_empty());
         assert!(!decision.fallback);
         assert!(!decision.whole_doc_failure);
-        assert!(warning.is_some());
+        assert_eq!(warnings.len(), 1);
     }
 
     #[test]
     fn a_page_a_picture_covers_stays_failing_so_its_body_is_read() {
-        let (decision, warning) = run(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config_with(&["eng"]));
+        let (decision, warnings) = run(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config_with(&["eng"]));
         assert_eq!(decision.failing_pages, [1]);
         assert!(decision.fallback);
-        assert!(warning.is_none());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        for part in ["page 1", "Khmer", "for example khm", "(eng)", "read by OCR"] {
+            assert!(warnings[0].message.contains(part), "{part}: {}", warnings[0].message);
+        }
+        assert!(!warnings[0].message.contains("kept"));
     }
 
     #[test]
@@ -556,20 +614,18 @@ mod tests {
             "a coverage-only check would send this page to OCR"
         );
         assert!(!page_is_scan(&document, 0));
-        let (decision, warning) = run(&[KHMER_MARKED], TEXT_WITH_FIGURE, &config_with(&["eng"]));
+        let (decision, warnings) = run(&[KHMER_MARKED], TEXT_WITH_FIGURE, &config_with(&["eng"]));
         assert!(decision.failing_pages.is_empty());
-        assert!(warning.is_some());
+        assert_eq!(warnings.len(), 1);
     }
 
     #[test]
     fn a_page_stays_failing_when_nothing_qualifies_it() {
-        let unmarked = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ ក្រុង សៀវភៅ សាលារៀន";
         let latin_marked = "Invoice \u{FFFD}\u{FFFD}\u{FFFD} total \u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}";
         for (page, languages) in [
             (KHMER_MARKED, &["eng", "khm"][..]),
             (KHMER_MARKED, &["eng", "zzz"][..]),
             (latin_marked, &["eng"][..]),
-            (unmarked, &["eng"][..]),
         ] {
             let (text, boundaries) = page_text(&[page]);
             let before = decision_for(&text, &boundaries);
@@ -579,7 +635,7 @@ mod tests {
                 (before.fallback, before.failing_pages.clone()),
                 "{page:?} {languages:?}"
             );
-            assert!(warning.is_none());
+            assert!(warning.is_empty());
         }
     }
 
@@ -595,16 +651,16 @@ mod tests {
             let warning =
                 retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), page_count, ONE_PAGE, &config);
             boundaries[0].page_number -= shift;
-            assert!(warning.is_none(), "{page_count:?} {shift}");
+            assert!(warning.is_empty(), "{page_count:?} {shift}");
             assert_eq!(decision.failing_pages, before, "{page_count:?} {shift}");
         }
         let warning = retain_unreadable_script_pages(&mut decision, &text, None, Some(1), ONE_PAGE, &config);
-        assert!(warning.is_none());
+        assert!(warning.is_empty());
         assert_eq!(decision.failing_pages, before);
     }
 
     #[test]
-    fn explicit_pipeline_and_other_backends_are_left_alone() {
+    fn other_backends_are_left_alone() {
         let mut paddle = config_with(&["eng"]);
         paddle.ocr.as_mut().unwrap().backend = "paddleocr".to_string();
         let mut vlm = config_with(&["eng"]);
@@ -612,8 +668,71 @@ mod tests {
         for config in [paddle, vlm] {
             let (decision, warning) = run(&[KHMER_MARKED], ONE_PAGE, &config);
             assert_eq!(decision.failing_pages, [1]);
-            assert!(warning.is_none());
+            assert!(warning.is_empty());
         }
+    }
+
+    fn pipeline_config(pipeline: serde_json::Value) -> ExtractionConfig {
+        let mut config = config_with(&["eng"]);
+        config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
+        config
+    }
+
+    #[test]
+    fn a_pipeline_of_stages_that_cannot_read_the_script_keeps_the_native_page() {
+        let config = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100},
+            {"backend": "tesseract", "priority": 50, "language": ["eng", "deu"]},
+        ]}));
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].message.contains("(eng+deu)"), "{}", warnings[0].message);
+    }
+
+    #[test]
+    fn a_pipeline_stage_that_reads_the_script_or_makes_no_claim_leaves_the_page_to_ocr() {
+        for pipeline in [
+            serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 100},
+                {"backend": "tesseract", "priority": 50, "language": ["khm"]},
+            ]}),
+            serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 100},
+                {"backend": "paddleocr", "priority": 50},
+            ]}),
+            serde_json::json!({"stages": [{"backend": "vlm", "priority": 100}]}),
+            serde_json::json!({"stages": []}),
+        ] {
+            let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &pipeline_config(pipeline.clone()));
+            assert_eq!(decision.failing_pages, [1], "{pipeline}");
+            assert!(warnings.is_empty(), "{pipeline}");
+        }
+    }
+
+    #[test]
+    fn a_page_without_lost_glyph_markers_is_judged_by_its_script() {
+        let unmarked = "ខ្ញុំ ស្រលាញ់ ប្រទេស";
+        assert!(
+            !decision_for(unmarked, &page_text(&[unmarked]).1)
+                .failing_pages
+                .is_empty()
+        );
+        let (decision, warnings) = run(&[unmarked], ONE_PAGE, &config_with(&["eng"]));
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1);
+        let (decision, warnings) = run(&[unmarked], ONE_PAGE, &config_with(&["eng", "khm"]));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn a_kept_page_and_a_read_page_each_get_one_warning() {
+        let (decision, warnings) = run(&[KHMER_MARKED, KHMER_MARKED], TWO_PAGES, &config_with(&["eng"]));
+        assert_eq!(decision.failing_pages, [2]);
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(warnings[0].message.contains("page 1") && !warnings[0].message.contains("page 2"));
+        assert!(warnings[1].message.contains("page 2") && !warnings[1].message.contains("page 1"));
     }
 
     #[test]

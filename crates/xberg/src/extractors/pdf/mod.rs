@@ -3115,16 +3115,14 @@ impl PdfExtractor {
                 &thresholds,
             );
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            if let Some(warning) = unreadable_script::retain_unreadable_script_pages(
+            ocr_fallback_warnings.extend(unreadable_script::retain_unreadable_script_pages(
                 &mut decision,
                 &native_text,
                 boundaries.as_deref(),
                 pdf_metadata.pdf_specific.page_count,
                 content,
                 config,
-            ) {
-                ocr_fallback_warnings.push(warning);
-            }
+            ));
 
             // `NativeTextStats`' character-class checks cannot see a font whose mapping
             // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
