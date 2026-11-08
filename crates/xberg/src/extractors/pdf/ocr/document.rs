@@ -90,6 +90,7 @@ pub(super) fn assemble_mixed_ocr_page_document(
             &[],
             &Default::default(),
         );
+        copy_source_strip_frames(&doc.metadata, &mut assembled.metadata);
         assembled.processing_warnings = std::mem::take(&mut doc.processing_warnings);
         doc = assembled;
     }
@@ -984,6 +985,75 @@ pub(super) fn attach_page_ocr_payload(
         doc.prebuilt_ocr_elements.get_or_insert_with(Vec::new).extend(elements);
     }
 }
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn source_strip_frames(metadata: &crate::types::Metadata) -> Vec<serde_json::Value> {
+    use crate::ocr_metadata_keys::{
+        OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY, OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY,
+    };
+    if let Some(frames) = metadata
+        .additional
+        .get(OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY)
+        .and_then(serde_json::Value::as_array)
+    {
+        return frames.iter().filter(|frame| frame.is_object()).cloned().collect();
+    }
+    metadata
+        .additional
+        .get(OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY)
+        .filter(|frame| frame.is_object())
+        .cloned()
+        .into_iter()
+        .collect()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn store_source_strip_frames(metadata: &mut crate::types::Metadata, frames: Vec<serde_json::Value>) {
+    use crate::ocr_metadata_keys::{
+        OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY, OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY,
+    };
+    if let Some(first) = frames.first() {
+        metadata
+            .additional
+            .insert(OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY.into(), first.clone());
+        metadata
+            .additional
+            .insert(OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY.into(), frames.into());
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn copy_source_strip_frames(source: &crate::types::Metadata, target: &mut crate::types::Metadata) {
+    store_source_strip_frames(target, source_strip_frames(source));
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn merge_source_strip_frames(
+    doc: &mut crate::types::internal::InternalDocument,
+    replacements: &ahash::AHashMap<u32, String>,
+    pages: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+) {
+    let mut accepted = pages
+        .iter()
+        .filter(|(page, _)| replacements.get(page).is_some_and(|text| !text.trim().is_empty()))
+        .collect::<Vec<_>>();
+    accepted.sort_unstable_by_key(|(page, _)| **page);
+    let frames = accepted
+        .into_iter()
+        .flat_map(|(&page, document)| {
+            source_strip_frames(&document.metadata)
+                .into_iter()
+                .filter_map(move |frame| {
+                    let mut frame = frame.as_object()?.clone();
+                    // Detached stages number their lone page locally; the accepted page map owns
+                    // the document identity. ~keep
+                    frame.insert("page_number".into(), page.into());
+                    Some(serde_json::Value::Object(frame))
+                })
+        })
+        .collect();
+    store_source_strip_frames(&mut doc.metadata, frames);
+}
+
 /// Copy the payload fields that a page document already carried before the document-global
 /// restructuring heuristic (`heuristically_restructured_ocr_pages`, in `pipeline.rs`) rebuilt
 /// it: the heuristic's combined document has no notion of the backend's raw per-word OCR
@@ -1000,6 +1070,7 @@ pub(super) fn carry_page_ocr_payload_forward(
     new_page_doc.prebuilt_ocr_elements = existing.prebuilt_ocr_elements.clone();
     new_page_doc.processing_warnings = existing.processing_warnings.clone();
     new_page_doc.ocr_coordinate_frame = existing.ocr_coordinate_frame;
+    copy_source_strip_frames(&existing.metadata, &mut new_page_doc.metadata);
     if let Some(modes) = existing
         .metadata
         .additional
@@ -1747,6 +1818,7 @@ pub(crate) fn merge_structured_ocr_pages_into_internal_document(
         return;
     }
 
+    merge_source_strip_frames(doc, ocr_results, structured_pages);
     let containers = analyze_container_markers(&doc.elements);
     let anchors = replacement_anchors(&doc.elements, &containers.inferred_pages, &replacements);
     // Assets carried by a per-page OCR document are re-indexed into the parent's
@@ -3764,3 +3836,7 @@ mod tests {
 #[cfg(all(test, feature = "pdf", feature = "ocr"))]
 #[path = "document/table_grid_geometry_tests.rs"]
 mod table_grid_geometry_tests;
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+#[path = "document/source_strip_frame_tests.rs"]
+mod source_strip_frame_tests;
