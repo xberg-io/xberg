@@ -220,6 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Run no-binarization contrast preprocessing on the 8-bit plane for genuinely gray input.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which shrank or refused the sparse-retry fallback's upscale. A raster whose channels are equal in every pixel now becomes an 8-bit Pix and frees its RGB before background normalization and sharpening; the result is pixel-identical to the colour path, and the native phases peak at 7.0 bytes per pixel as measured with Leptonica's allocator (29,360,128 bytes at 2048x2048 against a modelled 29,360,384). Colour input keeps the colour path and its model, a step that fails after the RGB is freed keeps the best Pix already built, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does. The receipt OCR test is ignored until #2699 is resolved: its expected spelling does not reproduce at default limits and the cause is not isolated.
+
 - **(pdf): Honor graphics-state dash patterns and zero-opacity strokes in native PDF path extraction.** (#2332)
   All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour for clamped zero opacity; this prevents false HTML headers from those separators.
   Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
