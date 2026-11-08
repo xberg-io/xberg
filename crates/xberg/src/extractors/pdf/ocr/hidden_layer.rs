@@ -119,13 +119,10 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
 /// not for two.
 const PREVIEW_WORK_PER_ITERATION: usize = 16;
 
-/// Per-page budgets that make up the document-wide ceiling. The ceiling is this many times
-/// `16 * max_iterations` units: 960 million at the default `max_iterations` of 10 million, 6x the
-/// shared budget it replaces. Decoding measured 1.1 to 2.5 ms per million units on an optimized
-/// build (Apple silicon), so the worst case is about 1 to 2.4 s, and about 5 s at a pessimistic
-/// 5 ms per million. It still buys 10 pages of the costliest audited 300 dpi scan (88 million
-/// units each) and 35 of a light one (27 million), so a realistic multi-page scan recovers every
-/// page (#2694).
+/// Per-page budgets in the document ceiling: 6 x `16 * max_iterations`, or 960 million units at
+/// the default, 6x the shared budget this replaces. Decoding measured 1.1 to 2.5 ms per million
+/// units optimized (about 5 ms pessimistic), so the worst case is 1 to 5 s while 10 audited 300 dpi
+/// pages (88 million each) still fit (#2694).
 const PREVIEW_FULL_BUDGET_PAGES: usize = 6;
 
 /// Preview work for one document: each page may spend up to the per-page limit derived from
