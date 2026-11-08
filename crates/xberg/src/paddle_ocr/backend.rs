@@ -271,7 +271,7 @@ fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::Accel
 ///
 /// The `tract` backend takes the same `num_thread` parameter but ignores it (`TractBackend::load`).
 fn paddle_inference_thread_count() -> usize {
-    paddle_session_thread_budget(crate::core::config::concurrency::resolve_thread_budget(None))
+    paddle_session_thread_budget(crate::core::config::concurrency::active_thread_budget())
 }
 
 /// Pure core of [`paddle_inference_thread_count`], split out so the policy is testable
@@ -1967,6 +1967,21 @@ mod tests {
     #[test]
     fn paddle_session_thread_budget_floors_at_one() {
         assert_eq!(paddle_session_thread_budget(0), 1);
+    }
+
+    /// GH#2649: the session budget must be the one installed from the request's
+    /// `ConcurrencyConfig.max_threads`, not a fresh host-derived default.
+    #[test]
+    fn paddle_inference_thread_count_follows_the_installed_process_budget() {
+        let config = crate::core::config::ConcurrencyConfig {
+            max_threads: Some(1),
+            ..Default::default()
+        };
+        crate::core::config::concurrency::init_thread_pools(Some(&config));
+        assert_eq!(
+            paddle_inference_thread_count(),
+            crate::core::config::concurrency::active_thread_budget()
+        );
     }
 
     const CONCURRENT_INITIALIZER_COUNT: usize = 8;
