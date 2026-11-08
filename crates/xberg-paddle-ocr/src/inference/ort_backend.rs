@@ -27,6 +27,11 @@ pub fn adopt_environment(environment: &ort::environment::Environment) -> bool {
     ENVIRONMENT.set(environment.clone()).is_ok()
 }
 
+#[cfg(test)]
+thread_local! {
+    static APPLIED_THREADS: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
 /// ONNX Runtime session wrapper.
 ///
 /// The session is held behind a [`Mutex`] because `ort`'s `Session::run` needs
@@ -42,10 +47,9 @@ impl OrtBackend {
     ///
     /// Mirrors the pre-seam `BaseNet::init_model_from_memory` exactly, including its
     /// `catch_unwind` guard around session construction (ONNX Runtime's native
-    /// library can panic on a malformed model): `builder_fn` fully replaces the
-    /// default session configuration when supplied (matching today's
-    /// `init_models_custom` behavior); otherwise the session runs at `All` graph
-    /// optimization with `num_thread` intra-op threads and one inter-op thread.
+    /// library can panic on a malformed model): the session always gets
+    /// `num_thread` intra-op threads and one inter-op thread; `builder_fn` then customizes
+    /// the builder (it replaces only the `All` graph optimization default).
     pub(crate) fn load(
         model_bytes: &[u8],
         num_thread: usize,
@@ -75,19 +79,27 @@ impl OrtBackend {
         Ok(ENVIRONMENT.get_or_init(|| environment))
     }
 
+    /// Thread limits are set before `builder_fn` runs so a custom builder (execution-provider
+    /// registration) cannot leave the session on ONNX Runtime's automatic thread pools.
+    fn apply_thread_limits(builder: SessionBuilder, num_thread: usize) -> Result<SessionBuilder, OcrError> {
+        #[cfg(test)]
+        APPLIED_THREADS.with(|cell| cell.set(Some(num_thread)));
+        builder
+            .with_intra_threads(num_thread)
+            .map_err(|e| OcrError::Ort(ort::Error::new(e.message())))?
+            .with_inter_threads(1)
+            .map_err(|e| OcrError::Ort(ort::Error::new(e.message())))
+    }
+
     fn session_builder(
         num_thread: usize,
         builder_fn: Option<fn(SessionBuilder) -> Result<SessionBuilder, ort::Error>>,
     ) -> Result<SessionBuilder, OcrError> {
-        let builder = Session::builder(Self::environment()?)?;
+        let builder = Self::apply_thread_limits(Session::builder(Self::environment()?)?, num_thread)?;
         let builder = match builder_fn {
             Some(custom) => custom(builder)?,
             None => builder
                 .with_optimization_level(GraphOptimizationLevel::All)
-                .map_err(|e| OcrError::Ort(ort::Error::new(e.message())))?
-                .with_intra_threads(num_thread)
-                .map_err(|e| OcrError::Ort(ort::Error::new(e.message())))?
-                .with_inter_threads(1)
                 .map_err(|e| OcrError::Ort(ort::Error::new(e.message())))?,
         };
 
@@ -173,6 +185,18 @@ fn array_from_output(dims: &[i64], data: &[f32]) -> Result<Tensor, OcrError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn identity_builder(builder: SessionBuilder) -> Result<SessionBuilder, ort::Error> {
+        Ok(builder)
+    }
+
+    /// GH#2649: a custom builder replaced the default recipe, leaving thread pools automatic.
+    #[test]
+    fn custom_builder_still_receives_the_thread_limit() {
+        APPLIED_THREADS.with(|cell| cell.set(None));
+        OrtBackend::session_builder(3, Some(identity_builder)).expect("session builder");
+        assert_eq!(APPLIED_THREADS.with(|cell| cell.get()), Some(3));
+    }
 
     #[test]
     fn shape_to_i64_converts_dims() {
