@@ -1,6 +1,6 @@
 """Regenerate the issue #2322 ligature-advance fixtures with the lock-pinned fonttools.
 
-Usage: python3 generate.py OUTPUT.pdf MODE, MODE one of direct, letters, codepoint, plain, plain_direct.
+Usage: python3 generate.py OUTPUT.pdf MODE, MODE one of direct, letters, codepoint, plain, plain_direct, accent.
 """
 
 import io
@@ -12,7 +12,7 @@ from fontTools.ttLib import TTFont
 
 output = Path(sys.argv[1])
 mode = sys.argv[2]
-if mode not in ("direct", "letters", "codepoint", "plain", "plain_direct"):
+if mode not in ("direct", "letters", "codepoint", "plain", "plain_direct", "accent"):
     raise ValueError(f"unknown mode {mode}")
 
 SENT = [
@@ -70,6 +70,8 @@ widths = [int(w[g][0] * 1000 / tt["head"].unitsPerEm) for g in order]
 
 
 def unicode_of(c):
+    if mode == "accent" and c == "e":
+        return "00650301"  # one code, two characters: a letter and a combining accent, not a ligature
     if c in LETTERS and mode != "codepoint":
         return "".join(f"{ord(x):04X}" for x in LETTERS[c])
     return f"{ord(c):04X}"

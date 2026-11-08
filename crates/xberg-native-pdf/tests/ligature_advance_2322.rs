@@ -65,3 +65,18 @@ fn should_keep_runs_of_single_letter_codes_on_the_shaping_route() {
         "a run whose codes each decode to one letter must stay on the Unicode shaping route"
     );
 }
+
+#[test]
+fn should_paint_a_code_that_decodes_to_a_letter_and_an_accent_by_cid() {
+    // The route follows the count of characters a code decodes to, not the ligature code points. The
+    // ToUnicode of `e` is U+0065 U+0301, so every run with an `e` leaves the shaping route. The reference is
+    // the same codes with no font cmap, where the font would join the separate f and i codes by GSUB. ~keep
+    let reference = raster(PLAIN_DIRECT);
+    assert_seven_lines_have_ink(&reference);
+    let actual = raster(include_bytes!("fixtures/ligature_advance_2322/accent.pdf"));
+    assert_seven_lines_have_ink(&actual);
+    assert!(
+        actual.as_raw() == reference.as_raw(),
+        "a code that decodes to a letter and a combining accent must be painted by CID, not shaped"
+    );
+}

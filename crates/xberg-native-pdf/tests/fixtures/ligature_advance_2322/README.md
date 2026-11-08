@@ -13,6 +13,8 @@ Run `python3 generate.py OUTPUT.pdf MODE` with fonttools 4.68.0 from `uv.lock`. 
 - `codepoint`: the same as `letters`, but ToUnicode maps each ligature code to its U+FB0x code point.
 - `plain`: separate letter codes, a full font cmap. The control for the Unicode shaping route.
 - `plain_direct`: the same codes as `plain`, no font cmap.
+- `accent`: the same codes as `plain`. ToUnicode maps the code of `e` to U+0065 U+0301, a letter and a combining
+  accent. No ligature code is present.
 
 | File | SHA-256 |
 | --- | --- |
@@ -21,3 +23,4 @@ Run `python3 generate.py OUTPUT.pdf MODE` with fonttools 4.68.0 from `uv.lock`. 
 | codepoint.pdf | 942e329df0e11268ec853cc3ce67278acbacd20e17667f18ff0892d81aa375c3 |
 | plain.pdf | 805e8011e94cb855002714a913b14964c3411d4786d65f2405521a12e59730f8 |
 | plain_direct.pdf | 3b2dc89dfd042fe4024d34496d25c0ce59d325f9865b7ecff3c87ba876c6b069 |
+| accent.pdf | 38f7bf29394e4ff095803dc722905918cc7ead601a9c364c8eec7637ef1d17a6 |
