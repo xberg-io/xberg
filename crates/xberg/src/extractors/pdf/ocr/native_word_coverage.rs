@@ -224,6 +224,7 @@ fn ink_is_glyph_ink(
     read_words: &[(String, LineBox)],
     native_words: &[(String, LineBox)],
 ) -> bool {
+    debug_assert_eq!(placed.len(), read_words.len());
     let scale = INK_PROOF_DPI as f32 / 72.0;
     let shown: Option<Vec<bool>> = placed
         .iter()

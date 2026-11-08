@@ -54,6 +54,19 @@ fn should_compare_a_table_read_to_its_words_without_the_table_markup() {
 }
 
 #[test]
+fn should_reject_a_table_read_whose_words_differ_from_the_iterator_words() {
+    let content = "| Value | Type |\n| --- | --- |";
+    assert!(content_holds_exactly_the_read_words(
+        content,
+        ["Value", "Type"].iter().copied()
+    ));
+    assert!(!content_holds_exactly_the_read_words(
+        content,
+        ["Value", "Kind"].iter().copied()
+    ));
+}
+
+#[test]
 fn should_certify_a_page_of_text_and_tables_only_when_it_holds_exactly_the_read_words() {
     let read = "| Value | Type |\n| --- | --- |\n| 00H | General |";
     let mut doc = super::super::document::flat_ocr_page_document("Table 3-12 Encoding");
@@ -78,6 +91,13 @@ fn should_certify_a_page_of_text_and_tables_only_when_it_holds_exactly_the_read_
         "a read word the structure lacks is content the native page would drop"
     );
     assert!(!only_segments_certified_tesseract_text(&doc, &page_read));
+
+    let mut extra_cell = doc.clone();
+    extra_cell.tables[0].cells[1].push("Extra".into());
+    assert!(
+        !only_segments_certified_tesseract_text_and_tables(&extra_cell, &page_read),
+        "a cell word the certified markdown lacks would be emitted uncertified"
+    );
 
     let mut with_image = doc.clone();
     with_image.images.push(Default::default());

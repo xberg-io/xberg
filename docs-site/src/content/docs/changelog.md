@@ -205,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(ocr): Keep the native page when automatic OCR reads it as a table of the same words (Refs #2534).**
-  A read that Tesseract laid out as a table is compared to the native layer by its words with the table markup and ruling bars set aside, and it yields to the native text under the same agreement and glyph-ink proof as a plain read. The native page was followed by its whole OCR table (1315 words for 550 on Intel SDM page 815).
+  A read that Tesseract laid out as a table is compared with its own iterator words with the table markup and ruling bars set aside, and it yields to the native text under the same unchanged 0.85 native-agreement share and glyph-ink proof as a plain read. The native page was followed by its whole OCR table (1315 words for 550 on Intel SDM page 815).
 
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.

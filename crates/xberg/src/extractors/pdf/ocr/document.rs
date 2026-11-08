@@ -447,6 +447,10 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
         .chain(doc.tables.iter().map(|table| table.markdown.as_str()))
         .collect::<Vec<_>>()
         .join(" ");
+    let cells_match_markdown = doc.tables.iter().all(|table| {
+        solid_words(&table.cells.iter().flatten().cloned().collect::<Vec<_>>().join(" "))
+            == solid_words(&table.markdown)
+    });
     !doc.tables.is_empty()
         && no_ocr_rich_assets_besides_tables(doc)
         && metadata.is_empty()
@@ -454,6 +458,7 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
             .elements
             .iter()
             .all(|element| segmenting_ocr_text(element) || table_element(element))
+        && cells_match_markdown
         && solid_words(&block_text) == solid_words(read)
 }
 
