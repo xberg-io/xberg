@@ -222,6 +222,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Honor graphics-state dash patterns and zero-opacity strokes in native PDF path extraction.** (#2332)
+  All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour for clamped zero opacity; this prevents false HTML headers from those separators.
+  Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
+  Partial stroke opacity, fill opacity (`ca`), soft masks (`SMask`) and blend modes (`BM`) remain unmodelled in path-based header visibility proof.
+
 - **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
   The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that spans more than one read word now keeps the OCR read.
 
