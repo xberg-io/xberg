@@ -172,7 +172,8 @@ pub(super) fn native_text_paints_all_read_ink(
 /// Whether the read's text is the iterator words and nothing else. A read that Tesseract laid out
 /// as a table renders the same words in cell order inside markdown pipes and separator rows, and
 /// leaves out the iterator words that are only a ruling mark, so such a read is compared as a
-/// multiset of its words with the table markup set aside. ~keep
+/// multiset of its words with the table markup set aside. The table renderer escapes a cell's `|`
+/// as `\|` (`render_table_markdown`), so that escape is undone on the content side. ~keep
 fn content_holds_exactly_the_read_words<'a>(content: &str, words: impl Iterator<Item = &'a str> + Clone) -> bool {
     if content.split_whitespace().eq(words.clone()) {
         return true;
@@ -186,7 +187,8 @@ fn content_holds_exactly_the_read_words<'a>(content: &str, words: impl Iterator<
         kept.sort_unstable();
         kept
     };
-    content.contains('|') && sorted(&mut content.split_whitespace()) == sorted(&mut words.clone())
+    let unescaped = content.replace("\\|", "|");
+    content.contains('|') && sorted(&mut unescaped.split_whitespace()) == sorted(&mut words.clone())
 }
 
 /// Whether every lost glyph of the layer sits in a located native word and the read does not

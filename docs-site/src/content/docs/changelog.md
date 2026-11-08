@@ -207,6 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Compare a table read's escaped cell pipes with their iterator words (Refs #2534).**
+  The table renderer writes a `|` inside a cell as `\|`, so a cell word that starts with a bar differed from the Tesseract iterator word and the page never reached the native-ink proof. The escape is now undone before the comparison; the native-agreement share is unchanged. Intel SDM page 4311 returns its 298 native words instead of 874.
+
 - **(ocr): Keep the native page when automatic OCR reads it as a table of the same words (Refs #2534).**
   A read that Tesseract laid out as a table is compared with its own iterator words with the table markup and ruling bars set aside, and it yields to the native text under the same unchanged 0.85 native-agreement share and glyph-ink proof as a plain read. The native page was followed by its whole OCR table (1315 words for 550 on Intel SDM page 815).
 
