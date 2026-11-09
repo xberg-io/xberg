@@ -10,6 +10,8 @@ mod acceptance_controls;
 #[path = "pdf_all_pages_native_preservation_2768/document_scope.rs"]
 mod document_scope;
 mod helpers;
+#[path = "pdf_all_pages_native_preservation_2768/mixed_tables.rs"]
+mod mixed_tables;
 #[path = "pdf_all_pages_native_preservation_2768/structured_output.rs"]
 mod structured_output;
 
@@ -71,20 +73,46 @@ fn pinned_config(tessdata: &std::path::Path) -> ExtractionConfig {
     }
 }
 
-async fn page_texts(bytes: &[u8], config: &ExtractionConfig, expected_pages: usize) -> Vec<String> {
+async fn read_document(bytes: &[u8], config: &ExtractionConfig, expected_pages: usize) -> xberg::ExtractedDocument {
     let document = helpers::extract_bytes_document(bytes, "application/pdf", config)
         .await
         .expect("extract the public excerpt");
-    let pages = document.pages.expect("requested page text");
-    assert_eq!(pages.len(), expected_pages);
-    pages.into_iter().map(|page| page.content).collect()
+    assert_eq!(
+        document.pages.as_ref().expect("requested page text").len(),
+        expected_pages
+    );
+    document
+}
+
+fn page_tables_json(page: &xberg::types::PageContent) -> serde_json::Value {
+    serde_json::to_value(page.tables.iter().map(|table| table.as_ref()).collect::<Vec<_>>()).unwrap()
+}
+
+fn assert_kept_native_page(actual: &xberg::ExtractedDocument, native: &xberg::ExtractedDocument, index: usize) {
+    let actual_page = &actual.pages.as_ref().unwrap()[index];
+    let native_page = &native.pages.as_ref().unwrap()[index];
+    assert_eq!(native_page.content.split_whitespace().count(), SOURCE_WORDS);
+    assert_eq!(actual_page.content, native_page.content);
+    assert!(
+        !native_page.tables.is_empty(),
+        "the source control detects a native table"
+    );
+    assert_eq!(page_tables_json(actual_page), page_tables_json(native_page));
+    let tables = |document: &xberg::ExtractedDocument| {
+        serde_json::to_value(
+            document
+                .tables
+                .iter()
+                .filter(|table| table.page_number == native_page.page_number)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    };
+    assert_eq!(tables(actual), tables(native));
 }
 
 #[tokio::test]
 async fn automatic_all_pages_ocr_preserves_the_same_native_table_as_the_mixed_route() {
-    if helpers::skip_if_missing(SOURCE) {
-        return;
-    }
     let tessdata = tempfile::tempdir().unwrap();
     let automatic = pinned_config(tessdata.path());
     let native = ExtractionConfig {
@@ -92,22 +120,12 @@ async fn automatic_all_pages_ocr_preserves_the_same_native_table_as_the_mixed_ro
         ..automatic.clone()
     };
     let mixed = excerpt(&[SOURCE_PAGE - 1, SOURCE_PAGE, SOURCE_PAGE + 1]);
-    let mixed_native = page_texts(&mixed, &native, 3).await;
-    let mixed_automatic = page_texts(&mixed, &automatic, 3).await;
-    assert_eq!(mixed_native[1].split_whitespace().count(), SOURCE_WORDS);
-    assert_eq!(
-        mixed_automatic[1], mixed_native[1],
-        "the existing mixed route keeps native text once"
-    );
+    let mixed_native = read_document(&mixed, &native, 3).await;
+    let mixed_automatic = read_document(&mixed, &automatic, 3).await;
+    assert_kept_native_page(&mixed_automatic, &mixed_native, 1);
 
     let single = excerpt(&[SOURCE_PAGE]);
-    let single_native = page_texts(&single, &native, 1).await;
-    let single_automatic = page_texts(&single, &automatic, 1).await;
-    assert_eq!(single_native[0].split_whitespace().count(), SOURCE_WORDS);
-    assert_eq!(
-        single_automatic[0].split_whitespace().count(),
-        SOURCE_WORDS,
-        "automatic all-pages OCR must preserve the same 550 source words as the mixed route"
-    );
-    assert_eq!(single_automatic[0], single_native[0]);
+    let single_native = read_document(&single, &native, 1).await;
+    let single_automatic = read_document(&single, &automatic, 1).await;
+    assert_kept_native_page(&single_automatic, &single_native, 0);
 }

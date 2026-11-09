@@ -100,9 +100,6 @@ fn scope_config(name: &'static str, explicit_pipeline: bool) -> ExtractionConfig
 }
 
 async fn assert_document_scope(name: &'static str, explicit_pipeline: bool) {
-    if super::helpers::skip_if_missing(super::SOURCE) {
-        return;
-    }
     let backend = Arc::new(DocumentBackend {
         name,
         documents: AtomicUsize::new(0),

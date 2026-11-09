@@ -8,7 +8,10 @@ pub(super) fn automatic_page_acceptance_supported(config: &ExtractionConfig) -> 
         let Some(ocr_config) = config.ocr.as_ref() else {
             return false;
         };
-        if config.include_document_structure || config.result_format == crate::types::ResultFormat::ElementBased {
+        if config.output_format != crate::core::config::OutputFormat::Plain
+            || config.include_document_structure
+            || config.result_format == crate::types::ResultFormat::ElementBased
+        {
             return false;
         }
         if config.force_ocr_pages.as_ref().is_some_and(|pages| !pages.is_empty()) {
@@ -81,6 +84,13 @@ pub(super) fn with_native_page_acceptance(
         || native.trim().is_empty()
         || !complete_page_selection(bounds, failing_pages, native, page_count)
         || !boundaries_cover_native_text(bounds, native)
+    {
+        return outcome;
+    }
+    // Keep document-scoped glyph proofs and missing-model warnings for Khmer-number candidates (#2408). ~keep
+    if native
+        .chars()
+        .any(|character| ('\u{17e0}'..='\u{17e9}').contains(&character))
     {
         return outcome;
     }

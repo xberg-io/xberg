@@ -2,6 +2,8 @@ use xberg::{ExtractionConfig, types::ExtractionMethod};
 
 const JUNK_SCAN: &[u8] = include_bytes!("../fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
 const FORCED_SDM_WORDS: usize = 582;
+// The original #2768 reproducer at 3b3a7c returned 1,315 tokens. ~keep
+const HISTORICAL_DUPLICATED_WORDS: usize = 1315;
 const KHMER: &[u8] = include_bytes!("../fixtures/pdf/khmer-cluster-2536/genuinely-partial-mapped.pdf");
 
 async fn read(bytes: &[u8], config: &ExtractionConfig) -> xberg::ExtractedDocument {
@@ -79,7 +81,7 @@ async fn automatic_all_pages_replaces_a_disjoint_invisible_junk_layer() {
 }
 
 #[tokio::test]
-async fn automatic_all_pages_keeps_native_script_the_english_model_cannot_read() {
+async fn unreadable_native_script_control_keeps_the_preexisting_native_route() {
     let models = tempfile::tempdir().unwrap();
     let config = super::pinned_config(models.path());
     let native = read(KHMER, &native_config(&config)).await;
@@ -94,16 +96,91 @@ async fn automatic_all_pages_keeps_native_script_the_english_model_cannot_read()
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
 }
 
+fn token_digest(text: &str) -> String {
+    use sha2::Digest;
+    hex::encode(sha2::Sha256::digest(
+        text.split_whitespace().collect::<Vec<_>>().join(" "),
+    ))
+}
+
+fn token_surplus<'a>(text: &'a str, reference: &str) -> std::collections::BTreeMap<&'a str, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    for word in text.split_whitespace() {
+        *counts.entry(word).or_insert(0_usize) += 1;
+    }
+    for word in reference.split_whitespace() {
+        if let Some(count) = counts.get_mut(word) {
+            *count = count.saturating_sub(1);
+        }
+    }
+    counts.retain(|_, count| *count > 0);
+    counts
+}
+
+fn expected_forced_surplus() -> std::collections::BTreeMap<&'static str, usize> {
+    std::collections::BTreeMap::from([
+        ("|", 32),
+        ("OOH", 1),
+        ("O5H", 1),
+        ("OGH", 1),
+        ("OAH", 1),
+        ("OBH", 1),
+        ("OCH", 1),
+        ("ODH", 1),
+        ("OEH", 1),
+        ("end-level", 2),
+        ("OFH,", 1),
+        ("O6H);", 1),
+        ("4€H", 1),
+        ("GMByte,", 1),
+    ])
+}
+
+fn expected_native_surplus() -> std::collections::BTreeMap<&'static str, usize> {
+    std::collections::BTreeMap::from([
+        ("00H", 1),
+        ("05H", 1),
+        ("06H", 1),
+        ("0AH", 1),
+        ("0BH", 1),
+        ("0CH", 1),
+        ("0DH", 1),
+        ("0EH", 1),
+        ("2nd-level", 2),
+        ("0FH,", 1),
+        ("06H);", 1),
+        ("4EH", 1),
+        ("6MByte,", 1),
+    ])
+}
+
+fn assert_sdm_word_difference(native: &str, forced: &str) {
+    assert_eq!(token_surplus(forced, native), expected_forced_surplus());
+    assert_eq!(token_surplus(native, forced), expected_native_surplus());
+    assert_eq!(
+        token_digest(native),
+        "491415e6e0ae19ade9640896167add05c42771bf160a9d83743a6cc1fd2ae8e9"
+    );
+    assert_eq!(
+        token_digest(forced),
+        "e7b627f8c2767b9db1a4e32d6838ac40f1db9e9cab33960e5b9d5b894df81fb3"
+    );
+}
+
 #[tokio::test]
 async fn forced_ocr_at_the_all_pages_seam_returns_the_full_recognized_text() {
-    if super::helpers::skip_if_missing(super::SOURCE) {
-        return;
-    }
     let models = tempfile::tempdir().unwrap();
     let config = super::pinned_config(models.path());
     let bytes = super::excerpt(&[super::SOURCE_PAGE]);
     let automatic = read(&bytes, &config).await;
     let forced = read(&bytes, &forced_config(&config)).await;
+    let native = read(&bytes, &native_config(&config)).await;
+    assert!(
+        automatic
+            .content
+            .split_whitespace()
+            .eq(native.content.split_whitespace())
+    );
     assert_eq!(automatic.content.split_whitespace().count(), super::SOURCE_WORDS);
     assert_eq!(forced.extraction_method, Some(ExtractionMethod::Ocr));
     assert_eq!(
@@ -117,15 +194,41 @@ async fn forced_ocr_at_the_all_pages_seam_returns_the_full_recognized_text() {
             .contains("Table 3-12. Encoding of CPUID Leaf 2 Descriptors")
     );
     assert!(forced.content.trim_end().ends_with("Vol. 2A 3-241"));
-    assert_ne!(forced.content, automatic.content);
+    assert_sdm_word_difference(&native.content, &forced.content);
+}
+
+#[tokio::test]
+async fn explicit_tesseract_options_keep_the_original_native_table_once() {
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    config.ocr.as_mut().unwrap().tesseract_config = Some(xberg::TesseractConfig {
+        use_cache: false,
+        ..Default::default()
+    });
+    let bytes = super::excerpt(&[super::SOURCE_PAGE]);
+    let native = read(&bytes, &native_config(&config)).await;
+    let automatic = read(&bytes, &config).await;
+    let count = automatic.content.split_whitespace().count();
+    assert_ne!(
+        count, HISTORICAL_DUPLICATED_WORDS,
+        "the original explicit-options whole-document route duplicated native and OCR table text"
+    );
+    assert_eq!(count, super::SOURCE_WORDS);
+    assert!(
+        automatic
+            .content
+            .split_whitespace()
+            .eq(native.content.split_whitespace())
+    );
+    assert_eq!(
+        token_digest(&automatic.content),
+        "491415e6e0ae19ade9640896167add05c42771bf160a9d83743a6cc1fd2ae8e9"
+    );
 }
 
 #[tokio::test]
 async fn naca_2425_all_pages_replaces_the_junk_layer_with_the_confident_read() {
     const PAGE: &str = "pdf/regression_pages/nasa-naca-report-1135-p25.pdf";
-    if super::helpers::skip_if_missing(PAGE) {
-        return;
-    }
     let bytes = std::fs::read(super::helpers::get_test_file_path(PAGE)).unwrap();
     use sha2::Digest;
     assert_eq!(

@@ -105,7 +105,7 @@ pub(crate) use document::{
 };
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-pub(crate) use document::native_preservation_is_automatic;
+pub(in crate::extractors::pdf) use document::native_preservation_is_automatic;
 
 #[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(crate) use pipeline::extract_full_document_ocr_pipeline_per_page;

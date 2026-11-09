@@ -9,7 +9,7 @@ fn resources(document: &Document, page: &lopdf::Dictionary) -> lopdf::Dictionary
     }
 }
 
-fn stamped_table_pages() -> Vec<u8> {
+pub(super) fn stamped_table_pages() -> Vec<u8> {
     let source = include_bytes!("../fixtures/ocr/shaded_table_scan.pdf");
     let mut document = Document::load_mem(source).unwrap();
     let page_id = *document.get_pages().values().next().unwrap();
@@ -145,4 +145,26 @@ async fn requested_ocr_elements_keep_the_whole_document_payload() {
         serde_json::to_value(&forced.ocr_elements).unwrap()
     );
     assert_same_page_payload(&actual, &forced);
+}
+
+#[tokio::test]
+async fn non_plain_formats_keep_the_whole_document_ocr_route() {
+    let models = tempfile::tempdir().unwrap();
+    let baseline = super::pinned_config(models.path());
+    let bytes = stamped_table_pages();
+    for format in [
+        xberg::OutputFormat::Markdown,
+        xberg::OutputFormat::Html,
+        xberg::OutputFormat::Djot,
+    ] {
+        let config = ExtractionConfig {
+            output_format: format,
+            ..baseline.clone()
+        };
+        let forced = whole_document_control(&bytes, &config).await;
+        let actual = read(&bytes, &config).await;
+        assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Ocr));
+        assert!(!actual.content.trim().is_empty());
+        assert_same_page_payload(&actual, &forced);
+    }
 }

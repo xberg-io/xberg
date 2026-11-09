@@ -176,3 +176,60 @@ fn automatic_page_acceptance_excludes_every_explicit_ocr_request() {
         assert!(!super::automatic_page_acceptance_supported(&config), "{patch}");
     }
 }
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+#[serial_test::serial]
+fn automatic_page_acceptance_excludes_non_plain_renderers() {
+    for format in ["markdown", "html", "djot", "json", "doctags", "custom-renderer"] {
+        let config = serde_json::from_value(serde_json::json!({
+            "ocr": {"enabled": true}, "output_format": format,
+        }))
+        .unwrap();
+        assert!(!super::automatic_page_acceptance_supported(&config), "{format}");
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+#[serial_test::serial]
+fn automatic_page_acceptance_requires_page_uniform_native_preservation() {
+    for overrides in [None, Some(Vec::new()), Some(vec![2]), Some(vec![37])] {
+        let config = crate::ExtractionConfig {
+            force_ocr_pages: overrides.clone(),
+            ocr: Some(crate::OcrConfig {
+                enabled: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let uniform = overrides.as_ref().is_none_or(Vec::is_empty);
+        assert_eq!(super::automatic_page_acceptance_supported(&config), uniform);
+        if uniform {
+            for page in [1, 2, 37, u32::MAX] {
+                assert!(super::ocr::native_preservation_is_automatic(&config, page), "{page}");
+            }
+        }
+    }
+}
+
+#[test]
+fn native_khmer_number_candidates_keep_the_full_document_route() {
+    for digit in '\u{17e0}'..='\u{17e9}' {
+        let native = format!("native {digit} text");
+        let bounds = [boundary(1, 0, native.len())];
+        assert_eq!(
+            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), &native, Some(1)),
+            OcrGateOutcome::RunFallback,
+            "{digit}"
+        );
+    }
+    for text in ["native 0123456789 text", "native \u{17df} \u{17ea} text"] {
+        let bounds = [boundary(1, 0, text.len())];
+        assert_eq!(
+            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), text, Some(1)),
+            OcrGateOutcome::RunFallbackOnPages(vec![1]),
+            "{text}"
+        );
+    }
+}
