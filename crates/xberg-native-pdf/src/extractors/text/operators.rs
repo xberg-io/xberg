@@ -303,7 +303,10 @@ impl<'doc> TextExtractor<'doc> {
                         }
                     }
                     if let Some(buffer) = replacement {
-                        self.flush_tj_buffer(buffer)?;
+                        // Left open like the Tj path leaves its run, so a later array in the same
+                        // scope adds its width here instead of to an unrelated buffer. ~keep
+                        self.flush_tj_span_buffer()?;
+                        self.tj_span_buffer = Some(buffer);
                     }
                 } else {
                     if self.extract_spans {

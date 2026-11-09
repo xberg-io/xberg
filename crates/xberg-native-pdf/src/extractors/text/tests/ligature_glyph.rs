@@ -197,6 +197,13 @@ fn an_actual_text_ligature_in_a_tj_array_joins_the_word_around_it() {
     assert_eq!(texts, vec!["different".to_string()]);
 }
 
+fn merged_texts(font: FontInfo, stream: &[u8]) -> Vec<String> {
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), font);
+    let spans = extractor.extract_text_spans(stream).unwrap();
+    spans.into_iter().map(|s| s.text).collect()
+}
+
 fn span_widths(font: FontInfo, stream: &[u8]) -> Vec<(String, f32)> {
     let mut extractor = TextExtractor::new();
     extractor.add_font("F1".to_string(), font);
@@ -235,6 +242,37 @@ fn an_actual_text_run_spans_every_array_in_its_scope() {
     );
     assert_eq!(one.len(), 1, "{one:?}");
     assert_eq!(two, one);
+}
+
+/// Two TJ arrays in one `/ActualText` scope are one replacement run as wide as both, like one Tj.
+#[test]
+fn an_actual_text_run_spans_two_tj_arrays_in_its_scope() {
+    let one = span_widths(
+        create_test_font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC (xy) Tj EMC ET",
+    );
+    let two = span_widths(
+        create_test_font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC [(x)] TJ [(y)] TJ EMC ET",
+    );
+    assert_eq!(one.len(), 1, "{one:?}");
+    assert_eq!(two, one);
+}
+
+/// The width of an `/ActualText` array decides the space after it: XX
+#[test]
+fn the_gap_after_an_actual_text_array_run_is_measured_from_its_end() {
+    let font = create_test_font;
+    let joined = merged_texts(
+        font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ab)>> BDC [(xx)] TJ EMC (cd) Tj ET",
+    );
+    assert_eq!(joined, vec!["abcd".to_string()]);
+    let spaced = merged_texts(
+        font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ab)>> BDC [(xx)] TJ EMC 20 0 Td (cd) Tj ET",
+    );
+    assert_eq!(spaced, vec!["ab".to_string(), "cd".to_string()]);
 }
 
 /// Control: an `/ActualText` that is a short word is no ligature.
