@@ -1,4 +1,4 @@
-"""Writes 11.png, 11.tsv and toc.png (invented values only).
+"""Writes 11.png, 11.tsv, toc.png and clean_table.png (invented values only).
 
 usage: uv run --no-project --with pillow python gen_leader_fixtures.py <DejaVuSans.ttf> <out dir>
 
@@ -46,7 +46,7 @@ def table_rows(seed, n=12):
     return [[LABELS[(seed + i) % len(LABELS)], *amounts(rng, i)] for i in range(n)]
 
 
-def draw_table(font, rows, px):
+def draw_table(font, rows, px, leaders=True):
     f = ImageFont.truetype(font, px)
     colw = [int(px * 13), int(px * 4.5), int(px * 6), int(px * 6)]
     rowh = int(px * 1.9)
@@ -59,7 +59,7 @@ def draw_table(font, rows, px):
         for c, cell in enumerate(row):
             if c == 0:
                 d.text((x, y), cell, font=f, fill=(0, 0, 0))
-                if r > 0:
+                if r > 0 and leaders:
                     lx = x + d.textlength(cell + " ", font=f)
                     while lx < x + colw[0] - px:
                         d.text((lx, y), ".", font=f, fill=(0, 0, 0))
@@ -110,6 +110,7 @@ def main():
     with (out / "11.tsv").open("w") as tsv:
         tsv.writelines("\t".join(row) + "\n" for row in rows)
     toc(font).save(out / "toc.png", format="PNG")
+    draw_table(font, rows, 20, leaders=False).save(out / "clean_table.png", format="PNG")
 
 
 if __name__ == "__main__":

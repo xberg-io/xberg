@@ -1279,6 +1279,17 @@
           "description": "Whether the core crate's default Cargo features are also enabled.",
           "type": "boolean"
         },
+        "executable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentExecutableConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Build, payload and fingerprint settings of an `executable` producer. Required when\n`producer_language = \"executable\"` and rejected otherwise."
+        },
         "extra_dependencies": {
           "additionalProperties": true,
           "description": "Extra Cargo dependencies for this component's generated producer crate, keyed by crate name.\n\nEach value is a Cargo dependency spec: a version string (`\"1\"`) or an inline table\n(`{ version = \"1\", features = [\"x\"] }`, `{ path = \"../x\" }`, `{ git = \"...\" }`), emitted\nverbatim into the producer `Cargo.toml`. Lets an implementation type live in a crate other\nthan the core crate. Cannot override `alef-component-abi`, `futures` or the core crate.",
@@ -1392,6 +1403,48 @@
       },
       "type": "object"
     },
+    "ComponentExecutableConfig": {
+      "additionalProperties": false,
+      "description": "How to build the executable of a `producer_language = \"executable\"` component.",
+      "properties": {
+        "build": {
+          "description": "Shell command that builds the executable for one target, run with `sh -c` from the\ncomponent's `producer_dir`. Placeholders: `{target}` (Rust target triple), `{out}` (absolute\npath the command must write the executable to; required) and `{profile}` (`release` or\n`debug`). Each substituted value is inserted POSIX single-quoted, so a path containing\nspaces or quotes stays one word: write `-o {out}`, never `-o \"{out}\"`. On Windows `{out}`\nuses forward slashes. The same values are exported unquoted as `ALEF_COMPONENT_TARGET`,\n`ALEF_COMPONENT_OUT` and `ALEF_COMPONENT_PROFILE`. Mapping a triple to the consumer's\ntoolchain (for example GOOS/GOARCH) is the command's job, and cross-compilation is allowed.\nA POSIX `sh` must be on `PATH` of the build host, Windows included (Git for Windows or\nMSYS2 provide one).",
+          "type": "string"
+        },
+        "file": {
+          "description": "Payload file name; defaults to the component name. `.exe` is appended for `*-windows-*`\ntargets unless `target_files` names the target.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputs": {
+          "description": "Glob patterns (relative to the directory of `alef.toml`) of the files whose content decides\nwhether `alef component plan` reuses a previous build. A directory matches every file under\nit; `.git` directories and alef's own `.alef` build directory are skipped. An entry that\nnames an existing path is taken literally before it is tried as a glob. Symbolic links are\nhashed by their target string and never followed. Defaults to the component's\n`producer_dir`; when set it replaces that default, so list the producer directory too when\nit should still count, plus files outside it such as a shared `go.work`. Unlike\n`producer_dir`, entries may use `..` to reach files outside the producer directory.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target_files": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Exact payload file name per target triple, overriding `file` and the `.exe` rule.",
+          "type": "object"
+        },
+        "toolchain_version_cmd": {
+          "description": "Shell command whose trimmed standard output identifies the toolchain (for example\n`go version`); it is part of the fingerprint, so a compiler upgrade rebuilds. Run with\n`sh -c` from the `producer_dir` by `plan`, `build` and `package`, never by `lock`. Because\n`lock` does not run it, `lock --reuse` re-verification covers the input files and the build\ncommand but not the toolchain: the toolchain is trusted to the plan that produced the\nreused artifact.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "build"
+      ],
+      "type": "object"
+    },
     "ComponentHostConfig": {
       "additionalProperties": false,
       "description": "A standalone Rust host module for hosts that load components without an ffi/pyo3 binding.\n\n`alef generate` writes one Rust file at `output` holding the contract tables, proxies,\nentry-symbol constants and a `component_manager` constructor over the embedded lock.",
@@ -1431,6 +1484,11 @@
         {
           "const": "go",
           "description": "Go c-shared producer using the native C ABI.",
+          "type": "string"
+        },
+        {
+          "const": "executable",
+          "description": "Prebuilt executable speaking the framed stdio transport, built by a consumer command; alef\ngenerates no producer or bridge for it.",
           "type": "string"
         }
       ]
@@ -4551,6 +4609,13 @@
             "string",
             "null"
           ]
+        },
+        "visitor_context_accessors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Callback-only borrowed string-map accessors, keyed by visitor context type.\n\nWith `[crates.node.visitor_context_accessors]` a context getter such as\n`NodeContext.attributes` is defined as a JS property accessor that reads the borrowed\ncore context during the visitor callback, instead of copying the map into the context\nobject on every callback. A visitor that never reads the property never builds the map.\nA context that does not opt in keeps the copied property.",
+          "type": "object"
         }
       },
       "type": "object"
@@ -5528,7 +5593,7 @@
         },
         "release_gil": {
           "default": false,
-          "description": "When true, wrap blocking function bodies in py.allow_threads() to release the GIL.",
+          "description": "When true, release the GIL around the core call of synchronous `capsule_types`\nfunctions and methods. Every other synchronous free function, trait-bridge\nwrappers included, releases it regardless of this setting.",
           "type": "boolean"
         },
         "rename_fields": {
@@ -5713,6 +5778,13 @@
             "string",
             "null"
           ]
+        },
+        "visitor_context_accessors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Callback-only borrowed string-map accessors, keyed by visitor context type.\n\nWith `[crates.r.visitor_context_accessors]` the context list gains a function element\n(`ctx$attributes()`) that reads the borrowed core context during the visitor callback,\ninstead of copying the map into the list on every callback. A visitor that never calls it\nnever builds the map. A context that does not opt in keeps the copied element.",
+          "type": "object"
         }
       },
       "type": "object"
@@ -6697,6 +6769,13 @@
             "$ref": "#/$defs/FfiTargetDepOverride"
           },
           "type": "array"
+        },
+        "visitor_context_accessors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Callback-only borrowed string-map accessors, keyed by visitor context type.\n\nWith `[crates.ruby.visitor_context_accessors]` the context hash gains a singleton method\nsuch as `ctx.attributes` that reads the borrowed core context during the visitor callback,\ninstead of copying the map into the hash on every callback. A visitor that never calls it\nnever builds the map. A context that does not opt in keeps the copied symbol key.",
+          "type": "object"
         }
       },
       "type": "object"
@@ -8088,6 +8167,13 @@
             "null"
           ]
         },
+        "visitor_context_accessors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Callback-only borrowed string-map accessors, keyed by visitor context type.\n\nWith `[crates.wasm.visitor_context_accessors]` a context getter such as\n`NodeContext.attributes` is defined as a JS property accessor that reads the borrowed\ncore context during the visitor callback, instead of copying the map into the context\nobject on every callback. A visitor that never reads the property never builds the map.\nA context that does not opt in keeps the copied property.",
+          "type": "object"
+        },
         "wasm_opt": {
           "default": [],
           "description": "`wasm-opt` pass arguments, emitted as\n`[package.metadata.wasm-pack.profile.release] wasm-opt = [...]`. When set to\na non-empty list, wasm-pack runs `wasm-opt` with these flags (e.g. `[\"-Oz\"]`\nto minimize binary size, keeping large builds under a CDN per-file cap).\nDefaults to empty, which emits `wasm-opt = false` so wasm-pack skips the pass\n(the historical default; unchanged for consumers that don't set it).",
@@ -8642,7 +8728,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.123.0/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.129.1/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8774,6 +8860,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.123.0",
-  "x-alef-version": "0.123.0"
+  "version": "0.129.1",
+  "x-alef-version": "0.129.1"
 }
