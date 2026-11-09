@@ -2898,6 +2898,9 @@ public func __alef_phantom_vec_table_overlap_preference() -> RustVec<TableOverla
 public func __alef_phantom_vec_whisper_model() -> RustVec<WhisperModel> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_whisper_model())
 }
+public func __alefCloneExtractInput(_ value: ExtractInputRef) -> ExtractInput {
+    ExtractInput(ptr: __swift_bridge__$__alef_clone_extract_input(value.ptr))
+}
 
 public class AlefBridgeError: AlefBridgeErrorRefMut {
     public var isOwned: Bool = true

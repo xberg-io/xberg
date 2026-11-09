@@ -2,7 +2,7 @@
 //! owned by `xberg-io`.
 //!
 //! Every entry is an unmodified copy of a pinned upstream export, pinned here by the immutable
-//! commit of the owned repository plus the SHA-256 and size of every file. No entry is a default,
+//! commit of the owned repository plus the SHA-256 of every file. No entry is a default,
 //! a supported preset or a bundling decision: each stays experimental until the qualification in
 //! xberg-io/xberg#2334 passes. The inventory only names and pins artifacts; consumers acquire
 //! them through the shared model download and cache infrastructure.
@@ -24,8 +24,6 @@ pub const CAPTIONING_MODELS_REVISION: &str = "7b8359d8ab0086922b91b7dfde6577c1a3
 pub(crate) const CLASSIFICATION_SHA256_MANIFEST: &str = include_str!("classification.sha256sum");
 /// `<sha256>  <repo-relative path>` lines for `xberg-io/captioning-models`.
 pub(crate) const CAPTIONING_SHA256_MANIFEST: &str = include_str!("captioning.sha256sum");
-/// `<size in bytes>  <repo-relative path>` lines covering both repositories.
-const SIZE_MANIFEST: &str = include_str!("sizes.txt");
 
 /// Task a candidate model is evaluated for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,8 +51,6 @@ pub struct CandidateFile {
     pub path: String,
     /// Lowercase hexadecimal SHA-256 of the file.
     pub sha256: String,
-    /// Exact size in bytes.
-    pub size_bytes: u64,
 }
 
 /// A candidate model staged on an owned Hugging Face repository.
@@ -81,8 +77,7 @@ pub struct CandidateModel {
     /// (fp32 and quantized variants) are pinned in the manifests but not listed here; the NLI
     /// descriptor selects its graph separately because the fp32 graph exceeds the adapter's cap.
     pub required_files: &'static [&'static str],
-    sha256_manifest: &'static str,
-    size_manifest: &'static str,
+    pub(crate) sha256_manifest: &'static str,
 }
 
 const NLI_MINILM2_L6_H768: CandidateModel = CandidateModel {
@@ -101,7 +96,6 @@ const NLI_MINILM2_L6_H768: CandidateModel = CandidateModel {
         "special_tokens_map.json",
     ],
     sha256_manifest: CLASSIFICATION_SHA256_MANIFEST,
-    size_manifest: SIZE_MANIFEST,
 };
 
 const SMOLVLM_COMMON: [&str; 9] = [
@@ -127,7 +121,6 @@ const SMOLVLM_256M_INSTRUCT: CandidateModel = CandidateModel {
     license: "Apache-2.0",
     required_files: &SMOLVLM_COMMON,
     sha256_manifest: CAPTIONING_SHA256_MANIFEST,
-    size_manifest: SIZE_MANIFEST,
 };
 
 const SMOLVLM_500M_INSTRUCT: CandidateModel = CandidateModel {
@@ -141,7 +134,6 @@ const SMOLVLM_500M_INSTRUCT: CandidateModel = CandidateModel {
     license: "Apache-2.0",
     required_files: &SMOLVLM_COMMON,
     sha256_manifest: CAPTIONING_SHA256_MANIFEST,
-    size_manifest: SIZE_MANIFEST,
 };
 
 const FLORENCE_2_BASE: CandidateModel = CandidateModel {
@@ -167,7 +159,6 @@ const FLORENCE_2_BASE: CandidateModel = CandidateModel {
         "added_tokens.json",
     ],
     sha256_manifest: CAPTIONING_SHA256_MANIFEST,
-    size_manifest: SIZE_MANIFEST,
 };
 
 /// Every staged candidate, none of them a default.
@@ -201,35 +192,14 @@ impl CandidateModel {
         Ok(())
     }
 
-    /// Every pinned file of this model, with SHA-256 and size, sorted by path.
+    /// Every pinned file of this model, with its SHA-256, sorted by path.
     pub fn files(&self) -> Result<Vec<CandidateFile>, String> {
         let prefix = format!("{}/", self.id);
-        let sizes: std::collections::HashMap<String, u64> = self
-            .size_manifest
-            .lines()
-            .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-            .map(|line| {
-                let (size, path) = line
-                    .split_once("  ")
-                    .ok_or_else(|| format!("malformed size line {line:?}"))?;
-                let size = size.parse::<u64>().map_err(|e| format!("size of {path}: {e}"))?;
-                Ok((path.to_owned(), size))
-            })
-            .collect::<Result<_, String>>()?;
-        let mut files = crate::model_download::parse_sha256_manifest(self.sha256_manifest)?
+        let mut files: Vec<CandidateFile> = crate::model_download::parse_sha256_manifest(self.sha256_manifest)?
             .into_iter()
             .filter(|(path, _)| path.starts_with(&prefix))
-            .map(|(path, sha256)| {
-                let size_bytes = *sizes
-                    .get(&path)
-                    .ok_or_else(|| format!("{path} has a checksum but no recorded size"))?;
-                Ok(CandidateFile {
-                    path,
-                    sha256,
-                    size_bytes,
-                })
-            })
-            .collect::<Result<Vec<_>, String>>()?;
+            .map(|(path, sha256)| CandidateFile { path, sha256 })
+            .collect();
         if files.is_empty() {
             return Err(format!("{} has no pinned files", self.id));
         }
@@ -237,8 +207,8 @@ impl CandidateModel {
         Ok(files)
     }
 
-    /// Verifies `local` against the pin for `relative` (a path inside the model directory): exact
-    /// size first, then SHA-256. A corrupted, truncated or other-revision file is rejected.
+    /// Verifies `local` against the SHA-256 pin for `relative` (a path inside the model directory)
+    /// with the shared download check. A corrupted, truncated or other-revision file is rejected.
     pub fn verify_file(&self, relative: &str, local: &Path) -> Result<(), String> {
         let path = format!("{}/{relative}", self.id);
         let pin = self
@@ -246,21 +216,8 @@ impl CandidateModel {
             .into_iter()
             .find(|file| file.path == path)
             .ok_or_else(|| format!("{path} is not pinned for {}", self.id))?;
-        verify_against_pin(&pin, local)
+        crate::model_download::verify_sha256(local, &pin.sha256, &pin.path)
     }
-}
-
-fn verify_against_pin(pin: &CandidateFile, local: &Path) -> Result<(), String> {
-    let actual = std::fs::metadata(local)
-        .map_err(|e| format!("cannot stat {}: {e}", pin.path))?
-        .len();
-    if actual != pin.size_bytes {
-        return Err(format!(
-            "Size mismatch for {}: expected {} bytes, got {actual}",
-            pin.path, pin.size_bytes
-        ));
-    }
-    crate::model_download::verify_sha256(local, &pin.sha256, &pin.path)
 }
 
 /// Graph the NLI descriptor selects on this architecture. The fp32 graph (328,649,957 bytes) exceeds
@@ -283,21 +240,28 @@ pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
 /// the adapter's caps rather than substituting the oversized fp32 graph.
 #[cfg(feature = "classification-onnx")]
 pub(crate) fn nli_minilm2_l6_h768_classifier() -> Result<crate::local_classification::LocalNliModel, String> {
+    nli_classifier(&NLI_MINILM2_L6_H768)
+}
+
+/// Builds the descriptor from `model`'s pins, so a test can substitute stand-in pins and still go
+/// through the production graph selection.
+#[cfg(feature = "classification-onnx")]
+pub(crate) fn nli_classifier(model: &CandidateModel) -> Result<crate::local_classification::LocalNliModel, String> {
     let graph = nli_minilm2_l6_h768_graph().ok_or_else(|| {
         format!(
             "{} has no quantized graph within the adapter's size cap for {}",
-            NLI_MINILM2_L6_H768.id,
+            model.id,
             std::env::consts::ARCH
         )
     })?;
-    nli_minilm2_l6_h768_classifier_for(graph)
+    nli_classifier_for(model, graph)
 }
 
 #[cfg(feature = "classification-onnx")]
-pub(crate) fn nli_minilm2_l6_h768_classifier_for(
+pub(crate) fn nli_classifier_for(
+    model: &CandidateModel,
     graph: &str,
 ) -> Result<crate::local_classification::LocalNliModel, String> {
-    let model = &NLI_MINILM2_L6_H768;
     let files = model.files()?;
     let mut manifest = String::new();
     for required in std::iter::once(graph).chain(model.required_files.iter().copied()) {
