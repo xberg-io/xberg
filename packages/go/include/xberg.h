@@ -18566,6 +18566,19 @@ XBERGAlefHandle xberg_ocr_config_pipeline(XBERGAlefHandle handle);
 int32_t xberg_ocr_config_auto_rotate(XBERGAlefHandle handle);
 
 /**
+ * Report whether the `auto_rotate` field on a `OcrConfig` is `Some`.
+ *
+ * `xberg_ocr_config_auto_rotate` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
+ * representation for a numeric return, so both collapse to the same sentinel.
+ * Call this function first: `1` means the field getter's return value is
+ * meaningful, `0` means the field is absent and the getter's sentinel must be
+ * ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
+ * Safety Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_ocr_config_has_auto_rotate(XBERGAlefHandle handle);
+
+/**
  * Get the `vlm_fallback` field from a `OcrConfig`.
  * A non-null returned handle is owned by the caller.
  * It must be freed with `xberg_vlm_fallback_policy_free`.

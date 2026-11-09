@@ -1,0 +1,13 @@
+# sha256 manifest for xberg-io/classification-models (experimental candidates, upstream files unmodified).
+# Format: <sha256>  <repo-relative path>. Pins the exact bytes each candidate resolves to.
+cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  nli-minilm2-l6-h768/LICENSE
+1a6e3f880df3584acc1b209c7c667eb22cb7ddd98ab56a5905dda5cfc446ddd1  nli-minilm2-l6-h768/UPSTREAM_README.md
+8b0e41caff7567c0f53e6983f35591c3dec59507c9173ab125c5823394fb57f3  nli-minilm2-l6-h768/config.json
+fe36cab26d4f4421ed725e10a2e9ddb7f799449c603a96e7f29b5a3c82a95862  nli-minilm2-l6-h768/merges.txt
+807d33fffefd95ad60e2a91f54eed50a92aa53c077945a6842bb587a49a3fdf3  nli-minilm2-l6-h768/model.onnx
+449024a8711a3e655cad410cb2192158f9897fc2a32b65dbb817922351150db7  nli-minilm2-l6-h768/model_qint8_arm64.onnx
+44391a5241a62e0083c1a8899a71e69a092b95aea5ba89e14062925468eceac7  nli-minilm2-l6-h768/model_quint8_avx2.onnx
+378eb3bf733eb16e65792d7e3fda5b8a4631387ca04d2015199c4d4f22ae554d  nli-minilm2-l6-h768/special_tokens_map.json
+82139106e603ee4e1d5bc99d056ccbed5a92bc24848b1b5a7137c26e00d0dbf6  nli-minilm2-l6-h768/tokenizer.json
+e06f5c3c435fc0255b08b5574cd574eec685390f60c85b27f83d785eb8ecaaa1  nli-minilm2-l6-h768/tokenizer_config.json
+ed19656ea1707df69134c4af35c8ceda2cc9860bf2c3495026153a133670ab5e  nli-minilm2-l6-h768/vocab.json

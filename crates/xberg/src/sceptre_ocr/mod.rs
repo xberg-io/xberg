@@ -297,9 +297,10 @@ impl SceptreOcrBackend {
         Ok(RotationContext {
             detector: config
                 .auto_rotate
+                .unwrap_or(false)
                 .then(|| self.orientation_detector_for_config(sceptre_config, config.acceleration.clone()))
                 .transpose()?,
-            enabled: config.auto_rotate,
+            enabled: config.auto_rotate == Some(true),
         })
     }
 
@@ -929,7 +930,7 @@ fn validate_acceleration(config: &OcrConfig) -> Result<()> {
 
 fn validate_auto_rotate_support(_config: &OcrConfig) -> Result<()> {
     #[cfg(not(auto_rotate))]
-    if _config.auto_rotate {
+    if _config.auto_rotate == Some(true) {
         return Err(ocr_error(
             "Sceptre auto-rotation is unavailable in this build; enable the `auto-rotate` or `auto-rotate-tract` feature",
         ));

@@ -14362,7 +14362,7 @@ const _: fn() = || {
         let _: Option<crate::OcrElementConfig> = OcrConfig.element_config;
         let _: Option<crate::OcrQualityThresholds> = OcrConfig.quality_thresholds;
         let _: Option<crate::OcrPipelineConfig> = OcrConfig.pipeline;
-        let _: bool = OcrConfig.auto_rotate;
+        let _: Option<bool> = OcrConfig.auto_rotate;
         let _: crate::VlmFallbackPolicy = OcrConfig.vlm_fallback;
         let _: Option<crate::LlmConfig> = OcrConfig.vlm_config;
         let _: Option<String> = OcrConfig.vlm_prompt;
@@ -22346,7 +22346,7 @@ impl SseDecode for crate::OcrConfig {
         let mut var_elementConfig = <Option<crate::OcrElementConfig>>::sse_decode(deserializer);
         let mut var_qualityThresholds = <Option<crate::OcrQualityThresholds>>::sse_decode(deserializer);
         let mut var_pipeline = <Option<crate::OcrPipelineConfig>>::sse_decode(deserializer);
-        let mut var_autoRotate = <bool>::sse_decode(deserializer);
+        let mut var_autoRotate = <Option<bool>>::sse_decode(deserializer);
         let mut var_vlmFallback = <crate::VlmFallbackPolicy>::sse_decode(deserializer);
         let mut var_vlmConfig = <Option<crate::LlmConfig>>::sse_decode(deserializer);
         let mut var_vlmPrompt = <Option<String>>::sse_decode(deserializer);
@@ -40056,7 +40056,7 @@ impl SseEncode for crate::OcrConfig {
         <Option<crate::OcrElementConfig>>::sse_encode(self.element_config, serializer);
         <Option<crate::OcrQualityThresholds>>::sse_encode(self.quality_thresholds, serializer);
         <Option<crate::OcrPipelineConfig>>::sse_encode(self.pipeline, serializer);
-        <bool>::sse_encode(self.auto_rotate, serializer);
+        <Option<bool>>::sse_encode(self.auto_rotate, serializer);
         <crate::VlmFallbackPolicy>::sse_encode(self.vlm_fallback, serializer);
         <Option<crate::LlmConfig>>::sse_encode(self.vlm_config, serializer);
         <Option<String>>::sse_encode(self.vlm_prompt, serializer);

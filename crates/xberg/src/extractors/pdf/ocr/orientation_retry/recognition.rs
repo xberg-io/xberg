@@ -18,7 +18,7 @@ const MAX_CERTIFICATE_TEXT_BYTES: usize = 512 * 1024;
 pub(super) fn eligible(config: &OcrConfig) -> bool {
     config.enabled
         && config.backend == "tesseract"
-        && !config.auto_rotate
+        && config.auto_rotate.is_none()
         && !language_selects_vertical_psm(config)
         && config.pipeline.is_none()
         && config.backend_options.is_none()
@@ -1020,7 +1020,7 @@ mod tests {
         config.enabled = false;
         assert!(!eligible(&config));
         config.enabled = true;
-        config.auto_rotate = true;
+        config.auto_rotate = Some(true);
         assert!(!eligible(&config));
     }
 

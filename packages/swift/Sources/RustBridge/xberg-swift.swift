@@ -2898,6 +2898,9 @@ public func __alef_phantom_vec_table_overlap_preference() -> RustVec<TableOverla
 public func __alef_phantom_vec_whisper_model() -> RustVec<WhisperModel> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_whisper_model())
 }
+public func __alefCloneExtractInput(_ value: ExtractInputRef) -> ExtractInput {
+    ExtractInput(ptr: __swift_bridge__$__alef_clone_extract_input(value.ptr))
+}
 
 public class AlefBridgeError: AlefBridgeErrorRefMut {
     public var isOwned: Bool = true
@@ -18399,8 +18402,8 @@ extension OcrConfigRef {
         { let val = __swift_bridge__$OcrConfig$pipeline(ptr); if val != nil { return OcrPipelineConfig(ptr: val!) } else { return nil } }()
     }
 
-    public func autoRotate() -> Bool {
-        __swift_bridge__$OcrConfig$auto_rotate(ptr)
+    public func autoRotate() -> Optional<Bool> {
+        __swift_bridge__$OcrConfig$auto_rotate(ptr).intoSwiftRepr()
     }
 
     public func vlmFallback() -> RustString {
