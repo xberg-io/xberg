@@ -81,7 +81,6 @@ impl VisibleRasterProof {
             || image.rotation_degrees != 0.0
             || image.bbox != frame
             || (image.width, image.height) != (source.width, source.height)
-            || (icc && image.bits_per_component != 8)
         {
             return None;
         }
@@ -389,8 +388,12 @@ mod tests {
     }
 
     fn icc_source_after(edit: impl FnOnce(&mut lopdf::Dictionary)) -> Option<ImageSource> {
+        icc_source_after_document(|pdf| edit(&mut pdf.get_object_mut((4, 0)).unwrap().as_stream_mut().unwrap().dict))
+    }
+
+    fn icc_source_after_document(edit: impl FnOnce(&mut lopdf::Document)) -> Option<ImageSource> {
         let mut pdf = lopdf::Document::load_mem(ICC_PROSE).unwrap();
-        edit(&mut pdf.get_object_mut((4, 0)).unwrap().as_stream_mut().unwrap().dict);
+        edit(&mut pdf);
         let mut bytes = Vec::new();
         pdf.save_to(&mut bytes).unwrap();
         let document = PdfDocument::from_bytes(bytes).unwrap();
@@ -406,6 +409,104 @@ mod tests {
     #[test]
     fn icc_gray_source_declines_extra_image_dictionary_keys() {
         assert!(icc_source_after(|dict| dict.set("Interpolate", true)).is_none());
+    }
+
+    fn icc_source_after_profile(edit: impl FnOnce(&mut lopdf::Stream)) -> Option<ImageSource> {
+        icc_source_after_document(|pdf| edit(pdf.get_object_mut((5, 0)).unwrap().as_stream_mut().unwrap()))
+    }
+
+    fn icc_source_after_profile_bytes(edit: impl FnOnce(&mut Vec<u8>)) -> Option<ImageSource> {
+        icc_source_after_profile(|profile| {
+            let mut bytes = profile.content.clone();
+            edit(&mut bytes);
+            profile.set_content(bytes);
+        })
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_page_with_a_color_space_resource() {
+        assert!(icc_source_after_document(|_| {}).is_some());
+        let declined = icc_source_after_document(|pdf| {
+            pdf.get_object_mut((7, 0))
+                .unwrap()
+                .as_dict_mut()
+                .unwrap()
+                .set("ColorSpace", lopdf::Dictionary::new());
+        });
+        assert!(declined.is_none());
+    }
+
+    #[test]
+    fn icc_gray_source_declines_an_image_whose_length_differs_from_its_data() {
+        let with_length = |extra: i64| {
+            icc_source_after(|dict| {
+                let length = dict.get(b"Length").unwrap().as_i64().unwrap();
+                dict.set("Length", length + extra);
+            })
+        };
+        assert!(with_length(0).is_some());
+        // +1 is absent on purpose: the parser takes the newline before endstream as data, so the Length then matches.
+        for extra in [-1, 10] {
+            assert!(with_length(extra).is_none(), "Length {extra:+}");
+        }
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_profile_whose_length_differs_from_its_data() {
+        let with_length = |extra: i64| {
+            icc_source_after_profile(|profile| {
+                let length = i64::try_from(profile.content.len()).unwrap();
+                profile.dict.set("Length", length + extra);
+            })
+        };
+        assert!(with_length(0).is_some());
+        for extra in [-1, 10] {
+            assert!(with_length(extra).is_none(), "Length {extra:+}");
+        }
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_profile_with_a_wrong_declared_size() {
+        assert!(icc_source_after_profile_bytes(|_| {}).is_some());
+        for delta in [-4_i64, 4] {
+            let declined = icc_source_after_profile_bytes(|bytes| {
+                let declared = i64::from(u32::from_be_bytes(bytes[..4].try_into().unwrap()));
+                let wrong = u32::try_from(declared + delta).unwrap();
+                bytes[..4].copy_from_slice(&wrong.to_be_bytes());
+            });
+            assert!(declined.is_none(), "declared size {delta:+}");
+        }
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_profile_that_is_not_a_display_device() {
+        let declined = icc_source_after_profile_bytes(|bytes| bytes[12..16].copy_from_slice(b"scnr"));
+        assert!(declined.is_none());
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_profile_with_another_alternate_space() {
+        let declined = icc_source_after_profile(|profile| profile.dict.set("Alternate", "DeviceRGB"));
+        assert!(declined.is_none());
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_profile_over_the_byte_cap() {
+        let pad = |bytes: &mut Vec<u8>, total: usize| {
+            bytes.resize(total, 0);
+            bytes[..4].copy_from_slice(&u32::try_from(total).unwrap().to_be_bytes());
+        };
+        assert!(icc_source_after_profile_bytes(|bytes| pad(bytes, MAX_GRAY_PROFILE_BYTES)).is_some());
+        assert!(icc_source_after_profile_bytes(|bytes| pad(bytes, MAX_GRAY_PROFILE_BYTES + 4)).is_none());
+    }
+
+    #[test]
+    fn icc_gray_source_declines_a_profile_without_a_white_point_or_tone_curve() {
+        let without_white_point = icc_source_after_profile_bytes(|bytes| bytes[156..160].copy_from_slice(b"bkpt"));
+        assert!(without_white_point.is_none());
+        let without_tone_curve =
+            icc_source_after_profile_bytes(|bytes| bytes[128..132].copy_from_slice(&3_u32.to_be_bytes()));
+        assert!(without_tone_curve.is_none());
     }
 
     fn proof(pixels_left: usize, byte_limit: usize) -> VisibleRasterProof {

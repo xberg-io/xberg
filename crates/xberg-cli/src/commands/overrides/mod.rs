@@ -231,6 +231,14 @@ pub struct ExtractionOverrides {
     )]
     pub layout_strategy: Option<String>,
 
+    /// Layout detection model: rt_detr (default) or pp_doc_layout_v3 (experimental, ORT-only, bbox-only).
+    #[cfg(feature = "layout-detection")]
+    #[arg(
+        long,
+        help = "Layout detection model: rt_detr (default) or pp_doc_layout_v3 (experimental, ORT-only, bbox-only, ~131MB download)"
+    )]
+    pub layout_model: Option<String>,
+
     /// Table structure model: tatr (default), slanet_wired, slanet_wireless, slanet_plus, slanet_auto, disabled.
     #[cfg(feature = "layout-detection")]
     #[arg(

@@ -625,9 +625,9 @@ fn isolated_painted_orphan(
     candidates: &ahash::AHashSet<&SegmentKey>,
     hyphens: &super::pipeline::HyphenWitnesses,
 ) -> Option<usize> {
-    let mut digits = candidates.iter().copied().filter(|key| key.is_ascii_digit());
-    let candidate = digits.next()?;
-    if digits.next().is_some() || page.iter().any(|p| p.is_list_item || p.layout_region_path.is_some()) {
+    let mut glyphs = candidates.iter().copied().filter(|key| key.is_single_glyph());
+    let candidate = glyphs.next()?;
+    if glyphs.next().is_some() || page.iter().any(|p| p.is_list_item || p.layout_region_path.is_some()) {
         return None;
     }
     page.iter().position(|paragraph| {
@@ -2306,25 +2306,116 @@ mod tests {
         }
     }
 
-    #[test]
-    fn painted_orphan_ignores_non_digits_without_resolving_two_digit_candidates() {
-        let paragraph = |text: &str, x| {
-            let mut paragraph = make_paragraph_at(text, None, 390.0);
-            let glyph = &mut paragraph.lines[0].segments[0];
-            glyph.x = x;
-            glyph.y = 390.0;
-            glyph.width = 5.0;
-            paragraph.block_bbox = Some((x, 390.0, x + 5.0, 402.0));
-            paragraph
-        };
-        let page = [paragraph("%", 13.0), paragraph("0", 33.0), paragraph("1", 53.0)];
-        let [punctuation, first, second] = page.each_ref().map(|p| SegmentKey::from(&p.lines[0].segments[0]));
-        let hyphens = Default::default();
-        let mut candidates = ahash::AHashSet::from_iter([&punctuation, &first]);
-        assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), Some(1));
+    fn glyph_paragraph(text: &str, x: f32) -> PdfParagraph {
+        let mut paragraph = make_paragraph_at(text, None, 390.0);
+        let glyph = &mut paragraph.lines[0].segments[0];
+        glyph.x = x;
+        glyph.y = 390.0;
+        glyph.width = 5.0;
+        paragraph.block_bbox = Some((x, 390.0, x + 5.0, 402.0));
+        paragraph
+    }
 
-        candidates.insert(&second);
-        assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), None);
+    #[test]
+    fn painted_orphan_is_resolved_whatever_the_glyph() {
+        let hyphens = Default::default();
+        for glyph in ["0", "%", "-", "$", "\u{2212}", "\u{0e51}"] {
+            let page = [glyph_paragraph(glyph, 33.0)];
+            let key = SegmentKey::from(&page[0].lines[0].segments[0]);
+            let candidates = ahash::AHashSet::from_iter([&key]);
+            assert_eq!(
+                isolated_painted_orphan(&page, &candidates, &hyphens),
+                Some(0),
+                "{glyph}"
+            );
+        }
+    }
+
+    #[test]
+    fn painted_orphan_refuses_ambiguous_or_multi_glyph_candidates() {
+        let hyphens = Default::default();
+        let page = [
+            glyph_paragraph("%", 13.0),
+            glyph_paragraph("0", 33.0),
+            glyph_paragraph("1", 53.0),
+        ];
+        let [punctuation, first, second] = page.each_ref().map(|p| SegmentKey::from(&p.lines[0].segments[0]));
+        let candidates = ahash::AHashSet::from_iter([&first]);
+        assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), Some(1));
+        for pair in [[&punctuation, &first], [&first, &second]] {
+            let candidates = ahash::AHashSet::from_iter(pair);
+            assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), None);
+        }
+        let word = [glyph_paragraph("10", 33.0)];
+        let key = SegmentKey::from(&word[0].lines[0].segments[0]);
+        let candidates = ahash::AHashSet::from_iter([&key]);
+        assert_eq!(isolated_painted_orphan(&word, &candidates, &hyphens), None);
+        let blank = [glyph_paragraph(" ", 33.0)];
+        let key = SegmentKey::from(&blank[0].lines[0].segments[0]);
+        let candidates = ahash::AHashSet::from_iter([&key]);
+        assert_eq!(isolated_painted_orphan(&blank, &candidates, &hyphens), None);
+    }
+
+    fn painted_overhang_page(candidate: &str, bystanders: &[(&str, f32)]) -> Vec<PdfParagraph> {
+        // Mostly outside the table box (2 of 5 points inside): the overhang is what lets the glyph pass the
+        // pre-filter that drops segments a table covers and carries.
+        let mut page = vec![glyph_paragraph(candidate, 108.0)];
+        page.extend(bystanders.iter().map(|(text, x)| glyph_paragraph(text, *x)));
+        page
+    }
+
+    fn reconcile_painted_overhang(page: &mut Vec<PdfParagraph>, painted: Vec<Vec<SegmentKey>>) {
+        let table = crate::types::Table {
+            cells: vec![vec!["10.1%".into()]],
+            markdown: "| 10.1% |".into(),
+            page_number: 1,
+            bounding_box: Some(BoundingBox {
+                x0: 12.0,
+                y0: 380.0,
+                x1: 110.0,
+                y1: 402.0,
+            }),
+            ..Default::default()
+        };
+        let members = ahash::AHashMap::from_iter([(
+            0,
+            crate::pdf::native::table::source_members::CertifiedRuns {
+                contained: Vec::new(),
+                painted_overhangs: painted,
+                recovered_lines: Vec::new(),
+                recovered_tracks: Vec::new(),
+                replaces_empty_ruled_route: false,
+            },
+        )]);
+        reconcile_certified_table_paragraphs(
+            std::slice::from_mut(page),
+            std::slice::from_ref(&table),
+            &members,
+            &Default::default(),
+            &[],
+        );
+    }
+
+    fn page_texts(page: &[PdfParagraph]) -> Vec<String> {
+        page.iter().map(|p| p.lines[0].segments[0].text.clone()).collect()
+    }
+
+    #[test]
+    fn painted_cell_orphan_is_removed_from_the_page_beside_unrelated_paragraphs() {
+        let sibling = SegmentKey::from(&plain_segment("10.1"));
+        let bystanders = [("T", 60.0), ("1", 80.0), ("a", 100.0)];
+        let mut page = painted_overhang_page("%", &bystanders);
+        let orphan = SegmentKey::from(&page[0].lines[0].segments[0]);
+        reconcile_painted_overhang(&mut page, vec![vec![sibling.clone(), orphan.clone()]]);
+        assert_eq!(page_texts(&page), ["T", "1", "a"]);
+
+        let mut unowned = painted_overhang_page("%", &bystanders);
+        reconcile_painted_overhang(&mut unowned, Vec::new());
+        assert_eq!(
+            page_texts(&unowned),
+            ["%", "T", "1", "a"],
+            "no painted run owns the glyph"
+        );
     }
 
     fn make_paragraph_in_box(text: &str, baseline_y: f32, left: f32, right: f32) -> PdfParagraph {
