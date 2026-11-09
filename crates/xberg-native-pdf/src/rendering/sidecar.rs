@@ -2264,6 +2264,14 @@ mod tests {
     }
 
     #[test]
+    fn detect_smask_dict_behind_reference_fires() {
+        // Positive control for the test above: the same object number resolves to a
+        // soft-mask dict, so the reference is followed.
+        let dict = "6 0 obj\n<< /S /Alpha /G 7 0 R >>\nendobj\n";
+        assert_eq!(detect("/SMask 6 0 R", &[dict]), (true, true));
+    }
+
+    #[test]
     fn detect_smask_dict_with_form_reference_fires() {
         assert_eq!(detect("/SMask << /S /Alpha /G 6 0 R >>", &[]), (true, true));
     }
@@ -2304,11 +2312,11 @@ mod tests {
 
     #[test]
     fn detect_blend_mode_unrecognised_name() {
-        // Shared-parser rule (ext_gstate.rs parse_blend_mode): a name /BM is kept
-        // verbatim, and the renderers' `blend_mode != "Normal"` tests count it as
-        // non-trivial (it still paints as Normal). The sidecar now follows.
-        assert_eq!(detect("/BM /NoSuchMode", &[]), (true, true));
-        assert_eq!(detect("/BM /Compatible", &[]), (true, true));
+        // Shared-parser rule (ext_gstate.rs parse_blend_mode): a name that is not a
+        // standard blend mode, /Compatible included, reads as /Normal, as in the
+        // array form.
+        assert_eq!(detect("/BM /NoSuchMode", &[]), (false, false));
+        assert_eq!(detect("/BM /Compatible", &[]), (false, false));
     }
 
     #[test]

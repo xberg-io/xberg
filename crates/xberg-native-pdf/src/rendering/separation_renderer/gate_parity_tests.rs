@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::rendering::page_renderer::{PageRenderer, RenderOptions};
+use crate::rendering::sidecar::page_declares_transparency;
 
 const DPI: u32 = 72;
 
@@ -53,6 +54,10 @@ fn build_page(state_body: &str, extras: &[&str]) -> PdfDocument {
     PdfDocument::from_bytes(buf).expect("synthetic PDF parses")
 }
 
+fn gate(doc: &PdfDocument) -> bool {
+    page_declares_transparency(doc, &doc.get_page_resources(0).expect("resources"))
+}
+
 fn plate(state_body: &str, extras: &[&str]) -> Vec<u8> {
     let inks = vec!["InkA".to_string()];
     let doc = build_page(state_body, extras);
@@ -61,19 +66,11 @@ fn plate(state_body: &str, extras: &[&str]) -> Vec<u8> {
     plates.into_iter().next().expect("one plate").data
 }
 
-fn assert_page_independent_of_sidecar(state_body: &str) {
+fn page(state_body: &str, force_sidecar: bool) -> Vec<u8> {
     let doc = build_page(state_body, &[]);
-    let render = |force: bool| {
-        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
-        renderer.force_cmyk_sidecar = force;
-        renderer.render_page(&doc, 0).expect("render page").data
-    };
-    let without_sidecar = render(false);
-    assert!(without_sidecar.iter().any(|&b| b != 255), "{state_body}: page is blank");
-    assert!(
-        without_sidecar == render(true),
-        "{state_body}: page pixels depend on the sidecar"
-    );
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
+    renderer.force_cmyk_sidecar = force_sidecar;
+    renderer.render_page(&doc, 0).expect("render page").data
 }
 
 #[test]
@@ -86,14 +83,37 @@ fn indirect_blend_array_element_blends_like_a_direct_name() {
 }
 
 #[test]
-fn malformed_soft_mask_and_unrecognised_blend_name_render_the_same_page_with_or_without_sidecar() {
+fn malformed_soft_mask_stays_off_the_composite_path_and_renders_as_normal() {
+    let normal_plate = plate("/BM /Normal", &[]);
+    let normal_page = page("/BM /Normal", false);
+    assert!(normal_page.iter().any(|&b| b != 255), "page is blank");
     for state in [
         "/SMask << /S /Alpha >>",
         "/SMask << /S /Alpha /G 7 >>",
         "/SMask 3",
         "/SMask 99 0 R",
-        "/BM /NoSuchMode",
     ] {
-        assert_page_independent_of_sidecar(state);
+        assert!(!gate(&build_page(state, &[])), "{state}: gate fired");
+        assert!(plate(state, &[]) == normal_plate, "{state}: plate differs from Normal");
+        assert!(page(state, false) == normal_page, "{state}: page differs from Normal");
+        assert!(
+            page(state, true) == normal_page,
+            "{state}: page with sidecar differs from Normal"
+        );
+    }
+}
+
+#[test]
+fn unrecognised_blend_names_read_as_normal() {
+    let normal_plate = plate("/BM /Normal", &[]);
+    let normal_page = page("/BM /Normal", false);
+    for state in ["/BM /NoSuchMode", "/BM /Compatible"] {
+        assert!(!gate(&build_page(state, &[])), "{state}: gate fired");
+        assert!(plate(state, &[]) == normal_plate, "{state}: plate differs from Normal");
+        assert!(page(state, false) == normal_page, "{state}: page differs from Normal");
+        assert!(
+            page(state, true) == normal_page,
+            "{state}: page with sidecar differs from Normal"
+        );
     }
 }
