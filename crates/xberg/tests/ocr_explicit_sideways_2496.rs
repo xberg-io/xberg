@@ -482,9 +482,7 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         result
     };
     let before = read(&config);
-    // The unset policy recovers through the classifier before the OSD pack exists. ~keep
-    assert_source_table(&before);
-    assert_route("before", &before, Route::Classifier);
+    assert_before_osd(&before);
     assert_eq!(
         persisted_extraction_entries("explicit-osd-transition"),
         1,
@@ -557,8 +555,7 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         .unwrap();
     let read = |config: &ExtractionConfig| read_engine(&engine, &runtime, config);
     let before = read(&config);
-    assert_source_table(&before);
-    assert_route("before", &before, Route::Classifier);
+    assert_before_osd(&before);
     assert_eq!(cache.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
     let osd = osd_model();
     std::fs::write(models.path().join("osd.traineddata"), osd).unwrap();
@@ -987,6 +984,7 @@ fn source_cell_matches(result: &ExtractedDocument) -> usize {
 enum Route {
     Osd,
     Classifier,
+    Original,
 }
 
 /// The OSD recognition read is forced to PSM 1 and never rotates pixels; the classifier route
@@ -1002,9 +1000,25 @@ fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
     let observed = match (psm1, rotated) {
         (true, false) => Route::Osd,
         (false, true) => Route::Classifier,
+        (false, false) => Route::Original,
         _ => panic!("{name}: ambiguous route psm1={psm1} auto_rotated={rotated}"),
     };
     assert_eq!(observed, expected, "{name}: served from the wrong orientation route");
+}
+
+/// The unset policy's read before the OSD pack exists: the classifier recovers the table when one
+/// is compiled; otherwise the original read is kept. ~keep
+fn assert_before_osd(before: &ExtractedDocument) {
+    #[cfg(auto_rotate)]
+    {
+        assert_source_table(before);
+        assert_route("before", before, Route::Classifier);
+    }
+    #[cfg(not(auto_rotate))]
+    {
+        assert_original_read(before);
+        assert_route("before", before, Route::Original);
+    }
 }
 
 fn assert_source_table(result: &ExtractedDocument) {
