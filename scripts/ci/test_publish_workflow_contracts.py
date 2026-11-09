@@ -935,7 +935,15 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     assert re.findall(r"(?m)^        if: ([^\n]+)$", setup[0]) == ["matrix.name == 'sceptre-ocr-ort'"], (
         "runtime setup must select exactly the standalone Sceptre ORT leg"
     )
-    assert re.findall(r"(?m)^          ort-version: ([^\n]+)$", setup[0]) == ["${{ env.ORT_VERSION }}"]
+    assert not re.search(r"(?m)^          ort-version:", setup[0]), "use the shared action version default"
+    assert not re.search(r"(?m)^ +ORT_VERSION:", workflow), "do not duplicate the shared runtime version"
+    action = (WORKFLOW.parents[1] / "actions/setup-onnx-runtime/action.yml").read_text()
+    version = re.findall(r"(?m)^  ort-version:\n((?:^    [^\n]*\n)+)", action)
+    assert len(version) == 1, "one actual runtime version input must exist"
+    assert re.findall(r"(?m)^    required: ([^\n]+)$", version[0]) == ["false"]
+    assert re.findall(r'(?m)^    default: "([^"\n]+)"$', version[0]) == ["1.24.2"], (
+        "standalone Sceptre ORT must use the supported shared runtime version"
+    )
     assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
 
 

@@ -42,6 +42,7 @@ fn should_preserve_repeated_margin_body_text_with_deferred_model_classification_
             include_footnotes: false,
             include_watermarks: false,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
@@ -117,6 +118,7 @@ fn native_chart_legend_yields_to_real_page_layout_hints() {
                 include_footnotes: true,
                 include_watermarks: true,
                 used_structure_tree,
+                ocr_text: false,
                 image_positions: &[],
                 images: None,
                 inject_placeholders: false,
@@ -270,6 +272,7 @@ fn table_hint_document_with(
             include_footnotes: true,
             include_watermarks: true,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
@@ -1018,6 +1021,136 @@ fn dedup_non_overlapping_tables_both_kept() {
     ];
     deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Native);
     assert_eq!(tables.len(), 2, "non-overlapping tables are both kept");
+}
+
+/// pb_SERFF_TX_random_pages_1_page173: the right-hand "Lapse Rate" rows lower the assumptions
+/// grid's box over the "Claims Trend" block beside them, though no cell of one sits in the other.
+fn serff_assumptions_grid() -> crate::types::Table {
+    cell_table(
+        1,
+        (73.0, 649.0, 538.0, 704.0),
+        &[
+            &["Requested Rate Increase:", "3.60% 4.00% 2.00%", "", "", ""],
+            &[
+                "Aging Factor:",
+                "1.80% 1.80% 1.80%",
+                "",
+                "Lapse Rate:",
+                "7.50% 5.00% 5.00%",
+            ],
+            &["Premium Trend Rate:", "5.46% 5.87% 3.84%", "", "", ""],
+            &["", "", "", "Additional Lapse Due to Increase:", "0.00% 0.00% 0.00%"],
+            &["", "", "", "Adverse Selection Due to Increase:", "0.00% 0.00% 0.00%"],
+        ],
+    )
+}
+
+#[test]
+fn dedup_keeps_a_native_table_whose_box_overlaps_a_grid_that_does_not_hold_its_rows() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let claims = cell_table(
+        1,
+        (73.0, 640.0, 296.0, 666.0),
+        &[
+            &["Claims Trend Increase:", "3.60% 4.00% 2.00%"],
+            &["Aging Factor:", "1.80% 1.80% 1.80%"],
+            &["Claims Trend Factor:", "5.46% 5.87% 3.84%"],
+        ],
+    );
+    let mut tables = vec![serff_assumptions_grid(), claims];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 2, "the Claims Trend rows exist only in their own table");
+    assert_eq!(tables[1].cells[2][0], "Claims Trend Factor:");
+}
+
+#[test]
+fn dedup_still_drops_a_native_pass_that_repeats_the_rows_of_a_larger_grid() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let repeat = cell_table(
+        1,
+        (73.0, 649.0, 538.0, 690.0),
+        &[
+            &["Requested Rate Increase: 3.60% 4.00% 2.00%"],
+            &["Aging Factor: 1.80% 1.80% 1.80%", "Lapse Rate: 7.50% 5.00% 5.00%"],
+            &["Premium Trend Rate: 5.46% 5.87% 3.84%"],
+        ],
+    );
+    let mut tables = vec![repeat, serff_assumptions_grid()];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].cells.len(), 5);
+}
+
+#[test]
+fn dedup_drops_near_coincident_native_redetections_even_when_their_rows_differ() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let wide = cell_table(
+        1,
+        (206.8, 565.5, 480.1, 674.4),
+        &[
+            &["20", "", "20"],
+            &["A)", "", "A)"],
+            &["\u{3bc}", "", "\u{3bc}"],
+            &["0", "", "0"],
+            &["Current (", "", "Current ("],
+            &["Voltage (V)", "", ""],
+        ],
+    );
+    let narrow = cell_table(
+        1,
+        (195.0, 567.4, 480.1, 674.4),
+        &[
+            &["(a)", "(b)", ""],
+            &["\u{393} =0.2 : \u{393} =0.4", "", "\u{393} =0.2 : \u{393} =0.4"],
+            &["40", "", "40"],
+        ],
+    );
+    let mut tables = vec![wide, narrow];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1, "one region detected twice yields one table");
+}
+
+#[test]
+fn dedup_counts_exactly_half_shared_rows_as_a_duplicate() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let large = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["alpha", "1"], &["beta", "2"], &["gamma", "3"], &["delta", "4"]],
+    );
+    let half = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["other", "9"]]);
+    let mut tables = vec![large, half];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].cells.len(), 4);
+}
+
+#[test]
+fn dedup_without_cell_text_keeps_arbitrating_by_box_overlap() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let mut tables = vec![
+        ov_table(1, (73.0, 649.0, 538.0, 704.0), "grid"),
+        ov_table(1, (73.0, 640.0, 296.0, 666.0), "block"),
+    ];
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1);
+}
+
+#[test]
+fn dedup_does_not_apply_the_distinct_rows_guard_to_a_layout_table() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let claims = cell_table(
+        1,
+        (73.0, 640.0, 296.0, 666.0),
+        &[
+            &["Claims Trend Increase:", "3.60% 4.00% 2.00%"],
+            &["Aging Factor:", "1.80% 1.80% 1.80%"],
+            &["Claims Trend Factor:", "5.46% 5.87% 3.84%"],
+        ],
+    );
+    let mut tables = vec![serff_assumptions_grid(), claims];
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Content);
+    assert_eq!(tables.len(), 1, "native/layout arbitration is unchanged");
 }
 
 #[test]
@@ -4191,6 +4324,7 @@ fn extract_heading_test_document(
             include_footnotes: true,
             include_watermarks: true,
             used_structure_tree,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,
@@ -4212,6 +4346,95 @@ fn extract_heading_test_document(
         },
     )
     .expect("document structure extraction must succeed")
+}
+
+fn ligature_space_document(pages: Vec<Vec<SegmentData>>, ocr_text: bool) -> crate::types::internal::InternalDocument {
+    extract_document_structure_from_segments(
+        pages,
+        SegmentStructureConfig {
+            k_clusters: 4,
+            tables: &[],
+            outline_entries: &[],
+            strip_repeating_text: false,
+            include_headers: true,
+            include_footers: true,
+            include_footnotes: true,
+            include_watermarks: true,
+            used_structure_tree: false,
+            ocr_text,
+            image_positions: &[],
+            images: None,
+            inject_placeholders: false,
+            layout_hints: None,
+            allow_single_column: true,
+            cancel_token: None,
+            #[cfg(feature = "layout-detection")]
+            layout_images: None,
+            #[cfg(feature = "layout-detection")]
+            layout_results: None,
+            #[cfg(feature = "layout-detection")]
+            table_model: crate::core::config::layout::TableModel::Disabled,
+            #[cfg(feature = "layout-detection")]
+            table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+            #[cfg(feature = "layout-detection")]
+            acceleration: None,
+            #[cfg(feature = "layout-detection")]
+            session_thread_budget: 0,
+        },
+    )
+    .expect("document structure extraction must succeed")
+}
+
+fn ligature_space_text(text: &str, ocr_text: bool) -> String {
+    let document = ligature_space_document(vec![vec![seg(text, 72.0, 200.0)]], ocr_text);
+    document
+        .elements
+        .iter()
+        .map(|e| e.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Extracted PDF text keeps a space after a ligature: the extractor placed it from
+/// glyph geometry or the author wrote it (#2322).
+///
+/// Neutralisation that must break this test: pass `true` for `absorb_space` in
+/// `fused_text_repairs` regardless of `witnesses.ocr_text`.
+#[test]
+fn extracted_pdf_text_keeps_the_space_after_a_ligature() {
+    assert_eq!(
+        ligature_space_text("sta\u{FB00} only and \u{FB01} nal", false),
+        "staff only and fi nal"
+    );
+}
+
+/// A geometry-joined ligature stays joined: there is no space to keep or remove.
+#[test]
+fn extracted_pdf_text_with_a_tight_ligature_stays_joined() {
+    assert_eq!(
+        ligature_space_text("di\u{FB00}erent de\u{FB01}nes", false),
+        "different defines"
+    );
+}
+
+/// OCR places no glyph geometry, so a ligature emitted as its own word is rejoined.
+///
+/// Neutralisation that must break this test: ignore `ocr_text` in `fused_text_repairs`.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_segments_rejoin_a_ligature_emitted_as_its_own_word() {
+    let mut paragraph = para_with_font_size(12.0);
+    paragraph.lines = vec![line(vec![seg("the \u{FB01} eld of \u{FB02} owers", 72.0, 200.0)])];
+    let pages = crate::pdf::structure::adapters::segments_from_ocr_pages(&[vec![paragraph]]);
+    assert!(pages[0].iter().any(|segment| segment.text.contains('\u{FB01}')));
+    let document = ligature_space_document(pages, true);
+    let text = document
+        .elements
+        .iter()
+        .map(|e| e.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(text, "the field of flowers");
 }
 
 fn element_kind_for(
@@ -5385,6 +5608,7 @@ fn segments_to_paragraphs_preserves_a_witnessed_ligature_space_boundary() {
     let witnesses = TextRepairWitnesses {
         hyphens: HyphenWitnesses::default(),
         words: ["bedrijf".to_string()].into_iter().collect(),
+        ocr_text: false,
     };
 
     let paragraphs = segments_to_paragraphs(segments, &[(11.0, None)], &[], &witnesses);
@@ -5674,6 +5898,7 @@ fn should_preserve_eight_distinct_body_paragraphs_through_native_structure() {
             include_footnotes: true,
             include_watermarks: true,
             used_structure_tree: false,
+            ocr_text: false,
             image_positions: &[],
             images: None,
             inject_placeholders: false,

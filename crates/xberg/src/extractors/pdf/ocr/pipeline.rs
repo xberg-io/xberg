@@ -754,29 +754,50 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let probe_doc = std::sync::Arc::clone(&render_doc);
         let cancel = config.cancel_token.clone();
         let page_limit = super::hidden_layer::preview_page_limit(config);
+        let work_budget = super::hidden_layer::PreviewWorkBudget::new(config);
+        // An audited page whose invisible layer covers its picture is read only when the
+        // language check did not judge that layer plausible prose: it abstained or flagged it.
+        // The check runs inside the blocking closure, and only for such pages, on the same page
+        // text and thresholds as `record_implausible_text_pages`. With plausibility routing
+        // disabled it judges nothing, so every covered layer is read. ~keep
+        let candidates: std::collections::HashSet<usize> = page_indices.iter().copied().collect();
+        let layer_texts: std::collections::HashMap<usize, String> = boundaries
+            .iter()
+            .filter_map(|boundary| {
+                let index = usize::try_from(boundary.page_number).ok()?.checked_sub(1)?;
+                candidates.contains(&index).then_some(())?;
+                let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
+                Some((index, text.to_owned()))
+            })
+            .collect();
+        let plausibility_thresholds = config
+            .ocr
+            .as_ref()
+            .map(|ocr| ocr.effective_thresholds())
+            .unwrap_or_default();
         super::super::ensure_pdf_not_cancelled(config)?;
-        page_indices = super::super::spawn_pdf_blocking(move || {
+        let decisions = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
-            let mut remaining_ccitt_work = page_limit;
-            let selected = page_indices
-                .into_iter()
-                .take(page_limit)
-                .take_while(|_| !is_cancelled())
-                .filter(|&index| {
-                    let needed = super::hidden_layer::needs_ocr(
-                        &probe_doc,
-                        index,
-                        byte_limit,
-                        &mut remaining_ccitt_work,
-                        is_cancelled,
-                    );
-                    tracing::debug!(page = index + 1, ?needed, "Checked coverage of hidden PDF text");
-                    needed == Some(true)
-                })
-                .collect::<Vec<_>>();
-            Ok(selected)
+            let mut work_budget = work_budget;
+            let mut decisions = Vec::new();
+            for index in page_indices.into_iter().take(page_limit) {
+                if is_cancelled() {
+                    break;
+                }
+                let needed = work_budget.probe_page(|page_work| {
+                    super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, page_work, is_cancelled)
+                });
+                let plausible = super::hidden_layer::layer_judged_plausible(
+                    needed,
+                    layer_texts.get(&index).map(String::as_str),
+                    &plausibility_thresholds,
+                );
+                decisions.push((index, needed, plausible));
+            }
+            Ok(decisions)
         })
         .await?;
+        page_indices = super::hidden_layer::pages_to_probe(decisions);
         super::super::ensure_pdf_not_cancelled(config)?;
     }
     if page_indices.is_empty() {
@@ -786,6 +807,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // Pages whose OCR text got the recognition-noise verdict and was not discarded. The caller
     // decides each page on its OCR text alone and puts the layer first only on a replaced page.
     let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    // Pages whose calibrated mean confidence fell below `min_ocr_mean_confidence`.
+    let mut low_confidence_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    // Pages whose dictionary-invalid word ratio crossed its threshold.
+    let mut dictionary_noise_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
     // The readable text layers that a replaced page keeps first when its OCR text is judged
     // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
     // none. ~keep
@@ -1050,7 +1075,28 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let native_coverage_layers = page_layers.as_ref().filter(|_| {
+    let ink_coverage_layers = {
+        let markers = if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative {
+            super::document::marker_native_ink_layers(
+                native_text,
+                boundaries,
+                &ocr_set,
+                page_count,
+                &ocr_output_thresholds,
+            )
+        } else {
+            ahash::AHashMap::new()
+        };
+        if markers.is_empty() {
+            page_layers.clone()
+        } else {
+            let mut layers = page_layers.as_deref().cloned().unwrap_or_default();
+            layers.extend(markers);
+            Some(std::sync::Arc::new(layers))
+        }
+    };
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let native_coverage_layers = ink_coverage_layers.as_ref().filter(|_| {
         all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
             && !probing_hidden_layer
             && !mixed_route_layout_active
@@ -2409,6 +2455,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             if acceptance.verdict.is_some() && !acceptance.discarded {
                 noise_verdict_pages.insert(*page_number);
             }
+            if acceptance.verdict.is_some_and(|verdict| verdict.low_confidence) {
+                low_confidence_pages.insert(*page_number);
+            }
+            if acceptance.verdict.is_some_and(|verdict| verdict.dictionary_noise) {
+                dictionary_noise_pages.insert(*page_number);
+            }
             *text = acceptance.content;
         }
     }
@@ -2445,6 +2497,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             super::hidden_layer::adds_text_preserving_native(native, text)
                                 && (probing_hidden_layer
                                     || super::hidden_layer::keeps_native_lines_in_order(native, text))
+                        }))
+                // Every probed page passed the hidden-text audit: all of its native text is render
+                // mode 3. A confident read has a calibrated score that clears the default gate and
+                // no low-confidence or dictionary-noise verdict. The fragmentation signal does not
+                // veto it: a table of numbers is mostly short tokens. ~keep
+                && !(probing_hidden_layer
+                    && native_text
+                        .get(boundary.byte_start..boundary.byte_end)
+                        .is_some_and(|native| {
+                            super::hidden_layer::confident_read_replaces_layer(
+                                low_confidence_pages.contains(&page),
+                                dictionary_noise_pages.contains(&page),
+                                ocr_confidence_by_page.get(&page).and_then(|confidence| confidence.score),
+                                native,
+                                text,
+                            )
                         }))
             {
                 accepted_replacements.remove(&page);
@@ -2490,9 +2558,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && ink_proof_layout_free
                 && super::document::native_preservation_is_automatic(config, *page_number)
                 && !noise_verdict_pages.contains(page_number)
-                && structured_ocr_pages
-                    .get(page_number)
-                    .is_some_and(super::native_word_coverage::has_only_certified_tesseract_text)
+                && structured_ocr_pages.get(page_number).is_some_and(|doc| {
+                    super::native_word_coverage::has_only_certified_tesseract_text(doc)
+                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text)
+                })
                 && layers.get(page_number).is_some_and(|layer| {
                     let mut stripped = layer.clone();
                     super::super::unmapped_glyphs::strip_native_fragment(&mut stripped);
@@ -2694,7 +2763,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if native_ink_owned_pages.contains(&page)
                 && ink_proof_layout_free
-                && page_count == 1
                 && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
                 && accepted_replacements.contains_key(&page)
                 && !noise_verdict_pages.contains(&page)
@@ -2724,7 +2792,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if native_ink_owned_pages.contains(&page) {
-                    return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text);
+                    return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text)
+                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text);
                 }
                 false
             });

@@ -88,7 +88,7 @@ harfrust = "0.15"
 hayro-jbig2 = { version = "0.3", default-features = false }
 hayro-jpeg2000 = { version = "0.4.1", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff"] }
-jpeg-decoder = { version = "0.3", default-features = false }                               # default = ["rayon"]; this crate has no other rayon user ~keep
+jpeg-decoder = { version = "=0.3.2", default-features = false }                            # rayon is enabled per target below ~keep
 md-5 = "0.11"
 memchr = "2"
 nom = "8.0"
@@ -123,6 +123,12 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 # fontconfig at all. ~keep
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies]
 fontconfig-parser = { version = "0.5", default-features = false }
+
+# jpeg-decoder's default thread-per-component worker queues full-resolution coefficient rows without a
+# bound; its rayon worker converts each row as it is read. Reduced JPEG decoding relies on that. The
+# exact pin matches the xberg crate's, whose peak model `tests/bounded_jpeg_peak.rs` measures. ~keep
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+jpeg-decoder = { version = "=0.3.2", default-features = false, features = ["rayon"] }
 
 [dev-dependencies]
 aes = "0.9"

@@ -14,12 +14,15 @@ use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, PageCo
 
 const BOOK: &str = "pdf/assembly_language_for_beginners_al4_b_en.pdf";
 const LISTING_PAGE: u32 = 591;
+const SDM: &str = "pdf/intel_64_and_ia_32_architectures_software_developer_s_manual_combined_volumes_1_4_june_2021_325462_sdm_vol_1_2abcd_3abcd.pdf";
+const DESCRIPTOR_TABLE_PAGE: u32 = 815;
+const ESCAPED_CELL_TABLE_PAGE: u32 = 4311;
 const ENGLISH_MODEL_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
 
-fn three_pages_around(page: u32) -> Vec<u8> {
+fn three_pages_around(book: &str, page: u32) -> Vec<u8> {
     use lopdf::Object;
 
-    let mut document = lopdf::Document::load(helpers::get_test_file_path(BOOK)).expect("open the corpus PDF");
+    let mut document = lopdf::Document::load(helpers::get_test_file_path(book)).expect("open the corpus PDF");
     let pages = document.get_pages();
     let kept: Vec<Object> = (page - 1..=page + 1)
         .map(|number| Object::Reference(pages[&number]))
@@ -44,10 +47,34 @@ fn three_pages_around(page: u32) -> Vec<u8> {
             .unwrap()
             .set("Parent", root);
     }
-    document.prune_objects();
     let mut bytes = Vec::new();
     document.save_to(&mut bytes).expect("save the three-page excerpt");
     bytes
+}
+
+fn pinned_english_config(tessdata: &std::path::Path) -> ExtractionConfig {
+    let model = xberg_tesseract::bundled_eng_traineddata().expect("bundled English model");
+    assert_eq!(hex::encode(Sha256::digest(model)), ENGLISH_MODEL_SHA256);
+    std::fs::write(tessdata.join("eng.traineddata"), model).unwrap();
+    ExtractionConfig {
+        use_cache: false,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ocr: Some(OcrConfig {
+            enabled: true,
+            backend: "tesseract".into(),
+            language: vec!["eng".into()],
+            tessdata_path: Some(tessdata.to_path_buf()),
+            tesseract_config: Some(TesseractConfig {
+                use_cache: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
 }
 
 async fn pages_of(bytes: &[u8], config: &ExtractionConfig) -> (Vec<String>, Option<ExtractionMethod>) {
@@ -74,30 +101,9 @@ async fn automatic_ocr_returns_a_code_listing_page_once_and_keeps_its_repeated_l
         );
         return;
     }
-    let model = xberg_tesseract::bundled_eng_traineddata().expect("bundled English model");
-    assert_eq!(hex::encode(Sha256::digest(model)), ENGLISH_MODEL_SHA256);
     let tessdata = tempfile::tempdir().unwrap();
-    std::fs::write(tessdata.path().join("eng.traineddata"), model).unwrap();
-    let config = ExtractionConfig {
-        use_cache: false,
-        pages: Some(PageConfig {
-            extract_pages: true,
-            ..Default::default()
-        }),
-        ocr: Some(OcrConfig {
-            enabled: true,
-            backend: "tesseract".into(),
-            language: vec!["eng".into()],
-            tessdata_path: Some(tessdata.path().to_path_buf()),
-            tesseract_config: Some(TesseractConfig {
-                use_cache: false,
-                ..Default::default()
-            }),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let bytes = three_pages_around(LISTING_PAGE);
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(BOOK, LISTING_PAGE);
     let (native, native_method) = pages_of(
         &bytes,
         &ExtractionConfig {
@@ -131,4 +137,125 @@ async fn automatic_ocr_returns_a_code_listing_page_once_and_keeps_its_repeated_l
     let call_puts = |page: &str| page.lines().filter(|line| line.trim() == "call puts").count();
     assert!(call_puts(&native[1]) >= 3, "the listing repeats `call puts`");
     assert_eq!(call_puts(&automatic[1]), call_puts(&native[1]));
+}
+
+#[tokio::test]
+async fn automatic_ocr_returns_a_table_page_once_when_native_text_holds_every_word() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(SDM, DESCRIPTOR_TABLE_PAGE);
+    let (native, _) = pages_of(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    let words = |page: &str| page.split_whitespace().count();
+    assert!(
+        words(&native[1]) > 500,
+        "the descriptor table page holds its native words"
+    );
+    assert_eq!(
+        words(&automatic[1]),
+        words(&native[1]),
+        "the OCR table of words the native text already holds is not appended"
+    );
+    assert_eq!(automatic[1], native[1]);
+}
+
+#[tokio::test]
+async fn automatic_ocr_returns_a_table_page_once_when_a_cell_starts_with_a_pipe() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(SDM, ESCAPED_CELL_TABLE_PAGE);
+    let (native, _) = pages_of(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    let words = |page: &str| page.split_whitespace().count();
+    assert!(
+        words(&native[1]) > 250,
+        "the register table page holds its native words"
+    );
+    assert_eq!(
+        words(&automatic[1]),
+        words(&native[1]),
+        "the OCR table of words the native text already holds is not appended"
+    );
+    assert_eq!(automatic[1], native[1]);
+}
+
+const GLUED_TOKEN_TABLE_PAGE: u32 = 4443;
+const CLEAN_TABLE_PAGE: u32 = 4444;
+
+#[tokio::test]
+async fn automatic_ocr_keeps_words_that_a_glued_native_token_hides_on_a_table_page() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(SDM, GLUED_TOKEN_TABLE_PAGE);
+    let (native, _) = pages_of(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    for word in ["Ovf_PMC1", "Ovf_PMC2", "Ovf_PMC3"] {
+        let held = |page: &str| page.split_whitespace().any(|token| token == word);
+        assert!(!held(&native[1]), "the native text glues `{word}` into a longer token");
+        assert!(held(&automatic[1]), "automatic OCR keeps `{word}`");
+    }
+    for word in ["Ovf_PMC4", "Ovf_PMC6"] {
+        assert!(
+            automatic[1].split_whitespace().any(|token| token == word),
+            "automatic OCR keeps the clean native token `{word}`"
+        );
+    }
+}
+
+#[tokio::test]
+async fn automatic_ocr_returns_a_neighbouring_clean_table_page_once() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = three_pages_around(SDM, CLEAN_TABLE_PAGE);
+    let (native, _) = pages_of(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    let (automatic, _) = pages_of(&bytes, &config).await;
+    assert!(
+        native[1].split_whitespace().count() > 100,
+        "the clean table page holds its native words"
+    );
+    assert_eq!(automatic[1], native[1], "a table page with no glued token stays native");
 }

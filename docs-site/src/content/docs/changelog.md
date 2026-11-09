@@ -13,9 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Freeze experimental NLI accounting plans and validate completed reports.** (#2334)
+  The standalone runner calls the existing local classifier with pinned inputs and artifacts; report validation checks accounting consistency and does not qualify a model or prove inference occurred.
+
+- **(layout): Add an experimental `model` selector for layout detection.** (#2284)
+  `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
+
 - **(ci): Add a macOS PHP archive gate that rejects imports the PIE install does not ship.** (#2547)
-  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
-  The gate is not yet wired into the release workflow because the PHP macOS build still needs a single-file codec design.
+  `scripts/ci/verify-php-macos-extension.sh` fails on any non-system import in `xberg.so`, any libheif or codec import, a deployment target above macOS 15.0, and missing or altered license notices; it rejects the published v1.3.10 arm64 archives, which import Homebrew's libheif.
+  The release workflow now runs it on every macOS PHP archive.
 
 - **(ocr): Read a scan's embedded JPEG at the resolution its placement proves.** (#2530)
   When the embedded-image retry covers a page-covering image placed by an unsheared quarter-turn matrix with equal horizontal and vertical resolution, the backend receives that resolution instead of estimating it, so a scan the render budget refused is read within `max_content_size`. Unproven placements keep the previous behavior, a read the recognition-noise check rejects keeps the original refusal, and a retry that still recovers nothing reports why each image failed beside the original error.
@@ -69,6 +75,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(pdf): Pin the native PDF reduced-JPEG decoder to the version the OCR path measures, and drop the unreachable decoder output cap.** (#2740)
+  `xberg-native-pdf` now requires `jpeg-decoder` `=0.3.2`, as `xberg` does. The decoder output cap is gone: the decoder checked it only after allocating its buffers, so it never bounded an allocation, and it always equalled the size already checked after scaling. Rendering is unchanged.
+
+- **(ocr): Re-read a standalone picture that looks like a table as one uniform block and adopt that read.** (#2503, #2432)
+  When the sparse-text first pass finds no table but its words form a lattice (at least four rows, three columns separated by wide gaps, emitted row by row), the picture is read again with Tesseract PSM 6, whose dot-leader row recovery keeps each row on one line, and that read replaces the first. It is adopted as a caller-forced `psm = 6` would be, so a token PSM 6 misreads is kept; only a re-read with no table, an empty one, or one with under three quarters of the first read's letters and digits is discarded. On the #2432 set standalone pictures keep 162 of 288 rows whole (108 before; explicit `psm = 6` reaches 167). Every picture the lattice test admits is OCR'd twice, whether or not the re-read is adopted (11 of 24 pictures on that set, adopted on 6); only default Tesseract OCR is affected. An explicit `psm`, vertical languages, any TIFF, a VLM fallback or pipeline, requested document structure, layout detection, a first read that already has a table, and scanned PDF pages keep the first read.
+
+- **(layout): Pin PP-DocLayoutV3 to PaddlePaddle's official ONNX.** (#2284)
+  The `pp_doclayout_v3` artifact now comes from `xberg-io/layout-models` revision `a0c2d342` (130,502,049 bytes, sha256 `45bf7175...`), the official PaddlePaddle export re-hosted with attribution. Its outputs keep the adapter's contract (`fetch_name_0` F32[N,7], `fetch_name_1` I32[1], `fetch_name_2` I32[N,200,200]). Any V3 capture set recorded against the previous artifact is bound to a hash the code no longer pins and must be re-recorded.
+
+- **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
+  The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.
+- **(pdf): Native PDF text returns the letters of every ligature.** (GH#2322)
+  A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters in every output format, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. Neither the native `extract_text` nor the default output carries U+FB00 to U+FB06 any more, so a caller that matched the ligature code points must match the letters. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next minor release.
 
 - **(pdf): Reduce allocations in native text extraction.** (#2429)
   Reuse ordered spans directly when the text pass does not need character records.
@@ -147,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Docker and CI use Tesseract 5.5.4, Leptonica 1.87.0, libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2.
   Windows builds verified Tesseract source; Linux and macOS provisioning checks selected runtimes and real decoding.
 
+- **(pdf): The OCR structure heuristic's retention gate reads ligature code points through the text repair's ligature table (#2689).**
+  The gate carried its own copy of the U+FB00..FB06 mapping; behavior is unchanged.
+
 ### Security
 
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
@@ -204,22 +227,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
+  A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
+- **(pdf): Stop OCR from splitting words at a ligature such as "fi nancial".** (GH#2322)
+  A page that OCR reads is first drawn by the native renderer. A glyph code in an embedded TrueType font
+  can decode to several letters, as a ligature does, and the renderer gave each later glyph the width of a
+  later glyph. That opened a gap after the ligature, and OCR read it as a space. The renderer now draws each
+  run (one show string) that holds such a code glyph by glyph from the font, each at its own width.
+  Markdown, HTML and Djot output of OCR pages change too.
+- **(pdf): Recover a page of outlined prose with eight or more drawn rows beside a native header and footer.** (GH#2313)
+  The outlined-prose check refused a page that painted more than about seven rows of outlined text.
+  Such a page kept only its native header and footer. The check now accepts a full page of outlined rows.
+  The recovered words still pass through the merge that keeps every native word.
+- **(pdf): Recover a page of outlined prose that also paints a picture.** (GH#2313)
+  The outlined-prose check refused any page that drew an image or a form object.
+  A picture holds no outlined text, so the check now reads past an image. It still refuses a page with a form object.
+- **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
+  One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.
+  A reference such as `[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].`, a versioned citation without a date, and a sentence that ends at a bare identifier are kept whole.
+  A stamp drawn in parts that the extractor reads as separate paragraphs (identifier, category, date) is removed when the parts on the page make one whole stamp, so its date no longer shows as a heading. The parts must read identifier, category, date (or the reverse), share one rotation (modulo a full turn), sit on one line in their reading direction, and lie in a margin: within a tenth of the page width (text turned up or down) or height (text read across) from a page edge, measured by the thickness of the text, not the length of its run. A page that reads category, identifier, date keeps its parts. A page with two split stamps keeps all six parts, because together they do not make one stamp.
+  A stamp that ends a paragraph is removed alone; the words before it stay.
+
+- **(ocr): Do not crash when the process exits while a thread is still recognizing.**
+  The Tesseract exit cleanup freed every engine, including one an OCR thread still used, so a document that hit the extraction timeout could abort or segfault and lose all its text.
+  The cleanup now frees only engines that are parked in the idle pool and skips an engine in use. Each engine has its own id, so a new engine at the address of a freed one is never mistaken for the old engine. A direct user of the `xberg-tesseract` crate who never calls `mark_idle` gets tesseract's leak report on stderr at exit instead of a crash.
+- **(pdf): Join a word that a ligature glyph split in two, and return the letters of every ligature.** (GH#2322)
+  A space drawn inside a ligature's box (the pen is pulled back by the space width) no longer counts as a word break: the gap between the real letters decides. A space with its own room stays, because the page shows a gap there: a space with a full advance after a ligature stays in native text, so `fi eld` stays split. A ToUnicode value of U+0000 for a ligature now falls back to the `/Differences` glyph name of the font. A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next minor release.
+- **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
+  Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
+- **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
+  A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
+- **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
+  Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
+
+- **(ocr): Recover a sideways page with two tables when the first read held extra filtered words.** (#2497)
+  The implicit orientation retry refused two rotated tables unless the first read's iterator word count equalled its reported count, so dictionary-filtered words left the page on its noise read. It now accepts iterator words that include every retained token (extra filtered words only widen the protection check), with the same exact table, geometry and protected-word proofs.
+
+- **(pdf): Remove a painted orphan glyph beside a table whatever the glyph (#2616).**
+  The standalone orphan that a painted table cell already carries was deleted only when it was an ASCII digit, so a "%", "-", currency sign or non-Latin digit stayed as a duplicate paragraph. It is now deleted when it is the single remaining source glyph of a painted overhang and the exact plain source paragraph; two competing glyphs, a multi-character word and blank text are still refused. A symbol candidate beside a digit candidate now counts as competing and is refused, where the symbol used to be ignored.
+
+- **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694, #2730)
+  Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 3 to 4 s of decode on a release build), so a multi-page scan with a junk layer on every page recovers its pages up to that ceiling (35 pages of 300 dpi) while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
+
+- **(ocr): Limit the glued-cell veto's leader exemption to the gap at the leader (#2704).**
+  A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` counts as a leader and `‥` counts toward one.
+
+- **(ocr): Run no-binarization contrast preprocessing on the 8-bit plane for genuinely gray input.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which shrank or refused the sparse-retry fallback's upscale. A raster whose channels are equal in every pixel now becomes an 8-bit Pix and frees its RGB before background normalization and sharpening; the result is pixel-identical to the colour path, and the native phases peak at 7.0 bytes per pixel as measured with Leptonica's allocator (29,360,128 bytes at 2048x2048 against a modelled 29,360,384). Colour input keeps the colour path and its model, a step that fails after the RGB is freed keeps the best Pix already built, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does. The scale-dependent receipt OCR test was replaced with deterministic tests of the fallback gate (#2699); the lost receipt-header recovery is tracked in #2741.
+
+- **(pdf): Honor graphics-state dash patterns and zero-opacity strokes in native PDF path extraction.** (#2332)
+  All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour for clamped zero opacity; this prevents false HTML headers from those separators.
+  Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
+  Partial stroke opacity, fill opacity (`ca`), soft masks (`SMask`) and blend modes (`BM`) remain unmodelled in path-based header visibility proof.
+
+- **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
+  The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that joins read words a cell apart now keeps the OCR read.
+
+- **(pdf): Stop a math line such as `X = Y` from reading as a numbered heading (#2688).**
+  A leading roman numeral or number matched the heading enumerator whatever followed it, so a formula opening with a variable (`X = Y`, `2 + ...`), a decimal (`0.03 ± 0.01`, `1.5 = x`) or a DOI tail (`10.1109/IPIN.2018`) became a heading and split its paragraph. An enumerator now fails to be a heading when a math operator (`= + < > ^ ± ≤ −` and the like) follows it, or when `/` or `*` is followed directly by an operand, as in `12/1996`. So `3.2 ± 0.1`, `4.1 × Scaling` and `1.2/1.3 Results` are no longer headings, while `IV. Results`, `II Methods`, `1/ INTRODUCTION` and `IV - Results` still are.
+
+- **(ocr): Recover tall scans after OCR preprocessing reduces their read resolution.** (#2502)
+  Neutral RGB tall scans no longer require unfiltered page-paint streams: raw, Flate and ASCII85+Flate wrappers
+  are eligible only after the decoded full-page draw and every RGB sample's neutrality are certified.
+  Line geometry scales up with source density while preserving the prior limits below 150 DPI;
+  memory, reading-order and recognition-quality checks remain in force.
+  Original read-frame diagnostics survive automatic per-page OCR and document rebuilding, with accepted page IDs
+  retained in order and the existing single-frame metadata object preserved for compatibility.
+
+- **(pdf): Keep a native table whose box overlaps a grid that does not hold its rows (#2376).**
+  Overlap arbitration treated an L-shaped grid and the block beside it as one detection and dropped the smaller table, so rows such as the Claims Trend block of a rate filing vanished from the table output; two native tables now count as duplicates only when most of the smaller one's rows reappear in the larger.
+
+- **(ocr): Compare a table read's escaped cell pipes with their iterator words (Refs #2534).**
+  The table renderer writes a `|` inside a cell as `\|`, so a cell word that starts with a bar differed from the Tesseract iterator word and the page never reached the native-ink proof. The escape is now undone before the comparison; the native-agreement share is unchanged. Intel SDM page 4311 returns its 298 native words instead of 874.
+
+- **(ocr): Keep the native page when automatic OCR reads it as a table of the same words (Refs #2534).**
+  A read that Tesseract laid out as a table is compared with its own iterator words with the table markup and ruling bars set aside, and it yields to the native text under the same unchanged 0.85 native-agreement share and glyph-ink proof as a plain read. The native page was followed by its whole OCR table (1315 words for 550 on Intel SDM page 815).
+
+- **(php,elixir): Make the macOS PHP extension and Elixir NIF load without Homebrew's libheif.** (#2547)
+  The v1.3.10 and earlier macOS releases linked `/opt/homebrew/opt/libheif/lib/libheif.1.dylib` by absolute path and did not ship it, so the whole binding failed to load on a Mac without it.
+  PIE installs one file, so the PHP extension now links libheif, libde265 and libaom (decode only, no x265 or other encoder) statically, built from pinned sources at the macOS 15.0 floor; the archive ships their upstream notices, the GPL-3.0 text and a source inventory, the release loads it in PHP and decodes HEIC and AVIF before upload, and HEIF output is unavailable there.
+  The Elixir NIF archive ships its four codec libraries as `@loader_path` siblings, staged and load-tested in the release job.
+  See `THIRD_PARTY_LICENSES.md` for the licenses and how to relink the LGPL components.
+
+- **(pdf): Join a ligature drawn as its own run to the rest of its word in Plain and Markdown output.** (#2322)
+  The rich text assembler split `di` + `ﬀ` + `erent` at the ligature whenever the kerning gap passed 0.15 em; it now applies the same wider ligature-boundary threshold as the native extractor. OCR text keeps its string-level repair of a space after a ligature. The OCR structure heuristic's character-retention gate now counts a ligature as its letters, so a page with a ligature is no longer rejected.
+
+- **(pdf): Keep an authored space after a ligature in Plain and Markdown output.** (#2322)
+  A space following a ligature glyph ("staﬀ only") was removed by a string-level repair, welding two words into "staffonly". Word boundaries after a ligature now come only from the extractor's glyph geometry.
+
+- **(pdf): Decode an over-budget JPEG page image at a reduced scale instead of refusing the page.** (#2682)
+  A scan whose embedded JPEG rasters and canvas exceed the image working budget (for example a 6623x4678 RGB scan on a large page) is decoded at the finest 1/2, 1/4 or 1/8 IDCT scale that fits, so the page renders and takes the normal OCR route. Each axis of the reduced raster must reach 90% of the canvas pixels the image is painted over, less one pixel (`reduced >= 0.9 * painted - 1`); a 600 px reduced axis accepts a painted extent up to 667 px and refuses 668 px.
+  Progressive, CMYK, colour-key-masked and in-data soft-masked JPEGs are still refused as before, as is a frame that disagrees with its image dictionary (the JPEG's own frame size decides the scale). A reduced decode that fails after admission is reported as the same budget refusal rather than rendering the page without the image.
+  The decode relies on `jpeg-decoder`'s `rayon` worker (enabled for `xberg-native-pdf` on every non-wasm32 target; wasm32 uses its immediate worker), which converts each coefficient row as it is read; the default thread-per-component worker would queue rows without a bound. The decoder checks its buffer limit only after decoding, so the admission arithmetic is what bounds memory.
+
+- **(ocr): Apply `max_threads` to PaddleOCR ONNX Runtime sessions.** (#2649)
+  Sessions now take the installed process thread budget instead of the host default, and keep their intra-op and inter-op limits when an execution provider (including explicit CPU) is configured.
+
+- **(pdf): Recover prose behind grayscale ICC page images (#2313).** A page whose only content is a full-page 8-bit gray image with a bounded display ICC profile now takes the visible-raster OCR route, so the prose in the image is no longer dropped in favour of the near-empty native text.
+
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
 - **(pdf): Stop reading order from moving list items and words out of their sentence on native pages (GH#2658).**
   Ordering on a base line now applies only to a mark at most 0.8 of its base size that abuts the base. Text of nearly the same size as a bullet, or set apart from a larger icon, keeps its own line.
 
-- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
+- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2644).**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 
-- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text.**
+- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text (GH#2616).**
   The full-scan leader recovery no longer requires an all-letter header and label or digit-only values. Rows are still refused unless every leader is proved as regular dots on the raster, each value lies in its header column and the hOCR words match exactly.
 
-- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (#2616).**
+- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (GH#2616).**
   The hOCR row claim no longer requires an all-letter label and digit-only values; a value such as "$1,010" or "3.2%" or a label with a digit now keeps its one claimed row. The row's words must still equal the table cells and the leader must still sit alone between the label and the first value.
 
-- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (#2616).**
+- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (GH#2616).**
   The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. Instead the region needs a median line thickness above a page-relative floor, at most a small share of marks thinner than a third of that median, mostly word-shaped (not stroke-shaped) boxes and mostly tokens carrying a letter, all measured in the upright frame.
 
 - **(ocr): Give an explicitly rotated table in-page bounds on the per-page route.** (#2497)
@@ -231,8 +351,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover more tall scans: Indexed scans at 120 DPI, Markdown output and an explicit Tesseract page mode, and report when strips were not used.** (#2502)
   Indexed sources down to 120 DPI use source-image strips, each of which must match its source ink rows; bilevel, neutral RGB and JPEG scans rendered at 120 DPI did not read back as their source words and keep the 150 DPI floor. A Tesseract page mode such as PSM 3 no longer turns recovery off, and Markdown output recovers the words as plain paragraphs with a warning that no Markdown structure was rebuilt. Strips now join as separate paragraphs. A page read from a render downscaled below 150 DPI carries a warning that names why its strips were not used.
 
-- **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
+- **(pdf): Keep a marked native page that the configured OCR languages cannot read (GH#2536).**
   A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
+
+- **(pdf): Keep any native page the configured OCR languages cannot read, also through a Tesseract pipeline, and warn when a scan is in such a script.** (#2536)
+  The kept-page rule now also keeps an unmarked page in Khmer, Thai, Lao, Myanmar or an Indic script when its combining signs attach to letters as the script requires, and applies when `ocr.pipeline` is set: the native layer is kept when any Tesseract stage cannot read the script, while a PaddleOCR, VLM or custom stage, or a `vlm_fallback`, means no claim and leaves the page to OCR. A scanned page in such a script is still read, and an `ocr` warning now tells the caller which model to add. Glyphs with no Unicode value stay unrecovered without the right model.
 
 - **(pdf): A bullet set in a larger font or drawn after its text no longer splits its list item.** (#2443)
   The bullet is no longer taken as the base of a script run for the text beside it, and a bullet that follows its body in the content stream is placed ahead of it, so wrapped items keep their lines and line-end hyphens are joined.
@@ -249,6 +372,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
+- **(ocr): Keep the raw pixels of coloured graphics that have a dark mean.**
+  Automatic preprocessing for dense dark glyphs on a dark-mean image now applies only when most of the dark ink
+  is neutral: black, grey, or slate and brown-black ink with up to 40 levels between the strongest and weakest
+  colour channel. Saturated text such as pure blue counts as dark ink. A coloured graphic with a dark mean skips
+  the preprocessing and reaches OCR with its raw pixels (GH#2515).
 
 - **(ocr): Place mixed-route OCR lines in the resampled frame when matching them to native text.**
   OCR paragraphs are in the frame preprocessing resampled the render to, but the page-text merge scaled them by the render's size, so every OCR box was twice its true size at a 150 to 300 DPI resample, owned no native line and the native lines were prepended a second time (#2313).
@@ -264,6 +392,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Words over rasters, outlines, rules, partial fills or overpaint keep their OCR alternative.
   The proof also runs on the direct Tesseract route used when PaddleOCR is not compiled in.
   A native word that no glyph paint shows (under a fill, clipped or invisible) or a native layer that the read contradicts at more than 15% of its words keeps the OCR page.
+
+- **(pdf): Keep certified native text on an automatically selected OCR page in a mixed document.** (#2533)
+  Pages with unmapped glyphs now reach the same glyph-ink proof as a one-page document, so an OCR read that misses mapped source text does not replace it. Explicitly forced OCR and pages without that proof keep their existing behavior.
 
 - **(pdf): Keep a one-page native text layer whose lost glyphs the automatic OCR read does not recover.** (#2533)
   The ink-ownership proof now accepts a layer with glyphs that have no Unicode value when each sits in a located native word and no kind of lost glyph (by font, size and advance) of three places or more is read as letters or digits at half its places, tolerates read words only on flat blank paper between native words, requires glyph ink in every located lost glyph and native word, and lets Markdown block structure yield to the native page. A read that sees a kind of three or more lost glyphs as text at half its places, or any word over a raster, outline, rule or fill, keeps the OCR page.
@@ -1254,6 +1385,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(docx): A carriage return (`w:cr`) breaks the line and a position tab (`w:ptab`) separates the words.**
   Both were dropped, so the words around them ran together, in text boxes too. Tab stop definitions in a text
   box no longer add a tab before its text. (#2152)
+
+- **(ocr): Let a confident OCR read replace an invisible text layer that shares almost no words with the page picture.** (#2425)
+  A layer painted only in render mode 3 over a page-covering scan is replaced when the read repeats at most 15% of its words and passes the confidence check; visible text and layers that match the picture keep their text. The hidden-layer probe now also audits a text stream and a picture stream that are both Flate-compressed, in either order, and decodes a 300 dpi CCITT Group 4 picture with `/Decode [0 1]` and no `/Rows` or `/BlackIs1`. A layer that covers every ink band is now read too, unless the language check judged it plausible prose. Its CCITT preview budget is 16 work units per `max_iterations`.
 
 ## [1.3.11] - 2026-10-16
 

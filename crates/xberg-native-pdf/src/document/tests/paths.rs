@@ -83,3 +83,38 @@ fn test_resolve_oc_name_unresolvable_is_none() {
     let name_ref = Object::Name("MC9".to_string());
     assert_eq!(doc.resolve_oc_layer_name(None, &name_ref), None);
 }
+
+/// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).
+fn page_with_xobject(paint: &str, x1: &str) -> PdfDocument {
+    let content = format!("q 20 0 0 20 300 300 cm {paint} Q 100 100 m 150 200 200 200 250 100 c S");
+    let page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+                /Resources << /XObject << /X1 5 0 R >> >> >>";
+    let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    let pdf = build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[(3, page.as_bytes()), (4, stream.as_bytes()), (5, x1.as_bytes())],
+    );
+    PdfDocument::from_bytes(pdf).unwrap()
+}
+
+fn page_local_path_count(doc: &PdfDocument) -> usize {
+    doc.extract_bounded_page_local_paths(0, 1 << 20, 10_000).unwrap().len()
+}
+
+const IMAGE_X1: &str = "<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray \
+                        /BitsPerComponent 8 /Length 4 >>\nstream\nabcd\nendstream";
+const FORM_X1: &str = "<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Length 12 >>\nstream\n0 0 1 1 re f\nendstream";
+
+#[test]
+fn bounded_page_local_paths_read_past_an_image_xobject() {
+    assert_eq!(page_local_path_count(&page_with_xobject("", IMAGE_X1)), 1);
+    assert_eq!(page_local_path_count(&page_with_xobject("/X1 Do", IMAGE_X1)), 1);
+}
+
+#[test]
+fn bounded_page_local_paths_stop_at_a_form_xobject_or_an_unknown_name() {
+    assert_eq!(page_local_path_count(&page_with_xobject("", FORM_X1)), 1);
+    assert_eq!(page_local_path_count(&page_with_xobject("/X1 Do", FORM_X1)), 0);
+    assert_eq!(page_local_path_count(&page_with_xobject("/X9 Do", IMAGE_X1)), 0);
+}

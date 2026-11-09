@@ -115,7 +115,7 @@ pub(super) fn native_text_paints_all_read_ink(
     let words = || elements.iter().filter(|element| element.level == OcrElementLevel::Word);
     if words().next().is_none()
         || !words().all(is_iterator_word)
-        || !read.content.split_whitespace().eq(words().map(|word| word.text.trim()))
+        || !content_holds_exactly_the_read_words(&read.content, words().map(|word| word.text.trim()))
     {
         return false;
     }
@@ -165,8 +165,31 @@ pub(super) fn native_text_paints_all_read_ink(
     ) else {
         return false;
     };
-    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
-        && ink_is_glyph_ink(&rasters, media, &placed, &native_words)
+    !native_word_glues_separate_cells(&native_words, &read_words)
+        && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+        && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
+}
+
+/// Whether the read's text is the iterator words and nothing else. A read that Tesseract laid out
+/// as a table renders the same words in cell order inside markdown pipes and separator rows, and
+/// leaves out the iterator words that are only a ruling mark, so such a read is compared as a
+/// multiset of its words with the table markup set aside. The table renderer escapes a cell's `|`
+/// as `\|` (`render_table_markdown`), so that escape is undone on the content side. ~keep
+fn content_holds_exactly_the_read_words<'a>(content: &str, words: impl Iterator<Item = &'a str> + Clone) -> bool {
+    if content.split_whitespace().eq(words.clone()) {
+        return true;
+    }
+    let is_table_markup = |token: &str| token.chars().all(|c| matches!(c, '|' | '-' | '\\'));
+    let sorted = |tokens: &mut dyn Iterator<Item = &str>| {
+        let mut kept: Vec<String> = tokens
+            .filter(|token| !is_table_markup(token))
+            .map(str::to_owned)
+            .collect();
+        kept.sort_unstable();
+        kept
+    };
+    let unescaped = content.replace("\\|", "|");
+    content.contains('|') && sorted(&mut unescaped.split_whitespace()) == sorted(&mut words.clone())
 }
 
 /// Whether every lost glyph of the layer sits in a located native word and the read does not
@@ -201,12 +224,16 @@ fn ink_is_glyph_ink(
     rasters: &xberg_native_pdf::rendering::TextInkRasters,
     media: Rect,
     placed: &[(LineBox, bool)],
+    read_words: &[(String, LineBox)],
     native_words: &[(String, LineBox)],
 ) -> bool {
+    debug_assert_eq!(placed.len(), read_words.len());
     let scale = INK_PROOF_DPI as f32 / 72.0;
     let shown: Option<Vec<bool>> = placed
         .iter()
-        .map(|(word, over_native_word)| {
+        .zip(read_words)
+        .filter(|(_, (text, _))| !is_ruling_bar(text))
+        .map(|((word, over_native_word), _)| {
             word_ink(rasters, word, media, scale).filter(|shows_glyph| *shows_glyph || !over_native_word)
         })
         .collect();
@@ -217,6 +244,12 @@ fn ink_is_glyph_ink(
                 !alnum_key(text).is_empty() || text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)
             })
             .all(|(_, word)| glyph_ink_in(rasters, word, media, scale))
+}
+
+/// A read word that is only vertical bars is how Tesseract reads a table's ruling. It holds no
+/// text, so it neither needs glyph ink nor counts against the page being glyph ink. ~keep
+fn is_ruling_bar(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|c| c == '|')
 }
 
 fn alnum_key(text: &str) -> String {
@@ -248,6 +281,119 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
         }
     }
     if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
+}
+
+/// How far, as a share of the line height, a read leader's box may reach into a neighbouring read
+/// word and still count as lying in the gap: OCR boxes of a leader and its neighbours overlap by a
+/// pixel or two.
+const LEADER_BOX_SLACK: f32 = 0.1;
+
+/// The fewest leader characters that make a run a leader rather than punctuation.
+const MIN_LEADER_RUN: usize = 3;
+
+/// How many leader characters `c` counts for: dots, middle dots, underscores and hyphens count
+/// one, the two-dot leader two, and the ellipses a whole run. Anything else is not a leader.
+fn leader_weight(c: char) -> Option<usize> {
+    match c {
+        '.' | '·' | '_' | '-' => Some(1),
+        '\u{2025}' => Some(2),
+        '\u{2026}' | '\u{22EF}' => Some(MIN_LEADER_RUN),
+        _ => None,
+    }
+}
+
+/// Whether `text` is a run of the characters a table of contents or form sets between a label and
+/// its value. A lone `.` or a `|` is not one.
+fn is_leader_run(text: &str) -> bool {
+    text.chars()
+        .map(leader_weight)
+        .sum::<Option<usize>>()
+        .is_some_and(|weight| weight >= MIN_LEADER_RUN)
+}
+
+/// The letter-and-digit counts at which the token holds a leader run of [`MIN_LEADER_RUN`] or
+/// more leader characters in a row: where a leader joined a label to its value.
+fn leader_run_offsets(token: &str) -> Vec<usize> {
+    let (mut run, mut seen) = (0, 0);
+    let mut offsets = Vec::new();
+    for c in token.chars() {
+        match leader_weight(c) {
+            Some(weight) => {
+                let before = run;
+                run += weight;
+                if before < MIN_LEADER_RUN && run >= MIN_LEADER_RUN {
+                    offsets.push(seen);
+                }
+            }
+            None => {
+                run = 0;
+                seen += usize::from(c.is_alphanumeric());
+            }
+        }
+    }
+    offsets
+}
+
+/// Whether a native word glues read words that stand a cell apart. The native text joins cells
+/// that touch in its glyph stream (`1ThreadOvf_PMC1`) although the page sets them a column apart,
+/// so the words the read separates are not words of the native text, and the share cannot credit
+/// the token for them: the joined read words contain it, yet a reader of the native text never
+/// sees `Ovf_PMC1`. The gap is measured along the line from the furthest right edge of the read
+/// words before it. A gap under one line height is a break inside a word. A leader run read
+/// inside the gap (`.....`) closes it; a `|` or a lone `.` does not, since a ruled table reads its
+/// rules that way, and neither does a leader that overlaps a read word, which is a rule drawn
+/// through the word. A native token that holds a leader run is a label and its value joined by a
+/// leader whether or not the read kept the dots (`Introduction.........12`), so only the gap at
+/// the run, found by counting the letters and digits before it, is exempt and any other gap in
+/// the token still vetoes. That position is a count, so a read that miscounts the letters before
+/// the run (`rn` for `m`) while dropping the dots no longer matches it and keeps the OCR read,
+/// the safe side. Gaps are measured between read words only; a leader never moves the edge a
+/// gap is measured from. Words set sideways stack their read words vertically and are out of
+/// scope. ~keep
+fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
+    native.iter().any(|(text, place)| {
+        let height = place.bottom - place.top;
+        if height <= 0.0 {
+            return false;
+        }
+        let run_offsets = leader_run_offsets(text);
+        let mut parts: Vec<(&LineBox, usize, bool)> = read
+            .iter()
+            .filter(|(word, at)| place.owns(at) && !word.trim().is_empty())
+            .map(|(word, at)| {
+                (
+                    at,
+                    word.chars().filter(|c| c.is_alphanumeric()).count(),
+                    is_leader_run(word),
+                )
+            })
+            .filter(|(_, letters, is_leader)| *letters > 0 || *is_leader)
+            .collect();
+        parts.sort_by(|a, b| a.0.left.total_cmp(&b.0.left));
+        let mut reach = f32::NEG_INFINITY;
+        let mut letters_before: Option<usize> = None;
+        let mut leader_right = f32::INFINITY;
+        let slack = height * LEADER_BOX_SLACK;
+        for (part, letters, is_leader) in parts {
+            if is_leader {
+                if part.left >= reach - slack {
+                    leader_right = leader_right.min(part.right);
+                }
+                continue;
+            }
+            if let Some(before) = letters_before
+                && part.left - reach > height
+                && leader_right > part.left + slack
+                && !run_offsets.contains(&before)
+            {
+                return true;
+            }
+            letters_before = Some(letters_before.unwrap_or(0) + letters);
+            leader_right = f32::INFINITY;
+            reach = reach.max(part.right);
+        }
+        false
+    })
 }
 
 fn pixel_window(
@@ -468,6 +614,20 @@ pub(super) fn has_only_certified_tesseract_text(doc: &InternalDocument) -> bool 
 /// Whether the page's final structure only cuts a certified Tesseract read into blocks.
 pub(super) fn only_segments_certified_tesseract_text(doc: &InternalDocument, read: &str) -> bool {
     doc.prebuilt_ocr_elements.is_none() && ocr_page_only_segments_text_with(doc, read, is_hocr_bookkeeping)
+}
+
+/// Whether the page's final structure cuts a certified Tesseract read into blocks and tables
+/// without adding anything else (see [`only_segments_certified_tesseract_text`]).
+pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDocument, read: &str) -> bool {
+    doc.prebuilt_ocr_elements.is_none()
+        && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
+}
+
+fn is_hocr_bookkeeping_with_tables(key: &str, value: &serde_json::Value) -> bool {
+    match key {
+        "tables_detected" | "table_count" | "table_rows" | "table_cols" => value.as_u64().is_some(),
+        _ => is_hocr_bookkeeping(key, value),
+    }
 }
 
 fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {

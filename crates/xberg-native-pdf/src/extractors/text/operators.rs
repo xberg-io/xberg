@@ -129,6 +129,9 @@ impl<'doc> TextExtractor<'doc> {
                             // Same line, same transform, LTR progression →
                             // update width to reflect actual visual extent ~keep
                             buffer.accumulated_width = e - buffer.start_matrix.e;
+                            // A new matrix sets the pen again: the pull-back after a ligature
+                            // no longer refers to the glyph that ends the run. ~keep
+                            buffer.ligature_tail = false;
                             true
                         }
                         _ => false,

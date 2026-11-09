@@ -280,17 +280,12 @@ pub struct ConversionOptions {
     /// Default: `None` (all spans kept).
     pub include_region: Option<(crate::geometry::Rect, crate::layout::RectFilterMode)>,
 
-    /// Expand Unicode ligature characters to their component letters.
-    ///
-    /// When `true`, ligature characters from the Latin Alphabetic Presentation
-    /// Forms block (U+FB00–U+FB06) are expanded to their ASCII equivalents:
-    /// `ﬁ`→`fi`, `ﬂ`→`fl`, `ﬀ`→`ff`, `ﬃ`→`ffi`, `ﬄ`→`ffl`, `ﬅ`→`st`, `ﬆ`→`st`.
-    ///
-    /// When `false` (default), these characters are preserved exactly as the
-    /// font's ToUnicode map produced them. Ground-truth corpora for PDF quality
-    /// testing usually preserve ligatures, so the default avoids Jaccard penalty.
+    /// Has no effect. A ligature glyph always yields its component letters
+    /// (`ﬁ`→`fi`, `ﬂ`→`fl`, `ﬀ`→`ff`, `ﬃ`→`ffi`, `ﬄ`→`ffl`, `ﬅ`/`ﬆ`→`st`) when the text is read.
+    /// The field stays until the next minor release so existing callers compile; remove it from your code.
     ///
     /// Default: `false`.
+    #[deprecated(note = "has no effect: ligature glyphs always yield their letters; the field will be removed")]
     pub expand_ligatures: bool,
 
     /// Emit a visible marker in the markdown/HTML for a page that produced no
@@ -316,6 +311,7 @@ pub struct ConversionOptions {
     pub include_artifacts: bool,
 }
 
+#[allow(deprecated)]
 impl Default for ConversionOptions {
     /// Create default conversion options.
     ///

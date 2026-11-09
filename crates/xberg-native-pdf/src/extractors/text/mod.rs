@@ -978,6 +978,20 @@ pub(crate) fn starts_with_agl_ligature(text: &str) -> bool {
     matches!(text, "ff" | "fi" | "fl" | "ffi" | "ffl")
 }
 
+/// How much wider a gap must be to separate words when one side is a ligature glyph.
+pub(crate) const LIGATURE_BOUNDARY_GAP_FACTOR: f32 = 1.5;
+
+/// Whether the boundary between two adjacent runs touches a ligature glyph: the
+/// following run is a bare ligature, or the preceding run ends in one.
+#[inline]
+pub(crate) fn is_ligature_boundary(preceding: &str, following: &str) -> bool {
+    starts_with_agl_ligature(following)
+        || preceding
+            .chars()
+            .next_back()
+            .is_some_and(|c| ('\u{FB00}'..='\u{FB06}').contains(&c))
+}
+
 /// detect monospace fonts by name.
 /// Monospace fonts emit one show-text op per glyph with one-em
 /// advance positioning, which triggers the proportional-font space-
@@ -1371,22 +1385,10 @@ fn should_insert_space(
         font_size * 0.25
     };
 
-    // suppress space insertion at AGL-
-    // ligature boundaries. When the preceding or following text
-    // starts with one of the Latin ligature codepoints (U+FB00..U+FB04)
-    // or matches the multi-char AGL ligature names, the small kerning
-    // gap that surrounds the ligature glyph is NOT a word boundary —
-    // it's an intra-word position artefact from pdfTeX-style ligature
-    // emission. Inflating the threshold by 1.5× at these positions
-    // catches the `di ff cult` → `difficult` repro. ~keep
-    let ligature_boundary = starts_with_agl_ligature(following_text)
-        || preceding_text
-            .chars()
-            .last()
-            .map(|c| ('\u{FB00}'..='\u{FB06}').contains(&c))
-            .unwrap_or(false);
-    let geometric_threshold = if ligature_boundary {
-        geometric_threshold * 1.5
+    // The small kerning gap around a ligature glyph is an intra-word position artefact
+    // of pdfTeX-style ligature emission, not a word boundary (`di ff cult`). ~keep
+    let geometric_threshold = if is_ligature_boundary(preceding_text, following_text) {
+        geometric_threshold * LIGATURE_BOUNDARY_GAP_FACTOR
     } else {
         geometric_threshold
     };
@@ -1846,7 +1848,19 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// How far, in text-space units, the pen sits left of the right edge of the last glyph
+    /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
+    pullback: f32,
+    /// Whether the last glyph stood for more than one letter (a ligature). Only such a glyph has a
+    /// box that a space can start inside of.
+    ligature_tail: bool,
 }
+
+/// The share of a space glyph that must lie inside the previous glyph's box before the space
+/// takes no room. The value is chosen, not measured: a producer that joins a ligature pulls the pen
+/// back by the whole space, and a pull-back of half the space leaves a word gap. Tests pin 60% (kept)
+/// and 96% (dropped). ~keep
+const ROOMLESS_SPACE_OVERLAP: f32 = 0.9;
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
 /// `θ = atan2(b, a)`) to the nearest of `0 / 90 / 180 / -90` when it is within
@@ -1972,6 +1986,50 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            pullback: 0.0,
+            ligature_tail: false,
+        }
+    }
+
+    /// Decide whether a space glyph of advance `width` takes no room on the line: it follows a
+    /// ligature and the pen was pulled back over at least `ROOMLESS_SPACE_OVERLAP` of the space.
+    /// If so, the space stays out of the text and its advance goes to the previous glyph, so the
+    /// gap test between the real neighbours decides. A smaller pull-back keeps the space, because
+    /// part of the space then stands between the two words. A glyph of one letter keeps its space
+    /// too, because a producer may pull the pen back there to place a word gap. ~keep
+    fn absorb_roomless_space(&mut self, width: f32) -> bool {
+        if !self.ligature_tail || self.pullback < width * ROOMLESS_SPACE_OVERLAP {
+            return false;
+        }
+        let Some(last) = self.char_widths.last_mut() else {
+            return false;
+        };
+        *last += width;
+        self.pullback = (self.pullback - width).max(0.0);
+        true
+    }
+
+    /// Whether text shown under `state` continues this run: every setting the buffer captured at its
+    /// start is unchanged, so the run can go on without a span of its own. The font and the writing mode
+    /// need no comparison: `Tf` and `Q` flush the run before they change either. ~keep
+    fn continues_under(&self, state: &crate::content::graphics_state::GraphicsState) -> bool {
+        let text_rise = if state.font_size > 0.0 {
+            state.text_rise / state.font_size
+        } else {
+            0.0
+        };
+        self.fill_color_rgb == state.fill_color_rgb
+            && self.char_space == state.char_space
+            && self.word_space == state.word_space
+            && self.horizontal_scaling == state.horizontal_scaling
+            && self.render_mode == state.render_mode
+            && self.text_rise == text_rise
+    }
+
+    /// Push one width for each output letter of a code, so `char_widths` and the text stay equal in length.
+    fn push_letter_widths(&mut self, letter_count: usize, width: f32) {
+        for _ in 0..letter_count {
+            self.char_widths.push(width / letter_count as f32);
         }
     }
 
@@ -2174,6 +2232,8 @@ pub struct TextExtractor<'doc> {
     pub(crate) preserve_script_baselines: bool,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
+    /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
+    after_ligature: bool,
     /// Resources dictionary (for accessing XObjects and fonts)
     resources: Option<Object>,
     /// Reference to the document (for loading XObjects)

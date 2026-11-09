@@ -220,8 +220,9 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
 
 /// Paint order decides visibility: a later dashed, light or filled rectangle covering the stroke band
 /// hides the part of the rule it crosses, and a rule may be split into collinear segments. PathContent
-/// carries no alpha, so any fill is treated as opaque; a thin border drawn across a rule therefore
-/// splits it and the header is not retained, the conservative outcome. ~keep
+/// omits zero-opacity strokes but carries no partial alpha or fill opacity (`ca`). Soft masks
+/// (`SMask`) and blend modes (`BM`) are also unmodelled. Fills are treated as opaque, so a fill
+/// crossing a rule can withhold a header even when that fill is transparent in the PDF. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
     visible_rule_styles(paths, left, right, y).is_some()
 }
@@ -282,8 +283,7 @@ fn covering_fill(path: &PathContent, y: f32) -> bool {
         && path.bbox.bottom() >= y + HEADER_RULE_TOLERANCE / 2.0
 }
 
-/// Dash comes from the `d` operator; a dash or alpha set through an ExtGState (`gs`) is not seen,
-/// so such a rule counts as solid and opaque. ~keep
+/// Dash comes from `d` or ExtGState `/D`; zero-opacity strokes have no stroke colour. ~keep
 fn dark_solid_stroke(path: &PathContent) -> bool {
     path.dash_pattern.is_none()
         && path.stroke_width >= 0.0

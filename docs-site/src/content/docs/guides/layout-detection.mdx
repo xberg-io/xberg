@@ -43,11 +43,11 @@ no default build profile, so it needs a build with `--features formula-recogniti
 *171-document PDF corpus, CPU only. GPU acceleration significantly reduces the time penalty.*
 
 :::note[Layout Detection Model]
-Xberg uses only the RT-DETR v2 model for layout detection. The `preset` field is not available in `LayoutDetectionConfig`. Configure table structure recognition separately via `table_model` — see "Table Structure Models" below.
+Xberg uses the RT-DETR v2 model for layout detection by default. The `preset` field is not available in `LayoutDetectionConfig`. An experimental alternative, PP-DocLayout-V3, is selectable via `model` — see "Experimental: PP-DocLayout-V3" below. Configure table structure recognition separately via `table_model` — see "Table Structure Models" below.
 :::
 
 :::note[Pure-Rust inference engine]
-RT-DETR also runs through xberg's pure-Rust `tract` engine (no native ONNX Runtime library, CPU-only), matching ONNX Runtime within 5e-3 on its outputs. This brings layout detection to targets that cannot link native ONNX Runtime: it is enabled on WASM and the Android x86_64 emulator via the `layout-tract` feature (on WASM, weights are streamed in through the `detectLayout` export). PP-DocLayout-V3, TATR, and SLANeXT table structure models remain ONNX Runtime-only.
+RT-DETR also runs through xberg's pure-Rust `tract` engine (no native ONNX Runtime library, CPU-only), matching ONNX Runtime within 5e-3 on its outputs. This brings layout detection to targets that cannot link native ONNX Runtime: it is enabled on WASM and the Android x86_64 emulator via the `layout-tract` feature (on WASM, weights are streamed in through the `detectLayout` export). PP-DocLayout-V3, TATR, and SLANeXT table structure models remain ONNX Runtime-only; selecting PP-DocLayout-V3 on a build without ONNX Runtime fails with an error instead of falling back to RT-DETR.
 :::
 
 ## Choose pages explicitly
@@ -99,6 +99,15 @@ async fn print_regions(pdf_bytes: Vec<u8>) -> xberg::Result<()> {
 
 The ordinary extraction is available as `result.extraction`. Regions without a
 proven match are omitted. Redaction requests suppress the region text.
+
+A region is omitted, rather than returned with a cut-off word or text that
+belongs to its neighbour, when a native span crosses its edge, another region
+claims the same span, it covers no span, or its text does not start and end on
+word boundaries. Other regions on the page whose spans are owned cleanly still
+return their text. No region on a page returns text when the page's reading
+order interleaves regions, or when the page geometry is unsupported (rotated
+pages, `UserUnit`, a CropBox that differs from the MediaBox). To read omitted
+words, use the page text in `result.extraction`.
 
 ## Configuration
 
@@ -218,6 +227,30 @@ Two behaviors to know:
 - Skipped pages are auditable: `metadata.format.layout_gated_pages` lists them (1-indexed), and `metadata.format.layout_gate_reasons` records each page's decision reason (`multi_column`, `table_grid`, `plain_text`, and so on). The `format` object is tagged `format_type: "pdf"`.
 
 Note that `auto` trades the model's per-paragraph refinements on skipped pages (heading promotion, code and formula tagging) for throughput; content and reading order are unchanged. Keep `always` when you need the model's classification on every page.
+
+## Experimental: PP-DocLayout-V3
+
+Set `LayoutDetectionConfig.model` to select the layout detector:
+
+| Value              | Notes                                                                 |
+| ------------------ | --------------------------------------------------------------------- |
+| `rt_detr`          | Default. RT-DETR v2, 17 classes. Runs on ONNX Runtime and `tract`.    |
+| `pp_doc_layout_v3` | Experimental. PP-DocLayout-V3, 25 classes mapped to xberg's labels.   |
+
+PP-DocLayout-V3 is experimental and its quality relative to RT-DETR has not been qualified. Its limits:
+
+- ONNX Runtime only. On builds without the `layout-detection` feature (`tract`-only, WASM), `extract` and `extract_batch` return a validation error for it, including for per-input overrides; it never falls back to RT-DETR.
+- Bounding boxes and classes only. The model's masks and reading-order output are ignored.
+- A one-time download of about 131 MB on first use (`xberg doctor` reports the cached artifact under `layout.pp-doclayout-v3`). To fetch it ahead of time, run `xberg cache warm --layout-model pp_doc_layout_v3` (`--all-table-models` also includes it).
+
+```toml title="xberg.toml"
+[layout]
+model = "pp_doc_layout_v3"
+```
+
+```bash title="Terminal"
+xberg extract document.pdf --layout --layout-model pp_doc_layout_v3 --content-format markdown
+```
 
 ## Table Structure Models
 

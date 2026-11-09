@@ -23,11 +23,17 @@ pub(crate) use embedded_gap::embedded_gap_placement;
 mod visible_raster;
 pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 
+mod ccitt_params;
+use ccitt_params::{decode_is_inverted, supported_group4_params};
+mod layer_judgement;
+pub(super) use layer_judgement::{confident_read_replaces_layer, layer_judged_plausible, pages_to_probe};
 mod source_audit;
 use source_audit::audited_image_name;
 
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_OPERATORS: usize = 4096;
+// Operator limit of the filtered two-stream audit: an average of four bytes per operator in MAX_CONTENT_BYTES.
+const MAX_AUDIT_OPERATORS: usize = MAX_CONTENT_BYTES / 4;
 const MAX_PREVIEW_PIXELS: usize = 1024 * 1024;
 const MIN_TRAILING_INK_RUNS: usize = 4;
 const MIN_TRAILING_WIDTH_IN_LINE_HEIGHTS: usize = 3;
@@ -105,6 +111,58 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
         .as_ref()
         .and_then(|ocr| ocr.security_limits.as_ref())
         .map_or(limit, |ocr_limits| limit.min(ocr_limits.max_iterations))
+}
+
+/// Preview work units that one `max_iterations` step buys. A unit is a pixel or edge visit, far
+/// finer than the object-level iteration the limit counts. The default limit of 10 million
+/// iterations buys 160 million units: five 300 dpi letter pages (27 million each), not six.
+const PREVIEW_WORK_PER_ITERATION: usize = 16;
+
+/// Per-page budgets in the document ceiling: 6 x `16 * max_iterations`, 960 million units at the
+/// default. Measured on an AMD EPYC 7B12 with the release profile (fat LTO) over 500 pages (35
+/// audited at 300 dpi, 11 at 5000x5500), the full ceiling costs 3 to 4 s of decode, about 3.7 ms per
+/// million units (15 s without LTO); #2712's 1.1 to 2.5 ms was low and this supersedes it. A 300 dpi
+/// page costs 27 million units, so a longer scan is audited for its first 35 pages (#2730).
+const PREVIEW_FULL_BUDGET_PAGES: usize = 6;
+
+/// Preview work for one document: each page may spend up to the per-page limit derived from
+/// `max_iterations`, and all pages together up to [`PREVIEW_FULL_BUDGET_PAGES`] per-page limits.
+pub(super) struct PreviewWorkBudget {
+    per_page: usize,
+    remaining: usize,
+}
+
+impl PreviewWorkBudget {
+    pub(super) fn new(config: &ExtractionConfig) -> Self {
+        Self::with_pages(
+            preview_page_limit(config).saturating_mul(PREVIEW_WORK_PER_ITERATION),
+            PREVIEW_FULL_BUDGET_PAGES,
+        )
+    }
+
+    fn with_pages(per_page: usize, pages: usize) -> Self {
+        Self {
+            per_page,
+            remaining: per_page.saturating_mul(pages),
+        }
+    }
+
+    /// Run one page's probe under the per-page limit, capped by what the document has left, and
+    /// charge the document for the work the page debited. A refused charge debits nothing.
+    pub(super) fn probe_page<R>(&mut self, probe: impl FnOnce(&mut usize) -> R) -> R {
+        let mut page_work = self.per_page.min(self.remaining);
+        let granted = page_work;
+        let result = probe(&mut page_work);
+        self.remaining = self.remaining.saturating_sub(granted.saturating_sub(page_work));
+        result
+    }
+}
+
+/// Whether the OCR probe reads a page. `needed` is the coverage verdict of [`needs_ocr`]: `None`
+/// when the source audit refused the page, `Some(false)` when the invisible layer covers every ink
+/// band. A covered layer is read unless the language check judged it plausible prose.
+pub(super) fn probes_page(needed: Option<bool>, layer_judged_plausible: bool) -> bool {
+    needed == Some(true) || (needed == Some(false) && !layer_judged_plausible)
 }
 
 pub(super) fn needs_ocr(
@@ -376,7 +434,10 @@ enum ImageEncoding {
         filters: StreamFilters,
         predictor: Option<DecodeParams>,
     },
-    CcittGroup4,
+    CcittGroup4 {
+        /// Whether a black pixel's gray level is light once `/BlackIs1` and `/Decode` apply.
+        black_is_light: bool,
+    },
 }
 
 struct ImageSource {
@@ -403,7 +464,7 @@ impl ImageSource {
     }
 
     fn charge_ccitt_work(&self, remaining: &mut usize) -> Option<()> {
-        if matches!(self.encoding, ImageEncoding::CcittGroup4) {
+        if matches!(self.encoding, ImageEncoding::CcittGroup4 { .. }) {
             // A unit is a pixel/edge visit or a bounded prefix probe, not an individual bit
             // inspection. Charge packing, grayscale expansion, and the forward edge walk
             // by pixel. Each Huffman code tests at most 104 prefixes and consumes at least
@@ -422,14 +483,17 @@ impl ImageSource {
 
     fn decode_budget(&self, byte_limit: usize, box_capacity: usize) -> Option<usize> {
         match self.encoding {
-            ImageEncoding::CcittGroup4 => byte_limit.checked_sub(box_capacity.checked_mul(size_of::<Rect>())?),
+            ImageEncoding::CcittGroup4 { .. } => byte_limit.checked_sub(box_capacity.checked_mul(size_of::<Rect>())?),
             ImageEncoding::Stream { .. } => Some(byte_limit),
         }
     }
 
     fn decode_samples(&self, byte_limit: usize) -> Option<Vec<u8>> {
         let ImageEncoding::Stream { filters, predictor } = &self.encoding else {
-            return self.decode_group4_samples(byte_limit);
+            let ImageEncoding::CcittGroup4 { black_is_light } = self.encoding else {
+                return None;
+            };
+            return self.decode_group4_samples(byte_limit, black_is_light);
         };
         let expected = self.inflated_size(predictor.as_ref())?;
         let inflated = decode_probe_stream(&self.data, *filters, expected, byte_limit)?;
@@ -444,7 +508,7 @@ impl ImageSource {
         (samples.len() == self.decoded_size()?).then_some(samples)
     }
 
-    fn decode_group4_samples(&self, byte_limit: usize) -> Option<Vec<u8>> {
+    fn decode_group4_samples(&self, byte_limit: usize, black_is_light: bool) -> Option<Vec<u8>> {
         let width = u16::try_from(self.width).ok()?;
         let columns = usize::from(width);
         let row_bytes = columns.div_ceil(8);
@@ -458,9 +522,8 @@ impl ImageSource {
         samples.try_reserve_exact(gray_bytes).ok()?;
         for row in packed.chunks_exact(row_bytes) {
             for x in 0..columns {
-                // Match Native's supported /BlackIs1 inversion before expanding the gray sample.
-                let bit_set = row[x / 8] & (0x80 >> (x % 8)) != 0;
-                samples.push(if bit_set { 255 } else { 0 });
+                let black = row[x / 8] & (0x80 >> (x % 8)) != 0;
+                samples.push(if black == black_is_light { 255 } else { 0 });
             }
         }
         Some(samples)
@@ -480,17 +543,9 @@ fn image_source(doc: &PdfDocument, page: usize, name: &str) -> Option<ImageSourc
         _ => return None,
     };
     if dict.get("Subtype")?.as_name()? != "Image"
-        || [
-            "Mask",
-            "SMask",
-            "SMaskInData",
-            "Decode",
-            "ImageMask",
-            "Alternates",
-            "OC",
-        ]
-        .iter()
-        .any(|key| dict.contains_key(*key))
+        || ["Mask", "SMask", "SMaskInData", "ImageMask", "Alternates", "OC"]
+            .iter()
+            .any(|key| dict.contains_key(*key))
         || resources.contains_key("ColorSpace")
     {
         return None;
@@ -501,12 +556,15 @@ fn image_source(doc: &PdfDocument, page: usize, name: &str) -> Option<ImageSourc
     let filter = dict.get("Filter");
     let parameters = dict.get("DecodeParms");
     let encoding = if filter.and_then(Object::as_name) == Some("CCITTFaxDecode") {
-        if bits != 1 || channels != 1 || !supported_group4_params(parameters?.as_dict()?, width, height) {
+        if bits != 1 || channels != 1 {
             return None;
         }
-        ImageEncoding::CcittGroup4
+        let black_is_1 = supported_group4_params(parameters?.as_dict()?, width, height)?;
+        ImageEncoding::CcittGroup4 {
+            black_is_light: black_is_1 != decode_is_inverted(dict.get("Decode"))?,
+        }
     } else {
-        if bits != 8 {
+        if bits != 8 || dict.contains_key("Decode") {
             return None;
         }
         let filters = stream_filters(filter)?;
@@ -526,17 +584,6 @@ fn image_source(doc: &PdfDocument, page: usize, name: &str) -> Option<ImageSourc
         data,
         encoding,
     })
-}
-
-fn supported_group4_params(params: &std::collections::HashMap<String, Object>, width: u32, height: u32) -> bool {
-    width > 0
-        && u16::try_from(width).is_ok()
-        && height > 0
-        && params.len() == 4
-        && params.get("K").and_then(Object::as_integer) == Some(-1)
-        && params.get("Columns").and_then(Object::as_integer) == Some(i64::from(width))
-        && params.get("Rows").and_then(Object::as_integer) == Some(i64::from(height))
-        && matches!(params.get("BlackIs1"), Some(Object::Boolean(true)))
 }
 
 pub(super) fn image_predictor(
@@ -683,7 +730,7 @@ fn preview_size(bounds: Rect, source: &ImageSource, limit: usize) -> Option<(u32
         .checked_add(intervals)?
         .checked_add(box_bytes)?;
     let peak = match &source.encoding {
-        ImageEncoding::CcittGroup4 => preview_peak.checked_add(source.data.len())?,
+        ImageEncoding::CcittGroup4 { .. } => preview_peak.checked_add(source.data.len())?,
         ImageEncoding::Stream { filters, predictor } => {
             let wrapped_bytes = match filters {
                 StreamFilters::Ascii85Flate => source.data.len().checked_mul(8)?,

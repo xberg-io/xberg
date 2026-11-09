@@ -1,8 +1,8 @@
 //! Audit the exact source paint before treating OCR as a supplement to native text.
 
 use super::{
-    MAX_CONTENT_BYTES, MAX_OPERATORS, Object, Operator, PdfDocument, decode_probe_stream, positive_axis_matrix,
-    simple_font_resources, stream_filters, visit_complete_content_stream,
+    MAX_AUDIT_OPERATORS, MAX_CONTENT_BYTES, MAX_OPERATORS, Object, Operator, PdfDocument, decode_probe_stream,
+    positive_axis_matrix, simple_font_resources, stream_filters, visit_complete_content_stream,
 };
 
 pub(super) fn audited_image_name(
@@ -12,16 +12,24 @@ pub(super) fn audited_image_name(
     byte_limit: usize,
     remaining_work: &mut usize,
 ) -> Option<String> {
-    let (bytes, split) = if let Some(streams) = content.as_array() {
-        (audit_split_contents(doc, streams, byte_limit, remaining_work)?, true)
+    let (bytes, split, operator_limit) = if let Some(streams) = content.as_array() {
+        match audit_split_contents(doc, streams, byte_limit, remaining_work) {
+            Some(bytes) => (bytes, true, MAX_OPERATORS),
+            None => (
+                audit_filtered_contents(doc, streams, byte_limit, remaining_work)?,
+                false,
+                MAX_AUDIT_OPERATORS,
+            ),
+        }
     } else {
         (
             decode_content_stream(content, MAX_CONTENT_BYTES.min(byte_limit / 4), byte_limit)?,
             false,
+            MAX_OPERATORS,
         )
     };
     let fonts = simple_font_resources(doc, page)?;
-    let source = audit_hidden_text_image(&bytes, split, |font| fonts.contains_key(font))?;
+    let source = audit_hidden_text_image(&bytes, split, operator_limit, |font| fonts.contains_key(font))?;
     (doc.get_page_content_data(page).ok()? == bytes).then_some(source)
 }
 
@@ -78,6 +86,37 @@ pub(super) fn audit_split_contents(
     bytes.push(b'\n');
     bytes.extend_from_slice(text);
     bytes.push(b'\n');
+    Some(bytes)
+}
+
+/// Two filtered content streams, in either order, are audited like one filtered stream. The
+/// raw split form keeps its stricter syntax check above. Page painting runs over the streams
+/// as one, so the audit sees the bytes that Native's page content read joins. ~keep
+pub(super) fn audit_filtered_contents(
+    doc: &PdfDocument,
+    streams: &[Object],
+    byte_limit: usize,
+    remaining_work: &mut usize,
+) -> Option<Vec<u8>> {
+    let [first, second] = streams else {
+        return None;
+    };
+    let limit = MAX_CONTENT_BYTES.min(byte_limit / 4);
+    let mut bytes = Vec::new();
+    for stream in [first, second] {
+        let stream = doc.resolve_object(stream).ok()?;
+        let Object::Stream { dict, .. } = &stream else {
+            return None;
+        };
+        if !dict.contains_key("Filter") {
+            return None;
+        }
+        let room = limit.checked_sub(bytes.len())?.checked_sub(1)?;
+        let decoded = decode_content_stream(&stream, room, byte_limit)?;
+        *remaining_work = remaining_work.checked_sub(decoded.len())?;
+        bytes.extend_from_slice(&decoded);
+        bytes.push(b'\n');
+    }
     Some(bytes)
 }
 
@@ -166,12 +205,13 @@ fn plain_literal(token: &str) -> bool {
 
 #[cfg(test)]
 pub(super) fn hidden_text_image_name(content: &[u8], font_is_known: impl Fn(&str) -> bool) -> Option<String> {
-    audit_hidden_text_image(content, false, font_is_known)
+    audit_hidden_text_image(content, false, MAX_OPERATORS, font_is_known)
 }
 
 pub(super) fn audit_hidden_text_image(
     content: &[u8],
     split: bool,
+    operator_limit: usize,
     font_is_known: impl Fn(&str) -> bool,
 ) -> Option<String> {
     let mut mode = 0;
@@ -181,7 +221,7 @@ pub(super) fn audit_hidden_text_image(
     let mut image = None;
     let mut hidden = false;
     let mut index = 0;
-    let complete = visit_complete_content_stream(content, MAX_OPERATORS, |op| {
+    let complete = visit_complete_content_stream(content, operator_limit, |op| {
         if split && !split_operator_in_sequence(index, inside_text, &op) {
             return false;
         }
