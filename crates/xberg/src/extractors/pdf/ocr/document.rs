@@ -574,28 +574,58 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
         })
 }
 
-/// The share of a read's meaningful words the native text must also spell before the native layer
-/// is treated as the page's visible content. Pages whose render merely lost glyphs shared 0.43 and
-/// 0.75 of their read words; a covered layer beside a short visible line shared none. ~keep
+/// The share of a read's distinct meaningful words the native text must also spell before the
+/// native layer counts as the page's visible content. It sits below the share the legitimate
+/// Type0 pages of `pdf_cid_glyph_raster_2309` reach and above none, which a covered layer beside
+/// a short visible line shares. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) const MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE: f64 = 0.25;
 
-/// The share of the read's meaningful words that the native text also spells, once the lost-glyph
-/// markers are removed so a word the render dropped a letter from still matches its read. A
-/// covered or contradicted layer shares none of the words visible ink reads; a layer whose render
-/// merely lost glyphs shares most of them. ~keep
+/// The distinct meaningful words of a read, how many the native text also spells, and whether any
+/// of those is alphabetic. Lost-glyph markers are removed from the native text first so a word
+/// the render dropped a letter from still matches its read. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) fn read_words_in_native_share(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> f64 {
+pub(super) fn read_words_in_native(
+    native: &str,
+    read: &str,
+    thresholds: &OcrQualityThresholds,
+) -> (usize, usize, bool) {
     use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
 
     let spelled: std::collections::HashSet<String> = whole_words(&native.replace(LOST_GLYPH_MARKER, "")).collect();
-    let meaningful: Vec<String> = whole_words(read)
+    let distinct: std::collections::HashSet<String> = whole_words(read)
         .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)
         .collect();
-    if meaningful.is_empty() {
-        return 0.0;
-    }
-    meaningful.iter().filter(|word| spelled.contains(*word)).count() as f64 / meaningful.len() as f64
+    let shared: Vec<&String> = distinct.iter().filter(|word| spelled.contains(*word)).collect();
+    let alphabetic = shared.iter().any(|word| word.chars().any(char::is_alphabetic));
+    (shared.len(), distinct.len(), alphabetic)
+}
+
+/// Whether the native text spells enough of the read to be the page's visible content: at least
+/// the quality floor of distinct shared words (never fewer than two), one of them alphabetic, and
+/// the minimum share of the read's distinct words. A short read cannot pass on one shared word. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn native_spells_read(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
+    let (shared, distinct, alphabetic) = read_words_in_native(native, read, thresholds);
+    distinct > 0
+        && alphabetic
+        && shared >= thresholds.min_meaningful_words.max(2)
+        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE
+}
+
+/// A native layer that lost Type0 ink survives only when the page also shows it is visible
+/// content: it owns the read ink, its words are covered by the read, or it spells the read. The
+/// one rule serves both the mixed-page and the single-page retention. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn type0_native_is_corroborated(
+    native: &str,
+    read: &str,
+    thresholds: &OcrQualityThresholds,
+    ink_owned: bool,
+    words_covered: bool,
+) -> bool {
+    (ink_owned || words_covered || native_spells_read(native, read, thresholds))
+        && native_survives_type0_ink_loss(native, read, thresholds)
 }
 
 /// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep

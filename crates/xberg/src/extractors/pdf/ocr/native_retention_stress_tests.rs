@@ -570,3 +570,80 @@ fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() 
         &thresholds
     ));
 }
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share() {
+    use super::super::document::{native_spells_read, read_words_in_native};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let native = "Committee members reviewed budget design archive reader source library plans 2024";
+    let marked = "The commit\u{FFFD}tee met on Tuesd\u{FFFD}y to review the budget and design";
+    let garbled_page = "The committee met on Tuesday to review the plan for the new library. \
+         Members \u{FFFD}sked \u{FFFD}bout the schedule \u{FFFD}nd the budget for the parking \u{FFFD}re\u{FFFD}.";
+    let garbled_read = "The committee met on Tuesdy to review tre pnfao the new | ibry. \
+         Members sked bout the shedul endthebudet fatheprk ng re.";
+    let filler = |count: usize| -> String {
+        ('a'..='z')
+            .take(count)
+            .map(|letter| letter.to_string().repeat(5))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let near_floor = format!("budget design archive {}", filler(6));
+    let under_share = format!("budget design archive {}", filler(10));
+    let cases: [(&str, &str, &str, bool); 13] = [
+        ("empty read", native, "", false),
+        ("short words only", native, "the and for new met", false),
+        ("case is ignored", native, "COMMITTEE Members REVIEWED budget", true),
+        (
+            "markers removed from native",
+            marked,
+            "committee tuesday review budget design",
+            true,
+        ),
+        (
+            "repeated read words count once",
+            native,
+            "budget budget budget budget budget",
+            false,
+        ),
+        ("one shared word of three", native, "budget wrong other", false),
+        (
+            "two shared words are under the floor",
+            native,
+            "budget design alpha bravo",
+            false,
+        ),
+        ("three shared of nine is above the share", native, &near_floor, true),
+        (
+            "three shared of thirteen is under the share",
+            native,
+            &under_share,
+            false,
+        ),
+        ("digits alone are not alphabetic", native, "2024 2025 2026", false),
+        (
+            "shared digits and one word do not reach the floor",
+            native,
+            "2024 budget zzzz yyyy",
+            false,
+        ),
+        ("a garbled read on a legitimate page", garbled_page, garbled_read, true),
+        (
+            "a read that contradicts the layer",
+            native,
+            "quarterly revenue improved",
+            false,
+        ),
+    ];
+    for (name, native, read, expected) in cases {
+        let overlap = read_words_in_native(native, read, &thresholds);
+        assert_eq!(
+            native_spells_read(native, read, &thresholds),
+            expected,
+            "{name}: {overlap:?}"
+        );
+    }
+    assert_eq!(read_words_in_native(native, &near_floor, &thresholds), (3, 9, true));
+    assert_eq!(read_words_in_native(native, &under_share, &thresholds), (3, 13, true));
+}

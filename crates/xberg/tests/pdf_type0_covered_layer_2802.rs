@@ -12,7 +12,9 @@ const TYPE0_PAGE: &[u8] = include_bytes!("../../xberg-native-pdf/tests/fixtures/
 const SHORT_LINE: &str = "Quarterly revenue improved";
 /// What the source's text layer says the short line reads, which its ink contradicts.
 const CONTRADICTING_TEXT: &str = "Ledger entries pending";
-const RETAINED_WARNING: &str = "retained native text after its OCR render lost Type0 glyph ink";
+/// Both retention sites name the lost Type0 ink in their warning or error, so this also proves
+/// the render set `type0_ink_loss`.
+const RETAINED_WARNING: &str = "lost Type0 glyph ink";
 
 #[derive(Clone, Copy, PartialEq)]
 enum Layer {
@@ -22,7 +24,7 @@ enum Layer {
 
 /// The Type0 page followed by an ordinary second page. In the covered variant a white fill paints
 /// over the Type0 layer and a short line of other text is drawn on top of it.
-fn source_pdf(layer: Layer) -> Vec<u8> {
+fn source_pdf(layer: Layer, second_page: bool) -> Vec<u8> {
     let mut pdf = Document::load_mem(TYPE0_PAGE).unwrap();
     let pages = *pdf.get_pages().get(&1).unwrap();
     let parent = pdf
@@ -64,28 +66,30 @@ fn source_pdf(layer: Layer) -> Vec<u8> {
             .unwrap();
         fonts.as_dict_mut().unwrap().set("F9", helvetica);
     }
-    let second_stream = pdf.add_object(Stream::new(
-        dictionary! {},
-        b"BT /F9 14 Tf 40 700 Td 18 TL (Second page text) Tj T* (stays an ordinary native page) Tj ET".to_vec(),
-    ));
-    let second = pdf.add_object(dictionary! {
-        "Type" => "Page", "Parent" => parent, "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
-        "Contents" => second_stream,
-        "Resources" => dictionary! {"Font" => dictionary! {"F9" => helvetica}},
-    });
-    let kids = pdf.get_object_mut(parent).unwrap().as_dict_mut().unwrap();
-    kids.get_mut(b"Kids")
-        .unwrap()
-        .as_array_mut()
-        .unwrap()
-        .push(second.into());
-    kids.set("Count", 2);
+    if second_page {
+        let second_stream = pdf.add_object(Stream::new(
+            dictionary! {},
+            b"BT /F9 14 Tf 40 700 Td 18 TL (Second page text) Tj T* (stays an ordinary native page) Tj ET".to_vec(),
+        ));
+        let second = pdf.add_object(dictionary! {
+            "Type" => "Page", "Parent" => parent, "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+            "Contents" => second_stream,
+            "Resources" => dictionary! {"Font" => dictionary! {"F9" => helvetica}},
+        });
+        let kids = pdf.get_object_mut(parent).unwrap().as_dict_mut().unwrap();
+        kids.get_mut(b"Kids")
+            .unwrap()
+            .as_array_mut()
+            .unwrap()
+            .push(second.into());
+        kids.set("Count", 2);
+    }
     let mut bytes = Vec::new();
     pdf.save_to(&mut bytes).unwrap();
     bytes
 }
 
-fn extract(layer: Layer) -> xberg::ExtractedDocument {
+fn extract(layer: Layer, second_page: bool) -> xberg::ExtractedDocument {
     let tessdata = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English data");
     std::fs::write(tessdata.path().join("eng.traineddata"), english).unwrap();
@@ -102,7 +106,7 @@ fn extract(layer: Layer) -> xberg::ExtractedDocument {
         }),
         ..Default::default()
     };
-    helpers::extract_bytes_document_blocking(&source_pdf(layer), "application/pdf", &config).unwrap()
+    helpers::extract_bytes_document_blocking(&source_pdf(layer, second_page), "application/pdf", &config).unwrap()
 }
 
 fn retained(result: &xberg::ExtractedDocument) -> bool {
@@ -114,7 +118,7 @@ fn retained(result: &xberg::ExtractedDocument) -> bool {
 
 #[test]
 fn a_covered_type0_layer_does_not_outvote_the_short_visible_read() {
-    let result = extract(Layer::Covered);
+    let result = extract(Layer::Covered, true);
     let page = &result.pages.as_ref().unwrap()[0].content;
     assert!(page.contains("Quarterly revenue improved"), "{page:?}");
     assert!(!page.contains("committee"), "{page:?}");
@@ -123,9 +127,26 @@ fn a_covered_type0_layer_does_not_outvote_the_short_visible_read() {
 
 #[test]
 fn a_visible_correct_type0_layer_keeps_native_text_after_ink_loss() {
-    let result = extract(Layer::Visible);
+    let result = extract(Layer::Visible, true);
     let page = &result.pages.as_ref().unwrap()[0].content;
     assert!(page.contains("committee met on Tuesd"), "{page:?}");
+    assert!(retained(&result), "{:?}", result.processing_warnings);
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+}
+
+#[test]
+fn a_covered_single_page_type0_layer_does_not_outvote_the_short_visible_read() {
+    let result = extract(Layer::Covered, false);
+    let page = &result.pages.as_ref().unwrap()[0].content;
+    assert_eq!(result.pages.as_ref().unwrap().len(), 1);
+    assert!(page.contains("Quarterly revenue improved"), "{page:?}");
+    assert!(!page.contains("committee"), "{page:?}");
+    assert!(!retained(&result), "{:?}", result.processing_warnings);
+}
+
+#[test]
+fn a_visible_single_page_type0_layer_keeps_native_text_after_ink_loss() {
+    let result = extract(Layer::Visible, false);
     assert!(retained(&result), "{:?}", result.processing_warnings);
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
 }
