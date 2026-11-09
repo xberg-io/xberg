@@ -106,4 +106,4 @@ I I
 
 _50
 
-\-IO0 4 8 12 16 20 24 28 32 Cone semivertex ongle, o-, degrees *CnttR*T 7.--Varialion of Math number at the ._urface of a cone with cone semivertex angle for various upstream Math numbers. Perfect gas, -y = 1.405.
+\-IO0 4 8 12 16 20 24 28 32 Cone semivertex ongle, o-, degrees *CnttRT* 7.--Varialion of Math number at the ._urface of a cone with cone semivertex angle for various upstream Math numbers. Perfect gas, -y = 1.405.

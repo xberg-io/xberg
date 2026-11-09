@@ -2,11 +2,9 @@
 
 with Crouzeix-Raviart Element
 
-## Zhijin Guan∗
+∗ † §
 
-## , Yifan Wang†
-
-## , Hehu Xie‡ and Chenguang Zhou§
+### Zhijin Guan, Yifan Wang, Hehu Xie<sup>‡</sup> and Chenguang Zhou
 
 **Abstract**
 

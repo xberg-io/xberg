@@ -709,3 +709,75 @@ fn reorder_same_line_runs_de_interleaves_two_stacked_lines() {
         "stacked lines must de-interleave, not X-sort into one fake line"
     );
 }
+
+/// A ligature glyph drawn as its own run inside one word ("di" + "ﬀ" + "erent") is
+/// separated from its neighbours by kerning slightly above the ordinary word-gap
+/// threshold; it must not read as a word break (#2322).
+#[test]
+fn test_should_insert_space_keeps_a_tight_ligature_run_inside_a_word() {
+    let before = make_test_span("di", 72.0, 700.0, 10.0, 12.0);
+    let ligature = make_test_span("\u{FB00}", 84.0, 700.0, 7.0, 12.0); // 2pt = 0.17em gap ~keep
+    let after = make_test_span("erent", 93.0, 700.0, 30.0, 12.0); // 2pt gap ~keep
+    assert!(!PdfDocument::should_insert_space(&before, &ligature));
+    assert!(!PdfDocument::should_insert_space(&ligature, &after));
+}
+
+/// The same relaxed threshold must not weld two words: a real space-sized gap
+/// after a word-final ligature still separates them.
+#[test]
+fn test_should_insert_space_still_separates_words_around_a_ligature() {
+    let word = make_test_span("sta\u{FB00}", 72.0, 700.0, 25.0, 12.0);
+    let next = make_test_span("only", 100.0, 700.0, 20.0, 12.0); // 3pt = 0.25em gap ~keep
+    assert!(PdfDocument::should_insert_space(&word, &next));
+    let ligature_start = make_test_span("\u{FB01}nal", 100.0, 700.0, 20.0, 12.0);
+    let prev = make_test_span("the", 72.0, 700.0, 25.0, 12.0);
+    assert!(PdfDocument::should_insert_space(&prev, &ligature_start));
+}
+
+/// A word-final ligature inside a longer run ("staﬀ") is not a bare ligature run, so
+/// a gap only slightly above the ordinary threshold still separates the next word.
+#[test]
+fn test_should_insert_space_after_a_word_final_ligature_uses_the_ordinary_gap() {
+    let word = make_test_span("sta\u{FB00}", 72.0, 700.0, 25.0, 12.0);
+    let next = make_test_span("only", 99.5, 700.0, 20.0, 12.0); // 2.5pt = 0.21em gap ~keep
+    assert!(PdfDocument::should_insert_space(&word, &next));
+}
+
+/// The relaxed ligature gap is 0.225 em (0.15 em x 1.5), 2.7pt at 12pt: a gap just inside it
+/// keeps a ligature code point in its word and a gap just outside it separates the words (#2689).
+#[test]
+fn test_should_insert_space_ligature_window_edges() {
+    let before = make_test_span("di", 72.0, 700.0, 10.0, 12.0); // right edge 82
+    let ligature = |gap: f32| make_test_span("\u{FB00}", 82.0 + gap, 700.0, 7.0, 12.0);
+    assert!(!PdfDocument::should_insert_space(&before, &ligature(2.6)));
+    assert!(PdfDocument::should_insert_space(&before, &ligature(2.8)));
+    let after = |gap: f32| make_test_span("erent", 89.0 + gap, 700.0, 30.0, 12.0); // ligature right edge 89
+    let lig = make_test_span("\u{FB00}", 82.0, 700.0, 7.0, 12.0);
+    assert!(!PdfDocument::should_insert_space(&lig, &after(2.6)));
+    assert!(PdfDocument::should_insert_space(&lig, &after(2.8)));
+}
+
+/// Every code point of the block relaxes the same way, `\u{FB05}` and `\u{FB06}` included.
+#[test]
+fn test_should_insert_space_relaxes_every_ligature_code_point_alike() {
+    for code in '\u{FB00}'..='\u{FB06}' {
+        let before = make_test_span("di", 72.0, 700.0, 10.0, 12.0);
+        let ligature = make_test_span(&code.to_string(), 84.6, 700.0, 7.0, 12.0); // 2.6pt gap
+        assert!(
+            !PdfDocument::should_insert_space(&before, &ligature),
+            "U+{:04X}",
+            code as u32
+        );
+    }
+}
+
+/// A span that is literally `fi`, `ff` or `fl` carries no provenance from a ligature glyph, so on the
+/// preceding side it keeps the ordinary 0.15 em gap: shell `fi` + `done`, `fl oz`, a dynamic `ff`.
+#[test]
+fn test_should_insert_space_keeps_literal_ligature_letters_apart_from_the_next_word() {
+    for (letters, next) in [("fi", "done"), ("fl", "oz"), ("ff", "only"), ("ffi", "cult")] {
+        let word = make_test_span(letters, 72.0, 700.0, 10.0, 12.0); // right edge 82
+        let following = make_test_span(next, 84.4, 700.0, 20.0, 12.0); // 2.4pt = 0.2 em
+        assert!(PdfDocument::should_insert_space(&word, &following), "{letters} {next}");
+    }
+}

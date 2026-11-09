@@ -8,4 +8,8 @@
 
 **5.3.1 INVSHIFTROWS()**
 
-INVSHIFTROWS() is the inverse of the SHIFTROWS(). In particular, the bytes in the last three rows of the state are cyclically shifted as follows: s0r,c = sr,(c−r) mod 4 for 0 ≤ r \< 4 and 0 ≤ c \< 4. (5.12) INVSHIFTROWS() is illustrated in Figure 9. In that representation of the state, the effect is to move each byte by r positions to the right in the row, cycling the right-most r bytes around to the left end of the row. The frst row, where r = 0, is unchanged.
+INVSHIFTROWS() is the inverse of the SHIFTROWS(). In particular, the bytes in the last three rows of the state are cyclically shifted as follows:
+
+0
+
+s~r,~c = s~r,~(c−r) mod 4 for 0 ≤ r \< 4 and 0 ≤ c \< 4. (5.12) INVSHIFTROWS() is illustrated in Figure 9. In that representation of the state, the effect is to move each byte by r positions to the right in the row, cycling the right-most r bytes around to the left end of the row. The frst row, where r = 0, is unchanged.

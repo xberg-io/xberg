@@ -8,7 +8,7 @@
 
 3
 
-2 0 1 2 3 4 102 103 104 105
+2 0 1 2 3 4 10<sup>2</sup> 10<sup>3</sup> 10<sup>4</sup> 10<sup>5</sup>
 
 Number of Boxes per Frame Number of Boxes per Polyp (log scale)
 
@@ -18,8 +18,10 @@ of detection, tracking, and classification tasks in colonoscopy compared to stan
 
 **Polyp Detection**
 
-This section presents a technical validation conducted to evaluate polyp detection in the REAL-Colon dataset, primarily focusing on verifying the quality and usefulness of the dataset. For this task, we leveraged an off-the-shelf SSD object detection model
+This section presents a technical validation conducted to evaluate polyp detection in the REAL-Colon dataset, primarily focusing on verifying the quality and usefulness of the dataset. For this task, we leveraged an off-the-shelf SSD object detection
 
-38, as implemented in the NVIDIA's DeepLearningExamples repository. Comprehensive training and testing code is accessible via our GitHub repositories at https://github.com/cosmoimd/DeepLearningExamples. Our experiments do not merely target the absolute performance of the proposed method on the REAL-Colon dataset; instead, we focus on evaluating the dataset's utility for this specific task. Specifically, we aimed to ascertain the influence of possessing a substantial sample set for each polyp on the accuracy of the trained model. Moreover, we conducted multiple training experiments incorporating varying proportions of negative frames from each video (1%, 5%, 10 % and 100 % of negative frames from each video) in the training dataset to evaluate their impact on model performance. We partitioned the first 10 videos from each cohort into the training set, the following two videos into the validation set,
+38
+
+model , as implemented in the NVIDIA's DeepLearningExamples repository. Comprehensive training and testing code is accessible via our GitHub repositories at https://github.com/cosmoimd/DeepLearningExamples. Our experiments do not merely target the absolute performance of the proposed method on the REAL-Colon dataset; instead, we focus on evaluating the dataset's utility for this specific task. Specifically, we aimed to ascertain the influence of possessing a substantial sample set for each polyp on the accuracy of the trained model. Moreover, we conducted multiple training experiments incorporating varying proportions of negative frames from each video (1%, 5%, 10 % and 100 % of negative frames from each video) in the training dataset to evaluate their impact on model performance. We partitioned the first 10 videos from each cohort into the training set, the following two videos into the validation set,
 
 **7/12**

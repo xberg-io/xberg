@@ -118,7 +118,7 @@ async fn independently_decoded_raster_controls_preserve_words_and_native_coverag
 async fn tight_ccitt_work_limit_keeps_the_partial_native_text() {
     let mut config = config(false);
     config.security_limits = Some(xberg::extractors::security::SecurityLimits {
-        max_iterations: 3_000_000,
+        max_iterations: 500_000,
         ..Default::default()
     });
     let ccitt = read(CCITT_PARTIAL, &config).await;

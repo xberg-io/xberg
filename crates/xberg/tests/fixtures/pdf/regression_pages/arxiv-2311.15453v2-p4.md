@@ -2,17 +2,11 @@ AP
 
 **ATLAS BraTS-T1 BraTS-T2**
 
-25 0.03 ± 0.00 0.38 ± 0.01 0.23 ± 0.01 50 0.20 ± 0.02
-
-**0.44** ± 0.02 0.45 ± 0.01
+25 0.03 ± 0.00 0.38 ± 0.01 0.23 ± 0.01 50 0.20 ± 0.02 **0.44** ± 0.02 0.45 ± 0.01
 
 t
 
-75
-
-**0.29** ± 0.03 0.34 ± 0.03 0.59 ± 0.03 100 0.25 ± 0.03 0.28 ± 0.02
-
-**0.70** ± 0.02
+75 **0.29** ± 0.03 0.34 ± 0.03 0.59 ± 0.03 100 0.25 ± 0.03 0.28 ± 0.02 **0.70** ± 0.02
 
 **single-step**
 
@@ -116,13 +110,9 @@ our final experiments as it provides a good balance between coverage of the anom
 
 **Table 2** . Localization results of the image-reconstruction
 
-In this work we propose DISYRE, a new strategy that ( **IR** ), feature-modeling ( **FM** ), attention-based ( **AB** ), and selfadapts diffusion models to UAD. With the motivation of supervised ( **S-S** ) methods. Best scores are bold. learning a score function ∇ log p(x) which generalizes
+In this work we propose DISYRE, a new strategy that ( **IR** ), feature-modeling ( **FM** ), attention-based ( **AB** ), and selfadapts diffusion models to UAD. With the motivation of supervised ( **S-S** ) methods. Best scores are bold. learning a score function ∇~x~log p(x) which generalizes to naturally occurring medical anomalies, we replace the standard Gaussian noise corruption with gradual, synthetic
 
-x
-
-to naturally occurring medical anomalies, we replace the standard Gaussian noise corruption with gradual, synthetic
-
-- 4\. **DISCUSSION & CONCLUSION**
+4. **DISCUSSION & CONCLUSION**
 
 anomalies. DISYRE opens a new route to leverage diffusion- Results in Table 2 highlight the effectiveness of our strategy:
 
