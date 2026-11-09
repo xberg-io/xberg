@@ -3,6 +3,10 @@
 //! Provides extraction of text, metadata, tables, and images from PDF documents
 //! using xberg_native_pdf (pure Rust). Supports both native text extraction and OCR fallback.
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+mod automatic_fallback;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod automatic_fallback_tests;
 mod extraction;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
@@ -35,6 +39,8 @@ use async_trait::async_trait;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use automatic_fallback::{automatic_page_acceptance_supported, with_native_page_acceptance};
 use extraction::extract_all_from_native_document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn extraction_method_after_mixed_ocr(replacements: &ahash::AHashMap<u32, String>) -> ExtractionMethod {
@@ -3204,13 +3210,25 @@ impl PdfExtractor {
                 1.0
             };
 
-            match ocr::evaluate_ocr_skip_gate(
+            let outcome = ocr::evaluate_ocr_skip_gate(
                 pre_rendered_doc.is_some(),
                 total_chars,
                 alnum_ws_ratio,
                 &decision,
                 &thresholds,
-            ) {
+            );
+            let outcome = if automatic_page_acceptance_supported(config) {
+                with_native_page_acceptance(
+                    outcome,
+                    &decision.failing_pages,
+                    boundaries.as_deref(),
+                    &native_text,
+                    pdf_metadata.pdf_specific.page_count,
+                )
+            } else {
+                outcome
+            };
+            match outcome {
                 ocr::OcrGateOutcome::SkipNonText => {
                     tracing::debug!(
                         alnum_ws_ratio,

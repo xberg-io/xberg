@@ -231,6 +231,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep native text when an automatic all-pages OCR read duplicates it.** (#2768)
+  Native-text preservation for automatic Tesseract OCR now uses the same page acceptance when every page needs OCR as when only some pages do. A native table page therefore keeps its text once whether extracted alone or inside a larger document; explicit pipelines, VLM fallback, custom backends, forced OCR and fallback without usable native page boundaries retain their existing routes.
+
 - **(ocr): Adopt the block re-read of a standalone dot-leader table picture.** (#2503)
   A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.
 - **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**

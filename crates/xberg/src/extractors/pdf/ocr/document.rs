@@ -553,7 +553,7 @@ pub(super) fn ocr_page_has_only_plain_payload_with(
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: u32) -> bool {
+pub(crate) fn native_preservation_is_automatic(config: &ExtractionConfig, page: u32) -> bool {
     #[cfg(feature = "layout-types")]
     if config.layout.is_some() {
         return false;
