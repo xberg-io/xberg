@@ -153,6 +153,7 @@ fn checked_words(result: &ExtractedDocument) -> Option<Vec<&OcrElement>> {
 /// count, so equality cannot hold; the extra words are a superset a protection check only
 /// over-covers. The extras are capped at a quarter of the reported count so that a few retained
 /// tokens never "cover" a long unrelated word list.
+#[cfg(auto_rotate)]
 pub(super) fn primary_covers_output(result: &ExtractedDocument) -> bool {
     plain_primary(result)
         && checked_words_with(result, true).is_some_and(|words| {
