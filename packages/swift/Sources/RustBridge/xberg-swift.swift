@@ -16147,8 +16147,13 @@ public class LayoutDetectionConfig: LayoutDetectionConfigRefMut {
     }
 }
 extension LayoutDetectionConfig {
-    public convenience init(_ strategy: LayoutStrategy, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool, _ model: LayoutDetectionModel) {
-        self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding, {model.isOwned = false; return model.ptr;}()))
+    public convenience init(_ strategy: LayoutStrategy, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool) {
+        self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
+    }
+}
+extension LayoutDetectionConfig {
+    class public func new_with_fields(_ strategy: LayoutStrategy, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool, _ model: LayoutDetectionModel) -> LayoutDetectionConfig {
+        LayoutDetectionConfig(ptr: __swift_bridge__$LayoutDetectionConfig$new_with_fields({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding, {model.isOwned = false; return model.ptr;}()))
     }
 }
 public class LayoutDetectionConfigRefMut: LayoutDetectionConfigRef {

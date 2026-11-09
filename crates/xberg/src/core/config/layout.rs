@@ -220,6 +220,19 @@ impl fmt::Display for LayoutDetectionModel {
 /// is enabled for PDF extraction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    alef,
+    alef(legacy_constructor_fields = [
+        "strategy",
+        "confidence_threshold",
+        "apply_heuristics",
+        "table_model",
+        "formula_model",
+        "table_overlap_preference",
+        "acceleration",
+        "enable_chart_understanding"
+    ])
+)]
 pub struct LayoutDetectionConfig {
     /// Which pages the layout model runs on.
     ///
