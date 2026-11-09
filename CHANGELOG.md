@@ -225,14 +225,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Return the letters of a ligature glyph that the ToUnicode map leaves out.** (GH#2664)
-  Some embedded TrueType subsets draw "ti", "tt" or "st" as one glyph that has no ToUnicode entry and no glyph name, so its letters were dropped and an invented word such as "frotiny" came out as "fro ny".
-  The letters now come from the font's own standard and discretionary GSUB ligatures: the component glyphs of the ligature, each mapped through ToUnicode.
-  A ToUnicode entry for the ligature still wins, and a ligature whose rules disagree or whose components have no ToUnicode entry keeps the old output.
-  The shaping forms of complex scripts, such as Khmer below-base forms, are not read, because their components are not in reading order.
-  A ligature drawn by its own show operator under a text matrix that scales the glyphs no longer leaves a space after it ("defi ne" for "define"): the run that holds it is now as wide as its glyph.
-  A word drawn in two shows under text matrices that differ only in their horizontal scale, the second show starting at or just before the pen of the first, no longer gets a space inside it ("Char lie" for "Charlie"): the run continues under the second matrix, in its unit.
-  A line written as several TJ arrays, each placed by a Td with no line move back to the pen of the previous array, no longer gets a space at the seam between two arrays ("bro wn" for "brown") when the font gives its glyph widths.
 - **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
   A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
 - **(pdf): Read a block at the right of a page before a block at the left that starts below it.** (GH#2757)
@@ -250,6 +242,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recover a page of outlined prose that also paints a picture.** (GH#2313)
   The outlined-prose check refused any page that drew an image or a form object.
   A picture holds no outlined text, so the check now reads past an image. It still refuses a page with a form object.
+- **(pdf): Return the letters of a ligature glyph that the ToUnicode map leaves out.** (GH#2664)
+  Some embedded TrueType subsets draw "ti", "tt" or "st" as one glyph that has no ToUnicode entry and no glyph name, so its letters were dropped and an invented word such as "frotiny" came out as "fro ny".
+  The letters now come from the font's own standard and discretionary GSUB ligatures: the component glyphs of the ligature, each mapped through ToUnicode.
+  A ToUnicode entry for the ligature still wins, and a ligature whose rules disagree or whose components have no ToUnicode entry keeps the old output.
+  The shaping forms of complex scripts, such as Khmer below-base forms, are not read, because their components are not in reading order.
+  A ligature drawn by its own show operator under a text matrix that scales the glyphs no longer leaves a space after it ("defi ne" for "define"): the run that holds it is now as wide as its glyph.
+  A word drawn in two shows under text matrices that differ only in their horizontal scale, the second show starting at or just before the pen of the first, no longer gets a space inside it ("Char lie" for "Charlie"): the run continues under the second matrix, in its unit.
+  A line written as several TJ arrays, each placed by a Td with no line move back to the pen of the previous array, no longer gets a space at the seam between two arrays ("bro wn" for "brown") when the font gives its glyph widths.
 - **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
   One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.
   A reference such as `[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].`, a versioned citation without a date, and a sentence that ends at a bare identifier are kept whole.
