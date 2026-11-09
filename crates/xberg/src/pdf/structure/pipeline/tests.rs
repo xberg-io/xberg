@@ -1088,7 +1088,7 @@ fn dedup_keeps_a_native_table_whose_box_overlaps_a_grid_that_does_not_hold_its_r
 }
 
 #[test]
-fn dedup_still_drops_a_native_pass_that_repeats_the_rows_of_a_larger_grid() {
+fn dedup_without_page_text_drops_a_native_pass_that_repeats_the_rows_of_a_larger_grid() {
     use crate::core::config::layout::TableOverlapPreference;
     let repeat = cell_table(
         1,
@@ -1135,7 +1135,7 @@ fn dedup_drops_near_coincident_native_redetections_even_when_their_rows_differ()
 }
 
 #[test]
-fn dedup_counts_exactly_half_shared_rows_as_a_duplicate() {
+fn dedup_without_page_text_counts_exactly_half_shared_rows_as_a_duplicate() {
     use crate::core::config::layout::TableOverlapPreference;
     let large = cell_table(
         1,
@@ -1226,8 +1226,129 @@ fn dedup_keeps_a_table_with_exactly_half_new_words_and_drops_one_below_half() {
     );
 }
 
+fn printed_at(text: &str, x: f32, y: f32) -> SegmentData {
+    let mut segment = seg(text, x, 5.0);
+    segment.y = y;
+    segment.height = 5.0;
+    segment
+}
+
+fn four_row_grid() -> crate::types::Table {
+    cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["alpha", "1"], &["beta", "2"], &["gamma", "3"], &["delta", "4"]],
+    )
+}
+
+#[test]
+fn dedup_keeps_a_table_whose_cells_join_words_the_page_prints_apart() {
+    let joined = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 100.0),
+        &[&["EstimatedIncreases", "ProjectedProjections"]],
+    );
+    let mut page = printed_cells(&[&four_row_grid()]);
+    for (text, x) in [
+        ("Estimated", 1.0),
+        ("Increases", 11.0),
+        ("Projected", 21.0),
+        ("Projections", 31.0),
+    ] {
+        page[0].push(printed_at(text, x, 41.0));
+    }
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), joined], &page),
+        2,
+        "the page prints those letters once, and only the joined cells carry them"
+    );
+}
+
+#[test]
+fn dedup_keeps_a_table_whose_words_the_page_does_not_print_at_all() {
+    let unseen = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["omega", "7"], &["sigma", "8"]]);
+    let page = printed_cells(&[&four_row_grid()]);
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), unseen], &page),
+        2,
+        "a word that no page text matches is new, not already printed"
+    );
+}
+
+#[test]
+fn dedup_drops_a_table_whose_repaired_ligature_words_the_page_prints_with_ligatures() {
+    let repaired = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 100.0),
+        &[&["final", "floor"], &["office", "stuff"]],
+    );
+    let mut page = printed_cells(&[&four_row_grid()]);
+    for (text, x) in [
+        ("\u{FB01}nal", 1.0),
+        ("\u{FB02}oor", 11.0),
+        ("o\u{FB03}ce", 21.0),
+        ("stu\u{FB00}", 31.0),
+    ] {
+        page[0].push(printed_at(text, x, 41.0));
+    }
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), repaired], &page),
+        1,
+        "the repaired cells and the ligature segments spell the same words"
+    );
+}
+
+#[test]
+fn dedup_drops_one_merged_cell_against_page_segments_that_split_its_words() {
+    let merged = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha 1 beta 2 gamma 3 delta 4"]]);
+    let page = printed_cells(&[&four_row_grid()]);
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), merged], &page),
+        1,
+        "one merged cell against eight page segments adds no word"
+    );
+}
+
+#[test]
+fn dedup_keeps_a_table_that_repeats_rows_the_page_prints_twice() {
+    let again = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = printed_cells(&[&four_row_grid(), &again]);
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), again], &page),
+        2,
+        "every shared row appears twice on the page, so the second table adds words"
+    );
+}
+
+#[test]
+fn dedup_without_page_text_keeps_row_disjoint_native_tables() {
+    let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"], &["delta", "4"]]);
+    let grid = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    assert_eq!(kept_after_dedup(vec![grid.clone(), partner.clone()], &[]), 2);
+    assert_eq!(
+        kept_after_dedup(vec![grid, partner], &[Vec::new()]),
+        2,
+        "a page with no segments is no evidence either"
+    );
+}
+
+#[test]
+fn overlap_evidence_reads_each_page_and_table_once() {
+    let grid = four_row_grid();
+    let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"]]);
+    let third = cell_table(1, (0.0, 50.0, 100.0, 100.0), &[&["delta", "4"]]);
+    let page = printed_cells(&[&grid, &partner, &third]);
+    let tables = [grid, partner, third];
+    let mut evidence = OverlapEvidence::new(&page);
+    let removed = ahash::AHashSet::new();
+    for dropped in [1, 2, 1, 2] {
+        assert!(evidence.holds_unprinted_words(&tables, dropped, &removed).is_some());
+    }
+    assert_eq!(evidence.pages.len(), 1, "one page, counted once");
+    assert_eq!(evidence.table_words.len(), 3, "each table's words, counted once");
+}
+
 /// Tables that the document build emits for one page of text and the given native tables.
-#[cfg(feature = "layout-detection")]
 fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>) -> usize {
     let document = build_document_structure(
         page,
@@ -1248,33 +1369,38 @@ fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>
             layout_hints: None,
             allow_single_column: true,
             cancel_token: None,
+            #[cfg(feature = "layout-detection")]
             layout_images: None,
+            #[cfg(feature = "layout-detection")]
             layout_results: None,
+            #[cfg(feature = "layout-detection")]
             table_model: crate::core::config::layout::TableModel::Disabled,
+            #[cfg(feature = "layout-detection")]
             table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+            #[cfg(feature = "layout-detection")]
             acceleration: None,
+            #[cfg(feature = "layout-detection")]
             session_thread_budget: 1,
         },
+        #[cfg(feature = "layout-detection")]
         NO_TABLE_MODELS,
     )
     .expect("the document structure builds");
     document.tables.len()
 }
 
-#[cfg(feature = "layout-detection")]
 #[test]
-fn document_build_applies_the_page_budget_to_overlapping_native_tables() {
-    let grid = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
-    let other = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"], &["delta", "4"]]);
-    let page = printed_cells(&[&grid, &other]);
+fn document_build_keeps_an_overlapping_native_table_that_repeats_rows_the_page_prints_twice() {
+    let grid = four_row_grid();
+    let again = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = printed_cells(&[&grid, &again]);
     assert_eq!(
-        built_table_count(&[grid, other], page),
+        built_table_count(&[grid, again], page),
         2,
-        "the page prints the words of both tables, and no other table carries them"
+        "every shared row is printed twice, which only the page text can show"
     );
 }
 
-#[cfg(feature = "layout-detection")]
 #[test]
 fn document_build_drops_an_overlapping_native_table_that_repeats_the_printed_words() {
     let grid = serff_assumptions_grid();
