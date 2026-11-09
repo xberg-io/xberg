@@ -3140,7 +3140,7 @@ impl ImageExtractor {
                 Ok(()) => {
                     tracing::debug!("standalone table re-read adopted");
                     if second.tables.is_empty() {
-                        split_leader_rows_into_paragraphs(&mut second);
+                        mark_leader_rows(&mut second);
                     }
                     Ok(second)
                 }
@@ -4027,29 +4027,23 @@ fn build_image_internal_document(
     builder.build()
 }
 
-/// Gives each line of an adopted leader-row read its own paragraph. A paragraph's line breaks
-/// render as spaces in Markdown, which would weld every row of a table with no cell structure into
-/// one line (#2503).
+/// Marks the paragraphs of an adopted leader-row read as table rows. Markdown renders a
+/// paragraph's line breaks as spaces, which would weld every row of a table with no cell
+/// structure into one line; the marker has Markdown give each row its own paragraph while
+/// Plain keeps the element's line breaks (#2503).
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn split_leader_rows_into_paragraphs(doc: &mut InternalDocument) {
-    use crate::types::internal::ElementKind;
+fn mark_leader_rows(doc: &mut InternalDocument) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
 
-    if !doc.relationships.is_empty() {
-        return;
-    }
-    let elements = std::mem::take(&mut doc.elements);
-    for element in elements {
-        if element.kind == ElementKind::Paragraph && element.annotations.is_empty() && element.text.contains('\n') {
-            for line in element.text.lines().map(str::trim).filter(|line| !line.is_empty()) {
-                let mut row = element.clone();
-                row.text = line.to_owned();
-                let index = doc.elements.len() as u32;
-                doc.push_element(row.with_index(index));
-            }
-        } else {
-            let index = doc.elements.len() as u32;
-            doc.push_element(element.with_index(index));
-        }
+    for element in doc
+        .elements
+        .iter_mut()
+        .filter(|element| element.kind == ElementKind::Paragraph && element.text.contains('\n'))
+    {
+        element
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
     }
 }
 
