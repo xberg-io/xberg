@@ -1448,6 +1448,39 @@ fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leav
     assert_eq!(text, "total 12 cm3\n\nalpha beta\ntotal 12 cm\u{2019}");
 }
 
+/// A heading and a plain paragraph hold the same misread row: the paragraph leaves, the heading
+/// stays, whatever their order on the page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_misread_row_leaves_the_plain_paragraph_and_not_the_heading_with_the_same_text() {
+    use super::super::document::{LayerFirst, put_layer_first_in_document};
+    let misread = "total 12 cm\u{2019}";
+    for heading_first in [true, false] {
+        let mut doc = InternalDocument::new("pdf");
+        let heading = InternalElement::text(ElementKind::Heading { level: 1 }, misread, 0);
+        let paragraph = InternalElement::text(ElementKind::Paragraph, misread, 0);
+        let order = if heading_first {
+            [heading, paragraph]
+        } else {
+            [paragraph, heading]
+        };
+        for mut element in order {
+            element.page = Some(1);
+            doc.push_element(element);
+        }
+        let first = LayerFirst {
+            lines: "total 12 cm3".to_string(),
+            lost_glyphs: 0,
+            misread_ocr_rows: vec![misread.to_string()],
+        };
+        put_layer_first_in_document(&mut doc, Some(1), &first);
+        let kinds: Vec<&str> = doc.elements.iter().map(|element| element.kind.discriminant()).collect();
+        let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+        assert_eq!(texts, ["total 12 cm3", misread], "heading first: {heading_first}");
+        assert_eq!(kinds[1], "heading", "the heading keeps its row; the emptied paragraph leaves");
+    }
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn a_whole_document_run_drops_the_misread_row_on_a_plain_page_only() {
