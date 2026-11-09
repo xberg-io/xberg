@@ -220,6 +220,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
+  Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
+
 - **(ocr): Recover a sideways page with two tables when the first read held extra filtered words.** (#2497)
   The implicit orientation retry refused two rotated tables unless the first read's iterator word count equalled its reported count, so dictionary-filtered words left the page on its noise read. It now accepts iterator words that include every retained token (extra filtered words only widen the protection check), with the same exact table, geometry and protected-word proofs.
 

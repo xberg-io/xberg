@@ -406,6 +406,21 @@ fn warmed_page_state_is_not_reused_inside_form_resources_without_extgstate() {
 }
 
 #[test]
+fn page_extgstate_cache_survives_a_form_that_redefines_the_same_name() {
+    let paths = paths_with_form_resources(
+        b"/G1 gs q /X1 Do Q /Reset gs /G1 gs 0 700 m 300 700 l S",
+        b"/G1 gs 0 50 m 100 50 l S",
+        "[1 0 0 1 0 0]",
+        "/ExtGState << /G1 << /D [[3 2] 1] /CA 1 >> /Reset << /D [[] 0] /CA 1 >> >>",
+        "/Resources << /ExtGState << /G1 << /D [[7 1] 0] /CA 0 >> >> >>",
+    );
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0].stroke_color, None);
+    assert_eq!(paths[1].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[1].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+}
+
+#[test]
 fn repeated_extgstate_dash_uses_the_current_matrix_not_the_lookup_matrix() {
     let paths = paths_with_extgstate(
         b"/GS gs q 2 0 0 2 0 0 cm /GS gs 0 350 m 150 350 l S Q /GS gs 0 690 m 300 690 l S",
