@@ -2548,6 +2548,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // lacks first. A page it keeps native stays as it was. ~keep
     let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
     let mut complete_native_pages = std::collections::HashSet::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut clean_native_ink_pages = std::collections::HashSet::new();
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
@@ -2577,13 +2579,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let clean_ink_layer = native_coverage_layers
+                .and_then(|layers| layers.get(page_number))
+                .map(String::as_str)
+                .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if native_ink_owned_pages.contains(page_number)
                 && ink_proof_layout_free
                 && super::document::native_preservation_is_automatic(config, *page_number)
                 && !noise_verdict_pages.contains(page_number)
                 && structured_ocr_pages.get(page_number).is_some_and(|doc| {
                     super::native_word_coverage::has_only_certified_tesseract_text(doc)
-                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text)
+                        || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
+                            doc,
+                            text,
+                            clean_ink_layer,
+                        )
                 })
                 && layers.get(page_number).is_some_and(|layer| {
                     let mut stripped = layer.clone();
@@ -2592,6 +2603,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 })
             {
                 complete_native_pages.insert(*page_number);
+                // Marker-bearing candidates can own ink too; only this clean-layer admission permits omissions. ~keep
+                if clean_ink_layer.is_some() {
+                    clean_native_ink_pages.insert(*page_number);
+                }
             }
             if native_preservation_enabled
                 && super::document::native_preservation_is_automatic(config, *page_number)
@@ -2821,8 +2836,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if native_ink_owned_pages.contains(&page) {
+                    let clean_ink_layer = native_coverage_layers
+                        .filter(|_| clean_native_ink_pages.contains(&page))
+                        .and_then(|layers| layers.get(&page))
+                        .map(String::as_str);
                     return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text)
-                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text);
+                        || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
+                            doc,
+                            text,
+                            clean_ink_layer,
+                        );
                 }
                 false
             });
