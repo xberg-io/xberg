@@ -171,6 +171,8 @@ pub(crate) struct CachedFormSpans {
     /// Includes this Form and the deepest descendant visited by the complete run.
     pub(crate) required_depth: u32,
     pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
+    /// The spans among `spans` that start at the pen of the previous `TJ` array (GH#2664).
+    pub(crate) pen_continuations: Vec<crate::extractors::text::SpanKey>,
     /// Weak references retain allocation identity without retaining font data.
     fonts: Vec<(String, Weak<crate::fonts::FontInfo>)>,
     local_scope: bool,
@@ -195,9 +197,15 @@ impl CachedFormSpans {
         Self {
             required_depth,
             spans,
+            pen_continuations: Vec::new(),
             fonts,
             local_scope,
         }
+    }
+
+    pub(crate) fn with_pen_continuations(mut self, keys: Vec<crate::extractors::text::SpanKey>) -> Self {
+        self.pen_continuations = keys;
+        self
     }
 
     pub(crate) fn matches_inherited_fonts(&self, inherited: &ExtractorFonts) -> bool {

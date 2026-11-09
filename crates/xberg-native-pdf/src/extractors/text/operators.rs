@@ -12,6 +12,8 @@ impl<'doc> TextExtractor<'doc> {
     ///
     /// Updates the graphics state and extracts text as appropriate.
     pub(super) fn execute_operator(&mut self, op: Operator) -> Result<()> {
+        // The seam of the previous `TJ` array reaches this operator only (see `PenSeam`). ~keep
+        let seam = self.pen_seam.take();
         match op {
             Operator::Tf { font, size } => {
                 let same_font = {
@@ -68,6 +70,7 @@ impl<'doc> TextExtractor<'doc> {
                 // two axes swap. The added conjunct re-checks both along the
                 // run's own writing axis (ISO 32000-1 §9.4.4). ~keep
                 let cur_font_size = self.state_stack.current().font_size;
+                let severe_overlap_pt = self.merging_config.severe_overlap_threshold_pt;
                 let is_continuation = self.merging_config.merge_tm_tj_runs
                     && match self.tj_span_buffer {
                         Some(ref mut buffer)
@@ -107,8 +110,9 @@ impl<'doc> TextExtractor<'doc> {
                             // `is_monospace` so proportional-font Tm+Tj runs (a
                             // separate, differently-shaped gap problem) are
                             // untouched. ~keep
-                            let expected_next_e = buffer.start_matrix.e + buffer.accumulated_width;
-                            let raw_gap = e - expected_next_e;
+                            // The pen's move in text space, the unit of the run's width. ~keep
+                            let advance = Self::text_space_advance(buffer.start_matrix, buffer.wmode, e);
+                            let raw_gap = advance - buffer.accumulated_width;
                             if buffer.wmode == 0
                                 && buffer.is_monospace
                                 && !buffer.unicode.ends_with(|c: char| c.is_whitespace())
@@ -128,10 +132,24 @@ impl<'doc> TextExtractor<'doc> {
 
                             // Same line, same transform, LTR progression →
                             // update width to reflect actual visual extent ~keep
-                            buffer.accumulated_width = e - buffer.start_matrix.e;
+                            buffer.accumulated_width = advance;
                             // A new matrix sets the pen again: the pull-back after a ligature
                             // no longer refers to the glyph that ends the run. ~keep
                             buffer.ligature_tail = false;
+                            true
+                        }
+                        // A matrix that changes only the horizontal scale `a` and starts the show at
+                        // or just before the pen stretches the same word (GH#2664). The run goes on in
+                        // the new unit. ~keep
+                        Some(ref mut buffer)
+                            if (f - buffer.start_matrix.f).abs()
+                                <= ((cur_font_size * buffer.start_matrix.d).abs() * 0.5).max(0.5)
+                                && b == buffer.start_matrix.b
+                                && c == buffer.start_matrix.c
+                                && d == buffer.start_matrix.d
+                                && Self::stretched_tm_starts_at_the_pen(buffer, a, e, severe_overlap_pt) =>
+                        {
+                            Self::restate_run_under_stretched_tm(buffer, a, e);
                             true
                         }
                         _ => false,
@@ -145,6 +163,7 @@ impl<'doc> TextExtractor<'doc> {
             }
             Operator::Td { tx, ty } => {
                 self.flush_tj_span_buffer()?;
+                self.carry_pen_seam(seam, ty);
                 // Per ISO 32000-1:2008 §9.4.2, Table 108:
                 // Tlm_new = T(tx,ty) × Tlm_old
                 // The translation is in text-line space, so it must be
@@ -154,6 +173,7 @@ impl<'doc> TextExtractor<'doc> {
             }
             Operator::TD { tx, ty } => {
                 self.flush_tj_span_buffer()?;
+                self.carry_pen_seam(seam, ty);
 
                 self.state_stack.current_mut().leading = -ty;
                 // Per ISO 32000-1:2008 §9.4.2: Tlm_new = T(tx,ty) × Tlm_old ~keep
@@ -300,7 +320,11 @@ impl<'doc> TextExtractor<'doc> {
                         // Per PDF Spec ISO 32000-1:2008, Section 9.4.4 NOTE 6:
                         // "text strings are as long as possible"
                         // This creates one span per logical text unit instead of fragmenting ~keep
-                        self.process_tj_array(&array)?;
+                        let continues_pen = seam == Some(PenSeam::ContinuesPen);
+                        let word_boundary_flushed = self.process_tj_array(&array, continues_pen)?;
+                        if word_boundary_flushed && self.current_font_gives_widths() {
+                            self.pen_seam = Some(PenSeam::TjArrayEnd);
+                        }
                     } else {
                         for (index, element) in array.iter().enumerate() {
                             match element {

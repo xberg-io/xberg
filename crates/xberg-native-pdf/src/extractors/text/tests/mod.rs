@@ -13,3 +13,4 @@ mod config_and_merging;
 mod extraction_and_rotation;
 mod leading_offset;
 mod ligature_decode;
+mod pen_continuation;

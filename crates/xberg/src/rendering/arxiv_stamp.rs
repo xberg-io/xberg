@@ -8,12 +8,18 @@ use std::sync::LazyLock;
 /// for extra spaces between its parts.
 const MAX_STAMP_TAIL_BYTES: usize = 160;
 
+/// The three parts of a stamp: the identifier with its version, the category and the date.
+const IDENTIFIER: &str = r"arXiv:[0-9]{4}\.[0-9]{4,5}v[0-9]+";
+const CATEGORY: &str = r"\[[A-Za-z][A-Za-z0-9._-]*\]";
+const DATE: &str = r"[0-9]{1,2}\s+[A-Z][a-z]{2,8}\s+[0-9]{4}";
+
 static STAMP: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(concat!(
-        r"arXiv:[0-9]{4}\.[0-9]{4,5}v[0-9]+\s*\[[A-Za-z][A-Za-z0-9._-]*\]",
-        r"\s*[0-9]{1,2}\s+[A-Z][a-z]{2,8}\s+[0-9]{4}\s*$",
-    ))
-    .expect("static regex compiles")
+    regex::Regex::new(&format!(r"{IDENTIFIER}\s*{CATEGORY}\s*{DATE}\s*$")).expect("static regex compiles")
+});
+
+#[cfg(feature = "pdf")]
+static PARTS: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(&format!(r"^(?:{IDENTIFIER})?\s*(?:{CATEGORY})?\s*(?:{DATE})?$")).expect("static regex compiles")
 });
 
 /// Return the byte offset where an arXiv stamp starts, when `text` ends with a whole stamp.
@@ -26,8 +32,17 @@ pub(crate) fn trailing_stamp_start(text: &str) -> Option<usize> {
     (start == 0 || text[..start].ends_with(char::is_whitespace)).then_some(start)
 }
 
+/// Whether `text` is one or two parts of a stamp in stamp order, and not the whole stamp.
+#[cfg(feature = "pdf")]
+pub(crate) fn is_partial_stamp(text: &str) -> bool {
+    let text = text.trim();
+    !text.is_empty() && PARTS.is_match(text) && !STAMP.is_match(text)
+}
+
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "pdf")]
+    use super::is_partial_stamp;
     use super::trailing_stamp_start;
 
     const STAMP: &str = "arXiv:2312.13591v2 [hep-ph] 6 Dec 2023";
@@ -119,6 +134,34 @@ mod tests {
         let text = format!("{} {STAMP}", "word ".repeat(5000));
         let start = trailing_stamp_start(&text).expect("stamp");
         assert_eq!(&text[start..], STAMP);
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn each_part_and_each_pair_of_parts_is_a_partial_stamp() {
+        for text in [
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "arXiv:2312.13591v2 [hep-ph]",
+            "[hep-ph] 6 Dec 2023",
+        ] {
+            assert!(is_partial_stamp(text), "{text}");
+        }
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn a_whole_stamp_and_body_text_are_not_partial_stamps() {
+        for text in [
+            STAMP,
+            "",
+            "6 Dec 2023 was a Wednesday",
+            "[12] A. Author, arXiv:2312.13591v2",
+            "Body [hep-ph]",
+        ] {
+            assert!(!is_partial_stamp(text), "{text}");
+        }
     }
 
     #[test]
