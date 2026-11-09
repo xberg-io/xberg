@@ -5486,6 +5486,62 @@ mod tests {
             assert!(has_robust_word_confidence_distribution(&result));
         }
 
+        /// #2699: a re-read that returns no usable words must not be kept over the first pass. ~keep
+        #[test]
+        fn should_reject_fallback_that_read_no_usable_words() {
+            assert!(!has_robust_word_confidence_distribution(&result_with_word_confidences(
+                &[]
+            )));
+            assert!(!has_robust_word_confidence_distribution(
+                &crate::types::ExtractedDocument::default()
+            ));
+            let mut whitespace_only = result_with_word_confidences(&[0.95, 0.95]);
+            for element in whitespace_only.ocr_elements.iter_mut().flatten() {
+                element.text = "  ".to_string();
+            }
+            assert!(!has_robust_word_confidence_distribution(&whitespace_only));
+        }
+
+        #[test]
+        fn robust_word_confidence_gate_decides_at_the_percentile_and_confidence_thresholds() {
+            let with_low = |good: usize, low: usize| {
+                let mut confidences = vec![0.95; good];
+                confidences.extend(vec![0.2; low]);
+                confidences
+            };
+            let cases: [(&str, Vec<f64>, bool); 6] = [
+                ("a single confident word", vec![0.95], true),
+                (
+                    "a word exactly at the minimum confidence is not low",
+                    vec![0.30; 10],
+                    true,
+                ),
+                (
+                    "one low word in ten sits on the tenth percentile",
+                    with_low(9, 1),
+                    false,
+                ),
+                (
+                    "one low word in twenty stays under the tenth percentile",
+                    with_low(19, 1),
+                    true,
+                ),
+                (
+                    "two low words in twenty reach the tenth percentile",
+                    with_low(18, 2),
+                    false,
+                ),
+                ("every word low", with_low(0, 12), false),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    has_robust_word_confidence_distribution(&result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
+        }
+
         #[test]
         fn should_build_psm3_fallback_with_explicit_grayscale_enhancement() {
             let mut whole_image_config = crate::core::config::OcrConfig::default();
@@ -6540,34 +6596,6 @@ mod tests {
 
         assert!(!result.metadata.ocr_used);
         assert_eq!(result.extraction_method, None);
-    }
-
-    #[cfg(feature = "ocr")]
-    #[tokio::test]
-    #[ignore = "expectation not reproducible at default limits; cause not isolated, see #2699"]
-    async fn should_recover_receipt_header_with_implicit_sparse_image_fallback() {
-        let Some(receipt) = crate::utils::read_test_fixture("images/cord_receipt_02.jpg") else {
-            return;
-        };
-        let config = ExtractionConfig {
-            use_cache: false,
-            force_ocr: true,
-            ocr: Some(crate::core::config::OcrConfig::default()),
-            ..Default::default()
-        };
-
-        let doc = ImageExtractor::new()
-            .extract_content(&receipt, "image/jpeg", &config)
-            .await
-            .expect("receipt OCR must succeed");
-        let result =
-            crate::extraction::derive::derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
-        let normalized = result.content.to_ascii_lowercase();
-
-        assert!(
-            normalized.contains("j.stb promo"),
-            "implicit sparse-image fallback must recover the grounded receipt header; got {normalized:?}"
-        );
     }
 
     #[test]

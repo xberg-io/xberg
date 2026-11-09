@@ -813,6 +813,16 @@ mod gray_route_tests {
     }
 
     #[test]
+    fn a_raster_differing_from_gray_only_in_blue_is_not_gray() {
+        let mut rgb = gray_page(false);
+        assert!(rgb_is_gray(&rgb));
+        let last = rgb.len() - 1;
+        rgb[last] = rgb[last].wrapping_add(1);
+        assert_eq!(rgb[last - 2], rgb[last - 1]);
+        assert!(!rgb_is_gray(&rgb));
+    }
+
+    #[test]
     fn a_failed_step_keeps_the_best_raster_already_built() {
         let rgb = gray_page(false);
         let plane: Vec<u8> = rgb.as_chunks::<3>().0.iter().map(|pixel| pixel[0]).collect();
