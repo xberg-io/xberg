@@ -127,3 +127,40 @@ fn a_dot_leader_table_of_contents_is_not_read_again_as_a_table() {
     let result = helpers::extract_bytes_document_blocking(TABLE_OF_CONTENTS, "image/png", &config(None)).unwrap();
     assert_eq!(recorded_psm(&result), "11");
 }
+
+#[test]
+fn markdown_keeps_every_row_of_an_adopted_leader_picture_on_its_own_line() {
+    let mut markdown = config(None);
+    markdown.output_format = OutputFormat::Markdown;
+    let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &markdown).unwrap();
+    assert_eq!(recorded_psm(&result), "6");
+    let lines: Vec<_> = result.content.lines().filter(|line| !line.trim().is_empty()).collect();
+    assert_eq!(
+        lines.len(),
+        13,
+        "header plus 12 rows, one per line:\n{}",
+        result.content
+    );
+    let mut kept = 0;
+    let mut next = 0;
+    for row in PICTURE_11PX_ROWS.lines() {
+        let Some(at) = lines.iter().position(|line| row_lines(line, row) == 1) else {
+            continue;
+        };
+        assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
+        kept += 1;
+        next = at;
+    }
+    assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
+}
+
+#[test]
+fn plain_keeps_the_rows_of_an_adopted_leader_picture_on_consecutive_lines() {
+    let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &config(None)).unwrap();
+    assert_eq!(recorded_psm(&result), "6");
+    assert!(
+        !result.content.contains("\n\n"),
+        "no blank line between rows:\n{}",
+        result.content
+    );
+}
