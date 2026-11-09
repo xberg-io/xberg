@@ -229,8 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
   A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
-- **(pdf): Read a block at the right of a page before a block at the left that starts below it.** (GH#2757)
-  The reading order cut a region into two columns whenever an empty vertical corridor ran through it, so a letterhead at the right of a page top came after the address that started below it. The cut is now refused when the right side sits wholly above the left side, and the two blocks read top-down. A left block above a right block keeps its column cut: the two orders agree there.
+- **(pdf): Read a block at the right of a page before a block at the left that starts below it.** (#2680)
+  The reading order cut a region into two columns at a gap or density valley between its left and right spans, even when the right side sat wholly above the left side, so a letterhead at the right of a page top came after the address that started below it. The cut is now refused when the right side sits wholly above the left side, and the two blocks read top-down. A left block above a right block keeps its column cut: the two orders agree there.
 - **(pdf): Stop OCR from splitting words at a ligature such as "fi nancial".** (GH#2322)
   A page that OCR reads is first drawn by the native renderer. A glyph code in an embedded TrueType font
   can decode to several letters, as a ligature does, and the renderer gave each later glyph the width of a
