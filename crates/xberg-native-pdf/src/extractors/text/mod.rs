@@ -925,18 +925,30 @@ impl SpanMergingConfig {
 /// "SalesF" + "orce" with `raw_gap == 0` would otherwise be torn into
 /// "SalesF orce". (`bbox.width × (1 − 1/1.22)` is the algebraic form of
 /// `next.x − (prev.x + width/1.22)` once `raw_gap` is substituted in.)
+///
+/// An overlap within two ULPs of the coordinate is coordinate rounding, not a
+/// real overlap, when the next show is a single glyph placed by itself
+/// (`next_is_one_glyph`): the correction skips it. A show of two or more
+/// characters is a word, and it gets the correction at any overlap.
 fn corrected_space_gap(
     raw_gap: f32,
     reliable_widths: bool,
     bbox_width: f32,
     text_empty: bool,
     position_magnitude: f32,
+    next_is_one_glyph: bool,
 ) -> f32 {
     // Two rounded edge coordinates can differ by a couple of ULPs even when
-    // source glyph advances touch. Do not amplify that uncertainty into a word gap. ~keep
+    // source glyph advances touch. Glyph-by-glyph placement is the only layout that
+    // produces such a touch inside a word, so a show of two or more characters
+    // starts a new word at any overlap and gets no tolerance. ~keep
     const EDGE_ROUNDING_ULPS: f32 = 2.0;
     let coordinate = position_magnitude.abs();
-    let rounding_error = EDGE_ROUNDING_ULPS * (coordinate.next_up() - coordinate);
+    let rounding_error = if next_is_one_glyph {
+        EDGE_ROUNDING_ULPS * (coordinate.next_up() - coordinate)
+    } else {
+        0.0
+    };
     if !reliable_widths && raw_gap < -rounding_error && bbox_width > 0.0 && !text_empty {
         raw_gap + bbox_width * (1.0 - 1.0 / 1.22)
     } else {

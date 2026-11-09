@@ -506,9 +506,9 @@ fn test_should_insert_space_font_aware() {
 #[test]
 fn test_corrected_space_gap_no_inflation_when_adjacent() {
     // raw_gap 0.0, unreliable widths, non-empty: must stay 0.0. ~keep
-    assert_eq!(corrected_space_gap(0.0, false, 34.23, false, 0.0), 0.0);
+    assert_eq!(corrected_space_gap(0.0, false, 34.23, false, 0.0, true), 0.0);
     // small positive raw gap (academic "XGBoostX"+"provides") untouched. ~keep
-    assert_eq!(corrected_space_gap(0.47, false, 50.0, false, 0.0), 0.47);
+    assert_eq!(corrected_space_gap(0.47, false, 50.0, false, 0.0, true), 0.47);
 }
 
 #[test]
@@ -588,7 +588,7 @@ fn test_strip_prime_decimal_boundary_spaces() {
 #[test]
 fn test_corrected_space_gap_corrects_overlap() {
     // raw_gap -2.0, width 30 → -2.0 + 30*(1 - 1/1.22) ≈ -2.0 + 5.41 = 3.41 ~keep
-    let g = corrected_space_gap(-2.0, false, 30.0, false, 0.0);
+    let g = corrected_space_gap(-2.0, false, 30.0, false, 0.0, true);
     assert!(
         g > 0.0,
         "overlap on fallback-width font must be lifted positive, got {g}"
@@ -599,8 +599,8 @@ fn test_corrected_space_gap_corrects_overlap() {
 /// bbox gap is authoritative regardless of sign.
 #[test]
 fn test_corrected_space_gap_reliable_widths_untouched() {
-    assert_eq!(corrected_space_gap(-2.0, true, 30.0, false, 0.0), -2.0);
-    assert_eq!(corrected_space_gap(5.0, true, 30.0, false, 0.0), 5.0);
+    assert_eq!(corrected_space_gap(-2.0, true, 30.0, false, 0.0, true), -2.0);
+    assert_eq!(corrected_space_gap(5.0, true, 30.0, false, 0.0, true), 5.0);
 }
 
 #[test]
@@ -930,7 +930,7 @@ fn corrected_space_gap_preserves_a_one_ulp_overlap() {
     let next_start = 87.79_f32;
     let raw_gap = next_start - previous_end;
     assert!(raw_gap < 0.0);
-    assert_eq!(corrected_space_gap(raw_gap, false, 16.67, false, previous_end), raw_gap);
+    assert_eq!(corrected_space_gap(raw_gap, false, 16.67, false, previous_end, true), raw_gap);
 }
 
 #[test]
@@ -939,9 +939,19 @@ fn corrected_space_gap_uses_the_coordinates_rounding_scale() {
         let previous_end = next_start.next_up();
         let raw_gap = next_start - previous_end;
         let magnitude = previous_end.abs().max(next_start.abs());
-        assert_eq!(corrected_space_gap(raw_gap, false, 16.67, false, magnitude), raw_gap);
+        assert_eq!(corrected_space_gap(raw_gap, false, 16.67, false, magnitude, true), raw_gap);
     }
-    let true_overlap = corrected_space_gap(-2.0, false, 30.0, false, 87.79);
-    assert_eq!(true_overlap, corrected_space_gap(-2.0, false, 30.0, false, 0.0));
+    let true_overlap = corrected_space_gap(-2.0, false, 30.0, false, 87.79, true);
+    assert_eq!(true_overlap, corrected_space_gap(-2.0, false, 30.0, false, 0.0, true));
     assert!(true_overlap > 0.0);
+}
+
+#[test]
+fn corrected_space_gap_corrects_a_one_ulp_overlap_before_a_word() {
+    let previous_end = 87.79001_f32;
+    let next_start = 87.79_f32;
+    let raw_gap = next_start - previous_end;
+    assert!(raw_gap < 0.0);
+    let gap = corrected_space_gap(raw_gap, false, 16.67, false, previous_end, false);
+    assert!(gap > 0.0, "a word that touches the previous show keeps its word space: {gap}");
 }

@@ -122,6 +122,7 @@ impl<'doc> TextExtractor<'doc> {
                 current.bbox.width,
                 current.text.is_empty(),
                 current_end_x.abs().max(span.bbox.x.abs()),
+                span.text.chars().count() == 1,
             );
 
             // Column-boundary gap, font-size-aware. The same 6pt gap is
