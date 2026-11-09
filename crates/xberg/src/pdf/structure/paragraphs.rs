@@ -2,8 +2,11 @@
 
 use super::types::PdfParagraph;
 
+mod accent;
 mod display_rows;
 mod legend_rows;
+use accent::accent_letter_over_formula_line;
+pub(super) use accent::accent_letter_over_formula_start;
 pub(super) use legend_rows::reattach_chart_legend_markers;
 
 /// Maximum baseline-to-baseline gap, as a multiple of the larger paragraph's
@@ -121,6 +124,7 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
             && same_rotation
             && vertical_gap_compatible
             && !next_starts_section
+            && !accent_letter_over_formula_line(&current, &next)
             && !display_rows::is_indexed_display_row(&next)
             && !display_rows::is_indexed_display_row(&current)
             && (!current_starts_section || heading_wrap_exempt);
@@ -189,17 +193,7 @@ fn union_block_bbox(
 /// than `starts_with_section_number` so a paragraph opening with a bare year
 /// ("2024 was een druk jaar") is still treated as prose.
 fn starts_numbered_section(para: &PdfParagraph) -> bool {
-    let Some(first_line) = para.lines.first() else {
-        return false;
-    };
-    let joined = first_line
-        .segments
-        .iter()
-        .map(|segment| segment.text.trim())
-        .filter(|text| !text.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    super::classify::is_numbered_section_heading(&joined)
+    super::classify::is_numbered_section_heading(&accent::first_line_joined(para))
 }
 
 /// Check if a paragraph starts with a lowercase letter, indicating it's a
@@ -358,6 +352,7 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
 
 #[cfg(test)]
 mod tests {
+    mod accent_tests;
     mod display_rows_tests;
     use super::*;
 

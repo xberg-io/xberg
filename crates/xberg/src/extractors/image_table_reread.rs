@@ -1,12 +1,14 @@
 //! The decision to read a standalone picture a second time as one uniform block, and to keep
 //! that read (#2503, #2432).
 //!
-//! Admission is geometry only: the first read's word boxes must form a lattice table. Four or
+//! Admission is geometry first: the first read's word boxes must form a lattice table. Four or
 //! more rows share a few column edges with wide gaps between at least three columns, the words
-//! come out row by row, and the page is not a lattice of dozens of edges. Nothing depends on what
-//! a word says. The second read is adopted only if it finds a table, so a page that is not a
-//! readable table keeps its first read. A token it misreads is kept; a read that failed outright
-//! is discarded (see [`second_read_is_usable`]).
+//! come out row by row, and the page is not a lattice of dozens of edges. A first read that
+//! already holds a table is admitted only when its column rows hold the low-confidence noise a
+//! small dot leader decays into (see [`first_read_is_garbled`]). The second read is adopted only
+//! if it finds a table (or, for a first read with none, dot-leader rows), and a garbled first read
+//! is replaced only by a read with leader rows. A token it misreads is kept; a read that failed
+//! outright is discarded (see [`second_read_is_usable`]).
 
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrBoundingGeometry, OcrElementLevel};
@@ -32,6 +34,8 @@ struct WordBox {
     center: u32,
     height: u32,
     leader: bool,
+    dotted: bool,
+    junk: bool,
 }
 
 fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
@@ -51,6 +55,8 @@ fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
                 center: top.saturating_add(height / 2),
                 height,
                 leader: is_leader(&element.text),
+                dotted: ends_in_leader(&element.text),
+                junk: is_junk(&element.text, element.confidence.recognition),
             }),
             _ => None,
         })
@@ -241,13 +247,58 @@ fn is_leader(text: &str) -> bool {
     text.chars().count() >= MIN_LEADER_DOTS && text.chars().all(|c| c == '.')
 }
 
-/// Text rows that take part in the column structure and hold at least one leader word.
-fn leader_rows(doc: &InternalDocument) -> usize {
+/// A word that is a leader or ends in one (`paint...........`): a block read often keeps the
+/// leader attached to the label before it.
+fn ends_in_leader(text: &str) -> bool {
+    text.trim().chars().rev().take_while(|c| *c == '.').count() >= MIN_LEADER_DOTS
+}
+
+/// Recognition confidence under which a lowercase letters-only word is taken as a misread leader.
+const JUNK_CONFIDENCE: f64 = 0.5;
+/// Column rows that must hold a misread leader for a first read's table to count as garbled.
+const MIN_JUNK_ROWS: usize = 4;
+
+/// A word the engine barely recognised and that is only lowercase letters: the noise a small dot
+/// leader decays into (`ee`, `eaeacees`).
+fn is_junk(text: &str, recognition: f64) -> bool {
+    let text = text.trim();
+    recognition < JUNK_CONFIDENCE && !text.is_empty() && text.chars().all(|c| c.is_ascii_lowercase())
+}
+
+/// Text rows that take part in the column structure and hold a word satisfying `test`.
+fn column_rows_with(doc: &InternalDocument, test: fn(&WordBox) -> bool) -> usize {
     column_structure(doc)
         .0
         .iter()
-        .filter(|row| row.iter().any(|word| word.leader))
+        .filter(|row| row.iter().any(test))
         .count()
+}
+
+/// Admitting a garbled first read costs one extra OCR pass whenever the re-read is then refused.
+///
+/// The first read found a table, but its column rows hold the misread leaders of a dot-leader
+/// table: a block read can recover what the table check parsed around noise. Four or more column
+/// rows must carry such a word, so a clean table (even one with a stray low-confidence cell) is
+/// never read twice.
+pub(super) fn first_read_is_garbled(first: &InternalDocument) -> bool {
+    !first.tables.is_empty() && column_rows_with(first, |word| word.junk) >= MIN_JUNK_ROWS
+}
+
+/// Letters and digits in the word elements of a read, leaving out the misread leaders.
+fn confident_alphanumeric_count(doc: &InternalDocument) -> usize {
+    doc.prebuilt_ocr_elements
+        .iter()
+        .flatten()
+        .filter(|element| {
+            element.level == OcrElementLevel::Word && !is_junk(&element.text, element.confidence.recognition)
+        })
+        .map(|element| element.text.chars().filter(|c| c.is_alphanumeric()).count())
+        .sum()
+}
+
+/// Text rows that take part in the column structure and hold at least one leader word.
+fn leader_rows(doc: &InternalDocument) -> usize {
+    column_rows_with(doc, |word| word.leader)
 }
 
 /// A block read that found no table but whose rows are dot-leader rows on shared column edges: the
@@ -257,6 +308,10 @@ fn reads_leader_rows(doc: &InternalDocument) -> bool {
     leader_rows(doc) >= MIN_LEADER_ROWS && shows_column_structure(doc)
 }
 
+/// A first read whose table is garbled (see [`first_read_is_garbled`]) is replaced only by a
+/// second read that has a table and leader rows on shared column edges, and keeps the first read's
+/// confidently read letters and digits.
+///
 /// A second read with no letters or digits in its word elements, or with less than three quarters
 /// of the first read's, failed to read the picture. A second read with no table did not confirm the
 /// table the geometry showed, so the first read stands, unless its words are dot-leader rows (see
@@ -265,13 +320,32 @@ fn reads_leader_rows(doc: &InternalDocument) -> bool {
 /// second read with more letters is not capped: a block read legitimately recovers text the sparse
 /// read missed, and the guard only separates a failed read from a read.
 pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalDocument) -> Result<(), &'static str> {
-    let (before, after) = (alphanumeric_count(first), alphanumeric_count(second));
+    let garbled = first_read_is_garbled(first);
+    let before = if garbled {
+        confident_alphanumeric_count(first)
+    } else {
+        alphanumeric_count(first)
+    };
+    let after = if garbled {
+        confident_alphanumeric_count(second)
+    } else {
+        alphanumeric_count(second)
+    };
     tracing::debug!(before, after, "standalone table re-read: letters and digits per read");
     if after == 0 {
         return Err("the second read has no letters or digits in its word elements");
     }
     if after * MIN_RETAINED.1 < before * MIN_RETAINED.0 {
         return Err("the second read kept too few letters and digits");
+    }
+    if garbled {
+        if second.tables.is_empty()
+            || column_rows_with(second, |word| word.dotted) < MIN_LEADER_ROWS
+            || !shows_column_structure(second)
+        {
+            return Err("the second read does not recover the leader rows of the garbled table");
+        }
+        return Ok(());
     }
     if second.tables.is_empty() && !reads_leader_rows(second) {
         return Err("the second read found no table");
@@ -573,6 +647,112 @@ mod tests {
         let mut leaders: Vec<_> = (0..6).map(|row| element(".........", 10, 10 + row * 40, 140)).collect();
         leaders.push(element("abcd", 10, 400, 30));
         assert_eq!(second_read_is_usable(&first, &doc(leaders)), NO_TABLE);
+    }
+
+    fn junk(text: &str, recognition: f64, element: OcrElement) -> OcrElement {
+        OcrElement {
+            text: text.to_string(),
+            confidence: OcrConfidence {
+                detection: None,
+                recognition,
+            },
+            ..element
+        }
+    }
+
+    /// `rows` table rows, the first `garbled` of which carry a low-confidence `noise` word where the
+    /// leader was, in a read that found a table.
+    fn garbled_read(rows: usize, garbled: usize, noise: &str, recognition: f64) -> InternalDocument {
+        let mut read = doc_with_table(table(rows));
+        for row in 0..garbled as u32 {
+            read.prebuilt_ocr_elements.as_mut().unwrap().push(junk(
+                noise,
+                recognition,
+                element(noise, 150, 10 + row * 40, 120),
+            ));
+        }
+        read
+    }
+
+    #[test]
+    fn a_table_whose_column_rows_hold_misread_leaders_is_garbled() {
+        assert!(first_read_is_garbled(&garbled_read(6, 4, "eae", 0.1)));
+        assert!(
+            !first_read_is_garbled(&garbled_read(6, 3, "eae", 0.1)),
+            "3 rows is under the floor"
+        );
+        assert!(
+            !first_read_is_garbled(&garbled_read(6, 6, "eae", 0.5)),
+            "0.5 is confident enough"
+        );
+        assert!(
+            !first_read_is_garbled(&garbled_read(6, 6, "Eae", 0.1)),
+            "only lowercase noise"
+        );
+        assert!(
+            !first_read_is_garbled(&garbled_read(6, 6, "ea3", 0.1)),
+            "a digit is a value"
+        );
+        assert!(!first_read_is_garbled(&doc(table(6))), "a clean table is not garbled");
+        let mut no_table = garbled_read(6, 6, "eae", 0.1);
+        no_table.tables.clear();
+        assert!(!first_read_is_garbled(&no_table), "no table takes the other route");
+    }
+
+    #[test]
+    fn a_garbled_first_read_is_replaced_only_by_a_read_with_leader_rows() {
+        let first = garbled_read(6, 6, "eae", 0.1);
+        assert_eq!(
+            second_read_is_usable(&first, &doc_with_table(leader_table(6, 6, "........."))),
+            Ok(())
+        );
+        let reason = "the second read does not recover the leader rows of the garbled table";
+        assert_eq!(
+            second_read_is_usable(&first, &doc_with_table(leader_table(6, 3, "........."))),
+            Err(reason)
+        );
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(table(6))), Err(reason));
+        assert_eq!(
+            second_read_is_usable(&first, &doc(leader_table(6, 6, "........."))),
+            Err(reason)
+        );
+    }
+
+    #[test]
+    fn a_first_read_with_lowercase_codes_is_kept_when_the_re_read_has_no_leader_rows() {
+        let reason = "the second read does not recover the leader rows of the garbled table";
+        for code in ["mm", "ea", "id"] {
+            let first = garbled_read(6, 6, code, 0.3);
+            assert!(first_read_is_garbled(&first), "{code} is admitted to a second read");
+            assert_eq!(
+                second_read_is_usable(&first, &doc_with_table(table(6))),
+                Err(reason),
+                "{code}: a re-read with a table but no dotted rows leaves the first read"
+            );
+        }
+    }
+
+    #[test]
+    fn a_garbled_first_read_is_replaced_by_a_read_whose_leaders_stay_on_the_label() {
+        let first = garbled_read(6, 6, "eae", 0.1);
+        let mut glued = table(6);
+        for word in glued.iter_mut().filter(|word| word.text == "Label") {
+            word.text = "Label...........".to_string();
+        }
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(glued)), Ok(()));
+    }
+
+    #[test]
+    fn a_garbled_first_read_is_judged_on_its_confident_letters() {
+        let first = garbled_read(6, 6, "eaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaea", 0.1);
+        assert_eq!(
+            second_read_is_usable(&first, &doc_with_table(leader_table(6, 6, "........."))),
+            Ok(()),
+            "the noise letters are not counted against the re-read"
+        );
+        let mut starved = leader_table(6, 6, ".........");
+        starved.retain(|word| word.text != "Label" && word.text != "345,678");
+        assert!(second_read_is_usable(&first, &doc_with_table(starved)).is_err());
     }
 
     #[test]
