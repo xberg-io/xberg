@@ -252,8 +252,12 @@ fn khm_then_eng(config: &mut ExtractionConfig) {
 
 #[test]
 #[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
+#[allow(clippy::print_stderr)]
 fn a_khmer_stage_before_an_english_stage_reads_the_khmer_page_with_ocr() {
-    let models = khmer_model_dir().expect("khm.traineddata is not installed");
+    let Some(models) = khmer_model_dir() else {
+        eprintln!("skipped: khm.traineddata is not installed");
+        return;
+    };
     let automatic = extract(COMPLETE, models.path(), khm_then_eng);
     assert_eq!(
         automatic.extraction_method,

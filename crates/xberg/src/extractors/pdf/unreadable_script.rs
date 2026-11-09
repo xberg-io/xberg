@@ -482,8 +482,9 @@ fn lost_glyphs_clause(kept: &[(u32, Vec<Script>, bool)]) -> String {
     } else if marked.len() == kept.len() {
         ", and glyphs it has no Unicode value for stay lost".to_string()
     } else {
+        let noun = if marked.len() > 1 { "pages" } else { "page" };
         format!(
-            ", and glyphs it has no Unicode value for stay lost on page {}",
+            ", and glyphs it has no Unicode value for stay lost on {noun} {}",
             marked.join(", ")
         )
     }
@@ -1082,12 +1083,66 @@ mod tests {
         };
         let page = |number, marked| (number, vec![Script::Khmer], marked);
         let mixed = kept_pages_warning(&[page(1, true), page(2, false), page(3, true)], &stage).message;
-        assert!(mixed.contains("stay lost on page 1, 3"), "{mixed}");
+        assert!(mixed.contains("stay lost on pages 1, 3"), "{mixed}");
         let all = kept_pages_warning(&[page(1, true), page(2, true)], &stage).message;
-        assert!(all.contains("stay lost.") || all.contains("stay lost,"), "{all}");
         assert!(!all.contains("stay lost on page"), "{all}");
+        let clause = ", and glyphs it has no Unicode value for stay lost";
+        assert_eq!(lost_glyphs_clause(&[page(1, true), page(2, true)]), clause);
+        assert!(
+            all.contains(&format!("kept as extracted{clause}. Add a model")),
+            "{all}"
+        );
+        assert_eq!(
+            lost_glyphs_clause(&[page(1, true), page(2, false)]),
+            format!("{clause} on page 1")
+        );
         let none = kept_pages_warning(&[page(1, false), page(2, false)], &stage).message;
         assert!(!none.contains("stay lost"), "{none}");
+    }
+
+    #[test]
+    fn language_source_agrees_with_the_branch_the_language_resolution_takes() {
+        let tesseract = |language: &str| -> crate::types::TesseractConfig {
+            serde_json::from_value(serde_json::json!({"language": [language]})).unwrap()
+        };
+        let deu = tesseract("deu");
+        let cases = [
+            (
+                &["eng"][..],
+                false,
+                Some(&deu),
+                LanguageSource::TesseractConfig,
+                &["deu"][..],
+            ),
+            (&["eng"], true, Some(&deu), LanguageSource::TesseractConfig, &["deu"]),
+            (&["fra"], true, Some(&deu), LanguageSource::StageLanguage, &["fra"]),
+            (&["fra"], false, Some(&deu), LanguageSource::OcrLanguage, &["fra"]),
+            (&["eng"], false, None, LanguageSource::OcrLanguage, &["eng"]),
+        ];
+        for (language, stage_sets, config, source, resolved) in cases {
+            let language = langs(language);
+            assert_eq!(language_source(&language, stage_sets, config), source, "{language:?}");
+            assert_eq!(
+                crate::core::config::ocr::effective_tesseract_language_for(&language, config),
+                langs(resolved),
+                "{language:?}"
+            );
+        }
+    }
+
+    // Pins the behavior #2794 changes: the first stage is only a claim while it succeeds. A `khm`
+    // stage that fails or scores low hands the page to `eng`, which replaces the native Khmer layer,
+    // yet the decision here is "leave the page to OCR". It cannot be an end-to-end test because
+    // Tesseract falls back to the system tessdata, so a missing `khm` model is not reproducible.
+    #[test]
+    fn residual_2794_a_khm_first_pipeline_leaves_the_page_to_ocr_although_eng_may_replace_it() {
+        let config = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+            {"backend": "tesseract", "priority": 50, "language": ["eng"]},
+        ]}));
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty());
     }
 
     #[test]
