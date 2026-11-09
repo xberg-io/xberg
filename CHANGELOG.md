@@ -220,8 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(bindings): Keep `LayoutDetectionConfig` positional constructors in their pre-#2702 order.** (#2717)
-  `model` moved to the last field, so the PHP and WASM `new`, the Java record constructor and the Swift memberwise `init` take their earlier arguments in the same positions as before and `model` is the last argument. The default model is unchanged (`rt_detr`).
+- **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
+  `model` had become the second field in #2702, shifting positional constructor arguments. It is now last, so the Java record constructor and the Swift `init` take their arguments in the pre-#2702 positions again. In the PHP and WASM `new` and the Python `__init__` stub, `model` now follows `enableChartUnderstanding` but still precedes `confidenceThreshold`, `formulaModel` and `acceleration`, which stay one position later than before #2702, and in PHP `model` is now optional. The default model is unchanged (`rt_detr`).
 
 - **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
   Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
