@@ -563,6 +563,13 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3
 /// other preserved loss stays U+FFFD. ~keep
 pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFE}';
 
+/// Whether `c` is a marker a preserved decode leaves for a glyph without a Unicode value: U+FFFD,
+/// or [`LOST_SYMBOL_GLYPH_MARKER`] for a symbol font.
+#[must_use]
+pub const fn is_lost_glyph_marker(c: char) -> bool {
+    c == '\u{FFFD}' || c == LOST_SYMBOL_GLYPH_MARKER
+}
+
 pub(crate) fn decode_text_to_unicode(
     bytes: &[u8],
     font: Option<&FontInfo>,

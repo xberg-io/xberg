@@ -1119,29 +1119,35 @@ pub(super) mod tests {
     fn test_multi_page_garbage_threshold_outside_boundaries_uses_aggregate_fallback() {
         use crate::types::PageBoundary;
 
-        let thresholds = t();
-        let first_page = "This first page contains reliable searchable measurements and explanatory text.";
-        let garbage = "\u{FFFD}".repeat(thresholds.min_garbage_chars);
-        let second_page = "This second page also contains reliable searchable measurements and explanatory text.";
-        let text = format!("{first_page}{garbage}{second_page}");
-        let boundaries = vec![
-            PageBoundary {
-                page_number: 1,
-                byte_start: 0,
-                byte_end: first_page.len(),
-            },
-            PageBoundary {
-                page_number: 2,
-                byte_start: first_page.len() + garbage.len(),
-                byte_end: text.len(),
-            },
-        ];
+        // Lost glyphs of either marker outside every page keep the aggregate check. ~keep
+        for marker in [
+            '\u{FFFD}',
+            crate::extractors::pdf::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER,
+        ] {
+            let thresholds = t();
+            let first_page = "This first page contains reliable searchable measurements and explanatory text.";
+            let garbage = marker.to_string().repeat(thresholds.min_garbage_chars);
+            let second_page = "This second page also contains reliable searchable measurements and explanatory text.";
+            let text = format!("{first_page}{garbage}{second_page}");
+            let boundaries = vec![
+                PageBoundary {
+                    page_number: 1,
+                    byte_start: 0,
+                    byte_end: first_page.len(),
+                },
+                PageBoundary {
+                    page_number: 2,
+                    byte_start: first_page.len() + garbage.len(),
+                    byte_end: text.len(),
+                },
+            ];
 
-        let decision = evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &thresholds);
+            let decision = evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &thresholds);
 
-        assert!(decision.fallback);
-        assert!(decision.whole_doc_failure);
-        assert!(decision.failing_pages.is_empty());
+            assert!(decision.fallback, "{marker:?}");
+            assert!(decision.whole_doc_failure, "{marker:?}");
+            assert!(decision.failing_pages.is_empty(), "{marker:?}");
+        }
     }
 
     // xberg#1667: `apply_flagged_pages` is the union step that lets the

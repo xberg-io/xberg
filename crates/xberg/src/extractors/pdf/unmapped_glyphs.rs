@@ -15,17 +15,7 @@ use crate::types::{PageBoundary, PageContent, ProcessingWarning, Table};
 /// The marker the native extractor leaves for a glyph without a Unicode value.
 pub(super) const LOST_GLYPH_MARKER: char = '\u{FFFD}';
 
-/// The marker the native extractor leaves for a glyph without a Unicode value from a symbol font
-/// (a checkbox, a bullet): `xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER`, repeated here because
-/// this module also builds without the `pdf` feature. Such a glyph is no letter of the word next
-/// to it. The decoder writes this noncharacter for nothing else; U+FFFF it does write for text
-/// (a glyph a font cannot name), so U+FFFF is no marker. ~keep
-pub(super) const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFE}';
-
-/// Whether `c` is a lost-glyph marker of either kind.
-pub(super) fn is_lost_glyph(c: char) -> bool {
-    c == LOST_GLYPH_MARKER || c == LOST_SYMBOL_GLYPH_MARKER
-}
+pub(super) use xberg_native_pdf::{LOST_SYMBOL_GLYPH_MARKER, is_lost_glyph_marker as is_lost_glyph};
 
 /// A run of consecutive markers in a text, and what replaces it. One lost glyph, or several in a
 /// row, stands for characters that exist on the page, so the run leaves a single space between
@@ -270,13 +260,6 @@ mod tests {
         let removed = strip_text(&mut text, None, &[]);
         assert_eq!(removed, 4, "each marker of either kind counts");
         assert_eq!(text, "ab cd ef");
-    }
-
-    /// The marker the native extractor emits is the one this module strips. ~keep
-    #[cfg(feature = "pdf")]
-    #[test]
-    fn the_symbol_marker_is_the_one_the_native_extractor_emits() {
-        assert_eq!(LOST_SYMBOL_GLYPH_MARKER, xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER);
     }
 
     #[test]

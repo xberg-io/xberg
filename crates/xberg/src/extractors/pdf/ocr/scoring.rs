@@ -1332,12 +1332,13 @@ pub(crate) fn evaluate_per_page_ocr(
             .iter()
             .map(|boundary| {
                 native_text[boundary.byte_start..boundary.byte_end]
-                    .chars()
-                    .filter(|character| *character == '\u{FFFD}')
+                    .matches(super::super::unmapped_glyphs::is_lost_glyph)
                     .count()
             })
             .sum::<usize>()
-            == native_text.chars().filter(|character| *character == '\u{FFFD}').count();
+            == native_text
+                .matches(super::super::unmapped_glyphs::is_lost_glyph)
+                .count();
     let can_evaluate_every_page = boundary_count_matches_pages
         && all_boundaries_are_valid
         && boundaries_are_ordered
