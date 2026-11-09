@@ -139,9 +139,18 @@ impl IndexedSource {
         else {
             return None;
         };
+        let filter = match dict.get("Filter")? {
+            Object::Array(filters) => {
+                let [filter] = filters.as_slice() else {
+                    return None;
+                };
+                filter
+            }
+            filter => filter,
+        };
         if dict.get("Subtype")?.as_name()? != "Image"
             || dict.get("BitsPerComponent")?.as_integer()? != 8
-            || dict.get("Filter")?.as_name()? != "FlateDecode"
+            || filter.as_name()? != "FlateDecode"
             || [
                 "Mask",
                 "SMask",
@@ -395,6 +404,101 @@ fn ink_bands<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SCAN_WIDTH: usize = 4;
+    const SCAN_HEIGHT: usize = 4100;
+
+    fn filtered_image(filter: lopdf::Object) -> lopdf::Stream {
+        use lopdf::{Object as LopdfObject, Stream, dictionary};
+        use std::io::Write;
+
+        let mut samples = vec![1; SCAN_WIDTH * SCAN_HEIGHT];
+        samples[SCAN_WIDTH + 1] = 0;
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&samples).unwrap();
+        let mut palette = vec![255; PALETTE_BYTES];
+        palette[..3].fill(0);
+        Stream::new(
+            dictionary! {
+                "Type" => "XObject", "Subtype" => "Image", "Width" => SCAN_WIDTH as i64, "Height" => SCAN_HEIGHT as i64,
+                "BitsPerComponent" => 8, "Filter" => filter,
+                "ColorSpace" => vec![LopdfObject::Name(b"Indexed".to_vec()),
+                    LopdfObject::Name(b"DeviceRGB".to_vec()), LopdfObject::Integer(255),
+                    LopdfObject::String(palette, lopdf::StringFormat::Hexadecimal)],
+            },
+            encoder.finish().unwrap(),
+        )
+    }
+
+    fn filtered_scan(filter: lopdf::Object, extra_paint: bool) -> PdfDocument {
+        use lopdf::{Document, Object as LopdfObject, Stream, dictionary};
+
+        let mut document = Document::with_version("1.7");
+        let pages = document.new_object_id();
+        let image = document.add_object(filtered_image(filter));
+        let mut paint = format!("q {SCAN_WIDTH} 0 0 {SCAN_HEIGHT} 0 0 cm /Scan Do Q").into_bytes();
+        if extra_paint {
+            paint.extend_from_slice(b" 0 0 m 1 1 l S");
+        }
+        let contents = document.add_object(Stream::new(dictionary! {}, paint));
+        let page = document.add_object(dictionary! {
+            "Type" => "Page", "Parent" => pages,
+            "MediaBox" => LopdfObject::Array(vec![0.into(), 0.into(),
+                (SCAN_WIDTH as i64).into(), (SCAN_HEIGHT as i64).into()]),
+            "Resources" => dictionary! {"XObject" => dictionary! {"Scan" => image}}, "Contents" => contents,
+        });
+        document.objects.insert(
+            pages,
+            dictionary! {
+                "Type" => "Pages", "Kids" => vec![LopdfObject::Reference(page)], "Count" => 1,
+            }
+            .into(),
+        );
+        let root = document.add_object(dictionary! {"Type" => "Catalog", "Pages" => pages});
+        document.trailer.set("Root", root);
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).unwrap();
+        PdfDocument::from_bytes(bytes).unwrap()
+    }
+
+    fn load_filtered_scan(filter: lopdf::Object, extra_paint: bool) -> Option<IndexedSource> {
+        let document = filtered_scan(filter, extra_paint);
+        IndexedSource::load(&super::super::Attempt {
+            document: &document,
+            page: 0,
+            raster: Some((1, 100, 0)),
+            read_width: Some(1),
+            byte_limit: 8 * FIXED_WORK_BYTES,
+            max_strips: 4,
+            cancel: None,
+        })
+    }
+
+    #[test]
+    fn singleton_flate_filter_loads_the_same_indexed_source_samples() {
+        let filter = lopdf::Object::Name(b"FlateDecode".to_vec());
+        let scalar = load_filtered_scan(filter.clone(), false).expect("certified scalar filter source");
+        let singleton =
+            load_filtered_scan(lopdf::Object::Array(vec![filter]), false).expect("equivalent singleton filter source");
+        assert_eq!((singleton.width, singleton.height, singleton.dpi), (4, 4100, 72.0));
+        assert_eq!(singleton.indices, scalar.indices);
+        assert_eq!(singleton.palette, scalar.palette);
+        assert_eq!(singleton.available, scalar.available);
+    }
+
+    #[test]
+    fn singleton_filter_keeps_the_exact_filter_chain_and_single_paint_proofs() {
+        let filter = lopdf::Object::Name(b"FlateDecode".to_vec());
+        for filters in [
+            vec![],
+            vec![filter.clone(), filter.clone()],
+            vec![filter.clone(), lopdf::Object::Name(b"DCTDecode".to_vec())],
+            vec![lopdf::Object::Name(b"DCTDecode".to_vec())],
+        ] {
+            assert!(load_filtered_scan(lopdf::Object::Array(filters), false).is_none());
+        }
+        assert!(load_filtered_scan(lopdf::Object::Array(vec![filter]), true).is_none());
+    }
 
     #[test]
     fn rejects_placement_that_can_clip_beyond_one_edge_sample() {

@@ -67,6 +67,29 @@ fn pinned_page() -> Vec<u8> {
     isolated
 }
 
+fn singleton_filter_page() -> Vec<u8> {
+    let mut document = lopdf::Document::load_mem(&pinned_page()).unwrap();
+    let mut changed = 0;
+    for object in document.objects.values_mut() {
+        let Ok(stream) = object.as_stream_mut() else {
+            continue;
+        };
+        if stream.dict.get(b"Subtype").and_then(lopdf::Object::as_name).ok() != Some(b"Image".as_slice()) {
+            continue;
+        }
+        assert_eq!(stream.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+        stream
+            .dict
+            .set("Filter", vec![lopdf::Object::Name(b"FlateDecode".to_vec())]);
+        changed += 1;
+    }
+    assert_eq!(changed, 1, "change only the source image filter spelling");
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    assert_source_image(&bytes);
+    bytes
+}
+
 fn assert_source_image(bytes: &[u8]) {
     let page = lopdf::Document::load_mem(bytes).expect("reopen isolated PDF");
     let pages = page.get_pages();
@@ -183,6 +206,33 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
     assert_eq!(
         serde_json::to_value(&doc.tables).unwrap(),
         serde_json::to_value(&stock.tables).unwrap()
+    );
+    assert_projection(&doc.content, &stock.content);
+    assert_projection(&page.content, &stock_page.content);
+}
+
+#[tokio::test]
+async fn singleton_flate_filter_preserves_the_certified_right_column_and_original_table() {
+    let tessdata = tempfile::tempdir().expect("private tessdata directory");
+    write_english_model(tessdata.path());
+    let bytes = singleton_filter_page();
+    let config = pinned_config(false, false, tessdata.path());
+    let doc = read_pinned(&xberg::engine::Engine::new_default(), &bytes, &config).await;
+    let stock = read_stock(&bytes, tessdata.path()).await;
+    assert_eq!(doc.tables.len(), 1);
+    assert_eq!(
+        serde_json::to_value(&doc.tables).unwrap(),
+        serde_json::to_value(&stock.tables).unwrap()
+    );
+    let [page] = doc.pages.as_deref().unwrap() else {
+        panic!("one original guide page")
+    };
+    let [stock_page] = stock.pages.as_deref().unwrap() else {
+        panic!("one original stock guide page")
+    };
+    assert_eq!(
+        serde_json::to_value(page.tables.iter().map(AsRef::as_ref).collect::<Vec<_>>()).unwrap(),
+        serde_json::to_value(stock_page.tables.iter().map(AsRef::as_ref).collect::<Vec<_>>()).unwrap()
     );
     assert_projection(&doc.content, &stock.content);
     assert_projection(&page.content, &stock_page.content);
