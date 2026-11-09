@@ -283,10 +283,6 @@ const MIN_LABEL_VALUE_ROWS: usize = 3;
 // cut is prose running across the gutter, not column content. Matches the minimum column
 // width a cut must leave on each side. ~keep
 const MIN_STRADDLING_INK_PTS: f32 = 60.0;
-// The two sides of a column cut must share rows: their y-extents overlap over at least this
-// share of the shorter side's height. Two blocks that overlap less are stacked, not side by
-// side, and the row split reads them top-down. ~keep
-const MIN_SHARED_ROWS_FRACTION: f32 = 0.5;
 
 /// Group `indices` into visual lines: anchored (not chained) on `y`, top to bottom, and
 /// further split on `x` wherever consecutive items are more than `MAX_INTRA_LINE_GAP_EM`
@@ -2203,15 +2199,12 @@ impl XYCutStrategy {
         Some((left, right))
     }
 
-    /// True when the y-extents of the two sides of a column cut overlap over at least
-    /// `MIN_SHARED_ROWS_FRACTION` of the shorter side's height. A side of one zero-height span
-    /// shares rows when it lies inside the other side's extent. ~keep
+    /// True when the y-extents of the two sides of a column cut overlap. Two sides that touch
+    /// or leave a gap share no rows: one sits wholly above the other. ~keep
     fn sides_share_rows(all_spans: &[TextSpan], left: &[usize], right: &[usize]) -> bool {
         let left_box = union_bboxes(all_spans, left);
         let right_box = union_bboxes(all_spans, right);
-        let overlap = left_box.bottom().min(right_box.bottom()) - left_box.top().max(right_box.top());
-        let shorter = (left_box.bottom() - left_box.top()).min(right_box.bottom() - right_box.top());
-        overlap >= MIN_SHARED_ROWS_FRACTION * shorter
+        left_box.bottom().min(right_box.bottom()) > left_box.top().max(right_box.top())
     }
 
     /// True when the cut at `split_x` would separate short label/value pairs that share a
@@ -5122,12 +5115,8 @@ mod tests {
             strategy.find_horizontal_split_indexed(&spans, &indices).is_none(),
             "a right block wholly above the left block must not be cut into columns"
         );
-        let order: Vec<&str> = strategy
-            .partition_region(&spans, None)
-            .iter()
-            .flatten()
-            .map(|s| s.text.as_str())
-            .collect();
+        let groups = strategy.partition_region(&spans, None);
+        let order: Vec<&str> = groups.iter().flatten().map(|s| s.text.as_str()).collect();
         let last_upper = order.iter().rposition(|t| *t == "lh").unwrap();
         let first_lower = order.iter().position(|t| *t == "ad").unwrap();
         assert!(last_upper < first_lower, "the upper block must read first, got {order:?}");
@@ -5151,22 +5140,23 @@ mod tests {
         assert_eq!(right, (8..16).collect::<Vec<_>>());
     }
 
-    /// The boundary of the rule, on the shorter (right, 66 pt) side: an overlap of 20 pt (30
-    /// percent) is stacked and not cut; an overlap of 50 pt (76 percent) shares rows and is cut.
+    /// The boundary of the rule is the y-extent itself: two sides that touch (the right block
+    /// ends at 590, where the left block starts) are stacked and not cut; two sides whose
+    /// extents overlap by one point share a row and are cut.
     #[test]
-    fn the_shared_rows_boundary_is_half_of_the_shorter_side() {
+    fn sides_share_rows_only_when_their_y_extents_overlap() {
         let strategy = XYCutStrategy::new();
         let indices: Vec<usize> = (0..13).collect();
 
-        let stacked = letter_top(570.0);
+        let touching = letter_top(590.0);
         assert!(
-            strategy.find_horizontal_split_indexed(&stacked, &indices).is_none(),
-            "an overlap of 30 percent of the shorter side is stacked"
+            strategy.find_horizontal_split_indexed(&touching, &indices).is_none(),
+            "two blocks that touch share no rows and are stacked"
         );
-        let beside = letter_top(540.0);
+        let overlapping = letter_top(589.0);
         assert!(
-            strategy.find_horizontal_split_indexed(&beside, &indices).is_some(),
-            "an overlap of 76 percent of the shorter side shares rows"
+            strategy.find_horizontal_split_indexed(&overlapping, &indices).is_some(),
+            "an overlap of one point shares a row"
         );
     }
 
