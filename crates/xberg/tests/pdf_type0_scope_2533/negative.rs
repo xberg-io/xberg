@@ -84,7 +84,7 @@ fn contradicted_page() -> Vec<u8> {
         Object::Dictionary(dictionary) => dictionary,
         _ => panic!("source page resources"),
     };
-    assert_eq!(resources.has(b"XObject"), false);
+    assert!(!resources.has(b"XObject"));
     resources.set("XObject", dictionary! { "Bad" => form });
     let mut contents = vec![Object::Reference(pdf.add_object(Stream::new(
         dictionary! {},

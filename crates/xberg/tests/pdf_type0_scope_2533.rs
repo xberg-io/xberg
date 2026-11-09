@@ -165,19 +165,11 @@ fn extract(
 
 fn assert_public_pages(result: &ExtractedDocument, format: &OutputFormat, mode: Mode) {
     let pages = result.pages.as_ref().expect("requested public pages");
-    eprintln!(
-        "{mode:?} {format:?}: method={:?}, page expression counts={:?}, page units counts={:?}",
-        result.extraction_method,
-        pages
-            .iter()
-            .map(|page| page.content.matches(MAPPED_EXPRESSION).count())
-            .collect::<Vec<_>>(),
-        pages
-            .iter()
-            .map(|page| page.content.matches(CELSIUS_UNIT).count())
-            .collect::<Vec<_>>()
+    assert_eq!(
+        pages.iter().map(|page| page.page_number).collect::<Vec<_>>(),
+        [1, 2],
+        "{mode:?} {format:?}: requested public page identity"
     );
-    assert_eq!(pages.iter().map(|page| page.page_number).collect::<Vec<_>>(), [1, 2]);
     let paint_failures = result
         .processing_warnings
         .iter()
@@ -303,7 +295,6 @@ fn extract_matrix(bytes: &[u8], config: &ExtractionConfig) -> Vec<ExtractionRow>
         })
         .collect();
     assert_eq!(extractions, 6);
-    eprintln!("Completed {extractions} public extractions");
     matrix
 }
 
@@ -326,7 +317,7 @@ fn assert_mixed_retention(nist_first: bool) {
         }
         assert_native_oracles(&native, nist_index);
         assert_eq!(forced.extraction_method, Some(ExtractionMethod::Ocr));
-        assert_eq!(forced.metadata.ocr_used, true);
+        assert!(forced.metadata.ocr_used);
         for page in forced.pages.as_ref().unwrap() {
             assert_ne!(page.content.trim(), "", "forced OCR page {}", page.page_number);
         }
@@ -366,7 +357,7 @@ fn should_force_only_the_requested_page_in_either_document_order() {
                 extractions += 1;
                 assert_public_pages(&forced, &format, Mode::Selected(selected));
                 assert_eq!(forced.extraction_method, Some(ExtractionMethod::Mixed));
-                assert_eq!(forced.metadata.ocr_used, true);
+                assert!(forced.metadata.ocr_used);
                 let pages = forced.pages.as_ref().unwrap();
                 let requested = selected as usize - 1;
                 assert_ne!(pages[requested].content.trim(), "");
