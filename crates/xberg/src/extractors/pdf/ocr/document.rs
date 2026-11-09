@@ -1147,10 +1147,10 @@ impl<'a> OcrRowSpans<'a> {
         Self { rows, taken }
     }
     /// The first untaken run of the words of `key` in OCR row `at`, marked taken. A row with
-    /// lost-glyph markers takes no words: its match is a pattern, not a word run. ~keep
+    /// lost-glyph markers takes the untaken words its pattern matches. ~keep
     fn spend(&mut self, at: usize, key: &str) -> bool {
-        if key.contains(super::super::unmapped_glyphs::is_lost_glyph) {
-            return true;
+        if let Some(pattern) = marked_row_pattern(key, false) {
+            return self.take_marked(at, &pattern);
         }
         let words: Vec<&str> = key.split_whitespace().collect();
         let (Some(row), Some(taken)) = (self.rows.get(at), self.taken.get_mut(at)) else {
@@ -1167,11 +1167,31 @@ impl<'a> OcrRowSpans<'a> {
         taken[start..start + words.len()].fill(true);
         true
     }
+    /// The first match of a marked row pattern in OCR row `at` whose words are all untaken,
+    /// marked taken: a marked row consumes its match as an equal row does. ~keep
+    fn take_marked(&mut self, at: usize, pattern: &regex::Regex) -> bool {
+        let (Some(row), Some(taken)) = (self.rows.get(at), self.taken.get_mut(at)) else {
+            return false;
+        };
+        let joined = row.join(" ");
+        for found in pattern.find_iter(&joined) {
+            let text = found.as_str();
+            let span = text.trim_matches(' ');
+            if span.is_empty() {
+                continue;
+            }
+            let start = found.start() + (text.len() - text.trim_start_matches(' ').len());
+            let first = joined[..start].matches(' ').count();
+            let count = span.split(' ').count();
+            if first + count <= taken.len() && !taken[first..first + count].contains(&true) {
+                taken[first..first + count].fill(true);
+                return true;
+            }
+        }
+        false
+    }
     /// Whether one OCR row holds `key` whole in untaken words, read marker-aware. ~keep
     fn take_whole(&mut self, key: &str) -> bool {
-        if let Some(pattern) = marked_row_pattern(key, false) {
-            return self.rows.iter().any(|row| pattern.is_match(&row.join(" ")));
-        }
         (0..self.rows.len()).any(|at| self.spend(at, key))
     }
 }

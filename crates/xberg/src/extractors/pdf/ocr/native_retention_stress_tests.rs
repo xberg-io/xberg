@@ -1050,6 +1050,41 @@ fn an_equal_row_takes_its_ocr_row_before_a_marked_row_does() {
     assert_eq!(first.lines, clean[0].replacen("approved", "appr ved", 1));
 }
 
+/// Two native copies of one marked row and one OCR occurrence of it: the occurrence covers one
+/// copy, so the other is put first, once, with and without row geometry. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn one_ocr_occurrence_covers_one_of_two_marked_copies() {
+    use super::super::document::layer_lines_to_put_first;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let mut native = vec![marked.clone(), marked];
+    native.extend(clean[2..].iter().cloned());
+    let mut read: Vec<(String, usize)> = vec![(clean[0].clone(), 2)];
+    read.extend(clean[2..].iter().map(|row| (row.clone(), 1)));
+    let boxes = spanning_row_boxes(&native, &read);
+    let read_text = read.iter().map(|(row, _)| row.as_str()).collect::<Vec<_>>().join("\n");
+    for boxes in [None, Some(&boxes)] {
+        let first = layer_lines_to_put_first(
+            &stored_layer(&native.join("\n")),
+            &read_text,
+            false,
+            &thresholds,
+            boxes,
+            crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+        )
+        .expect("the second copy has no OCR occurrence");
+        assert_eq!(
+            first.lines,
+            clean[0].replacen("approved", "appr ved", 1),
+            "geometry: {}",
+            boxes.is_some()
+        );
+        assert_eq!(first.lost_glyphs, 1);
+    }
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn a_marker_inside_a_word_does_not_fuse_the_word_the_ocr_confirms() {
