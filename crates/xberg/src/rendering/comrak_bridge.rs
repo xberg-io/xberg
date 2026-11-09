@@ -3161,11 +3161,12 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("test");
         push_math_paragraph(&mut builder, "Let $α+β$ hold ∑.", &["$α+β$"]);
         push_math_paragraph(&mut builder, "Then $$∑ α<β$$ holds.", &["$$∑ α<β$$"]);
+        push_math_paragraph(&mut builder, "And $x<αy$ too.", &["$x<αy$"]);
         builder.push_formula("α+β\nγ", None, None);
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_eq!(
             markdown,
-            "Let $α+β$ hold ∑.\n\nThen $$∑ α<β$$ holds.\n\n$$\nα+β\nγ\n$$\n"
+            "Let $α+β$ hold ∑.\n\nThen $$∑ α<β$$ holds.\n\nAnd $x<αy$ too.\n\n$$\nα+β\nγ\n$$\n"
         );
     }
 
@@ -3182,9 +3183,16 @@ mod tests {
             "<?php",
             "<![CDATA[",
             "<!DOCTYPE",
+            "<p",
+            "<table",
+            "<ul",
+            "<section",
+            "<h1",
         ];
-        for opener in openers {
-            let tex = format!("a\n{opener}\nb");
+        for tex in openers
+            .iter()
+            .flat_map(|opener| [format!("a\n{opener}\nb"), format!("{opener}\nb")])
+        {
             let mut builder = InternalDocumentBuilder::new("test");
             builder.push_formula(&tex, None, None);
             let markdown = crate::rendering::render_markdown(&builder.build());
@@ -3195,22 +3203,28 @@ mod tests {
                 "{markdown}"
             );
         }
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("a\n<script\nb", None, None);
+        assert_eq!(
+            crate::rendering::render_markdown(&builder.build()),
+            "$$\na\n< script\nb\n$$\n"
+        );
     }
 
     #[test]
     fn should_not_let_display_math_open_an_html_block_inside_a_container() {
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_quote_start();
-        builder.push_formula("a\n<div\nb", None, None);
+        builder.push_formula("α\n<div\nβ", None, None);
         builder.push_quote_end();
         builder.push_list(false);
         builder.push_list_item("item", false, vec![], None, None);
-        builder.push_formula("a\n<script\nb", None, None);
+        builder.push_formula("α\n<script\nβ", None, None);
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_no_html(&markdown, &Options::default());
-        assert!(markdown.contains("> $$a <div b$$"), "{markdown}");
-        assert!(markdown.contains("  $$a <script b$$"), "{markdown}");
+        assert!(markdown.contains("> $$α <div β$$"), "{markdown}");
+        assert!(markdown.contains("  $$α <script β$$"), "{markdown}");
     }
 
     #[test]
