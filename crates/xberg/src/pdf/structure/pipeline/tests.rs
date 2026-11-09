@@ -442,7 +442,7 @@ fn stitch_and_emit(
 ) -> Vec<crate::types::Table> {
     use crate::core::config::layout::TableOverlapPreference;
     let stitched = stitch_fragmented_tables(native_tables, all_page_segments, 0);
-    prepare_emitted_tables(&stitched, layout_tables, TableOverlapPreference::Content)
+    prepare_emitted_tables(&stitched, layout_tables, TableOverlapPreference::Content, &[])
 }
 
 #[test]
@@ -600,7 +600,7 @@ fn identical_markdown_tables_collapse_despite_missing_bbox() {
     }];
     let layout = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| a | b |")];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.len(),
@@ -636,7 +636,7 @@ fn sparse_currency_affix_columns_merge_into_financial_values() {
         ..Default::default()
     };
 
-    let emitted = prepare_emitted_tables(&[table], Vec::new(), TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&[table], Vec::new(), TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted[0].cells[0], ["Security", "Par (000)", "Value"]);
     assert_eq!(emitted[0].cells[1], ["Bond 0", "USD 1,000", "$ 1,500"]);
@@ -959,7 +959,7 @@ fn dedup_content_preference_keeps_larger_table() {
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "a"),
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "bbbbbbbbbb"),
     ];
-    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Content, &[]);
     assert_eq!(tables.len(), 1);
     assert_eq!(
         tables[0].markdown, "bbbbbbbbbb",
@@ -974,7 +974,7 @@ fn dedup_native_preference_keeps_native_even_when_smaller() {
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "a"),
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "bbbbbbbbbb"),
     ];
-    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Native);
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Native, &[]);
     assert_eq!(tables.len(), 1);
     assert_eq!(
         tables[0].markdown, "a",
@@ -989,7 +989,7 @@ fn dedup_layout_preference_keeps_layout_even_when_smaller() {
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "aaaaaaaaaa"),
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "b"),
     ];
-    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Layout);
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Layout, &[]);
     assert_eq!(tables.len(), 1);
     assert_eq!(
         tables[0].markdown, "b",
@@ -1004,7 +1004,7 @@ fn dedup_native_preference_falls_back_to_content_for_same_origin() {
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "a"),
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "bbbbbbbbbb"),
     ];
-    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Native);
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Native, &[]);
     assert_eq!(tables.len(), 1);
     assert_eq!(
         tables[0].markdown, "bbbbbbbbbb",
@@ -1019,7 +1019,7 @@ fn dedup_non_overlapping_tables_both_kept() {
         ov_table(1, (0.0, 0.0, 100.0, 100.0), "a"),
         ov_table(1, (200.0, 200.0, 300.0, 300.0), "b"),
     ];
-    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Native);
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Native, &[]);
     assert_eq!(tables.len(), 2, "non-overlapping tables are both kept");
 }
 
@@ -1045,6 +1045,29 @@ fn serff_assumptions_grid() -> crate::types::Table {
     )
 }
 
+/// Page text as the native extractor reports it: one segment per non-empty cell, inside the
+/// table's box. A table the page prints once contributes its cells once.
+fn printed_cells(tables: &[&crate::types::Table]) -> Vec<Vec<SegmentData>> {
+    let mut segments = Vec::new();
+    for table in tables {
+        let bbox = table.bounding_box.expect("table has a box");
+        for cell in table.cells.iter().flatten().filter(|cell| !cell.is_empty()) {
+            let mut segment = seg(cell, bbox.x0 as f32 + 1.0, 5.0);
+            segment.y = bbox.y0 as f32 + 1.0;
+            segment.height = 5.0;
+            segments.push(segment);
+        }
+    }
+    vec![segments]
+}
+
+fn kept_after_dedup(tables: Vec<crate::types::Table>, page: &[Vec<SegmentData>]) -> usize {
+    use crate::core::config::layout::TableOverlapPreference;
+    let mut tables = tables;
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content, page);
+    tables.len()
+}
+
 #[test]
 fn dedup_keeps_a_native_table_whose_box_overlaps_a_grid_that_does_not_hold_its_rows() {
     use crate::core::config::layout::TableOverlapPreference;
@@ -1057,8 +1080,9 @@ fn dedup_keeps_a_native_table_whose_box_overlaps_a_grid_that_does_not_hold_its_r
             &["Claims Trend Factor:", "5.46% 5.87% 3.84%"],
         ],
     );
+    let page = printed_cells(&[&serff_assumptions_grid(), &claims]);
     let mut tables = vec![serff_assumptions_grid(), claims];
-    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content, &page);
     assert_eq!(tables.len(), 2, "the Claims Trend rows exist only in their own table");
     assert_eq!(tables[1].cells[2][0], "Claims Trend Factor:");
 }
@@ -1076,7 +1100,7 @@ fn dedup_still_drops_a_native_pass_that_repeats_the_rows_of_a_larger_grid() {
         ],
     );
     let mut tables = vec![repeat, serff_assumptions_grid()];
-    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content, &[]);
     assert_eq!(tables.len(), 1);
     assert_eq!(tables[0].cells.len(), 5);
 }
@@ -1106,7 +1130,7 @@ fn dedup_drops_near_coincident_native_redetections_even_when_their_rows_differ()
         ],
     );
     let mut tables = vec![wide, narrow];
-    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content, &[]);
     assert_eq!(tables.len(), 1, "one region detected twice yields one table");
 }
 
@@ -1120,9 +1144,150 @@ fn dedup_counts_exactly_half_shared_rows_as_a_duplicate() {
     );
     let half = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["other", "9"]]);
     let mut tables = vec![large, half];
-    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content, &[]);
     assert_eq!(tables.len(), 1);
     assert_eq!(tables[0].cells.len(), 4);
+}
+
+#[test]
+fn dedup_drops_a_pass_whose_merged_rows_only_repeat_the_words_the_page_prints_once() {
+    let grid = serff_assumptions_grid();
+    let merged = cell_table(
+        1,
+        (73.0, 649.0, 538.0, 690.0),
+        &[&[
+            "Requested Rate Increase: 3.60% 4.00% 2.00% Aging Factor: 1.80% 1.80% 1.80% Lapse Rate: 7.50% 5.00% 5.00%",
+            "Premium Trend Rate: 5.46% 5.87% 3.84%",
+        ]],
+    );
+    let page = printed_cells(&[&grid]);
+    assert_eq!(
+        kept_after_dedup(vec![merged, grid], &page),
+        1,
+        "no merged row fits a row of the grid, yet every word is already printed"
+    );
+}
+
+#[test]
+fn dedup_drops_the_short_partner_of_a_long_duplicate_that_regroups_its_words() {
+    let words: Vec<String> = (0..13).map(|n| format!("item{n} qty{n}")).collect();
+    let long_rows: Vec<Vec<&str>> = words.iter().map(|row| vec![row.as_str()]).collect();
+    let long_refs: Vec<&[&str]> = long_rows.iter().map(Vec::as_slice).collect();
+    let long = cell_table(1, (0.0, 0.0, 100.0, 200.0), &long_refs);
+    let pairs: Vec<String> = (0..5)
+        .rev()
+        .map(|n| format!("{} {}", words[2 * n], words[2 * n + 1]))
+        .collect();
+    let short_rows: Vec<Vec<&str>> = pairs.iter().map(|row| vec![row.as_str()]).collect();
+    let short_refs: Vec<&[&str]> = short_rows.iter().map(Vec::as_slice).collect();
+    let short = cell_table(1, (0.0, 20.0, 100.0, 180.0), &short_refs);
+    let page = printed_cells(&[&long]);
+    assert_eq!(
+        kept_after_dedup(vec![short, long], &page),
+        1,
+        "five rows that regroup and reorder rows of the 13-row table add no word"
+    );
+}
+
+#[test]
+fn dedup_keeps_a_table_whose_words_the_page_prints_and_no_other_table_does() {
+    let grid = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let other = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"], &["delta", "4"]]);
+    let page = printed_cells(&[&grid, &other]);
+    assert_eq!(kept_after_dedup(vec![grid, other], &page), 2);
+}
+
+#[test]
+fn dedup_keeps_a_table_with_exactly_half_new_words_and_drops_one_below_half() {
+    let grid = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["alpha", "beta", "gamma", "delta"], &["omega"]],
+    );
+    let half = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "beta", "epsilon", "zeta"]]);
+    let below = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "beta", "gamma", "zeta"]]);
+    let mut page_half = printed_cells(&[&grid]);
+    page_half[0].push(seg("epsilon zeta", 1.0, 5.0));
+    page_half[0][5].y = 41.0;
+    page_half[0][5].height = 5.0;
+    let mut page_below = printed_cells(&[&grid]);
+    page_below[0].push(seg("zeta", 1.0, 5.0));
+    page_below[0][5].y = 41.0;
+    page_below[0][5].height = 5.0;
+    assert_eq!(
+        kept_after_dedup(vec![grid.clone(), half], &page_half),
+        2,
+        "2 of 4 words are new"
+    );
+    assert_eq!(
+        kept_after_dedup(vec![grid, below], &page_below),
+        1,
+        "1 of 4 words is new"
+    );
+}
+
+/// Tables that the document build emits for one page of text and the given native tables.
+#[cfg(feature = "layout-detection")]
+fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>) -> usize {
+    let document = build_document_structure(
+        page,
+        SegmentStructureConfig {
+            k_clusters: 3,
+            tables,
+            outline_entries: &[],
+            strip_repeating_text: false,
+            include_headers: true,
+            include_footers: true,
+            include_footnotes: true,
+            include_watermarks: true,
+            used_structure_tree: false,
+            ocr_text: false,
+            image_positions: &[],
+            images: None,
+            inject_placeholders: false,
+            layout_hints: None,
+            allow_single_column: true,
+            cancel_token: None,
+            layout_images: None,
+            layout_results: None,
+            table_model: crate::core::config::layout::TableModel::Disabled,
+            table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+            acceleration: None,
+            session_thread_budget: 1,
+        },
+        NO_TABLE_MODELS,
+    )
+    .expect("the document structure builds");
+    document.tables.len()
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn document_build_applies_the_page_budget_to_overlapping_native_tables() {
+    let grid = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let other = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"], &["delta", "4"]]);
+    let page = printed_cells(&[&grid, &other]);
+    assert_eq!(
+        built_table_count(&[grid, other], page),
+        2,
+        "the page prints the words of both tables, and no other table carries them"
+    );
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn document_build_drops_an_overlapping_native_table_that_repeats_the_printed_words() {
+    let grid = serff_assumptions_grid();
+    let merged = cell_table(
+        1,
+        (73.0, 649.0, 538.0, 690.0),
+        &[&[
+            "Requested Rate Increase: 3.60% 4.00% 2.00% Aging Factor: 1.80% 1.80% 1.80% Lapse Rate: 7.50% 5.00% 5.00%",
+            "Premium Trend Rate: 5.46% 5.87% 3.84%",
+        ]],
+    );
+    let page = printed_cells(&[&grid]);
+    assert_eq!(built_table_count(&[merged, grid], page), 1);
 }
 
 #[test]
@@ -1132,7 +1297,7 @@ fn dedup_without_cell_text_keeps_arbitrating_by_box_overlap() {
         ov_table(1, (73.0, 649.0, 538.0, 704.0), "grid"),
         ov_table(1, (73.0, 640.0, 296.0, 666.0), "block"),
     ];
-    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 2, TableOverlapPreference::Content, &[]);
     assert_eq!(tables.len(), 1);
 }
 
@@ -1149,7 +1314,7 @@ fn dedup_does_not_apply_the_distinct_rows_guard_to_a_layout_table() {
         ],
     );
     let mut tables = vec![serff_assumptions_grid(), claims];
-    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Content);
+    deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Content, &[]);
     assert_eq!(tables.len(), 1, "native/layout arbitration is unchanged");
 }
 
@@ -1162,7 +1327,7 @@ fn side_by_side_layout_children_replace_content_heavy_parent() {
         ov_table(1, (0.0, 0.0, 95.0, 100.0), "left"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1182,7 +1347,7 @@ fn side_by_side_layout_cohort_replaces_two_content_heavy_native_parents() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), "layout right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1202,7 +1367,7 @@ fn native_preference_keeps_two_parents_over_side_by_side_layout_cohort() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), &"layout right".repeat(100)),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Native);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Native, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1219,7 +1384,7 @@ fn one_layout_child_does_not_replace_two_native_parents() {
     ];
     let layout = vec![ov_table(1, (0.0, 0.0, 95.0, 100.0), "layout left")];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted.len(), 2);
     assert!(emitted.iter().all(|table| table.markdown.starts_with("native")));
@@ -1326,7 +1491,7 @@ fn three_native_candidates_select_one_disjoint_adjacent_cohort() {
     let replacements = side_by_side_layout_replacements(&candidates, native.len());
     assert_eq!(replacements, [(vec![2, 0], vec![4, 5])]);
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
         ["layout left", "layout middle", &"native right".repeat(100)]
@@ -1345,7 +1510,7 @@ fn side_by_side_replacement_is_atomic_against_native_duplicate() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), "right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1364,7 +1529,7 @@ fn side_by_side_replacement_is_atomic_against_earlier_layout_duplicate() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), "right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1383,7 +1548,7 @@ fn side_by_side_replacement_is_atomic_against_later_layout_duplicate() {
         ov_table(1, (0.0, 0.0, 95.0, 100.0), better_left),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1405,7 +1570,7 @@ fn overlapping_protected_replacement_groups_survive() {
         ov_table(1, (105.0, 40.0, 200.0, 140.0), "lower right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1426,7 +1591,7 @@ fn partially_shared_replacement_groups_keep_canonical_table_order() {
         ov_table(1, (0.0, 0.0, 95.0, 100.0), "left"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1444,7 +1609,7 @@ fn side_by_side_replacement_orders_complete_affected_row_cohort() {
         ov_table(1, (0.0, 0.0, 95.0, 100.0), "left"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1462,7 +1627,7 @@ fn side_by_side_replacement_preserves_interleaved_different_row_slot() {
         ov_table(1, (0.0, 0.0, 95.0, 100.0), "left"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1476,7 +1641,7 @@ fn one_layout_child_does_not_replace_parent() {
     let native = vec![ov_table(1, (0.0, 0.0, 200.0, 100.0), &"parent".repeat(100))];
     let layout = vec![ov_table(1, (0.0, 0.0, 95.0, 100.0), "left")];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].markdown.starts_with("parent"));
@@ -1491,7 +1656,7 @@ fn overlapping_layout_children_do_not_replace_parent() {
         ov_table(1, (80.0, 0.0, 200.0, 100.0), "right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].markdown.starts_with("parent"));
@@ -1506,7 +1671,7 @@ fn stacked_layout_children_do_not_replace_parent() {
         ov_table(1, (0.0, 55.0, 200.0, 100.0), "bottom"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].markdown.starts_with("parent"));
@@ -1521,7 +1686,7 @@ fn shallow_layout_children_do_not_replace_tall_parent() {
         ov_table(1, (105.0, 0.0, 200.0, 20.0), "right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].markdown.starts_with("parent"));
@@ -1536,7 +1701,7 @@ fn weakly_overlapping_layout_children_do_not_replace_parent() {
         ov_table(1, (120.0, 0.0, 270.0, 100.0), "right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].markdown.starts_with("parent"));
@@ -1554,7 +1719,7 @@ fn side_by_side_replacement_preserves_unrelated_table() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), "right"),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
 
     assert_eq!(
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
@@ -1571,7 +1736,7 @@ fn native_preference_keeps_parent_over_side_by_side_children() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), &"right".repeat(100)),
     ];
 
-    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Native);
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Native, &[]);
 
     assert_eq!(emitted.len(), 1);
     assert_eq!(emitted[0].markdown, "parent");
@@ -1583,7 +1748,7 @@ fn dropped_duplicate_table_does_not_suppress_text() {
 
     let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "native table content")];
     let layout_tables = vec![ov_table(1, (0.0, 0.0, 200.0, 100.0), "x")];
-    let emitted_tables = prepare_emitted_tables(&native_tables, layout_tables, TableOverlapPreference::Content);
+    let emitted_tables = prepare_emitted_tables(&native_tables, layout_tables, TableOverlapPreference::Content, &[]);
     let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
 
     assert_eq!(emitted_tables.len(), 1);
@@ -1608,7 +1773,7 @@ fn empty_table_does_not_suppress_text() {
     use crate::core::config::layout::TableOverlapPreference;
 
     let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "  \n")];
-    let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content);
+    let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content, &[]);
     let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
 
     assert!(
@@ -1641,7 +1806,7 @@ fn empty_table_does_not_displace_valid_overlap() {
     let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "  \n")];
     let layout_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| valid |")];
 
-    let emitted_tables = prepare_emitted_tables(&native_tables, layout_tables, TableOverlapPreference::Native);
+    let emitted_tables = prepare_emitted_tables(&native_tables, layout_tables, TableOverlapPreference::Native, &[]);
 
     assert_eq!(emitted_tables.len(), 1);
     assert_eq!(emitted_tables[0].markdown, "| valid |");
@@ -1674,7 +1839,7 @@ fn emitted_table_still_suppresses_covered_text() {
     use crate::core::config::layout::TableOverlapPreference;
 
     let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| duplicated table text |")];
-    let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content);
+    let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content, &[]);
     let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
     let segment = SegmentData {
         x: 10.0,
@@ -8291,7 +8456,7 @@ mod table_header_metadata_tests {
         } else {
             (vec![input], Vec::new())
         };
-        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].table_id.as_deref(), Some("table-1"));
         assert_eq!(emitted[0].cells, expected_cells);

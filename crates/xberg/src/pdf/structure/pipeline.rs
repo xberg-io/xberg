@@ -3968,7 +3968,12 @@ fn build_document_structure_with_native(
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
     let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
-    let emitted_tables = prepare_emitted_tables(&stitched_native_tables, layout_tables, overlap_preference);
+    let emitted_tables = prepare_emitted_tables(
+        &stitched_native_tables,
+        layout_tables,
+        overlap_preference,
+        &all_page_segments,
+    );
 
     let table_members =
         crate::pdf::native::table::source_members::project(&all_page_segments, table_sources, &emitted_tables);
@@ -4840,6 +4845,7 @@ fn prepare_emitted_tables(
     native_tables: &[crate::types::Table],
     layout_tables: Vec<crate::types::Table>,
     overlap_preference: crate::core::config::layout::TableOverlapPreference,
+    page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     let mut emitted_tables: Vec<crate::types::Table> = native_tables.iter().cloned().chain(layout_tables).collect();
     emitted_tables.retain(|table| !table.markdown.trim().is_empty());
@@ -4847,7 +4853,7 @@ fn prepare_emitted_tables(
         .iter()
         .filter(|table| !table.markdown.trim().is_empty())
         .count();
-    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference);
+    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference, page_segments);
     normalize_sparse_currency_affix_columns(&mut emitted_tables);
     normalize_wrapped_financial_rows(&mut emitted_tables);
     deduplicate_identical_tables(&mut emitted_tables);
@@ -5319,26 +5325,7 @@ fn normalize_for_table_coverage(text: &str) -> String {
 fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<TableCoverage>> {
     let mut coverage_by_page: ahash::AHashMap<usize, Vec<TableCoverage>> = ahash::AHashMap::new();
     for table in tables {
-        if let Some(bbox) = table.bounding_box {
-            // `cells` is authoritative when populated, but a table can reach here
-            // carrying only rendered `markdown` (layout-sourced tables, and the
-            // overlap-preference merge, both produce that shape). Falling back to the
-            // markdown keeps suppression working for those instead of silently
-            // disabling it, which would emit their contents twice. ~keep
-            let coverage = if table.cells.iter().any(|row| !row.is_empty()) {
-                TableCoverage::from_rows(
-                    bbox,
-                    table.cells.iter().map(|row| row.iter().map(String::as_str).collect()),
-                )
-            } else {
-                TableCoverage::from_rows(
-                    bbox,
-                    table
-                        .markdown
-                        .lines()
-                        .map(|line| line.split('|').collect::<Vec<&str>>()),
-                )
-            };
+        if let Some(coverage) = table_coverage(table) {
             coverage_by_page
                 .entry(table.page_number.saturating_sub(1) as usize)
                 .or_default()
@@ -5346,6 +5333,29 @@ fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize
         }
     }
     coverage_by_page
+}
+
+fn table_coverage(table: &crate::types::Table) -> Option<TableCoverage> {
+    let bbox = table.bounding_box?;
+    // `cells` is authoritative when populated, but a table can reach here
+    // carrying only rendered `markdown` (layout-sourced tables, and the
+    // overlap-preference merge, both produce that shape). Falling back to the
+    // markdown keeps suppression working for those instead of silently
+    // disabling it, which would emit their contents twice. ~keep
+    Some(if table.cells.iter().any(|row| !row.is_empty()) {
+        TableCoverage::from_rows(
+            bbox,
+            table.cells.iter().map(|row| row.iter().map(String::as_str).collect()),
+        )
+    } else {
+        TableCoverage::from_rows(
+            bbox,
+            table
+                .markdown
+                .lines()
+                .map(|line| line.split('|').collect::<Vec<&str>>()),
+        )
+    })
 }
 
 /// Filter out segments a table both COVERS and CARRIES.
@@ -5430,6 +5440,7 @@ fn deduplicate_overlapping_tables(
     tables: &mut Vec<crate::types::Table>,
     native_count: usize,
     preference: crate::core::config::layout::TableOverlapPreference,
+    page_segments: &[Vec<SegmentData>],
 ) {
     use crate::core::config::layout::TableOverlapPreference;
 
@@ -5478,7 +5489,7 @@ fn deduplicate_overlapping_tables(
                     if i < native_count
                         && j < native_count
                         && !near_coincident
-                        && holds_distinct_rows(&tables[i], &tables[j])
+                        && holds_unprinted_words(tables, page_segments, lower_content_table(tables, i, j), &to_remove)
                     {
                         continue;
                     }
@@ -5541,56 +5552,81 @@ fn deduplicate_overlapping_tables(
     canonicalize_affected_table_rows(tables, affected_rows);
 }
 
-/// Fraction of the smaller table's rows that must reappear in the larger one for the pair to
-/// count as two detections of the same region.
-const SHARED_ROW_FRACTION: f64 = 0.5;
+/// Share of a table's words that the page must still lack for the table to count as new content.
+const NEW_WORD_FRACTION: f64 = 0.5;
 
 /// Boxes covering this much of each other are one region read twice, whatever their rows say.
 const NEAR_COINCIDENT_OVERLAP: f64 = 0.8;
 
-fn row_words(row: &[String]) -> Vec<&str> {
-    let mut words: Vec<&str> = row.iter().flat_map(|cell| cell.split_whitespace()).collect();
-    words.sort_unstable();
-    words
+type WordCounts = ahash::AHashMap<String, usize>;
+
+fn count_words<'a>(texts: impl IntoIterator<Item = &'a str>) -> WordCounts {
+    let mut counts = WordCounts::new();
+    for word in texts
+        .into_iter()
+        .flat_map(str::split_whitespace)
+        .map(normalize_for_table_coverage)
+        .filter(|word| !word.is_empty())
+    {
+        *counts.entry(word).or_default() += 1;
+    }
+    counts
 }
 
-/// Whether the smaller of two same-page native tables mostly holds rows the larger lacks.
+fn table_word_counts(table: &crate::types::Table) -> WordCounts {
+    count_words(table.cells.iter().flatten().map(String::as_str))
+}
+
+/// Whether the table that overlap arbitration would drop holds words the page would otherwise lack.
 ///
 /// Box overlap cannot tell a repeated detection from an L-shaped grid whose boxed corner lies
-/// beside another table; only the rows can. A row is shared when its words fit inside one row of
-/// the other table, whatever the cell split. Tables without cell text give no evidence.
-fn holds_distinct_rows(left: &crate::types::Table, right: &crate::types::Table) -> bool {
-    let (small, large) = if left.cells.len() <= right.cells.len() {
-        (left, right)
-    } else {
-        (right, left)
+/// beside another table. The page can: it prints each word a fixed number of times. A word counts
+/// as new when the page text has more copies of it than the rest of the page output prints, that
+/// is the other live tables on the page and the text no live table suppresses. The table stays
+/// when at least [`NEW_WORD_FRACTION`] of its words are new. A table without cell text, or a page
+/// without text, gives no evidence.
+fn holds_unprinted_words(
+    tables: &[crate::types::Table],
+    page_segments: &[Vec<SegmentData>],
+    dropped: usize,
+    removed: &ahash::AHashSet<usize>,
+) -> bool {
+    let table = &tables[dropped];
+    let own = table_word_counts(table);
+    let own_total: usize = own.values().sum();
+    let Some(segments) = page_segments.get(table.page_number.saturating_sub(1) as usize) else {
+        return false;
     };
-    let large_rows: Vec<Vec<&str>> = large.cells.iter().map(|row| row_words(row)).collect();
-    let small_rows: Vec<Vec<&str>> = small
-        .cells
-        .iter()
-        .map(|row| row_words(row))
-        .filter(|words| !words.is_empty())
-        .collect();
-    if small_rows.is_empty() || large_rows.iter().all(Vec::is_empty) {
+    if own_total == 0 {
         return false;
     }
-    let shared = small_rows
+    let live: Vec<usize> = (0..tables.len())
+        .filter(|&index| tables[index].page_number == table.page_number && !removed.contains(&index))
+        .collect();
+    let coverage: Vec<TableCoverage> = live
         .iter()
-        .filter(|words| {
-            large_rows.iter().any(|candidate| {
-                let mut available = candidate.clone();
-                words.iter().all(|word| {
-                    available
-                        .iter()
-                        .position(|other| other == word)
-                        .map(|at| available.swap_remove(at))
-                        .is_some()
-                })
-            })
+        .filter_map(|&index| table_coverage(&tables[index]))
+        .collect();
+    let page = count_words(segments.iter().map(|segment| segment.text.as_str()));
+    let mut rest = count_words(
+        filter_segments_by_table_bboxes(segments.clone(), &coverage)
+            .iter()
+            .map(|segment| segment.text.as_str()),
+    );
+    for &index in live.iter().filter(|&&index| index != dropped) {
+        for (word, count) in table_word_counts(&tables[index]) {
+            *rest.entry(word).or_default() += count;
+        }
+    }
+    let new_words: usize = own
+        .iter()
+        .map(|(word, &count)| {
+            let printed = page.get(word).copied().unwrap_or(0);
+            let elsewhere = rest.get(word).copied().unwrap_or(0);
+            count.min(printed.saturating_sub(elsewhere))
         })
-        .count();
-    (shared as f64) < SHARED_ROW_FRACTION * small_rows.len() as f64
+        .sum();
+    new_words as f64 >= NEW_WORD_FRACTION * own_total as f64
 }
 
 /// Required containment for a layout child and, in one-to-one cohort matching,
