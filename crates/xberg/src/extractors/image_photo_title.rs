@@ -125,7 +125,7 @@ fn is_default_english_profile(ocr: &OcrConfig) -> bool {
         && ocr.tessdata_path.is_none()
         && ocr.tessdata_bytes.is_none()
         && ocr.pipeline.is_none()
-        && !ocr.auto_rotate
+        && ocr.auto_rotate != Some(true)
         && !ocr.numeric_repair
         && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
 }

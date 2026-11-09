@@ -34,6 +34,7 @@ fn span(text: &str, x: f32, y: f32, mcid: u32, seq: usize) -> TextSpan {
         wmode: 0,
         text_rise: 0.0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }

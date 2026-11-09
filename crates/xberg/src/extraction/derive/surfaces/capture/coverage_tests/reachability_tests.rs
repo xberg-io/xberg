@@ -54,7 +54,7 @@ fn inline_math(literal: &str) -> DerivedResult {
     };
     let result = paragraph(&source, vec![annotation]);
     let markdown = result.formatted_content.as_ref().unwrap();
-    assert_eq!(markdown.matches(&format!("$`{literal}`$")).count(), 1);
+    assert_eq!(markdown.matches(&format!("${literal}$")).count(), 1);
     let arena = comrak::Arena::new();
     let root = comrak::parse_document(&arena, markdown, &canonical_options());
     let formulas = root
@@ -67,7 +67,7 @@ fn inline_math(literal: &str) -> DerivedResult {
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(formulas, [(false, false, literal.to_owned())]);
+    assert_eq!(formulas, [(true, false, literal.to_owned())]);
     assert_eq!(visible(markdown), format!("Let {literal} hold."));
     result
 }
@@ -272,7 +272,7 @@ fn padded_inline_math() -> DerivedResult {
     assert!(crate::rendering::common::valid_math_annotation(source, &annotation));
     let result = paragraph(source, vec![annotation]);
     let markdown = result.formatted_content.as_ref().unwrap();
-    assert_eq!(markdown.matches("$` Jane Doe `$").count(), 1);
+    assert_eq!(markdown.matches("$Jane Doe$").count(), 1);
     let arena = comrak::Arena::new();
     let root = comrak::parse_document(&arena, markdown, &canonical_options());
     let formulas = root
@@ -285,7 +285,7 @@ fn padded_inline_math() -> DerivedResult {
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(formulas, [(false, false, "Jane Doe".to_owned())]);
+    assert_eq!(formulas, [(true, false, "Jane Doe".to_owned())]);
     assert_eq!(visible(markdown), "Let Jane Doe hold.");
     result
 }
@@ -337,13 +337,20 @@ fn math_first_footnote() -> DerivedResult {
     assert_eq!(definitions.len(), 1);
     let first = definitions[0].first_child().expect("real definition child");
     let data = first.data.borrow();
-    let comrak::nodes::NodeValue::CodeBlock(block) = &data.value else {
-        panic!(
-            "canonical display math must become the first CodeBlock: {:?}",
-            data.value
-        );
+    assert!(
+        matches!(data.value, comrak::nodes::NodeValue::Paragraph),
+        "{:?}",
+        data.value
+    );
+    let math = first.first_child().expect("display math in the definition");
+    let math = math.data.borrow();
+    let comrak::nodes::NodeValue::Math(math) = &math.value else {
+        panic!("canonical display math must become dollar math: {:?}", math.value);
     };
-    assert_eq!((block.info.as_str(), block.literal.as_str()), ("math", "x+y\n"));
+    assert_eq!(
+        (math.dollar_math, math.display_math, math.literal.as_str()),
+        (true, true, "x+y")
+    );
     assert_math_footnote_consumers(markdown);
     result
 }
@@ -459,11 +466,20 @@ fn sensitive_math_first_footnote() -> DerivedResult {
     assert_eq!(definitions.len(), 1);
     let first = definitions[0].first_child().expect("actual definition child");
     let data = first.data.borrow();
-    let comrak::nodes::NodeValue::CodeBlock(block) = &data.value else {
-        panic!("canonical annotated definition must begin with math CodeBlock");
+    assert!(
+        matches!(data.value, comrak::nodes::NodeValue::Paragraph),
+        "{:?}",
+        data.value
+    );
+    let math = first.first_child().expect("display math in the definition");
+    let math = math.data.borrow();
+    let comrak::nodes::NodeValue::Math(math) = &math.value else {
+        panic!("canonical annotated definition must begin with dollar math");
     };
-    assert!(block.fenced && block.closed);
-    assert_eq!((block.info.as_str(), block.literal.as_str()), ("math", "Jane Doe\n"));
+    assert_eq!(
+        (math.dollar_math, math.display_math, math.literal.as_str()),
+        (true, true, "Jane Doe")
+    );
     assert_eq!(visible(markdown), "See note11 Jane Doe");
     assert_sensitive_math_pdf(markdown);
     result
@@ -493,4 +509,75 @@ async fn canonical_sensitive_math_first_footnote_remains_completely_redactable()
         "See note11 [REDACTED]",
     )
     .await;
+}
+
+async fn assert_display_math_redactable(document: InternalDocument, markdown_shape: &str) {
+    let mut result = prepare(document);
+    let markdown = result.formatted_content.clone().unwrap();
+    assert!(markdown.contains(markdown_shape), "{markdown}");
+    apply(&mut result, rule())
+        .await
+        .expect("display math in a container must remain redactable");
+    let result = finish(result);
+    assert!(!result.content.contains("Jane Doe"), "{}", result.content);
+    assert!(result.redaction_report.as_ref().unwrap().total_redacted > 0);
+}
+
+fn display_math_in_container(tex: &str, container: &str) -> InternalDocument {
+    let mut builder = InternalDocumentBuilder::new("test");
+    match container {
+        "quote" => builder.push_quote_start(),
+        _ => {
+            builder.push_list(false);
+            builder.push_list_item("item", false, vec![], None, None);
+        }
+    }
+    builder.push_formula(tex, None, None);
+    match container {
+        "quote" => builder.push_quote_end(),
+        _ => builder.end_list(),
+    }
+    builder.build()
+}
+
+#[tokio::test]
+async fn display_math_in_a_quote_is_redacted_on_one_line() {
+    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "quote"), "> $$Jane Doe x$$").await;
+}
+
+#[tokio::test]
+async fn display_math_in_a_list_item_is_redacted_on_one_line() {
+    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "list"), "  $$Jane Doe x$$").await;
+}
+
+#[tokio::test]
+async fn display_math_with_a_comment_in_a_quote_is_redacted_as_a_fence() {
+    assert_display_math_redactable(
+        display_math_in_container("Jane Doe % note\nx", "quote"),
+        "> ```math\n> Jane Doe % note\n> x\n> ```",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn display_math_with_a_comment_at_the_top_level_is_redacted_between_dollar_lines() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_formula("Jane Doe % note\nx", None, None);
+    assert_display_math_redactable(builder.build(), "$$\nJane Doe % note\nx\n$$").await;
+}
+
+#[tokio::test]
+async fn display_math_with_a_comment_in_a_footnote_is_redacted_as_a_fence() {
+    let source = "$$Jane Doe % note\nx$$";
+    let annotation = TextAnnotation {
+        start: 0,
+        end: u32::try_from(source.len()).unwrap(),
+        kind: AnnotationKind::math(true),
+    };
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("See note", vec![], None, None);
+    builder.push_footnote_ref("1", "note", None);
+    let index = builder.push_footnote_definition(source, "note", None);
+    builder.set_annotations(index, vec![annotation]);
+    assert_display_math_redactable(builder.build(), "```math\n    Jane Doe % note\n    x\n    ```").await;
 }

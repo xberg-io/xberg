@@ -775,6 +775,7 @@ fn test_deduplicate_overlapping_spans_geometric() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -805,6 +806,7 @@ fn test_deduplicate_overlapping_spans_geometric() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -859,6 +861,7 @@ fn test_deduplicate_spans_keeps_narrow_glyph_doublets() {
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     };
@@ -922,6 +925,7 @@ fn test_deduplicate_spans_still_collapses_stroke_fill_narrow_glyphs() {
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     };
