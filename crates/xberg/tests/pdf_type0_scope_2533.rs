@@ -30,6 +30,7 @@ enum Mode {
     Native,
     Automatic,
     Forced,
+    Selected(u32),
 }
 
 fn pinned_source() -> Vec<u8> {
@@ -147,6 +148,10 @@ fn extract(
         output_format: format,
         disable_ocr: matches!(mode, Mode::Native),
         force_ocr: matches!(mode, Mode::Forced),
+        force_ocr_pages: match mode {
+            Mode::Selected(page) => Some(vec![page]),
+            _ => None,
+        },
         ..base.clone()
     };
     helpers::extract_bytes_document_blocking(bytes, "application/pdf", &config)
@@ -238,12 +243,26 @@ fn compare_automatic(
         automatic.extraction_method,
         Some(ExtractionMethod::Native),
     );
+    compare_retention_warning(errors, automatic, nist_index);
     for content in [
         &automatic.content,
         &automatic.pages.as_ref().unwrap()[nist_index].content,
     ] {
         compare_projection(errors, content);
     }
+}
+
+fn compare_retention_warning(errors: &mut Vec<String>, automatic: &ExtractedDocument, nist_index: usize) {
+    let message = format!(
+        "Page {} retained native text; 8 glyphs have no Unicode value",
+        nist_index + 1
+    );
+    let retained = automatic
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.message.starts_with(&message))
+        .count();
+    record_equal(errors, "page-owned unrecovered-glyph warning", retained, 1);
 }
 
 fn compare_projection(errors: &mut Vec<String>, content: &str) {
@@ -324,4 +343,34 @@ fn should_preserve_unrecovered_type0_page_when_first_in_mixed_document() {
 #[test]
 fn should_preserve_unrecovered_type0_page_when_second_in_mixed_document() {
     assert_mixed_retention(false);
+}
+
+#[test]
+fn should_force_only_the_requested_page_in_either_document_order() {
+    let models = tempfile::tempdir().unwrap();
+    let config = pinned_config(models.path());
+    let mut extractions = 0;
+    for nist_first in [true, false] {
+        let bytes = mixed_pdf(nist_first);
+        for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+            let native = extract(&bytes, &config, format.clone(), Mode::Native).unwrap();
+            extractions += 1;
+            for selected in 1..=2 {
+                let forced = extract(&bytes, &config, format.clone(), Mode::Selected(selected)).unwrap();
+                extractions += 1;
+                assert_public_pages(&forced, &format, Mode::Selected(selected));
+                assert_eq!(forced.extraction_method, Some(ExtractionMethod::Mixed));
+                assert_eq!(forced.metadata.ocr_used, true);
+                let pages = forced.pages.as_ref().unwrap();
+                let requested = selected as usize - 1;
+                assert_ne!(pages[requested].content.trim(), "");
+                assert_eq!(
+                    pages[1 - requested].content,
+                    native.pages.as_ref().unwrap()[1 - requested].content,
+                    "{format:?}: only page {selected} was requested"
+                );
+            }
+        }
+    }
+    assert_eq!(extractions, 12);
 }

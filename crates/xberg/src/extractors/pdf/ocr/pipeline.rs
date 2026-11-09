@@ -1098,7 +1098,28 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let native_coverage_layers = page_layers.as_ref().filter(|_| {
+    let ink_coverage_layers = {
+        let markers = if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative {
+            super::document::marker_native_ink_layers(
+                native_text,
+                boundaries,
+                &ocr_set,
+                page_count,
+                &ocr_output_thresholds,
+            )
+        } else {
+            ahash::AHashMap::new()
+        };
+        if markers.is_empty() {
+            page_layers.clone()
+        } else {
+            let mut layers = page_layers.as_deref().cloned().unwrap_or_default();
+            layers.extend(markers);
+            Some(std::sync::Arc::new(layers))
+        }
+    };
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let native_coverage_layers = ink_coverage_layers.as_ref().filter(|_| {
         all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
             && !probing_hidden_layer
             && !mixed_route_layout_active
@@ -2762,7 +2783,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if native_ink_owned_pages.contains(&page)
                 && ink_proof_layout_free
-                && page_count == 1
                 && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
                 && accepted_replacements.contains_key(&page)
                 && !noise_verdict_pages.contains(&page)
