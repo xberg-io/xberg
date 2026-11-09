@@ -5449,30 +5449,59 @@ mod tests {
             assert!(has_robust_word_confidence_distribution(&result));
         }
 
-        /// #2699: on the receipt fixture the PSM 3 re-read at the workspace-bounded upscale returns no words
-        /// at all (layout analysis gives up on the textured background); at other scales it reads the header.
-        /// The gate must not keep such a re-read, whatever the scale. ~keep
+        /// #2699: a re-read that returns no usable words must not be kept over the first pass. ~keep
         #[test]
-        fn should_reject_fallback_that_read_no_words() {
+        fn should_reject_fallback_that_read_no_usable_words() {
             assert!(!has_robust_word_confidence_distribution(&result_with_word_confidences(
                 &[]
             )));
+            assert!(!has_robust_word_confidence_distribution(
+                &crate::types::ExtractedDocument::default()
+            ));
+            let mut whitespace_only = result_with_word_confidences(&[0.95, 0.95]);
+            for element in whitespace_only.ocr_elements.iter_mut().flatten() {
+                element.text = "  ".to_string();
+            }
+            assert!(!has_robust_word_confidence_distribution(&whitespace_only));
         }
 
         #[test]
-        fn robust_word_confidence_verdict_does_not_depend_on_how_many_words_share_the_distribution() {
-            let distributions: [&[f64]; 3] = [&[0.95, 0.9, 0.85, 0.4], &[0.95, 0.2, 0.2, 0.9], &[0.31; 4]];
-            for base in distributions {
-                let verdict = |copies: usize| {
-                    let confidences = base
-                        .iter()
-                        .copied()
-                        .cycle()
-                        .take(base.len() * copies)
-                        .collect::<Vec<_>>();
-                    has_robust_word_confidence_distribution(&result_with_word_confidences(&confidences))
-                };
-                assert_eq!(verdict(1), verdict(4), "{base:?}");
+        fn robust_word_confidence_gate_decides_at_the_percentile_and_confidence_thresholds() {
+            let with_low = |good: usize, low: usize| {
+                let mut confidences = vec![0.95; good];
+                confidences.extend(vec![0.2; low]);
+                confidences
+            };
+            let cases: [(&str, Vec<f64>, bool); 6] = [
+                ("a single confident word", vec![0.95], true),
+                (
+                    "a word exactly at the minimum confidence is not low",
+                    vec![0.30; 10],
+                    true,
+                ),
+                (
+                    "one low word in ten sits on the tenth percentile",
+                    with_low(9, 1),
+                    false,
+                ),
+                (
+                    "one low word in twenty stays under the tenth percentile",
+                    with_low(19, 1),
+                    true,
+                ),
+                (
+                    "two low words in twenty reach the tenth percentile",
+                    with_low(18, 2),
+                    false,
+                ),
+                ("every word low", with_low(0, 12), false),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    has_robust_word_confidence_distribution(&result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
             }
         }
 
