@@ -76,8 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(ocr): Make `OcrConfig.auto_rotate` tri-state so an omitted value no longer reads as `false`.** (#2496)
-  The field is `Option<bool>` in Rust and nullable in every binding; `true` and `false` in existing configs parse unchanged and an omitted value is unset. Unset keeps the orientation retry on for a plain Tesseract `ocr` block and, when no `osd.traineddata` is cached, recovers sideways and upside-down scans through the ONNX orientation classifier exactly as extraction without an `ocr` block does. `true` always rotates and `false` never rotates or retries (an explicit `false` previously still allowed the cached-OSD retry). Rust callers constructing `OcrConfig` must write `Some(true)`/`Some(false)`/`None`.
+- **Breaking (ocr): `OcrConfig.auto_rotate` is now tri-state, and an explicit `false` no longer allows the orientation retry.** (#2496)
+  Previously `auto_rotate: false` still allowed the cached-OSD retry for a plain Tesseract block; now `false` never rotates and never retries, `true` always rotates, and an omitted value (unset) keeps the retry and, when no `osd.traineddata` is cached, recovers sideways and upside-down scans through the ONNX orientation classifier exactly as extraction without an `ocr` block does. The field is `Option<bool>` in Rust and nullable in every binding; `true` and `false` in existing configs parse unchanged. Rust callers constructing `OcrConfig` must write `Some(true)`/`Some(false)`/`None`. In the C ABI `xberg_ocr_config_auto_rotate` returns 0 for an unset value, so callers must check `xberg_ocr_config_has_auto_rotate` first.
 
 - **(pdf): Pin the native PDF reduced-JPEG decoder to the version the OCR path measures, and drop the unreachable decoder output cap.** (#2740)
   `xberg-native-pdf` now requires `jpeg-decoder` `=0.3.2`, as `xberg` does. The decoder output cap is gone: the decoder checked it only after allocating its buffers, so it never bounded an allocation, and it always equalled the size already checked after scaling. Rendering is unchanged.
@@ -173,6 +173,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(deps): Upgrade `rmcp` to 3.9.0 to fix RUSTSEC-2026-0462.**
+  Before 3.9.0 the Streamable HTTP clients read response bodies without a size limit; the `mcp` server feature, its lockfiles and the binding lockfiles now resolve the fixed release.
+
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
   Bound the unique retained bytes for plain embedded JPEGs while preserving repeated paints. (#2339)
 
@@ -228,8 +231,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
+  An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
+- **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
+  `model` had become the second field in #2702, shifting positional constructor arguments. It is now last, so the Java record constructor and the Swift `init` take their arguments in the pre-#2702 positions again, plus a trailing `model`. In the PHP and WASM `new` and the Python native constructor and `__init__` stub, `model` now follows `enableChartUnderstanding` but still precedes `confidenceThreshold`, `formulaModel` and `acceleration`, which stay one position later than before #2702, and in PHP `model` is now optional. The default model is unchanged (`rt_detr`).
 - **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
   A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
+- **(pdf): Apply graphics states recovered while visiting a Form XObject.** (#2752)
+  Failed graphics-state dictionaries and indirect dash or opacity operands are retried only after object-stream loading publishes recovered objects, so later page strokes use recovered settings without repeatedly decoding a permanently broken stream.
+
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
   Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
 

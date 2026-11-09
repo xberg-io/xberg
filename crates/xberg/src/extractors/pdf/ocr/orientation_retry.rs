@@ -272,7 +272,9 @@ impl OrientationRetry {
         let probe = lookup_osd_directory(config.clone());
         let Some(directory) = self.prepare_recognition(cancel, probe).await? else {
             // Without a cached OSD model the omitted policy takes the classifier route that
-            // extraction without an `ocr` block uses. ~keep
+            // extraction without an `ocr` block uses. The plain-primary check above already
+            // excludes tables and formulas, so `after_implicit`'s own early return on them
+            // agrees with it. ~keep
             #[cfg(auto_rotate)]
             return self.after_implicit(backend, raster, config, original, cancel).await;
             #[cfg(not(auto_rotate))]
@@ -1149,6 +1151,74 @@ mod tests {
         let rasters = scripted.rasters.lock().clone();
         let configs = scripted.configs.lock().clone();
         (result, rasters, configs)
+    }
+
+    #[cfg(not(auto_rotate))]
+    async fn retry_without_osd() -> (ExtractedDocument, Vec<Vec<u8>>) {
+        let models = tempfile::tempdir().unwrap();
+        std::fs::write(models.path().join("eng.traineddata"), b"fixture").unwrap();
+        let ocr = OcrConfig {
+            tessdata_path: Some(models.path().into()),
+            ..Default::default()
+        };
+        let config = ExtractionConfig {
+            ocr: Some(ocr.clone()),
+            ..Default::default()
+        };
+        let retry = OrientationRetry::new(&config, OcrQualityThresholds::default());
+        let scripted = Arc::new(ScriptedBackend {
+            replies: parking_lot::Mutex::new(vec![table_candidate()].into()),
+            rasters: Default::default(),
+            configs: Default::default(),
+        });
+        let backend: Arc<dyn OcrBackend> = scripted.clone();
+        let result = retry
+            .after_ocr(
+                &backend,
+                Arc::new(png_with_one_red_corner()),
+                &ocr,
+                Ok(inverted_primary()),
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+        let rasters = scripted.rasters.lock().clone();
+        (result, rasters)
+    }
+
+    #[cfg(not(auto_rotate))]
+    #[tokio::test]
+    async fn an_unset_policy_without_osd_keeps_the_primary_when_no_classifier_is_compiled() {
+        let (result, rasters) = retry_without_osd().await;
+        assert!(rasters.is_empty(), "no retry read may run without OSD or a classifier");
+        assert_eq!(result.content, "zzq xkv");
+        assert!(result.tables.is_empty());
+    }
+
+    #[test]
+    fn an_explicit_policy_never_constructs_a_retry_for_an_ocr_block() {
+        for (policy, allowed) in [(None, true), (Some(true), false), (Some(false), false)] {
+            let config = ExtractionConfig {
+                ocr: Some(OcrConfig {
+                    auto_rotate: policy,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            assert_eq!(OrientationRetry::allows(&config), allowed, "{policy:?}");
+        }
+    }
+
+    #[test]
+    fn only_an_unset_policy_is_eligible_for_the_recognition_retry() {
+        for (policy, eligible) in [(None, true), (Some(true), false), (Some(false), false)] {
+            let config = OcrConfig {
+                auto_rotate: policy,
+                ..Default::default()
+            };
+            assert_eq!(recognition_retry_eligible(&config), eligible, "{policy:?}");
+        }
     }
 
     #[tokio::test]

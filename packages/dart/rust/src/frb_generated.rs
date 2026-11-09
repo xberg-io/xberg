@@ -14026,7 +14026,6 @@ const _: fn() = || {
     {
         let LayoutDetectionConfig = None::<crate::LayoutDetectionConfig>.unwrap();
         let _: crate::LayoutStrategy = LayoutDetectionConfig.strategy;
-        let _: crate::LayoutDetectionModel = LayoutDetectionConfig.model;
         let _: Option<f64> = LayoutDetectionConfig.confidence_threshold;
         let _: bool = LayoutDetectionConfig.apply_heuristics;
         let _: crate::TableModel = LayoutDetectionConfig.table_model;
@@ -14034,6 +14033,7 @@ const _: fn() = || {
         let _: crate::TableOverlapPreference = LayoutDetectionConfig.table_overlap_preference;
         let _: Option<crate::AccelerationConfig> = LayoutDetectionConfig.acceleration;
         let _: bool = LayoutDetectionConfig.enable_chart_understanding;
+        let _: crate::LayoutDetectionModel = LayoutDetectionConfig.model;
     }
     {
         let LayoutRegion = None::<crate::LayoutRegion>.unwrap();
@@ -20363,7 +20363,6 @@ impl SseDecode for crate::LayoutDetectionConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_strategy = <crate::LayoutStrategy>::sse_decode(deserializer);
-        let mut var_model = <crate::LayoutDetectionModel>::sse_decode(deserializer);
         let mut var_confidenceThreshold = <Option<f64>>::sse_decode(deserializer);
         let mut var_applyHeuristics = <bool>::sse_decode(deserializer);
         let mut var_tableModel = <crate::TableModel>::sse_decode(deserializer);
@@ -20371,9 +20370,9 @@ impl SseDecode for crate::LayoutDetectionConfig {
         let mut var_tableOverlapPreference = <crate::TableOverlapPreference>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
         let mut var_enableChartUnderstanding = <bool>::sse_decode(deserializer);
+        let mut var_model = <crate::LayoutDetectionModel>::sse_decode(deserializer);
         return crate::LayoutDetectionConfig {
             strategy: var_strategy,
-            model: var_model,
             confidence_threshold: var_confidenceThreshold,
             apply_heuristics: var_applyHeuristics,
             table_model: var_tableModel,
@@ -20381,6 +20380,7 @@ impl SseDecode for crate::LayoutDetectionConfig {
             table_overlap_preference: var_tableOverlapPreference,
             acceleration: var_acceleration,
             enable_chart_understanding: var_enableChartUnderstanding,
+            model: var_model,
         };
     }
 }
@@ -31402,7 +31402,6 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::LayoutDetectionConfig> 
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.0.strategy.into_into_dart().into_dart(),
-            self.0.model.into_into_dart().into_dart(),
             self.0.confidence_threshold.into_into_dart().into_dart(),
             self.0.apply_heuristics.into_into_dart().into_dart(),
             self.0.table_model.into_into_dart().into_dart(),
@@ -31410,6 +31409,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::LayoutDetectionConfig> 
             self.0.table_overlap_preference.into_into_dart().into_dart(),
             self.0.acceleration.into_into_dart().into_dart(),
             self.0.enable_chart_understanding.into_into_dart().into_dart(),
+            self.0.model.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -38415,7 +38415,6 @@ impl SseEncode for crate::LayoutDetectionConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::LayoutStrategy>::sse_encode(self.strategy, serializer);
-        <crate::LayoutDetectionModel>::sse_encode(self.model, serializer);
         <Option<f64>>::sse_encode(self.confidence_threshold, serializer);
         <bool>::sse_encode(self.apply_heuristics, serializer);
         <crate::TableModel>::sse_encode(self.table_model, serializer);
@@ -38423,6 +38422,7 @@ impl SseEncode for crate::LayoutDetectionConfig {
         <crate::TableOverlapPreference>::sse_encode(self.table_overlap_preference, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
         <bool>::sse_encode(self.enable_chart_understanding, serializer);
+        <crate::LayoutDetectionModel>::sse_encode(self.model, serializer);
     }
 }
 

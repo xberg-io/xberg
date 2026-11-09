@@ -230,13 +230,6 @@ pub struct LayoutDetectionConfig {
     #[serde(default)]
     pub strategy: LayoutStrategy,
 
-    /// Layout detection model.
-    ///
-    /// Defaults to [`LayoutDetectionModel::RtDetr`]. [`LayoutDetectionModel::PpDocLayoutV3`]
-    /// is experimental, ORT-only and bbox-only.
-    #[serde(default)]
-    pub model: LayoutDetectionModel,
-
     /// Confidence threshold override (None = use model default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence_threshold: Option<f32>,
@@ -285,13 +278,19 @@ pub struct LayoutDetectionConfig {
     /// opt-in and has no effect on standard text/table extraction scores.
     #[serde(default)]
     pub enable_chart_understanding: bool,
+
+    /// Layout detection model.
+    ///
+    /// Defaults to [`LayoutDetectionModel::RtDetr`]. [`LayoutDetectionModel::PpDocLayoutV3`]
+    /// is experimental, ORT-only and bbox-only.
+    #[serde(default)]
+    pub model: LayoutDetectionModel,
 }
 
 impl Default for LayoutDetectionConfig {
     fn default() -> Self {
         Self {
             strategy: LayoutStrategy::default(),
-            model: LayoutDetectionModel::default(),
             confidence_threshold: None,
             apply_heuristics: true,
             table_model: TableModel::default(),
@@ -299,6 +298,7 @@ impl Default for LayoutDetectionConfig {
             table_overlap_preference: TableOverlapPreference::default(),
             acceleration: None,
             enable_chart_understanding: false,
+            model: LayoutDetectionModel::default(),
         }
     }
 }
@@ -357,6 +357,22 @@ mod tests {
 
         let from_toml: LayoutDetectionConfig = toml::from_str("model = \"rt_detr\"").expect("toml must deserialize");
         assert_eq!(from_toml.model, LayoutDetectionModel::RtDetr);
+    }
+
+    #[test]
+    fn layout_model_is_the_last_serialized_field() {
+        let json = serde_json::to_string(&LayoutDetectionConfig::default()).unwrap();
+        let model_at = json.find(r#""model""#).expect("model is serialized");
+        for earlier in [
+            "strategy",
+            "apply_heuristics",
+            "table_model",
+            "enable_chart_understanding",
+        ] {
+            let at = json.find(&format!(r#""{earlier}""#)).expect("field is serialized");
+            assert!(at < model_at, "{earlier} must precede model: {json}");
+        }
+        assert_eq!(LayoutDetectionConfig::default().model, LayoutDetectionModel::RtDetr);
     }
 
     #[test]

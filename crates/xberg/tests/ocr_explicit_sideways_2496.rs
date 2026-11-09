@@ -484,6 +484,7 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     let before = read(&config);
     // The unset policy recovers through the classifier before the OSD pack exists. ~keep
     assert_source_table(&before);
+    assert_route("before", &before, Route::Classifier);
     assert_eq!(
         persisted_extraction_entries("explicit-osd-transition"),
         1,
@@ -496,9 +497,11 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         ..config.clone()
     });
     assert_source_table(&fresh);
+    assert_route("fresh", &fresh, Route::Osd);
     let after = read(&config);
     record_result("cached-after-osd", &after);
     assert_source_table(&after);
+    assert_route("after", &after, Route::Osd);
 }
 
 #[derive(Default)]
@@ -555,13 +558,16 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
     let read = |config: &ExtractionConfig| read_engine(&engine, &runtime, config);
     let before = read(&config);
     assert_source_table(&before);
+    assert_route("before", &before, Route::Classifier);
     assert_eq!(cache.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
     let osd = osd_model();
     std::fs::write(models.path().join("osd.traineddata"), osd).unwrap();
-    assert_source_table(&read(&ExtractionConfig {
+    let fresh = read(&ExtractionConfig {
         use_cache: false,
         ..config.clone()
-    }));
+    });
+    assert_source_table(&fresh);
+    assert_route("fresh", &fresh, Route::Osd);
     let after = read(&config);
     assert_eq!(
         cache.hits.load(std::sync::atomic::Ordering::SeqCst),
@@ -569,6 +575,7 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         "changed OSD capability must miss the outer cache"
     );
     assert_source_table(&after);
+    assert_route("after", &after, Route::Osd);
 }
 
 #[test]
@@ -599,7 +606,9 @@ fn cached_context_changed_during_extraction_is_not_written() {
         .enable_all()
         .build()
         .unwrap();
-    assert_source_table(&read_engine(&engine, &runtime, &config));
+    let read = read_engine(&engine, &runtime, &config);
+    assert_source_table(&read);
+    assert_route("read after install during lookup", &read, Route::Osd);
     assert!(
         cache.install_osd_on_lookup.lock().unwrap().is_none(),
         "lookup installed the verified OSD pack"
@@ -972,6 +981,30 @@ fn source_cell_matches(result: &ExtractedDocument) -> usize {
                 .count()
         })
         .sum()
+}
+
+#[derive(Debug, PartialEq)]
+enum Route {
+    Osd,
+    Classifier,
+}
+
+/// The OSD recognition read is forced to PSM 1 and never rotates pixels; the classifier route
+/// rotates the raster and records it, so a stale entry from the other route is visible. ~keep
+fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
+    let psm1 = result
+        .metadata
+        .additional
+        .get("psm")
+        .and_then(serde_json::Value::as_str)
+        == Some("1");
+    let rotated = result.metadata.additional.contains_key("auto_rotated");
+    let observed = match (psm1, rotated) {
+        (true, false) => Route::Osd,
+        (false, true) => Route::Classifier,
+        _ => panic!("{name}: ambiguous route psm1={psm1} auto_rotated={rotated}"),
+    };
+    assert_eq!(observed, expected, "{name}: served from the wrong orientation route");
 }
 
 fn assert_source_table(result: &ExtractedDocument) {

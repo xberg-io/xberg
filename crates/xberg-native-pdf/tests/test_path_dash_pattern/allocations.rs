@@ -6,13 +6,15 @@ use super::document_with_resource_objects;
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    static ALLOCATED_BYTES: Cell<usize> = const { Cell::new(0) };
 }
 
 struct CountingAllocator;
 
-fn record_allocation() {
+fn record_allocation(size: usize) {
     if COUNTING.try_with(Cell::get).unwrap_or(false) {
         let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        let _ = ALLOCATED_BYTES.try_with(|count| count.set(count.get() + size));
     }
 }
 
@@ -23,7 +25,7 @@ fn record_allocation() {
 )]
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        record_allocation();
+        record_allocation(layout.size());
         // SAFETY: The caller supplies the allocation layout required by GlobalAlloc.
         unsafe { System.alloc(layout) }
     }
@@ -34,7 +36,7 @@ unsafe impl GlobalAlloc for CountingAllocator {
     }
 
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        record_allocation();
+        record_allocation(size);
         // SAFETY: The caller's allocation and requested size are forwarded unchanged.
         unsafe { System.realloc(pointer, layout, size) }
     }
@@ -44,6 +46,16 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 struct CountingScope;
+
+pub(super) fn measure<T>(action: impl FnOnce() -> T) -> (T, usize, usize) {
+    ALLOCATIONS.set(0);
+    ALLOCATED_BYTES.set(0);
+    COUNTING.set(true);
+    let scope = CountingScope;
+    let output = action();
+    drop(scope);
+    (output, ALLOCATIONS.get(), ALLOCATED_BYTES.get())
+}
 
 impl Drop for CountingScope {
     fn drop(&mut self) {
