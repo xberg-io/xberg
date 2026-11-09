@@ -2356,6 +2356,66 @@ mod tests {
         assert_eq!(isolated_painted_orphan(&blank, &candidates, &hyphens), None);
     }
 
+    fn painted_overhang_page(candidate: &str, bystanders: &[(&str, f32)]) -> Vec<PdfParagraph> {
+        let mut page = vec![glyph_paragraph(candidate, 33.0)];
+        page.extend(bystanders.iter().map(|(text, x)| glyph_paragraph(text, *x)));
+        page
+    }
+
+    fn reconcile_painted_overhang(page: &mut Vec<PdfParagraph>, painted: Vec<Vec<SegmentKey>>) {
+        let table = crate::types::Table {
+            cells: vec![vec!["10.1%".into()]],
+            markdown: "| 10.1% |".into(),
+            page_number: 1,
+            bounding_box: Some(BoundingBox {
+                x0: 12.0,
+                y0: 380.0,
+                x1: 110.0,
+                y1: 402.0,
+            }),
+            ..Default::default()
+        };
+        let members = ahash::AHashMap::from_iter([(
+            0,
+            crate::pdf::native::table::source_members::CertifiedRuns {
+                contained: Vec::new(),
+                painted_overhangs: painted,
+                recovered_lines: Vec::new(),
+                recovered_tracks: Vec::new(),
+                replaces_empty_ruled_route: false,
+            },
+        )]);
+        reconcile_certified_table_paragraphs(
+            std::slice::from_mut(page),
+            std::slice::from_ref(&table),
+            &members,
+            &Default::default(),
+            &[],
+        );
+    }
+
+    fn page_texts(page: &[PdfParagraph]) -> Vec<String> {
+        page.iter().map(|p| p.lines[0].segments[0].text.clone()).collect()
+    }
+
+    #[test]
+    fn painted_cell_orphan_is_removed_from_the_page_while_real_letters_stay() {
+        let sibling = SegmentKey::from(&plain_segment("10.1"));
+        let bystanders = [("T", 60.0), ("1", 80.0), ("a", 100.0)];
+        let mut page = painted_overhang_page("%", &bystanders);
+        let orphan = SegmentKey::from(&page[0].lines[0].segments[0]);
+        reconcile_painted_overhang(&mut page, vec![vec![sibling.clone(), orphan.clone()]]);
+        assert_eq!(page_texts(&page), ["T", "1", "a"]);
+
+        let mut unowned = painted_overhang_page("%", &bystanders);
+        reconcile_painted_overhang(&mut unowned, Vec::new());
+        assert_eq!(
+            page_texts(&unowned),
+            ["%", "T", "1", "a"],
+            "no painted run owns the glyph"
+        );
+    }
+
     fn make_paragraph_in_box(text: &str, baseline_y: f32, left: f32, right: f32) -> PdfParagraph {
         let mut paragraph = make_paragraph_at(text, None, baseline_y);
         paragraph.block_bbox = Some((left, baseline_y - 12.0, right, baseline_y));
