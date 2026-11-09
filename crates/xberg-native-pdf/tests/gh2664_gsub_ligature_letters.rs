@@ -508,6 +508,21 @@ fn two_rules_that_disagree_on_the_letters_give_none() {
     );
 }
 
+/// The letter lookup holds a second rule whose output is the glyph of "a", not the ligature. Only the
+/// rule whose output is the ligature glyph gives the letters; the other rule is not a disagreement. ~keep
+#[test]
+fn a_rule_whose_output_is_another_glyph_is_not_read_for_the_ligature() {
+    let fixture = Fixture {
+        ligatures: vec![(vec![T, I], LIG_TI), (vec![P, T], A)],
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(
+        text.contains("potential"),
+        "a rule whose output is another glyph was read for the ligature: {text:?}"
+    );
+}
+
 #[test]
 fn a_component_mapped_to_a_placeholder_gives_no_letters() {
     let fixture = Fixture {

@@ -237,6 +237,35 @@ fn b08_run_restated_in_the_new_unit_keeps_its_width() {
     );
 }
 
+/// Each glyph of the restated run keeps its own width: the glyphs of the first show were measured in the
+/// old unit, and the flush in the new unit gives them the width they have on the page. ~keep
+#[test]
+fn b12_restated_run_keeps_the_width_of_each_glyph() {
+    let font = create_test_font();
+    let line = times()
+        .show(at("Pre", 10.01, 100.0))
+        .show(after("determined", 9.1, -0.2));
+    let spans = extract(create_test_font(), &line.end());
+    assert_eq!(words(&spans), "Predetermined", "{}", runs(&spans));
+    let run = spans
+        .iter()
+        .find(|s| s.text.starts_with("Predetermined"))
+        .expect("the run");
+    assert_eq!(run.char_widths.len(), run.text.chars().count(), "{}", runs(&spans));
+    let p = units(&font, "P") / 1000.0 * 10.01;
+    let d = units(&font, "d") / 1000.0 * 9.1;
+    assert!(
+        (run.char_widths[0] - p).abs() < 0.01,
+        "the P of the first show is {} wide, its glyph is {p}",
+        run.char_widths[0]
+    );
+    assert!(
+        (run.char_widths[3] - d).abs() < 0.01,
+        "the d of the second show is {} wide, its glyph is {d}",
+        run.char_widths[3]
+    );
+}
+
 #[test]
 fn b09_pen_jump_inside_the_run_then_a_stretched_show() {
     let line = times()
