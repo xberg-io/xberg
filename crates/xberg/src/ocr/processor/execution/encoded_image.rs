@@ -613,7 +613,7 @@ mod tests {
             deskew: false,
             ..Default::default()
         };
-        let limit = native_image_budget::known_phase_peak(200, 100, encoded.len(), Some(&policy))
+        let limit = native_image_budget::known_gray_phase_peak(200, 100, encoded.len(), Some(&policy))
             .unwrap()
             .unwrap() as usize;
         let config = TesseractConfig {
@@ -625,22 +625,27 @@ mod tests {
             auto_adjust_dpi: false,
             ..Default::default()
         };
-        let result = prepare_encoded_ocr_image(
-            &encoded,
-            &SecurityLimits {
-                max_content_size: limit,
-                ..Default::default()
-            },
-            &config,
-            Some(&images),
-            false,
-        )
-        .expect("the original raster fits its exact workspace");
-        assert_eq!((result.width, result.height, result.source_dpi), (200, 100, 100));
-        let metadata = result.image_preprocessing.expect("budget-aware DPI metadata");
-        assert_eq!(metadata.target_dpi, 300);
-        assert_eq!(metadata.final_dpi, 100);
-        assert_eq!(metadata.scale_factor, 1.0);
-        assert!(metadata.skipped_resize);
+        for (limit, dimensions, dpi, scale, skipped) in [
+            (limit, (200, 100, 100), 100, 1.0, true),
+            (8 * 1024 * 1024, (600, 300, 300), 300, 3.0, false),
+        ] {
+            let result = prepare_encoded_ocr_image(
+                &encoded,
+                &SecurityLimits {
+                    max_content_size: limit,
+                    ..Default::default()
+                },
+                &config,
+                Some(&images),
+                false,
+            )
+            .expect("the raster fits the selected workspace");
+            assert_eq!((result.width, result.height, result.source_dpi), dimensions);
+            let metadata = result.image_preprocessing.expect("budget-aware DPI metadata");
+            assert_eq!(metadata.target_dpi, 300);
+            assert_eq!(metadata.final_dpi, dpi);
+            assert_eq!(metadata.scale_factor, scale);
+            assert_eq!(metadata.skipped_resize, skipped);
+        }
     }
 }
