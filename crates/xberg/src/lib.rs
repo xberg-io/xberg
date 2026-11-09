@@ -270,6 +270,7 @@ pub mod captioning;
 
 /// Pinned inventory of experimental candidate models staged on owned Hugging Face repositories.
 #[cfg(feature = "onnx-runtime")]
+// No non-test consumer exists until the captioning adapters in #2335 and a supported preset land. ~keep
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) mod candidate_models;
 

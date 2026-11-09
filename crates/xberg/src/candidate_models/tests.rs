@@ -75,6 +75,20 @@ fn revisions_are_immutable_commit_hashes_and_floating_refs_are_rejected() {
 }
 
 #[test]
+fn the_nli_graph_alternatives_are_pinned_and_its_license_caveat_is_recorded() {
+    let nli = &CANDIDATE_MODELS[0];
+    let pinned: BTreeSet<String> = nli.files().unwrap().into_iter().map(|f| f.path).collect();
+    for graph in ["model.onnx", "model_qint8_arm64.onnx", "model_quint8_avx2.onnx"] {
+        assert!(pinned.contains(&format!("{}/{graph}", nli.id)), "{graph}");
+    }
+    assert!(
+        !nli.required_files.contains(&"model.onnx"),
+        "the fp32 graph is over the adapter cap"
+    );
+    assert!(nli.license.contains("unstated"), "{}", nli.license);
+}
+
+#[test]
 fn every_required_file_and_the_license_are_pinned_with_a_nonzero_size() {
     for model in &CANDIDATE_MODELS {
         let files = model.files().unwrap();

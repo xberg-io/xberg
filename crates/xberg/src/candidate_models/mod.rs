@@ -77,8 +77,9 @@ pub struct CandidateModel {
     pub upstream_revision: &'static str,
     /// SPDX license identifier of the upstream weights, with any caveat in parentheses.
     pub license: &'static str,
-    /// Files, relative to the model directory, that inference needs. Alternatives such as quantized
-    /// variants are pinned too but not listed here.
+    /// Files, relative to the model directory, that every inference path needs. Graph alternatives
+    /// (fp32 and quantized variants) are pinned in the manifests but not listed here; the NLI
+    /// descriptor selects its graph separately because the fp32 graph exceeds the adapter's cap.
     pub required_files: &'static [&'static str],
     sha256_manifest: &'static str,
     size_manifest: &'static str,
@@ -94,7 +95,6 @@ const NLI_MINILM2_L6_H768: CandidateModel = CandidateModel {
     upstream_revision: "b95119ce93d3e065de6214e38cd4a97b0f2f2c6d",
     license: "Apache-2.0 (base model license unstated)",
     required_files: &[
-        "model.onnx",
         "tokenizer.json",
         "config.json",
         "tokenizer_config.json",
@@ -265,6 +265,7 @@ fn verify_against_pin(pin: &CandidateFile, local: &Path) -> Result<(), String> {
 
 /// Graph the NLI descriptor selects on this architecture. The fp32 graph (328,649,957 bytes) exceeds
 /// the adapter's graph size cap, so only the dynamically quantized graph for the host ISA is usable.
+/// x86_64 selects the AVX2 graph without checking the CPU for AVX2 support.
 #[cfg(feature = "classification-onnx")]
 pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
     if cfg!(target_arch = "aarch64") {
@@ -299,7 +300,7 @@ pub(crate) fn nli_minilm2_l6_h768_classifier_for(
     let model = &NLI_MINILM2_L6_H768;
     let files = model.files()?;
     let mut manifest = String::new();
-    for required in std::iter::once(graph).chain(model.required_files.iter().copied().filter(|f| *f != "model.onnx")) {
+    for required in std::iter::once(graph).chain(model.required_files.iter().copied()) {
         let path = format!("{}/{required}", model.id);
         let pin = files
             .iter()
