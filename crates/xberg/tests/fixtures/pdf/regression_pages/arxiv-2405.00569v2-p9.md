@@ -48,9 +48,9 @@ The LS method solves the optimization problem by setting the derivatives of the 
 
 - Tenth-order penta-diagonal TDCCS 
 
-∂E ∂E ∂E
+∂E ∂E
 
- = 0, = 0, = 0, ~∂a~
+<sup>∂</sup>E = 0, = 0, = 0, ~∂a~
 
 ∂b ∂c
 

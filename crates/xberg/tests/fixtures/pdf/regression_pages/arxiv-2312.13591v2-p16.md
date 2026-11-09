@@ -61,9 +61,9 @@ taquarks from Λ~c~K /Σ~c~K interactions, Phys. Rev. D **108** , 054011 (2023),
 
 - [106] T. Asanuma, Y. Yamaguchi, and M. Harada, Analysis of DD
 
-(∗) (∗)
+(∗)
 
-¯ and D Ξ~cc~ molecule by one boson exchange model based on Heavy quark symmetry, (2023), arXiv:2311.04695 [hep-ph].
+¯<sup>(</sup>∗) and D Ξ~cc~ molecule by one boson exchange model based on Heavy quark symmetry, (2023), arXiv:2311.04695 [hep-ph].
 
 - [107] Z.-G. Wang, Analysis of the triply-charmed pentaquark states with QCD sum rules, Eur. Phys. J. C
 

@@ -206,19 +206,11 @@ al. predicted the existence of isospin- bound states in the ~2~ ¯ ¯ ¯ coupled
 
 1
 
-Yalikun et al. obtained three bound states with isospin2 in the
-
-(∗)
-
-¯ ΣD systems through the OBE model [117], and they pro-
+Yalikun et al. obtained three bound states with isospin2 in the ¯<sup>(</sup>∗) ΣD systems through the OBE model [117], and they pro-
 
 0 −
 
-posed to search for these states in the process B~s~ → nD ¯ ~s~ p. Additionally, Yan et al. obtained a similar spectrum for the
-
-(∗)
-
-¯ ΣD systems based on the light-meson exchange saturation model [118]. Moreover, pentaquark systems with the quark configuration
+posed to search for these states in the process B~s~ → nD ¯ ~s~ p. Additionally, Yan et al. obtained a similar spectrum for the ¯<sup>(</sup>∗) ΣD systems based on the light-meson exchange saturation model [118]. Moreover, pentaquark systems with the quark configuration
 
 (∗)
 
@@ -290,33 +282,29 @@ Systems E~B~/E~V~ Decay channels − −
 
 models [110, 118, 124], QCD sum rule [125], and chiral quark model [126], have been employed to investigate the properties of these systems. In Table VII and Fig. 4, we present the mass spectra and se-
 
-(∗) (∗) (∗) (∗) (∗) (∗)
+(∗) (∗) (∗) (∗)
 
-¯ ¯ lected decay channels for the Σ D , Ξ D , Σ D ,
+¯<sup>(</sup>∗) ¯<sup>(</sup>∗) lected decay channels for the Σ D , Ξ D , Σ D ,
 
 (∗) (∗)
 
 and Ξ D systems. Our calculation reveals the existence of several bound states and virtual states in these systems. In
 
-(∗) (∗)
+(∗)
 
-¯ the Σ D systems, we identified seven molecules, all of
+¯<sup>(</sup>∗) the Σ D systems, we identified seven molecules, all of
 
 1
 
-which are present in the isospin-~2~ channels. Among them, the
+which are present in the isospin-~2~ channels. Among them, the ¯<sup>(</sup>∗) three states in ΣD can be considered near-threshold bound
+
+∗
+
+¯<sup>(</sup>∗) (or virtual) states, while the molecules in Σ D correspond to shallow bound states. Similarly, we derived seven hadronic
 
 (∗)
 
-¯ three states in ΣD can be considered near-threshold bound
-
-∗ (∗)
-
-¯ (or virtual) states, while the molecules in Σ D correspond to shallow bound states. Similarly, we derived seven hadronic
-
-(∗) (∗)
-
-¯ molecules in the isoscalar Ξ D systems, with most of
+¯<sup>(</sup>∗) molecules in the isoscalar Ξ D systems, with most of
 
 (∗) (∗) (∗) (∗)
 

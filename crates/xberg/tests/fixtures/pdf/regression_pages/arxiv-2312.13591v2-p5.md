@@ -1,8 +1,8 @@
 5
 
-(∗) (∗) (′,∗) (∗) (∗) (∗) (′,∗) (∗)
+(∗) (′,∗) (∗) (∗) (′,∗) (∗)
 
-¯ ¯
+¯<sup>(</sup>∗) ¯<sup>(</sup>∗)
 
 TABLE IV. The mass spectra and selected decay channels of the molecular pentaquarks in Σ~c~ D , Ξ~c~ D and Σ~c~ D , Ξ~c~ D sys¯ tems. The isospin average masses of the corresponding systems are given in the brackets in the second column, e.g., in the form Σ~c~D [4320.7]. The subscripts B/V denote the bound/virtual state solutions. The superscript ♯ means that this state might be nonexistent in the range of parameters, while the † represents that this state can also be the near-threshold bound (virtual) state ifit is labeled as the virtual (bound) state in this table. The (pole) masses are given in units of MeV.
 
@@ -162,9 +162,9 @@ I(J<sup>P</sup> ) Systems [Thr.] E~B~/E~V~ Decay channels
 
 **Ä ä**
 
-1 − +3.1 (∗)
+1 − +3.1
 
-¯ 0 4473.9 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.5
+¯<sup>(</sup>∗) 0 4473.9 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.5
 
 B
 
@@ -192,9 +192,9 @@ B
 
 **Ä ä**
 
-1 − +0.9 (∗)
+1 − +0.9
 
-¯ 0 4443.7 J/ψΛ, η~c~Λ,D~s~ Λ~c~ ′ ¯
+¯<sup>(</sup>∗) 0 4443.7 J/ψΛ, η~c~Λ,D~s~ Λ~c~ ′ ¯
 
 −1.1 B
 
@@ -208,9 +208,9 @@ B
 
 **Ä ä**
 
-1 − +1.4 (∗)
+1 − +1.4
 
-¯ 0 4585.0 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −2.0
+¯<sup>(</sup>∗) 0 4585.0 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −2.0
 
 B
 
@@ -254,9 +254,9 @@ B
 
 **Ä ä**
 
-1 − +3.0 (∗)
+1 − +3.0
 
-¯ 0 4649.8 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.0
+¯<sup>(</sup>∗) 0 4649.8 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.0
 
 B
 
@@ -270,9 +270,9 @@ B
 
 **Ä**<sup>2</sup> **ä**
 
-5 − +1.5 (∗)
+5 − +1.5
 
-¯ 0 4652.0 J/ψΛ, η~c~Λ,D~s~ Λ~c~ ∗ ¯<sup>∗</sup>
+¯<sup>(</sup>∗) 0 4652.0 J/ψΛ, η~c~Λ,D~s~ Λ~c~ ∗ ¯<sup>∗</sup>
 
 −2.4 B
 
