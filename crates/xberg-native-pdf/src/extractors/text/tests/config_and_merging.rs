@@ -880,8 +880,14 @@ fn test_extractor_prepare_for_span_extraction() {
     assert!(extractor.extract_spans);
     assert_eq!(extractor.span_sequence_counter, 0);
     assert!(extractor.spans.is_empty());
-    assert_eq!(extractor.pen_seam, None, "a pen seam does not outlive the extraction it was set in");
-    assert!(extractor.pen_continuations.is_empty(), "pen marks do not outlive the extraction they were set in");
+    assert_eq!(
+        extractor.pen_seam, None,
+        "a pen seam does not outlive the extraction it was set in"
+    );
+    assert!(
+        extractor.pen_continuations.is_empty(),
+        "pen marks do not outlive the extraction they were set in"
+    );
 }
 
 #[test]

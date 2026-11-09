@@ -563,8 +563,11 @@ impl<'doc> TextExtractor<'doc> {
                         None
                     };
                     // The replayed spans keep their sequence numbers, so their pen marks replay too. ~keep
-                    let new_continuations: Vec<SpanKey> =
-                        self.pen_continuations.difference(&pen_continuations_before).copied().collect();
+                    let new_continuations: Vec<SpanKey> = self
+                        .pen_continuations
+                        .difference(&pen_continuations_before)
+                        .copied()
+                        .collect();
                     let cached =
                         crate::document::CachedFormSpans::new(required_depth, new_spans, caller_fonts, &self.fonts)
                             .with_pen_continuations(new_continuations);
