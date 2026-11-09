@@ -354,7 +354,8 @@ impl PathExtractor {
         let Some(parsed) = self.cached_extgstates.get(name) else {
             return false;
         };
-        let alpha = parsed.stroke_alpha;
+        // The parser keeps CA as written; the path state keeps it inside 0..1. ~keep
+        let alpha = parsed.stroke_alpha.map(|alpha| alpha.clamp(0.0, 1.0));
         if let Some((lengths, phase)) = &parsed.dash {
             state.dash.0.clone_from(lengths);
             state.dash.1 = *phase;

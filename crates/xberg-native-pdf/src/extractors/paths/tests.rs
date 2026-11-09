@@ -383,3 +383,18 @@ fn move_to_followed_by_a_segment_still_contributes_both_points() {
     assert_eq!(bbox.width, 100.0);
     assert_eq!(bbox.height, 100.0);
 }
+
+#[test]
+fn cached_extgstate_keeps_the_stroke_opacity_inside_zero_to_one() {
+    for (written, kept) in [(1.7_f32, 1.0_f32), (-0.3, 0.0), (0.4, 0.4)] {
+        let mut extractor = PathExtractor::new();
+        let parsed = crate::rendering::ext_gstate::ParsedExtGState {
+            stroke_alpha: Some(written),
+            ..Default::default()
+        };
+        extractor.cache_path_extgstate("GS", parsed);
+        let mut state = PathGraphicsState::new();
+        assert!(extractor.apply_cached_path_extgstate("GS", &mut state));
+        assert_eq!(state.stroke_alpha, kept, "CA {written}");
+    }
+}
