@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(models): Pin experimental candidate classification and captioning ONNX artifacts to owned Hugging Face revisions.** (#2336)
+  `xberg::candidate_models` (feature `onnx-runtime`) inventories NLI-MiniLM2, SmolVLM-256M, SmolVLM-500M and Florence-2-base as unmodified, license-preserving copies in `xberg-io/classification-models` and `xberg-io/captioning-models`, each file pinned by immutable commit, SHA-256 and size. Every entry is marked experimental and unqualified: none is a default or a supported preset, and no captioning adapter consumes them yet.
+
 - **(benchmarks): Freeze experimental NLI accounting plans and validate completed reports.** (#2334)
   The standalone runner calls the existing local classifier with pinned inputs and artifacts; report validation checks accounting consistency and does not qualify a model or prove inference occurred.
 
