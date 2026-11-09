@@ -7,6 +7,8 @@
 
 #[path = "pdf_all_pages_native_preservation_2768/acceptance_controls.rs"]
 mod acceptance_controls;
+#[path = "pdf_all_pages_native_preservation_2768/document_contracts.rs"]
+mod document_contracts;
 #[path = "pdf_all_pages_native_preservation_2768/document_scope.rs"]
 mod document_scope;
 mod helpers;

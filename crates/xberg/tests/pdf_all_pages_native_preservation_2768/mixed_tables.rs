@@ -44,6 +44,10 @@ fn with_scanned_table(source_pages: &[u32], stamp: bool) -> Vec<u8> {
     tree.set("Kids", children);
     let mut bytes = Vec::new();
     native.save_to(&mut bytes).unwrap();
+    assert_eq!(
+        Document::load_mem(&bytes).unwrap().get_pages().len(),
+        source_pages.len() + 1
+    );
     bytes
 }
 
@@ -103,6 +107,21 @@ async fn check_mixed_tables(source_pages: &[u32], stamp: bool, force_scan: bool)
         },
     )
     .await;
+    if stamp && !force_scan {
+        let whole = read(
+            &bytes,
+            &ExtractionConfig {
+                include_document_structure: true,
+                ..config.clone()
+            },
+        )
+        .await;
+        assert_eq!(
+            whole.extraction_method,
+            Some(xberg::types::ExtractionMethod::Ocr),
+            "an unforced request that excludes the adapter takes the whole-document gate"
+        );
+    }
     if force_scan {
         config.force_ocr_pages = Some(vec![u32::try_from(source_pages.len() + 1).unwrap()]);
     }

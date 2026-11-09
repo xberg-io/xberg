@@ -1,7 +1,7 @@
 use lopdf::{Document, Object, dictionary};
 use xberg::{ExtractedDocument, ExtractionConfig};
 
-fn resources(document: &Document, page: &lopdf::Dictionary) -> lopdf::Dictionary {
+pub(super) fn resources(document: &Document, page: &lopdf::Dictionary) -> lopdf::Dictionary {
     match page.get(b"Resources").unwrap() {
         Object::Reference(id) => document.get_dictionary(*id).unwrap().clone(),
         Object::Dictionary(value) => value.clone(),

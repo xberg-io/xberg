@@ -2,8 +2,6 @@ use xberg::{ExtractionConfig, types::ExtractionMethod};
 
 const JUNK_SCAN: &[u8] = include_bytes!("../fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
 const FORCED_SDM_WORDS: usize = 582;
-// The original #2768 reproducer at 3b3a7c returned 1,315 tokens. ~keep
-const HISTORICAL_DUPLICATED_WORDS: usize = 1315;
 const KHMER: &[u8] = include_bytes!("../fixtures/pdf/khmer-cluster-2536/genuinely-partial-mapped.pdf");
 
 async fn read(bytes: &[u8], config: &ExtractionConfig) -> xberg::ExtractedDocument {
@@ -209,10 +207,6 @@ async fn explicit_tesseract_options_keep_the_original_native_table_once() {
     let native = read(&bytes, &native_config(&config)).await;
     let automatic = read(&bytes, &config).await;
     let count = automatic.content.split_whitespace().count();
-    assert_ne!(
-        count, HISTORICAL_DUPLICATED_WORDS,
-        "the original explicit-options whole-document route duplicated native and OCR table text"
-    );
     assert_eq!(count, super::SOURCE_WORDS);
     assert!(
         automatic

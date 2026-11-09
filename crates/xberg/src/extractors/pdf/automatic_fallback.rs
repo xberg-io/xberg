@@ -87,7 +87,9 @@ pub(super) fn with_native_page_acceptance(
     {
         return outcome;
     }
-    // Keep document-scoped glyph proofs and missing-model warnings for Khmer-number candidates (#2408). ~keep
+    // Even one native Khmer digit in otherwise English text keeps the original whole-document fallback. ~keep
+    // This preserves #2408 glyph/raster proofs, missing-model warnings and model-cache behavior; the tradeoff ~keep
+    // is withholding native-page acceptance for the entire document when the whole-document gate requests OCR. ~keep
     if native
         .chars()
         .any(|character| ('\u{17e0}'..='\u{17e9}').contains(&character))
