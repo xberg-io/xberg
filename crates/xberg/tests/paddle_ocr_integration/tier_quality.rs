@@ -142,7 +142,7 @@ async fn test_mobile_tier_auto_rotate() {
         let ocr_config = OcrConfig {
             backend: "paddle-ocr".to_string(),
             language: vec!["en".to_string()],
-            auto_rotate: true,
+            auto_rotate: Some(true),
             paddle_ocr_settings: Some(PaddleOcrConfig::new("en").with_model_tier("mobile")),
             ..Default::default()
         };

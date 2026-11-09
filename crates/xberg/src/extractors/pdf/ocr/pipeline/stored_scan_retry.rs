@@ -27,7 +27,7 @@ pub(super) fn eligible(config: &ExtractionConfig, page: u32) -> bool {
                 && ocr.backend_options.is_none()
                 && ocr.tesseract_config.is_none()
                 && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-                && !ocr.auto_rotate
+                && ocr.auto_rotate != Some(true)
         })
 }
 

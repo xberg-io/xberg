@@ -157,7 +157,7 @@ fn config() -> ExtractionConfig {
         enable_quality_processing: false,
         ocr: Some(OcrConfig {
             backend: BACKEND.into(),
-            auto_rotate: true,
+            auto_rotate: Some(true),
             element_config: Some(crate::types::OcrElementConfig {
                 include_elements: true,
                 min_level: OcrElementLevel::Word,

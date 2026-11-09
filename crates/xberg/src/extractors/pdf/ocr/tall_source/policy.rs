@@ -33,7 +33,7 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
         || ocr.element_config.is_some()
         || ocr.output_format.is_some()
         || ocr.pipeline.is_some()
-        || ocr.auto_rotate
+        || ocr.auto_rotate == Some(true)
     {
         return Some("OCR preprocessing, element, pipeline or rotation options are set");
     }
