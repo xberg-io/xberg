@@ -1758,6 +1758,133 @@ async fn the_mixed_route_replaces_a_marked_page_its_ink_does_not_corroborate() {
     }
 }
 
+/// A two-page PDF whose pages have no content; the fake backend reads whichever page is rendered. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn blank_two_page_pdf() -> Vec<u8> {
+    let mut buf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    let objects = [
+        "<</Type /Catalog /Pages 2 0 R>>",
+        "<</Type /Pages /Kids [3 0 R 4 0 R] /Count 2>>",
+        "<</Type /Page /MediaBox [0 0 612 792] /Parent 2 0 R>>",
+        "<</Type /Page /MediaBox [0 0 612 792] /Parent 2 0 R>>",
+    ];
+    for (n, body) in objects.iter().enumerate() {
+        offsets.push(buf.len());
+        buf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", n + 1).as_bytes());
+    }
+    let xref = buf.len();
+    buf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    buf.extend_from_slice(
+        format!(
+            "trailer\n<</Size {} /Root 1 0 R>>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    buf
+}
+
+/// A long marked native layer that nothing corroborates, beside a short correct read: the read
+/// replaces the page and the other page is untouched, whichever page comes first and whichever
+/// output format. The whole text is compared, so a row printed twice fails. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn a_long_marked_layer_nothing_corroborates_gives_way_to_the_short_correct_read() {
+    use super::super::pipeline::extract_mixed_ocr_native;
+    use crate::core::config::OutputFormat;
+    const BACKEND: &str = "covered-layer-route-backend";
+    const READ: &str = "visible invoice total";
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(super::StageBackend {
+        name: BACKEND,
+        text: READ,
+        noisy: false,
+    }))
+    .unwrap();
+    let pdf = blank_two_page_pdf();
+    let (_, marked_rows, _) = marked_cases().swap_remove(0);
+    let marked = format!("{}\n", marked_rows[..20].join("\n"));
+    let clean = format!("{}\n", forty_rows()[20..].join("\n"));
+    let mut runs = Vec::new();
+    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        for marked_first in [true, false] {
+            let (native, marked_page) = if marked_first {
+                (format!("{marked}{clean}"), 1u32)
+            } else {
+                (format!("{clean}{marked}"), 2u32)
+            };
+            let (first, second) = if marked_first {
+                (marked.len(), clean.len())
+            } else {
+                (clean.len(), marked.len())
+            };
+            let boundaries = vec![
+                crate::types::PageBoundary {
+                    byte_start: 0,
+                    byte_end: first,
+                    page_number: 1,
+                },
+                crate::types::PageBoundary {
+                    byte_start: first,
+                    byte_end: first + second,
+                    page_number: 2,
+                },
+            ];
+            let mut config = mixed_route_config(BACKEND, false);
+            config.output_format = format.clone();
+            let run = extract_mixed_ocr_native(&native, &boundaries, &[marked_page], &pdf, &config, None).await;
+            runs.push((format!("{:?}", config.output_format), marked_first, marked_page, run));
+        }
+    }
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    assert_eq!(runs.len(), 4);
+    for (format, marked_first, marked_page, run) in runs {
+        let (text, replaced, ..) = run.unwrap();
+        let label = format!("{format}, marked first: {marked_first}");
+        let expected = if marked_first {
+            format!("{READ}{clean}")
+        } else {
+            format!("{clean}{READ}")
+        };
+        assert_eq!(text, expected, "{label}");
+        assert_eq!(
+            replaced.keys().copied().collect::<Vec<_>>(),
+            vec![marked_page],
+            "{label}"
+        );
+        assert_eq!(replaced[&marked_page], READ, "{label}");
+    }
+}
+
+/// With ink proof present the ink gate alone would keep the marked page native; a forced page or
+/// `force_ocr` must still let the OCR read replace it. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn ink_proof_does_not_keep_a_forced_marked_page_native() {
+    use super::super::document::{accepted_ocr_page_replacements, marked_page_is_judged_on_readable_text as judged};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let page = readable_page_with_lost_glyphs();
+    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
+    let mut by_pages = mixed_route_config("tesseract", false);
+    by_pages.force_ocr_pages = Some(vec![1]);
+    let mut by_flag = mixed_route_config("tesseract", false);
+    by_flag.force_ocr = true;
+    for (name, config, native_kept) in [
+        ("automatic", mixed_route_config("tesseract", false), true),
+        ("force_ocr_pages", by_pages, false),
+        ("force_ocr", by_flag, false),
+    ] {
+        let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |p| {
+            judged(&config, p, false, true)
+        });
+        assert_eq!(accepted.is_empty(), native_kept, "{name}: {accepted:?}");
+    }
+}
+
 /// A marked page is judged on its readable text only where the run may keep native text
 /// automatically and the page's ink corroborates it. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]

@@ -2485,16 +2485,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
-    // The same page's ink proof (native text paints the ink OCR read, or the render lost Type0 ink)
-    // is what lets a marked page be judged on the text it held. ~keep
+    // The same page's ink proof (native text paints the ink OCR read, or covers its words) is what
+    // lets a marked page be judged on the text it held. A lost Type0 glyph in the render is no such
+    // proof: that case keeps its own check (`native_survives_type0_ink_loss`). ~keep
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let ink_corroborated = |page: u32| {
-        native_ink_owned_pages.contains(&page)
-            || native_words_covered_pages.contains(&page)
-            || raster_dpis
-                .get(&(page.saturating_sub(1) as usize))
-                .is_some_and(|raster| raster.type0_ink_loss)
-    };
+    let ink_corroborated =
+        |page: u32| native_ink_owned_pages.contains(&page) || native_words_covered_pages.contains(&page);
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
     let ink_corroborated = |_page: u32| false;
     let mut accepted_replacements =
