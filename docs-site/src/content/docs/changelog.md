@@ -364,6 +364,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
   Partial stroke opacity, fill opacity (`ca`), soft masks (`SMask`) and blend modes (`BM`) remain unmodelled in path-based header visibility proof.
 
+- **(pdf): Preserve native PDF leaf headers beneath repeated column groups.** (#2332)
+  Grouped tables with repeated leaf labels and a shaded first data row retain those labels as header cells in HTML
+  and document grids, preserving body cells, table bounds and spans.
+
 - **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
   The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that joins read words a cell apart now keeps the OCR read.
 
