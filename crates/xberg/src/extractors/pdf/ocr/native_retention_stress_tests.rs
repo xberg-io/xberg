@@ -1900,7 +1900,7 @@ fn the_ink_gate_decides_whether_a_short_read_replaces_a_long_marked_layer() {
 }
 
 /// The boundaries of a two-page text whose pages are `first` and `second` bytes long. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[cfg(all(feature = "pdf", feature = "ocr"))]
 fn page_pair(first: usize, second: usize) -> Vec<crate::types::PageBoundary> {
     vec![
         crate::types::PageBoundary {
