@@ -76,3 +76,15 @@ fn a_word_show_touching_the_previous_word_keeps_its_space() {
 fn a_one_glyph_show_touching_the_previous_glyphs_gains_no_space() {
     assert_eq!(merged_text_with_one_ulp_overlap("hell", "o"), "hello");
 }
+
+#[test]
+fn a_multi_byte_one_glyph_show_touching_the_previous_glyphs_gains_no_space() {
+    // The show is the single character U+00E9 (two bytes in UTF-8), written as the WinAnsi code \351.
+    assert_eq!(merged_text_with_one_ulp_overlap("caf", "\\351"), "caf\u{e9}");
+}
+
+#[test]
+fn a_word_split_over_two_touching_multi_character_shows_keeps_a_space() {
+    // Pins the current rule: only a one-glyph show skips the correction, so "hel" + "lo" splits as it did in 0.4.4.
+    assert_eq!(merged_text_with_one_ulp_overlap("hel", "lo"), "hel lo");
+}
