@@ -314,10 +314,7 @@ impl PathExtractor {
     /// operators resolve against the parent scope and can trigger pathological
     /// cross-recursion between sibling forms whose local resource names happen
     /// to collide with parent form names.
-    pub(crate) fn swap_resources(
-        &mut self,
-        new_resources: Option<crate::object::Object>,
-    ) -> SavedResourceScope {
+    pub(crate) fn swap_resources(&mut self, new_resources: Option<crate::object::Object>) -> SavedResourceScope {
         let prev_resources = std::mem::replace(&mut self.resources, new_resources);
         let prev_cache = self.cached_xobject_dict.take();
         let prev_extgstates = std::mem::take(&mut self.cached_extgstates);
