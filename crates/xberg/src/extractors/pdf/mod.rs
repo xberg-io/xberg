@@ -12,6 +12,8 @@ mod extraction;
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod unreadable_script;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
@@ -42,6 +44,8 @@ use std::path::Path;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use automatic_fallback::{automatic_page_acceptance_supported, with_native_page_acceptance};
 use extraction::extract_all_from_native_document;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use mixed_tables::merge_mixed_ocr_tables;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn extraction_method_after_mixed_ocr(replacements: &ahash::AHashMap<u32, String>) -> ExtractionMethod {
     if replacements.is_empty() {
@@ -1007,34 +1011,6 @@ fn replace_tables_with_ocr_output(tables: &mut Vec<crate::types::Table>, mut ocr
 
     ocr_tables.sort_by_key(|table| table.page_number);
     *tables = ocr_tables;
-}
-
-/// Merge OCR tables into the mixed path's table list, replacing only the tables of pages OCR
-/// itself produced a table for.
-///
-/// Unlike [`replace_tables_with_ocr_output`], which is right for full-document OCR (every page
-/// went through OCR, so there is no native page left to preserve), the mixed path sends only
-/// SOME pages to OCR. Before this, the mixed path called `replace_tables_with_ocr_output` too,
-/// which replaced the WHOLE document's table list with only the OCR pages' tables: on a long
-/// document where a handful of scanned pages produced even one OCR table, every native table on
-/// every page OCR never touched was silently dropped (GH#1670). A page whose OCR pass found no
-/// table keeps its native tables untouched, the same as `replace_tables_with_ocr_output` does
-/// when it finds none anywhere.
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn merge_mixed_ocr_tables(
-    tables: &mut Vec<crate::types::Table>,
-    structured_pages: &ahash::AHashMap<u32, InternalDocument>,
-) {
-    let mut ocr_tables = accepted_mixed_ocr_tables(structured_pages);
-    if ocr_tables.is_empty() {
-        return;
-    }
-
-    ocr_tables.sort_by_key(|table| table.page_number);
-    let ocr_pages: std::collections::HashSet<u32> = ocr_tables.iter().map(|table| table.page_number).collect();
-    tables.retain(|table| !ocr_pages.contains(&table.page_number));
-    tables.extend(ocr_tables);
-    tables.sort_by_key(|table| table.page_number);
 }
 
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -2459,6 +2435,29 @@ fn whole_document_ocr_hints(
     hints
 }
 
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+use unreadable_script::{dropped_script_warnings, every_page_dropped_script};
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn every_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
+    false
+}
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn dropped_script_warnings(
+    _: &[u32],
+    _: &str,
+    _: Option<&[crate::types::PageBoundary]>,
+) -> Vec<crate::types::ProcessingWarning> {
+    Vec::new()
+}
+
 /// PDF document extractor using xberg_native_pdf.
 #[cfg_attr(alef, alef(skip))]
 pub struct PdfExtractor;
@@ -2951,7 +2950,7 @@ impl PdfExtractor {
                             content,
                             config,
                             layout_pages,
-                            &[],
+                            (&[], &[]),
                         )
                         .await?;
                         #[cfg(feature = "formula-recognition")]
@@ -3026,7 +3025,7 @@ impl PdfExtractor {
                     content,
                     config,
                     layout_pages,
-                    &[],
+                    (&[], &[]),
                 )
                 .await
                 {
@@ -3126,6 +3125,8 @@ impl PdfExtractor {
                 pdf_metadata.pdf_specific.page_count,
                 &thresholds,
             );
+            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+            let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             crate::core::diagnostics::dedup_extend_warnings(
                 &mut ocr_fallback_warnings,
@@ -3138,6 +3139,9 @@ impl PdfExtractor {
                     config,
                 ),
             );
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let native_script_pages =
+                unreadable_script::native_script_pages(&decision, &native_text, boundaries.as_deref(), content, config);
 
             // `NativeTextStats`' character-class checks cannot see a font whose mapping
             // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
@@ -3292,7 +3296,13 @@ impl PdfExtractor {
                             layout_warning,
                             layout_glyph_drop_warnings,
                             discarded_visible_native_page,
-                        )) => {
+                        )) if !every_page_dropped_script(
+                            &native_script_pages,
+                            &native_text,
+                            boundaries.as_deref(),
+                            &ocr_pts,
+                        ) =>
+                        {
                             if let Some(warning) = layout_warning {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                             }
@@ -3330,6 +3340,32 @@ impl PdfExtractor {
                                 ocr_confidence_by_page = page_ocr_confidence;
                                 (ocr_text, ExtractionMethod::Ocr)
                             }
+                        }
+                        Ok((_, _, _, ocr_doc, _, _, _, _, _, _, _, _, _, _)) => {
+                            let (warnings, failures) = ocr_doc
+                                .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
+                                .unwrap_or_default();
+                            // The discarded read's text is not in the result: its failures were not
+                            // recovered by it, and layout inputs and llm_usage go with it, as in the
+                            // sibling arms.
+                            crate::core::diagnostics::dedup_extend_warnings(
+                                &mut ocr_fallback_warnings,
+                                warnings
+                                    .into_iter()
+                                    .filter(|warning| !warning.message.contains("was recovered from"))
+                                    .collect(),
+                            );
+                            ocr_page_failures.extend(failures.into_iter().map(|failure| {
+                                crate::types::OcrPageFailure {
+                                    recovered: false,
+                                    ..failure
+                                }
+                            }));
+                            crate::core::diagnostics::dedup_extend_warnings(
+                                &mut ocr_fallback_warnings,
+                                dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),
+                            );
+                            (native_text, ExtractionMethod::Native)
                         }
                         Err(failed_run) => {
                             tracing::warn!(
@@ -3379,7 +3415,7 @@ impl PdfExtractor {
                             content,
                             config,
                             layout_pages,
-                            &outlined_ocr_pages,
+                            (&outlined_ocr_pages, &native_script_pages),
                         )
                         .await
                         {

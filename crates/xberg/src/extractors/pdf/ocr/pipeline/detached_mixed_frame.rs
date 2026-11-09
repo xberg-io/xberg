@@ -10,7 +10,7 @@ pub(super) fn supports(config: &crate::core::config::ExtractionConfig, page_coun
         return false;
     }
     page_count == Some(1)
-        && config.include_document_structure
+        && config.ocr.as_ref().is_none_or(|ocr| ocr.auto_rotate.is_none())
         && !config.use_cache
         && config.output_format == crate::core::config::OutputFormat::Plain
         && config.content_filter.is_none()
@@ -26,7 +26,7 @@ pub(super) fn stock_mixed_read(read: &ExtractedDocument) -> bool {
         && read.form_fields.is_empty()
         && read.annotations.as_ref().is_none_or(Vec::is_empty)
         && read.images.as_ref().is_none_or(Vec::is_empty)
-        && read.tables.len() == 1
+        && matches!(read.tables.len(), 1 | 2)
         && read.ocr_internal_document.as_ref().is_some_and(plain_text_block)
         && super::super::document::resolved_ocr_correction_degrees(&read.metadata).unwrap_or(0) == 0
 }
@@ -102,7 +102,9 @@ pub(super) fn place_table_in_render(
     let processed = super::super::document::processed_ocr_layout_dimensions(&read.metadata)?;
     let resized = preprocessing.new_dimensions?;
     let original = preprocessing.original_dimensions;
-    if (original.width, original.height) != (render.0 as usize, render.1 as usize)
+    if render.0 == 0
+        || render.1 == 0
+        || (original.width, original.height) != (render.0 as usize, render.1 as usize)
         || (resized.width, resized.height) != (processed.0 as usize, processed.1 as usize)
         || processed == render
         || ![points.0, points.1]
@@ -112,16 +114,29 @@ pub(super) fn place_table_in_render(
         return None;
     }
     let text_bbox = read.ocr_internal_document.as_ref()?.elements.first()?.bbox?;
-    let table_bbox = read.tables.first_mut()?.bounding_box.as_mut()?;
-    if !in_frame(text_bbox, processed) || !in_frame(*table_bbox, processed) || text_bbox.y1 > table_bbox.y0 {
+    let boxes = read
+        .tables
+        .iter()
+        .map(|table| table.bounding_box)
+        .collect::<Option<Vec<_>>>()?;
+    if !matches!(boxes.len(), 1 | 2)
+        || !in_frame(text_bbox, processed)
+        || boxes.iter().any(|bbox| !in_frame(*bbox, processed))
+        || boxes.windows(2).any(|pair| pair[0].y1 >= pair[1].y0)
+        || text_bbox.y1 > boxes.first()?.y0
+    {
         return None;
     }
     let sx = f64::from(render.0) / f64::from(processed.0);
     let sy = f64::from(render.1) / f64::from(processed.1);
-    table_bbox.x0 *= sx;
-    table_bbox.x1 *= sx;
-    table_bbox.y0 *= sy;
-    table_bbox.y1 *= sy;
+    for (table, bbox) in read.tables.iter_mut().zip(boxes) {
+        table.bounding_box = Some(BoundingBox {
+            x0: bbox.x0 * sx,
+            x1: bbox.x1 * sx,
+            y0: bbox.y0 * sy,
+            y1: bbox.y1 * sy,
+        });
+    }
     Some((points.0 / processed.0 as f32, points.1 / processed.1 as f32))
 }
 
@@ -188,6 +203,26 @@ mod tests {
     }
 
     #[test]
+    fn default_plain_detached_mixed_read_also_owns_its_frames() {
+        let config = ExtractionConfig {
+            use_cache: false,
+            ..Default::default()
+        };
+        assert!(!config.include_document_structure);
+        assert!(supports(&config, Some(1)));
+        for (ocr, expected) in [
+            (crate::core::config::OcrConfig::default(), true),
+            (serde_json::from_str("{}").unwrap(), true),
+            (serde_json::from_str(r#"{"auto_rotate":false}"#).unwrap(), false),
+            (serde_json::from_str(r#"{"auto_rotate":true}"#).unwrap(), false),
+        ] {
+            let mut explicit = config.clone();
+            explicit.ocr = Some(ocr);
+            assert_eq!(supports(&explicit, Some(1)), expected, "policy {:?}", explicit.ocr);
+        }
+    }
+
+    #[test]
     fn explicit_redaction_or_image_extraction_disables_detached_placement() {
         let mut config = ExtractionConfig {
             use_cache: false,
@@ -245,6 +280,119 @@ mod tests {
         element.kind = block;
         element.text = "1. Listed item".to_string();
         assert!(!stock_mixed_read(&read));
+    }
+
+    fn two_table_frame() -> ExtractedDocument {
+        let mut document = InternalDocument::new("ocr");
+        let mut text = InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Block,
+            },
+            "Ledger summary",
+            0,
+        );
+        text.bbox = Some(BoundingBox {
+            x0: 20.,
+            y0: 10.,
+            x1: 180.,
+            y1: 30.,
+        });
+        document.push_element(text);
+        let mut read = ExtractedDocument {
+            ocr_internal_document: Some(document),
+            ..Default::default()
+        };
+        for top in [60., 220.] {
+            read.tables.push(Table {
+                bounding_box: Some(BoundingBox {
+                    x0: 20.,
+                    y0: top,
+                    x1: 180.,
+                    y1: top + 100.,
+                }),
+                ..Default::default()
+            });
+        }
+        read.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(),
+            200.into(),
+        );
+        read.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(),
+            400.into(),
+        );
+        read.metadata.image_preprocessing = Some(crate::types::ImagePreprocessingMetadata {
+            original_dimensions: (400, 800).into(),
+            original_dpi: (150., 150.).into(),
+            target_dpi: 75,
+            scale_factor: 0.5,
+            auto_adjusted: false,
+            final_dpi: 75,
+            new_dimensions: Some((200, 400).into()),
+            resample_method: "test".into(),
+            dimension_clamped: false,
+            calculated_dpi: None,
+            skipped_resize: false,
+            resize_error: None,
+        });
+        read
+    }
+
+    #[test]
+    fn both_detached_table_boxes_use_the_processed_frame_once() {
+        let mut read = two_table_frame();
+        assert!(stock_mixed_read(&read));
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            Some((1., 1.))
+        );
+        let bounds: Vec<_> = read.tables.iter().map(|table| table.bounding_box.unwrap()).collect();
+        assert_eq!(
+            bounds,
+            [
+                BoundingBox {
+                    x0: 40.,
+                    y0: 120.,
+                    x1: 360.,
+                    y1: 320.
+                },
+                BoundingBox {
+                    x0: 40.,
+                    y0: 440.,
+                    x1: 360.,
+                    y1: 640.
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn prose_between_or_below_tables_keeps_the_existing_frame() {
+        for top in [180., 340.] {
+            let mut read = two_table_frame();
+            let text = &mut read.ocr_internal_document.as_mut().unwrap().elements[0];
+            text.bbox.as_mut().unwrap().y0 = top;
+            text.bbox.as_mut().unwrap().y1 = top + 20.;
+            let before = read.clone();
+            assert!(stock_mixed_read(&read));
+            assert_eq!(place_table_in_render(&mut read, (400, 800), (200., 400.)), None);
+            assert_eq!(
+                serde_json::to_value(&read).unwrap(),
+                serde_json::to_value(&before).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn an_invalid_second_table_never_partially_rescales_the_first() {
+        let mut read = two_table_frame();
+        read.tables[1].bounding_box.as_mut().unwrap().x1 = 201.;
+        let before = read.tables.iter().map(|table| table.bounding_box).collect::<Vec<_>>();
+        assert!(place_table_in_render(&mut read, (400, 800), (200., 400.)).is_none());
+        assert_eq!(
+            read.tables.iter().map(|table| table.bounding_box).collect::<Vec<_>>(),
+            before
+        );
     }
 
     #[test]

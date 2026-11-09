@@ -313,7 +313,10 @@ fn implicit_pdf_ocr_recovers_the_empty_270_degree_scan() {
     }
     let expected = "Docling bundles PDF document conversion to JSON and Markdown in an easy self contained package";
     assert_eq!(
-        scan_270_text(Some(xberg::OcrConfig::default())),
+        scan_270_text(Some(xberg::OcrConfig {
+            auto_rotate: Some(false),
+            ..Default::default()
+        })),
         "",
         "explicit orientation opt-out"
     );
