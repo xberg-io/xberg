@@ -332,7 +332,7 @@ fn tesseract_inline_config(
         ocr: Some(xberg::core::config::OcrConfig {
             backend: "tesseract".to_string(),
             language: vec!["eng".to_string()],
-            auto_rotate: Some(auto_rotate),
+            auto_rotate: auto_rotate.then_some(true),
             ..Default::default()
         }),
         layout,
