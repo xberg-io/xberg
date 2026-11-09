@@ -474,21 +474,45 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
     read: &str,
     is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
 ) -> bool {
+    ocr_page_matches_read_text_and_tables(doc, read, is_private_metadata, true)
+}
+
+/// A nonempty structure may omit any certified read words, including body text or table rows.
+/// The complete clean native page carries those words; retained occurrences and rich payload
+/// must still be accounted for. The caller must establish that native-page ink ownership. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn ocr_page_uses_only_read_text_and_tables_with(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    ocr_page_matches_read_text_and_tables(doc, read, is_private_metadata, false)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn sorted_ocr_table_words(text: &str) -> Vec<String> {
+    let mut words: Vec<String> = text
+        .split_whitespace()
+        .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+        .filter(|word| !word.is_empty())
+        .collect();
+    words.sort_unstable();
+    words
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn ocr_page_matches_read_text_and_tables(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+    require_complete_read: bool,
+) -> bool {
     use crate::types::internal::ElementKind;
 
     let mut metadata = doc.metadata.clone();
     metadata.additional.retain(|key, value| {
         key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
     });
-    let solid_words = |text: &str| {
-        let mut words: Vec<String> = text
-            .split_whitespace()
-            .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
-            .filter(|word| !word.is_empty())
-            .collect();
-        words.sort_unstable();
-        words
-    };
     let table_element = |element: &crate::types::internal::InternalElement| {
         matches!(element.kind, ElementKind::Table { .. })
             && element.layer == crate::types::document_structure::ContentLayer::Body
@@ -503,9 +527,17 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
         .collect::<Vec<_>>()
         .join(" ");
     let cells_match_markdown = doc.tables.iter().all(|table| {
-        solid_words(&table.cells.iter().flatten().cloned().collect::<Vec<_>>().join(" "))
-            == solid_words(&table.markdown)
+        sorted_ocr_table_words(&table.cells.iter().flatten().cloned().collect::<Vec<_>>().join(" "))
+            == sorted_ocr_table_words(&table.markdown)
     });
+    let block_words = sorted_ocr_table_words(&block_text);
+    let read_words = sorted_ocr_table_words(read);
+    let mut remaining = read_words.iter();
+    let words_match = if require_complete_read {
+        block_words == read_words
+    } else {
+        !block_words.is_empty() && block_words.iter().all(|word| remaining.any(|source| source == word))
+    };
     !doc.tables.is_empty()
         && no_ocr_rich_assets_besides_tables(doc)
         && metadata.is_empty()
@@ -514,7 +546,7 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
             .iter()
             .all(|element| segmenting_ocr_text(element) || table_element(element))
         && cells_match_markdown
-        && solid_words(&block_text) == solid_words(read)
+        && words_match
 }
 
 /// The final structure must independently retain exactly the raw OCR text. Word geometry is
