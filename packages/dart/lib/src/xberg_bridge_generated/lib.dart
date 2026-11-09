@@ -11978,7 +11978,7 @@ class LayoutDetectionConfig {
     required this.tableOverlapPreference,
     this.acceleration,
     required this.enableChartUnderstanding,
-    required this.model,
+    this.model = LayoutDetectionModel.rtDetr,
   });
 
   @override
