@@ -5072,6 +5072,80 @@ mod tests {
         }
     }
 
+    /// A letter top: a five-line block at the right (x 212 to 482, 14 pt leading) above or
+    /// beside an eight-line block at the left (x 69 to 159, y 370 to 590). `right_bottom_y` is
+    /// the lower edge of the right block, so a value above 590 stacks it over the left block.
+    /// The right block's spans come first. The texts are short, so the region classifies as a
+    /// table and neither prose detector runs: the spans reach the column cut directly. ~keep
+    fn letter_top(right_bottom_y: f32) -> Vec<TextSpan> {
+        let mut spans: Vec<TextSpan> = (0..5)
+            .map(|k| make_span_text(212.0, right_bottom_y + k as f32 * 14.0, 270.0, 10.0, "lh", 12.0))
+            .collect();
+        spans.extend((0..8).map(|k| make_span_text(69.0, 370.0 + k as f32 * 30.0, 90.0, 10.0, "ad", 12.0)));
+        spans
+    }
+
+    /// The right block sits wholly above the left block (a 6 pt gap, too narrow for a row
+    /// valley). The two sides share no rows, so the clean x-gap between them is not a column
+    /// gutter: the cut is refused and the page reads top-down, right block first.
+    #[test]
+    fn stacked_blocks_with_a_clean_x_gap_are_not_cut_into_columns() {
+        let strategy = XYCutStrategy::new();
+        let spans = letter_top(596.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        assert!(
+            strategy.find_horizontal_split_indexed(&spans, &indices).is_none(),
+            "a right block wholly above the left block must not be cut into columns"
+        );
+        let order: Vec<&str> = strategy
+            .partition_region(&spans, None)
+            .iter()
+            .flatten()
+            .map(|s| s.text.as_str())
+            .collect();
+        let last_upper = order.iter().rposition(|t| *t == "lh").unwrap();
+        let first_lower = order.iter().position(|t| *t == "ad").unwrap();
+        assert!(last_upper < first_lower, "the upper block must read first, got {order:?}");
+    }
+
+    /// Two eight-line columns on the same rows: the shared-rows rule leaves a true column cut
+    /// as it was, left column then right column.
+    #[test]
+    fn columns_that_share_rows_are_still_cut() {
+        let strategy = XYCutStrategy::new();
+        let mut spans: Vec<TextSpan> = (0..8)
+            .map(|k| make_span_text(69.0, 300.0 + k as f32 * 14.0, 200.0, 10.0, "lc", 12.0))
+            .collect();
+        spans.extend((0..8).map(|k| make_span_text(330.0, 300.0 + k as f32 * 14.0, 200.0, 10.0, "rc", 12.0)));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let (left, right) = strategy
+            .find_horizontal_split_indexed(&spans, &indices)
+            .expect("two columns on the same rows are cut");
+        assert_eq!(left, (0..8).collect::<Vec<_>>());
+        assert_eq!(right, (8..16).collect::<Vec<_>>());
+    }
+
+    /// The boundary of the rule, on the shorter (right, 66 pt) side: an overlap of 20 pt (30
+    /// percent) is stacked and not cut; an overlap of 50 pt (76 percent) shares rows and is cut.
+    #[test]
+    fn the_shared_rows_boundary_is_half_of_the_shorter_side() {
+        let strategy = XYCutStrategy::new();
+        let indices: Vec<usize> = (0..13).collect();
+
+        let stacked = letter_top(570.0);
+        assert!(
+            strategy.find_horizontal_split_indexed(&stacked, &indices).is_none(),
+            "an overlap of 30 percent of the shorter side is stacked"
+        );
+        let beside = letter_top(540.0);
+        assert!(
+            strategy.find_horizontal_split_indexed(&beside, &indices).is_some(),
+            "an overlap of 76 percent of the shorter side shares rows"
+        );
+    }
+
     /// GH#2116 geometry on an 842 x 595 pt two-up sheet: a left slide of short 6pt bullet
     /// lines (x 138..208, y 340..450) beside right body text of full 295pt lines at 9.9pt
     /// leading 11.9 (x 484, y 270..472). The two leadings differ, so four of the bullets sit
