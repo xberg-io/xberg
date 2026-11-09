@@ -413,6 +413,12 @@ fn cached_extgstate_ignores_a_nan_stroke_opacity() {
     assert_eq!(state.stroke_alpha, 0.5);
     extractor.move_to(0.0, 0.0);
     extractor.line_to(10.0, 0.0);
+    extractor.set_stroke_color(Color::new(1.0, 0.0, 0.0));
     extractor.stroke();
-    assert_eq!(extractor.finish().len(), 1, "a stroke after a NaN CA is kept");
+    let paths = extractor.finish();
+    assert_eq!(paths.len(), 1);
+    assert!(
+        paths[0].stroke_color.is_some(),
+        "a stroke after a NaN CA keeps its colour"
+    );
 }
