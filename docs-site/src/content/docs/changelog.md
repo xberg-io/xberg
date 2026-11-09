@@ -234,6 +234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Print each row of a dot-leader table picture once when the block read keeps a line the table already holds.** (#2783)
+  The PSM 6 read's hOCR grouped some rows into one multi-line paragraph, and a line is dropped as claimed only on an exact token match with a table row. A leader token or a stray `=` the table cell lacks kept the line, so the row appeared as text and in the table. Dot-leader reads now compare a line with a table row on their alphanumeric tokens alone.
 - **(ocr): Re-read a standalone dot-leader table picture whose first read holds a garbled table.** (#2503)
   At 14 px the sparse read turns each leader into low-confidence lowercase noise inside a table whose label cells are corrupted, so the picture was never re-read. A first-read table whose column rows (four or more) hold such noise is now read again as one block, and the re-read replaces it only if it has a table, at least four column rows carrying a leader, and keeps the first read's confidently read letters and digits. The 14 px picture keeps 11 of 12 rows by default instead of 3; correct first-read tables, table-of-contents pictures, scans and an explicit caller PSM are unchanged.
 - **(models): Make the candidate inventory's pins reachable by tests.** (#2771)

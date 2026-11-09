@@ -96,22 +96,36 @@ fn claim_matching_table_rows(
     }
 }
 
-pub(crate) struct ExactTableRows(HashMap<String, usize>);
+pub(crate) struct ExactTableRows {
+    rows: HashMap<String, usize>,
+    ignore_marks: bool,
+}
 
 impl ExactTableRows {
     pub(crate) fn new(cells: &[Vec<String>]) -> Self {
+        Self::with_marks(cells, false)
+    }
+
+    /// Rows compared on their alphanumeric tokens alone, so a dot leader or a stray mark between a
+    /// label and its values does not keep a line whose every word the table carries (#2783).
+    pub(crate) fn ignoring_marks(cells: &[Vec<String>]) -> Self {
+        Self::with_marks(cells, true)
+    }
+
+    fn with_marks(cells: &[Vec<String>], ignore_marks: bool) -> Self {
         let mut rows = HashMap::new();
         for row in cells {
-            let tokens = row_tokens(row.iter().flat_map(|cell| cell.split_whitespace()));
+            let tokens = row_tokens(row.iter().flat_map(|cell| cell.split_whitespace()), ignore_marks);
             if !tokens.is_empty() {
                 *rows.entry(tokens).or_default() += 1;
             }
         }
-        Self(rows)
+        Self { rows, ignore_marks }
     }
 
     pub(crate) fn claim<'a>(&mut self, tokens: impl Iterator<Item = &'a str>) -> bool {
-        let Some(remaining) = self.0.get_mut(&row_tokens(tokens)).filter(|count| **count > 0) else {
+        let key = row_tokens(tokens, self.ignore_marks);
+        let Some(remaining) = self.rows.get_mut(&key).filter(|count| **count > 0) else {
             return false;
         };
         *remaining -= 1;
@@ -119,8 +133,11 @@ impl ExactTableRows {
     }
 }
 
-fn row_tokens<'a>(tokens: impl Iterator<Item = &'a str>) -> String {
-    tokens.collect::<Vec<_>>().join(" ")
+fn row_tokens<'a>(tokens: impl Iterator<Item = &'a str>, ignore_marks: bool) -> String {
+    tokens
+        .filter(|token| !ignore_marks || token.chars().any(char::is_alphanumeric))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// [`drop_elements_claimed_by_tables`] over a page document, recording in
@@ -202,6 +219,20 @@ mod tests {
     /// One row of cells from whitespace-separated text, for tables that must retain a paragraph's words.
     fn cells_of(text: &str) -> Vec<Vec<String>> {
         vec![text.split_whitespace().map(str::to_string).collect()]
+    }
+
+    #[test]
+    fn rows_ignoring_marks_claim_a_line_with_a_leader_and_a_stray_mark_but_exact_rows_do_not() {
+        let cells = vec![vec![
+            "Pool repairs".to_string(),
+            "14".to_string(),
+            "140,506".to_string(),
+        ]];
+        let line = "Pool repairs ......... 14 = 140,506";
+
+        assert!(!ExactTableRows::new(&cells).claim(line.split_whitespace()));
+        assert!(ExactTableRows::ignoring_marks(&cells).claim(line.split_whitespace()));
+        assert!(!ExactTableRows::ignoring_marks(&cells).claim("Pool repairs ... 15 = 140,506".split_whitespace()));
     }
 
     #[test]

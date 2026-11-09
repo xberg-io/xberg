@@ -241,20 +241,27 @@ pub(crate) fn parse_hocr_preserving_rejected_table_words(
     )
 }
 
-/// Remove exact table rows while the parser still has each physical line's word boxes.
+/// Remove exact table rows while the parser still has each physical line's word boxes. With
+/// `ignore_marks`, rows are compared on their alphanumeric tokens alone (dot-leader rows, #2783).
 pub(crate) fn parse_hocr_without_claimed_table_rows(
     hocr_html: &str,
     page_offset: u32,
     bbox: &BoundingBox,
     cells: &[Vec<String>],
+    ignore_marks: bool,
 ) -> InternalDocument {
+    let rows = if ignore_marks {
+        ExactTableRows::ignoring_marks(cells)
+    } else {
+        ExactTableRows::new(cells)
+    };
     parse_hocr_document(
         hocr_html,
         page_offset,
         HocrLinePolicy {
             dictionary_filter: None,
             protected_words: None,
-            table_rows: Some((bbox, ExactTableRows::new(cells))),
+            table_rows: Some((bbox, rows)),
             claimed_words: None,
         },
     )
@@ -2325,7 +2332,7 @@ mod tests {
             ..retained_box
         };
         let cells = vec![vec!["Claimed".to_string()]];
-        let doc = parse_hocr_without_claimed_table_rows(hocr, 4, &table_box, &cells);
+        let doc = parse_hocr_without_claimed_table_rows(hocr, 4, &table_box, &cells, false);
 
         assert_eq!(doc.elements.len(), 1);
         let line = &doc.elements[0];
