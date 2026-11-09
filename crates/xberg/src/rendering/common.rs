@@ -30,7 +30,8 @@ pub(crate) fn annotated_math<'a>(span: &'a str, kind: &AnnotationKind) -> Option
 }
 
 /// Byte offset of the first `%` in a TeX line that starts a comment: one preceded by an even
-/// number of backslashes, since `\%` is a literal percent sign.
+/// number of backslashes, since `\%` is a literal percent sign. Verbatim text such as
+/// `\verb|%|` is not understood: its `%` counts as a comment.
 pub(crate) fn tex_comment_start(line: &str) -> Option<usize> {
     let mut backslashes = 0;
     for (index, byte) in line.bytes().enumerate() {

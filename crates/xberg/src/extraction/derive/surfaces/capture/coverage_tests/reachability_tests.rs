@@ -565,3 +565,19 @@ async fn display_math_with_a_comment_at_the_top_level_is_redacted_between_dollar
     builder.push_formula("Jane Doe % note\nx", None, None);
     assert_display_math_redactable(builder.build(), "$$\nJane Doe % note\nx\n$$").await;
 }
+
+#[tokio::test]
+async fn display_math_with_a_comment_in_a_footnote_is_redacted_as_a_fence() {
+    let source = "$$Jane Doe % note\nx$$";
+    let annotation = TextAnnotation {
+        start: 0,
+        end: u32::try_from(source.len()).unwrap(),
+        kind: AnnotationKind::math(true),
+    };
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("See note", vec![], None, None);
+    builder.push_footnote_ref("1", "note", None);
+    let index = builder.push_footnote_definition(source, "note", None);
+    builder.set_annotations(index, vec![annotation]);
+    assert_display_math_redactable(builder.build(), "```math\n    Jane Doe % note\n    x\n    ```").await;
+}

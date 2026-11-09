@@ -160,6 +160,17 @@ mod tests {
             .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::TableCell))
             .count();
         assert_eq!(cells, 4, "{rendered}");
+        assert!(rendered.contains("$\\|x\\|$"), "{rendered}");
+        let second_row_cell = parsed
+            .descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::TableCell))
+            .nth(3)
+            .and_then(|cell| cell.first_child())
+            .map(|child| format!("{:?}", child.data.borrow().value));
+        assert!(
+            second_row_cell.is_some_and(|value| value.contains("\"b\"")),
+            "{rendered}"
+        );
     }
 
     #[test]

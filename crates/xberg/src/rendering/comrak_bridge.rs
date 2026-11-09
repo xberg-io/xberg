@@ -330,7 +330,7 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
 /// The TeX holds no blank line, which would end the block, and no unescaped `$`.
 fn dollar_math_display(tex: &str, top_level: bool) -> Option<String> {
     let comment = has_tex_comment(tex);
-    let tex = neutralize_markup(&escape_math_dollars(&unix_lines(tex)));
+    let tex = neutralize_markup(&escape_math_dollars(&unix_lines(tex)), true);
     let lines: Vec<&str> = tex
         .lines()
         .map(str::trim_end)
@@ -355,7 +355,7 @@ fn opens_block(line: &str) -> bool {
 
 /// Inline TeX on one line, without the edge whitespace that stops `$` from opening or closing math.
 fn dollar_math_inline(tex: &str) -> String {
-    guard_trailing_backslash(neutralize_markup(&escape_math_dollars(&join_tex_lines(tex))))
+    guard_trailing_backslash(neutralize_markup(&escape_math_dollars(&join_tex_lines(tex)), false))
 }
 
 /// An odd run of trailing backslashes would escape the closing "$".
@@ -380,16 +380,18 @@ fn escape_math_dollars(tex: &str) -> String {
 }
 
 /// A space after `<` changes nothing in TeX, and keeps `<img ...>` or `<https://x>` from reading as
-/// a tag or autolink to a CommonMark reader. Only a `<` before a letter, `/`, `!` or `?` with a `>`
-/// later can open one. The space is visible inside `\text{}` and `\mathrm{}`, and `$` to `\$` in
+/// a tag or autolink to a CommonMark reader. Only a `<` before a letter, `/`, `!` or `?` can open
+/// one. Display math fills its paragraph, so there a tag needs its `>` inside the TeX
+/// (`closed_inside`); inline math continues into the paragraph, whose text can close the tag, so
+/// every such `<` is spaced. The space is visible inside `\text{}` and `\mathrm{}`, and `$` to `\$` in
 /// `escape_math_dollars` is lossy there too.
-fn neutralize_markup(tex: &str) -> String {
+fn neutralize_markup(tex: &str, closed_inside: bool) -> String {
     let mut out = String::with_capacity(tex.len());
     for (index, ch) in tex.char_indices() {
         out.push(ch);
         let rest = &tex[index + 1..];
         if ch == '<'
-            && rest.contains('>')
+            && (!closed_inside || rest.contains('>'))
             && rest
                 .chars()
                 .next()
@@ -3132,7 +3134,7 @@ mod tests {
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_eq!(
             markdown,
-            "Let $a<b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
+            "Let $a< b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
         );
         assert!(!markdown.contains("```math"), "{markdown}");
     }
@@ -3200,6 +3202,34 @@ mod tests {
     }
 
     #[test]
+    fn should_not_let_inline_math_open_a_tag_closed_by_the_prose() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        let span = "$<img src=x$";
+        push_math_paragraph(&mut builder, &format!("{span} onerror=alert(1) >"), &[span]);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(markdown, "$< img src=x$ onerror=alert(1) \\>\n");
+        assert_no_html(&markdown, &Options::default());
+    }
+
+    #[test]
+    fn should_handle_comments_on_block_marker_lines_and_cr_separated_lines_in_a_quote() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("a\n- b % c", None, None);
+        builder.push_formula("> a % c\nb", None, None);
+        builder.push_formula("# a % c\nb", None, None);
+        builder.push_quote_start();
+        builder.push_formula("a\r% c\rb", None, None);
+        builder.push_quote_end();
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert!(
+            markdown
+                .starts_with("```math\na\n- b % c\n```\n\n```math\n> a % c\nb\n```\n\n```math\n# a % c\nb\n```\n\n"),
+            "{markdown}"
+        );
+        assert!(markdown.ends_with("> ```math\n> a\n> % c\n> b\n> ```\n"), "{markdown}");
+    }
+
+    #[test]
     fn should_drop_a_tex_comment_instead_of_joining_a_line_into_it() {
         let mut builder = InternalDocumentBuilder::new("test");
         push_math_paragraph(&mut builder, "Let $a % c\nb \\% d$ hold.", &["$a % c\nb \\% d$"]);
@@ -3208,11 +3238,11 @@ mod tests {
     }
 
     #[test]
-    fn should_escape_currency_beside_math_and_keep_a_bare_angle_bracket() {
+    fn should_escape_currency_beside_math_and_space_an_inline_angle_bracket() {
         let mut builder = InternalDocumentBuilder::new("test");
         push_math_paragraph(&mut builder, "Cost $5 or $7 and $a<b$.", &["$a<b$"]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "Cost \\$5 or \\$7 and $a<b$.\n");
+        assert_eq!(markdown, "Cost \\$5 or \\$7 and $a< b$.\n");
     }
 
     #[test]
