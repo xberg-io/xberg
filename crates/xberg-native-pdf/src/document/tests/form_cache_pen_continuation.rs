@@ -60,3 +60,48 @@ fn a_replayed_form_keeps_the_pen_continuation_of_its_arrays() {
     assert!(warm.contains("brown"), "warm form run: {warm}");
     assert_eq!(warm, cold, "the replay must equal the cold run");
 }
+
+/// A page that draws "abc", paints a form whose text sits elsewhere, then sets the pen back over "abc" and
+/// leads with a word gap. The form is another content stream under its own matrix: the run drawn before it
+/// is not the run the pen sets back into, and the form's own end is not either.
+fn form_between_runs_pdf() -> Vec<u8> {
+    let paint = "BT /F1 10 Tf 200 500 Td (zz) Tj ET";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 600 800] \
+         /Resources << /Font << /F1 7 0 R >> >> /Length {} >>\nstream\n{paint}\nendstream",
+        paint.len()
+    );
+    let content = "BT /F1 10 Tf 72 700 Td (abc) Tj ET /Fm0 Do BT /F1 10 Tf 72 700 Td [-3000 (def)] TJ ET";
+    let contents = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (
+                3,
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] \
+                   /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> /XObject << /Fm0 6 0 R >> >> >>",
+            ),
+            (5, contents.as_bytes()),
+            (6, form.as_bytes()),
+            (
+                7,
+                b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            ),
+        ],
+    )
+}
+
+#[test]
+fn a_form_between_two_runs_ends_the_run_the_pen_sets_back_into() {
+    let document = PdfDocument::from_bytes(form_between_runs_pdf()).expect("open the form page");
+    let spans = document.extract_spans(0).expect("extract the form page");
+    let texts: Vec<(&str, f32)> = spans.iter().map(|s| (s.text.as_str(), s.bbox.x)).collect();
+    assert!(texts.iter().any(|(t, _)| *t == "zz"), "{texts:?}");
+    let space = texts.iter().find(|(t, _)| t.trim().is_empty()).map(|(_, x)| *x);
+    assert_eq!(
+        space,
+        Some(72.0),
+        "the space sits at the pen, not at an end read across the form: {texts:?}"
+    );
+}

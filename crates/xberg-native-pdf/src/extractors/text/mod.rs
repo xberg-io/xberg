@@ -2448,6 +2448,9 @@ pub struct TextExtractor<'doc> {
     /// The text matrix where the pen stood when a positioning operator moved it away from a place that a
     /// glyph or an offset reached: the end of what the content stream drew last. ~keep
     drawn_end: Option<Matrix>,
+    /// The word-boundary threshold that classified the lead of the `TJ` array in progress, so that the run
+    /// truncation and the offset handling read the same value. ~keep
+    lead_threshold: Option<f32>,
     /// Word boundary detection mode
     ///
     /// Controls whether WordBoundaryDetector is used as:

@@ -183,11 +183,17 @@ impl<'doc> TextExtractor<'doc> {
         } else {
             None
         };
-        if matches!(array.first(), Some(TextElement::Offset(lead)) if *lead < self.calculate_adaptive_tj_threshold())
-            && let Some(mut run) = self.tj_span_buffer.take()
+        if let Some(TextElement::Offset(lead)) = array.first()
+            && self.word_boundary_mode == WordBoundaryMode::Tiebreaker
         {
-            self.end_set_back_run_at_drawn_end(&mut run);
-            self.tj_span_buffer = Some(run);
+            let threshold = self.calculate_adaptive_tj_threshold();
+            self.lead_threshold = Some(threshold);
+            if *lead < threshold
+                && let Some(mut run) = self.tj_span_buffer.take()
+            {
+                self.end_set_back_run_at_drawn_end(&mut run);
+                self.tj_span_buffer = Some(run);
+            }
         }
         self.flush_tj_span_buffer()?;
         match self.word_boundary_mode {
@@ -372,7 +378,10 @@ impl<'doc> TextExtractor<'doc> {
         // Check if this offset indicates a word boundary
         // Per PDF spec: negative offsets increase spacing
         // Use geometry-based adaptive threshold ~keep
-        let threshold = self.calculate_adaptive_tj_threshold();
+        let threshold = match self.lead_threshold.take() {
+            Some(lead_threshold) if idx == 0 => lead_threshold,
+            _ => self.calculate_adaptive_tj_threshold(),
+        };
         if offset < threshold {
             let fresh = self.flush_buffer_at_tj_word_boundary(array, idx, offset, buffer)?;
             Ok((fresh, true))
@@ -384,8 +393,9 @@ impl<'doc> TextExtractor<'doc> {
             self.advance_position_for_offset(offset)?;
             // A sub-threshold offset moves the pen but not the end of the run drawn last: the pen
             // stays the positioned pen until a glyph or an offset past the threshold moves it. ~keep
-            if at_positioned_pen {
-                self.positioned_pen = Some(self.state_stack.current().text_matrix);
+            let pen = self.state_stack.current().text_matrix;
+            if at_positioned_pen && self.drawn_end.is_none_or(|end| self.baseline_reach(pen, end).0 >= 0.0) {
+                self.positioned_pen = Some(pen);
             }
             // Fold the same displacement into the buffer's
             // advance record. Historically only the text matrix
@@ -504,7 +514,8 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// Forget the end of the run drawn last. It is a raw text-space matrix read under the current CTM, so it
-    /// means nothing once a `Q`, a `cm` or a form `Do` changed the CTM it was drawn under. ~keep
+    /// means nothing once a `Q`, a `cm` or a form `Do` changed the CTM it was drawn under. A run drawn before
+    /// the next positioning operator has no end: that operator records the pen it finds as the end. ~keep
     pub(super) fn forget_drawn_end(&mut self) {
         self.positioned_pen = None;
         self.drawn_end = None;

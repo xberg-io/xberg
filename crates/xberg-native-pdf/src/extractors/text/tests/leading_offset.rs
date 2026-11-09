@@ -386,6 +386,10 @@ fn drawn_end_does_not_survive_a_q_or_cm_into_a_text_object_under_another_ctm() {
         let texts: Vec<(&str, f32)> = spans.iter().map(|(t, x, _)| (t.as_str(), *x)).collect();
         assert_eq!(texts, [("abc", 72.0), (" ", 122.0), ("def", 152.0)], "{stream}");
     }
+    // The same two text objects with no cm and no Q are set back into the run: the space goes at its end.
+    let plain = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj ET BT /F1 10 Tf 72 700 Td [-3000 (def)] TJ ET");
+    let texts: Vec<(&str, f32)> = plain.iter().map(|(t, x, _)| (t.as_str(), *x)).collect();
+    assert_eq!(texts, [("abc", 72.0), (" ", 87.0), ("def", 102.0)]);
 }
 
 /// A form `Do` draws under its own matrix: the run drawn before it is not the run the pen sets back into.
@@ -432,4 +436,23 @@ fn td_back_after_a_seam_marked_array_keeps_the_set_back_rule() {
 fn sub_threshold_negative_lead_after_a_tm_back_keeps_the_pen_move_width() {
     let spans = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-50 (def)] TJ ET");
     assert_eq!(spans.first(), Some(&("abc".to_string(), 72.0, 8.0)));
+}
+
+/// A sub-threshold kern that carries the pen past the end kept for the run drawn last leaves that end
+/// behind: the pen is then the end of what was drawn, and a later set back puts its space there. A kern
+/// that stops short of the end, or a glyph after the kern, keep the space where it was. ~keep
+#[test]
+fn sub_threshold_kern_across_the_drawn_end_does_not_keep_it() {
+    for (kern, space) in [("[-120]", 87.2), ("[-100]", 87.0), ("[-100 (x)]", 92.0)] {
+        let stream = format!(
+            "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 86 700 Tm {kern} TJ 1 0 0 1 80 700 Tm [-3000 (def)] TJ ET"
+        );
+        let spans = span_boxes(&stream);
+        let texts: Vec<(&str, f32)> = spans.iter().map(|(t, x, _)| (t.as_str(), *x)).collect();
+        assert_eq!(
+            texts.iter().find(|(t, _)| *t == " ").map(|(_, x)| *x),
+            Some(space),
+            "{kern}: {texts:?}"
+        );
+    }
 }
