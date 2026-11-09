@@ -73,6 +73,8 @@ impl<'doc> TextExtractor<'doc> {
         self.extract_spans = true;
         self.spans.clear();
         self.span_sequence_counter = 0;
+        self.pen_seam = None;
+        self.pen_continuations.clear();
         self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
 
         extract_log_debug!("Parsing content stream for text extraction");

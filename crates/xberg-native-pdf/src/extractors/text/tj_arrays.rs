@@ -36,6 +36,13 @@ impl<'doc> TextExtractor<'doc> {
         }
 
         let total_width = buffer.accumulated_width * buffer.user_h_scale;
+        if buffer.pen_continuation {
+            self.pen_continuations.insert(SpanKey::at(
+                self.span_sequence_counter,
+                buffer.user_pos_x,
+                buffer.user_pos_y,
+            ));
+        }
 
         // Use pre-computed values from buffer creation (avoids
         // matrix multiply + sqrt + HashMap lookup + transform_point per flush) ~keep
@@ -152,7 +159,10 @@ impl<'doc> TextExtractor<'doc> {
     /// this method dispatches to either:
     /// - process_tj_array_tiebreaker(): WordBoundaryMode::Tiebreaker (default)
     /// - process_tj_array_primary(): WordBoundaryMode::Primary
-    pub(super) fn process_tj_array(&mut self, array: &[TextElement]) -> Result<()> {
+    ///
+    /// `continues_pen` marks the array's first span as starting where the previous array left the
+    /// pen (see [`PenSeam`]). Returns whether the array flushed a span at a word-boundary offset.
+    pub(super) fn process_tj_array(&mut self, array: &[TextElement], continues_pen: bool) -> Result<bool> {
         // A bare `Tj` immediately before this array leaves `self.tj_span_buffer` open: `Tj`
         // buffers into that field, while `TJ` runs through its own local buffer below and never
         // reads or clears it. Every other run-closing boundary -- Td, TD, T*, a non-continuing
@@ -175,8 +185,11 @@ impl<'doc> TextExtractor<'doc> {
         };
         self.flush_tj_span_buffer()?;
         match self.word_boundary_mode {
-            WordBoundaryMode::Tiebreaker => self.process_tj_array_tiebreaker(array, carried),
-            WordBoundaryMode::Primary => self.process_tj_array_primary(array),
+            WordBoundaryMode::Tiebreaker => self.process_tj_array_tiebreaker(array, carried, continues_pen),
+            WordBoundaryMode::Primary => {
+                self.process_tj_array_primary(array)?;
+                Ok(false)
+            }
         }
     }
 
@@ -200,7 +213,14 @@ impl<'doc> TextExtractor<'doc> {
     /// This method buffers consecutive strings into a single span, only breaking on:
     /// - Large negative offsets (indicating word boundaries)
     /// - End of TJ array
-    fn process_tj_array_tiebreaker(&mut self, array: &[TextElement], carried: Option<TjBuffer>) -> Result<()> {
+    ///
+    /// Returns whether a word-boundary offset flushed a span.
+    fn process_tj_array_tiebreaker(
+        &mut self,
+        array: &[TextElement],
+        carried: Option<TjBuffer>,
+        continues_pen: bool,
+    ) -> Result<bool> {
         // Character-level tracking for word boundary detection
         // Collect detailed character information during TJ array processing
         // Per ISO 32000-1:2008 Section 9.4.4, character-level data improves accuracy ~keep
@@ -223,10 +243,11 @@ impl<'doc> TextExtractor<'doc> {
                 &self.font_provenance_cache,
             )
         });
-        let mut _element_count = 0;
+        // Only the first run of the array starts at the pen the previous array left. ~keep
+        buffer.pen_continuation = continues_pen;
+        let mut word_boundary_flushed = false;
 
         for (idx, element) in array.iter().enumerate() {
-            _element_count += 1;
             match element {
                 TextElement::String(s) => {
                     let metrics = TjCharacterMetrics {
@@ -238,7 +259,9 @@ impl<'doc> TextExtractor<'doc> {
                     self.process_tj_string_element(array, idx, s, &metrics, font_name.as_deref(), &mut buffer)?;
                 }
                 TextElement::Offset(offset) => {
-                    buffer = self.process_tj_offset_element(array, idx, *offset, buffer)?;
+                    let (next, flushed) = self.process_tj_offset_element(array, idx, *offset, buffer)?;
+                    buffer = next;
+                    word_boundary_flushed |= flushed;
                 }
             }
         }
@@ -247,7 +270,7 @@ impl<'doc> TextExtractor<'doc> {
             self.flush_tj_buffer(buffer)?;
         }
 
-        Ok(())
+        Ok(word_boundary_flushed)
     }
 
     /// Track per-character info for one `TJ` show-string element and append
@@ -310,7 +333,7 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Apply one `TJ` numeric offset: update the running statistics, decide
     /// whether it is a word boundary, and either flush `buffer` into a span
-    /// (returning a fresh one) or fold the offset into it. Split out of
+    /// (returning a fresh one and `true`) or fold the offset into it. Split out of
     /// [`Self::process_tj_array_tiebreaker`] to keep it short. ~keep
     fn process_tj_offset_element(
         &mut self,
@@ -318,7 +341,7 @@ impl<'doc> TextExtractor<'doc> {
         idx: usize,
         offset: f32,
         mut buffer: TjBuffer,
-    ) -> Result<TjBuffer> {
+    ) -> Result<(TjBuffer, bool)> {
         // Track TJ offset for statistical analysis
         // Per ISO 32000-1:2008 Section 9.4.4, collect all TJ values
         // to detect justified vs normal text through coefficient of variation ~keep
@@ -345,7 +368,8 @@ impl<'doc> TextExtractor<'doc> {
         // Use geometry-based adaptive threshold ~keep
         let threshold = self.calculate_adaptive_tj_threshold();
         if offset < threshold {
-            self.flush_buffer_at_tj_word_boundary(array, idx, offset, buffer)
+            let fresh = self.flush_buffer_at_tj_word_boundary(array, idx, offset, buffer)?;
+            Ok((fresh, true))
         } else {
             // Sub-threshold offset: matrix advances but the
             // current buffer keeps accumulating, so apply
@@ -364,7 +388,7 @@ impl<'doc> TextExtractor<'doc> {
             // `sum(char_widths) == accumulated_width == matrix
             // advance` by construction. ~keep
             self.fold_offset_into_buffer(&mut buffer, offset);
-            Ok(buffer)
+            Ok((buffer, false))
         }
     }
 
@@ -451,7 +475,7 @@ impl<'doc> TextExtractor<'doc> {
     /// 6. Marks spans with primary_detected flag
     fn process_tj_array_primary(&mut self, array: &[TextElement]) -> Result<()> {
         if self.tj_character_array.is_empty() {
-            return self.process_tj_array_tiebreaker(array, None);
+            return self.process_tj_array_tiebreaker(array, None, false).map(|_| ());
         }
 
         // Mark pattern contexts BEFORE boundary detection
@@ -469,7 +493,7 @@ impl<'doc> TextExtractor<'doc> {
         let boundaries = detector.detect_word_boundaries(&self.tj_character_array, &context);
 
         if boundaries.is_empty() {
-            return self.process_tj_array_tiebreaker(array, None);
+            return self.process_tj_array_tiebreaker(array, None, false).map(|_| ());
         }
 
         self.apply_ligature_decisions()?;

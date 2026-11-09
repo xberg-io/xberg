@@ -60,6 +60,8 @@ impl<'doc> TextExtractor<'doc> {
             extract_spans: true,
             tj_span_buffer: None,
             span_sequence_counter: 0,
+            pen_seam: None,
+            pen_continuations: HashSet::new(),
             marked_content_stack: Vec::new(),
             saw_reversed_chars: false,
             inside_artifact: false,
@@ -221,6 +223,8 @@ impl<'doc> TextExtractor<'doc> {
         self.extract_spans = true;
         self.spans.clear();
         self.span_sequence_counter = 0;
+        self.pen_seam = None;
+        self.pen_continuations.clear();
     }
 
     /// Public wrapper for execute_operator (normally private).
