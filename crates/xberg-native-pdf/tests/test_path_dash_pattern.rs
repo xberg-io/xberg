@@ -421,6 +421,58 @@ fn page_extgstate_cache_survives_a_form_that_redefines_the_same_name() {
 }
 
 #[test]
+fn a_form_uses_its_own_indirect_extgstate_for_a_shared_page_name() {
+    let form = "/Shared gs 0 50 m 100 50 l S";
+    let form_object = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] \
+         /Resources << /ExtGState 7 0 R >> /Length {} >>\nstream\n{form}\nendstream",
+        form.len()
+    );
+    let paths = paths_with_resource_objects(
+        b"/Shared gs 0 700 m 300 700 l S /F Do 0 690 m 300 690 l S",
+        "/ExtGState 5 0 R /XObject << /F 6 0 R >>",
+        &[
+            "<< /Shared << /D [[3 2] 1] /CA 1 >> >>",
+            &form_object,
+            "<< /Shared << /D [[7 1] 2] /CA 0 >> >>",
+        ],
+    );
+    assert_eq!(paths.len(), 3, "page, Form, restored page");
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+    assert_eq!(paths[1].stroke_color, None, "the Form's shared name hides its stroke");
+    assert_eq!(paths[1].dash_pattern, None);
+    assert_eq!(paths[2].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[2].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+}
+
+#[test]
+fn a_name_first_used_after_a_form_reads_the_restored_indirect_page_dictionary() {
+    let form = "/Shared gs 0 50 m 100 50 l S";
+    let form_object = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] \
+         /Resources << /ExtGState 7 0 R >> /Length {} >>\nstream\n{form}\nendstream",
+        form.len()
+    );
+    let paths = paths_with_resource_objects(
+        b"/Shared gs 0 700 m 300 700 l S /F Do /After gs 0 690 m 300 690 l S",
+        "/ExtGState 5 0 R /XObject << /F 6 0 R >>",
+        &[
+            "<< /Shared << /D [[3 2] 1] /CA 1 >> /After << /D [[11 5] 4] /CA 1 >> >>",
+            &form_object,
+            "<< /Shared << /D [[7 1] 2] /CA 0 >> /After << /D [[9 4] 3] /CA 0 >> >>",
+        ],
+    );
+    assert_eq!(paths.len(), 3, "page, Form, first page lookup of /After");
+    assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
+    assert_eq!(paths[1].stroke_color, None);
+    assert_eq!(paths[1].dash_pattern, None);
+    assert_eq!(paths[2].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
+    assert_eq!(paths[2].dash_pattern, Some((vec![11.0, 5.0], 4.0)));
+}
+
+#[test]
 fn repeated_extgstate_dash_uses_the_current_matrix_not_the_lookup_matrix() {
     let paths = paths_with_extgstate(
         b"/GS gs q 2 0 0 2 0 0 cm /GS gs 0 350 m 150 350 l S Q /GS gs 0 690 m 300 690 l S",

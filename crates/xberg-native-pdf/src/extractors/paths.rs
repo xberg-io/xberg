@@ -191,8 +191,8 @@ pub struct PathExtractor {
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
     cached_xobject_dict: Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
     cached_extgstates: std::collections::HashMap<String, PathGraphicsPatch>,
-    /// The scope's indirect `/ExtGState` container, loaded once. `None` until first resolved;
-    /// `Some(None)` when the entry is absent or fails to load.
+    /// The scope's indirect `/ExtGState` dictionary, loaded once. Failed loads and Null
+    /// placeholders remain retryable because a later object-stream recovery can replace them. ~keep
     cached_extgstate_container: Option<Option<crate::object::Object>>,
     /// Stack of active Optional Content Group (PDF "layer") names. Each
     /// `BDC`/`BMC` operator (any tag) pushes one entry and each `EMC` pops
@@ -343,7 +343,7 @@ impl PathExtractor {
                 .as_ref()
                 .and_then(|resources| resources.as_dict()?.get("ExtGState")?.as_reference())
                 .and_then(load);
-            self.cached_extgstate_container = Some(loaded);
+            self.cached_extgstate_container = loaded.filter(|container| container.as_dict().is_some()).map(Some);
         }
         self.loaded_extgstate_container()
     }

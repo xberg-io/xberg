@@ -396,7 +396,9 @@ impl PdfDocument {
             return;
         }
         extractor.extgstate_container(|reference| self.load_object(reference).ok());
-        let patch = self.resolve_path_extgstate(name, extractor).unwrap_or_default();
+        let Some(patch) = self.resolve_path_extgstate(name, extractor) else {
+            return;
+        };
         extractor.cache_path_extgstate(name, patch);
         extractor.apply_cached_path_extgstate(name, stack.current_mut());
     }
