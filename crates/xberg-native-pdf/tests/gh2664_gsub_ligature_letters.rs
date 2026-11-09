@@ -569,6 +569,22 @@ fn a_cid_keyed_cff_font_does_not_read_its_cids_as_glyph_indices() {
 }
 
 #[test]
+fn every_letter_ligature_feature_gives_the_letters() {
+    for feature in [b"clig", b"dlig", b"hlig"] {
+        let fixture = Fixture {
+            feature,
+            ..Fixture::standard()
+        };
+        let text = extract(&fixture);
+        let tag = std::str::from_utf8(feature).unwrap();
+        assert!(
+            text.contains("potential"),
+            "a ligature of the {tag} feature did not give the letters of its components: {text:?}"
+        );
+    }
+}
+
+#[test]
 fn a_shaping_form_ligature_gives_no_letters() {
     let fixture = Fixture {
         feature: b"blwf",
