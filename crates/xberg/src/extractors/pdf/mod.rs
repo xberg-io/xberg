@@ -3351,8 +3351,22 @@ impl PdfExtractor {
                             let (warnings, failures) = ocr_doc
                                 .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                 .unwrap_or_default();
-                            crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, warnings);
-                            ocr_page_failures.extend(failures);
+                            // The discarded read's text is not in the result: its failures were not
+                            // recovered by it, and layout inputs and llm_usage go with it, as in the
+                            // sibling arms.
+                            crate::core::diagnostics::dedup_extend_warnings(
+                                &mut ocr_fallback_warnings,
+                                warnings
+                                    .into_iter()
+                                    .filter(|warning| !warning.message.contains("was recovered from"))
+                                    .collect(),
+                            );
+                            ocr_page_failures.extend(failures.into_iter().map(|failure| {
+                                crate::types::OcrPageFailure {
+                                    recovered: false,
+                                    ..failure
+                                }
+                            }));
                             crate::core::diagnostics::dedup_extend_warnings(
                                 &mut ocr_fallback_warnings,
                                 dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),

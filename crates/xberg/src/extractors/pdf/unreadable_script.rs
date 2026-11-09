@@ -591,15 +591,16 @@ pub(super) fn retain_unreadable_script_pages(
 }
 
 /// The scripts that dominate a native page, judged against Latin alone: those holding at least
-/// [`MINOR_SCRIPT_SHARE`] of its uncovered letters, on a page where Latin letters are no more than
-/// that share of all its letters. A stray word in another script, or a Latin page with a
-/// marked Khmer word, has no dominant script and is left to whatever OCR reads.
+/// [`MINOR_SCRIPT_SHARE`] of its uncovered letters, on a page where the uncovered letters outnumber
+/// the Latin ones. A page with inline English, names or URLs around its Khmer is still a Khmer
+/// page, while a Latin page with a marked Khmer word has no dominant script and is left to whatever
+/// OCR reads.
 fn dominant_scripts(text: &str) -> Option<Vec<Script>> {
     let latin_only = [crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()];
     let counts = uncovered_script_counts(text, &latin_only)?;
     let uncovered: usize = counts.iter().map(|(_, count)| count).sum();
     let latin = text.chars().filter(|c| script_of(*c) == Some(Script::Latin)).count();
-    if latin as f64 > MINOR_SCRIPT_SHARE * (uncovered + latin) as f64 {
+    if latin >= uncovered {
         return None;
     }
     let weighty: Vec<Script> = counts
@@ -1336,6 +1337,25 @@ mod tests {
     }
 
     const THAI_MARKED: &str = "สวัสดี\u{FFFD}ครับ\u{FFFD} ผม\u{FFFD} รักประเทศไทย\u{FFFD} มาก\u{FFFD}";
+
+    #[test]
+    fn a_khmer_page_with_inline_latin_is_marked_while_a_latin_majority_page_is_not() {
+        let config = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+        ]}));
+        let khmer_with_latin = format!("{KHMER_MARKED} Phnom Penh web site");
+        let letters = |predicate: fn(char) -> bool| khmer_with_latin.chars().filter(|c| predicate(*c)).count();
+        let latin = letters(|c| c.is_ascii_alphabetic());
+        let khmer = letters(|c| script_of(c) == Some(Script::Khmer));
+        assert!(
+            latin * 100 >= 25 * (latin + khmer) && latin * 100 <= 35 * (latin + khmer),
+            "{latin} Latin of {khmer} Khmer"
+        );
+        assert_eq!(marked_for(&[&khmer_with_latin], &config).1, [1]);
+        let latin_majority =
+            format!("{KHMER_MARKED} Phnom Penh is the capital and largest city of Cambodia on the web");
+        assert!(dominant_scripts(&latin_majority).is_none());
+    }
 
     #[test]
     fn a_latin_page_with_one_marked_khmer_word_is_not_marked() {
