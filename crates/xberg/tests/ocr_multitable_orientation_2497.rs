@@ -181,7 +181,7 @@ async fn implicit_rotation_recovers_two_tables_when_primary_iterator_words_cover
         let forced = extract(
             rotated,
             Some(OcrConfig {
-                auto_rotate: true,
+                auto_rotate: Some(true),
                 ..Default::default()
             }),
         )
@@ -215,7 +215,7 @@ async fn implicit_rotation_recovers_two_tables_when_primary_iterator_words_cover
     let forced = extract(
         rotated,
         Some(OcrConfig {
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         }),
     )
@@ -245,7 +245,7 @@ async fn implicit_sideways_heading_recovers_exact_source_and_table_bounds() {
     let forced = extract(
         pdf,
         Some(OcrConfig {
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         }),
     )

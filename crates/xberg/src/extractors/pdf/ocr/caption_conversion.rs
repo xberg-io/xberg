@@ -30,7 +30,7 @@ pub(super) fn eligible(config: &ExtractionConfig) -> bool {
             ocr.tesseract_config.is_none()
                 && ocr.element_config.is_none()
                 && !ocr.numeric_repair
-                && !ocr.auto_rotate
+                && ocr.auto_rotate != Some(true)
                 && ocr.effective_tesseract_language() == ["eng"]
         })
 }

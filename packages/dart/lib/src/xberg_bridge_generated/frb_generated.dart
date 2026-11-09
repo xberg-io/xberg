@@ -22673,7 +22673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         arr[9],
       ),
       pipeline: dco_decode_opt_box_autoadd_ocr_pipeline_config(arr[10]),
-      autoRotate: dco_decode_bool(arr[11]),
+      autoRotate: dco_decode_opt_box_autoadd_bool(arr[11]),
       vlmFallback: dco_decode_vlm_fallback_policy(arr[12]),
       vlmConfig: dco_decode_opt_box_autoadd_llm_config(arr[13]),
       vlmPrompt: dco_decode_opt_String(arr[14]),
@@ -33029,7 +33029,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_pipeline = sse_decode_opt_box_autoadd_ocr_pipeline_config(
       deserializer,
     );
-    var var_autoRotate = sse_decode_bool(deserializer);
+    var var_autoRotate = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_vlmFallback = sse_decode_vlm_fallback_policy(deserializer);
     var var_vlmConfig = sse_decode_opt_box_autoadd_llm_config(deserializer);
     var var_vlmPrompt = sse_decode_opt_String(deserializer);
@@ -43880,7 +43880,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_opt_box_autoadd_ocr_pipeline_config(self.pipeline, serializer);
-    sse_encode_bool(self.autoRotate, serializer);
+    sse_encode_opt_box_autoadd_bool(self.autoRotate, serializer);
     sse_encode_vlm_fallback_policy(self.vlmFallback, serializer);
     sse_encode_opt_box_autoadd_llm_config(self.vlmConfig, serializer);
     sse_encode_opt_String(self.vlmPrompt, serializer);

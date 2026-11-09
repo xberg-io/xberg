@@ -4430,7 +4430,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     && whole_page_raster
                     && page_rotation_degrees == 0
                     && correction_degrees == 0
-                    && !base_ocr_config.auto_rotate
+                    && base_ocr_config.auto_rotate != Some(true)
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
                 let task = crate::engine::seams::inherit_progress(async move {
@@ -4884,7 +4884,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 let normalize_recovered_table = xobject_document.is_some()
-                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate)
+                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate == Some(true))
                     && !ocr_result.tables.is_empty()
                     && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
                         .is_some_and(|angle| angle != 0);
