@@ -794,7 +794,7 @@ fn later_rectangular_paint_withholds_the_shading_proof() {
 }
 
 #[test]
-fn repeated_schema_requires_numeric_body_values_independent_of_bold_labels() {
+fn repeated_schema_requires_an_ascii_digit_in_each_body_value_after_column_zero() {
     let mut rows = repeated_schema_rows();
     rows[2].cells[1].text = "Note".into();
     assert!(!retained(rows, &shaded_first_body()));
@@ -816,4 +816,27 @@ fn the_same_leaf_and_body_rule_vetoes_independent_shading_evidence() {
     paths.push(PathContent::line(0.0, 0.0, COLUMNS as f32 * WIDTH, 0.0));
     paths.push(PathContent::line(0.0, -HEIGHT, COLUMNS as f32 * WIDTH, -HEIGHT));
     assert!(!retained(repeated_schema_rows(), &paths));
+}
+
+#[test]
+fn numeric_only_leaf_schemas_need_visible_rules() {
+    let mut rows = repeated_schema_rows();
+    rows[1] = leaves(["Item", "2023", "2024", "2023", "2024"], true);
+    assert!(complete_source_band(&rows[1], COLUMNS, true));
+    assert!(grouped_leaves(&rows[0], &rows[1]).is_some());
+    assert!(!retained(rows, &shaded_first_body()));
+}
+
+#[test]
+fn body_column_alignment_is_required_even_when_text_moves_with_its_cell() {
+    let mut rows = repeated_schema_rows();
+    let value = &mut rows[2].cells[2];
+    value.bbox.as_mut().unwrap().x += 2.0;
+    for span in &mut value.spans {
+        span.bbox.x += 2.0;
+    }
+    assert!(complete_source_band(&rows[2], COLUMNS, false));
+    let shading = shaded_first_body();
+    assert!(cell_is_shaded(&rows[2].cells[2], &shading_rectangles(shading.iter())));
+    assert!(!retained(rows, &shading));
 }

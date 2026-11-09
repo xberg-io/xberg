@@ -16,6 +16,7 @@ struct Source {
     repainted_shading: bool,
     partially_erased_leaf_shading: bool,
     zebra_body: bool,
+    fully_shaded_body: bool,
     first_value: Option<&'static str>,
     separator: &'static str,
 }
@@ -72,6 +73,9 @@ fn table_pdf(source: Source) -> Vec<u8> {
     }
     if source.zebra_body {
         operators.push_str(".9 g 60 572 400 22 re f 0 g\n");
+    }
+    if source.fully_shaded_body {
+        operators.push_str(".9 g 60 572 400 66 re f 0 g\n");
     }
     text(&mut operators, "F2", 150, 666, "North");
     text(&mut operators, "F2", 310, 666, "South");
@@ -312,6 +316,7 @@ fn independent_shading_proof_does_not_require_visible_separator_rules() {
     for separator in [
         "0 G [3 2] 0 d 60 638 m 460 638 l S 60 616 m 460 616 l S",
         "q /Invisible gs 0 G 60 638 m 460 638 l S 60 616 m 460 616 l S Q",
+        ".95 G 60 638 m 460 638 l S 60 616 m 460 616 l S",
         ".98 G 60 638 m 460 638 l S 60 616 m 460 616 l S",
         "0 G 60 638 m 460 638 l S",
         "0 G 60 616 m 460 616 l S",
@@ -365,6 +370,20 @@ fn first_body_values_need_an_ascii_digit_not_a_numeric_only_string() {
                 ..Source::default()
             }),
             expected,
+        );
+    }
+}
+
+#[test]
+fn a_fully_shaded_body_still_requires_the_independent_repeated_schema() {
+    for different_schema in [false, true] {
+        assert_leaf_roles(
+            &extract(Source {
+                fully_shaded_body: true,
+                different_schema,
+                ..Source::default()
+            }),
+            !different_schema,
         );
     }
 }
