@@ -120,7 +120,7 @@ fn a_single_letter_or_a_code_with_a_non_letter_does_not_mark_the_span() {
     let spans = spans_of(simple_font_decoding_a_to("00660031"), b"BT /F1 12 Tf 0 0 Td (A) Tj ET");
     assert_eq!(spans, unmarked("f1"));
     let spans = spans_of(simple_font_decoding_a_to("00660020"), b"BT /F1 12 Tf 0 0 Td (A) Tj ET");
-    assert!(!spans.is_empty() && spans.iter().all(|(_, mark)| !mark), "{spans:?}");
+    assert_eq!(spans, unmarked("f "));
 }
 
 /// Control: the letters "ff" typed as two ordinary glyphs carry no mark, so real words and
@@ -182,6 +182,19 @@ fn a_lone_actual_text_ligature_marks_the_span() {
     assert_eq!(spans_of(create_test_font(), stream), marked("ff"));
     let stream = b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (fi)>> BDC [(xx)] TJ EMC ET";
     assert_eq!(spans_of(create_test_font(), stream), marked("fi"));
+}
+
+/// The item's case with the ligature as an `/ActualText` over a TJ array: "di", the replacement "ff"
+/// drawn over two glyphs, "erent". The replacement is marked and as wide as its glyphs, so the gap
+/// after it is measured from its end and the merged line is one word.
+#[test]
+fn an_actual_text_ligature_in_a_tj_array_joins_the_word_around_it() {
+    let stream = b"BT /F1 12 Tf 0 0 Td (di) Tj /Span <</ActualText (ff)>> BDC [(xx)] TJ EMC (erent) Tj ET";
+    let texts: Vec<String> = spans_of(create_test_font(), stream)
+        .into_iter()
+        .map(|(text, _)| text)
+        .collect();
+    assert_eq!(texts, vec!["different".to_string()]);
 }
 
 fn span_widths(font: FontInfo, stream: &[u8]) -> Vec<(String, f32)> {
@@ -254,15 +267,28 @@ fn run(text: &str, x: f32, width: f32, ligature_glyph: bool) -> TextSpan {
 /// "di", a lone expanded "ff" and "erent", 3.5 pt apart at 12 pt: wider than the ordinary 3 pt word gap
 /// of a run with no font, narrower than the 4.5 pt gap that a ligature edge allows.
 fn merged_text(ligature_glyph: bool) -> Vec<String> {
+    merged_text_around("ff", ligature_glyph)
+}
+
+/// "di", the run `middle` and "erent", 3.5 pt apart at 12 pt.
+fn merged_text_around(middle: &str, ligature_glyph: bool) -> Vec<String> {
     let mut extractor = TextExtractor::new();
     extractor.merging_config = SpanMergingConfig::legacy();
     extractor.spans = vec![
         run("di", 100.0, 10.0, false),
-        run("ff", 113.5, 7.0, ligature_glyph),
+        run(middle, 113.5, 7.0, ligature_glyph),
         run("erent", 124.0, 30.0, false),
     ];
     extractor.merge_adjacent_spans();
     extractor.spans.into_iter().map(|s| s.text).collect()
+}
+
+/// A marked run whose text is no longer a ligature's letters is no ligature to the merge pass, on
+/// either side of it: "ff2" between "di" and "erent" keeps both spaces, as the same unmarked run does.
+#[test]
+fn merging_keeps_the_spaces_around_a_marked_ligature_that_gained_text() {
+    assert_eq!(merged_text_around("ff2", false), vec!["di ff2 erent".to_string()]);
+    assert_eq!(merged_text_around("ff2", true), merged_text_around("ff2", false));
 }
 
 #[test]

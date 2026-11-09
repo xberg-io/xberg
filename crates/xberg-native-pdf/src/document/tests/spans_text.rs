@@ -818,3 +818,22 @@ fn test_should_insert_space_expanded_ligature_window_edges() {
     assert!(!PdfDocument::should_insert_space(&before, &ligature(2.6)));
     assert!(PdfDocument::should_insert_space(&before, &ligature(2.8)));
 }
+
+/// Text added to a marked "ff" run after the decode ends the ligature rule: a drop-cap initial
+/// prepended by the drop-cap merge makes the run "Off", no longer the one glyph the decoder expanded,
+/// so the gap before the next run is the ordinary 0.15 em, not the 0.225 em a ligature edge allows.
+/// Red while the gap check read the mark alone. (The sub/superscript merge cannot reach such a run:
+/// it takes no two-letter lowercase base.)
+#[test]
+fn test_a_drop_cap_prepended_to_an_expanded_ligature_ends_the_relaxed_gap() {
+    let initial = make_test_span("O", 72.0, 100.0, 24.0, 36.0); // right edge 96
+    let mut ligature = make_test_span("ff", 96.0, 100.0, 7.0, 12.0); // right edge 103
+    ligature.ligature_glyph = true;
+    let mut spans = vec![initial, ligature];
+    PdfDocument::merge_drop_cap_initials(&mut spans);
+    assert_eq!(spans.len(), 1, "{spans:?}");
+    assert_eq!(spans[0].text, "Off");
+    let right = spans[0].bbox.x + spans[0].bbox.width;
+    let next = make_test_span("ice", right + 2.6, 100.0, 15.0, 12.0); // 2.6 pt gap, 0.217 em
+    assert!(PdfDocument::should_insert_space(&spans[0], &next), "{spans:?}");
+}
