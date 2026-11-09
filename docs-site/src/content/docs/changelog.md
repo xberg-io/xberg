@@ -213,6 +213,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
+  A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
 - **(pdf): Stop OCR from splitting words at a ligature such as "fi nancial".** (GH#2322)
   A page that OCR reads is first drawn by the native renderer. A glyph code in an embedded TrueType font
   can decode to several letters, as a ligature does, and the renderer gave each later glyph the width of a
