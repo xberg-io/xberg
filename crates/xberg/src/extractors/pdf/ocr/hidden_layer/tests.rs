@@ -646,10 +646,13 @@ fn a_refused_charge_debits_nothing_and_the_ceiling_is_a_multiple_of_the_page_lim
 
     let defaults = PreviewWorkBudget::new(&crate::ExtractionConfig::default());
     assert_eq!(defaults.per_page, 10_000_000 * PREVIEW_WORK_PER_ITERATION);
-    assert_eq!(PREVIEW_FULL_BUDGET_PAGES, 6, "the document ceiling is six per-page budgets");
+    assert_eq!(
+        PREVIEW_FULL_BUDGET_PAGES, 6,
+        "the document ceiling is six per-page budgets"
+    );
     assert_eq!(
         defaults.remaining, 960_000_000,
-        "six budgets of 160 million units at the default limit"
+        "six budgets of 160 million units at the default limit; this literal also moves with the default max_iterations"
     );
 
     let mut unbounded = PreviewWorkBudget::with_pages(usize::MAX, PREVIEW_FULL_BUDGET_PAGES);
@@ -730,8 +733,9 @@ fn the_default_budget_covers_six_pages_and_refuses_the_seventh() {
         Some(false)
     );
     let page_cost = start - work;
-    // Each page may draw 1.1 page costs, so the ceiling of n budgets is 1.1 n costs and covers n
-    // pages: six pages fit and 0.6 of a cost remains for the seventh.
+    // Page 0 is probed seven times: only the budget accounting matters, not the page. Each
+    // budget is 1.1 page costs, so six budgets are 6.6 costs; six probes spend 6.0 and the
+    // remaining 0.6 of a cost is less than the seventh probe needs, so it is refused.
     let max_iterations = (page_cost + page_cost / 10).div_ceil(PREVIEW_WORK_PER_ITERATION);
     let config = crate::ExtractionConfig {
         security_limits: Some(crate::extractors::security::SecurityLimits {
@@ -747,7 +751,15 @@ fn the_default_budget_covers_six_pages_and_refuses_the_seventh() {
     }
     assert_eq!(
         verdicts,
-        [Some(false), Some(false), Some(false), Some(false), Some(false), Some(false), None]
+        [
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            None
+        ]
     );
 }
 
