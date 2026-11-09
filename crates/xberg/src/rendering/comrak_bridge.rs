@@ -79,10 +79,10 @@ fn normalize_text(text: &str) -> String {
 }
 
 /// Rewrite the AST so text inside code spans, code blocks and math cannot turn into raw HTML in
-/// Markdown output. Math becomes code math: a ```` ```math ```` fence for display math alone in a
-/// paragraph, `` $`tex`$ `` otherwise. Math whose TeX holds a backtick or `$`, or that shares a
-/// block (widened to its outermost tight list item) with code holding `$`, is written as a plain
-/// code span. The HTML writer escapes all of these itself.
+/// Markdown output. Math becomes dollar math: `$$` lines for display math alone in a paragraph,
+/// `$tex$` or `$$tex$$` otherwise, the form GitHub, Pandoc, Obsidian and MathJax read. Math whose
+/// TeX holds a backtick, or that shares a block (widened to its outermost tight list item) with
+/// code holding `$`, is written as code instead. The HTML writer escapes all of these itself.
 pub(crate) fn keep_code_literal<'a>(root: &'a AstNode<'a>, arena: &'a comrak::Arena<'a>) {
     for node in root.descendants().collect::<Vec<_>>() {
         let math = match &mut node.data.borrow_mut().value {
@@ -116,7 +116,11 @@ pub(crate) fn keep_code_literal<'a>(root: &'a AstNode<'a>, arena: &'a comrak::Ar
     let mut seen = HashSet::new();
     let blocks: Vec<_> = root
         .descendants()
-        .filter(|node| matches!(&node.data.borrow().value, NodeValue::Code(code) if code.literal.contains('$')))
+        .filter(|node| match &node.data.borrow().value {
+            NodeValue::Code(code) => code.literal.contains('$'),
+            NodeValue::Math(_) => true,
+            _ => false,
+        })
         .filter_map(|node| node.ancestors().find(|ancestor| ancestor.data.borrow().value.block()))
         .map(|block| {
             block
@@ -135,9 +139,15 @@ pub(crate) fn keep_code_literal<'a>(root: &'a AstNode<'a>, arena: &'a comrak::Ar
             .any(|ancestor| seen.contains(&std::ptr::from_ref(ancestor)))
     });
     for block in outermost {
+        let code_dollar = block
+            .descendants()
+            .any(|node| matches!(&node.data.borrow().value, NodeValue::Code(code) if code.literal.contains('$')));
         for node in block.descendants().collect::<Vec<_>>() {
-            escape_dollars(node, arena);
+            escape_dollars(node, arena, code_dollar);
         }
+    }
+    for node in root.descendants().collect::<Vec<_>>() {
+        sanitize_dollar_math(node);
     }
     // comrak writes no "**" for a Strong inside a Strong, so code spans either side of one are
     // adjacent in the output. Flatten it, as the writer does, so the merge below sees them.
@@ -254,9 +264,35 @@ fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
         node.detach();
         return;
     }
-    if math.display_math
-        && let Some(paragraph) = node.parent().filter(|parent| holds_only(parent, node))
-    {
+    // A backtick can pair with one in a neighbouring code span, so that TeX keeps the code forms.
+    if math.literal.contains('`') {
+        let alone = math.display_math && node.parent().is_some_and(|parent| holds_only(parent, node));
+        write_backtick_math_as_code(node, math, alone);
+        return;
+    }
+    node.data.borrow_mut().value = NodeValue::Math(NodeMath {
+        dollar_math: true,
+        ..math
+    });
+}
+
+/// Make each remaining math node safe between its dollars, once prose dollars are settled.
+fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
+    let paragraph = node.parent().filter(|parent| holds_only(parent, node));
+    let top_level = paragraph
+        .and_then(|paragraph| paragraph.parent())
+        .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Document));
+    if let NodeValue::Math(math) = &mut node.data.borrow_mut().value {
+        math.literal = if math.display_math && paragraph.is_some() {
+            dollar_math_display(&math.literal, top_level)
+        } else {
+            dollar_math_inline(&math.literal)
+        };
+    }
+}
+
+fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone: bool) {
+    if alone && let Some(paragraph) = node.parent() {
         for child in paragraph.children().collect::<Vec<_>>() {
             child.detach();
         }
@@ -271,28 +307,88 @@ fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
         }));
         return;
     }
-    let literal = one_line(&math.literal);
-    // Code math ends at the first "`$", and a dollar-only parser's math at the first "$".
-    node.data.borrow_mut().value = if literal.contains(['`', '$']) {
-        NodeValue::Code(NodeCode {
-            num_backticks: 1,
-            literal,
-        })
-    } else {
-        NodeValue::Math(NodeMath {
-            dollar_math: false,
-            display_math: math.display_math,
-            literal,
-        })
-    };
+    node.data.borrow_mut().value = NodeValue::Code(NodeCode {
+        num_backticks: 1,
+        literal: one_line(&math.literal),
+    });
 }
 
-/// Write each `$` in Text as `\$` and code math as a code span. comrak escapes a backslash in Text.
-fn escape_dollars<'a>(node: &'a AstNode<'a>, arena: &'a comrak::Arena<'a>) {
+/// Display TeX for math alone in a paragraph. At the top level it is the literal between `$$`
+/// delimiter lines. Inside a quote, list item or footnote a container prefix would indent each of
+/// those lines, so the TeX is written on one line, `$$tex$$`, as it is when a line opens a Markdown
+/// block (a quote, list or heading marker), which would end the paragraph for a reader without
+/// math. Line breaks stay only where a `%` comment makes them significant. No blank line, no
+/// unescaped `$`, and no `<` that opens a tag in a reader without math.
+fn dollar_math_display(tex: &str, top_level: bool) -> String {
+    let tex = neutralize_markup(&escape_math_dollars(&unix_lines(tex)));
+    let lines: Vec<&str> = tex
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    if !tex.contains('%') && (!top_level || lines.iter().any(|line| opens_block(line))) {
+        return lines.iter().map(|line| line.trim()).collect::<Vec<_>>().join(" ");
+    }
+    format!("\n{}\n", lines.join("\n"))
+}
+
+fn opens_block(line: &str) -> bool {
+    let line = line.trim_start();
+    let digits = line.bytes().take_while(u8::is_ascii_digit).count();
+    line.starts_with(['>', '#', '-', '+', '*', '=', '_', '~', '`', '|', ':', '['])
+        || (digits > 0 && line[digits..].starts_with(['.', ')']))
+}
+
+/// Inline TeX on one line, without the edge whitespace that stops `$` from opening or closing math.
+fn dollar_math_inline(tex: &str) -> String {
+    let mut tex = neutralize_markup(&escape_math_dollars(&one_line(tex)))
+        .trim()
+        .to_string();
+    // An odd run of trailing backslashes would escape the closing "$".
+    if (tex.len() - tex.trim_end_matches('\\').len()) % 2 == 1 {
+        tex.push(' ');
+    }
+    tex
+}
+
+fn escape_math_dollars(tex: &str) -> String {
+    let mut out = String::with_capacity(tex.len());
+    let mut backslashes = 0;
+    for ch in tex.chars() {
+        if ch == '$' && backslashes % 2 == 0 {
+            out.push('\\');
+        }
+        backslashes = if ch == '\\' { backslashes + 1 } else { 0 };
+        out.push(ch);
+    }
+    out
+}
+
+/// A space after `<` changes nothing in TeX, and keeps `<img` or `<https://x>` from reading as markup.
+fn neutralize_markup(tex: &str) -> String {
+    let mut out = String::with_capacity(tex.len());
+    let mut chars = tex.chars().peekable();
+    while let Some(ch) = chars.next() {
+        out.push(ch);
+        if ch == '<'
+            && chars
+                .peek()
+                .is_some_and(|next| next.is_ascii_alphabetic() || matches!(next, '/' | '!' | '?'))
+        {
+            out.push(' ');
+        }
+    }
+    out
+}
+
+/// Write each `$` in Text as `\$`, since a reader pairs it with one in the block's math or code
+/// span, and dollar math as a code span when the block holds code with `$`. comrak escapes a
+/// backslash in Text.
+fn escape_dollars<'a>(node: &'a AstNode<'a>, arena: &'a comrak::Arena<'a>, math_as_code: bool) {
     let mut data = node.data.borrow_mut();
     match &mut data.value {
-        NodeValue::Math(math) => {
-            let literal = std::mem::take(&mut math.literal);
+        NodeValue::Math(math) if math_as_code => {
+            let literal = one_line(std::mem::take(&mut math.literal).trim());
             data.value = NodeValue::Code(NodeCode {
                 num_backticks: 1,
                 literal,
@@ -2663,7 +2759,7 @@ mod tests {
         assert_eq!(math, vec![(r"\alpha^{2}".into(), false)]);
         assert_eq!(
             crate::rendering::render_markdown(&doc).trim(),
-            r"From $5 to $10; $`\alpha^{2}`$ holds."
+            r"From \$5 to \$10; $\alpha^{2}$ holds."
         );
     }
 
@@ -2886,7 +2982,7 @@ mod tests {
                 ));
                 assert_eq!(
                     crate::rendering::render_markdown(&doc).trim(),
-                    format!(r"{prefix}**$`\alpha  + x`$**{suffix}")
+                    format!(r"{prefix}**$\alpha  + x$**{suffix}")
                 );
                 let html = crate::rendering::render_html(&doc);
                 assert_eq!(html.matches("data-math-style=\"inline\"").count(), 1);
@@ -2938,7 +3034,7 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_paragraph(text, annotations, None, None);
         let doc = builder.build();
-        assert_eq!(crate::rendering::render_markdown(&doc).trim(), r"$`\alpha  + x`$");
+        assert_eq!(crate::rendering::render_markdown(&doc).trim(), r"$\alpha  + x$");
         assert_eq!(
             crate::rendering::render_html(&doc)
                 .matches("data-math-style=\"inline\"")
@@ -2980,10 +3076,10 @@ mod tests {
             .collect()
     }
 
-    /// Re-parse `markdown` as plain CommonMark, as xberg's own options read it, and with dollar
-    /// math only, the way remark-math reads it.
+    /// Re-parse `markdown` as plain CommonMark, which must show no HTML, as xberg's own options
+    /// read it, and with dollar math only, the way remark-math reads it.
     fn assert_literals(markdown: &str, expected: &[&str]) {
-        assert_eq!(literals(markdown, &Options::default()), expected, "{markdown}");
+        assert_no_html(markdown, &Options::default());
         assert_eq!(
             literals(markdown, &crate::rendering::markdown::comrak_options()),
             expected,
@@ -3008,7 +3104,7 @@ mod tests {
     }
 
     #[test]
-    fn should_write_math_as_code_math() {
+    fn should_write_math_as_dollar_math() {
         let mut builder = InternalDocumentBuilder::new("test");
         push_math_paragraph(&mut builder, r"Let $a<b$ and $$x^2$$ hold.", &["$a<b$", "$$x^2$$"]);
         push_math_paragraph(&mut builder, r"$$\sum_i x_i$$", &[r"$$\sum_i x_i$$"]);
@@ -3016,8 +3112,44 @@ mod tests {
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_eq!(
             markdown,
-            "Let $`a<b`$ and $`x^2`$ hold.\n\n```math\n\\sum_i x_i\n```\n\n```math\ny = x\n```\n"
+            "Let $a< b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
         );
+        assert!(!markdown.contains("```math"), "{markdown}");
+    }
+
+    #[test]
+    fn should_write_display_math_inside_prose_as_one_line_dollars() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        push_math_paragraph(&mut builder, r"Then $$x^2$$ holds.", &["$$x^2$$"]);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(markdown, "Then $$x^2$$ holds.\n");
+    }
+
+    #[test]
+    fn should_keep_dollars_and_blank_lines_in_tex_inside_one_math_block() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("a \\$5 + $b$\n\nc \\", None, None);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(markdown, "$$\na \\$5 + \\$b\\$\nc \\\n$$\n");
+        let arena = comrak::Arena::new();
+        let root = comrak::parse_document(&arena, &markdown, &crate::rendering::markdown::comrak_options());
+        let math: Vec<_> = root
+            .descendants()
+            .filter_map(|node| match &node.data.borrow().value {
+                NodeValue::Math(math) => Some(math.display_math),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(math, vec![true], "{markdown}");
+    }
+
+    #[test]
+    fn should_write_tex_with_a_block_marker_line_on_one_line() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("a\n- b\n> c", None, None);
+        builder.push_formula("a % note\n- b", None, None);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(markdown, "$$a - b > c$$\n\n$$\na % note\n- b\n$$\n");
     }
 
     #[test]
@@ -3040,11 +3172,11 @@ mod tests {
         assert_literals(
             &markdown,
             &[
-                "<img src=x onerror=alert(1)>",
-                "<https://x>",
-                "x  <img src=x>",
+                "< img src=x onerror=alert(1)>",
+                "< https://x>",
+                "x  < img src=x>",
                 "a`$<img src=x>",
-                "<script>\nalert(1)\n</script>",
+                "\n< script>\nalert(1)\n< /script>\n",
                 "a\n```\n<b>",
             ],
         );
@@ -3110,10 +3242,10 @@ mod tests {
         assert_literals(
             &markdown,
             &[
-                "x\n<img src=x onerror=alert(1)>",
+                "x < img src=x onerror=alert(1)>",
                 "a\r\n```\n<img src=x>",
                 "b",
-                "y\n<img src=x>",
+                "y < img src=x>",
             ],
         );
     }
@@ -3158,7 +3290,7 @@ mod tests {
         builder.push_paragraph(watermark, vec![], None, None);
         push_math_paragraph(&mut builder, "Let $x^2$ hold.", &["$x^2$"]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "$5.\n\nLet $`x^2`$ hold.\n");
+        assert_eq!(markdown, "$5.\n\nLet $x^2$ hold.\n");
 
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(watermark, vec![], None, None);
@@ -3215,15 +3347,15 @@ mod tests {
             &markdown,
             &[
                 "x`y$<img src=x onerror=alert(1)>",
-                "a$$<img src=x onerror=alert(1)>",
-                "x$<img src=x onerror=alert(1)>",
+                "a\\$\\$< img src=x onerror=alert(1)>",
+                "x\\$< img src=x onerror=alert(1)>",
                 "x^2",
                 "x",
                 "a$<img src=x>",
                 "c$<img src=x onerror=alert(1)>",
             ],
         );
-        assert!(markdown.contains("Costs $5 and $`x^2`$."), "{markdown}");
+        assert!(markdown.contains(r"Costs \$5 and $x^2$."), "{markdown}");
     }
 
     #[test]
@@ -3313,7 +3445,7 @@ mod tests {
         builder.push_list_item(text, true, vec![math_span(text, text)], None, None);
         builder.end_list();
         builder.end_list();
-        assert_literals(&crate::rendering::render_markdown(&builder.build()), &["a<!-->"]);
+        assert_literals(&crate::rendering::render_markdown(&builder.build()), &["a< !-->"]);
     }
 
     #[test]
@@ -3343,7 +3475,7 @@ mod tests {
         builder.push_list_item("", true, vec![], None, None);
         push_math_paragraph(&mut builder, "$$>$<t>$$$", &["$$>$<t>$$"]);
         builder.end_list();
-        assert_literals(&crate::rendering::render_markdown(&builder.build()), &[">", ">$<t>"]);
+        assert_literals(&crate::rendering::render_markdown(&builder.build()), &[">", ">\\$< t>"]);
 
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_list(false);

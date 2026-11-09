@@ -237,7 +237,7 @@ impl BodyWriter {
                 self.text(&code.literal);
                 self.run.code -= 1;
             }
-            NodeValue::Math(math) => self.text(&math.literal),
+            NodeValue::Math(math) => self.text(&math.literal.trim().replace(['\r', '\n'], " ")),
             NodeValue::HtmlInline(text) | NodeValue::Raw(text) => self.text(text),
             NodeValue::EscapedTag(text) => self.text(text),
             NodeValue::FootnoteReference(reference) => {
@@ -718,6 +718,13 @@ mod tests {
         assert_eq!(body_text(&document), "Let a<b hold.x^2");
         assert!(!document.contains("Courier New"), "{document}");
         assert!(!document.contains("SourceCode"), "{document}");
+    }
+
+    #[test]
+    fn should_write_dollar_math_as_text_without_delimiters() {
+        let document = part("Let $a$ hold.\n\n$$\nx^2\n$$\n", "word/document.xml");
+        assert_eq!(body_text(&document), "Let a hold.x^2");
+        assert!(!document.contains('$'), "{document}");
     }
 
     #[test]

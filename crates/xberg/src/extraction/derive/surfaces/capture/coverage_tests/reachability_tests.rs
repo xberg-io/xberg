@@ -54,7 +54,7 @@ fn inline_math(literal: &str) -> DerivedResult {
     };
     let result = paragraph(&source, vec![annotation]);
     let markdown = result.formatted_content.as_ref().unwrap();
-    assert_eq!(markdown.matches(&format!("$`{literal}`$")).count(), 1);
+    assert_eq!(markdown.matches(&format!("${literal}$")).count(), 1);
     let arena = comrak::Arena::new();
     let root = comrak::parse_document(&arena, markdown, &canonical_options());
     let formulas = root
@@ -67,7 +67,7 @@ fn inline_math(literal: &str) -> DerivedResult {
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(formulas, [(false, false, literal.to_owned())]);
+    assert_eq!(formulas, [(true, false, literal.to_owned())]);
     assert_eq!(visible(markdown), format!("Let {literal} hold."));
     result
 }
@@ -272,7 +272,7 @@ fn padded_inline_math() -> DerivedResult {
     assert!(crate::rendering::common::valid_math_annotation(source, &annotation));
     let result = paragraph(source, vec![annotation]);
     let markdown = result.formatted_content.as_ref().unwrap();
-    assert_eq!(markdown.matches("$` Jane Doe `$").count(), 1);
+    assert_eq!(markdown.matches("$Jane Doe$").count(), 1);
     let arena = comrak::Arena::new();
     let root = comrak::parse_document(&arena, markdown, &canonical_options());
     let formulas = root
@@ -285,7 +285,7 @@ fn padded_inline_math() -> DerivedResult {
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(formulas, [(false, false, "Jane Doe".to_owned())]);
+    assert_eq!(formulas, [(true, false, "Jane Doe".to_owned())]);
     assert_eq!(visible(markdown), "Let Jane Doe hold.");
     result
 }
@@ -337,13 +337,20 @@ fn math_first_footnote() -> DerivedResult {
     assert_eq!(definitions.len(), 1);
     let first = definitions[0].first_child().expect("real definition child");
     let data = first.data.borrow();
-    let comrak::nodes::NodeValue::CodeBlock(block) = &data.value else {
-        panic!(
-            "canonical display math must become the first CodeBlock: {:?}",
-            data.value
-        );
+    assert!(
+        matches!(data.value, comrak::nodes::NodeValue::Paragraph),
+        "{:?}",
+        data.value
+    );
+    let math = first.first_child().expect("display math in the definition");
+    let math = math.data.borrow();
+    let comrak::nodes::NodeValue::Math(math) = &math.value else {
+        panic!("canonical display math must become dollar math: {:?}", math.value);
     };
-    assert_eq!((block.info.as_str(), block.literal.as_str()), ("math", "x+y\n"));
+    assert_eq!(
+        (math.dollar_math, math.display_math, math.literal.as_str()),
+        (true, true, "x+y")
+    );
     assert_math_footnote_consumers(markdown);
     result
 }
@@ -459,11 +466,20 @@ fn sensitive_math_first_footnote() -> DerivedResult {
     assert_eq!(definitions.len(), 1);
     let first = definitions[0].first_child().expect("actual definition child");
     let data = first.data.borrow();
-    let comrak::nodes::NodeValue::CodeBlock(block) = &data.value else {
-        panic!("canonical annotated definition must begin with math CodeBlock");
+    assert!(
+        matches!(data.value, comrak::nodes::NodeValue::Paragraph),
+        "{:?}",
+        data.value
+    );
+    let math = first.first_child().expect("display math in the definition");
+    let math = math.data.borrow();
+    let comrak::nodes::NodeValue::Math(math) = &math.value else {
+        panic!("canonical annotated definition must begin with dollar math");
     };
-    assert!(block.fenced && block.closed);
-    assert_eq!((block.info.as_str(), block.literal.as_str()), ("math", "Jane Doe\n"));
+    assert_eq!(
+        (math.dollar_math, math.display_math, math.literal.as_str()),
+        (true, true, "Jane Doe")
+    );
     assert_eq!(visible(markdown), "See note11 Jane Doe");
     assert_sensitive_math_pdf(markdown);
     result

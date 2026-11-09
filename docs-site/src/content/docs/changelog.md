@@ -79,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(markdown): Markdown output writes math as `$...$` and `$$...$$` instead of code math.** (#2331)
+  Display math standing alone is now `$$`, the TeX, `$$` on separate lines; other display math is `$$tex$$` and inline math `$tex$`. Readers that know only dollar math (GitHub, Pandoc, Obsidian, MathJax, the olmOCR evaluator) read these, and they did not read the previous `` $`...`$ `` and ```` ```math ```` forms. Inside the delimiters `$` is written `\$`, a blank line is dropped, and `<` before a letter, `/`, `!` or `?` gains a space so the TeX cannot read as HTML. TeX holding a backtick keeps the code forms. HTML and Djot output are unchanged.
+
 - **(pdf): Pin the native PDF reduced-JPEG decoder to the version the OCR path measures, and drop the unreachable decoder output cap.** (#2740)
   `xberg-native-pdf` now requires `jpeg-decoder` `=0.3.2`, as `xberg` does. The decoder output cap is gone: the decoder checked it only after allocating its buffers, so it never bounded an allocation, and it always equalled the size already checked after scaling. Rendering is unchanged.
 
