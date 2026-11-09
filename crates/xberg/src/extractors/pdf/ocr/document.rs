@@ -2220,57 +2220,40 @@ pub(crate) fn merge_ocr_pages_into_native(
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
 ) -> String {
-    let accepted = accepted_ocr_page_replacements(
-        native_text,
-        boundaries,
-        ocr_results,
-        &OcrQualityThresholds::default(),
-        &ahash::AHashSet::new(),
-    );
+    let accepted =
+        accepted_ocr_page_replacements(native_text, boundaries, ocr_results, &OcrQualityThresholds::default());
     apply_ocr_page_replacements(native_text, boundaries, &accepted)
 }
 /// Whether the OCR text of a page would discard most of a healthy native text layer, as the
-/// alnum count the page held and the count OCR read. A page with lost-glyph markers is judged only
-/// with `layer_has_page_evidence`: on its readable text, and each lost glyph is a character the
-/// page holds and the readable text lacks, so the page is judged against what it held, not against
-/// what survived. Without that evidence, the markers say the layer is not what the page shows, so
-/// the read replaces it. ~keep
+/// alnum count the page held and the count OCR read. A page with lost-glyph markers is never
+/// held back here: the markers say the layer is not what the page shows, so the read replaces
+/// it, and a page whose layer the ink proof confirms keeps its native text in a later step. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn destructive_ocr_information_loss(
     native_page: &str,
     ocr_text: &str,
     thresholds: &OcrQualityThresholds,
-    layer_has_page_evidence: bool,
 ) -> Option<(usize, usize)> {
-    let lost_glyphs = native_page
-        .matches(super::super::unmapped_glyphs::is_lost_glyph)
-        .count();
-    if lost_glyphs > 0 && !layer_has_page_evidence {
+    if native_page.contains(super::super::unmapped_glyphs::is_lost_glyph) {
         return None;
     }
-    let readable = super::super::unmapped_glyphs::readable_text(native_page);
-    let native_decision = evaluate_native_text_for_ocr(&readable, Some(1), thresholds);
+    let native_decision = evaluate_native_text_for_ocr(native_page, Some(1), thresholds);
     if native_decision.fallback {
         return None;
     }
 
-    let page_alnum = native_decision.stats.alnum.saturating_add(lost_glyphs);
     let ocr_stats = NativeTextStats::compute(ocr_text, thresholds);
-    let retained_ratio = ocr_stats.alnum as f64 / page_alnum.max(1) as f64;
-    (retained_ratio < MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO).then_some((page_alnum, ocr_stats.alnum))
+    let retained_ratio = ocr_stats.alnum as f64 / native_decision.stats.alnum.max(1) as f64;
+    (retained_ratio < MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO).then_some((native_decision.stats.alnum, ocr_stats.alnum))
 }
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
-/// `evidence_pages` holds the pages whose native layer has same-page evidence: the ink proof gave
-/// the read's ink to the native text, or the read covers every native word. Only those pages are
-/// judged on their readable text, as for `destructive_ocr_information_loss`. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn accepted_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
     thresholds: &OcrQualityThresholds,
-    evidence_pages: &ahash::AHashSet<u32>,
 ) -> ahash::AHashMap<u32, String> {
     let mut page_counts = std::collections::HashMap::new();
     for boundary in boundaries {
@@ -2340,8 +2323,7 @@ pub(super) fn accepted_ocr_page_replacements(
                 return false;
             }
             let native_page = &native_text[byte_start..byte_end];
-            let loss = destructive_ocr_information_loss(native_page, text, thresholds, evidence_pages.contains(*page));
-            if let Some((native_alnum, ocr_alnum)) = loss {
+            if let Some((native_alnum, ocr_alnum)) = destructive_ocr_information_loss(native_page, text, thresholds) {
                 tracing::warn!(
                     page = **page,
                     native_alnum,
@@ -4111,7 +4093,6 @@ mod public_ocr_handoff_tests {
             &boundaries,
             &ahash::AHashMap::from_iter([(1, text.into())]),
             &Default::default(),
-            &ahash::AHashSet::new(),
         )
     }
 

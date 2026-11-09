@@ -388,9 +388,9 @@ async fn short_read_failures(marked: u32, forced: bool) -> Vec<String> {
     failures
 }
 
-/// Review point 1 of #2637: a marker rejects the OCR read of a page only on same-page ink or
-/// coverage evidence for its layer. A custom backend gives none, so a short correct read replaces
-/// a long marked layer, in both page orders. ~keep
+/// Review point 1 of #2637: a marked page keeps its layer against the OCR read only on same-page
+/// ink evidence for the layer. A custom backend gives none, so a short correct read replaces a
+/// long marked layer, in both page orders. ~keep
 #[tokio::test]
 #[serial_test::serial]
 async fn a_short_read_replaces_a_long_marked_layer_without_same_page_evidence() {

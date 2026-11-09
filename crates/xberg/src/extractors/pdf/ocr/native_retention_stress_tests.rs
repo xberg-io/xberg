@@ -618,12 +618,6 @@ fn one_page(page: &str) -> Vec<crate::types::PageBoundary> {
     }]
 }
 
-/// The pages whose native layer has same-page ink or coverage evidence. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn evidence(pages: &[u32]) -> ahash::AHashSet<u32> {
-    pages.iter().copied().collect()
-}
-
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn a_marked_page_still_routes_to_ocr_but_keeps_its_readable_layer() {
@@ -637,23 +631,6 @@ fn a_marked_page_still_routes_to_ocr_but_keeps_its_readable_layer() {
     );
     let layers = clean_native_page_layers(&page, &one_page(&page), None, &thresholds);
     assert!(layers.contains_key(&1), "the readable words of the page stay a layer");
-}
-
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[test]
-fn ocr_that_drops_the_readable_words_of_a_marked_page_is_not_accepted() {
-    use super::super::document::accepted_ocr_page_replacements;
-    let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
-    let page = readable_page_with_lost_glyphs();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, &evidence(&[1]));
-    assert!(accepted.is_empty(), "OCR keeps under half of the readable words");
-    let all_lost = "\u{FFFD} ".repeat(20);
-    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds, &evidence(&[1]));
-    assert!(
-        accepted.contains_key(&1),
-        "control: a page with no readable word keeps no protection"
-    );
 }
 
 const ROW_WORDS: [&str; 20] = [
@@ -1149,142 +1126,6 @@ fn a_marker_inside_a_word_does_not_fuse_the_word_the_ocr_confirms() {
     );
 }
 
-/// A page whose first twenty rows read and whose other half is lost glyphs, one for each letter or
-/// digit of the readable half: the rows, the native text and its readable half. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn half_lost_page() -> (Vec<String>, String, String) {
-    let clean = forty_rows();
-    let readable = clean[..20].join("\n");
-    let lost: String = "\u{FFFD}".repeat(readable.chars().filter(|c| c.is_alphanumeric()).count());
-    let native = format!("{readable}\n{lost}");
-    (clean, native, readable)
-}
-
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[test]
-fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
-    use super::super::document::accepted_ocr_page_replacements;
-    let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let (clean, native, readable) = half_lost_page();
-    // The read holds 80% of the readable half: over the ratio against the layer, under it against
-    // the whole page. ~keep
-    let alnum = |text: &str| text.chars().filter(|c| c.is_alphanumeric()).count();
-    let layer_alnum = alnum(&readable);
-    let rows = (1..=20)
-        .find(|&rows| alnum(&clean[..rows].join("\n")) * 10 >= layer_alnum * 8)
-        .expect("twenty rows hold the layer");
-    let ocr_reads_forty_percent = clean[..rows].join("\n");
-    let read_alnum = alnum(&ocr_reads_forty_percent);
-    assert!(
-        read_alnum * 2 >= layer_alnum && read_alnum < layer_alnum,
-        "fixture: the read holds over half of the layer and under half of the page"
-    );
-    let accepted = accepted_ocr_page_replacements(
-        &native,
-        &one_page(&native),
-        &[(1, ocr_reads_forty_percent.clone())].into_iter().collect(),
-        &thresholds,
-        &evidence(&[1]),
-    );
-    assert!(
-        accepted.is_empty(),
-        "40% of the real page is not a replacement for 50% of it"
-    );
-    let ocr_reads_all = clean[..20].join("\n");
-    let accepted = accepted_ocr_page_replacements(
-        &native,
-        &one_page(&native),
-        &[(1, ocr_reads_all)].into_iter().collect(),
-        &thresholds,
-        &evidence(&[1]),
-    );
-    assert!(
-        accepted.contains_key(&1),
-        "control: OCR that reads the readable half is accepted"
-    );
-}
-
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[test]
-fn ocr_that_reads_sixty_percent_of_a_half_lost_page_is_accepted() {
-    use super::super::document::accepted_ocr_page_replacements;
-    let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let (clean, native, readable) = half_lost_page();
-    let alnum = |text: &str| text.chars().filter(|c| c.is_alphanumeric()).count();
-    let page_alnum = alnum(&readable) * 2;
-    let rows = (1..=40)
-        .find(|&rows| alnum(&clean[..rows].join("\n")) * 10 >= page_alnum * 6)
-        .expect("forty rows hold the page");
-    let read = clean[..rows].join("\n");
-    let share = alnum(&read) as f64 / page_alnum as f64;
-    assert!(
-        (0.6..0.65).contains(&share),
-        "fixture: the read holds 60% of the page, well over the 0.5 line, not on it: {share}"
-    );
-    let accepted = accepted_ocr_page_replacements(
-        &native,
-        &one_page(&native),
-        &[(1, read)].into_iter().collect(),
-        &thresholds,
-        &evidence(&[1]),
-    );
-    assert!(
-        accepted.contains_key(&1),
-        "OCR that reads 60% of the real page replaces a layer that holds 50% of it"
-    );
-}
-
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[test]
-fn only_the_marked_page_of_a_document_keeps_its_native_text() {
-    use super::super::document::accepted_ocr_page_replacements;
-    let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let clean = forty_rows();
-    let (_, marked, _) = marked_cases().swap_remove(0);
-    let page_one = format!("{}\n", marked[..20].join("\n"));
-    let page_two = format!("{}\n", clean[20..].join("\n"));
-    let native = format!("{page_one}{page_two}");
-    let boundaries = vec![
-        crate::types::PageBoundary {
-            byte_start: 0,
-            byte_end: page_one.len(),
-            page_number: 1,
-        },
-        crate::types::PageBoundary {
-            byte_start: page_one.len(),
-            byte_end: native.len(),
-            page_number: 2,
-        },
-    ];
-    let stray = "two stray words only".to_string();
-    let read = [(1, stray.clone()), (2, stray)].into_iter().collect();
-    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, &evidence(&[1, 2]));
-    assert!(
-        accepted.is_empty(),
-        "both pages are readable, so OCR that keeps a few words replaces neither"
-    );
-    let page_two_lost = "\u{FFFD} ".repeat(60);
-    let native = format!("{page_one}{page_two_lost}");
-    let boundaries = vec![
-        crate::types::PageBoundary {
-            byte_start: 0,
-            byte_end: page_one.len(),
-            page_number: 1,
-        },
-        crate::types::PageBoundary {
-            byte_start: page_one.len(),
-            byte_end: native.len(),
-            page_number: 2,
-        },
-    ];
-    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, &evidence(&[1, 2]));
-    assert_eq!(
-        accepted.keys().copied().collect::<Vec<_>>(),
-        vec![2],
-        "only the page with nothing readable is replaced"
-    );
-}
-
 /// Forty rows whose row 3 ends in a measure, and the same rows as OCR reads them: the measure's
 /// digit as a quote. The OCR row keeps every word of the native row. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1695,7 +1536,7 @@ fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
         "nothing readable remains to keep"
     );
     let read = [(1, "two stray words only".to_string())].into_iter().collect();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, &evidence(&[1]));
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds);
     assert!(accepted.contains_key(&1), "the OCR text replaces the page");
 }
 
@@ -1706,33 +1547,21 @@ fn a_marked_page_without_same_page_evidence_goes_to_ocr() {
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
     let page = readable_page_with_lost_glyphs();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, &evidence(&[2]));
-    assert!(
-        accepted.contains_key(&1),
-        "evidence for another page leaves the marked page to OCR"
-    );
-    // One marker is under the garbage threshold, so only the missing evidence lets the read in. ~keep
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds);
+    assert!(accepted.contains_key(&1), "the short read replaces the marked page");
+    // One marker is under the garbage threshold, so only the marker lets the read in. ~keep
     let clean = format!("{}\n", forty_rows()[..20].join("\n"));
     let one_marker = format!("{clean}A\u{FFFD}B\n");
-    let accepted =
-        accepted_ocr_page_replacements(&one_marker, &one_page(&one_marker), &read, &thresholds, &evidence(&[]));
+    let accepted = accepted_ocr_page_replacements(&one_marker, &one_page(&one_marker), &read, &thresholds);
     assert!(
         accepted.contains_key(&1),
         "a page with one marker and no evidence goes to OCR"
     );
-    let accepted =
-        accepted_ocr_page_replacements(&one_marker, &one_page(&one_marker), &read, &thresholds, &evidence(&[1]));
+    let accepted = accepted_ocr_page_replacements(&clean, &one_page(&clean), &read, &thresholds);
     assert!(
         accepted.is_empty(),
-        "control: with same-page evidence the readable words keep the short read out"
+        "control: the same page without the marker keeps its text"
     );
-    for pages in [&[][..], &[1][..]] {
-        let accepted = accepted_ocr_page_replacements(&clean, &one_page(&clean), &read, &thresholds, &evidence(pages));
-        assert!(
-            accepted.is_empty(),
-            "control: a clean page keeps its text with and without evidence ({pages:?})"
-        );
-    }
 }
 
 /// A mixed-route config whose OCR runs the named fake backend alone, or as a configured pipeline. ~keep
@@ -1765,10 +1594,9 @@ fn mixed_route_config(backend: &str, pipeline: bool) -> crate::core::config::Ext
     }
 }
 
-/// The mixed route judges a marked page on its readable text only on same-page evidence for its
-/// layer, which only the built-in Tesseract read gives. A custom backend gives none, so its weak
-/// read replaces the marked page under a single backend and under a configured pipeline alike.
-/// The twin: the same page and read with evidence for the page keep the native text. ~keep
+/// The mixed route keeps a marked page native only on same-page ink evidence for its layer, which
+/// only the built-in Tesseract read gives. A custom backend gives none, so its weak read replaces
+/// the marked page under a single backend and under a configured pipeline alike. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial_test::serial]
@@ -1802,19 +1630,6 @@ async fn the_mixed_route_gives_a_marked_page_without_evidence_to_ocr_with_or_wit
             "pipeline {pipeline}: no marker of the replaced layer is printed: {text:?}"
         );
     }
-    use super::super::document::{accepted_ocr_page_replacements, apply_ocr_page_replacements};
-    let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let read: ahash::AHashMap<u32, String> = [(1, READ.to_string())].into_iter().collect();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, &evidence(&[1]));
-    assert!(
-        accepted.is_empty(),
-        "twin: same-page evidence keeps the weak read out: {accepted:?}"
-    );
-    assert_eq!(
-        apply_ocr_page_replacements(&page, &one_page(&page), &accepted),
-        page,
-        "twin: the native text of the kept page is unchanged"
-    );
 }
 
 /// The premise of the route test: under the `full` build the default config has an effective

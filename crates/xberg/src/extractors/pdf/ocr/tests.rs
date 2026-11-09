@@ -201,13 +201,8 @@ pub(super) mod tests {
         // What a blank page render actually produces: a scrap of noise.
         ocr_results.insert(1, "  a \n".to_string());
 
-        let accepted = accepted_ocr_page_replacements(
-            native,
-            &boundaries,
-            &ocr_results,
-            &OcrQualityThresholds::default(),
-            &ahash::AHashSet::new(),
-        );
+        let accepted =
+            accepted_ocr_page_replacements(native, &boundaries, &ocr_results, &OcrQualityThresholds::default());
         assert!(
             accepted.is_empty(),
             "blank OCR output must not be accepted as a replacement, got {accepted:?}"
@@ -234,13 +229,8 @@ pub(super) mod tests {
         let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
         ocr_results.insert(1, "ORDINANCE NO. 2197\n".to_string());
 
-        let accepted = accepted_ocr_page_replacements(
-            native,
-            &boundaries,
-            &ocr_results,
-            &OcrQualityThresholds::default(),
-            &ahash::AHashSet::new(),
-        );
+        let accepted =
+            accepted_ocr_page_replacements(native, &boundaries, &ocr_results, &OcrQualityThresholds::default());
         assert_eq!(accepted.len(), 1, "a page with real OCR text must be accepted");
 
         let merged = apply_ocr_page_replacements(native, &boundaries, &accepted);
@@ -258,13 +248,8 @@ pub(super) mod tests {
             "A short English OCR fragment with much less recovered information.".to_string(),
         )]);
 
-        let accepted = accepted_ocr_page_replacements(
-            &native,
-            &boundaries,
-            &ocr_results,
-            &OcrQualityThresholds::default(),
-            &ahash::AHashSet::new(),
-        );
+        let accepted =
+            accepted_ocr_page_replacements(&native, &boundaries, &ocr_results, &OcrQualityThresholds::default());
         assert!(
             accepted.is_empty(),
             "lower-information OCR must not overwrite a strong native text layer"
@@ -1409,13 +1394,7 @@ pub(super) mod tests {
         raw.insert(6, "overlap two".to_string());
         raw.insert(7, "   ".to_string());
 
-        let accepted = accepted_ocr_page_replacements(
-            native,
-            &boundaries,
-            &raw,
-            &OcrQualityThresholds::default(),
-            &ahash::AHashSet::new(),
-        );
+        let accepted = accepted_ocr_page_replacements(native, &boundaries, &raw, &OcrQualityThresholds::default());
 
         assert_eq!(accepted.len(), 1);
         assert_eq!(accepted.get(&1).map(String::as_str), Some("accepted"));
@@ -1439,13 +1418,7 @@ pub(super) mod tests {
         ];
         let raw = ahash::AHashMap::from_iter([(2, "page two".to_string()), (1, "page one|".to_string())]);
 
-        let accepted = accepted_ocr_page_replacements(
-            "",
-            &boundaries,
-            &raw,
-            &OcrQualityThresholds::default(),
-            &ahash::AHashSet::new(),
-        );
+        let accepted = accepted_ocr_page_replacements("", &boundaries, &raw, &OcrQualityThresholds::default());
         let merged = apply_ocr_page_replacements("", &boundaries, &accepted);
 
         assert_eq!(merged, "page one|page two");
