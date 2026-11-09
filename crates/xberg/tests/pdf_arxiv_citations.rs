@@ -183,12 +183,17 @@ fn rotated_stamp() -> String {
 /// The same stamp drawn as three strings far apart along the margin, so the extractor reads its
 /// identifier, its category and its date as three paragraphs.
 fn split_stamp() -> String {
+    split_stamp_at(32.0)
+}
+
+/// The split stamp with its three strings at `x` points from the left edge of the page.
+fn split_stamp_at(x: f32) -> String {
     [
         (150.0, "arXiv:2311.04567v3"),
         (400.0, "[hep-ph]"),
         (520.0, "6 Dec 2023"),
     ]
-    .map(|(y, part)| format!("q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 32 {y} Tm ({part}) Tj ET Q\n"))
+    .map(|(y, part)| format!("q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 {x} {y} Tm ({part}) Tj ET Q\n"))
     .concat()
 }
 
@@ -257,6 +262,17 @@ fn plain_output_removes_a_stamp_split_across_paragraphs() {
     assert!(!content.contains("6 Dec 2023"), "{content:?}");
     assert!(!content.contains("arXiv:2311.04567v3"), "{content:?}");
     assert!(content.contains(VERSIONED_CITATION), "{content:?}");
+}
+
+/// A split stamp 200 points from the left edge is not in a margin, so its parts are body text. A stamp
+/// 300 points from the edge is still taken for a margin stamp and removed (measured); the margin rule is
+/// not changed here.
+#[test]
+fn a_split_stamp_away_from_the_page_edge_stays_body_text() {
+    let content = extract_with_stamp(&split_stamp_at(200.0), OutputFormat::Markdown, false);
+    for part in ["arXiv:2311.04567v3", "[hep-ph]", "6 Dec 2023"] {
+        assert!(content.contains(part), "{part:?} missing from {content:?}");
+    }
 }
 
 /// First pages of real arXiv papers from the regression page corpus, each with its rotated margin stamp.
