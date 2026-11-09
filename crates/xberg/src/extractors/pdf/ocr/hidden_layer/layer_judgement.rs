@@ -64,10 +64,7 @@ pub(in crate::extractors::pdf::ocr) fn confidence_clears_replacement_floor(score
     score.is_some_and(|score| score >= OcrQualityThresholds::default().min_ocr_mean_confidence / 100.0)
 }
 
-/// Whether a confident OCR read replaces an audited invisible layer: no low-confidence or
-/// dictionary-noise verdict, a calibrated score that clears the default floor, and a read nearly
-/// disjoint from the layer. Fragmentation does not veto it: a table of numbers is mostly short
-/// tokens.
+/// Fragmentation is deliberately not a veto: a table of numbers is mostly short tokens.
 pub(in crate::extractors::pdf::ocr) fn confident_read_replaces_layer(
     low_confidence: bool,
     dictionary_noise: bool,
@@ -104,4 +101,22 @@ pub(in crate::extractors::pdf::ocr) fn layer_judged_plausible(
             .plausible
             .is_empty()
         })
+}
+
+/// The pages the OCR probe reads, from `(page index, coverage verdict, layer judged plausible)`.
+pub(in crate::extractors::pdf::ocr) fn pages_to_probe(decisions: Vec<(usize, Option<bool>, bool)>) -> Vec<usize> {
+    decisions
+        .into_iter()
+        .filter_map(|(index, needed, plausible)| {
+            let probed = super::probes_page(needed, plausible);
+            tracing::debug!(
+                page = index + 1,
+                ?needed,
+                plausible,
+                probed,
+                "Hidden PDF text probe decision"
+            );
+            probed.then_some(index)
+        })
+        .collect()
 }

@@ -776,7 +776,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .map(|ocr| ocr.effective_thresholds())
             .unwrap_or_default();
         super::super::ensure_pdf_not_cancelled(config)?;
-        page_indices = super::super::spawn_pdf_blocking(move || {
+        let decisions = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
             let mut work_budget = work_budget;
             let mut decisions = Vec::new();
@@ -796,20 +796,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             Ok(decisions)
         })
-        .await?
-        .into_iter()
-        .filter_map(|(index, needed, plausible)| {
-            let probed = super::hidden_layer::probes_page(needed, plausible);
-            tracing::debug!(
-                page = index + 1,
-                ?needed,
-                plausible,
-                probed,
-                "Hidden PDF text probe decision"
-            );
-            probed.then_some(index)
-        })
-        .collect();
+        .await?;
+        page_indices = super::hidden_layer::pages_to_probe(decisions);
         super::super::ensure_pdf_not_cancelled(config)?;
     }
     if page_indices.is_empty() {

@@ -738,8 +738,14 @@ const CONFIDENT_READ: &str = "The lighthouse keeper recorded every vessel that c
 #[test]
 fn a_confident_disjoint_read_replaces_the_layer_only_without_a_veto() {
     use super::confident_read_replaces_layer as replaces;
+    use crate::core::config::OcrQualityThresholds;
 
     assert_eq!(JUNK_LAYER.split_whitespace().count(), 20);
+    assert_eq!(
+        OcrQualityThresholds::default().min_ocr_mean_confidence,
+        75.0,
+        "the 0.74 below sits just under the default floor it reads"
+    );
     assert!(replaces(false, false, Some(0.9), JUNK_LAYER, CONFIDENT_READ));
     assert!(
         !replaces(true, false, Some(0.9), JUNK_LAYER, CONFIDENT_READ),
@@ -805,4 +811,16 @@ fn a_covered_layer_is_plausible_only_when_the_language_check_says_so() {
         !judged(Some(false), Some(PLAUSIBLE_PROSE), &routing_off),
         "with plausibility routing disabled nothing is judged plausible"
     );
+}
+
+#[test]
+fn only_pages_whose_layer_is_not_judged_plausible_are_probed() {
+    let decisions = vec![
+        (0, Some(true), false),
+        (1, Some(false), true),
+        (2, Some(false), false),
+        (3, None, false),
+        (4, Some(true), true),
+    ];
+    assert_eq!(super::pages_to_probe(decisions), [0, 2, 4]);
 }
