@@ -25,7 +25,7 @@ pub fn order_on_script_base_lines(
     spans: &mut Vec<crate::layout::TextSpan>,
     order: impl FnOnce(&mut Vec<crate::layout::TextSpan>),
 ) {
-    use crate::extractors::text::{SnapReach, snapped_script_baselines};
+    use crate::extractors::text::{OrderingSpan, ordering_script_baselines};
     use std::collections::HashMap;
 
     type Key = (String, u32, u32, usize, u32);
@@ -39,11 +39,19 @@ pub fn order_on_script_base_lines(
         )
     }
 
-    let snapshot: Vec<_> = spans
+    let snapshot: Vec<OrderingSpan<'_>> = spans
         .iter()
-        .map(|span| (span.bbox.x, span.bbox.y, span.bbox.width, span.font_size))
+        .map(|span| {
+            (
+                span.text.as_str(),
+                span.bbox.x,
+                span.bbox.y,
+                span.bbox.width,
+                span.font_size,
+            )
+        })
         .collect();
-    let snapped = snapped_script_baselines(&snapshot, SnapReach::ORDERING);
+    let snapped = ordering_script_baselines(&snapshot);
     let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
     for (span, base_y) in spans.iter_mut().zip(snapped) {
         if let Some(base_y) = base_y {
@@ -2256,14 +2264,14 @@ mod order_on_script_base_lines_tests {
 
     fn mark_beside_base(mark_x: f32, mark_size: f32) -> Vec<TextSpan> {
         vec![
-            span("mark", mark_x, 703.0, 4.0, mark_size, 5),
+            span("2", mark_x, 703.0, 4.0, mark_size, 5),
             span("other", 500.0, 702.0, 20.0, 10.0, 5),
             span("base", 100.0, 700.0, 10.0, 10.0, 1),
         ]
     }
 
-    const SNAPPED: [&str; 3] = ["other", "base", "mark"];
-    const RAW: [&str; 3] = ["mark", "other", "base"];
+    const SNAPPED: [&str; 3] = ["other", "base", "2"];
+    const RAW: [&str; 3] = ["2", "other", "base"];
 
     #[test]
     fn should_order_a_mark_of_exactly_08_of_its_base_size() {
@@ -2291,6 +2299,62 @@ mod order_on_script_base_lines_tests {
         let mut spans = mark_beside_base(113.0, 7.0);
         order_on_script_base_lines(&mut spans, |spans| by_row(spans));
         assert_eq!(texts(&spans), RAW);
+    }
+
+    #[test]
+    fn should_snap_a_raised_cluster_all_or_nothing() {
+        let mut spans = vec![
+            span("(", 110.0, 703.0, 2.9, 6.0, 5),
+            span("\u{2217}", 112.9, 703.0, 3.8, 6.0, 5),
+            span(")", 116.7, 703.0, 2.9, 6.0, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("base", 100.0, 700.0, 10.0, 10.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["(", "\u{2217}", ")", "other", "base"]);
+    }
+
+    #[test]
+    fn should_snap_a_whole_raised_cluster_whose_glyphs_all_abut_the_base() {
+        let mut spans = vec![
+            span("(", 110.0, 703.0, 0.8, 6.0, 5),
+            span("\u{2217}", 110.8, 703.0, 0.8, 6.0, 5),
+            span(")", 111.6, 703.0, 0.8, 6.0, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("base", 100.0, 700.0, 10.0, 10.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "base", "(", "\u{2217}", ")"]);
+    }
+
+    #[test]
+    fn should_not_treat_a_bullet_glyph_as_a_raised_mark() {
+        let mut spans = mark_beside_base(110.0, 7.0);
+        spans[0].text = "\u{2022}".to_string();
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["\u{2022}", "other", "base"]);
+    }
+
+    #[test]
+    fn should_keep_a_phrase_that_abuts_its_base_on_the_base_line() {
+        let mut spans = vec![
+            span("(see instructions):", 142.9, 427.7, 62.0, 8.0, 5),
+            span("other", 500.0, 427.5, 20.0, 9.0, 5),
+            span("Dependents", 100.0, 427.2, 40.0, 9.5, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "Dependents", "(see instructions):"]);
+    }
+
+    #[test]
+    fn should_not_pull_a_phrase_set_apart_from_a_larger_glyph_onto_its_line() {
+        let mut spans = vec![
+            span("Step 3", 128.0, 286.6, 40.0, 10.0, 5),
+            span("other", 500.0, 286.4, 20.0, 10.0, 5),
+            span("\u{a0}", 100.0, 286.1, 20.0, 12.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["Step 3", "other", "\u{a0}"]);
     }
 
     #[test]

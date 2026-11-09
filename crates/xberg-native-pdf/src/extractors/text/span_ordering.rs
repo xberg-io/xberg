@@ -771,12 +771,28 @@ impl SnapReach {
         min_base_size_factor: 1.15,
         max_gap_em: 1.0,
     };
-    /// The reading-order snap. A mark here is a real script: at most 0.8 of its base (0.8 itself qualifies), abutting it.
-    /// Prose at 0.83 of a bullet, or a word 17pt right of a caution icon, is not a mark. ~keep
+    /// The reading-order snap for a single raised glyph: at most 0.8 of its base (0.8 itself
+    /// qualifies), abutting it. Prose at 0.83 of a bullet, or a word 17pt right of a caution
+    /// icon, is not a mark. ~keep
     pub(crate) const ORDERING: Self = Self {
         max_shift_em: 0.35,
         min_base_size_factor: 1.25,
         max_gap_em: 0.25,
+    };
+    /// The reading-order snap for a phrase (a space, or more than three characters): it keeps the
+    /// looser size ratio but only when it abuts its base, so a phrase that continues a line
+    /// ("Dependents (see instructions):") stays on it while a step label beside a wider space
+    /// glyph does not. ~keep
+    pub(crate) const ORDERING_PHRASE: Self = Self {
+        max_shift_em: 0.35,
+        min_base_size_factor: 1.15,
+        max_gap_em: 0.4,
+    };
+    /// What counts as raised at all when grouping glyphs into clusters.
+    pub(crate) const RAISED: Self = Self {
+        max_shift_em: 0.35,
+        min_base_size_factor: 1.15,
+        max_gap_em: 1.0,
     };
 }
 
