@@ -1330,6 +1330,10 @@ mod tests {
 
     #[test]
     fn the_warning_names_the_model_that_reads_the_script() {
+        let stage = FirstStage {
+            languages: langs(&["eng"]),
+            source: LanguageSource::OcrLanguage,
+        };
         for (script, model) in [
             (Script::Han, "chi_sim"),
             (Script::Kana, "jpn"),
@@ -1337,7 +1341,7 @@ mod tests {
             (Script::Armenian, "hye"),
             (Script::Cyrillic, "rus"),
         ] {
-            let warning = kept_pages_warning(&[(4, vec![script])], &langs(&["eng"]));
+            let warning = kept_pages_warning(&[(4, vec![script], false)], &stage);
             let named = format!("page 4 ({script:?}; for example {model}): the native text");
             assert!(warning.message.contains(&named), "{named}: {}", warning.message);
         }
