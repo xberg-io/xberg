@@ -1422,6 +1422,8 @@ mod tests {
         );
     }
 
+    /// Guards the combined rule: `dominant_scripts` and `uncovered_script_counts` both refuse a page
+    /// whose Latin letters are not outnumbered, so reverting either one alone leaves this passing.
     #[test]
     fn a_page_with_more_latin_than_uncovered_letters_has_no_dominant_script() {
         let latin_heavy = format!(

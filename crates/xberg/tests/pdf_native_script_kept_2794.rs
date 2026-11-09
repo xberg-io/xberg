@@ -16,6 +16,7 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
 const FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 const AMONG_ENGLISH: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-among-english-pages.pdf");
+const KHMER_PAGE_LETTERS: usize = 222;
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
 const KHMER: &str = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា សួស្តីភ្នំពេញ ប្រទេសកម្ពុជាមានប្រជាជនច្រើន សៀវភៅសាលារៀន";
 
@@ -136,7 +137,7 @@ fn read_with(source: &[u8], backend: Arc<dyn OcrBackend>, disable_ocr: bool) -> 
 fn a_khm_stage_that_reads_english_leaves_the_native_khmer_page() {
     let native = read(ENGLISH, true);
     let automatic = read(ENGLISH, false);
-    assert_eq!(khmer_count(&native.content), 222);
+    assert_eq!(khmer_count(&native.content), KHMER_PAGE_LETTERS);
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
     assert_eq!(automatic.content, native.content);
     let kept: Vec<_> = automatic
@@ -197,11 +198,9 @@ fn a_failed_page_read_whose_image_was_read_is_not_reported_as_recovered_when_the
     );
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
     assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content));
-    assert!(
-        automatic.content.starts_with(&native.content),
-        "{:?}",
-        automatic.content
-    );
+    // The retry reads the page's embedded figure, and that text is appended after the native page as
+    // image text. The failed page read itself must add nothing, so the native page is unchanged.
+    assert_eq!(automatic.content, format!("{}\n\n{ENGLISH}", native.content));
     let failures: Vec<_> = automatic.ocr_page_failures.iter().flatten().collect();
     assert!(!failures.is_empty(), "{:?}", automatic.processing_warnings);
     assert!(failures.iter().all(|failure| !failure.recovered), "{failures:?}");
@@ -223,7 +222,7 @@ fn only_the_marked_page_of_a_document_with_readable_pages_keeps_its_native_text(
     let native_pages = native.pages.as_ref().unwrap();
     let pages = automatic.pages.as_ref().unwrap();
     assert_eq!(pages.len(), 4);
-    assert_eq!(khmer_count(&native_pages[1].content), 222);
+    assert_eq!(khmer_count(&native_pages[1].content), KHMER_PAGE_LETTERS);
     assert_eq!(pages[1].content, native_pages[1].content);
     assert_eq!(pages[0].content, native_pages[0].content);
     assert_eq!(pages[2].content, native_pages[2].content);
