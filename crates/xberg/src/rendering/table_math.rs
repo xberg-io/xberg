@@ -145,8 +145,8 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("docx");
         let element = builder.push_table_from_cells(
             &[
-                vec!["H".to_string(), "G".to_string()],
-                vec![cells[0][0].clone(), "b".to_string()],
+                vec![cells[0][0].clone(), "G".to_string()],
+                vec!["H".to_string(), "b".to_string()],
             ],
             None,
             None,
