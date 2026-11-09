@@ -10,6 +10,8 @@ use std::collections::{HashMap, HashSet};
 mod prose;
 
 pub(super) const MIN_UNIT_LETTERS: usize = 2;
+/// Extra iterator words allowed per reported word is 1 / MAX_EXTRA_RATIO.
+const MAX_EXTRA_RATIO: usize = 4;
 const MAX_CERTIFICATE_WORDS: usize = 1024;
 const MAX_CERTIFICATE_TEXT_BYTES: usize = 512 * 1024;
 
@@ -149,7 +151,8 @@ fn checked_words(result: &ExtractedDocument) -> Option<Vec<&OcrElement>> {
 /// A plain primary whose iterator words include every retained token. The text filter that drops
 /// dictionary-rejected words after recognition leaves more iterator words than the reported
 /// count, so equality cannot hold; the extra words are a superset a protection check only
-/// over-covers.
+/// over-covers. The extras are capped at a quarter of the reported count so that a few retained
+/// tokens never "cover" a long unrelated word list.
 pub(super) fn primary_covers_output(result: &ExtractedDocument) -> bool {
     plain_primary(result)
         && checked_words_with(result, true).is_some_and(|words| {
@@ -187,7 +190,7 @@ fn checked_words_with(result: &ExtractedDocument, covering: bool) -> Option<Vec<
             .ok()
             .is_none_or(|reported| {
                 if covering {
-                    reported > words.len()
+                    reported > words.len() || (words.len() - reported).saturating_mul(MAX_EXTRA_RATIO) > reported
                 } else {
                     reported != words.len()
                 }

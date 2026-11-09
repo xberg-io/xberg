@@ -189,6 +189,14 @@ async fn implicit_rotation_recovers_two_tables_when_primary_iterator_words_cover
         assert_tables(&forced, &expected, (792., 612.48));
         let disabled = extract(rotated, Some(OcrConfig::default())).await;
         assert!(disabled.tables.is_empty(), "an explicit false rotation keeps its read");
+        assert!(disabled.ocr_elements.is_none());
+        assert_ne!(disabled.content, forced.content);
+        assert!(
+            disabled
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains("recognition noise"))
+        );
         let implicit = extract(rotated, None).await;
         assert_tables(&implicit, &expected, (792., 612.48));
         for (actual, control) in implicit.tables.iter().zip(&forced.tables) {
@@ -280,4 +288,96 @@ fn assert_heading_and_table(document: &ExtractedDocument, expected: &[Vec<String
             "point coordinate {actual} != {expected}"
         );
     }
+}
+
+const NOISE_CASE: &str = "implicit_rotation_keeps_a_noise_read_when_no_tables_are_recovered";
+
+fn scrambled_page(source: &[u8]) -> Vec<u8> {
+    use lopdf::{Document, Object, Stream, dictionary};
+    const TILE: usize = 12;
+    let source = Document::load_mem(source).unwrap();
+    let (width, height, raw) = source
+        .objects
+        .values()
+        .find_map(|object| {
+            let Object::Stream(stream) = object else { return None };
+            let size = |key: &[u8]| stream.dict.get(key).ok()?.as_i64().ok().map(|value| value as usize);
+            let raw = stream.decompressed_content().ok()?;
+            if stream.dict.get(b"Subtype").ok()?.as_name().ok()? != b"Image" {
+                return None;
+            }
+            Some((size(b"Width")?, size(b"Height")?, raw))
+        })
+        .expect("one raster");
+    assert_eq!(raw.len(), width * height * 3);
+    let (columns, rows) = (width / TILE, height / TILE);
+    let mut order = (0..columns * rows).collect::<Vec<_>>();
+    let mut state = 12345u64;
+    for index in (1..order.len()).rev() {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        order.swap(index, (state >> 33) as usize % (index + 1));
+    }
+    let mut pixels = raw.clone();
+    for (target, &from) in order.iter().enumerate() {
+        let (tx, ty, fx, fy) = (
+            target % columns * TILE,
+            target / columns * TILE,
+            from % columns * TILE,
+            from / columns * TILE,
+        );
+        for row in 0..TILE {
+            let (to, at) = (((ty + row) * width + tx) * 3, ((fy + row) * width + fx) * 3);
+            pixels[to..to + TILE * 3].copy_from_slice(&raw[at..at + TILE * 3]);
+        }
+    }
+    let mut pdf = Document::with_version("1.4");
+    let pages = pdf.new_object_id();
+    let (w, h) = (width as f32 * 72.0 / 150.0, height as f32 * 72.0 / 150.0);
+    let scan = pdf.add_object(Stream::new(
+        dictionary! { "Type"=>"XObject", "Subtype"=>"Image", "Width"=>width as i64, "Height"=>height as i64,
+        "ColorSpace"=>"DeviceRGB", "BitsPerComponent"=>8 },
+        pixels,
+    ));
+    let content = pdf.add_object(Stream::new(
+        dictionary! {},
+        format!("q {w} 0 0 {h} 0 0 cm /Scan Do Q").into_bytes(),
+    ));
+    let page = pdf.add_object(dictionary! {
+        "Type"=>"Page", "Parent"=>pages, "Contents"=>content,
+        "MediaBox"=>vec![0.into(), 0.into(), w.into(), h.into()],
+        "Resources"=>dictionary! { "XObject"=>dictionary! { "Scan"=>scan } },
+    });
+    pdf.objects.insert(
+        pages,
+        Object::Dictionary(dictionary! { "Type"=>"Pages", "Kids"=>vec![page.into()], "Count"=>1 }),
+    );
+    let root = pdf.add_object(dictionary! { "Type"=>"Catalog", "Pages"=>pages });
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[tokio::test]
+async fn implicit_rotation_keeps_a_noise_read_when_no_tables_are_recovered() {
+    if !in_pinned_child(NOISE_CASE) {
+        return;
+    }
+    let noise = scrambled_page(include_bytes!(
+        "fixtures/ocr/multitable_orientation_2497/two-tables-90.pdf"
+    ));
+    let implicit = extract(&noise, None).await;
+    let disabled = extract(&noise, Some(OcrConfig::default())).await;
+    assert!(!implicit.content.trim().is_empty());
+    assert!(implicit.tables.is_empty());
+    assert!(implicit.ocr_elements.is_none());
+    assert_eq!(implicit.content, disabled.content);
+    assert!(
+        implicit
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("recognition noise"))
+    );
 }

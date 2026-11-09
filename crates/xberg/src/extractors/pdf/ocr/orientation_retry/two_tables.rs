@@ -322,29 +322,67 @@ mod tests {
         assert_eq!(prove(&primary), None);
     }
 
+    fn covering_primary(content: &str, evidence: &[&str]) -> ExtractedDocument {
+        let (_, mut primary) = two_table_candidate();
+        let template = primary.ocr_elements.as_ref().unwrap()[0].clone();
+        primary.ocr_elements = Some(
+            evidence
+                .iter()
+                .map(|text| {
+                    let mut word = template.clone();
+                    word.text = (*text).into();
+                    word
+                })
+                .collect(),
+        );
+        primary.content = content.into();
+        let reported = content.split_whitespace().count();
+        primary.metadata.additional.insert("word_count".into(), reported.into());
+        primary
+    }
+
     #[test]
-    fn accepts_primary_evidence_that_covers_a_filtered_output_and_refuses_uncovered_text() {
+    fn covering_primary_counts_tokens_and_bounds_the_extra_iterator_words() {
+        use super::super::recognition::primary_covers_output;
+        let four = ["aa", "bb", "cc", "dd"];
+        assert!(primary_covers_output(&covering_primary("aa bb cc dd", &four)));
+        let at_cap = ["aa", "bb", "cc", "dd", "zz"];
+        assert!(primary_covers_output(&covering_primary("aa bb cc dd", &at_cap)));
+        let over_cap = ["aa", "bb", "cc", "dd", "zz", "yy"];
+        assert!(!primary_covers_output(&covering_primary("aa bb cc dd", &over_cap)));
+        let mut under_reported = covering_primary("aa bb cc dd", &four);
+        under_reported.metadata.additional.insert("word_count".into(), 5.into());
+        assert!(!primary_covers_output(&under_reported));
+        let mut missing = covering_primary("aa bb cc dd", &four);
+        missing.content = "aa bb cc ee".into();
+        assert!(!primary_covers_output(&missing));
+        let duplicate = covering_primary("aa aa bb cc", &["aa", "bb", "cc", "dd"]);
+        assert!(
+            !primary_covers_output(&duplicate),
+            "a repeated token needs a repeated word"
+        );
+        assert!(primary_covers_output(&covering_primary(
+            "aa aa bb cc",
+            &["aa", "aa", "bb", "cc"]
+        )));
+    }
+
+    #[test]
+    fn a_confident_primary_word_outside_both_tables_still_blocks_a_covered_read() {
         let (candidate, mut primary) = two_table_candidate();
         let prove = |primary: &ExtractedDocument| {
             complete_text(&candidate, primary, &Default::default(), &Default::default(), 0.5)
         };
-        let mut dropped = primary.ocr_elements.as_ref().unwrap()[0].clone();
-        dropped.text = "zz".into();
-        dropped.confidence.recognition = 0.10;
-        primary.ocr_elements.as_mut().unwrap().push(dropped.clone());
-        assert_eq!(prove(&primary).as_deref(), Some(candidate.content.as_str()));
-        let mut confident_outside = dropped;
-        confident_outside.confidence.recognition = 0.95;
-        confident_outside.text = "77".into();
-        let OcrBoundingGeometry::Rectangle { left, .. } = &mut confident_outside.geometry else {
+        let mut outside = primary.ocr_elements.as_ref().unwrap()[0].clone();
+        outside.confidence.recognition = 0.95;
+        outside.text = "77".into();
+        let OcrBoundingGeometry::Rectangle { left, .. } = &mut outside.geometry else {
             unreachable!()
         };
         *left = 200;
-        primary.ocr_elements.as_mut().unwrap().push(confident_outside);
-        assert_eq!(prove(&primary), None);
-        primary.ocr_elements.as_mut().unwrap().pop();
-        primary.content = "49 50".into();
+        primary.content = "49 77".into();
         primary.metadata.additional.insert("word_count".into(), 2.into());
+        primary.ocr_elements.as_mut().unwrap().push(outside);
         assert_eq!(prove(&primary), None);
     }
 
