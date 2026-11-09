@@ -1122,6 +1122,7 @@ fn reconcile_grouped_hocr_table_rows(
     document: &InternalDocument,
     tables: &[OcrTable],
     page_number: u32,
+    ignore_marks: bool,
 ) -> Option<InternalDocument> {
     let [table] = tables else {
         return None;
@@ -1139,6 +1140,7 @@ fn reconcile_grouped_hocr_table_rows(
         page_number,
         &bbox,
         &table.cells,
+        ignore_marks,
     ))
 }
 
@@ -2991,7 +2993,15 @@ pub(super) fn perform_ocr(
                             policy == ImageOcrPolicy::StandaloneDotLeaderRows,
                         )
                     })
-                    .or_else(|| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number))
+                    .or_else(|| {
+                        reconcile_grouped_hocr_table_rows(
+                            hocr,
+                            document,
+                            &tables,
+                            config.page_number,
+                            policy == ImageOcrPolicy::StandaloneDotLeaderRows,
+                        )
+                    })
             });
         if let Some(reconciled) = reconciled {
             *document = reconciled;
