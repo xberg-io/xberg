@@ -184,3 +184,40 @@ fn an_english_stage_before_a_khmer_stage_cannot_replace_the_khmer_layer() {
     assert_eq!(automatic.content, native.content);
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
 }
+
+fn khmer_warnings(document: &ExtractedDocument) -> Vec<&str> {
+    document
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Khmer"))
+        .map(|w| w.message.as_ref())
+        .collect()
+}
+
+#[test]
+fn the_scan_page_warning_names_the_stage_language_when_the_first_stage_sets_one() {
+    let models = english_model();
+    let pipeline = serde_json::json!({"stages": [
+        {"backend": "tesseract", "priority": 100, "language": ["eng"]},
+    ]});
+    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
+        config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
+    });
+    let warnings = khmer_warnings(&automatic);
+    assert_eq!(warnings.len(), 1, "{:?}", automatic.processing_warnings);
+    assert!(warnings[0].contains("first stage of ocr.pipeline"), "{}", warnings[0]);
+    assert!(!warnings[0].contains("to ocr.language"), "{}", warnings[0]);
+}
+
+#[test]
+fn the_kept_page_warning_of_a_page_without_lost_glyphs_does_not_say_glyphs_stay_lost() {
+    let models = english_model();
+    let automatic = extract(KHMER_SHORT_FULLY_MAPPED, models.path(), |_| {});
+    let warnings = khmer_warnings(&automatic);
+    assert_eq!(warnings.len(), 1, "{:?}", automatic.processing_warnings);
+    assert!(!warnings[0].contains("stay lost"), "{}", warnings[0]);
+    let partial = extract(PARTIAL, models.path(), |_| {});
+    let warnings = khmer_warnings(&partial);
+    assert_eq!(warnings.len(), 1, "{:?}", partial.processing_warnings);
+    assert!(warnings[0].contains("stay lost"), "{}", warnings[0]);
+}
