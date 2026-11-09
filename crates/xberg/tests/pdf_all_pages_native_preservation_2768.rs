@@ -5,13 +5,17 @@
     feature = "tokio-runtime"
 ))]
 
+#[path = "pdf_all_pages_native_preservation_2768/acceptance_controls.rs"]
+mod acceptance_controls;
 #[path = "pdf_all_pages_native_preservation_2768/document_scope.rs"]
 mod document_scope;
 mod helpers;
+#[path = "pdf_all_pages_native_preservation_2768/structured_output.rs"]
+mod structured_output;
 
 use lopdf::Object;
 use sha2::{Digest, Sha256};
-use xberg::{ExtractionConfig, OcrConfig, PageConfig, TesseractConfig};
+use xberg::{ExtractionConfig, OcrConfig, PageConfig};
 
 const SOURCE: &str = "pdf/intel_64_and_ia_32_architectures_software_developer_s_manual_combined_volumes_1_4_june_2021_325462_sdm_vol_1_2abcd_3abcd.pdf";
 const SOURCE_SHA256: &str = "ef129f8b18963a55deb190e2fbff40f7e3bacbee4afc248c9c9087093d08be48";
@@ -61,10 +65,6 @@ fn pinned_config(tessdata: &std::path::Path) -> ExtractionConfig {
             backend: "tesseract".into(),
             language: vec!["eng".into()],
             tessdata_path: Some(tessdata.to_path_buf()),
-            tesseract_config: Some(TesseractConfig {
-                use_cache: false,
-                ..Default::default()
-            }),
             ..Default::default()
         }),
         ..Default::default()
@@ -82,6 +82,9 @@ async fn page_texts(bytes: &[u8], config: &ExtractionConfig, expected_pages: usi
 
 #[tokio::test]
 async fn automatic_all_pages_ocr_preserves_the_same_native_table_as_the_mixed_route() {
+    if helpers::skip_if_missing(SOURCE) {
+        return;
+    }
     let tessdata = tempfile::tempdir().unwrap();
     let automatic = pinned_config(tessdata.path());
     let native = ExtractionConfig {

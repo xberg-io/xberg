@@ -8,6 +8,13 @@ pub(super) fn automatic_page_acceptance_supported(config: &ExtractionConfig) -> 
         let Some(ocr_config) = config.ocr.as_ref() else {
             return false;
         };
+        if config.include_document_structure || config.result_format == crate::types::ResultFormat::ElementBased {
+            return false;
+        }
+        if config.force_ocr_pages.as_ref().is_some_and(|pages| !pages.is_empty()) {
+            return false;
+        }
+        // No page override remains, so the shared page-specific predicate is uniform across the document. ~keep
         if !ocr::native_preservation_is_automatic(config, 1)
             || ocr_config.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
         {
@@ -26,6 +33,40 @@ pub(super) fn automatic_page_acceptance_supported(config: &ExtractionConfig) -> 
     }
 }
 
+fn complete_page_selection(
+    bounds: &[crate::types::PageBoundary],
+    failing_pages: &[u32],
+    native: &str,
+    page_count: Option<u32>,
+) -> bool {
+    page_count.and_then(|count| usize::try_from(count).ok()) == Some(bounds.len())
+        && failing_pages.len() == bounds.len()
+        && bounds
+            .iter()
+            .zip(failing_pages)
+            .enumerate()
+            .all(|(index, (bound, page))| {
+                usize::try_from(bound.page_number).ok() == Some(index + 1)
+                    && bound.page_number == *page
+                    && native.get(bound.byte_start..bound.byte_end).is_some()
+            })
+}
+
+fn boundaries_cover_native_text(bounds: &[crate::types::PageBoundary], native: &str) -> bool {
+    let (Some(first), Some(last)) = (bounds.first(), bounds.last()) else {
+        return false;
+    };
+    native
+        .get(..first.byte_start)
+        .is_some_and(|text| text.trim().is_empty())
+        && native.get(last.byte_end..).is_some_and(|text| text.trim().is_empty())
+        && bounds.windows(2).all(|pair| {
+            native
+                .get(pair[0].byte_end..pair[1].byte_start)
+                .is_some_and(|text| text.trim().is_empty())
+        })
+}
+
 pub(super) fn with_native_page_acceptance(
     outcome: ocr::OcrGateOutcome,
     failing_pages: &[u32],
@@ -38,28 +79,8 @@ pub(super) fn with_native_page_acceptance(
     };
     if !matches!(outcome, ocr::OcrGateOutcome::RunFallback)
         || native.trim().is_empty()
-        || page_count.and_then(|count| usize::try_from(count).ok()) != Some(bounds.len())
-        || failing_pages.len() != bounds.len()
-        || !bounds
-            .iter()
-            .zip(failing_pages)
-            .enumerate()
-            .all(|(index, (bound, page))| {
-                usize::try_from(bound.page_number).ok() == Some(index + 1)
-                    && bound.page_number == *page
-                    && native.get(bound.byte_start..bound.byte_end).is_some()
-            })
-        || !bounds.windows(2).all(|pair| {
-            native
-                .get(pair[0].byte_end..pair[1].byte_start)
-                .is_some_and(|gap| gap.trim().is_empty())
-        })
-        || !native
-            .get(..bounds[0].byte_start)
-            .is_some_and(|prefix| prefix.trim().is_empty())
-        || !native
-            .get(bounds[bounds.len() - 1].byte_end..)
-            .is_some_and(|suffix| suffix.trim().is_empty())
+        || !complete_page_selection(bounds, failing_pages, native, page_count)
+        || !boundaries_cover_native_text(bounds, native)
     {
         return outcome;
     }

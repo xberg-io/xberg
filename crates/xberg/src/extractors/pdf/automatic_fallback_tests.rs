@@ -130,3 +130,49 @@ fn existing_skips_and_partial_page_selection_are_unchanged() {
         assert_eq!(actual, expected);
     }
 }
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+#[serial_test::serial]
+fn automatic_page_acceptance_excludes_every_explicit_ocr_request() {
+    let baseline = serde_json::json!({"ocr": {"enabled": true}});
+    let mut config: crate::ExtractionConfig = serde_json::from_value(baseline.clone()).unwrap();
+    assert!(super::automatic_page_acceptance_supported(&config));
+    config.force_ocr_pages = Some(Vec::new());
+    config.ocr.as_mut().unwrap().tesseract_config = Some(crate::TesseractConfig::default());
+    assert!(
+        config
+            .ocr
+            .as_ref()
+            .unwrap()
+            .tesseract_config
+            .as_ref()
+            .unwrap()
+            .enable_table_detection
+    );
+    assert!(super::automatic_page_acceptance_supported(&config));
+    let mut cases = vec![
+        serde_json::json!({"force_ocr": true}),
+        serde_json::json!({"include_document_structure": true}),
+        serde_json::json!({"result_format": "element_based"}),
+        serde_json::json!({"force_ocr_pages": [1]}),
+        serde_json::json!({"force_ocr_pages": [2]}),
+        serde_json::json!({"ocr": {"auto_rotate": true}}),
+        serde_json::json!({"ocr": {"element_config": {"include_elements": true}}}),
+        serde_json::json!({"images": {"include_page_rasters": true}}),
+        serde_json::json!({"ocr": {"backend": "custom"}}),
+        serde_json::json!({"ocr": {"enabled": false}}),
+        serde_json::json!({"ocr": {"pipeline": {"stages": [{"backend": "tesseract"}]}}}),
+    ];
+    #[cfg(feature = "layout-types")]
+    cases.push(serde_json::json!({"layout": {}}));
+    for patch in cases.drain(..) {
+        let mut value = baseline.clone();
+        value
+            .as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        let config = serde_json::from_value(value).expect("valid explicit extraction options");
+        assert!(!super::automatic_page_acceptance_supported(&config), "{patch}");
+    }
+}

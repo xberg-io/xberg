@@ -3636,6 +3636,13 @@ impl PdfExtractor {
             );
         }
 
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        if extraction_method == ExtractionMethod::Mixed
+            && let Some(ref accepted_pages) = structured_ocr_pages
+        {
+            merge_mixed_ocr_tables(&mut tables, accepted_pages);
+        }
+
         let mut final_pages =
             assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
 
@@ -3702,7 +3709,6 @@ impl PdfExtractor {
             && let Some(ref accepted_pages) = structured_ocr_pages
         {
             ocr_elements = accepted_mixed_ocr_elements(accepted_pages);
-            merge_mixed_ocr_tables(&mut tables, accepted_pages);
             ocr_coordinate_frames = accepted_mixed_ocr_coordinate_frames(accepted_pages);
         }
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
