@@ -134,22 +134,17 @@ pub enum FillRule {
     EvenOdd,
 }
 
-/// Cache source fields only: omitted fields must inherit the state at each application. ~keep
-#[derive(Debug, Default)]
-pub(crate) struct PathGraphicsPatch {
-    pub(crate) dash: Option<(Vec<f32>, f32)>,
-    pub(crate) stroke_alpha: Option<f32>,
-}
-
+/// The shared parser's result per `gs` name. Omitted fields stay `None` so each application
+/// inherits them from the current state. ~keep
 #[derive(Debug, Default)]
 pub(crate) struct PathExtGStateCache {
     container: Option<crate::object::Object>,
-    patches: std::collections::HashMap<String, CachedPathGraphicsPatch>,
+    states: std::collections::HashMap<String, CachedPathExtGState>,
 }
 
 #[derive(Debug)]
-struct CachedPathGraphicsPatch {
-    patch: PathGraphicsPatch,
+struct CachedPathExtGState {
+    parsed: crate::rendering::ext_gstate::ParsedExtGState,
     failures: Vec<crate::object::ObjectRef>,
     checked_epoch: usize,
 }
@@ -365,7 +360,7 @@ impl PathExtractor {
     {
         self.path_recovery_epoch = recovery_epoch;
         self.failed_path_references.lock_or_recover().current.clear();
-        let retry = self.extgstate_cache.patches.get_mut(name).is_some_and(|cached| {
+        let retry = self.extgstate_cache.states.get_mut(name).is_some_and(|cached| {
             if cached.failures.is_empty() || cached.checked_epoch == recovery_epoch {
                 return false;
             }
@@ -373,7 +368,7 @@ impl PathExtractor {
             cached.failures.iter().any(|reference| available(*reference))
         });
         if retry {
-            self.extgstate_cache.patches.remove(name);
+            self.extgstate_cache.states.remove(name);
         }
     }
 
@@ -431,12 +426,12 @@ impl PathExtractor {
         self.extgstate_cache.container.as_ref()
     }
 
-    pub(crate) fn cache_path_extgstate(&mut self, name: &str, patch: PathGraphicsPatch) {
+    pub(crate) fn cache_path_extgstate(&mut self, name: &str, parsed: crate::rendering::ext_gstate::ParsedExtGState) {
         let failures = self.failed_path_references.lock_or_recover().current.clone();
-        self.extgstate_cache.patches.insert(
+        self.extgstate_cache.states.insert(
             name.to_owned(),
-            CachedPathGraphicsPatch {
-                patch,
+            CachedPathExtGState {
+                parsed,
                 failures,
                 checked_epoch: self.path_recovery_epoch,
             },
@@ -444,12 +439,18 @@ impl PathExtractor {
     }
 
     pub(crate) fn apply_cached_path_extgstate(&mut self, name: &str, state: &mut PathGraphicsState) -> bool {
-        let Some(cached) = self.extgstate_cache.patches.get(name) else {
+        let Some(cached) = self.extgstate_cache.states.get(name) else {
             return false;
         };
-        let patch = &cached.patch;
-        let alpha = patch.stroke_alpha;
-        if let Some((lengths, phase)) = &patch.dash {
+        let parsed = &cached.parsed;
+        // The parser keeps CA as written; the path state keeps it inside 0..1. A NaN CA leaves the stroke
+        // opacity unchanged, because NaN survives a clamp and would hide every later stroke. An infinite
+        // value is clamped to 0 or 1, as is a finite CA beyond the f32 range, which parses to infinity. ~keep
+        let alpha = parsed
+            .stroke_alpha
+            .filter(|alpha| !alpha.is_nan())
+            .map(|alpha| alpha.clamp(0.0, 1.0));
+        if let Some((lengths, phase)) = &parsed.dash {
             state.dash.0.clone_from(lengths);
             state.dash.1 = *phase;
             self.current_dash.0.clone_from(lengths);
