@@ -392,13 +392,17 @@ impl PdfDocument {
         extractor: &mut crate::extractors::paths::PathExtractor,
         stack: &mut crate::extractors::paths::PathGraphicsStateStack,
     ) {
+        extractor.prepare_path_extgstates(name, self.object_recovery_epoch.load(Ordering::Acquire), |reference| {
+            self.path_reference_available(reference)
+        });
         if extractor.apply_cached_path_extgstate(name, stack.current_mut()) {
             return;
         }
-        extractor.extgstate_container(|reference| self.load_object(reference).ok());
-        let Some(patch) = self.resolve_path_extgstate(name, extractor) else {
-            return;
-        };
+        extractor.extgstate_container(
+            |reference| self.path_reference_available(reference),
+            |reference| self.load_object(reference),
+        );
+        let patch = self.resolve_path_extgstate(name, extractor).unwrap_or_default();
         extractor.cache_path_extgstate(name, patch);
         extractor.apply_cached_path_extgstate(name, stack.current_mut());
     }
@@ -417,16 +421,24 @@ impl PdfDocument {
         let dictionary = states
             .as_dict()
             .and_then(|states| states.get(name))
-            .and_then(|state| self.path_state_object(state))?;
+            .and_then(|state| self.path_state_object(state, extractor))?;
         let dictionary = dictionary.as_dict()?;
         Some(crate::extractors::paths::PathGraphicsPatch {
-            dash: dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash)),
-            stroke_alpha: dictionary.get("CA").and_then(|alpha| self.path_stroke_alpha(alpha)),
+            dash: dictionary
+                .get("D")
+                .and_then(|dash| self.path_dash_pattern(dash, extractor)),
+            stroke_alpha: dictionary
+                .get("CA")
+                .and_then(|alpha| self.path_stroke_alpha(alpha, extractor)),
         })
     }
 
-    fn path_stroke_alpha(&self, object: &crate::object::Object) -> Option<f32> {
-        let object = self.path_state_object(object)?;
+    fn path_stroke_alpha(
+        &self,
+        object: &crate::object::Object,
+        extractor: &crate::extractors::paths::PathExtractor,
+    ) -> Option<f32> {
+        let object = self.path_state_object(object, extractor)?;
         let number = object
             .as_real()
             .or_else(|| object.as_integer().map(|value| value as f64))?;
@@ -434,36 +446,79 @@ impl PdfDocument {
         number.is_finite().then(|| number.clamp(0.0, 1.0) as f32)
     }
 
-    fn path_state_number(&self, object: &crate::object::Object) -> Option<f32> {
-        let object = self.path_state_object(object)?;
+    fn path_state_number(
+        &self,
+        object: &crate::object::Object,
+        extractor: &crate::extractors::paths::PathExtractor,
+    ) -> Option<f32> {
+        let object = self.path_state_object(object, extractor)?;
         let number = object
             .as_real()
             .or_else(|| object.as_integer().map(|value| value as f64))? as f32;
         number.is_finite().then_some(number)
     }
 
-    fn path_dash_pattern(&self, object: &crate::object::Object) -> Option<(Vec<f32>, f32)> {
-        let object = self.path_state_object(object)?;
+    fn path_dash_pattern(
+        &self,
+        object: &crate::object::Object,
+        extractor: &crate::extractors::paths::PathExtractor,
+    ) -> Option<(Vec<f32>, f32)> {
+        let object = self.path_state_object(object, extractor)?;
         let [array, phase] = object.as_array()?.as_slice() else {
             return None;
         };
-        let array = self.path_state_object(array)?;
+        let array = self.path_state_object(array, extractor)?;
         let lengths = array
             .as_array()?
             .iter()
-            .map(|length| self.path_state_number(length).filter(|length| *length >= 0.0))
+            .map(|length| {
+                self.path_state_number(length, extractor)
+                    .filter(|length| *length >= 0.0)
+            })
             .collect::<Option<Vec<_>>>()?;
-        Some((lengths, self.path_state_number(phase)?))
+        Some((lengths, self.path_state_number(phase, extractor)?))
     }
 
     fn path_state_object<'a>(
         &self,
         object: &'a crate::object::Object,
+        extractor: &crate::extractors::paths::PathExtractor,
     ) -> Option<std::borrow::Cow<'a, crate::object::Object>> {
         match object.as_reference() {
-            Some(reference) => self.load_object(reference).ok().map(std::borrow::Cow::Owned),
+            Some(reference) => extractor
+                .load_path_object(
+                    reference,
+                    |reference| self.path_reference_available(reference),
+                    |reference| self.load_object(reference),
+                )
+                .map(std::borrow::Cow::Owned),
             None => Some(std::borrow::Cow::Borrowed(object)),
         }
+    }
+
+    fn path_reference_available(&self, reference: crate::object::ObjectRef) -> bool {
+        if self
+            .object_cache
+            .lock_or_recover()
+            .get(&reference)
+            .is_some_and(|object| !matches!(object, Object::Null))
+        {
+            return true;
+        }
+        let Some(entry) = self.xref.get(reference.id) else {
+            return false;
+        };
+        if entry.entry_type != crate::xref::XRefEntryType::Compressed || reference.generation != 0 {
+            return false;
+        }
+        let Ok(stream) = u32::try_from(entry.offset) else {
+            return false;
+        };
+        self.object_stream_cache
+            .lock_or_recover()
+            .get(&crate::object::ObjectRef::new(stream, 0))
+            .and_then(|objects| objects.get(&reference.id))
+            .is_some_and(|object| !matches!(object, Object::Null))
     }
 
     /// Dereference one level of indirection, loading the target object;

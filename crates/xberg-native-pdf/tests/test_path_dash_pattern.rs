@@ -328,6 +328,12 @@ fn above_one_stroke_opacity_clamps_to_one_after_a_clear_state() {
 #[path = "test_path_dash_pattern/allocations.rs"]
 mod allocations;
 
+#[path = "test_path_dash_pattern/object_loads.rs"]
+mod object_loads;
+
+#[path = "test_path_dash_pattern/retries.rs"]
+mod retries;
+
 #[test]
 fn finite_negative_ca_outside_f32_range_clamps_to_zero() {
     let paths = paths_with_extgstate(
@@ -454,7 +460,7 @@ fn a_name_first_used_after_a_form_reads_the_restored_indirect_page_dictionary() 
          /Resources << /ExtGState 7 0 R >> /Length {} >>\nstream\n{form}\nendstream",
         form.len()
     );
-    let paths = paths_with_resource_objects(
+    let document = document_with_resource_objects(
         b"/Shared gs 0 700 m 300 700 l S /F Do /After gs 0 690 m 300 690 l S",
         "/ExtGState 5 0 R /XObject << /F 6 0 R >>",
         &[
@@ -463,6 +469,7 @@ fn a_name_first_used_after_a_form_reads_the_restored_indirect_page_dictionary() 
             "<< /Shared << /D [[7 1] 2] /CA 0 >> /After << /D [[9 4] 3] /CA 0 >> >>",
         ],
     );
+    let (paths, page_container_loads) = object_loads::count(5, || document.extract_paths(0).unwrap());
     assert_eq!(paths.len(), 3, "page, Form, first page lookup of /After");
     assert_eq!(paths[0].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
     assert_eq!(paths[0].dash_pattern, Some((vec![3.0, 2.0], 1.0)));
@@ -470,6 +477,10 @@ fn a_name_first_used_after_a_form_reads_the_restored_indirect_page_dictionary() 
     assert_eq!(paths[1].dash_pattern, None);
     assert_eq!(paths[2].stroke_color, Some(xberg_native_pdf::layout::Color::black()));
     assert_eq!(paths[2].dash_pattern, Some((vec![11.0, 5.0], 4.0)));
+    assert_eq!(
+        page_container_loads, 1,
+        "restore must retain the page container, not reload it"
+    );
 }
 
 #[test]
