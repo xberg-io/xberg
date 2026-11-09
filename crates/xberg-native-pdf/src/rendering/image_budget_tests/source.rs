@@ -18,6 +18,18 @@ pub(super) fn jpeg_of(width: u32, height: u32) -> Vec<u8> {
     bytes
 }
 
+/// Offset of the SOF0 marker, found by walking the marker segments from the SOI.
+pub(super) fn sof_marker_position(jpeg: &[u8]) -> usize {
+    let mut position = 2;
+    while jpeg[position] == 0xff {
+        if jpeg[position + 1] == 0xc0 {
+            return position;
+        }
+        position += 2 + usize::from(u16::from_be_bytes([jpeg[position + 2], jpeg[position + 3]]));
+    }
+    panic!("no SOF0 segment before the scan");
+}
+
 /// A header-valid four-component sequential JPEG: an RGB frame whose SOF0 declares four components.
 /// Only the headers are read for admission.
 pub(super) fn cmyk_jpeg(dimension: u32) -> Vec<u8> {
@@ -64,14 +76,20 @@ pub(super) fn document_with_paint(jpeg: &[u8], declared: u32, overlay: bool, ins
     from_objects(&objects)
 }
 
-/// A 32 pt page painting `/Im0` under `content`, with `entries` added to the image dictionary.
+/// A 32 pt page painting `/Im0` under `content`, with `entries` added to the image dictionary. The
+/// image is DCT-encoded unless `entries` names its own `/Filter`.
 pub(super) fn document_painting(jpeg: &[u8], declared: u32, content: &[u8], entries: &str) -> PdfDocument {
+    let filter = if entries.contains("/Filter") {
+        ""
+    } else {
+        "/Filter /DCTDecode"
+    };
     let objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
         stream("", content),
-        stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode {entries}"), jpeg),
+        stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 {filter} {entries}"), jpeg),
     ];
     from_objects(&objects)
 }

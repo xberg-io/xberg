@@ -90,7 +90,8 @@ fn a_reduced_decode_is_kept_at_exactly_the_limit_and_the_next_scale_one_byte_und
 #[test]
 fn an_extended_sequential_jpeg_is_reduced_like_a_baseline_one() {
     let mut extended = source::jpeg_of(1200, 1200);
-    let frame = extended.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    let frame = source::sof_marker_position(&extended);
+    assert_eq!(extended[frame + 1], 0xc0);
     extended[frame + 1] = 0xc1;
     let image = PdfImage::new(1200, 1200, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(extended.clone()));
     assert!(image_budget::reducible_jpeg(&image, &extended));
@@ -113,4 +114,23 @@ fn a_decode_refuses_a_frame_the_decoder_scales_to_another_size() {
         error.to_string(),
         "Stream decoding error: JPEG decoded at 1x512, not the admitted 1x2048"
     );
+}
+
+#[test]
+fn a_jpeg_image_never_carries_an_in_data_soft_mask() {
+    use crate::object::ObjectRef;
+    let jpeg = source::jpeg(32);
+    for filter in ["/DCTDecode", "[/DCTDecode /JPXDecode]"] {
+        let entries = format!("/SMaskInData 1 /Filter {filter}");
+        let document = source::document_painting(&jpeg, 32, FULL_PAGE, &entries);
+        let xobject = document.load_object(ObjectRef::new(5, 0)).unwrap();
+        let extracted = crate::extractors::images::extract_image_from_xobject(Some(&document), &xobject, None, None);
+        match extracted {
+            Ok(image) => {
+                assert!(image.soft_mask_in_data().is_none(), "{filter}");
+                assert!(filter != "/DCTDecode" || matches!(image.data(), ImageData::Jpeg(_)));
+            }
+            Err(error) => assert_ne!(filter, "/DCTDecode", "a plain DCT image decodes: {error}"),
+        }
+    }
 }
