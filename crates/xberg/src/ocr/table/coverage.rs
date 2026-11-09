@@ -106,8 +106,9 @@ impl ExactTableRows {
         Self::with_marks(cells, false)
     }
 
-    /// Rows compared on their alphanumeric tokens alone, so a dot leader or a stray mark between a
-    /// label and its values does not keep a line whose every word the table carries (#2783).
+    /// Rows compared without their leader tokens (made only of `. \u{b7} _ \u{2026} =`), so a dot leader
+    /// or a stray `=` between a label and its values does not keep a line whose every word the table
+    /// carries (#2783). Signs, dashes, brackets and currency symbols stay significant.
     pub(crate) fn ignoring_marks(cells: &[Vec<String>]) -> Self {
         Self::with_marks(cells, true)
     }
@@ -133,9 +134,13 @@ impl ExactTableRows {
     }
 }
 
+fn is_leader_mark(character: char) -> bool {
+    matches!(character, '.' | '\u{b7}' | '_' | '\u{2026}' | '=')
+}
+
 fn row_tokens<'a>(tokens: impl Iterator<Item = &'a str>, ignore_marks: bool) -> String {
     tokens
-        .filter(|token| !ignore_marks || token.chars().any(char::is_alphanumeric))
+        .filter(|token| !ignore_marks || !token.chars().all(is_leader_mark))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -221,18 +226,56 @@ mod tests {
         vec![text.split_whitespace().map(str::to_string).collect()]
     }
 
+    fn row(cells: &[&str]) -> Vec<Vec<String>> {
+        vec![cells.iter().map(|cell| cell.to_string()).collect()]
+    }
+
+    fn claims_ignoring_marks(cells: &[&str], line: &str) -> bool {
+        ExactTableRows::ignoring_marks(&row(cells)).claim(line.split_whitespace())
+    }
+
     #[test]
     fn rows_ignoring_marks_claim_a_line_with_a_leader_and_a_stray_mark_but_exact_rows_do_not() {
-        let cells = vec![vec![
-            "Pool repairs".to_string(),
-            "14".to_string(),
-            "140,506".to_string(),
-        ]];
+        let cells = row(&["Pool repairs", "14", "140,506"]);
         let line = "Pool repairs ......... 14 = 140,506";
 
         assert!(!ExactTableRows::new(&cells).claim(line.split_whitespace()));
         assert!(ExactTableRows::ignoring_marks(&cells).claim(line.split_whitespace()));
-        assert!(!ExactTableRows::ignoring_marks(&cells).claim("Pool repairs ... 15 = 140,506".split_whitespace()));
+        assert!(!claims_ignoring_marks(
+            &["Pool repairs", "14", "140,506"],
+            "Pool repairs ... 15 = 140,506"
+        ));
+    }
+
+    #[test]
+    fn rows_ignoring_marks_keep_signs_brackets_separators_and_dashes_significant() {
+        assert!(!claims_ignoring_marks(&["Item", "5"], "Item (5)"));
+        assert!(!claims_ignoring_marks(&["Item", "12"], "Item -12"));
+        assert!(!claims_ignoring_marks(&["Item", "1,234"], "Item 1.234"));
+        assert!(!claims_ignoring_marks(&["Item", "$5"], "Item 5"));
+        assert!(!claims_ignoring_marks(&["Item", "\u{2014}", "5"], "Item 5"));
+        assert!(claims_ignoring_marks(&["Item", "\u{2014}", "5"], "Item \u{2014} 5"));
+        assert!(claims_ignoring_marks(&["Item", "-", "5"], "Item ..... - 5"));
+    }
+
+    #[test]
+    fn rows_ignoring_marks_never_claim_a_row_made_only_of_leader_marks() {
+        assert!(!claims_ignoring_marks(&["....."], "....."));
+        assert!(!claims_ignoring_marks(&["=", "..."], "= ..."));
+        assert!(!claims_ignoring_marks(&["Item", "5"], "....."));
+    }
+
+    #[test]
+    fn rows_ignoring_marks_spend_each_identical_row_once() {
+        let cells = vec![
+            vec!["Fee".to_string(), "5".to_string()],
+            vec!["Fee".to_string(), "5".to_string()],
+        ];
+        let mut rows = ExactTableRows::ignoring_marks(&cells);
+
+        assert!(rows.claim("Fee ..... 5".split_whitespace()));
+        assert!(rows.claim("Fee = 5".split_whitespace()));
+        assert!(!rows.claim("Fee 5".split_whitespace()));
     }
 
     #[test]
