@@ -221,7 +221,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later glyph. That opened a gap after the ligature, and OCR read it as a space. The renderer now draws each
   run (one show string) that holds such a code glyph by glyph from the font, each at its own width.
   Markdown, HTML and Djot output of OCR pages change too.
-- **(pdf): Keep the space before a word that touches the previous word in a font with no `/Widths`.** (#2675)
+- **(pdf): Keep the space before a word that touches the previous word in a font with no `/Widths`.** (GH#2675)
   Native extraction joined two words into one token when the second word started one coordinate unit before the first ended. The rule that keeps touching glyphs together now applies only to a single glyph placed by itself, so words on tightly set forms are separate again, as in 0.4.4.
 - **(pdf): Recover a page of outlined prose with eight or more drawn rows beside a native header and footer.** (GH#2313)
   The outlined-prose check refused a page that painted more than about seven rows of outlined text.
