@@ -240,6 +240,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
 - **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
   `model` had become the second field in #2702, shifting positional constructor arguments. It is now last, so the Java record constructor and the Swift `init` take their arguments in the pre-#2702 positions again, plus a trailing `model`. In the PHP and WASM `new` and the Python native constructor and `__init__` stub, `model` now follows `enableChartUnderstanding` but still precedes `confidenceThreshold`, `formulaModel` and `acceleration`, which stay one position later than before #2702, and in PHP `model` is now optional. The default model is unchanged (`rt_detr`).
+
+- **(pdf): Keep a lone accent letter apart from the formula line under it.** (GH#2719)
+  A math font can draw a hat as its own lowercase letter, set just above the first letter of a formula line. If the formula line opens with a single capital letter or a number and then an operator (a hat over `X = V DU`, `Y = A B` or `Z + W`), that letter now stays apart from the formula line and is no longer joined into it as `bX`. A hat over a formula that opens with a lowercase letter still joins it.
+
+- **(pdf): Remove a repeated page stamp whose words join in more than one order.** (GH#2719)
+  The repeated-margin-text check now also compares a line by its set of words. A footer that reads "A B" on some pages and "B A" on others counts as one line, and is removed as page furniture from every page after its first.
+
 - **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
   A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
 - **(pdf): Apply graphics states recovered while visiting a Form XObject.** (#2752)
@@ -256,8 +263,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694, #2730)
   Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 3 to 4 s of decode on a release build), so a multi-page scan with a junk layer on every page recovers its pages up to that ceiling (35 pages of 300 dpi) while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
-- **(pdf): Remove a repeated page stamp whose words join in more than one order.** (GH#2719)
-  The repeated-margin-text check now also compares a line by its set of words. A footer that reads "A B" on some pages and "B A" on others counts as one line, and is removed as page furniture from every page after its first.
 
 - **(ocr): Limit the glued-cell veto's leader exemption to the gap at the leader (#2704).**
   A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` counts as a leader and `‥` counts toward one.

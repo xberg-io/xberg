@@ -1147,12 +1147,18 @@ pub(super) fn is_numbered_section_heading(text: &str) -> bool {
     section_keyword_prefix(t).is_some_and(is_keyword_numbered_section_heading)
 }
 
-/// The enumerator-first half of [`is_numbered_section_heading`]: the number,
-/// or the roman numeral, is the line's own first token.
-fn is_bare_numbered_section_heading(t: &str) -> bool {
+/// A leading enumerator: a roman numeral or a (multi-level) number, and where it ends.
+struct BareEnumerator {
+    end: usize,
+    roman: bool,
+    levels: usize,
+}
+
+/// Scan the enumerator that opens `t`, if it has one.
+fn scan_bare_enumerator(t: &str) -> Option<BareEnumerator> {
     let bytes = t.as_bytes();
     if bytes.is_empty() {
-        return false;
+        return None;
     }
 
     let roman_chars: &[u8] = b"IVXLCDM";
@@ -1162,7 +1168,11 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
         && matches!(bytes[roman_end], b'.' | b' ' | b')')
         && is_valid_roman(&t[..roman_end])
     {
-        return !starts_with_math_operator(&t[roman_end..]);
+        return Some(BareEnumerator {
+            end: roman_end,
+            roman: true,
+            levels: 1,
+        });
     }
 
     let mut levels = 0usize;
@@ -1183,16 +1193,28 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
             break;
         }
     }
-    if levels == 0 {
+    (levels > 0).then_some(BareEnumerator {
+        end: idx,
+        roman: false,
+        levels,
+    })
+}
+
+/// The enumerator-first half of [`is_numbered_section_heading`]: the number,
+/// or the roman numeral, is the line's own first token.
+fn is_bare_numbered_section_heading(t: &str) -> bool {
+    let Some(enumerator) = scan_bare_enumerator(t) else {
+        return false;
+    };
+    if starts_with_math_operator(&t[enumerator.end..]) {
         return false;
     }
-    if starts_with_math_operator(&t[idx..]) {
-        return false;
-    }
-    if levels >= 2 {
+    if enumerator.roman || enumerator.levels >= 2 {
         return true;
     }
 
+    let bytes = t.as_bytes();
+    let mut idx = enumerator.end;
     if matches!(bytes.get(idx), Some(b'.') | Some(b')')) {
         idx += 1;
     }
@@ -1202,6 +1224,20 @@ fn is_bare_numbered_section_heading(t: &str) -> bool {
             .chars()
             .filter(|c| c.is_alphabetic())
             .all(|c| c.is_uppercase())
+}
+
+/// Whether `text` opens with a formula: an enumerator or a capital letter, then a math operator
+/// (`X = Y`, `Y = A B`, `Z + W`, `1.5 = x`). The enumerator lines are the ones the numbered-heading
+/// rule rejects as formulas; a capital that is no roman numeral (`Y`, `A`, `Z`) is a variable.
+pub(super) fn is_formula_line(text: &str) -> bool {
+    let t = text.trim();
+    let opening_end = scan_bare_enumerator(t).map(|enumerator| enumerator.end).or_else(|| {
+        t.chars()
+            .next()
+            .filter(|first| first.is_uppercase())
+            .map(char::len_utf8)
+    });
+    opening_end.is_some_and(|end| starts_with_math_operator(&t[end..]))
 }
 
 /// Whether `rest`, the text right after an enumerator, opens with a math
@@ -2700,6 +2736,35 @@ mod tests {
         assert!(pages.iter().all(|page| !page[1].is_page_furniture));
     }
 
+    /// A footer that is the exact line on most pages and the same words reordered on page 0 has two
+    /// repeating keys with different first pages: the word set is first seen on page 0, the exact
+    /// line on page 1. Every page after the first drops it, page 1 included, because the earliest
+    /// first page of the keys it matches is page 0.
+    #[test]
+    fn test_cross_page_repeating_text_first_page_is_the_earliest_of_its_keys() {
+        let page_heights = vec![792.0; 4];
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..4)
+            .map(|i| {
+                let stamp = if i == 0 {
+                    "2012 Quarterly summary"
+                } else {
+                    "Quarterly summary 2012"
+                };
+                vec![make_margin_body(stamp), make_body_center(&format!("Body {i}"))]
+            })
+            .collect();
+        mark_cross_page_repeating_text(&mut pages, &page_heights);
+
+        assert!(!pages[0][0].is_page_furniture, "the first page keeps the footer");
+        for (i, page) in pages.iter().enumerate().skip(1) {
+            assert!(
+                page[0].is_page_furniture,
+                "page {i} footer must be furniture: the word set was first seen on page 0"
+            );
+        }
+        assert!(pages.iter().all(|page| !page[1].is_page_furniture));
+    }
+
     /// Two lines that share most words but not all are two lines: their page counts must not add.
     #[test]
     fn test_cross_page_repeating_text_keeps_lines_with_different_word_sets() {
@@ -3812,7 +3877,7 @@ mod tests {
 
 #[cfg(test)]
 mod numbered_section_heading_tests {
-    use super::{ends_with_sentence_period, is_numbered_section_heading};
+    use super::{ends_with_sentence_period, is_formula_line, is_numbered_section_heading};
 
     #[test]
     fn multilevel_numbers_are_headings() {
@@ -3871,6 +3936,38 @@ mod numbered_section_heading_tests {
         assert!(!is_numbered_section_heading("10.1109/IPIN.2018.8533777"));
         assert!(!is_numbered_section_heading("1.2/1.3 Results"));
         assert!(is_numbered_section_heading("4.1 Scaling"));
+    }
+
+    /// The formula-line predicate holds for every line the operator guard turns away from the
+    /// heading rule.
+    #[test]
+    fn an_enumerator_before_an_operator_is_a_formula_line() {
+        assert!(is_formula_line("X = V DU"));
+        assert!(is_formula_line("V + W"));
+        assert!(is_formula_line("1.5 = x"));
+        assert!(is_formula_line("12/1996\u{2013}P"));
+        assert!(!is_formula_line("IV. Results"));
+        assert!(!is_formula_line("3.2 Methods"));
+        assert!(!is_formula_line("y = V DU"));
+        assert!(!is_formula_line("The projection of"));
+        assert!(!is_formula_line(""));
+    }
+
+    /// A capital that is no roman numeral, then an operator, opens a formula as well.
+    /// A capital that opens a word or a line of prose does not.
+    #[test]
+    fn a_capital_before_an_operator_is_a_formula_line() {
+        assert!(is_formula_line("Y = V DU"));
+        assert!(is_formula_line("A = K \u{2212} b"));
+        assert!(is_formula_line("Z + W"));
+        assert!(is_formula_line("K= K"));
+        assert!(is_formula_line("A\u{2081} = x"));
+        assert!(is_formula_line("\u{03A9} = x"));
+        assert!(!is_formula_line("A note on"));
+        assert!(!is_formula_line("Yes = no"));
+        assert!(!is_formula_line("AB = C"));
+        assert!(!is_formula_line("Y"));
+        assert!(!is_formula_line("b = V DU"));
     }
 
     #[test]
