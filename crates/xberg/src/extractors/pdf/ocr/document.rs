@@ -162,6 +162,60 @@ pub(crate) fn clean_native_page_layers(
     }
     layers
 }
+
+/// Marker-bearing source is only an ink-proof candidate, never an ordinary clean layer. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn marker_native_ink_layers(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    selected: &std::collections::HashSet<u32>,
+    page_count: usize,
+    thresholds: &OcrQualityThresholds,
+) -> ahash::AHashMap<u32, String> {
+    let mut ordered = boundaries.iter().collect::<Vec<_>>();
+    ordered.sort_unstable_by_key(|boundary| boundary.byte_start);
+    let mut seen = std::collections::HashSet::new();
+    let mut excluded = std::collections::HashSet::new();
+    let mut previous: Option<&crate::types::PageBoundary> = None;
+    for boundary in ordered {
+        if !seen.insert(boundary.page_number) {
+            excluded.insert(boundary.page_number);
+        }
+        if let Some(previous) = previous
+            && boundary.byte_start < previous.byte_end
+        {
+            excluded.extend([previous.page_number, boundary.page_number]);
+        }
+        if previous.is_none_or(|previous| boundary.byte_end > previous.byte_end) {
+            previous = Some(boundary);
+        }
+    }
+    let mut layers = ahash::AHashMap::new();
+    for boundary in boundaries {
+        if boundary.page_number == 0
+            || boundary.page_number as usize > page_count
+            || !selected.contains(&boundary.page_number)
+            || excluded.contains(&boundary.page_number)
+        {
+            continue;
+        }
+        let Some(layer) = native_text.get(boundary.byte_start..boundary.byte_end) else {
+            continue;
+        };
+        let mut cleaned = layer.to_owned();
+        if super::super::unmapped_glyphs::strip_native_fragment(&mut cleaned) > 0
+            && native_layer_decodes_cleanly(&cleaned, thresholds)
+        {
+            layers.insert(boundary.page_number, layer.to_owned());
+        }
+    }
+    layers
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "marker_native_ink_layers_tests.rs"]
+mod marker_native_ink_layers_tests;
+
 /// Native rows without an equal whole OCR row, consuming each OCR occurrence once. Case and
 /// whitespace may differ; signs, units, punctuation and order remain source evidence. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

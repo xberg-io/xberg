@@ -58,6 +58,23 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+          submodules: ${{ matrix.suite == 'pdf-ocr' }}
+
+      - name: Fetch pinned NIST regression page
+        if: matrix.suite == 'pdf-ocr'
+        uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: pdf/regression_pages/nist-sp811-2008-p7.pdf
+          cache: "false"
+
+      - name: Verify NIST input for the public Type0 target
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          nist_fixture="$GITHUB_WORKSPACE/test_documents/pdf/regression_pages/nist-sp811-2008-p7.pdf"
+          printf '%s  %s\n' 71c2a76af332a9b796899a78e99ce2d835026d624048cf239069276fcacce79b \
+            "$nist_fixture" | sha256sum --check
+          printf 'XBERG_NIST_FIXTURE=%s\n' "$nist_fixture" >> "$GITHUB_ENV"
 
       - uses: xberg-io/actions/setup-rust@v1
         with:
