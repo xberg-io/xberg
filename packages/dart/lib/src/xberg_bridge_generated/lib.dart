@@ -13703,19 +13703,23 @@ class OcrConfig {
   /// When None, uses the single `backend` field (same as today).
   final OcrPipelineConfig? pipeline;
 
-  /// Enable automatic page rotation based on orientation detection.
+  /// Page rotation policy based on orientation detection.
   ///
-  /// When enabled, page orientation (0/90/180/270 degrees) is detected with an
-  /// ONNX PP-LCNet document-orientation classifier — NOT Tesseract's own
-  /// `DetectOrientationScript()`/OSD, which this crate does not call. If the
-  /// page is rotated with high confidence, the image is corrected before
-  /// recognition. Applies to every OCR backend; the tesseract-only
-  /// `TesseractConfig::preprocessing` field of the same name is OR'd in on
-  /// top of this one and affects tesseract alone.
+  /// - `Some(true)`: always detect the page orientation (0/90/180/270 degrees) with an
+  ///   ONNX PP-LCNet document-orientation classifier -- NOT Tesseract's own
+  ///   `DetectOrientationScript()`/OSD, which this crate does not call -- and correct a
+  ///   confidently rotated page before recognition. Applies to every OCR backend; the
+  ///   tesseract-only `TesseractConfig::preprocessing` field of the same name is OR'd in on
+  ///   top of this one and affects tesseract alone.
+  /// - `Some(false)`: never rotate and never run the orientation retry.
+  /// - `None` (omitted): the default. Pages are read as-is, and a low-confidence whole-page
+  ///   read of a plain Tesseract block is retried with the orientation recovery that
+  ///   extraction without an `ocr` block uses (cached OSD when present, the ONNX classifier
+  ///   otherwise).
   ///
   /// Independent of a page's PDF `/Rotate` entry, which is handled separately
   /// on every OCR route regardless of this setting.
-  final bool autoRotate;
+  final bool? autoRotate;
 
   /// Ergonomic VLM fallback policy.
   ///
@@ -13824,7 +13828,7 @@ class OcrConfig {
     this.elementConfig,
     this.qualityThresholds,
     this.pipeline,
-    required this.autoRotate,
+    this.autoRotate,
     required this.vlmFallback,
     this.vlmConfig,
     this.vlmPrompt,

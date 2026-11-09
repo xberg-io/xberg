@@ -74,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(ocr): Make `OcrConfig.auto_rotate` tri-state so an omitted value no longer reads as `false`.** (#2496)
+  The field is `Option<bool>` in Rust and nullable in every binding; `true` and `false` in existing configs parse unchanged and an omitted value is unset. Unset keeps the orientation retry on for a plain Tesseract `ocr` block and, when no `osd.traineddata` is cached, recovers sideways and upside-down scans through the ONNX orientation classifier exactly as extraction without an `ocr` block does. `true` always rotates and `false` never rotates or retries (an explicit `false` previously still allowed the cached-OSD retry). Rust callers constructing `OcrConfig` must write `Some(true)`/`Some(false)`/`None`.
+
 - **(pdf): Pin the native PDF reduced-JPEG decoder to the version the OCR path measures, and drop the unreachable decoder output cap.** (#2740)
   `xberg-native-pdf` now requires `jpeg-decoder` `=0.3.2`, as `xberg` does. The decoder output cap is gone: the decoder checked it only after allocating its buffers, so it never bounded an allocation, and it always equalled the size already checked after scaling. Rendering is unchanged.
 

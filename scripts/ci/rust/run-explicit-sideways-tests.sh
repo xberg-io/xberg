@@ -16,7 +16,7 @@ expected_names=()
 case "$profile" in
 warm)
   features+=",auto-rotate-tract"
-  expected=15
+  expected=18
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -30,8 +30,11 @@ warm)
     explicit_osd_retains_the_original_source_grid_without_rotating_pixels
     helpers::tests::test_get_test_documents_dir
     helpers::tests::test_test_documents_available
-    language_only_without_cached_osd_keeps_the_original_read
-    omitted_and_false_rotation_are_the_same_typed_public_configuration
+    language_only_without_cached_osd_recovers_through_the_classifier
+    language_only_without_cached_osd_recovers_the_counterclockwise_and_upside_down_grids
+    explicit_false_keeps_the_original_read_with_and_without_cached_osd
+    explicit_true_rotates_without_cached_osd
+    omitted_false_and_true_rotation_are_three_distinct_public_configurations
     upright_osd_preserves_its_existing_cells_and_content
   )
   if [ -z "${XBERG_ORIENTATION_TEST_MODEL:-}" ]; then

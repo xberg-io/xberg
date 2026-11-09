@@ -271,6 +271,11 @@ impl OrientationRetry {
         // read), so only the marker decides whether the unsupported primary is replaced. ~keep
         let probe = lookup_osd_directory(config.clone());
         let Some(directory) = self.prepare_recognition(cancel, probe).await? else {
+            // Without a cached OSD model the omitted policy takes the classifier route that
+            // extraction without an `ocr` block uses. ~keep
+            #[cfg(auto_rotate)]
+            return self.after_implicit(backend, raster, config, original, cancel).await;
+            #[cfg(not(auto_rotate))]
             return Ok(original);
         };
         check_cancelled(cancel)?;
@@ -429,7 +434,7 @@ async fn lookup_osd_directory(config: OcrConfig) -> crate::Result<Option<String>
 #[cfg(auto_rotate)]
 fn implicit_config(config: &OcrConfig) -> (OcrConfig, f64) {
     let mut rotated_config = config.clone();
-    rotated_config.auto_rotate = true;
+    rotated_config.auto_rotate = Some(true);
     rotated_config.element_config = Some(OcrElementConfig {
         include_elements: true,
         min_level: OcrElementLevel::Word,

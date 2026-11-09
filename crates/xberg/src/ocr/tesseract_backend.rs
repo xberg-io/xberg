@@ -228,7 +228,7 @@ impl TesseractBackend {
         if internal.language.trim().is_empty() {
             internal.language = crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string();
         }
-        if config.auto_rotate {
+        if config.auto_rotate == Some(true) {
             internal.auto_rotate = true;
         }
         // GH#1651: without this the caller's limits die here -- `TesseractConfig` is the only

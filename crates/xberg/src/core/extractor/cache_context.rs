@@ -352,9 +352,9 @@ mod tests {
             .psm = Some(11);
         assert_eq!(context(&config).await.as_deref(), Some(""));
         config.ocr.as_mut().unwrap().tesseract_config = None;
-        config.ocr.as_mut().unwrap().auto_rotate = true;
+        config.ocr.as_mut().unwrap().auto_rotate = Some(true);
         assert_eq!(context(&config).await.as_deref(), Some(""));
-        config.ocr.as_mut().unwrap().auto_rotate = false;
+        config.ocr.as_mut().unwrap().auto_rotate = None;
         config.ocr.as_mut().unwrap().language = vec!["jpn_vert".into()];
         assert!(
             CacheDependency::for_config(&config, Some("application/pdf"))

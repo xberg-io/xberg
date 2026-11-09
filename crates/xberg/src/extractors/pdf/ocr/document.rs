@@ -570,7 +570,7 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
                 && ocr.backend == "tesseract"
                 && ocr.pipeline.is_none()
                 && ocr.element_config.is_none()
-                && !ocr.auto_rotate
+                && ocr.auto_rotate != Some(true)
         })
 }
 

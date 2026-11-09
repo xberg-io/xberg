@@ -18399,8 +18399,8 @@ extension OcrConfigRef {
         { let val = __swift_bridge__$OcrConfig$pipeline(ptr); if val != nil { return OcrPipelineConfig(ptr: val!) } else { return nil } }()
     }
 
-    public func autoRotate() -> Bool {
-        __swift_bridge__$OcrConfig$auto_rotate(ptr)
+    public func autoRotate() -> Optional<Bool> {
+        __swift_bridge__$OcrConfig$auto_rotate(ptr).intoSwiftRepr()
     }
 
     public func vlmFallback() -> RustString {

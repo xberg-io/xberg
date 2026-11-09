@@ -159,7 +159,7 @@ fn build_paddle_extraction_config_with_quality_profile(
         ocr: Some(xberg::core::config::OcrConfig {
             backend: "paddleocr".to_string(),
             language: vec!["eng".to_string()],
-            auto_rotate: false,
+            auto_rotate: None,
             paddle_ocr_settings: Some(paddle_ocr_settings),
             ..Default::default()
         }),
@@ -332,7 +332,7 @@ fn tesseract_inline_config(
         ocr: Some(xberg::core::config::OcrConfig {
             backend: "tesseract".to_string(),
             language: vec!["eng".to_string()],
-            auto_rotate,
+            auto_rotate: Some(auto_rotate),
             ..Default::default()
         }),
         layout,
@@ -388,7 +388,7 @@ fn paddle_pipeline_config(pipeline: Pipeline) -> xberg::ExtractionConfig {
                 .ocr
                 .as_mut()
                 .expect("Paddle benchmark config must include OCR")
-                .auto_rotate = true;
+                .auto_rotate = Some(true);
             config
         }
         Pipeline::PaddleNoRotate => build_paddle_extraction_config(PP_OCR_V6, "medium", None),
@@ -407,7 +407,7 @@ fn sceptre_pipeline_config(pipeline: Pipeline) -> xberg::ExtractionConfig {
                 .ocr
                 .as_mut()
                 .expect("Sceptre benchmark config must include OCR")
-                .auto_rotate = true;
+                .auto_rotate = Some(true);
             config
         }
         _ => unreachable!("sceptre_pipeline_config called with non-sceptre-family pipeline: {pipeline:?}"),
