@@ -271,7 +271,7 @@ fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::Accel
 ///
 /// The `tract` backend takes the same `num_thread` parameter but ignores it (`TractBackend::load`).
 fn paddle_inference_thread_count() -> usize {
-    paddle_session_thread_budget(crate::core::config::concurrency::resolve_thread_budget(None))
+    paddle_session_thread_budget(crate::core::config::concurrency::active_thread_budget())
 }
 
 /// Pure core of [`paddle_inference_thread_count`], split out so the policy is testable
@@ -1967,6 +1967,38 @@ mod tests {
     #[test]
     fn paddle_session_thread_budget_floors_at_one() {
         assert_eq!(paddle_session_thread_budget(0), 1);
+    }
+
+    const INSTALLED_BUDGET_VARIABLE: &str = "XBERG_PADDLE_INSTALLED_BUDGET";
+
+    /// GH#2649: the session budget must be the one installed from the request's
+    /// `ConcurrencyConfig.max_threads`, not a fresh host-derived default. The install is
+    /// first-call-wins per process, so it runs in a child process of its own.
+    #[test]
+    fn paddle_inference_thread_count_follows_the_installed_process_budget() {
+        let host_default = crate::core::config::concurrency::resolve_thread_budget(None);
+        let installed = if host_default > 1 { 1 } else { 2 };
+        crate::utils::test_support::run_child_test(
+            "paddle_ocr::backend::tests::paddle_inference_thread_count_installed_budget_child",
+            INSTALLED_BUDGET_VARIABLE,
+            installed.to_string(),
+            |_| {},
+        );
+    }
+
+    #[test]
+    #[ignore = "run in an isolated subprocess by paddle_inference_thread_count_follows_the_installed_process_budget"]
+    fn paddle_inference_thread_count_installed_budget_child() {
+        let Some(installed) = crate::utils::test_support::child_test_root(INSTALLED_BUDGET_VARIABLE) else {
+            return;
+        };
+        let installed: usize = installed.to_str().unwrap().parse().unwrap();
+        let config = crate::core::config::ConcurrencyConfig {
+            max_threads: Some(installed),
+            ..Default::default()
+        };
+        crate::core::config::concurrency::init_thread_pools(Some(&config));
+        assert_eq!(paddle_inference_thread_count(), paddle_session_thread_budget(installed));
     }
 
     const CONCURRENT_INITIALIZER_COUNT: usize = 8;

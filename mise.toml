@@ -147,6 +147,10 @@ run = [
 description = "Test the macOS PHP archive gate against compiled Mach-O files"
 run = "uv run --no-project --with pytest python -m pytest -q scripts/ci/test_verify_php_macos_extension.py"
 
+[tasks."test:v3-cross-runtime"]
+description = "Test the tie- and boundary-tolerant PP-DocLayoutV3 cross-runtime comparison"
+run = "bash scripts/ci/test-v3-cross-runtime.sh"
+
 [tasks."poly:verify:tool-scopes"]
 description = "Check external Poly formatters are restricted to their intended languages"
 run = "python3 scripts/ci/check-poly-tool-scopes.py"

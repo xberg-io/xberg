@@ -1,0 +1,36 @@
+name: CI NLI Advisories
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-nli-advisories-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: github.repository == 'xberg-io/xberg' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          disable-cache: "true"
+          use-sccache: "false"
+          install-llvm-cov: "false"
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: cargo-deny
+          cache: "false"
+      - name: Check current advisories against the leaf lock
+        run: mise run nli:audit -- --advisories
+      - name: Verify advisory errors cannot silently become warnings
+        run: mise run nli:audit:advisory-control

@@ -790,7 +790,7 @@ fn init_thread_pools_with(
 ///
 /// Model backends with private pools use this value to obey the same extraction
 /// budget. Before initialization, this resolves to the standard automatic limit.
-#[cfg(sceptre_ocr)]
+#[cfg(any(sceptre_ocr, paddle_ocr))]
 pub(crate) fn active_thread_budget() -> usize {
     match ACTIVE_THREAD_BUDGET.load(Ordering::Relaxed) {
         0 => resolve_thread_budget(None),

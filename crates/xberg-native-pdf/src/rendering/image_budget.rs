@@ -37,6 +37,47 @@ impl ImageBudget {
         self.admit_required(jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4))
     }
 
+    /// Admit `image`, or the IDCT-scaled decode that keeps its rasters within the budget when the
+    /// full-size decode does not. Returns the scale denominator to decode at (1, 2, 4 or 8): the
+    /// finest scale that fits, provided each axis of the reduced raster is at least
+    /// [`MIN_PAINTED_COVERAGE`] of the `device` extent (in canvas pixels) the image is painted at,
+    /// less one pixel of slack (`reduced >= 0.9 * device - 1`). An image that cannot be reduced that
+    /// way is refused exactly as [`Self::admit_jpeg`] refuses it.
+    pub(super) fn admit_jpeg_reducing(
+        &mut self,
+        image: &PdfImage,
+        retained_canvas: u64,
+        device: (f32, f32),
+    ) -> Result<u8> {
+        let ImageData::Jpeg(bytes) = image.data() else {
+            return Ok(1);
+        };
+        let capacity = bytes.capacity();
+        let full = jpeg_image_bytes(image, bytes, capacity, retained_canvas, 4);
+        if full.as_ref().is_ok_and(|required| *required <= self.limit as u64) {
+            return Ok(1);
+        }
+        // The rayon worker's batched `append_rows` path serves progressive scans only, and
+        // `sequential_frame` excludes those. A frame that cannot be read, or that disagrees with the
+        // dictionary, is not reduced and keeps the `Exceeded` refusal the OCR path keys on. ~keep
+        let frame = reducible_jpeg(image, bytes)
+            .then(|| jpeg_frame(bytes).ok())
+            .flatten()
+            .filter(|frame| *frame == (image.width(), image.height()));
+        if let Some((frame_width, frame_height)) = frame {
+            for denominator in REDUCED_DENOMINATORS {
+                if !covers_device((frame_width, frame_height), denominator, device) {
+                    break;
+                }
+                let reduced = reduced_jpeg_image_bytes(bytes, capacity, retained_canvas, denominator);
+                if reduced.is_ok_and(|required| required <= self.limit as u64) {
+                    return Ok(denominator);
+                }
+            }
+        }
+        self.admit_required(full).map(|()| 1)
+    }
+
     pub(super) fn admit_referenced_mask(
         &mut self,
         image: &PdfImage,
@@ -50,6 +91,19 @@ impl ImageBudget {
         };
         let retained = parent_image_bytes(parent, dynamic, paint, retained_canvas);
         self.admit_required(retained.and_then(|retained| jpeg_image_bytes(image, bytes, bytes.capacity(), retained, 1)))
+    }
+
+    /// Record the refusal for an image whose reduced decode failed after admission, which reads
+    /// headers only. The page is then refused as the full-size decode would have been, not rendered
+    /// without the image.
+    pub(super) fn refuse_failed_reduction(&mut self, image: &PdfImage, retained_canvas: u64) {
+        if let ImageData::Jpeg(bytes) = image.data() {
+            let full = jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4);
+            let _ = self.admit_required(full);
+            if self.failure.is_none() {
+                self.failure = Some(Failure::Unqualified("the reduced JPEG decode failed".into()));
+            }
+        }
     }
 
     fn admit_required(&mut self, required: std::result::Result<u64, String>) -> Result<()> {
@@ -137,4 +191,160 @@ fn parent_image_bytes(
         .and_then(|bytes| bytes.checked_add(paint.as_raw().capacity() as u64))
         .and_then(|bytes| bytes.checked_add(retained_canvas))
         .ok_or_else(|| "referenced JPEG mask parent workspace arithmetic overflow".into())
+}
+
+/// Scales `jpeg-decoder` can decode at without holding the full-resolution raster.
+const REDUCED_DENOMINATORS: [u8; 3] = [2, 4, 8];
+/// Bytes of one 8x8 block of `i16` coefficients.
+const COEFFICIENT_BLOCK_BYTES: u64 = 64 * 2;
+/// Largest vertical sampling factor, in blocks per MCU column.
+const MAX_VERTICAL_BLOCKS: u64 = 4;
+
+/// Whether `bytes` is a sequential, non-CMYK JPEG. A progressive scan keeps every coefficient of the
+/// full-resolution image, so a reduced decode would not lower its peak; CMYK takes a separate
+/// conversion path.
+pub(super) fn reducible_jpeg(image: &PdfImage, bytes: &[u8]) -> bool {
+    image.color_space().components() != 4 && sequential_frame(bytes)
+}
+
+fn sequential_frame(bytes: &[u8]) -> bool {
+    let mut position = 2;
+    while bytes.get(position) == Some(&0xff) {
+        let Some(&marker) = bytes.get(position + 1) else {
+            return false;
+        };
+        match marker {
+            0xc0 | 0xc1 => return true,
+            // DHT, JPG and DAC are not frame headers; every other SOFn and SOS is not sequential
+            // Huffman, and SOS ends the headers. ~keep
+            0xc4 | 0xc8 | 0xcc => {}
+            0xc2..=0xcf | 0xda => return false,
+            _ => {}
+        }
+        let Some(length) = bytes.get(position + 2..position + 4) else {
+            return false;
+        };
+        position += 2 + usize::from(u16::from_be_bytes([length[0], length[1]]));
+    }
+    false
+}
+
+/// The frame dimensions of the JPEG itself, which the decoder allocates from, not the image dictionary's.
+pub(super) fn jpeg_frame(bytes: &[u8]) -> std::result::Result<(u32, u32), String> {
+    let mut decoder = jpeg_decoder::Decoder::new(bytes);
+    decoder.read_info().map_err(|error| error.to_string())?;
+    let info = decoder.info().ok_or("missing JPEG frame header")?;
+    Ok((u32::from(info.width), u32::from(info.height)))
+}
+
+/// Fraction of the painted canvas extent a reduced raster must still span, before the one pixel of
+/// slack `covers_device` allows. It keeps a page whose canvas sits just above a 1/2 scale from being
+/// refused.
+const MIN_PAINTED_COVERAGE: f32 = 0.9;
+
+/// Whether a frame of `frame` pixels at `denominator` still spans [`MIN_PAINTED_COVERAGE`] of the
+/// canvas pixels it is painted over on both axes: `reduced >= painted * 0.9 - 1`. For a 600 px reduced
+/// axis that accepts a painted extent up to 667 px and refuses 668 px.
+fn covers_device(frame: (u32, u32), denominator: u8, (width, height): (f32, f32)) -> bool {
+    let covers = |pixels: u32, painted: f32| {
+        painted.is_finite() && reduced_dimension(pixels, denominator) as f32 >= painted * MIN_PAINTED_COVERAGE - 1.0
+    };
+    covers(frame.0, width) && covers(frame.1, height)
+}
+
+fn reduced_dimension(dimension: u32, denominator: u8) -> u64 {
+    u64::from(dimension).div_ceil(u64::from(denominator))
+}
+
+/// The JPEG working set at `denominator`: the larger of the paint phase (scaled raster plus its
+/// RGBA conversion) and the decode phase (component planes, output and one MCU row of
+/// coefficients), on top of the encoded bytes and the retained canvas.
+///
+/// The one-MCU-row bound holds because `jpeg-decoder` converts each coefficient row as it is read:
+/// its `rayon` worker (enabled for this crate on every target that supports it) and its immediate
+/// worker (the only one on wasm32) both do. The default thread-per-component worker queues
+/// full-resolution rows without a bound, so this crate must not build `jpeg-decoder` without
+/// `rayon` on a threaded target.
+fn reduced_jpeg_image_bytes(
+    bytes: &[u8],
+    encoded_capacity: usize,
+    retained_canvas: u64,
+    denominator: u8,
+) -> std::result::Result<u64, String> {
+    let mut decoder = jpeg_decoder::Decoder::new(bytes);
+    decoder.read_info().map_err(|error| error.to_string())?;
+    let info = decoder.info().ok_or_else(|| "missing JPEG frame header".to_string())?;
+    if !matches!(
+        info.pixel_format,
+        jpeg_decoder::PixelFormat::L8 | jpeg_decoder::PixelFormat::RGB24
+    ) {
+        return Err("only 8-bit grayscale and RGB JPEG sources can be decoded at a reduced scale".into());
+    }
+    let (width, height) = (
+        reduced_dimension(u32::from(info.width), denominator),
+        reduced_dimension(u32::from(info.height), denominator),
+    );
+    // `scale` picks the finest size reaching the request on either axis, so a thin frame can land on a
+    // size other than the one admitted here; such a scale is not admitted. ~keep
+    let chosen = u16::try_from(width)
+        .ok()
+        .zip(u16::try_from(height).ok())
+        .and_then(|(width, height)| decoder.scale(width, height).ok());
+    if chosen.map(|(w, h)| (u64::from(w), u64::from(h))) != Some((width, height)) {
+        return Err("the decoder would not decode this frame at the admitted reduced size".into());
+    }
+    let pixels = width
+        .checked_mul(height)
+        .ok_or("reduced JPEG raster arithmetic overflow")?;
+    let components = info.pixel_format.pixel_bytes() as u64;
+    let decoded = pixels * components;
+    let paint = decoded.checked_add(pixels * 4);
+    let coefficients = u64::from(info.width)
+        .div_ceil(8)
+        .checked_mul(components * MAX_VERTICAL_BLOCKS * 2 * COEFFICIENT_BLOCK_BYTES);
+    let decoding = decoded
+        .checked_mul(2)
+        .and_then(|planes_and_output| planes_and_output.checked_add(coefficients?));
+    paint
+        .zip(decoding)
+        .map(|(paint, decoding)| paint.max(decoding))
+        .and_then(|sum| sum.checked_add(encoded_capacity as u64))
+        .and_then(|sum| sum.checked_add(bytes.len() as u64))
+        .and_then(|sum| sum.checked_add(retained_canvas))
+        .ok_or_else(|| "reduced JPEG source image workspace arithmetic overflow".into())
+}
+
+/// Decode a JPEG admitted by [`ImageBudget::admit_jpeg_reducing`] at `denominator`, never holding
+/// the full-resolution raster.
+pub(super) fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<image::DynamicImage> {
+    let failed =
+        |error: jpeg_decoder::Error| Error::Decode(format!("Failed to decode JPEG at 1/{denominator}: {error}"));
+    let mut decoder = jpeg_decoder::Decoder::new(bytes);
+    decoder.read_info().map_err(failed)?;
+    let info = decoder
+        .info()
+        .ok_or_else(|| Error::Decode("missing JPEG frame header".into()))?;
+    let width = u16::try_from(reduced_dimension(u32::from(info.width), denominator))
+        .map_err(|_| Error::Decode("reduced JPEG width exceeds the frame limit".into()))?;
+    let height = u16::try_from(reduced_dimension(u32::from(info.height), denominator))
+        .map_err(|_| Error::Decode("reduced JPEG height exceeds the frame limit".into()))?;
+    let actual = decoder.scale(width, height).map_err(failed)?;
+    if actual != (width, height) {
+        return Err(Error::Decode(format!(
+            "JPEG decoded at {}x{}, not the admitted {width}x{height}",
+            actual.0, actual.1
+        )));
+    }
+    let pixels = decoder.decode().map_err(failed)?;
+    let (width, height) = (u32::from(width), u32::from(height));
+    match info.pixel_format {
+        jpeg_decoder::PixelFormat::L8 => {
+            image::GrayImage::from_raw(width, height, pixels).map(image::DynamicImage::ImageLuma8)
+        }
+        jpeg_decoder::PixelFormat::RGB24 => {
+            image::RgbImage::from_raw(width, height, pixels).map(image::DynamicImage::ImageRgb8)
+        }
+        _ => None,
+    }
+    .ok_or_else(|| Error::Decode("reduced JPEG decoded to an unexpected pixel layout".into()))
 }

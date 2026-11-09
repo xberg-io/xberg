@@ -41,10 +41,7 @@ May 2019.
 - A. El Ghany, "Comparison of Random Forest and Extreme Gradient Boosting Fingerprints to Enhance an indoor Wifi Localization System," 2021 International Mobile, Intelligent, and Ubiquitous Computing Conference (MIUCC), Cairo, Egypt, 2021, pp. 143-148, doi: 10.1109/MI- UCC52538.2021.9447676.
 - [29] Wang, Y.; Xiu, C.; Zhang, X.; Yang, D. WiFi Indoor Localization with CSI Fingerprinting-Based Random Forest. Sensors 2018, 18, 2869. https://doi.org/10.3390/s18092869.
 - [30] Wu, Peng, Imbiriba, Tales, LaMountain, Gerald, Vila-Valls,\` Jordi, Closas, Pau, "WiFi Fingerprinting and Tracking using Neural Networks," Proceedings of the 32nd International Technical Meeting of the Satellite Division of The Institute of Navigation (ION GNSS+ 2019), Miami, Florida, September 2019, pp. 2314-2324. https://doi.org/10.33012/2019.16959.
-- [31] B. Berruet, O. Baala, A. Caminada and V. Guillet, "DelFin: A Deep Learning Based CSI Fingerprinting Indoor Localization in IoT Context," 2018 International Conference on Indoor Positioning and Indoor Navigation (IPIN), Nantes, France, 2018, pp. 1-8, doi:
-
-10.1109/IPIN.2018.8533777.
-
+- [31] B. Berruet, O. Baala, A. Caminada and V. Guillet, "DelFin: A Deep Learning Based CSI Fingerprinting Indoor Localization in IoT Context," 2018 International Conference on Indoor Positioning and Indoor Navigation (IPIN), Nantes, France, 2018, pp. 1-8, doi: 10.1109/IPIN.2018.8533777.
 - [32] K. Dembczynski, W. Waegeman, and W. Cheng. On label dependence and loss minimization in multi-label classification. Machine Learning, 2012.
 - [33] M. Schulz, D. Wegemer, and M. Hollick, "Nexmon: The Cbased Firmware Patching Framework," 2017. [Online]. Available: https://nexmon.org.
 - [34] Gill, T.K., Shanahan, E.M., Tucker, G.R. et al. Shoulder range of movement in the general population: age and gender stratified normative data using a community-based cohort. BMC Musculoskelet Disord 21, 676 (2020). https://doi.org/10.1186/s12891-020-03665-9.
