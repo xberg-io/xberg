@@ -7,6 +7,8 @@
 ))]
 
 mod helpers;
+#[path = "pdf_type0_scope_2533/negative.rs"]
+mod negative;
 
 use lopdf::{Document, Object, Stream, dictionary};
 use sha2::{Digest, Sha256};
@@ -43,7 +45,11 @@ fn pinned_source() -> Vec<u8> {
 }
 
 fn mixed_pdf(nist_first: bool) -> Vec<u8> {
-    let mut pdf = Document::load_mem(&pinned_source()).unwrap();
+    mixed_source_pdf(&pinned_source(), nist_first)
+}
+
+fn mixed_source_pdf(source: &[u8], source_first: bool) -> Vec<u8> {
+    let mut pdf = Document::load_mem(source).unwrap();
     assert_eq!(pdf.get_pages().len(), 1);
     let source_root = pdf.catalog().unwrap().get(b"Pages").unwrap().as_reference().unwrap();
     let root = pdf.new_object_id();
@@ -60,7 +66,7 @@ fn mixed_pdf(nist_first: bool) -> Vec<u8> {
     });
     // Keep the original page tree intact so inherited resources and boxes do not change. ~keep
     pdf.get_dictionary_mut(source_root).unwrap().set("Parent", root);
-    let children = if nist_first {
+    let children = if source_first {
         [source_root, control]
     } else {
         [control, source_root]
