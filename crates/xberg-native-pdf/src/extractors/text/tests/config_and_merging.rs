@@ -874,10 +874,14 @@ fn test_extractor_prepare_for_span_extraction() {
     let mut extractor = TextExtractor::new();
     extractor.extract_spans = false;
     extractor.span_sequence_counter = 42;
+    extractor.pen_seam = Some(PenSeam::ContinuesPen);
+    extractor.pen_continuations.insert(SpanKey { sequence: 7, x_bits: 0 });
     extractor.prepare_for_span_extraction();
     assert!(extractor.extract_spans);
     assert_eq!(extractor.span_sequence_counter, 0);
     assert!(extractor.spans.is_empty());
+    assert_eq!(extractor.pen_seam, None, "a pen seam does not outlive the extraction it was set in");
+    assert!(extractor.pen_continuations.is_empty(), "pen marks do not outlive the extraction they were set in");
 }
 
 #[test]
