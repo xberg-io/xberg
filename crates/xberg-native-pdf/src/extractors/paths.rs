@@ -443,8 +443,13 @@ impl PathExtractor {
             return false;
         };
         let parsed = &cached.parsed;
-        // The parser keeps CA as written; the path state keeps it inside 0..1. ~keep
-        let alpha = parsed.stroke_alpha.map(|alpha| alpha.clamp(0.0, 1.0));
+        // The parser keeps CA as written; the path state keeps it inside 0..1. A NaN CA leaves the stroke
+        // opacity unchanged, because NaN survives a clamp and would hide every later stroke. An infinite
+        // value is clamped to 0 or 1, as is a finite CA beyond the f32 range, which parses to infinity. ~keep
+        let alpha = parsed
+            .stroke_alpha
+            .filter(|alpha| !alpha.is_nan())
+            .map(|alpha| alpha.clamp(0.0, 1.0));
         if let Some((lengths, phase)) = &parsed.dash {
             state.dash.0.clone_from(lengths);
             state.dash.1 = *phase;

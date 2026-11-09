@@ -398,3 +398,21 @@ fn cached_extgstate_keeps_the_stroke_opacity_inside_zero_to_one() {
         assert_eq!(state.stroke_alpha, kept, "CA {written}");
     }
 }
+
+#[test]
+fn cached_extgstate_ignores_a_nan_stroke_opacity() {
+    let mut extractor = PathExtractor::new();
+    let parsed = crate::rendering::ext_gstate::ParsedExtGState {
+        stroke_alpha: Some(f32::NAN),
+        ..Default::default()
+    };
+    extractor.cache_path_extgstate("GS", parsed);
+    let mut state = PathGraphicsState::new();
+    state.stroke_alpha = 0.5;
+    assert!(extractor.apply_cached_path_extgstate("GS", &mut state));
+    assert_eq!(state.stroke_alpha, 0.5);
+    extractor.move_to(0.0, 0.0);
+    extractor.line_to(10.0, 0.0);
+    extractor.stroke();
+    assert_eq!(extractor.finish().len(), 1, "a stroke after a NaN CA is kept");
+}
