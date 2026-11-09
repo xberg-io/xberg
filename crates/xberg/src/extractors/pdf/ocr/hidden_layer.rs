@@ -26,7 +26,7 @@ pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 mod ccitt_params;
 use ccitt_params::{decode_is_inverted, supported_group4_params};
 mod layer_judgement;
-pub(super) use layer_judgement::{confidence_clears_replacement_floor, ocr_supersedes_disjoint_layer};
+pub(super) use layer_judgement::{confident_read_replaces_layer, layer_judged_plausible};
 mod source_audit;
 use source_audit::audited_image_name;
 

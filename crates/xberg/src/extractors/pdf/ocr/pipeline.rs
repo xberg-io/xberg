@@ -787,22 +787,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let needed = work_budget.probe_page(|page_work| {
                     super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, page_work, is_cancelled)
                 });
-                let plausible = needed == Some(false)
-                    && layer_texts.get(&index).is_some_and(|text| {
-                        let boundary = crate::types::PageBoundary {
-                            byte_start: 0,
-                            byte_end: text.len(),
-                            page_number: 1,
-                        };
-                        !super::plausibility::scan_text_plausibility(
-                            text,
-                            Some(&[boundary]),
-                            None,
-                            &plausibility_thresholds,
-                        )
-                        .plausible
-                        .is_empty()
-                    });
+                let plausible = super::hidden_layer::layer_judged_plausible(
+                    needed,
+                    layer_texts.get(&index).map(String::as_str),
+                    &plausibility_thresholds,
+                );
                 decisions.push((index, needed, plausible));
             }
             Ok(decisions)
@@ -2505,14 +2494,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 // no low-confidence or dictionary-noise verdict. The fragmentation signal does not
                 // veto it: a table of numbers is mostly short tokens. ~keep
                 && !(probing_hidden_layer
-                    && !low_confidence_pages.contains(&page)
-                    && !dictionary_noise_pages.contains(&page)
-                    && ocr_confidence_by_page
-                        .get(&page)
-                        .is_some_and(|confidence| super::hidden_layer::confidence_clears_replacement_floor(confidence.score))
                     && native_text
                         .get(boundary.byte_start..boundary.byte_end)
-                        .is_some_and(|native| super::hidden_layer::ocr_supersedes_disjoint_layer(native, text)))
+                        .is_some_and(|native| {
+                            super::hidden_layer::confident_read_replaces_layer(
+                                low_confidence_pages.contains(&page),
+                                dictionary_noise_pages.contains(&page),
+                                ocr_confidence_by_page.get(&page).and_then(|confidence| confidence.score),
+                                native,
+                                text,
+                            )
+                        }))
             {
                 accepted_replacements.remove(&page);
             }
