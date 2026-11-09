@@ -241,6 +241,7 @@ fn an_actual_text_run_spans_every_array_in_its_scope() {
         b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC (x) Tj [(y)] TJ EMC ET",
     );
     assert_eq!(one.len(), 1, "{one:?}");
+    assert_eq!(one[0].1, 12.0, "{one:?}");
     assert_eq!(two, one);
 }
 
@@ -256,10 +257,45 @@ fn an_actual_text_run_spans_two_tj_arrays_in_its_scope() {
         b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC [(x)] TJ [(y)] TJ EMC ET",
     );
     assert_eq!(one.len(), 1, "{one:?}");
+    assert_eq!(one[0].1, 12.0, "{one:?}");
     assert_eq!(two, one);
 }
 
-/// The width of an `/ActualText` array decides the space after it: XX
+/// A TJ offset inside an `/ActualText` array moves the pen like it does in an ordinary array, so the
+/// replacement run is as wide as the matrix advance: 6 + 6 for the glyphs and 300/1000 em = 3.6 pt.
+#[test]
+fn an_actual_text_run_includes_the_offsets_of_its_tj_array() {
+    let widths = span_widths(
+        create_test_font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC [(x) -300 (y)] TJ EMC ET",
+    );
+    assert_eq!(widths.len(), 1, "{widths:?}");
+    assert!((widths[0].1 - 15.6).abs() < 1e-3, "{widths:?}");
+}
+
+/// A Td ends the open replacement run, so a Tj after it in the same scope draws no more of the
+/// replaced glyphs and adds nothing to the run.
+#[test]
+fn a_td_inside_the_scope_closes_the_open_replacement_run() {
+    let spans = span_widths(
+        create_test_font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC [(x)] TJ 0 -30 Td (z) Tj EMC ET",
+    );
+    assert_eq!(spans, vec![("ff".to_string(), 6.0)]);
+}
+
+/// An EMC ends the scope: a Tj after it is a new run that the replacement does not absorb.
+#[test]
+fn an_emc_closes_the_open_replacement_run() {
+    let spans = span_widths(
+        create_test_font(),
+        b"BT /F1 12 Tf 0 0 Td /Span <</ActualText (ff)>> BDC [(x)] TJ EMC 0 -30 Td (z) Tj ET",
+    );
+    assert_eq!(spans, vec![("ff".to_string(), 6.0), ("z".to_string(), 5.328)]);
+}
+
+/// The width of an `/ActualText` array decides the space after it: a word that follows directly joins
+/// it, and a word set 20 pt along stays a separate run.
 #[test]
 fn the_gap_after_an_actual_text_array_run_is_measured_from_its_end() {
     let font = create_test_font;

@@ -299,6 +299,16 @@ impl<'doc> TextExtractor<'doc> {
                             }
                             TextElement::Offset(offset) => {
                                 self.advance_position_for_offset(*offset)?;
+                                let state = self.state_stack.current();
+                                let scale = if state.text_wmode == 0 {
+                                    state.horizontal_scaling / 100.0
+                                } else {
+                                    1.0
+                                };
+                                let advance = -offset / 1000.0 * state.font_size * scale;
+                                if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
+                                    buffer.accumulated_width += advance;
+                                }
                             }
                         }
                     }
