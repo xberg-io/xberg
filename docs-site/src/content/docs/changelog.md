@@ -170,6 +170,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(deps): Upgrade `rmcp` to 3.9.0 to fix RUSTSEC-2026-0462.**
+  Before 3.9.0 the Streamable HTTP clients read response bodies without a size limit; the `mcp` server feature, its lockfiles and the binding lockfiles now resolve the fixed release.
+
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
   Bound the unique retained bytes for plain embedded JPEGs while preserving repeated paints. (#2339)
 
