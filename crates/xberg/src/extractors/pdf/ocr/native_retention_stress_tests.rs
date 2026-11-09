@@ -647,3 +647,54 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share(
     assert_eq!(read_words_in_native(native, &near_floor, &thresholds), (3, 9, true));
     assert_eq!(read_words_in_native(native, &under_share, &thresholds), (3, 13, true));
 }
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn native_spells_read_rejects_a_read_whose_shared_words_are_all_numbers() {
+    use super::super::document::native_spells_read;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    assert!(!native_spells_read(
+        "2024 2025 2026 2027",
+        "2024 2025 2026 2027",
+        &thresholds
+    ));
+    assert!(native_spells_read(
+        "2024 2025 2026 budget",
+        "2024 2025 2026 budget",
+        &thresholds
+    ));
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn native_spells_read_never_accepts_a_single_shared_word_even_with_a_floor_of_one() {
+    use super::super::document::native_spells_read;
+    let thresholds = crate::core::config::OcrQualityThresholds {
+        min_meaningful_words: 1,
+        ..Default::default()
+    };
+    let native = "budget design archive reader";
+    assert!(!native_spells_read(native, "budget wrong other", &thresholds));
+    assert!(native_spells_read(native, "budget design wrong other", &thresholds));
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn native_spells_read_compares_unspaced_scripts_by_bigrams() {
+    use super::super::document::native_spells_read;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let native = "我们的委员会审查了图书馆的计划和预算设计方案\u{FFFD}";
+    let misread = "我们的委员会审查了图书馆的计划和预算设计万案";
+    assert!(native_spells_read(native, misread, &thresholds));
+    assert!(native_spells_read(
+        "한국어 문서의 위원회가 도서관 계획을 검토했다",
+        "한국어 문서의 위원회가 도서관 계획을 검토했다",
+        &thresholds
+    ));
+    assert!(!native_spells_read(
+        native,
+        "季度收入有所增长，利润率保持稳定",
+        &thresholds
+    ));
+    assert!(!native_spells_read(native, "我们的委员", &thresholds));
+}

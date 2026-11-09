@@ -12,9 +12,10 @@ const TYPE0_PAGE: &[u8] = include_bytes!("../../xberg-native-pdf/tests/fixtures/
 const SHORT_LINE: &str = "Quarterly revenue improved";
 /// What the source's text layer says the short line reads, which its ink contradicts.
 const CONTRADICTING_TEXT: &str = "Ledger entries pending";
-/// Both retention sites name the lost Type0 ink in their warning or error, so this also proves
-/// the render set `type0_ink_loss`.
-const RETAINED_WARNING: &str = "lost Type0 glyph ink";
+/// Each retention site words its notice differently; both name the lost Type0 ink, so a match
+/// also proves the render set `type0_ink_loss`.
+const MIXED_RETAINED: &str = "Page 1 retained native text after its OCR render lost Type0 glyph ink.";
+const SINGLE_RETAINED: &str = "Page 1 OCR read omitted native text after its render lost Type0 glyph ink";
 
 #[derive(Clone, Copy, PartialEq)]
 enum Layer {
@@ -109,11 +110,11 @@ fn extract(layer: Layer, second_page: bool) -> xberg::ExtractedDocument {
     helpers::extract_bytes_document_blocking(&source_pdf(layer, second_page), "application/pdf", &config).unwrap()
 }
 
-fn retained(result: &xberg::ExtractedDocument) -> bool {
+fn notice(result: &xberg::ExtractedDocument, text: &str) -> bool {
     result
         .processing_warnings
         .iter()
-        .any(|warning| warning.message.contains(RETAINED_WARNING))
+        .any(|warning| warning.message.contains(text))
 }
 
 #[test]
@@ -122,7 +123,7 @@ fn a_covered_type0_layer_does_not_outvote_the_short_visible_read() {
     let page = &result.pages.as_ref().unwrap()[0].content;
     assert!(page.contains("Quarterly revenue improved"), "{page:?}");
     assert!(!page.contains("committee"), "{page:?}");
-    assert!(!retained(&result), "{:?}", result.processing_warnings);
+    assert!(!notice(&result, MIXED_RETAINED), "{:?}", result.processing_warnings);
 }
 
 #[test]
@@ -130,7 +131,7 @@ fn a_visible_correct_type0_layer_keeps_native_text_after_ink_loss() {
     let result = extract(Layer::Visible, true);
     let page = &result.pages.as_ref().unwrap()[0].content;
     assert!(page.contains("committee met on Tuesd"), "{page:?}");
-    assert!(retained(&result), "{:?}", result.processing_warnings);
+    assert!(notice(&result, MIXED_RETAINED), "{:?}", result.processing_warnings);
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
 }
 
@@ -141,12 +142,12 @@ fn a_covered_single_page_type0_layer_does_not_outvote_the_short_visible_read() {
     assert_eq!(result.pages.as_ref().unwrap().len(), 1);
     assert!(page.contains("Quarterly revenue improved"), "{page:?}");
     assert!(!page.contains("committee"), "{page:?}");
-    assert!(!retained(&result), "{:?}", result.processing_warnings);
+    assert!(!notice(&result, SINGLE_RETAINED), "{:?}", result.processing_warnings);
 }
 
 #[test]
 fn a_visible_single_page_type0_layer_keeps_native_text_after_ink_loss() {
     let result = extract(Layer::Visible, false);
-    assert!(retained(&result), "{:?}", result.processing_warnings);
+    assert!(notice(&result, SINGLE_RETAINED), "{:?}", result.processing_warnings);
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
 }
