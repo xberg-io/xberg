@@ -103,3 +103,38 @@ fn chars_drop_a_space_glyph_pulled_back_into_the_ligature() {
         "The field was open."
     );
 }
+
+#[test]
+fn chars_keep_a_space_that_a_partial_pull_back_leaves_a_gap_for() {
+    assert_eq!(
+        last_line_chars("[(The \\001) 167 ( eld was open.)] TJ"),
+        "The fi eld was open."
+    );
+}
+
+#[test]
+fn chars_drop_a_space_that_a_near_total_pull_back_puts_inside_the_ligature() {
+    assert_eq!(
+        last_line_chars("[(The \\001) 267 ( eld was open.)] TJ"),
+        "The field was open."
+    );
+}
+
+/// The characters on or just above the fixture's last baseline (664), in the order the document lists
+/// them, so a space on a raised baseline is still read with its line.
+fn tail_chars(show: &str) -> String {
+    let document = PdfDocument::from_bytes(build_pdf(show)).expect("open the fixture");
+    let chars = document.extract_chars(0).expect("extract the characters");
+    let line: String = chars
+        .iter()
+        .filter(|c| (660.0..670.0).contains(&c.origin_y))
+        .map(|c| c.char)
+        .collect();
+    line
+}
+
+#[test]
+fn chars_keep_a_pulled_back_space_that_stands_on_another_baseline() {
+    let line = tail_chars("(The \\001) Tj 1 0 0 1 94.23 667 Tm ( eld was open.) Tj");
+    assert!(line.contains("The fi") && line.contains(" eld was open."), "{line:?}");
+}

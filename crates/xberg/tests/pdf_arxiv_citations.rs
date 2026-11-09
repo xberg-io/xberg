@@ -259,6 +259,17 @@ fn plain_output_removes_a_stamp_split_across_paragraphs() {
     assert!(content.contains(VERSIONED_CITATION), "{content:?}");
 }
 
+#[test]
+fn a_split_stamp_far_from_the_page_edge_is_kept() {
+    // The extractor measures a rotated run by its length (about 178 points here), so the stamp
+    // stands clear of both edges only where x exceeds that and x + 178 leaves 178 points to the right.
+    let stamp = split_stamp().replace(" 32 ", " 200 ");
+    let content = extract_with_stamp(&stamp, OutputFormat::Markdown, false);
+    for part in ["arXiv:2311.04567v3", "[hep-ph]", "6 Dec 2023"] {
+        assert!(content.contains(part), "{part:?} missing from {content:?}");
+    }
+}
+
 /// First pages of real arXiv papers from the regression page corpus, each with its rotated margin stamp.
 const ARXIV_PAGES: [(&str, &str); 3] = [
     ("arxiv-2310.09680v4-p1.pdf", "arXiv:2310.09680v4 [cs.CL] 4 Mar 2024"),
@@ -309,7 +320,8 @@ fn word_counts(text: &str) -> std::collections::BTreeMap<&str, usize> {
 ///
 /// On these three pages the extractor reads the stamp as one paragraph, so they cover the whole-stamp
 /// path. None of them reaches the split-stamp path (measured with a print in that path: no page has a
-/// partial stamp paragraph). The split path is covered by the synthetic page above and the unit tests.
+/// partial stamp paragraph), so the real pages cover the whole-stamp path only. The split path is covered by
+/// the synthetic page above and the unit tests.
 fn assert_real_stamps_removed_alone(output_format: OutputFormat) {
     for (name, stamp) in ARXIV_PAGES {
         let (Some(kept), Some(removed)) = (
