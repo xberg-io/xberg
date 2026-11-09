@@ -41,7 +41,7 @@ impl<'doc> TextExtractor<'doc> {
                 sequence: self.span_sequence_counter,
                 x_bits: buffer.user_pos_x.to_bits(),
             };
-            self.pen_continuations.push(key);
+            self.pen_continuations.insert(key);
         }
 
         // Use pre-computed values from buffer creation (avoids

@@ -61,7 +61,7 @@ impl<'doc> TextExtractor<'doc> {
             tj_span_buffer: None,
             span_sequence_counter: 0,
             pen_seam: None,
-            pen_continuations: Vec::new(),
+            pen_continuations: HashSet::new(),
             marked_content_stack: Vec::new(),
             saw_reversed_chars: false,
             inside_artifact: false,

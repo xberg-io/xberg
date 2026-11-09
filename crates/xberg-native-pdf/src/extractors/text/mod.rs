@@ -1876,7 +1876,7 @@ enum PenSeam {
 /// Sequence numbers are unique within one extraction, but a cached form XObject replays spans with
 /// the sequence numbers of an earlier extraction, so the key holds the x coordinate too. The y
 /// coordinate is not part of the key: the script snap moves it before the merge. ~keep
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SpanKey {
     sequence: usize,
     x_bits: u32,
@@ -2410,7 +2410,7 @@ pub struct TextExtractor<'doc> {
     pen_seam: Option<PenSeam>,
     /// The spans that start where the previous `TJ` array left the pen. The merge reads their gap
     /// raw, without the fallback-width correction. Reset with `span_sequence_counter`. ~keep
-    pen_continuations: Vec<SpanKey>,
+    pen_continuations: HashSet<SpanKey>,
     /// History of TJ array offsets for statistical analysis
     ///
     /// Tracks TJ offset values to detect justified vs. normal text through
