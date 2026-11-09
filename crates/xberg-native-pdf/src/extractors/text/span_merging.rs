@@ -39,7 +39,8 @@ impl<'doc> TextExtractor<'doc> {
         let mut tail_is_expanded_ligature = false;
 
         for (span_idx, span) in spans.into_iter().enumerate() {
-            let preceding_is_expanded_ligature = std::mem::replace(&mut tail_is_expanded_ligature, span.ligature_glyph);
+            let preceding_is_expanded_ligature =
+                std::mem::replace(&mut tail_is_expanded_ligature, span.is_expanded_ligature());
             if current_span.is_none() {
                 current_span = Some(span);
                 continue;
@@ -377,7 +378,7 @@ impl<'doc> TextExtractor<'doc> {
                         Some(&span.bbox),
                         current.font_size,
                         span.font_size,
-                        preceding_is_expanded_ligature || span.ligature_glyph,
+                        preceding_is_expanded_ligature || span.is_expanded_ligature(),
                     );
 
                     // Narrow-word-gap rescue. The fixed intra-word

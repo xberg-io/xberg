@@ -184,10 +184,12 @@ pub struct TextSpan {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub provenance: Option<crate::fonts::MappingProvenance>,
     /// True when the whole span is one glyph that the font decoded to the letters of a ligature
-    /// (`ff`, `fi`, `ffl`): the decoder sets it where one character code yields several Latin
-    /// letters. The gap checks that join a word around a ligature read it instead of matching the
-    /// letters, because real words contain `ff` and `fi` too. Span merging clears it, since a
-    /// merged run is no longer one glyph. Runtime metadata, not serialized.
+    /// (`ff`, `fi`, `ffl`): the decoder sets it where one character code yields exactly those
+    /// letters. The gap checks that join a word around a ligature read it through
+    /// [`Self::is_expanded_ligature`], which also asks whether the text is still those letters,
+    /// so a run that later gains text (a drop-cap initial, a subscript) leaves the rule without a
+    /// clear. Span merging clears it, since a merged run is no longer one glyph. Runtime
+    /// metadata, not serialized.
     #[serde(skip)]
     pub ligature_glyph: bool,
 }
@@ -246,6 +248,13 @@ impl Default for TextSpan {
 }
 
 impl TextSpan {
+    /// Whether the span is still the one ligature glyph the decoder marked: `ligature_glyph` is set
+    /// and the text is still exactly a ligature's letters. Text added after the mark ends it.
+    #[inline]
+    pub(crate) fn is_expanded_ligature(&self) -> bool {
+        self.ligature_glyph && crate::extractors::text::is_ligature_expansion(&self.text)
+    }
+
     /// Where the run physically sits on the page.
     ///
     /// [`Self::bbox`] carries the run's own extents: `width` is the advance

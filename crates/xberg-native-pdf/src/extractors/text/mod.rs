@@ -966,7 +966,7 @@ pub(crate) fn starts_with_agl_ligature(text: &str) -> bool {
 /// Whether the text is the letters that one ligature code point of the Latin Ligatures block
 /// (U+FB00..U+FB06) stands for under Unicode compatibility decomposition: `ff`, `fi`, `fl`, `ffi`,
 /// `ffl` or `st`. A short word that a font draws as one glyph (`to`, `of`) is not a ligature.
-fn is_ligature_expansion(text: &str) -> bool {
+pub(crate) fn is_ligature_expansion(text: &str) -> bool {
     use unicode_normalization::UnicodeNormalization;
     ('\u{FB00}'..='\u{FB06}').any(|ligature| ligature.nfkd().eq(text.chars()))
 }
