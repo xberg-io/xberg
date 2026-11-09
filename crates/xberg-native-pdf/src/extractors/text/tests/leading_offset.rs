@@ -218,18 +218,121 @@ fn justified_line_redrawn_word_by_word_from_its_start_keeps_its_words() {
 }
 
 /// A `Tm` set back into a run that ends in a ligature, then a lead (GH#2322). The `Tm` ends the ligature, so
-/// a space glyph after the lead keeps its room; the lead adds a space only for the part past the ligature.
+/// a lead that lands at the end of it joins the word, and a gap past it is a real gap.
 #[test]
 fn lead_after_a_tm_back_into_a_ligature_run() {
     use super::ligature_decode::ligature_font;
     // "de" and the "fi" ligature end at 92; the `Tm` sets the pen 7 points back, inside the ligature. ~keep
-    for (array, words) in [
-        ("[-700 (ne)]", &["define"][..]),
-        ("[-3000 (ne)]", &["defi", "ne"][..]),
-        ("[-700 ( ne)]", &["defi", "ne"][..]),
-        ("[-450 ( ne)]", &["defi", "ne"][..]),
-    ] {
+    for (array, words) in [("[-700 (ne)]", &["define"][..]), ("[-3000 (ne)]", &["defi", "ne"][..])] {
         let stream = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 1 85 700 Tm {array} TJ ET");
         assert_eq!(merged_words(ligature_font("00660069", None), &stream), words, "{array}");
+    }
+}
+
+/// KNOWN GAP, tracked in https://github.com/xberg-io/xberg/issues/2322. The producer draws "define" with a
+/// space glyph that falls inside the ligature box after the set back, and the extractor still outputs the
+/// split "defi ne". The expected words below are the wrong output of today, not the right answer: a fix for
+/// the gap flips this test to `["define"]`. Dropping that space needs the ligature to survive the `Tm`. ~keep
+#[test]
+fn known_gap_2322_space_glyph_inside_a_ligature_after_a_tm_back_splits_the_word() {
+    use super::ligature_decode::ligature_font;
+    for array in ["[-700 ( ne)]", "[-450 ( ne)]"] {
+        let stream = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 1 85 700 Tm {array} TJ ET");
+        let words = merged_words(ligature_font("00660069", None), &stream);
+        assert_eq!(words, ["defi", "ne"], "known gap, wrong output pinned: {array}");
+    }
+}
+
+/// The text and the origin of each span, in the order the content stream makes them.
+fn span_origins(stream: &str, vertical: bool) -> Vec<(String, f32, f32)> {
+    let mut font = half_em_font();
+    font.wmode = u8::from(vertical);
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), font);
+    extractor.extract_spans = true;
+    extractor.run_content_stream(stream.as_bytes()).unwrap();
+    extractor.flush_tj_span_buffer().unwrap();
+    extractor.settle_span_holds();
+    let round = |v: f32| (v * 100.0).round() / 100.0;
+    let spans = extractor.spans.iter();
+    spans
+        .map(|s| (s.text.clone(), round(s.bbox.x), round(s.bbox.y)))
+        .collect()
+}
+
+fn starts(stream: &str) -> Vec<(String, f32)> {
+    span_origins(stream, false)
+        .into_iter()
+        .map(|(t, x, _)| (t, x))
+        .collect()
+}
+
+fn start(text: &str, x: f32) -> (String, f32) {
+    (text.to_string(), x)
+}
+
+/// `T*` with a leading of 0 sets the pen back to the line start, 15 points before the end of the run drawn
+/// last. The space goes at the end of that run, not at the pen inside it (GH#2322). ~keep
+#[test]
+fn t_star_sets_the_pen_back_into_the_drawn_run() {
+    let spans = starts("BT /F1 10 Tf 0 TL 72 700 Td (abc) Tj T* [-3000 (def)] TJ ET");
+    assert_eq!(spans, [start("abc", 72.0), start(" ", 87.0), start("def", 102.0)]);
+}
+
+/// A new text object does not forget the run that the last one drew: `Tm` back into it sets the pen back.
+#[test]
+fn a_tm_in_a_new_text_object_sets_the_pen_back_into_the_run_drawn_in_the_last_one() {
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj ET BT /F1 10 Tf 1 0 0 1 80 700 Tm [-3000 (def)] TJ ET";
+    assert_eq!(
+        starts(stream),
+        [start("abc", 72.0), start(" ", 87.0), start("def", 110.0)]
+    );
+}
+
+/// A pen more than a quarter em (2.5 points at 10 points) before the end of the run is set back; a pen
+/// within it is not, and the space stays at the pen.
+#[test]
+fn a_pen_set_back_by_more_than_a_quarter_em_moves_the_space_to_the_end_of_the_run() {
+    for (pen, space, def) in [(84.0, 87.0, 114.0), (85.0, 85.0, 115.0), (87.0, 87.0, 117.0)] {
+        let stream = format!("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 {pen} 700 Tm [-3000 (def)] TJ ET");
+        let want = [start("abc", 72.0), start(" ", space), start("def", def)];
+        assert_eq!(starts(&stream), want, "pen at {pen}");
+    }
+}
+
+/// A `Tm` past the end of the run continues it with the width of the pen move, and a lead at that pen does
+/// not cut it back to its glyphs: the run keeps the 23 points between its start and the pen. ~keep
+#[test]
+fn tj_lead_after_a_tm_past_the_run_keeps_the_pen_move_width() {
+    let spans = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 95 700 Tm [-3000 (def)] TJ ET");
+    assert_eq!(spans.first(), Some(&("abc".to_string(), 72.0, 23.0)));
+}
+
+/// A lead that moves the pen on, back to the left, does not end the run at its glyphs: the run keeps the
+/// 8 points of the pen move. The end of the run at its glyphs is for a lead that reaches forward. ~keep
+#[test]
+fn positive_tj_lead_after_a_tm_back_into_the_run_keeps_the_pen_move_width() {
+    let spans = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [500 (def)] TJ ET");
+    assert_eq!(spans.first(), Some(&("abc".to_string(), 72.0, 8.0)));
+}
+
+/// Horizontal scaling stretches a `TJ` offset in horizontal writing: at 200 percent, 3000 units are 60
+/// points. "abc" is 30 points wide and ends at 102, so "def" starts at 162.
+#[test]
+fn tj_offset_is_scaled_by_horizontal_scaling_in_horizontal_writing() {
+    let spans = starts("BT /F1 10 Tf 200 Tz 72 700 Td [(abc) -3000 (def)] TJ ET");
+    assert_eq!(spans, [start("abc", 72.0), start(" ", 102.0), start("def", 162.0)]);
+}
+
+/// Horizontal scaling does not stretch a `TJ` offset in vertical writing: 2000 more units of offset move the
+/// pen 20 points more at 100 and at 200 percent.
+#[test]
+fn tj_offset_is_not_scaled_by_horizontal_scaling_in_vertical_writing() {
+    let last_y = |tz: u32, offset: i32| {
+        let stream = format!("BT /F1 10 Tf {tz} Tz 72 700 Td [(a) {offset} (b)] TJ ET");
+        span_origins(&stream, true).last().map(|(_, _, y)| *y).unwrap()
+    };
+    for tz in [100, 200] {
+        assert_eq!((last_y(tz, -3000) - last_y(tz, -1000)).abs(), 20.0, "Tz {tz}");
     }
 }
