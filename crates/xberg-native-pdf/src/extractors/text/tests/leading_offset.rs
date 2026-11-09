@@ -229,6 +229,41 @@ fn lead_after_a_tm_back_into_a_ligature_run() {
     }
 }
 
+/// A pen set back by `Td` into the end of a ligature, then a lead (GH#2322): the set-back rule and the
+/// ligature pull-back act on the same `TJ`. A lead that ends at the ligature's end joins the word, a gap
+/// past it keeps exactly one space, and a pulled-back space glyph inside the ligature box still drops. ~keep
+#[test]
+fn lead_after_a_td_back_into_a_ligature_joins_or_gaps_once() {
+    use super::ligature_decode::ligature_font;
+    // "de" and the "fi" ligature end at 92; the `Td` sets the pen 2.5 points back, into the ligature. ~keep
+    for (array, words) in [
+        ("[-250 (ne)]", &["define"][..]),
+        ("[-3000 (ne)]", &["defi", "ne"][..]),
+        ("[-3000 ( ne)]", &["defi", "ne"][..]),
+    ] {
+        let stream = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj -2.5 0 Td {array} TJ ET");
+        assert_eq!(merged_words(ligature_font("00660069", None), &stream), words, "{array}");
+    }
+}
+
+/// A large offset inside the `TJ` that draws a ligature, then the pulled-back space: the ligature's
+/// pull-back still absorbs the space, and a large offset before the next word keeps its one space. ~keep
+#[test]
+fn large_offset_after_a_ligature_keeps_the_pull_back_and_the_word_gap() {
+    use super::ligature_decode::ligature_font;
+    for (stream, words) in [
+        ("[(de\\200) 250 ( ne) -3000 (ab)] TJ", &["define", "ab"][..]),
+        ("[(de\\200) -3000 (ne)] TJ", &["defi", "ne"][..]),
+    ] {
+        let stream = format!("BT /F1 10 Tf 72 700 Td {stream} ET");
+        assert_eq!(
+            merged_words(ligature_font("00660069", None), &stream),
+            words,
+            "{stream}"
+        );
+    }
+}
+
 /// KNOWN GAP, tracked in https://github.com/xberg-io/xberg/issues/2322. The producer draws "define" with a
 /// space glyph that falls inside the ligature box after the set back, and the extractor still outputs the
 /// split "defi ne". The expected words below are the wrong output of today, not the right answer: a fix for
