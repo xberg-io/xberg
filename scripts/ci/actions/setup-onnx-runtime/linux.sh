@@ -5,6 +5,15 @@ ort_version="${1:?ort-version required}"
 dest_dir="${2:-crates/xberg-node}"
 arch_id="${3:-}"
 strategy="${4:-system}"
+verify_archive="${5:-false}"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+case "$verify_archive" in
+true | false) ;;
+*)
+  echo "verify-linux-archive must be true or false" >&2
+  exit 2
+  ;;
+esac
 
 extract_dir="$RUNNER_TEMP/onnxruntime"
 
@@ -34,7 +43,18 @@ arm64)
   ;;
 esac
 
-if [ ! -d "$extract_dir/$ort_dir_name" ]; then
+if [ "$verify_archive" = true ]; then
+  archive_path="$extract_dir/$archive"
+  bash "$script_dir/verify-archive.sh" "$archive_path" "$script_dir/checksums.sha256" --known
+  mkdir -p "$extract_dir"
+  if [ ! -f "$archive_path" ]; then
+    curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$archive_path" \
+      "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
+  fi
+  bash "$script_dir/verify-archive.sh" "$archive_path" "$script_dir/checksums.sha256"
+  extract_dir="$(mktemp -d "$RUNNER_TEMP/onnxruntime-verified.XXXXXX")"
+  tar -xzf "$archive_path" -C "$extract_dir"
+elif [ ! -d "$extract_dir/$ort_dir_name" ]; then
   echo "Cache miss: Downloading ONNX Runtime ${ort_version}"
   curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$RUNNER_TEMP/$archive" "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
   mkdir -p "$extract_dir"
