@@ -223,6 +223,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Adopt the block re-read of a standalone dot-leader table picture.** (#2503)
+  A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.
 - **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
   A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)

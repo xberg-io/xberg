@@ -226,9 +226,33 @@ fn alphanumeric_count(doc: &InternalDocument) -> usize {
         .sum()
 }
 
+/// Dots in a run a word must hold to count as a leader.
+const MIN_LEADER_DOTS: usize = 5;
+
+/// Words that are nothing but a run of dots: the leaders a block read keeps between a label and its
+/// values.
+fn leader_words(doc: &InternalDocument) -> usize {
+    doc.prebuilt_ocr_elements
+        .iter()
+        .flatten()
+        .filter(|element| element.level == OcrElementLevel::Word)
+        .filter(|element| {
+            let text = element.text.trim();
+            text.chars().count() >= MIN_LEADER_DOTS && text.chars().all(|c| c == '.')
+        })
+        .count()
+}
+
+/// A block read that found no table but whose words are leader rows on shared column edges: the
+/// table check drops a dot-leader table as prose, and the row recovery keeps each row on one line.
+fn reads_leader_rows(doc: &InternalDocument) -> bool {
+    leader_words(doc) >= MIN_ROWS_PER_COLUMN && shows_column_structure(doc)
+}
+
 /// A second read with no letters or digits in its word elements, or with less than three quarters
 /// of the first read's, failed to read the picture. A second read with no table did not confirm the
-/// table the geometry showed, so the first read stands. Any other second read is adopted as is. A
+/// table the geometry showed, so the first read stands, unless its words are dot-leader rows (see
+/// [`reads_leader_rows`]). Any other second read is adopted as is. A
 /// first read with no letters or digits is replaced by any second read that has some and a table. A
 /// second read with more letters is not capped: a block read legitimately recovers text the sparse
 /// read missed, and the guard only separates a failed read from a read.
@@ -241,7 +265,7 @@ pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalD
     if after * MIN_RETAINED.1 < before * MIN_RETAINED.0 {
         return Err("the second read kept too few letters and digits");
     }
-    if second.tables.is_empty() {
+    if second.tables.is_empty() && !reads_leader_rows(second) {
         return Err("the second read found no table");
     }
     Ok(())
@@ -424,6 +448,54 @@ mod tests {
         let reason = "the second read found no table";
         assert_eq!(second_read_is_usable(&first, &doc(table(6))), Err(reason));
         assert_eq!(second_read_is_usable(&first, &doc_with_table(table(6))), Ok(()));
+    }
+
+    fn leader_table(rows: usize, leader: &str) -> Vec<OcrElement> {
+        (0..rows as u32)
+            .flat_map(|row| {
+                let top = 10 + row * 40;
+                [
+                    element("Label", 10, top, 120),
+                    element(leader, 140, top, 140),
+                    element("12", 300, top, 30),
+                    element("345,678", 420, top, 90),
+                    element("(9.10)", 600, top, 70),
+                ]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_re_read_without_a_table_is_adopted_when_its_rows_carry_leaders() {
+        let first = doc(table(6));
+        let reason = "the second read found no table";
+        assert_eq!(
+            second_read_is_usable(&first, &doc(leader_table(6, "........."))),
+            Ok(())
+        );
+        assert_eq!(
+            second_read_is_usable(&first, &doc(leader_table(6, "...."))),
+            Err(reason)
+        );
+        assert_eq!(
+            second_read_is_usable(&first, &doc(leader_table(6, "ee eae"))),
+            Err(reason)
+        );
+        assert_eq!(
+            second_read_is_usable(&doc(table(3)), &doc(leader_table(3, "........."))),
+            Err(reason)
+        );
+    }
+
+    #[test]
+    fn leaders_without_column_structure_are_not_a_table() {
+        let first = doc(vec![element("abcd", 10, 400, 30)]);
+        let mut leaders: Vec<_> = (0..6).map(|row| element(".........", 10, 10 + row * 40, 140)).collect();
+        leaders.push(element("abcd", 10, 400, 30));
+        assert_eq!(
+            second_read_is_usable(&first, &doc(leaders)),
+            Err("the second read found no table")
+        );
     }
 
     #[test]

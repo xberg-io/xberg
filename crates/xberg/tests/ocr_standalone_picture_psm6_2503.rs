@@ -10,6 +10,9 @@ mod helpers;
 use xberg::types::TesseractConfig;
 use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
 
+const PICTURE_11PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/11.png");
+const PICTURE_11PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/11.tsv");
+const TWO_COLUMN_PROSE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/two_column.png");
 const PICTURE_20PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
 const PICTURE_20PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/20.tsv");
 const TINTED_SCAN: &[u8] = include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-tinted.pdf");
@@ -91,4 +94,29 @@ fn scanned_pdf_pages_are_not_reread_as_a_single_block() {
         Some("6")
     );
     assert_eq!(result.tables.len(), 1, "the scan route keeps its own table recovery");
+}
+
+#[test]
+fn default_route_rereads_a_standalone_leader_picture_whose_block_read_has_no_table() {
+    let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &config(None)).unwrap();
+    assert_eq!(recorded_psm(&result), "6");
+    let kept = PICTURE_11PX_ROWS
+        .lines()
+        .filter(|row| row_lines(&result.content, row) == 1)
+        .count();
+    assert!(kept >= 10, "{kept} of 12 rows kept whole:\n{}", result.content);
+}
+
+#[test]
+fn explicit_caller_psm_wins_on_a_standalone_leader_picture_that_would_be_reread() {
+    for psm in [3, 11] {
+        let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &config(Some(psm))).unwrap();
+        assert_eq!(recorded_psm(&result), psm.to_string());
+    }
+}
+
+#[test]
+fn a_standalone_prose_picture_keeps_the_default_route() {
+    let result = helpers::extract_bytes_document_blocking(TWO_COLUMN_PROSE, "image/png", &config(None)).unwrap();
+    assert_eq!(recorded_psm(&result), "11");
 }
