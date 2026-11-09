@@ -132,3 +132,37 @@ fn merging_clears_the_mark_on_the_merged_run() {
     assert_eq!(extractor.spans.len(), 1);
     assert!(!extractor.spans[0].ligature_glyph);
 }
+
+/// A flagged run that absorbs the next span is a longer run, so it loses the mark. The first span
+/// carries the mark here: the merge itself has to clear it.
+#[test]
+fn merging_clears_the_mark_a_flagged_first_run_carried() {
+    let mut extractor = TextExtractor::new();
+    extractor.merging_config = SpanMergingConfig::legacy();
+    extractor.spans = vec![run("ff", 100.0, 7.0, true), run("erent", 107.5, 30.0, false)];
+    extractor.merge_adjacent_spans();
+    assert_eq!(extractor.spans.len(), 1);
+    assert_eq!(extractor.spans[0].text, "fferent");
+    assert!(!extractor.spans[0].ligature_glyph);
+}
+
+/// A marked-content start flushes the run, so the ActualText text is a span of its own that merges with
+/// the lone ligature before it. The merged run is longer than one glyph and carries no mark.
+#[test]
+fn a_lone_ligature_then_actual_text_merges_into_an_unmarked_span() {
+    let stream = b"BT /F1 12 Tf 0 0 Td (A) Tj /Span <</ActualText (ab)>> BDC (Z) Tj EMC ET";
+    assert_eq!(spans_of(simple_ff_font(), stream), unmarked("ffab"));
+}
+
+/// A fixed-pitch word gap pushes a space into the run, so the run is longer than one glyph. No glyph
+/// follows the gap here, so nothing but the push itself can clear the mark.
+#[test]
+fn a_fixed_pitch_space_after_a_lone_ligature_leaves_the_span_unmarked() {
+    let mut font = simple_ff_font();
+    font.flags = Some(1);
+    let stream = b"BT /F1 12 Tf 1 0 0 1 100 700 Tm (A) Tj 1 0 0 1 160 700 Tm ET";
+    let spans = spans_of(font, stream);
+    assert_eq!(spans.len(), 1, "{spans:?}");
+    assert!(spans[0].0.starts_with("ff"), "{spans:?}");
+    assert!(!spans[0].1, "{spans:?}");
+}
