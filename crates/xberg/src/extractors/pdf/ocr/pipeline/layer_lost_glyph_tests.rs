@@ -252,3 +252,154 @@ async fn the_mixed_route_drops_a_misread_ocr_row_on_a_plain_page_only() {
         );
     }
 }
+
+const SHORT: &str = "layer-lost-glyph-short-read-backend";
+/// A short, correct read of a page: under half of the readable letters and digits of the long
+/// marked layer below. ~keep
+const SHORT_READ: &str = "The committee met on Tuesday to review the plans for the library.";
+const LONG_MARKED: [&str; 8] = [
+    "The warehouse workers inspected the broken engine beside the river.",
+    "Visitors requested a refund for the damaged furniture and plates.",
+    "The gardener planted roses behind the wooden gate last summer.",
+    "A musician played a quiet melody during the evening concert.",
+    "The captain ordered every sailor to secure the ropes before sunrise.",
+    "The baker sold fresh bread to the neighbours every early morning.",
+    "Two cyclists repaired a flat tyre near the old stone bridge.",
+    "A painter covered the tall fence with three coats of green paint.",
+];
+const CLEAN_PAGE: &str = "Plain second page words stay exactly as the native layer printed them.";
+
+/// Reads `SHORT_READ` on every page. ~keep
+struct ShortReadBackend;
+
+impl Plugin for ShortReadBackend {
+    fn name(&self) -> &str {
+        SHORT
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_owned()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for ShortReadBackend {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<crate::ExtractedDocument> {
+        Ok(crate::ExtractedDocument {
+            content: SHORT_READ.to_owned(),
+            ..Default::default()
+        })
+    }
+}
+
+/// The native text and page boundaries of a two-page document whose page `marked` (1 or 2) holds
+/// the long marked layer and whose other page is clean. ~keep
+fn long_marked_layer_document(marked: u32) -> (String, Vec<crate::types::PageBoundary>) {
+    let layer = format!("{}\nA\u{FFFD}B", LONG_MARKED.join("\n"));
+    let pages = if marked == 1 {
+        [layer.as_str(), CLEAN_PAGE]
+    } else {
+        [CLEAN_PAGE, layer.as_str()]
+    };
+    let text = pages.join("\n");
+    let boundaries = vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: pages[0].len(),
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: pages[0].len() + 1,
+            byte_end: text.len(),
+            page_number: 2,
+        },
+    ];
+    (text, boundaries)
+}
+
+/// The failures of one run of the short read on page `marked`: the read must replace the marked
+/// layer, which no same-page evidence proves, and the clean page stays. ~keep
+async fn short_read_failures(marked: u32, forced: bool) -> Vec<String> {
+    let (native, boundaries) = long_marked_layer_document(marked);
+    let pdf = super::super::tests::tests::build_minimal_two_page_pdf_with_sizes((612.0, 792.0), (612.0, 792.0));
+    let mut config = config();
+    config.ocr.as_mut().unwrap().backend = SHORT.to_owned();
+    if forced {
+        config.force_ocr_pages = Some(vec![marked]);
+    }
+    let run = extract_mixed_ocr_native_with_layout_inputs(
+        &native,
+        &boundaries,
+        MixedOcrPageSelection {
+            ocr: &[marked],
+            single_block: &[],
+            preserve_native: &[],
+            native_layers: None,
+            hidden_layer_backend: None,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            single_native_type0_page: None,
+            raster_dpis: None,
+        },
+        &pdf,
+        &config,
+        if forced {
+            AllPagesFailedPolicy::ReturnError
+        } else {
+            AllPagesFailedPolicy::PreserveNative
+        },
+        MixedLayoutInputs::Resolve(None),
+    )
+    .await;
+    let run = match run {
+        Ok(run) => run,
+        Err(failed) => return vec![format!("page {marked} forced {forced}: the page reads: {:?}", failed.error)],
+    };
+    let text = &run.output.0;
+    let mut failures = Vec::new();
+    if text.matches(SHORT_READ).count() != 1 {
+        failures.push(format!("page {marked} forced {forced}: the short read prints once: {text:?}"));
+    }
+    if LONG_MARKED.iter().any(|row| text.contains(row)) {
+        failures.push(format!("page {marked} forced {forced}: the unproved marked layer is dropped: {text:?}"));
+    }
+    if text.matches(CLEAN_PAGE).count() != 1 {
+        failures.push(format!("page {marked} forced {forced}: the clean page stays: {text:?}"));
+    }
+    failures
+}
+
+/// Review point 1 of #2637: a marker rejects the OCR read of a page only on same-page ink or
+/// coverage evidence for its layer. A custom backend gives none, so a short correct read replaces
+/// a long marked layer, in both page orders. ~keep
+#[tokio::test]
+#[serial_test::serial]
+async fn a_short_read_replaces_a_long_marked_layer_without_same_page_evidence() {
+    register_ocr_backend(Arc::new(ShortReadBackend)).unwrap();
+    let _guard = NamedGuard(SHORT);
+    let mut failures = short_read_failures(1, false).await;
+    failures.extend(short_read_failures(2, false).await);
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Review point 2 of #2637: a page the caller forces to OCR keeps its successful short read, in
+/// both page orders. ~keep
+#[tokio::test]
+#[serial_test::serial]
+async fn a_forced_marked_page_keeps_its_successful_short_read() {
+    register_ocr_backend(Arc::new(ShortReadBackend)).unwrap();
+    let _guard = NamedGuard(SHORT);
+    let mut failures = short_read_failures(1, true).await;
+    failures.extend(short_read_failures(2, true).await);
+    assert!(failures.is_empty(), "{failures:#?}");
+}
