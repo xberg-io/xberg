@@ -160,8 +160,23 @@ fn should_resolve_indirect_extgstate_once_for_many_distinct_names() {
         large < small * 3,
         "allocations grew superlinearly: N={small}, 2N={large}"
     );
+    // Measured at 4000 names: indirect 48156, inline 96153, a ratio of 0.50. A bound of 0.6 leaves
+    // room for unrelated changes and fails an indirect path that costs 1.25 times what it does now.
     assert!(
-        large <= inline * 2,
-        "indirect dictionary costs far more than inline: indirect={large}, inline={inline}"
+        large * 5 <= inline * 3,
+        "indirect dictionary costs more than 0.6 of inline: indirect={large}, inline={inline}"
+    );
+}
+
+#[test]
+fn should_not_clone_all_inline_states_for_each_distinct_gs_name() {
+    const NAMES: usize = 500;
+    // Every name misses the per-name cache. A copy of the dictionary per lookup makes the cost grow
+    // with the square of the name count, so doubling the names would about quadruple the allocations.
+    let small = distinct_name_allocations(NAMES, StateStorage::Inline);
+    let large = distinct_name_allocations(2 * NAMES, StateStorage::Inline);
+    assert!(
+        large < small * 3,
+        "dictionary copied per distinct gs name: N={small}, 2N={large}"
     );
 }
