@@ -225,6 +225,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
+  Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
+
 - **(pdf): Remove a painted orphan glyph beside a table whatever the glyph (#2616).**
   The standalone orphan that a painted table cell already carries was deleted only when it was an ASCII digit, so a "%", "-", currency sign or non-Latin digit stayed as a duplicate paragraph. It is now deleted when it is the single remaining source glyph of a painted overhang and the exact plain source paragraph; two competing glyphs, a multi-character word and blank text are still refused. A symbol candidate beside a digit candidate now counts as competing and is refused, where the symbol used to be ignored.
 

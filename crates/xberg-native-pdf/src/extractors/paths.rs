@@ -191,6 +191,9 @@ pub struct PathExtractor {
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
     cached_xobject_dict: Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
     cached_extgstates: std::collections::HashMap<String, PathGraphicsPatch>,
+    /// The scope's indirect `/ExtGState` container, loaded once. `None` until first resolved;
+    /// `Some(None)` when the entry is absent or fails to load.
+    cached_extgstate_container: Option<Option<crate::object::Object>>,
     /// Stack of active Optional Content Group (PDF "layer") names. Each
     /// `BDC`/`BMC` operator (any tag) pushes one entry and each `EMC` pops
     /// one, so the depth tracks the marked-content nesting precisely
@@ -202,6 +205,14 @@ pub struct PathExtractor {
     /// always the active layer, making `current_layer` O(1).
     oc_layer_stack: Vec<Option<String>>,
 }
+
+/// Resources, XObject name cache, and ExtGState caches of the scope a Form XObject replaced.
+pub(crate) type SavedResourceScope = (
+    Option<crate::object::Object>,
+    Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
+    std::collections::HashMap<String, PathGraphicsPatch>,
+    Option<Option<crate::object::Object>>,
+);
 
 impl PathExtractor {
     /// Create a new path extractor.
@@ -225,6 +236,7 @@ impl PathExtractor {
             max_xobject_depth: 100,
             cached_xobject_dict: None,
             cached_extgstates: std::collections::HashMap::new(),
+            cached_extgstate_container: None,
             oc_layer_stack: Vec::new(),
         }
     }
@@ -279,6 +291,7 @@ impl PathExtractor {
     pub fn set_resources(&mut self, resources: crate::object::Object) {
         self.resources = Some(resources);
         self.cached_extgstates.clear();
+        self.cached_extgstate_container = None;
     }
 
     /// The resource dictionary currently in scope — the page resources, or
@@ -290,9 +303,9 @@ impl PathExtractor {
     }
 
     /// Swap in a new resource scope for `Do` name lookups and return the
-    /// previous (resources, cached_dict) pair so the caller can restore it
-    /// after descending into a nested Form XObject. Parsed ExtGState patches
-    /// are discarded on both scope switches and restoration. Clears the name→ref
+    /// previous scope so the caller can restore it after descending into a
+    /// nested Form XObject. The ExtGState caches belong to the scope, so they travel with
+    /// it and the entered scope starts empty. Clears the name→ref
     /// cache so the next `resolve_xobject_ref` call rebuilds it against the
     /// new scope.
     ///
@@ -304,28 +317,43 @@ impl PathExtractor {
     pub(crate) fn swap_resources(
         &mut self,
         new_resources: Option<crate::object::Object>,
-    ) -> (
-        Option<crate::object::Object>,
-        Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
-    ) {
-        self.cached_extgstates.clear();
+    ) -> SavedResourceScope {
         let prev_resources = std::mem::replace(&mut self.resources, new_resources);
         let prev_cache = self.cached_xobject_dict.take();
-        (prev_resources, prev_cache)
+        let prev_extgstates = std::mem::take(&mut self.cached_extgstates);
+        let prev_container = self.cached_extgstate_container.take();
+        (prev_resources, prev_cache, prev_extgstates, prev_container)
     }
 
     /// Restore a (resources, cached_dict) pair previously returned by
     /// [`swap_resources`].
-    pub(crate) fn restore_resources(
-        &mut self,
-        saved: (
-            Option<crate::object::Object>,
-            Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
-        ),
-    ) {
-        self.cached_extgstates.clear();
+    pub(crate) fn restore_resources(&mut self, saved: SavedResourceScope) {
         self.resources = saved.0;
         self.cached_xobject_dict = saved.1;
+        self.cached_extgstates = saved.2;
+        self.cached_extgstate_container = saved.3;
+    }
+
+    /// Load the scope's indirect `/ExtGState` container on first use and keep it, so each
+    /// `gs` name borrows it instead of re-cloning the whole dictionary.
+    pub(crate) fn extgstate_container<F>(&mut self, load: F) -> Option<&crate::object::Object>
+    where
+        F: FnOnce(crate::object::ObjectRef) -> Option<crate::object::Object>,
+    {
+        if self.cached_extgstate_container.is_none() {
+            let loaded = self
+                .resources
+                .as_ref()
+                .and_then(|resources| resources.as_dict()?.get("ExtGState")?.as_reference())
+                .and_then(load);
+            self.cached_extgstate_container = Some(loaded);
+        }
+        self.loaded_extgstate_container()
+    }
+
+    /// The container cached by [`extgstate_container`], if it loaded.
+    pub(crate) fn loaded_extgstate_container(&self) -> Option<&crate::object::Object> {
+        self.cached_extgstate_container.as_ref()?.as_ref()
     }
 
     pub(crate) fn cache_path_extgstate(&mut self, name: &str, patch: PathGraphicsPatch) {
