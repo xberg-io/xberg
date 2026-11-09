@@ -265,7 +265,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
   Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
-- **(pdf): Print a table once when two overlapping table detections hold the same words.** (GH#2739)
+- **(pdf): Print a table once when two overlapping table detections hold the same words.** (#2739)
   When two native tables overlapped, the check that keeps both compared only the table with fewer rows, so a copy that regrouped its words into fewer, merged rows counted as new content and the page printed its words twice. The check now keeps a second table only when at least half of its words are words the rest of the page does not already print.
 
 - **(ocr): Recover a sideways page with two tables when the first read held extra filtered words.** (#2497)
