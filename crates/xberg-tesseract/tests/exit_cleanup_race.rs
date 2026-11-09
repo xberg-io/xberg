@@ -4,10 +4,11 @@
 //! recognizes a synthetic page in a loop, and the main thread calls C `exit()` while the
 //! worker is inside a recognition. `exit()` runs the exit cleanup. The child must exit
 //! with status 0. A crash (SIGSEGV or SIGABRT) means the cleanup freed the engine under
-//! the worker. The test skips itself without `eng.traineddata` in `TESSDATA_PREFIX`.
+//! the worker. The engine loads the bundled English model, so `required-features` in
+//! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
-#![cfg(all(unix, feature = "build-tesseract", not(target_arch = "wasm32")))]
-#![allow(clippy::print_stdout, clippy::print_stderr)] // ~keep: the child reports its progress on stdout by design
+#![cfg(all(unix, not(target_arch = "wasm32")))]
+#![allow(clippy::print_stdout)] // ~keep: the child reports its progress on stdout by design
 
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
@@ -16,30 +17,27 @@ use std::sync::mpsc;
 use std::time::Duration;
 use xberg_tesseract::TesseractAPI;
 
+/// The failure message when the build lacks the bundled model. The test fails and does not skip.
+const NEEDS_MODEL: &str = "these tests need the bundled English model: run them with --features bundle-tessdata-eng";
+
 const CHILD_ENV: &str = "XBERG_TESSERACT_EXIT_RACE_CHILD";
+const MODELS_ENV: &str = "XBERG_TESSERACT_EXIT_RACE_MODELS";
 const TEST_NAME: &str = "process_exit_during_recognition_does_not_crash";
 const ATTEMPTS: u64 = 6;
 const RECOGNIZING: &str = "RECOGNIZING";
 const WIDTH: usize = 2400;
 const HEIGHT: usize = 3200;
 
-/// The tessdata directory from `TESSDATA_PREFIX`, or `None` when it holds no `eng.traineddata`.
-fn tessdata_dir() -> Option<PathBuf> {
-    let path = PathBuf::from(std::env::var_os("TESSDATA_PREFIX")?);
-    let dir = if path.ends_with("tessdata") {
-        path
-    } else {
-        path.join("tessdata")
-    };
-    dir.join("eng.traineddata").exists().then_some(dir)
+/// A temporary model directory with the bundled English pack. The parent keeps it until every child exits.
+fn english_models() -> tempfile::TempDir {
+    let directory = tempfile::tempdir().expect("temporary model directory");
+    std::fs::write(
+        directory.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().expect(NEEDS_MODEL),
+    )
+    .expect("write the English model");
+    directory
 }
-
-/// The tessdata directory in the child, which only runs after the parent found it.
-fn child_tessdata_dir() -> PathBuf {
-    tessdata_dir().expect("the parent test checked TESSDATA_PREFIX")
-}
-
-const SKIP_NOTE: &str = "skipped: TESSDATA_PREFIX does not point at a directory with eng.traineddata";
 
 /// A white RGB page with rows of stroke groups, so layout analysis finds text lines and
 /// the recognizer has real work. The content is fixed by a small linear generator.
@@ -79,7 +77,7 @@ fn synthetic_page() -> Vec<u8> {
 /// worker is inside a later recognition. The first recognition has to finish first, because
 /// the exit cleanup registers itself after the first successful recognition.
 fn run_child(exit_delay: Duration) -> ! {
-    let tessdata = child_tessdata_dir();
+    let tessdata = PathBuf::from(std::env::var_os(MODELS_ENV).expect("the parent passes the model directory"));
     let (first_done, first_done_receiver) = mpsc::channel::<()>();
     std::thread::spawn(move || {
         let api = TesseractAPI::new().expect("create engine");
@@ -109,16 +107,14 @@ fn process_exit_during_recognition_does_not_crash() {
         let delay_ms: u64 = std::env::var(CHILD_ENV).unwrap().parse().unwrap();
         run_child(Duration::from_millis(delay_ms));
     }
-    if tessdata_dir().is_none() {
-        eprintln!("{SKIP_NOTE}");
-        return;
-    }
+    let models = english_models();
     let exe = std::env::current_exe().expect("test binary path");
     let mut failures = Vec::new();
     for attempt in 0..ATTEMPTS {
         let output = Command::new(&exe)
             .args(["--exact", TEST_NAME, "--nocapture", "--test-threads=1"])
             .env(CHILD_ENV, (200 + attempt * 331).to_string())
+            .env(MODELS_ENV, models.path())
             .output()
             .expect("run the child process");
         let stdout = String::from_utf8_lossy(&output.stdout);

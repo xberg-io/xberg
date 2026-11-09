@@ -2125,14 +2125,9 @@ impl XYCutStrategy {
             return None;
         }
 
-        // A column cut reads the left side before the right side. When the right side sits
-        // wholly above the left side (a letterhead at the right of a letter's top, above the
-        // address that starts below it), the sides share no rows and the cut would read the
-        // lower block before the upper one. Refusing the cut lets the row split read the two
-        // blocks in page order. A left side that sits wholly above the right side (a figure
-        // caption beside the body column that starts below it, GH#1763) keeps its cut: there
-        // the cut and the page order agree. The decision is the y-geometry, not a content
-        // class. ~keep
+        // A column cut reads the left side first. A right side wholly above the left side (a
+        // letterhead above the address that starts below it) would be read last; the row split
+        // reads them top-down. A left side above the right side (GH#1763) keeps its cut. ~keep
         if Self::right_side_sits_above_left_side(all_spans, &left, &right) {
             return None;
         }
@@ -5189,25 +5184,83 @@ mod tests {
         assert_eq!(right, (15..20).collect::<Vec<_>>());
     }
 
-    /// The boundary of the rule is the row itself: a letterhead whose lowest line touches the
-    /// left block's highest line (shift 15.98: lowest y 580.19 against highest y 580.19) is
-    /// the upper block and is not cut; one that overlaps that line by one point (shift 16.98)
-    /// shares a row and is cut.
+    /// One line of 200 pt width and 10 pt height at x, one per `ys` baseline.
+    fn column_lines(x: f32, ys: &[f32]) -> Vec<TextSpan> {
+        ys.iter()
+            .map(|&y| make_span_text(x, y, 200.0, 10.0, &"x".repeat(40), 10.0))
+            .collect()
+    }
+
+    fn cut_of(spans: &[TextSpan]) -> Option<(Vec<usize>, Vec<usize>)> {
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        XYCutStrategy::new().find_horizontal_split_indexed(spans, &indices)
+    }
+
+    /// Left lines at y 440..500 (highest edge 510). The row is the boundary: a right block whose
+    /// lowest edge is 510 touches it and is the upper block; one point lower shares a row.
+    /// Integer geometry, so the comparison is exact in f32.
     #[test]
     fn the_right_block_is_the_upper_block_until_it_overlaps_a_row_of_the_left_block() {
-        let strategy = XYCutStrategy::new();
-        let indices: Vec<usize> = (0..20).collect();
+        let left = column_lines(50.0, &[500.0, 480.0, 460.0, 440.0]);
+        let stack = |lowest_right_y: f32| {
+            let mut spans = left.clone();
+            let ys: Vec<f32> = (0..4).map(|i| lowest_right_y + 20.0 * i as f32).collect();
+            spans.extend(column_lines(350.0, &ys));
+            spans
+        };
 
-        let touching = letter_top(15.98);
         assert!(
-            strategy.find_horizontal_split_indexed(&touching, &indices).is_none(),
-            "a right block that touches the left block's highest row is the upper block"
+            cut_of(&stack(511.0)).is_none(),
+            "a gap above the left block's highest edge"
         );
-        let overlapping = letter_top(16.98);
         assert!(
-            strategy.find_horizontal_split_indexed(&overlapping, &indices).is_some(),
-            "an overlap of one point shares a row"
+            cut_of(&stack(510.0)).is_none(),
+            "touching the left block's highest edge"
         );
+        let (l, r) = cut_of(&stack(509.0)).expect("one point of overlap shares a row");
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
+    /// A left block above a right block (GH#1763 shape, a caption beside the body that starts
+    /// below it) keeps its cut: the column order and the page order agree.
+    #[test]
+    fn a_left_block_wholly_above_the_right_block_is_still_cut() {
+        let mut spans = column_lines(50.0, &[700.0, 680.0, 660.0, 640.0]);
+        spans.extend(column_lines(350.0, &[600.0, 580.0, 560.0, 540.0]));
+        let (l, r) = cut_of(&spans).expect("left above right is a column cut");
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
+    /// A table whose right-aligned header band sits above rows of a label and a value: the band
+    /// is not a column of its own, so the region is not cut into label and value columns.
+    #[test]
+    fn a_table_with_a_right_aligned_header_band_is_not_cut_into_columns() {
+        let mut spans = vec![
+            make_span_text(350.0, 700.0, 100.0, 10.0, "Amount (USD)", 10.0),
+            make_span_text(480.0, 700.0, 60.0, 10.0, "Change", 10.0),
+        ];
+        for (i, y) in [670.0, 650.0, 630.0, 610.0, 590.0].into_iter().enumerate() {
+            spans.push(make_span_text(50.0, y, 150.0, 10.0, &format!("Revenue line {i}"), 10.0));
+            spans.push(make_span_text(350.0, y - 0.5, 60.0, 10.0, "1,234", 10.0));
+            spans.push(make_span_text(480.0, y - 0.5, 40.0, 10.0, "5.6%", 10.0));
+        }
+        assert!(
+            cut_of(&spans).is_none(),
+            "label and value cells must not become two columns"
+        );
+    }
+
+    /// A right block taller than the left block, on offset baselines, shares rows with it and
+    /// is cut.
+    #[test]
+    fn a_taller_right_block_on_offset_baselines_is_still_cut() {
+        let mut spans = column_lines(50.0, &[600.0, 580.0, 560.0, 540.0]);
+        spans.extend(column_lines(
+            350.0,
+            &[683.0, 663.0, 643.0, 623.0, 603.0, 583.0, 563.0, 543.0, 523.0],
+        ));
+        let (l, r) = cut_of(&spans).expect("overlapping rows are a column cut");
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..13).collect::<Vec<_>>()));
     }
 
     /// GH#2116 geometry on an 842 x 595 pt two-up sheet: a left slide of short 6pt bullet
