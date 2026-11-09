@@ -473,13 +473,10 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// The set-back depth of the pen, when a positioning operator set it back into the run drawn last and
-    /// no glyph and no offset moved it since that operator. ~keep
+    /// no glyph and no offset moved it since that operator. A pen that a glyph or an offset moved is the end
+    /// of the run drawn last, so its depth is zero and needs no separate test. ~keep
     fn pen_set_back_depth(&self) -> Option<f32> {
-        let pen = self.state_stack.current().text_matrix;
-        if self.positioned_pen != Some(pen) {
-            return None;
-        }
-        self.set_back_depth(pen)
+        self.set_back_depth(self.state_stack.current().text_matrix)
     }
 
     /// A word-boundary offset at a pen set back into the run drawn last, `depth` before its end. A space
