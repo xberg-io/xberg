@@ -1689,6 +1689,9 @@ public func lateInteractionModelTypeFromJson<GenericIntoRustString: IntoRustStri
 public func layoutClassFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> LayoutClass {
     try { let val = __swift_bridge__$layout_class_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return LayoutClass(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
+public func layoutDetectionModelFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> LayoutDetectionModel {
+    try { let val = __swift_bridge__$layout_detection_model_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return LayoutDetectionModel(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
 public func layoutStrategyFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> LayoutStrategy {
     try { let val = __swift_bridge__$layout_strategy_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return LayoutStrategy(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
@@ -2858,6 +2861,9 @@ public func __alef_phantom_vec_keyword_algorithm() -> RustVec<KeywordAlgorithm> 
 }
 public func __alef_phantom_vec_layout_class() -> RustVec<LayoutClass> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_layout_class())
+}
+public func __alef_phantom_vec_layout_detection_model() -> RustVec<LayoutDetectionModel> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_layout_detection_model())
 }
 public func __alef_phantom_vec_layout_strategy() -> RustVec<LayoutStrategy> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_layout_strategy())
@@ -16138,8 +16144,8 @@ public class LayoutDetectionConfig: LayoutDetectionConfigRefMut {
     }
 }
 extension LayoutDetectionConfig {
-    public convenience init(_ strategy: LayoutStrategy, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool) {
-        self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
+    public convenience init(_ strategy: LayoutStrategy, _ model: LayoutDetectionModel, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool) {
+        self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), {model.isOwned = false; return model.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
     }
 }
 public class LayoutDetectionConfigRefMut: LayoutDetectionConfigRef {
@@ -16157,6 +16163,10 @@ public class LayoutDetectionConfigRef {
 extension LayoutDetectionConfigRef {
     public func strategy() -> RustString {
         RustString(ptr: __swift_bridge__$LayoutDetectionConfig$strategy(ptr))
+    }
+
+    public func model() -> RustString {
+        RustString(ptr: __swift_bridge__$LayoutDetectionConfig$model(ptr))
     }
 
     public func confidenceThreshold() -> Optional<Float> {
@@ -32608,6 +32618,86 @@ extension LayoutClass: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_LayoutClass$len(vecPtr)
+    }
+}
+
+
+public class LayoutDetectionModel: LayoutDetectionModelRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$LayoutDetectionModel$_free(ptr)
+        }
+    }
+}
+public class LayoutDetectionModelRefMut: LayoutDetectionModelRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class LayoutDetectionModelRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension LayoutDetectionModelRef {
+    public func to_string() -> RustString {
+        RustString(ptr: __swift_bridge__$LayoutDetectionModel$to_string(ptr))
+    }
+}
+extension LayoutDetectionModel: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_LayoutDetectionModel$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_LayoutDetectionModel$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: LayoutDetectionModel) {
+        __swift_bridge__$Vec_LayoutDetectionModel$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_LayoutDetectionModel$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (LayoutDetectionModel(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<LayoutDetectionModelRef> {
+        let pointer = __swift_bridge__$Vec_LayoutDetectionModel$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return LayoutDetectionModelRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<LayoutDetectionModelRefMut> {
+        let pointer = __swift_bridge__$Vec_LayoutDetectionModel$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return LayoutDetectionModelRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<LayoutDetectionModelRef> {
+        UnsafePointer<LayoutDetectionModelRef>(OpaquePointer(__swift_bridge__$Vec_LayoutDetectionModel$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_LayoutDetectionModel$len(vecPtr)
     }
 }
 

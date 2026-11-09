@@ -296,11 +296,11 @@ const MODELS: &[ModelDefinition] = &[
     ModelDefinition {
         model_type: "pp_doclayout_v3",
         hf_repo_id: "xberg-io/layout-models",
-        hf_revision: "c6bf493e2f7b0b9a29a5870da9880c14e20ff0a3",
+        hf_revision: "a0c2d342e16a2d892782f9ea2fb54619b76a9186",
         remote_filename: "pp_doclayout_v3/model.onnx",
         local_filename: "pp_doclayout_v3.onnx",
-        sha256_checksum: "93d1197e55f1c9cb6720275a89684e7ea61cd5830008a837d8c51b19d47926c1",
-        size_bytes: 131_731_131,
+        sha256_checksum: "45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba",
+        size_bytes: 130_502_049,
     },
 ];
 

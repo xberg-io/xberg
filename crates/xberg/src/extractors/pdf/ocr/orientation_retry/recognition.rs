@@ -10,6 +10,8 @@ use std::collections::{HashMap, HashSet};
 mod prose;
 
 pub(super) const MIN_UNIT_LETTERS: usize = 2;
+/// Extra iterator words allowed per reported word is 1 / MAX_EXTRA_RATIO.
+const MAX_EXTRA_RATIO: usize = 4;
 const MAX_CERTIFICATE_WORDS: usize = 1024;
 const MAX_CERTIFICATE_TEXT_BYTES: usize = 512 * 1024;
 
@@ -143,6 +145,35 @@ fn plain_ocr_attribute(name: &str, value: &str) -> bool {
 }
 
 fn checked_words(result: &ExtractedDocument) -> Option<Vec<&OcrElement>> {
+    checked_words_with(result, false)
+}
+
+/// A plain primary whose iterator words include every retained token. The text filter that drops
+/// dictionary-rejected words after recognition leaves more iterator words than the reported
+/// count, so equality cannot hold; the extra words are a superset a protection check only
+/// over-covers. The extras are capped at a quarter of the reported count so that a few retained
+/// tokens never "cover" a long unrelated word list.
+#[cfg(auto_rotate)]
+pub(super) fn primary_covers_output(result: &ExtractedDocument) -> bool {
+    plain_primary(result)
+        && checked_words_with(result, true).is_some_and(|words| {
+            let mut inventory = HashMap::new();
+            for word in &words {
+                for token in word.text.split_whitespace() {
+                    *inventory.entry(token).or_insert(0usize) += 1;
+                }
+            }
+            result.content.split_whitespace().all(|token| {
+                inventory
+                    .get_mut(token)
+                    .filter(|count| **count > 0)
+                    .map(|count| *count -= 1)
+                    .is_some()
+            })
+        })
+}
+
+fn checked_words_with(result: &ExtractedDocument, covering: bool) -> Option<Vec<&OcrElement>> {
     if result.content.len() > MAX_CERTIFICATE_TEXT_BYTES {
         return None;
     }
@@ -156,7 +187,15 @@ fn checked_words(result: &ExtractedDocument) -> Option<Vec<&OcrElement>> {
         .collect::<Vec<_>>();
     if words.is_empty()
         || words.len() > MAX_CERTIFICATE_WORDS
-        || usize::try_from(word_count_of(&result.metadata.additional)?).ok()? != words.len()
+        || usize::try_from(word_count_of(&result.metadata.additional)?)
+            .ok()
+            .is_none_or(|reported| {
+                if covering {
+                    reported > words.len() || (words.len() - reported).saturating_mul(MAX_EXTRA_RATIO) > reported
+                } else {
+                    reported != words.len()
+                }
+            })
         || words.iter().any(|word| {
             word.backend_metadata.get("backend").and_then(serde_json::Value::as_str) != Some("tesseract-iterator")
                 || !word.confidence.recognition.is_finite()

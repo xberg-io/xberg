@@ -1018,13 +1018,16 @@ impl ExtractionConfig {
     /// - `csv`: `delimiter`, when set, is exactly one ASCII character.
     /// - `keywords`: the n-gram range contains positive, ordered bounds and `min_score` is a
     ///   finite `[0.0, 1.0]` value.
-    /// - `layout`: `confidence_threshold`, when set, is a finite `[0.0, 1.0]` value.
+    /// - `layout`: `confidence_threshold`, when set, is a finite `[0.0, 1.0]` value, and the
+    ///   selected `model` can run in this build (PP-DocLayout-V3 needs `layout-detection`).
     /// - `redaction`: custom terms, patterns, and external findings are valid.
     /// - `pdf_options`: hierarchy cluster counts and margin fractions are in their supported ranges.
     /// - every nested LLM config: sampling ranges and target-specific authentication support.
     ///
-    /// Called automatically when a config is loaded from a file, built from a JSON override,
-    /// or passed to the public `extract` and `extract_batch` entry points. Call this method
+    /// Called automatically when a config is loaded from a file or built from a JSON override,
+    /// and by every `Engine` extraction entry point (`extract`, `extract_batch` and their
+    /// variants), including the free functions, the API server and the CLI. Per-input
+    /// `FileExtractionConfig` overrides are checked separately by the engine. Call this method
     /// explicitly before passing a typed config to lower-level processing APIs.
     ///
     /// # Errors
@@ -1090,6 +1093,11 @@ impl ExtractionConfig {
             && let Some(confidence_threshold) = layout.confidence_threshold
         {
             validate_unit_interval("layout.confidence_threshold", confidence_threshold)?;
+        }
+
+        #[cfg(feature = "layout-types")]
+        if let Some(ref layout) = self.layout {
+            layout.validate_backend()?;
         }
 
         if let Some(ref redaction) = self.redaction {
@@ -1241,6 +1249,30 @@ fn default_true() -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "layout-types", not(feature = "layout-detection")))]
+    #[test]
+    fn pp_doclayout_v3_selection_is_rejected_without_the_ort_engine() {
+        use crate::core::config::layout::{LayoutDetectionConfig, LayoutDetectionModel};
+
+        let config = ExtractionConfig {
+            layout: Some(LayoutDetectionConfig {
+                model: LayoutDetectionModel::PpDocLayoutV3,
+                ..LayoutDetectionConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+        let error = config
+            .validate()
+            .expect_err("V3 must not silently fall back to RT-DETR");
+        assert!(error.to_string().contains("pp_doc_layout_v3"), "{error}");
+
+        let default_layout = ExtractionConfig {
+            layout: Some(LayoutDetectionConfig::default()),
+            ..ExtractionConfig::default()
+        };
+        default_layout.validate().expect("RT-DETR stays valid on tract builds");
+    }
+
     /// Polyglot bindings serialize a zero-valued mirror struct with every field
     /// present, so `ocr_strategy` arrives as an explicit `null`. `#[serde(default)]`
     /// only covers a *missing* key; an internally-tagged enum rejects `null`.
