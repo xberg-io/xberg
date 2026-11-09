@@ -282,11 +282,10 @@ fn language_source(
 /// first stage therefore decides when it succeeds and clears the gate: if it reads the script, OCR is
 /// the better reader; if it does not, it produces the page's text and replaces the native layer.
 ///
-/// Residual: when the first stage fails (a missing model), is unavailable or scores below
-/// `pipeline_min_quality`, the executor hands the page to the next stage and returns the best result
-/// of any stage. With `[khm, eng]` a failing `khm` stage therefore lets the `eng` stage replace the
-/// Khmer layer, and the native layer is not kept for that page. Keeping it whenever any later stage
-/// cannot read the script would instead keep it for every healthy `khm`-first pipeline (#2738).
+/// When the first stage fails (a missing model), is unavailable or scores below `pipeline_min_quality`,
+/// the executor hands the page to the next stage. [`native_script_pages`] marks the pages this can
+/// happen to, and the replacement step keeps their native text when the accepted read does not
+/// contain the script (#2794).
 fn first_stage(ocr: &crate::OcrConfig) -> Option<FirstStage> {
     if !ocr.enabled || ocr.vlm_fallback != VlmFallbackPolicy::Disabled {
         return None;
@@ -589,6 +588,93 @@ pub(super) fn retain_unreadable_script_pages(
         warnings.push(read_pages_warning(&read, &stage));
     }
     warnings
+}
+
+/// The scripts of a native page that the first stage reads, when OCR is expected to write that script
+/// again: the page's layer is judged against Latin alone and the first stage covers every script it
+/// names. [`retain_unreadable_script_pages`] leaves such a page to OCR because the first stage reads
+/// it, but a later stage can replace the layer when the first one fails or scores low (#2794).
+fn claimed_scripts(text: &str, stage: &FirstStage) -> Option<Vec<Script>> {
+    let scripts = judged_scripts(text, &[crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()])?;
+    let mut covered = Vec::new();
+    for model in stage.languages.iter().flat_map(|language| language.split('+')) {
+        covered.extend_from_slice(language_scripts(model)?);
+    }
+    scripts.iter().all(|script| covered.contains(script)).then_some(scripts)
+}
+
+/// The failing pages whose native text must survive an OCR read that does not contain its script:
+/// those [`retain_unreadable_script_pages`] left to OCR because the first stage reads their script.
+/// A page that is a scan or carries one stays out, since its picture is not the native layer. Call
+/// it after [`retain_unreadable_script_pages`].
+pub(super) fn native_script_pages(
+    decision: &OcrFallbackDecision,
+    native_text: &str,
+    boundaries: Option<&[PageBoundary]>,
+    content: &[u8],
+    config: &ExtractionConfig,
+) -> Vec<u32> {
+    let (Some(ocr), Some(boundaries)) = (config.ocr.as_ref(), boundaries) else {
+        return Vec::new();
+    };
+    let Some(stage) = first_stage(ocr) else {
+        return Vec::new();
+    };
+    let candidates: Vec<u32> = decision
+        .failing_pages
+        .iter()
+        .copied()
+        .filter(|page| {
+            boundaries
+                .iter()
+                .find(|boundary| boundary.page_number == *page)
+                .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
+                .is_some_and(|text| claimed_scripts(text, &stage).is_some())
+        })
+        .collect();
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+    let Ok(document) = xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) else {
+        return Vec::new();
+    };
+    candidates
+        .into_iter()
+        .filter(|page| *page > 0 && !page_is_scan(&document, *page as usize - 1))
+        .collect()
+}
+
+/// Whether the OCR text of a page marked by [`native_script_pages`] contains none of the script its
+/// native layer is written in, so a read that fell through to a stage for another script (a Latin
+/// read of a Khmer page) must not replace the layer.
+pub(super) fn ocr_dropped_native_script(native_page: &str, ocr_text: &str) -> bool {
+    let Some(scripts) = judged_scripts(
+        native_page,
+        &[crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()],
+    ) else {
+        return false;
+    };
+    !ocr_text
+        .chars()
+        .filter_map(script_of)
+        .any(|script| scripts.contains(&script))
+}
+
+/// The warning for a page whose native text was kept because OCR did not write its script.
+pub(super) fn ocr_dropped_script_warning(page: u32, native_page: &str) -> crate::types::ProcessingWarning {
+    let scripts = judged_scripts(
+        native_page,
+        &[crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()],
+    )
+    .unwrap_or_default();
+    let names: Vec<_> = scripts.iter().map(|script| format!("{script:?}")).collect();
+    warning(format!(
+        "Page {page} retained its native text: the native text is in a script ({}) that OCR did not \
+         produce, so the OCR read was not used. Check that the OCR model for this script, for example {}, \
+         is installed.",
+        names.join(" and "),
+        scripts.first().map_or("khm", |script| model_for(*script)),
+    ))
 }
 
 #[cfg(test)]
@@ -1130,19 +1216,66 @@ mod tests {
         }
     }
 
-    // Pins the behavior #2794 changes: the first stage is only a claim while it succeeds. A `khm`
-    // stage that fails or scores low hands the page to `eng`, which replaces the native Khmer layer,
-    // yet the decision here is "leave the page to OCR". It cannot be an end-to-end test because
-    // Tesseract falls back to the system tessdata, so a missing `khm` model is not reproducible.
+    fn marked_for(pages: &[&str], config: &ExtractionConfig) -> (Vec<u32>, Vec<u32>) {
+        let (text, boundaries) = page_text(pages);
+        let mut decision = decision_for(&text, &boundaries);
+        retain_unreadable_script_pages(
+            &mut decision,
+            &text,
+            Some(&boundaries),
+            Some(boundaries.len() as u32),
+            ONE_PAGE,
+            config,
+        );
+        let marked = native_script_pages(&decision, &text, Some(&boundaries), ONE_PAGE, config);
+        (decision.failing_pages, marked)
+    }
+
+    // A first stage that reads the script leaves the page to OCR, but a later stage may replace the
+    // layer when it fails or scores low (#2794), so the page is marked for the check after OCR. It
+    // cannot be an end-to-end test because Tesseract falls back to the system tessdata, so a
+    // missing `khm` model is not reproducible; the replacement point is tested in
+    // `native_script_kept_tests`.
     #[test]
-    fn residual_2794_a_khm_first_pipeline_leaves_the_page_to_ocr_although_eng_may_replace_it() {
+    fn a_khm_first_pipeline_leaves_the_page_to_ocr_and_marks_it_for_the_script_check() {
         let config = pipeline_config(serde_json::json!({"stages": [
             {"backend": "tesseract", "priority": 100, "language": ["khm"]},
             {"backend": "tesseract", "priority": 50, "language": ["eng"]},
         ]}));
-        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
-        assert_eq!(decision.failing_pages, [1]);
-        assert!(warnings.is_empty());
+        let (failing, marked) = marked_for(&[KHMER_MARKED], &config);
+        assert_eq!(failing, [1]);
+        assert_eq!(marked, [1]);
+    }
+
+    #[test]
+    fn only_a_page_the_first_stage_reads_is_marked_for_the_script_check() {
+        for pipeline in [
+            serde_json::json!({"stages": [{"backend": "tesseract", "priority": 100}]}),
+            serde_json::json!({"stages": [{"backend": "vlm", "priority": 100, "language": ["khm"]}]}),
+            serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+                {"backend": "paddleocr", "priority": 50},
+            ]}),
+        ] {
+            let (_, marked) = marked_for(&[KHMER_MARKED], &pipeline_config(pipeline.clone()));
+            assert!(marked.is_empty(), "{pipeline}");
+        }
+        let (_, marked) = marked_for(&["Plain English text of a page that OCR reads without trouble."], &{
+            pipeline_config(
+                serde_json::json!({"stages": [{"backend": "tesseract", "priority": 100, "language": ["khm"]}]}),
+            )
+        });
+        assert!(marked.is_empty());
+    }
+
+    #[test]
+    fn a_read_is_checked_against_the_script_of_the_native_layer() {
+        assert!(ocr_dropped_native_script(
+            KHMER_MARKED,
+            "Latin text read in place of the page"
+        ));
+        assert!(!ocr_dropped_native_script(KHMER_MARKED, "ស្រលាញ់ប្រទេសកម្ពុជា"));
+        assert!(!ocr_dropped_native_script("Plain English", "Latin text"));
     }
 
     #[test]
