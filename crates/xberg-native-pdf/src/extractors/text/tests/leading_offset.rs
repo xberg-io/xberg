@@ -456,3 +456,126 @@ fn sub_threshold_kern_across_the_drawn_end_does_not_keep_it() {
         );
     }
 }
+
+/// `cm` and `Q` move the pen in user space without drawing (GH#2322). A pen that the new matrix puts past the
+/// end of the run drawn last keeps its space span at the pen. ~keep
+#[test]
+fn cm_or_q_that_puts_the_pen_past_the_drawn_run_keeps_the_space_at_the_pen() {
+    let past = [start("abc", 72.0), start(" ", 130.0), start("def", 137.0)];
+    for stream in [
+        "BT /F1 10 Tf 72 700 Td (abc) Tj ET 1 0 0 1 50 0 cm BT /F1 10 Tf 1 0 0 1 80 700 Tm [-700 (def)] TJ ET",
+        "q BT /F1 10 Tf 72 700 Td (abc) Tj ET Q q 1 0 0 1 50 0 cm BT /F1 10 Tf 1 0 0 1 80 700 Tm [-700 (def)] TJ ET Q",
+    ] {
+        assert_eq!(starts(stream), past, "{stream}");
+    }
+}
+
+/// A `q` ... `Q` block that only sets the pen draws nothing: the page reads as if the block were not there.
+#[test]
+fn q_block_that_draws_nothing_leaves_the_drawn_run_alone() {
+    let plain = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 200 700 Tm ET \
+                 BT /F1 10 Tf 1 0 0 1 150 700 Tm [-3000 (def)] TJ ET";
+    let with_block = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 200 700 Tm ET q BT /F1 10 Tf 300 100 Td ET Q \
+                      BT /F1 10 Tf 1 0 0 1 150 700 Tm [-3000 (def)] TJ ET";
+    assert_eq!(
+        starts(plain),
+        [start("abc", 72.0), start(" ", 150.0), start("def", 180.0)]
+    );
+    assert_eq!(starts(with_block), starts(plain));
+}
+
+/// A run that a word-boundary lead ends at its glyphs is as wide as its glyph advances again (GH#2690).
+#[test]
+fn tj_lead_after_a_tm_back_into_the_run_makes_its_width_the_sum_of_its_glyph_widths() {
+    let mut extractor = extractor();
+    extractor.extract_spans = true;
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-3000 (def)] TJ ET";
+    extractor.run_content_stream(stream.as_bytes()).unwrap();
+    extractor.flush_tj_span_buffer().unwrap();
+    let run = &extractor.spans[0];
+    assert_eq!(run.text, "abc");
+    let glyphs: f32 = run.char_widths.iter().sum();
+    assert!(
+        (glyphs - run.bbox.width).abs() < 1e-3,
+        "glyphs {glyphs}, run {}",
+        run.bbox.width
+    );
+}
+
+/// A run whose matrix maps every glyph to one point has no baseline: its width stays as it was, not NaN.
+#[test]
+fn a_degenerate_run_matrix_keeps_the_run_width() {
+    let mut extractor = extractor();
+    let state = extractor.state_stack.current_mut();
+    state.font_size = 10.0;
+    state.text_matrix = Matrix::translation(87.0, 700.0);
+    extractor.position_pen(Matrix::translation(80.0, 700.0));
+    let mut run = TjBuffer::new(extractor.state_stack.current(), None, None);
+    run.start_matrix = Matrix {
+        a: 0.0,
+        b: 0.0,
+        c: 0.0,
+        d: 0.0,
+        e: 72.0,
+        f: 700.0,
+    };
+    run.user_h_scale = 1.0;
+    run.accumulated_width = 8.0;
+    extractor.end_set_back_run_at_drawn_end(&mut run);
+    assert_eq!(run.accumulated_width, 8.0);
+}
+
+/// A content stream does not see the run that an earlier stream drew with the same extractor.
+#[test]
+fn a_new_content_stream_forgets_the_run_drawn_by_the_last_one() {
+    let next = b"BT /F1 10 Tf 1 0 0 1 80 700 Tm [-3000 (def)] TJ ET";
+    let boxes =
+        |spans: Vec<TextSpan>| -> Vec<(String, f32)> { spans.into_iter().map(|s| (s.text, s.bbox.x)).collect() };
+    let mut reused = extractor();
+    reused
+        .extract_text_spans(b"BT /F1 10 Tf 72 700 Td (abc) Tj ET")
+        .unwrap();
+    let after_a_page = boxes(reused.extract_text_spans(next).unwrap());
+    assert_eq!(after_a_page, boxes(extractor().extract_text_spans(next).unwrap()));
+    let mut prepared = extractor();
+    prepared
+        .extract_text_spans(b"BT /F1 10 Tf 72 700 Td (abc) Tj ET")
+        .unwrap();
+    prepared.prepare_for_span_extraction();
+    prepared.run_content_stream(next).unwrap();
+    prepared.flush_tj_span_buffer().unwrap();
+    let mut fresh = extractor();
+    fresh.prepare_for_span_extraction();
+    fresh.run_content_stream(next).unwrap();
+    fresh.flush_tj_span_buffer().unwrap();
+    let texts =
+        |e: &TextExtractor<'_>| -> Vec<(String, f32)> { e.spans.iter().map(|s| (s.text.clone(), s.bbox.x)).collect() };
+    assert_eq!(texts(&prepared), texts(&fresh));
+}
+
+/// A `Td` with no line move right after an array that marked a word boundary keeps the array's pen for the
+/// next array (the pen seam), and the set-back rule reads the same pen. A `Td` back into the array's last word
+/// puts the space span at the end of that word. A `Td` with a negative `tx` puts the pen before the array's
+/// start: the lead does not reach past the end of the drawn run, so it adds no space span. ~keep
+#[test]
+fn td_after_a_seam_marked_array_sets_the_pen_back_with_the_seam() {
+    // "abc" ends at 87, "def" spans 117 to 132. ~keep
+    let line = "BT /F1 10 Tf 72 700 Td [(abc) -3000 (def)] TJ";
+    let back_into_def = starts(&format!("{line} 52 0 Td [-3000 (ghi)] TJ ET"));
+    let want = [
+        start("abc", 72.0),
+        start(" ", 87.0),
+        start("def", 117.0),
+        start(" ", 132.0),
+        start("ghi", 154.0),
+    ];
+    assert_eq!(back_into_def, want);
+    let before_abc = starts(&format!("{line} -6 0 Td [-3000 (ghi)] TJ ET"));
+    let want = [
+        start("abc", 72.0),
+        start(" ", 87.0),
+        start("def", 117.0),
+        start("ghi", 96.0),
+    ];
+    assert_eq!(before_abc, want);
+}
