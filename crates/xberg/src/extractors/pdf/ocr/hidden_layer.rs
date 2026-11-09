@@ -26,7 +26,7 @@ pub(in crate::extractors::pdf) use visible_raster::VisibleRasterProof;
 mod ccitt_params;
 use ccitt_params::{decode_is_inverted, supported_group4_params};
 mod layer_judgement;
-pub(super) use layer_judgement::{confidence_clears_replacement_floor, ocr_supersedes_disjoint_layer};
+pub(super) use layer_judgement::{confident_read_replaces_layer, layer_judged_plausible, pages_to_probe};
 mod source_audit;
 use source_audit::audited_image_name;
 
@@ -115,12 +115,47 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
 
 /// Preview work units that one `max_iterations` step buys. A unit is a pixel or edge visit, far
 /// finer than the object-level iteration the limit counts. The default limit of 10 million
-/// iterations buys 160 million units, enough for one 300 dpi letter page (about 88 million) but
-/// not for two.
+/// iterations buys 160 million units: five 300 dpi letter pages (27 million each), not six.
 const PREVIEW_WORK_PER_ITERATION: usize = 16;
 
-pub(super) fn preview_work_limit(config: &ExtractionConfig) -> usize {
-    preview_page_limit(config).saturating_mul(PREVIEW_WORK_PER_ITERATION)
+/// Per-page budgets in the document ceiling: 6 x `16 * max_iterations`, 960 million units at the
+/// default. Measured on an AMD EPYC 7B12 with the release profile (fat LTO) over 500 pages (35
+/// audited at 300 dpi, 11 at 5000x5500), the full ceiling costs 3 to 4 s of decode, about 3.7 ms per
+/// million units (15 s without LTO); #2712's 1.1 to 2.5 ms was low and this supersedes it. A 300 dpi
+/// page costs 27 million units, so a longer scan is audited for its first 35 pages (#2730).
+const PREVIEW_FULL_BUDGET_PAGES: usize = 6;
+
+/// Preview work for one document: each page may spend up to the per-page limit derived from
+/// `max_iterations`, and all pages together up to [`PREVIEW_FULL_BUDGET_PAGES`] per-page limits.
+pub(super) struct PreviewWorkBudget {
+    per_page: usize,
+    remaining: usize,
+}
+
+impl PreviewWorkBudget {
+    pub(super) fn new(config: &ExtractionConfig) -> Self {
+        Self::with_pages(
+            preview_page_limit(config).saturating_mul(PREVIEW_WORK_PER_ITERATION),
+            PREVIEW_FULL_BUDGET_PAGES,
+        )
+    }
+
+    fn with_pages(per_page: usize, pages: usize) -> Self {
+        Self {
+            per_page,
+            remaining: per_page.saturating_mul(pages),
+        }
+    }
+
+    /// Run one page's probe under the per-page limit, capped by what the document has left, and
+    /// charge the document for the work the page debited. A refused charge debits nothing.
+    pub(super) fn probe_page<R>(&mut self, probe: impl FnOnce(&mut usize) -> R) -> R {
+        let mut page_work = self.per_page.min(self.remaining);
+        let granted = page_work;
+        let result = probe(&mut page_work);
+        self.remaining = self.remaining.saturating_sub(granted.saturating_sub(page_work));
+        result
+    }
 }
 
 /// Whether the OCR probe reads a page. `needed` is the coverage verdict of [`needs_ocr`]: `None`

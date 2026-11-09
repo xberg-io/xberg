@@ -27,8 +27,9 @@ pub(crate) struct SegmentKey {
 }
 
 impl SegmentKey {
-    pub(crate) fn is_ascii_digit(&self) -> bool {
-        matches!(self.text.as_bytes(), [digit] if digit.is_ascii_digit())
+    pub(crate) fn is_single_glyph(&self) -> bool {
+        let mut chars = self.text.chars();
+        chars.next().is_some_and(|glyph| !glyph.is_whitespace()) && chars.next().is_none()
     }
 }
 

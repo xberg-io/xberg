@@ -649,6 +649,12 @@ fn select_pdf_document(
             ),
         },
     };
+    if extraction_method == ExtractionMethod::Mixed
+        && let (Some(replacements), Some(pages)) = (ocr_results, structured_ocr_pages)
+    {
+        // Plain output can skip structural merging but still owns the accepted pages' diagnostics. ~keep
+        ocr::merge_source_strip_frames(&mut doc, replacements, pages);
+    }
     doc.mime_type = mime_type.to_string();
     (doc, origin, structured)
 }
@@ -4966,6 +4972,63 @@ mod tests {
                 "each boundary must slice the exact OCR page text"
             );
         }
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn source_strip_frames_survive_plain_and_structured_document_selection() {
+        let key = "ocr_source_strip_original_frames";
+        let frame = serde_json::json!([{
+            "page_number": 1, "rendered_width": 450, "rendered_height": 12000,
+            "processed_width": 154, "processed_height": 4096,
+        }]);
+        let mut page = InternalDocument::new("pdf");
+        page.push_element(InternalElement::text(ElementKind::Paragraph, "accepted OCR text", 0));
+        page.metadata.additional.insert(key.into(), frame.clone());
+        let pages = ahash::AHashMap::from([(1, page)]);
+        let replacements = ahash::AHashMap::from([(1, "accepted OCR text".to_owned())]);
+        let boundaries = [crate::types::PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: "accepted OCR text".len(),
+        }];
+        for format in [
+            crate::core::config::OutputFormat::Plain,
+            crate::core::config::OutputFormat::Markdown,
+        ] {
+            let (document, _, _) = select_pdf_document(
+                ExtractionMethod::Mixed,
+                "accepted OCR text",
+                "application/pdf",
+                None,
+                None,
+                Some(&replacements),
+                Some(&pages),
+                Some(&boundaries),
+                &format,
+            );
+            assert_eq!(document.metadata.additional.get(key), Some(&frame));
+            assert_eq!(
+                document
+                    .metadata
+                    .additional
+                    .get(crate::ocr_metadata_keys::OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY),
+                Some(&frame[0]),
+            );
+            assert_eq!(crate::rendering::render_plain(&document).trim(), "accepted OCR text");
+        }
+        let (native, _, _) = select_pdf_document(
+            ExtractionMethod::Native,
+            "native text",
+            "application/pdf",
+            None,
+            None,
+            Some(&replacements),
+            Some(&pages),
+            None,
+            &crate::core::config::OutputFormat::Plain,
+        );
+        assert!(!native.metadata.additional.contains_key(key));
     }
 
     #[cfg(feature = "ocr")]

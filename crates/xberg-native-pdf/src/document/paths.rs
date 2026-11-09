@@ -207,6 +207,9 @@ impl PdfDocument {
                     };
                     extractor.set_line_cap(cap);
                 }
+                Operator::SetExtGState { dict_name } => {
+                    self.apply_path_extgstate(&dict_name, &mut extractor, &mut state_stack);
+                }
                 Operator::SetDash { array, phase } => {
                     state_stack.current_mut().dash = (array.clone(), phase);
                     extractor.set_dash(array, phase);
@@ -399,6 +402,84 @@ impl PdfDocument {
             // but seen in real exports). ~keep
             Object::Name(s) => Some(s.clone()),
             _ => None,
+        }
+    }
+
+    fn apply_path_extgstate(
+        &self,
+        name: &str,
+        extractor: &mut crate::extractors::paths::PathExtractor,
+        stack: &mut crate::extractors::paths::PathGraphicsStateStack,
+    ) {
+        if extractor.apply_cached_path_extgstate(name, stack.current_mut()) {
+            return;
+        }
+        extractor.extgstate_container(|reference| self.load_object(reference).ok());
+        let patch = self.resolve_path_extgstate(name, extractor).unwrap_or_default();
+        extractor.cache_path_extgstate(name, patch);
+        extractor.apply_cached_path_extgstate(name, stack.current_mut());
+    }
+
+    fn resolve_path_extgstate(
+        &self,
+        name: &str,
+        extractor: &crate::extractors::paths::PathExtractor,
+    ) -> Option<crate::extractors::paths::PathGraphicsPatch> {
+        let entry = extractor.current_resources()?.as_dict()?.get("ExtGState")?;
+        let states = if entry.as_reference().is_some() {
+            extractor.loaded_extgstate_container()?
+        } else {
+            entry
+        };
+        let dictionary = states
+            .as_dict()
+            .and_then(|states| states.get(name))
+            .and_then(|state| self.path_state_object(state))?;
+        let dictionary = dictionary.as_dict()?;
+        Some(crate::extractors::paths::PathGraphicsPatch {
+            dash: dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash)),
+            stroke_alpha: dictionary.get("CA").and_then(|alpha| self.path_stroke_alpha(alpha)),
+        })
+    }
+
+    fn path_stroke_alpha(&self, object: &crate::object::Object) -> Option<f32> {
+        let object = self.path_state_object(object)?;
+        let number = object
+            .as_real()
+            .or_else(|| object.as_integer().map(|value| value as f64))?;
+        // Clamp at PDF number precision so finite out-of-f32-range constants are not discarded. ~keep
+        number.is_finite().then(|| number.clamp(0.0, 1.0) as f32)
+    }
+
+    fn path_state_number(&self, object: &crate::object::Object) -> Option<f32> {
+        let object = self.path_state_object(object)?;
+        let number = object
+            .as_real()
+            .or_else(|| object.as_integer().map(|value| value as f64))? as f32;
+        number.is_finite().then_some(number)
+    }
+
+    fn path_dash_pattern(&self, object: &crate::object::Object) -> Option<(Vec<f32>, f32)> {
+        let object = self.path_state_object(object)?;
+        let [array, phase] = object.as_array()?.as_slice() else {
+            return None;
+        };
+        let array = self.path_state_object(array)?;
+        let lengths = array
+            .as_array()?
+            .iter()
+            .map(|length| self.path_state_number(length).filter(|length| *length >= 0.0))
+            .collect::<Option<Vec<_>>>()?;
+        Some((lengths, self.path_state_number(phase)?))
+    }
+
+    fn path_state_object<'a>(
+        &self,
+        object: &'a crate::object::Object,
+    ) -> Option<std::borrow::Cow<'a, crate::object::Object>> {
+        match object.as_reference() {
+            Some(reference) => self.load_object(reference).ok().map(std::borrow::Cow::Owned),
+            None => Some(std::borrow::Cow::Borrowed(object)),
         }
     }
 
@@ -663,6 +744,9 @@ impl PdfDocument {
                         _ => LineCap::Butt,
                     };
                     extractor.set_line_cap(cap);
+                }
+                Operator::SetExtGState { dict_name } => {
+                    self.apply_path_extgstate(&dict_name, extractor, state_stack);
                 }
                 Operator::SetDash { array, phase } => {
                     state_stack.current_mut().dash = (array.clone(), phase);
