@@ -1,4 +1,4 @@
-"""Writes 11.png, 11.tsv, toc.png and clean_table.png (invented values only).
+"""Writes 11.png, 11.tsv, toc.png, clean_table.png and the 14px_seed3 / 18px_seed9 pictures (invented values only).
 
 usage: uv run --no-project --with pillow python gen_leader_fixtures.py <DejaVuSans.ttf> <out dir>
 
@@ -28,6 +28,8 @@ LABELS = [
     "Snow removal",
     "Field lights",
 ]
+
+DUPLICATE_ROW_PICTURES = [(14, 3), (18, 9)]
 
 
 def amounts(rng, i):
@@ -111,6 +113,11 @@ def main():
         tsv.writelines("\t".join(row) + "\n" for row in rows)
     toc(font).save(out / "toc.png", format="PNG")
     draw_table(font, rows, 20, leaders=False).save(out / "clean_table.png", format="PNG")
+    for px, seed in DUPLICATE_ROW_PICTURES:
+        pic_rows = table_rows(seed)
+        draw_table(font, pic_rows, px).save(out / f"{px}px_seed{seed}.png", format="PNG")
+        with (out / f"{px}px_seed{seed}.tsv").open("w") as tsv:
+            tsv.writelines("\t".join(row) + "\n" for row in pic_rows)
 
 
 if __name__ == "__main__":
