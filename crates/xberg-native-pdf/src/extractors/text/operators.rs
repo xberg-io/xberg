@@ -217,7 +217,6 @@ impl<'doc> TextExtractor<'doc> {
                             }
                             if let Some(ref mut buffer) = self.tj_span_buffer {
                                 buffer.unicode.push_str(&actual_text);
-                                buffer.lone_ligature = false;
                             }
                         } else {
                             // Character mode: show_text maps through font, but ActualText
