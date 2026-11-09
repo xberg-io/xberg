@@ -15,9 +15,9 @@ const RULE_GAP_TOLERANCE: f32 = 0.1;
 // hundreds of paths and no single rule can be told apart. ~keep
 const MAX_GROUPED_HEADER_PATHS: usize = 128;
 
-pub(super) fn shading_rectangles(paths: &[PathContent]) -> Vec<Rect> {
+pub(super) fn shading_rectangles<'a>(paths: impl IntoIterator<Item = &'a PathContent>) -> Vec<Rect> {
     paths
-        .iter()
+        .into_iter()
         .filter(|path| {
             path.is_rectangle()
                 && path.fill_color.is_some_and(|color| {
@@ -105,7 +105,8 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
             .any(|header| header)
         || !complete_source_band(first_body, columns, false)
         || !complete_source_band(leaves, columns, true)
-        || !grouped_header_rules(groups, leaves, &nearby)
+        || !(grouped_header_rules(groups, leaves, &nearby)
+            || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby))
         || body_repeats_the_header_rule(leaves, first_body, &nearby)
     {
         return;
@@ -151,35 +152,96 @@ fn grouped_header_rules(groups: &TableRow, leaves: &TableRow, paths: &[&PathCont
     if !visible_rule(paths, first.left(), last.right(), first.y) {
         return false;
     }
+    grouped_leaves(groups, leaves).is_some_and(|groups| {
+        groups.iter().all(|(group, _)| {
+            group
+                .bbox
+                .is_some_and(|bounds| visible_rule(paths, bounds.left(), bounds.right(), bounds.y))
+        })
+    })
+}
 
+fn grouped_leaves<'a>(groups: &'a TableRow, leaves: &'a TableRow) -> Option<Vec<(&'a TableCell, &'a [TableCell])>> {
     let mut remaining = leaves.cells.as_slice();
-    let mut grouped = 0;
+    let mut grouped = Vec::new();
     for (index, group) in groups.cells.iter().enumerate() {
-        let Some((owned, rest)) = remaining.split_at_checked(group.colspan as usize) else {
-            return false;
-        };
-        let Some(bounds) = group.bbox else { return false };
-        let [first, ..] = owned else { return false };
-        let (Some(left), Some(right)) = (first.bbox, owned.last().and_then(|leaf| leaf.bbox)) else {
-            return false;
-        };
+        let (owned, rest) = remaining.split_at_checked(group.colspan as usize)?;
+        let bounds = group.bbox?;
+        let left = owned.first()?.bbox?;
+        let right = owned.last()?.bbox?;
         if !same_rule_position(bounds.left(), left.left())
             || !same_rule_position(bounds.right(), right.right())
             || !same_rule_position(bounds.y, left.y + left.height)
         {
-            return false;
+            return None;
         }
-        if group.colspan >= 2
-            && source_label(group, true)
-            && visible_rule(paths, bounds.left(), bounds.right(), bounds.y)
-        {
-            grouped += 1;
+        if group.colspan >= 2 && source_label(group, true) {
+            grouped.push((group, owned));
         } else if index != 0 || group.rowspan != 1 || !group.text.trim().is_empty() || !group.spans.is_empty() {
-            return false;
+            return None;
         }
         remaining = rest;
     }
-    grouped >= 2 && remaining.is_empty()
+    (grouped.len() >= 2 && remaining.is_empty()).then_some(grouped)
+}
+
+/// A repeated column schema under separate groups and an independently shaded, regular body band
+/// establish headers even when the producer paints its grid white. Font size alone is not evidence. ~keep
+fn repeated_schema_over_shaded_body(
+    groups: &TableRow,
+    leaves: &TableRow,
+    first_body: &TableRow,
+    paths: &[&PathContent],
+) -> bool {
+    let Some(grouped) = grouped_leaves(groups, leaves) else {
+        return false;
+    };
+    let schema: Vec<_> = grouped[0].1.iter().map(|cell| cell.text.trim()).collect();
+    if !schema.iter().all(|label| label.chars().any(char::is_alphabetic))
+        || !schema.iter().any(|label| *label != schema[0])
+        || !grouped
+            .iter()
+            .all(|(_, cells)| cells.iter().map(|cell| cell.text.trim()).eq(schema.iter().copied()))
+    {
+        return false;
+    }
+    let possible_header_shading = shading_rectangles(paths.iter().copied());
+    let body_shading = uncovered_shading(paths);
+    groups.cells.iter().chain(&leaves.cells).all(|cell| {
+        cell.bbox.is_some_and(|bounds| {
+            possible_header_shading
+                .iter()
+                .all(|fill| fill.intersection(&bounds).is_none_or(|overlap| overlap.area() == 0.0))
+        })
+    }) && first_body.cells.iter().all(|cell| cell_is_shaded(cell, &body_shading))
+        && first_body.cells[1..]
+            .iter()
+            .all(|cell| cell.text.chars().any(|character| character.is_ascii_digit()))
+        && leaves.cells.iter().zip(&first_body.cells).all(|(leaf, body)| {
+            matches!((leaf.bbox, body.bbox), (Some(leaf), Some(body))
+                if same_rule_position(leaf.left(), body.left())
+                    && same_rule_position(leaf.right(), body.right())
+                    && same_rule_position(leaf.y, body.y + body.height))
+        })
+}
+
+/// Reject a background touched by later rectangular paint, even if that paint is transparent:
+/// PathContent does not carry fill opacity, so visibility cannot be certified in that case. ~keep
+fn uncovered_shading(paths: &[&PathContent]) -> Vec<Rect> {
+    shading_rectangles(paths.iter().enumerate().filter_map(|(index, path)| {
+        if path.fill_color.is_none() || !path.is_rectangle() {
+            return None;
+        }
+        let covered = paths[index + 1..].iter().any(|later| {
+            later.fill_color.is_some()
+                && later.is_rectangle()
+                && later
+                    .rendered_bbox()
+                    .intersection(&path.rendered_bbox())
+                    .is_some_and(|overlap| overlap.area() > 0.0)
+        });
+        (!covered).then_some(*path)
+    }))
 }
 
 /// In a grid ruled alike on every row, a rule under the leaf band says nothing about the header.
