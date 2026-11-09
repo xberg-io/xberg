@@ -771,11 +771,13 @@ pub(crate) struct LayerFirst {
     /// text and the structured page once, so the row is printed once, as the native read it. ~keep
     pub(crate) misread_ocr_rows: Vec<String>,
 }
-/// Literal source identity normalizes case and whitespace but preserves semantic delimiters.
+/// Literal source identity normalizes case, whitespace and the Markdown cell delimiter, so that a
+/// table row of the OCR text keys like the plain native row it reads; every other delimiter stays.
 /// Fuzzy page confirmation uses `whole_words` separately. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn line_key(line: &str) -> String {
-    line.split_whitespace()
+    line.split(|c: char| c.is_whitespace() || c == '|')
+        .filter(|word| !word.is_empty())
         .map(str::to_lowercase)
         .collect::<Vec<_>>()
         .join(" ")

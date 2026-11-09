@@ -43,6 +43,27 @@ fn should_require_complete_source_rows_before_omitting_native_lines_without_geom
     );
 }
 
+/// The OCR text renders a recognised table as Markdown cell rows. A native row that such a row
+/// reads whole is covered; an empty cell adds no word, and the separator row covers nothing. ~keep
+#[test]
+fn should_read_a_markdown_table_row_of_the_ocr_text_as_the_plain_row_it_holds() {
+    let layer = "7 Elm Township 1,200,400 45\n8 Oak Township 950,300 38\nTotals --- ---";
+    let table = "| No |  | Township | Value |\n| --- | --- | --- | --- |\n| 7 | Elm Township | 1,200,400 | 45 |\n\
+                 | 8 | Oak Township | 950,300 | 39 |";
+    let restored = Some("8 Oak Township 950,300 38\nTotals --- ---");
+    assert_eq!(
+        layer_lines_absent_from_ocr(layer, table).as_deref(),
+        restored,
+        "the row the table reads whole is covered; the misread cell and the separator cover nothing"
+    );
+    let plain = "No Township Value\n7 Elm Township 1,200,400 45\n8 Oak Township 950,300 39";
+    assert_eq!(
+        layer_lines_absent_from_ocr(layer, plain).as_deref(),
+        restored,
+        "control: the same rows as plain OCR lines give the same answer"
+    );
+}
+
 /// The letters of a layer word that occur in the OCR text only across a word boundary, or in a
 /// longer word, are not evidence that the OCR read the word. ~keep
 #[test]
