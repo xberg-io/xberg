@@ -330,13 +330,14 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
 /// The TeX holds no blank line, which would end the block, and no unescaped `$`.
 fn dollar_math_display(tex: &str, top_level: bool) -> Option<String> {
     let comment = has_tex_comment(tex);
-    let tex = neutralize_markup(&escape_math_dollars(&unix_lines(tex)), true);
+    let tex = escape_math_dollars(&unix_lines(tex));
+    let one_line = !top_level || tex.lines().any(opens_block);
+    let tex = neutralize_markup(&tex, true, !one_line);
     let lines: Vec<&str> = tex
         .lines()
         .map(str::trim_end)
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let one_line = !top_level || lines.iter().any(|line| opens_block(line));
     match (one_line, comment) {
         (true, true) => None,
         (true, false) => Some(guard_trailing_backslash(
@@ -355,7 +356,11 @@ fn opens_block(line: &str) -> bool {
 
 /// Inline TeX on one line, without the edge whitespace that stops `$` from opening or closing math.
 fn dollar_math_inline(tex: &str) -> String {
-    guard_trailing_backslash(neutralize_markup(&escape_math_dollars(&join_tex_lines(tex)), false))
+    guard_trailing_backslash(neutralize_markup(
+        &escape_math_dollars(&join_tex_lines(tex)),
+        false,
+        false,
+    ))
 }
 
 /// An odd run of trailing backslashes would escape the closing "$".
@@ -384,14 +389,21 @@ fn escape_math_dollars(tex: &str) -> String {
 /// one. Display math fills its paragraph, so there a tag needs its `>` inside the TeX
 /// (`closed_inside`); inline math continues into the paragraph, whose text can close the tag, so
 /// every such `<` is spaced. The space is visible inside `\text{}` and `\mathrm{}`, and `$` to `\$` in
-/// `escape_math_dollars` is lossy there too.
-fn neutralize_markup(tex: &str, closed_inside: bool) -> String {
+/// `escape_math_dollars` is lossy there too. A line of display TeX written on its own line
+/// (`block_lines`) also gets the space when it starts with `<`: seven CommonMark HTML block start
+/// conditions begin so, and six of them need no `>`.
+fn neutralize_markup(tex: &str, closed_inside: bool, block_lines: bool) -> String {
     let mut out = String::with_capacity(tex.len());
+    let mut line_start = true;
     for (index, ch) in tex.char_indices() {
         out.push(ch);
+        if ch != '<' {
+            line_start = ch == '\n' || (line_start && ch.is_whitespace());
+            continue;
+        }
+        // "<" is one byte, so the rest starts on a character boundary. ~keep
         let rest = &tex[index + 1..];
-        if ch == '<'
-            && (!closed_inside || rest.contains('>'))
+        if (!closed_inside || rest.contains('>') || (block_lines && line_start))
             && rest
                 .chars()
                 .next()
@@ -399,6 +411,7 @@ fn neutralize_markup(tex: &str, closed_inside: bool) -> String {
         {
             out.push(' ');
         }
+        line_start = false;
     }
     out
 }
