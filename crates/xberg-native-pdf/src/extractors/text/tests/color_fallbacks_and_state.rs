@@ -930,7 +930,10 @@ fn corrected_space_gap_preserves_a_one_ulp_overlap() {
     let next_start = 87.79_f32;
     let raw_gap = next_start - previous_end;
     assert!(raw_gap < 0.0);
-    assert_eq!(corrected_space_gap(raw_gap, false, 16.67, false, previous_end, true), raw_gap);
+    assert_eq!(
+        corrected_space_gap(raw_gap, false, 16.67, false, previous_end, true),
+        raw_gap
+    );
 }
 
 #[test]
@@ -939,7 +942,10 @@ fn corrected_space_gap_uses_the_coordinates_rounding_scale() {
         let previous_end = next_start.next_up();
         let raw_gap = next_start - previous_end;
         let magnitude = previous_end.abs().max(next_start.abs());
-        assert_eq!(corrected_space_gap(raw_gap, false, 16.67, false, magnitude, true), raw_gap);
+        assert_eq!(
+            corrected_space_gap(raw_gap, false, 16.67, false, magnitude, true),
+            raw_gap
+        );
     }
     let true_overlap = corrected_space_gap(-2.0, false, 30.0, false, 87.79, true);
     assert_eq!(true_overlap, corrected_space_gap(-2.0, false, 30.0, false, 0.0, true));
@@ -953,5 +959,8 @@ fn corrected_space_gap_corrects_a_one_ulp_overlap_before_a_word() {
     let raw_gap = next_start - previous_end;
     assert!(raw_gap < 0.0);
     let gap = corrected_space_gap(raw_gap, false, 16.67, false, previous_end, false);
-    assert!(gap > 0.0, "a word that touches the previous show keeps its word space: {gap}");
+    assert!(
+        gap > 0.0,
+        "a word that touches the previous show keeps its word space: {gap}"
+    );
 }

@@ -49,11 +49,20 @@ fn merged_text_with_one_ulp_overlap(first: &str, second: &str) -> String {
         .expect("parse the generated page")
     };
     let apart = page(400.0).extract_spans(0).expect("extract the spans of the far page");
-    let first_span = apart.iter().find(|span| span.text == first).expect("first show stays its own span");
+    let first_span = apart
+        .iter()
+        .find(|span| span.text == first)
+        .expect("first show stays its own span");
     let first_end = first_span.bbox.x + first_span.bbox.width;
     let second_x = first_end.next_down();
-    assert_eq!(format!("{second_x:?}").parse::<f32>().unwrap(), second_x, "the start survives printing");
-    let mut spans = page(second_x).extract_spans(0).expect("extract the spans of the touching page");
+    assert_eq!(
+        format!("{second_x:?}").parse::<f32>().unwrap(),
+        second_x,
+        "the start survives printing"
+    );
+    let mut spans = page(second_x)
+        .extract_spans(0)
+        .expect("extract the spans of the touching page");
     spans.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
     spans.iter().map(|span| span.text.as_str()).collect()
 }
