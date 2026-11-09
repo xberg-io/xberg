@@ -4284,6 +4284,13 @@ pub(super) async fn extract_with_ocr_for_page(
             not(target_arch = "wasm32")
         ))]
         let mut detached_frame_reads = vec![false; batch_count];
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let mut number_frame_reads = vec![false; batch_count];
 
         // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -4299,7 +4306,17 @@ pub(super) async fn extract_with_ocr_for_page(
                 // real OCR work to get it. ~keep
                 if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     let task = crate::engine::seams::inherit_progress(async move {
-                        (idx, 0, 0, 0, Err(crate::XbergError::Cancelled), None, false, None)
+                        (
+                            idx,
+                            0,
+                            0,
+                            0,
+                            Err(crate::XbergError::Cancelled),
+                            None,
+                            false,
+                            None,
+                            false,
+                        )
                     });
                     join_set.spawn(crate::core::extractor::cacheability::inherit(task));
                     continue;
@@ -4374,6 +4391,27 @@ pub(super) async fn extract_with_ocr_for_page(
                     has_layout_detections,
                 )
                 .into_owned();
+                #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                let (config_clone, observe_number_frame) =
+                    if get_ocr_backend_registry().read().is_builtin_tesseract(&backend) {
+                        super::number_recovery::prepare_read(
+                            config_clone,
+                            config,
+                            page_index_offset + *page_idx,
+                            page_ocr_hints
+                                .as_ref()
+                                .and_then(|hints| {
+                                    hints
+                                        .native_coverage_layers
+                                        .as_ref()
+                                        .or(hints.native_page_layers.as_ref())
+                                })
+                                .and_then(|layers| layers.get(&((page_index_offset + *page_idx + 1) as u32)))
+                                .map(String::as_str),
+                        )
+                    } else {
+                        (config_clone, false)
+                    };
                 let original_config = ocr_config_owned.clone();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
@@ -4444,6 +4482,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             None,
                             false,
                             None,
+                            false,
                         );
                     }
                     let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
@@ -4462,6 +4501,7 @@ pub(super) async fn extract_with_ocr_for_page(
                                 None,
                                 false,
                                 None,
+                                false,
                             );
                         }
                     };
@@ -4495,12 +4535,21 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let (result, scale_only, inventory) = if caption_raster.is_some() {
                         crate::ocr::preprocessing::geometry_evidence::observe_with_word_inventory(primary).await
-                    } else if ordered_raster.is_some() || observe_detached_frame {
+                    } else if ordered_raster.is_some() || observe_detached_frame || observe_number_frame {
                         let (result, scale_only) = crate::ocr::preprocessing::geometry_evidence::observe(primary).await;
                         (result, scale_only, None)
                     } else {
                         (primary.await, false, None)
                     };
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let number_proof = observe_number_frame
+                        .then(|| {
+                            result
+                                .as_ref()
+                                .ok()
+                                .and_then(|read| super::number_recovery::ReadProof::capture(read, scale_only))
+                        })
+                        .flatten();
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let detached_frame_read = observe_detached_frame
                         && scale_only
@@ -4565,6 +4614,11 @@ pub(super) async fn extract_with_ocr_for_page(
                         result
                     };
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let number_frame =
+                        number_proof.is_some_and(|proof| result.as_ref().is_ok_and(|read| proof.matches(read)));
+                    #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+                    let number_frame = false;
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let ordered_proof =
                         ordered_proof.filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches(selected)));
                     #[cfg(feature = "ocr")]
@@ -4579,6 +4633,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         ordered_proof,
                         detached_frame_read,
                         captured_caption,
+                        number_frame,
                     )
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
@@ -4593,15 +4648,17 @@ pub(super) async fn extract_with_ocr_for_page(
                     ordered_proof,
                     detached_frame_read,
                     captured_caption,
+                    number_frame,
                 ) = join_result.map_err(|e| crate::XbergError::Plugin {
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
                 })?;
                 #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
-                let _ = (ordered_proof, detached_frame_read);
+                let _ = (ordered_proof, detached_frame_read, number_frame);
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {
                     detached_frame_reads[page_idx - batch_start] = detached_frame_read;
+                    number_frame_reads[page_idx - batch_start] = number_frame;
                 }
                 #[cfg(all(
                     feature = "ocr",
@@ -5499,6 +5556,56 @@ pub(super) async fn extract_with_ocr_for_page(
                 );
                 page_texts[page_idx] = acceptance.content;
                 rejected_pages[page_idx] = acceptance.discarded;
+                #[cfg(all(
+                    feature = "pdf",
+                    feature = "ocr",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                if !acceptance.discarded
+                    && number_frame_reads[offset]
+                    && acceptance.verdict.is_none()
+                    && !has_layout_detections
+                    && !tall_source_used
+                    && batch_upright_correction[offset].0 == 0
+                    && !pages_with_recovered_xobject_payload[page_idx]
+                    && collected_tables
+                        .iter()
+                        .all(|table| table.page_number != document_page_number)
+                    && accumulated_formulas
+                        .iter()
+                        .all(|formula| formula.page != Some(document_page_number))
+                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                    && let (Some(pdf), Some(layer), Some(paragraphs)) = (
+                        xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
+                        page_ocr_hints
+                            .as_ref()
+                            .and_then(|hints| {
+                                hints
+                                    .native_coverage_layers
+                                    .as_ref()
+                                    .or(hints.native_page_layers.as_ref())
+                            })
+                            .and_then(|layers| layers.get(&document_page_number)),
+                        all_page_paragraphs[page_idx].as_mut(),
+                    )
+                {
+                    super::number_recovery::recover(
+                        super::number_recovery::PageSource {
+                            document: pdf,
+                            index: document_page_idx,
+                            layer,
+                            raster: std::sync::Arc::clone(&encoded_batch[offset].1),
+                            dimensions: (encoded_batch[offset].2, encoded_batch[offset].3),
+                            metadata: &ocr_result.metadata,
+                        },
+                        paragraphs,
+                        &mut page_texts[page_idx],
+                        config,
+                    )
+                    .await;
+                }
+
                 if let Some(verdict) = acceptance.verdict {
                     recognition_noise_verdicts.push(verdict);
                 }
@@ -5594,6 +5701,56 @@ pub(super) async fn extract_with_ocr_for_page(
             );
             page_texts[page_idx] = acceptance.content;
             rejected_pages[page_idx] = acceptance.discarded;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            if !acceptance.discarded
+                && number_frame_reads[offset]
+                && acceptance.verdict.is_none()
+                && !has_layout_detections
+                && !tall_source_used
+                && batch_upright_correction[offset].0 == 0
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && collected_tables
+                    .iter()
+                    .all(|table| table.page_number != document_page_number)
+                && accumulated_formulas
+                    .iter()
+                    .all(|formula| formula.page != Some(document_page_number))
+                && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                && let (Some(pdf), Some(layer), Some(paragraphs)) = (
+                    xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| {
+                            hints
+                                .native_coverage_layers
+                                .as_ref()
+                                .or(hints.native_page_layers.as_ref())
+                        })
+                        .and_then(|layers| layers.get(&document_page_number)),
+                    all_page_paragraphs[page_idx].as_mut(),
+                )
+            {
+                super::number_recovery::recover(
+                    super::number_recovery::PageSource {
+                        document: pdf,
+                        index: document_page_idx,
+                        layer,
+                        raster: std::sync::Arc::clone(&encoded_batch[offset].1),
+                        dimensions: (encoded_batch[offset].2, encoded_batch[offset].3),
+                        metadata: &ocr_result.metadata,
+                    },
+                    paragraphs,
+                    &mut page_texts[page_idx],
+                    config,
+                )
+                .await;
+            }
+
             if let Some(verdict) = acceptance.verdict {
                 recognition_noise_verdicts.push(verdict);
             }

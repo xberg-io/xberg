@@ -226,6 +226,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Recover independently verified native Khmer numbers at their source lines.** (#2408)
+  When Khmer traineddata already accompanies the selected primary model, upright numeric crops can restore numbers omitted by the ordinary OCR read. English-only extraction and forced OCR stay unchanged; no auxiliary model is downloaded.
+
 - **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
   An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
 - **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
