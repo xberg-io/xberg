@@ -305,6 +305,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Avoid repeating readable PDF table pages when OCR structure omits header words already present in the native text
+  (#2534).
+
 - **(pdf): Keep a word joined after a ligature that the font decodes to letters.** (GH#2718)
   When a PDF draws a ligature glyph as its own run and the font decodes it to letters, as in "di", "ff", "erent", the gap before the next run counted as a word break and the output read "diff erent". The decoder now marks a run that is one glyph decoded to the letters of a Latin ligature (ff, fi, fl, ffi, ffl or st), or a run whose ActualText is those letters, and both gap checks read that mark instead of matching the letters. A glyph that decodes to a short word such as "to" is not marked, and a run of the two ordinary letters "ff" between two words now keeps its spaces. An ActualText replacement drawn with a TJ array now spans the glyphs it replaces, across every array in its scope and including the offsets between its strings, so the gap after it no longer reads as a word break. The mark is the new `ligature_glyph` field of `TextSpan` (runtime metadata, not serialized); code that builds a `TextSpan` by its fields names it.
 - **(ocr): Re-read a standalone dot-leader table picture whose first read holds a garbled table.** (#2503)

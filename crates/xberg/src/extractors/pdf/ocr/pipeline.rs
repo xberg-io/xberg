@@ -2561,6 +2561,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && structured_ocr_pages.get(page_number).is_some_and(|doc| {
                     super::native_word_coverage::has_only_certified_tesseract_text(doc)
                         || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text)
+                        || super::native_word_coverage::uses_only_certified_tesseract_text_and_tables(doc, text)
                 })
                 && layers.get(page_number).is_some_and(|layer| {
                     let mut stripped = layer.clone();
@@ -2793,7 +2794,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if native_ink_owned_pages.contains(&page) {
                     return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text)
-                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text);
+                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text)
+                        || super::native_word_coverage::uses_only_certified_tesseract_text_and_tables(doc, text);
                 }
                 false
             });
