@@ -590,12 +590,32 @@ pub(super) fn retain_unreadable_script_pages(
     warnings
 }
 
-/// The scripts of a native page that the first stage reads, when OCR is expected to write that script
-/// again: the page's layer is judged against Latin alone and the first stage covers every script it
-/// names. [`retain_unreadable_script_pages`] leaves such a page to OCR because the first stage reads
-/// it, but a later stage can replace the layer when the first one fails or scores low (#2794).
+/// The scripts that dominate a native page, judged against Latin alone: those holding at least
+/// [`MINOR_SCRIPT_SHARE`] of its uncovered letters, on a page where Latin letters are no more than
+/// that share of all its letters. A stray word in another script, or a Latin page with a
+/// marked Khmer word, has no dominant script and is left to whatever OCR reads.
+fn dominant_scripts(text: &str) -> Option<Vec<Script>> {
+    let latin_only = [crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()];
+    let counts = uncovered_script_counts(text, &latin_only)?;
+    let uncovered: usize = counts.iter().map(|(_, count)| count).sum();
+    let latin = text.chars().filter(|c| script_of(*c) == Some(Script::Latin)).count();
+    if latin as f64 > MINOR_SCRIPT_SHARE * (uncovered + latin) as f64 {
+        return None;
+    }
+    let weighty: Vec<Script> = counts
+        .into_iter()
+        .filter(|(_, count)| *count as f64 >= MINOR_SCRIPT_SHARE * uncovered as f64)
+        .map(|(script, _)| script)
+        .collect();
+    (!weighty.is_empty() && judged_scripts(text, &latin_only).is_some()).then_some(weighty)
+}
+
+/// The dominant scripts of a native page that the first stage reads, when OCR is expected to write
+/// that script again. [`retain_unreadable_script_pages`] leaves such a page to OCR because the first
+/// stage reads it, but a later stage can replace the layer when the first one fails or scores too
+/// low (#2794).
 fn claimed_scripts(text: &str, stage: &FirstStage) -> Option<Vec<Script>> {
-    let scripts = judged_scripts(text, &[crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()])?;
+    let scripts = dominant_scripts(text)?;
     let mut covered = Vec::new();
     for model in stage.languages.iter().flat_map(|language| language.split('+')) {
         covered.extend_from_slice(language_scripts(model)?);
@@ -644,34 +664,65 @@ pub(super) fn native_script_pages(
         .collect()
 }
 
-/// Whether the OCR text of a page marked by [`native_script_pages`] contains none of the script its
-/// native layer is written in, so a read that fell through to a stage for another script (a Latin
-/// read of a Khmer page) must not replace the layer.
+/// Whether the OCR text of a page marked by [`native_script_pages`] is letters of other scripts and
+/// contains none of the script its native layer is written in, so a read that fell through to a
+/// stage for another script (a Latin read of a Khmer page) must not replace the layer. A read
+/// without letters (digits and punctuation only) is not a read in another script.
 pub(super) fn ocr_dropped_native_script(native_page: &str, ocr_text: &str) -> bool {
-    let Some(scripts) = judged_scripts(
-        native_page,
-        &[crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()],
-    ) else {
+    let Some(scripts) = dominant_scripts(native_page) else {
         return false;
     };
-    !ocr_text
-        .chars()
-        .filter_map(script_of)
-        .any(|script| scripts.contains(&script))
+    let read: Vec<Script> = ocr_text.chars().filter_map(script_of).collect();
+    !read.is_empty() && !read.iter().any(|script| scripts.contains(script))
+}
+
+/// Whether a whole-document read dropped the script of every page of the document, all of them
+/// marked. A page text missing from `page_texts` (a vector shorter than the document) is not a
+/// dropped read, so the check is off for it.
+pub(super) fn every_page_dropped_script(
+    marked: &[u32],
+    native_text: &str,
+    boundaries: Option<&[PageBoundary]>,
+    page_texts: &[String],
+) -> bool {
+    let Some(boundaries) = boundaries.filter(|boundaries| !boundaries.is_empty() && marked.len() == boundaries.len())
+    else {
+        return false;
+    };
+    marked.iter().all(|page| {
+        boundaries
+            .iter()
+            .find(|boundary| boundary.page_number == *page)
+            .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
+            .zip(page.checked_sub(1).and_then(|index| page_texts.get(index as usize)))
+            .is_some_and(|(native, read)| ocr_dropped_native_script(native, read))
+    })
+}
+
+/// The warnings for the marked pages whose native text is kept because OCR did not write its script.
+pub(super) fn dropped_script_warnings(
+    marked: &[u32],
+    native_text: &str,
+    boundaries: Option<&[PageBoundary]>,
+) -> Vec<crate::types::ProcessingWarning> {
+    marked
+        .iter()
+        .filter_map(|page| {
+            let boundary = boundaries?.iter().find(|boundary| boundary.page_number == *page)?;
+            let native = native_text.get(boundary.byte_start..boundary.byte_end)?;
+            Some(ocr_dropped_script_warning(*page, native))
+        })
+        .collect()
 }
 
 /// The warning for a page whose native text was kept because OCR did not write its script.
 pub(super) fn ocr_dropped_script_warning(page: u32, native_page: &str) -> crate::types::ProcessingWarning {
-    let scripts = judged_scripts(
-        native_page,
-        &[crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string()],
-    )
-    .unwrap_or_default();
+    let scripts = dominant_scripts(native_page).unwrap_or_default();
     let names: Vec<_> = scripts.iter().map(|script| format!("{script:?}")).collect();
     warning(format!(
-        "Page {page} retained its native text: the native text is in a script ({}) that OCR did not \
-         produce, so the OCR read was not used. Check that the OCR model for this script, for example {}, \
-         is installed.",
+        "Page {page} retained its native text: it is in a script ({}) that OCR did not produce, so the \
+         OCR read was not used. The OCR model for this script, for example {}, may be missing or may \
+         have failed or scored too low.",
         names.join(" and "),
         scripts.first().map_or("khm", |script| model_for(*script)),
     ))
@@ -1276,6 +1327,61 @@ mod tests {
         ));
         assert!(!ocr_dropped_native_script(KHMER_MARKED, "ស្រលាញ់ប្រទេសកម្ពុជា"));
         assert!(!ocr_dropped_native_script("Plain English", "Latin text"));
+    }
+
+    #[test]
+    fn a_read_of_digits_and_khmer_or_of_digits_alone_is_not_a_dropped_script() {
+        assert!(!ocr_dropped_native_script(KHMER_MARKED, "2024 ០១២ ស្រលាញ់ 15%"));
+        assert!(!ocr_dropped_native_script(KHMER_MARKED, "1 2 3 4.5 (6)"));
+    }
+
+    const THAI_MARKED: &str = "สวัสดี\u{FFFD}ครับ\u{FFFD} ผม\u{FFFD} รักประเทศไทย\u{FFFD} มาก\u{FFFD}";
+
+    #[test]
+    fn a_latin_page_with_one_marked_khmer_word_is_not_marked() {
+        let page = "The committee met on Tuesday to discuss the budget for the coming year and the staffing of \
+                    the library, and agreed to publish the minutes. ខ្ញុំ\u{FFFD}\u{FFFD}";
+        let config = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+        ]}));
+        assert!(dominant_scripts(page).is_none());
+        let (_, marked) = marked_for(&[page], &config);
+        assert!(marked.is_empty());
+        assert!(!ocr_dropped_native_script(page, "The committee met on Tuesday."));
+    }
+
+    #[test]
+    fn a_page_in_two_scripts_is_marked_only_when_the_first_stage_reads_both() {
+        let page = format!("{KHMER_MARKED} {THAI_MARKED}");
+        assert_eq!(dominant_scripts(&page).map(|scripts| scripts.len()), Some(2));
+        let khm = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+        ]}));
+        assert!(marked_for(&[&page], &khm).1.is_empty());
+        let both = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["khm", "tha"]},
+        ]}));
+        assert_eq!(marked_for(&[&page], &both).1, [1]);
+        assert!(!ocr_dropped_native_script(&page, "ស្រលាញ់ប្រទេស"));
+        assert!(!ocr_dropped_native_script(&page, "สวัสดีครับ"));
+        assert!(ocr_dropped_native_script(&page, "Latin only"));
+    }
+
+    #[test]
+    fn a_whole_document_read_is_dropped_only_when_every_page_is_marked_and_read_without_the_script() {
+        let (text, boundaries) = page_text(&[KHMER_MARKED, KHMER_MARKED]);
+        let latin = || vec!["English one".to_string(), "English two".to_string()];
+        let check =
+            |marked: &[u32], reads: &[String]| every_page_dropped_script(marked, &text, Some(&boundaries), reads);
+        assert!(check(&[1, 2], &latin()));
+        assert!(!check(&[1], &latin()));
+        assert!(!check(&[1, 2], &["English one".to_string(), "ស្រលាញ់ប្រទេស".to_string()]));
+        assert!(
+            !check(&[1, 2], &["English one".to_string()]),
+            "a short vector disables the check"
+        );
+        assert!(!every_page_dropped_script(&[1, 2], &text, None, &latin()));
+        assert_eq!(dropped_script_warnings(&[1, 2], &text, Some(&boundaries)).len(), 2);
     }
 
     #[test]

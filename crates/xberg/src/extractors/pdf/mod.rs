@@ -2453,30 +2453,27 @@ fn whole_document_ocr_hints(
     hints
 }
 
-/// Whether the whole-document OCR text of a page that [`unreadable_script::native_script_pages`] marked
-/// holds none of the script of that page's native layer.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn marked_read_dropped_script(
-    marked: &[u32],
-    native_text: &str,
-    boundaries: Option<&[crate::types::PageBoundary]>,
-    page_texts: &[String],
-) -> bool {
-    marked.iter().any(|page| {
-        boundaries
-            .and_then(|bounds| bounds.iter().find(|boundary| boundary.page_number == *page))
-            .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
-            .zip(page_texts.get(*page as usize - 1))
-            .is_some_and(|(native, read)| unreadable_script::ocr_dropped_native_script(native, read))
-    })
+use unreadable_script::{dropped_script_warnings, every_page_dropped_script};
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn every_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
+    false
 }
 
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     not(all(feature = "ocr", not(target_arch = "wasm32")))
 ))]
-fn marked_read_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
-    false
+fn dropped_script_warnings(
+    _: &[u32],
+    _: &str,
+    _: Option<&[crate::types::PageBoundary]>,
+) -> Vec<crate::types::ProcessingWarning> {
+    Vec::new()
 }
 
 /// PDF document extractor using xberg_native_pdf.
@@ -3235,43 +3232,6 @@ impl PdfExtractor {
                 1.0
             };
 
-            // Adopts a per-page OCR run as the extraction result; shared by the targeted route and
-            // the retry of a whole-document read that dropped a native script. ~keep
-            macro_rules! adopt_mixed_run {
-                ($mixed_run:expr) => {{
-                    let mixed_run = $mixed_run;
-                    #[cfg(feature = "formula-recognition")]
-                    {
-                        mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
-                    }
-                    let (
-                        mixed,
-                        results_map,
-                        mixed_structured_pages,
-                        mixed_llm_usage,
-                        mixed_rstrs,
-                        mixed_formulas,
-                        mixed_preprocessing,
-                        mixed_ocr_confidence,
-                        mixed_warnings,
-                        mixed_page_failures,
-                    ) = mixed_run.output;
-                    let extraction_method = extraction_method_after_mixed_ocr(&results_map);
-                    ocr_llm_usage = mixed_llm_usage;
-                    ocr_results_map = Some(results_map);
-                    structured_ocr_pages = Some(mixed_structured_pages);
-                    ocr_page_rasters = mixed_rstrs;
-                    if !mixed_formulas.is_empty() {
-                        ocr_formulas = mixed_formulas;
-                    }
-                    ocr_preprocessing_by_page.extend(mixed_preprocessing);
-                    ocr_confidence_by_page.extend(mixed_ocr_confidence);
-                    ocr_page_failures.extend(mixed_page_failures);
-                    ocr_fallback_warnings.extend(mixed_warnings);
-                    (mixed, extraction_method)
-                }};
-            }
-
             match ocr::evaluate_ocr_skip_gate(
                 pre_rendered_doc.is_some(),
                 total_chars,
@@ -3342,7 +3302,7 @@ impl PdfExtractor {
                             layout_warning,
                             layout_glyph_drop_warnings,
                             discarded_visible_native_page,
-                        )) if !marked_read_dropped_script(
+                        )) if !every_page_dropped_script(
                             &native_script_pages,
                             &native_text,
                             boundaries.as_deref(),
@@ -3387,40 +3347,17 @@ impl PdfExtractor {
                                 (ocr_text, ExtractionMethod::Ocr)
                             }
                         }
-                        Ok(_) => {
-                            // The whole-document read wrote none of the script a marked page's native
-                            // layer is in, so the pages are read again one by one, which keeps that layer.
-                            let Some(bounds) = boundaries.as_deref().filter(|bounds| !bounds.is_empty()) else {
-                                return Err(crate::XbergError::Plugin {
-                                    message: "OCR dropped the script of a native page without page boundaries"
-                                        .to_string(),
-                                    plugin_name: "ocr".to_string(),
-                                });
-                            };
-                            match ocr::extract_mixed_ocr_native_with_layout_pages(
-                                &native_text,
-                                bounds,
-                                (&decision.failing_pages, &[]),
-                                content,
-                                config,
-                                layout_pages,
-                                (&outlined_ocr_pages, &native_script_pages),
-                            )
-                            .await
-                            {
-                                Ok(mixed_run) => adopt_mixed_run!(mixed_run),
-                                Err(e) => {
-                                    tracing::warn!(error = %e, "Per-page OCR after a dropped native script failed; using native text");
-                                    ocr_fallback_warnings.push(crate::types::ProcessingWarning {
-                                        source: std::borrow::Cow::Borrowed("ocr"),
-                                        message: std::borrow::Cow::Owned(format!(
-                                            "OCR read none of the script of the native text ({e}); returning \
-                                             the native text, which may be incomplete."
-                                        )),
-                                    });
-                                    (native_text, ExtractionMethod::Native)
-                                }
-                            }
+                        Ok((_, _, _, ocr_doc, _, _, _, _, _, _, _, _, _, _)) => {
+                            let (warnings, failures) = ocr_doc
+                                .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
+                                .unwrap_or_default();
+                            crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, warnings);
+                            ocr_page_failures.extend(failures);
+                            crate::core::diagnostics::dedup_extend_warnings(
+                                &mut ocr_fallback_warnings,
+                                dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),
+                            );
+                            (native_text, ExtractionMethod::Native)
                         }
                         Err(failed_run) => {
                             tracing::warn!(
@@ -3474,7 +3411,37 @@ impl PdfExtractor {
                         )
                         .await
                         {
-                            Ok(mixed_run) => adopt_mixed_run!(mixed_run),
+                            Ok(mixed_run) => {
+                                #[cfg(feature = "formula-recognition")]
+                                {
+                                    mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                                }
+                                let (
+                                    mixed,
+                                    results_map,
+                                    mixed_structured_pages,
+                                    mixed_llm_usage,
+                                    mixed_rstrs,
+                                    mixed_formulas,
+                                    mixed_preprocessing,
+                                    mixed_ocr_confidence,
+                                    mixed_warnings,
+                                    mixed_page_failures,
+                                ) = mixed_run.output;
+                                let extraction_method = extraction_method_after_mixed_ocr(&results_map);
+                                ocr_llm_usage = mixed_llm_usage;
+                                ocr_results_map = Some(results_map);
+                                structured_ocr_pages = Some(mixed_structured_pages);
+                                ocr_page_rasters = mixed_rstrs;
+                                if !mixed_formulas.is_empty() {
+                                    ocr_formulas = mixed_formulas;
+                                }
+                                ocr_preprocessing_by_page.extend(mixed_preprocessing);
+                                ocr_confidence_by_page.extend(mixed_ocr_confidence);
+                                ocr_page_failures.extend(mixed_page_failures);
+                                ocr_fallback_warnings.extend(mixed_warnings);
+                                (mixed, extraction_method)
+                            }
                             Err(e) => {
                                 tracing::warn!(
                                     error = %e,
