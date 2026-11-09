@@ -805,6 +805,20 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
         })
 }
 
+/// Whether a page with lost-glyph markers is judged on its readable text when OCR may replace it.
+/// Only a page the run keeps native automatically qualifies (not forced, no configured pipeline, no
+/// hidden-layer probe), and only when the same page's ink corroborates its native text: the
+/// markers alone prove a loss, not that what remains is right. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn marked_page_is_judged_on_readable_text(
+    config: &ExtractionConfig,
+    page: u32,
+    probing_hidden_layer: bool,
+    ink_corroborated: bool,
+) -> bool {
+    ink_corroborated && !probing_hidden_layer && native_preservation_is_automatic(config, page)
+}
+
 /// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
@@ -2202,7 +2216,7 @@ pub(crate) fn merge_ocr_pages_into_native(
         boundaries,
         ocr_results,
         &OcrQualityThresholds::default(),
-        true,
+        |_| true,
     );
     apply_ocr_page_replacements(native_text, boundaries, &accepted)
 }
@@ -2239,15 +2253,17 @@ pub(super) fn destructive_ocr_information_loss(
 }
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
-/// `judge_marked_pages` as for `destructive_ocr_information_loss`: true unless the user configured
-/// an OCR pipeline or the run probes a hidden layer. ~keep
+/// `judge_marked_page` says per page whether `destructive_ocr_information_loss` judges a marked
+/// page on its readable text: only a page the run may keep native (automatic mode, no configured
+/// pipeline, no hidden-layer probe) and whose native text the same page's ink corroborates. A
+/// page it refuses is judged as before the markers were kept. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn accepted_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
     thresholds: &OcrQualityThresholds,
-    judge_marked_pages: bool,
+    judge_marked_page: impl Fn(u32) -> bool,
 ) -> ahash::AHashMap<u32, String> {
     let mut page_counts = std::collections::HashMap::new();
     for boundary in boundaries {
@@ -2317,7 +2333,7 @@ pub(super) fn accepted_ocr_page_replacements(
                 return false;
             }
             let native_page = &native_text[byte_start..byte_end];
-            let loss = destructive_ocr_information_loss(native_page, text, thresholds, judge_marked_pages);
+            let loss = destructive_ocr_information_loss(native_page, text, thresholds, judge_marked_page(**page));
             if let Some((native_alnum, ocr_alnum)) = loss {
                 tracing::warn!(
                     page = **page,
@@ -4088,7 +4104,7 @@ mod public_ocr_handoff_tests {
             &boundaries,
             &ahash::AHashMap::from_iter([(1, text.into())]),
             &Default::default(),
-            true,
+            |_| true,
         )
     }
 

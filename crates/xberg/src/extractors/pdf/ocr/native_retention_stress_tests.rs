@@ -640,10 +640,10 @@ fn ocr_that_drops_the_readable_words_of_a_marked_page_is_not_accepted() {
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
     let page = readable_page_with_lost_glyphs();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, true);
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |_| true);
     assert!(accepted.is_empty(), "OCR keeps under half of the readable words");
     let all_lost = "\u{FFFD} ".repeat(20);
-    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds, true);
+    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds, |_| true);
     assert!(
         accepted.contains_key(&1),
         "control: a page with no readable word keeps no protection"
@@ -1151,7 +1151,7 @@ fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
         &one_page(&native),
         &[(1, ocr_reads_forty_percent.clone())].into_iter().collect(),
         &thresholds,
-        true,
+        |_| true,
     );
     assert!(
         accepted.is_empty(),
@@ -1163,7 +1163,7 @@ fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
         &one_page(&native),
         &[(1, ocr_reads_all)].into_iter().collect(),
         &thresholds,
-        true,
+        |_| true,
     );
     assert!(
         accepted.contains_key(&1),
@@ -1193,7 +1193,7 @@ fn ocr_that_reads_sixty_percent_of_a_half_lost_page_is_accepted() {
         &one_page(&native),
         &[(1, read)].into_iter().collect(),
         &thresholds,
-        true,
+        |_| true,
     );
     assert!(
         accepted.contains_key(&1),
@@ -1225,7 +1225,7 @@ fn only_the_marked_page_of_a_document_keeps_its_native_text() {
     ];
     let stray = "two stray words only".to_string();
     let read = [(1, stray.clone()), (2, stray)].into_iter().collect();
-    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, true);
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |_| true);
     assert!(
         accepted.is_empty(),
         "both pages are readable, so OCR that keeps a few words replaces neither"
@@ -1244,7 +1244,7 @@ fn only_the_marked_page_of_a_document_keeps_its_native_text() {
             page_number: 2,
         },
     ];
-    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, true);
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |_| true);
     assert_eq!(
         accepted.keys().copied().collect::<Vec<_>>(),
         vec![2],
@@ -1662,7 +1662,7 @@ fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
         "nothing readable remains to keep"
     );
     let read = [(1, "two stray words only".to_string())].into_iter().collect();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, true);
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |_| true);
     assert!(accepted.contains_key(&1), "the OCR text replaces the page");
 }
 
@@ -1673,14 +1673,14 @@ fn the_marked_page_judgement_is_off_under_a_configured_pipeline() {
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
     let page = readable_page_with_lost_glyphs();
-    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, false);
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |_| false);
     assert!(
         accepted.contains_key(&1),
         "a configured pipeline judges the marked page as before: its markers are garble"
     );
     let clean = format!("{}\n", forty_rows()[..20].join("\n"));
     for judge in [false, true] {
-        let accepted = accepted_ocr_page_replacements(&clean, &one_page(&clean), &read, &thresholds, judge);
+        let accepted = accepted_ocr_page_replacements(&clean, &one_page(&clean), &read, &thresholds, |_| judge);
         assert!(
             accepted.is_empty(),
             "control: a clean page keeps its text under either arm ({judge})"
@@ -1718,12 +1718,13 @@ fn mixed_route_config(backend: &str, pipeline: bool) -> crate::core::config::Ext
     }
 }
 
-/// The mixed route judges a marked page on its readable text: a weak OCR read does not replace the
-/// page under a single backend, and a pipeline the user configured replaces it as before. ~keep
+/// The mixed route replaces a marked page when no ink proof of the same page backs its native
+/// text, whatever the route: a short read of a layer nothing corroborates is no reason to keep the
+/// layer. A forced page and a configured pipeline replace it too. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial_test::serial]
-async fn the_mixed_route_keeps_a_marked_page_unless_the_user_configured_a_pipeline() {
+async fn the_mixed_route_replaces_a_marked_page_its_ink_does_not_corroborate() {
     use super::super::pipeline::extract_mixed_ocr_native;
     const BACKEND: &str = "marked-page-route-backend";
     const READ: &str = "two stray words only";
@@ -1736,27 +1737,75 @@ async fn the_mixed_route_keeps_a_marked_page_unless_the_user_configured_a_pipeli
     let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
     let page = readable_page_with_lost_glyphs();
     let mut results = Vec::new();
-    for pipeline in [false, true] {
-        let config = mixed_route_config(BACKEND, pipeline);
+    for (name, pipeline, forced) in [
+        ("single", false, false),
+        ("pipeline", true, false),
+        ("forced", false, true),
+    ] {
+        let mut config = mixed_route_config(BACKEND, pipeline);
+        config.force_ocr_pages = forced.then(|| vec![1]);
         let run = extract_mixed_ocr_native(&page, &one_page(&page), &[1], &pdf, &config, None).await;
-        results.push((pipeline, run));
+        results.push((name, run));
     }
     crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
-    for (pipeline, run) in results {
+    assert_eq!(results.len(), 3);
+    for (name, run) in results {
         let (text, replaced, ..) = run.unwrap();
-        if pipeline {
-            assert!(
-                replaced.get(&1).is_some_and(|text| text.contains(READ)),
-                "a configured pipeline replaces the marked page: {text:?}"
-            );
-        } else {
-            assert!(
-                replaced.is_empty(),
-                "a single backend keeps the marked page: {replaced:?}"
-            );
-            assert_eq!(text, page, "the native text of the kept page is unchanged");
-        }
+        assert!(
+            replaced.get(&1).is_some_and(|text| text.contains(READ)),
+            "{name}: the uncorroborated marked page is replaced: {text:?} {replaced:?}"
+        );
     }
+}
+
+/// A marked page is judged on its readable text only where the run may keep native text
+/// automatically and the page's ink corroborates it. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn a_marked_page_is_judged_on_readable_text_only_in_automatic_mode_with_ink() {
+    use super::super::document::marked_page_is_judged_on_readable_text as judged;
+    let auto = mixed_route_config("tesseract", false);
+    assert!(judged(&auto, 1, false, true), "automatic mode with ink");
+    assert!(!judged(&auto, 1, false, false), "no ink corroboration");
+    assert!(!judged(&auto, 1, true, true), "a hidden-layer probe");
+    let mut forced = mixed_route_config("tesseract", false);
+    forced.force_ocr_pages = Some(vec![1]);
+    assert!(!judged(&forced, 1, false, true), "a forced page");
+    assert!(judged(&forced, 2, false, true), "control: another page of the same run");
+    let mut all = mixed_route_config("tesseract", false);
+    all.force_ocr = true;
+    assert!(!judged(&all, 2, false, true), "force_ocr");
+    assert!(
+        !judged(&mixed_route_config("tesseract", true), 1, false, true),
+        "a configured pipeline"
+    );
+}
+
+/// With the page-wise judgement, only the page the ink corroborates keeps its native text. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn only_the_corroborated_marked_page_keeps_its_native_text() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (_, marked, _) = marked_cases().swap_remove(0);
+    let page = format!("{}\n", marked[..20].join("\n"));
+    let native = format!("{page}{page}");
+    let boundaries = vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: page.len(),
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: page.len(),
+            byte_end: native.len(),
+            page_number: 2,
+        },
+    ];
+    let stray = "two stray words only".to_string();
+    let read = [(1, stray.clone()), (2, stray)].into_iter().collect();
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |page| page == 1);
+    assert_eq!(accepted.keys().copied().collect::<Vec<_>>(), vec![2]);
 }
 
 /// The premise of the route test: under the `full` build the default config has an effective

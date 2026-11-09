@@ -2485,16 +2485,27 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
-    // A marked page is judged on the text it held unless the user configured an OCR pipeline or the
-    // run probes a hidden layer; a pipeline the build or layout inputs make does not turn it off. ~keep
-    let judge_marked_pages = !probing_hidden_layer && ocr_config_owned.pipeline.is_none();
-    let mut accepted_replacements = accepted_ocr_page_replacements(
-        native_text,
-        boundaries,
-        &ocr_results,
-        &ocr_output_thresholds,
-        judge_marked_pages,
-    );
+    // The same page's ink proof (native text paints the ink OCR read, or the render lost Type0 ink)
+    // is what lets a marked page be judged on the text it held. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let ink_corroborated = |page: u32| {
+        native_ink_owned_pages.contains(&page)
+            || native_words_covered_pages.contains(&page)
+            || raster_dpis
+                .get(&(page.saturating_sub(1) as usize))
+                .is_some_and(|raster| raster.type0_ink_loss)
+    };
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let ink_corroborated = |_page: u32| false;
+    let mut accepted_replacements =
+        accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds, |page| {
+            super::document::marked_page_is_judged_on_readable_text(
+                config,
+                page,
+                probing_hidden_layer,
+                ink_corroborated(page),
+            )
+        });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if probing_hidden_layer || !pages.preserve_native.is_empty() {
         for boundary in boundaries {

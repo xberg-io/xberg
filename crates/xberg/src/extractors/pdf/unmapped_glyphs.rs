@@ -249,6 +249,14 @@ mod tests {
         assert!(matches!(readable_text("no loss"), std::borrow::Cow::Borrowed(_)));
     }
 
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn readable_text_reads_a_lost_symbol_glyph_as_a_space() {
+        const SYMBOL: &str = "\u{FFFE}";
+        assert_eq!(readable_text(&format!("{SYMBOL}yes no")), "yes no");
+        assert_eq!(readable_text(&format!("A{SYMBOL}B")), "A B");
+    }
+
     #[test]
     fn a_lost_symbol_glyph_is_stripped_and_counted_like_a_lost_glyph() {
         const SYMBOL: &str = "\u{FFFE}";
@@ -264,8 +272,6 @@ mod tests {
             !is_lost_glyph('\u{FFFF}'),
             "U+FFFF is a glyph the decoder writes for text, not a marker"
         );
-        assert_eq!(readable_text(&format!("{SYMBOL}yes no")), "yes no");
-        assert_eq!(readable_text(&format!("A{SYMBOL}B")), "A B");
         let mut text = format!("ab{SYMBOL}cd{MARK}{SYMBOL}ef{SYMBOL}");
         let removed = strip_text(&mut text, None, &[]);
         assert_eq!(removed, 4, "each marker of either kind counts");
