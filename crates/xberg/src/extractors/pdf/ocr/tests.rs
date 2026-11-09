@@ -1001,18 +1001,25 @@ pub(super) mod tests {
                         \u{FFFF}ag that \u{FFFF}attens the work the sta\u{FFFF} introduced, which signi\u{FFFF}cantly \
                         changed the plan. ";
         let prose = "Each section of the report describes the measured values and the method in plain words. ";
-        let text = format!("{sentence}{}", prose.repeat(100));
-        assert!(text.chars().filter(|c| !c.is_whitespace()).count() > 8000, "a long readable page");
-        assert_eq!(text.matches('\u{FFFF}').count(), 8, "eight words hold the glyph");
+        let text = format!("{sentence}{}", prose.repeat(120));
+        assert!(
+            text.chars().filter(|c| !c.is_whitespace()).count() > 8000,
+            "a long readable page"
+        );
+        assert_eq!(text.matches('\u{FFFF}').count(), 7, "seven words hold the glyph");
         let stats = NativeTextStats::compute(&text, &thresholds);
         assert_eq!(stats.garbage_char_count, 0, "U+FFFF is no lost-glyph marker");
         assert_eq!(
             NativeTextStats::compute(&text.replace('\u{FFFF}', "\u{FFFD}"), &thresholds).garbage_char_count,
-            8,
+            7,
             "control: the same page with lost-glyph markers counts them"
         );
         let decision = evaluate_native_text_for_ocr(&text, Some(1), &thresholds);
-        assert!(!decision.fallback, "the page stays on the native route: {decision:?}");
+        assert!(
+            !decision.fallback,
+            "the page stays on the native route: failing pages {:?}, garbage {}",
+            decision.failing_pages, decision.stats.garbage_char_count
+        );
     }
 
     #[cfg(feature = "ocr")]

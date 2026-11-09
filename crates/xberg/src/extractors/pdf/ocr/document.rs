@@ -298,10 +298,6 @@ impl PlainOcrRows {
     pub(crate) fn every() -> Self {
         Self(None)
     }
-    /// No OCR row is plain: every misread row stays. ~keep
-    pub(crate) fn none() -> Self {
-        Self(Some(KeyCounts::new([])))
-    }
     /// The rows of the unannotated OCR text elements of `page` in `doc`, or of every page when
     /// `page` is `None`. `None` for `doc` is a page without a structured document. ~keep
     #[cfg(feature = "pdf")]
@@ -317,10 +313,11 @@ impl PlainOcrRows {
             .flat_map(|element| element.text.lines().map(line_key));
         Self(Some(KeyCounts::new(keys)))
     }
-    /// Without the `pdf` feature no element kind of a page is known as plain OCR text. ~keep
+    /// Without the `pdf` feature no element kind of a page is known as plain OCR text: no misread
+    /// row leaves. ~keep
     #[cfg(not(feature = "pdf"))]
     pub(crate) fn of_page(_: Option<&crate::types::internal::InternalDocument>, _: Option<u32>) -> Self {
-        Self::none()
+        Self(Some(KeyCounts::new([])))
     }
     /// Whether a plain OCR row has the key, which then spends that row. ~keep
     fn take(&mut self, key: &str) -> bool {
@@ -1153,11 +1150,7 @@ pub(crate) fn layer_lines_to_put_first(
     let lost_glyphs = super::super::unmapped_glyphs::strip_native_fragment(&mut lines);
     // A misread row leaves only from plain OCR text: a table cell, heading, annotated or anchored
     // element keeps its row beside the native one. ~keep
-    let misread_ocr_rows: Vec<String> = restore
-        .misread
-        .into_iter()
-        .filter(|key| plain_rows.take(key))
-        .collect();
+    let misread_ocr_rows: Vec<String> = restore.misread.into_iter().filter(|key| plain_rows.take(key)).collect();
     (!lines.is_empty()).then_some(LayerFirst {
         lines,
         lost_glyphs,

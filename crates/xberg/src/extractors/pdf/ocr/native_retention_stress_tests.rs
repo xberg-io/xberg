@@ -1400,7 +1400,10 @@ fn should_print_a_row_once_when_its_ocr_misread_is_a_paragraph_on_a_page_with_a_
     let mut expected = vec![native[3].as_str()];
     expected.extend(kept.iter().map(String::as_str));
     expected.push(table_row);
-    assert_eq!(texts, expected, "the misread paragraph leaves the page; the table element stays");
+    assert_eq!(
+        texts, expected,
+        "the misread paragraph leaves the page; the table element stays"
+    );
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1477,7 +1480,10 @@ fn a_misread_row_leaves_the_plain_paragraph_and_not_the_heading_with_the_same_te
         let kinds: Vec<&str> = doc.elements.iter().map(|element| element.kind.discriminant()).collect();
         let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
         assert_eq!(texts, ["total 12 cm3", misread], "heading first: {heading_first}");
-        assert_eq!(kinds[1], "heading", "the heading keeps its row; the emptied paragraph leaves");
+        assert_eq!(
+            kinds[1], "heading",
+            "the heading keeps its row; the emptied paragraph leaves"
+        );
     }
 }
 
