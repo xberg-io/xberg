@@ -25,6 +25,9 @@ pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supp
 mod geometry_tests;
 mod gray_jpeg;
 mod indexed;
+#[cfg(test)]
+#[path = "tall_source/neutral_rgb_tests.rs"]
+mod neutral_rgb_tests;
 mod ordered;
 mod read_geometry;
 mod samples;

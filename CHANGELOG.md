@@ -74,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(pdf): Pin the native PDF reduced-JPEG decoder to the version the OCR path measures, and drop the unreachable decoder output cap.** (#2740)
+  `xberg-native-pdf` now requires `jpeg-decoder` `=0.3.2`, as `xberg` does. The decoder output cap is gone: the decoder checked it only after allocating its buffers, so it never bounded an allocation, and it always equalled the size already checked after scaling. Rendering is unchanged.
+
 - **(ocr): Re-read a standalone picture that looks like a table as one uniform block and adopt that read.** (#2503, #2432)
   When the sparse-text first pass finds no table but its words form a lattice (at least four rows, three columns separated by wide gaps, emitted row by row), the picture is read again with Tesseract PSM 6, whose dot-leader row recovery keeps each row on one line, and that read replaces the first. It is adopted as a caller-forced `psm = 6` would be, so a token PSM 6 misreads is kept; only an empty re-read, or one with under three quarters of the first read's letters and digits, is discarded. On the #2432 set standalone pictures keep 162 of 288 rows whole (108 before; explicit `psm = 6` reaches 167). Every picture the lattice test admits is OCR'd twice, whether or not the re-read is adopted (11 of 24 pictures on that set, adopted on 6); only default Tesseract OCR is affected. An explicit `psm`, vertical languages, any TIFF, a VLM fallback or pipeline, requested document structure, layout detection, a first read that already has a table, and scanned PDF pages keep the first read.
 

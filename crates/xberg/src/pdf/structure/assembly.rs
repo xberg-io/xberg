@@ -2357,7 +2357,9 @@ mod tests {
     }
 
     fn painted_overhang_page(candidate: &str, bystanders: &[(&str, f32)]) -> Vec<PdfParagraph> {
-        let mut page = vec![glyph_paragraph(candidate, 33.0)];
+        // Mostly outside the table box (2 of 5 points inside): the overhang is what lets the glyph pass the
+        // pre-filter that drops segments a table covers and carries.
+        let mut page = vec![glyph_paragraph(candidate, 108.0)];
         page.extend(bystanders.iter().map(|(text, x)| glyph_paragraph(text, *x)));
         page
     }
@@ -2399,7 +2401,7 @@ mod tests {
     }
 
     #[test]
-    fn painted_cell_orphan_is_removed_from_the_page_while_real_letters_stay() {
+    fn painted_cell_orphan_is_removed_from_the_page_beside_unrelated_paragraphs() {
         let sibling = SegmentKey::from(&plain_segment("10.1"));
         let bystanders = [("T", 60.0), ("1", 80.0), ("a", 100.0)];
         let mut page = painted_overhang_page("%", &bystanders);
