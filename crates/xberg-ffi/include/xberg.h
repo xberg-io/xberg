@@ -16482,17 +16482,6 @@ XBERGAlefHandle xberg_layout_detection_config_strategy(XBERGAlefHandle handle);
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
 /**
- * Get the `model` field from a `LayoutDetectionConfig`.
- * A non-null returned handle is owned by the caller.
- * It must be freed with `xberg_layout_detection_model_free`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-XBERGAlefHandle xberg_layout_detection_config_model(XBERGAlefHandle handle);
-#endif
-
-#if defined(XBERG_FEATURE_LAYOUT_TYPES)
-/**
  * Get the `confidence_threshold` field from a `LayoutDetectionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -16584,6 +16573,17 @@ xberg_layout_detection_config_acceleration(XBERGAlefHandle handle);
  */
 int32_t xberg_layout_detection_config_enable_chart_understanding(
     XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_LAYOUT_TYPES)
+/**
+ * Get the `model` field from a `LayoutDetectionConfig`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_layout_detection_model_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_layout_detection_config_model(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
