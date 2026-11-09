@@ -12,6 +12,7 @@ import generate_v3_cross_runtime_synthetic as generator
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/v3_cross_runtime_synthetic.json").read_text())
 MASK_SHAPE = FIXTURE["mask_shape"]
+ROWS, HEIGHT, WIDTH = MASK_SHAPE
 PAGE_ONE, PAGE_TWO = FIXTURE["pages"]
 EPSILON = contract.MASK_LOGIT_EPSILON
 
@@ -43,8 +44,8 @@ FLIP = [(0, 0, 0, 1, 0)]
 
 def test_synthetic_page_one_rank_differences_are_all_exact_ties() -> None:
     reference, actual, _, _ = rank_args(PAGE_ONE)
-    assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 16
-    assert contract.compare_ranks(*rank_args(PAGE_ONE)) == 16
+    assert sum(a != b for a, b in zip(reference, actual, strict=True)) == 14
+    assert contract.compare_ranks(*rank_args(PAGE_ONE)) == 14
 
 
 def test_synthetic_page_two_ranks_are_identical() -> None:
@@ -53,13 +54,13 @@ def test_synthetic_page_two_ranks_are_identical() -> None:
 
 
 def test_synthetic_page_ranks_are_not_a_permutation() -> None:
-    assert len(set(PAGE_ONE["reference_ranks"])) == 132 < len(PAGE_ONE["reference_ranks"]) == 300
+    assert len(set(PAGE_ONE["reference_ranks"])) == 96 < len(PAGE_ONE["reference_ranks"]) == 240
 
 
 def test_synthetic_page_two_flips_are_boundary_logits() -> None:
-    assert len(PAGE_TWO["mask_mismatches"]) == 5
-    assert len(set(logits(PAGE_TWO).values())) == 3
-    assert masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 5
+    assert len(PAGE_TWO["mask_mismatches"]) == 7
+    assert len(set(logits(PAGE_TWO).values())) == 4
+    assert masks(mismatches(PAGE_TWO), logits(PAGE_TWO)) == 7
 
 
 def test_synthetic_page_one_has_no_flips() -> None:
@@ -109,6 +110,11 @@ def test_a_tie_the_other_runtime_does_not_share_fails() -> None:
 def test_unmoved_keys_may_differ_numerically_but_not_in_tie_structure() -> None:
     assert contract.compare_ranks([0, 1], [0, 1], [1.0, 2.0], [1.0, 9.0]) == 0
     fails("tie_structure_mismatch", contract.compare_ranks, [0, 1], [0, 1], [1.0, 2.0], [9.0, 9.0])
+
+
+def test_a_bool_sort_key_is_not_a_float_key() -> None:
+    fails("keys_not_finite_floats", contract.compare_ranks, [0, 1], [0, 1], [False, True], [0.0, 1.0])
+    fails("keys_not_finite_floats", contract.compare_ranks, [0, 1], [0, 1], [0.0, 1.0], [0.0, True])
 
 
 def test_more_rows_than_positions_are_allowed_when_a_query_repeats() -> None:
@@ -220,13 +226,25 @@ def test_a_truncated_mismatch_list_fails() -> None:
 
 def test_mask_shapes_must_match_and_be_three_dimensional() -> None:
     table = {(0, 0, 0): (1e-6, -1e-6)}
-    fails("mask_shape_mismatch", masks, FLIP, table, actual_shape=[300, 200, 199])
+    fails("mask_shape_mismatch", masks, FLIP, table, actual_shape=[ROWS, HEIGHT, WIDTH - 1])
     fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[], actual_shape=[])
     fails("mask_shape_invalid", masks, FLIP, table, reference_shape=[200, 200], actual_shape=[200, 200])
 
 
+def test_a_zero_or_non_integer_mask_dimension_fails() -> None:
+    bad_shapes = (
+        [0, HEIGHT, WIDTH],
+        [ROWS, 0, WIDTH],
+        [ROWS, HEIGHT, -1],
+        [float(ROWS), HEIGHT, WIDTH],
+        [ROWS, HEIGHT, WIDTH + 0.5],
+    )
+    for shape in bad_shapes:
+        fails("mask_shape_invalid", masks, [], {}, reference_shape=shape, actual_shape=shape)
+
+
 def test_a_position_outside_the_mask_fails() -> None:
-    fails("mask_position_out_of_range", masks, [(300, 0, 0, 1, 0)], {(300, 0, 0): (1e-6, -1e-6)})
+    fails("mask_position_out_of_range", masks, [(ROWS, 0, 0, 1, 0)], {(ROWS, 0, 0): (1e-6, -1e-6)})
 
 
 def test_a_perturbed_synthetic_flip_fails() -> None:

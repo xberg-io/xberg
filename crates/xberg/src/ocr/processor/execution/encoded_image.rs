@@ -17,6 +17,9 @@ struct Preparation<'a> {
     images: Option<&'a ImageExtractionConfig>,
     ci_debug_enabled: bool,
     allow_bounded_inferred_upscale: bool,
+    /// Whether the candidate being prepared is a genuinely gray raster on the gray contrast path, so the
+    /// workspace model charges that path's own peak. Reset when a candidate is decoded. ~keep
+    gray_input: std::cell::Cell<bool>,
 }
 
 struct Assessment {
@@ -58,6 +61,7 @@ pub(super) fn prepare_with_dpi_policy(
         // A caller-selected preprocessing policy keeps its requested raster budget; a policy
         // the engine chose may fall back to the largest upscale that fits. ~keep
         allow_bounded_inferred_upscale: allow_bounded_inferred_upscale || config.preprocessing.is_none(),
+        gray_input: std::cell::Cell::new(false),
     };
     let mut assessment = Assessment {
         policy: config
@@ -91,6 +95,7 @@ impl Preparation<'_> {
     }
 
     fn decode(&self, assessment: &Assessment) -> crate::Result<DecodedOcrImage> {
+        self.gray_input.set(false);
         let planned = self.config.preprocessing.clone().unwrap_or_default();
         let dpi_config = ocr_dpi_config(&planned, self.images);
         let rejected_policy = std::cell::Cell::new(false);
@@ -175,15 +180,27 @@ impl Preparation<'_> {
         })
     }
 
+    fn phase_peak(
+        &self,
+        width: u32,
+        height: u32,
+        preprocessing: Option<&ImagePreprocessingConfig>,
+    ) -> crate::Result<Option<u64>> {
+        if self.gray_input.get() {
+            native_image_budget::known_gray_phase_peak(width, height, self.bytes.len(), preprocessing)
+        } else {
+            native_image_budget::known_phase_peak(width, height, self.bytes.len(), preprocessing)
+        }
+    }
+
     fn known_native_fits(
         &self,
         dimensions: (u32, u32),
         preprocessing: Option<&ImagePreprocessingConfig>,
     ) -> crate::Result<bool> {
-        Ok(
-            native_image_budget::known_phase_peak(dimensions.0, dimensions.1, self.bytes.len(), preprocessing)?
-                .is_none_or(|peak| peak <= self.limits.max_content_size as u64),
-        )
+        Ok(self
+            .phase_peak(dimensions.0, dimensions.1, preprocessing)?
+            .is_none_or(|peak| peak <= self.limits.max_content_size as u64))
     }
 
     fn prepare_candidate(&self, decoded: DecodedOcrImage) -> crate::Result<Candidate> {
@@ -199,6 +216,10 @@ impl Preparation<'_> {
             self.config.known_full_page_scan,
         );
         let policy = preprocessing.as_deref();
+        self.gray_input.set(
+            policy.is_some_and(native_image_budget::releases_source_rgb)
+                && super::super::super::preprocessing::rgb_is_gray(decoded.image.as_raw()),
+        );
         self.check_reduced_policy(&decoded, policy)?;
         let dpi = match self.candidate_dpi(&decoded, policy) {
             Ok(dpi) => dpi,
@@ -238,6 +259,23 @@ impl Preparation<'_> {
         self.finish_candidate(decoded, dpi, policy).map(Candidate::Ready)
     }
 
+    /// PNG and TIFF always may. A full-size JPEG may only when the engine chose the policy and the
+    /// resolution is inferred: the caller's requested upscale keeps its refusal, and a reduced
+    /// decode has no inferred resolution of the original to scale. ~keep
+    fn can_shrink_upscale(&self, decoded: &DecodedOcrImage) -> bool {
+        match image::guess_format(self.bytes) {
+            Ok(image::ImageFormat::Png | image::ImageFormat::Tiff) => true,
+            Ok(image::ImageFormat::Jpeg) => {
+                self.allow_bounded_inferred_upscale
+                    && decoded.scale_denominator == 1
+                    && self
+                        .source_dpi(decoded.original_width, decoded.original_height)
+                        .is_none()
+            }
+            _ => false,
+        }
+    }
+
     fn budgeted_upscale(
         &self,
         decoded: &DecodedOcrImage,
@@ -250,11 +288,7 @@ impl Preparation<'_> {
             || source_dpi <= 0.0
             || normalized.0 <= width
             || normalized.1 <= height
-            || self.is_jpeg()
-            || !matches!(
-                image::guess_format(self.bytes),
-                Ok(image::ImageFormat::Png | image::ImageFormat::Tiff)
-            )
+            || !self.can_shrink_upscale(decoded)
             || (!self.allow_bounded_inferred_upscale && self.source_dpi(width, height).is_none())
             || self.known_native_fits(normalized, Some(policy))?
         {
@@ -265,7 +299,8 @@ impl Preparation<'_> {
         let source = decoded.image.as_raw();
         let source_extra = source.capacity().saturating_sub(source.len());
         let resize_limit = self.limits.max_content_size.saturating_sub(source_extra);
-        if native_image_budget::known_phase_peak(width, height, self.bytes.len(), Some(policy))?
+        if self
+            .phase_peak(width, height, Some(policy))?
             .is_none_or(|peak| peak > resize_limit as u64)
         {
             return Ok(None);
@@ -284,8 +319,7 @@ impl Preparation<'_> {
         dpi_workspace::largest_feasible_upscale(lower, upper, |target| {
             dpi_config.target_dpi = target;
             let dimensions = normalized_image_dimensions(width, height, &dpi_config, Some(source_dpi));
-            let native_peak =
-                native_image_budget::known_phase_peak(dimensions.0, dimensions.1, self.bytes.len(), Some(policy))?;
+            let native_peak = self.phase_peak(dimensions.0, dimensions.1, Some(policy))?;
             let native_limit = if dimensions == (width, height) {
                 resize_limit
             } else {
@@ -332,12 +366,7 @@ impl Preparation<'_> {
             Some(source_dpi),
         );
         let extra_capacity = prepared.data.capacity().saturating_sub(prepared.data.len()) as u64;
-        let peak = native_image_budget::known_phase_peak(
-            prepared.width,
-            prepared.height,
-            self.bytes.len(),
-            prepared.preprocessing.as_ref(),
-        )?;
+        let peak = self.phase_peak(prepared.width, prepared.height, prepared.preprocessing.as_ref())?;
         if peak
             .and_then(|peak| peak.checked_add(extra_capacity))
             .is_none_or(|peak| peak > self.limits.max_content_size as u64)
@@ -570,34 +599,136 @@ fn retry_candidate(decoded: DecodedOcrImage, preprocessing: Option<&ImagePreproc
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ocr::preprocessing::rgb_is_gray;
 
-    #[test]
-    fn budgeted_png_without_resize_keeps_the_real_source_resolution() {
+    enum ExpectedImage {
+        Original,
+        Upscaled,
+        WorkspaceError,
+    }
+
+    fn png_fixture(pixel: [u8; 3], expected_gray: bool) -> Vec<u8> {
+        let image = image::RgbImage::from_pixel(200, 100, image::Rgb(pixel));
+        assert_eq!(rgb_is_gray(image.as_raw()), expected_gray, "fixture {pixel:?}");
         let mut encoded = std::io::Cursor::new(Vec::new());
-        image::RgbImage::from_pixel(200, 100, image::Rgb([245; 3]))
-            .write_to(&mut encoded, image::ImageFormat::Png)
-            .unwrap();
-        let encoded = encoded.into_inner();
-        let policy = ImagePreprocessingConfig {
+        image.write_to(&mut encoded, image::ImageFormat::Png).unwrap();
+        encoded.into_inner()
+    }
+
+    fn contrast_policy() -> ImagePreprocessingConfig {
+        ImagePreprocessingConfig {
             contrast_enhance: true,
             binarization_method: "none".into(),
             deskew: false,
             ..Default::default()
-        };
-        let limit = native_image_budget::known_phase_peak(200, 100, encoded.len(), Some(&policy))
+        }
+    }
+
+    fn prepare_png(bytes: &[u8], policy: &ImagePreprocessingConfig, budget: usize) -> crate::Result<PreparedOcrImage> {
+        prepare_encoded_ocr_image(
+            bytes,
+            &SecurityLimits {
+                max_content_size: budget,
+                ..Default::default()
+            },
+            &TesseractConfig {
+                source_dpi: Some(100.0),
+                preprocessing: Some(policy.clone()),
+                ..Default::default()
+            },
+            Some(&ImageExtractionConfig {
+                auto_adjust_dpi: false,
+                ..Default::default()
+            }),
+            false,
+        )
+    }
+
+    fn assert_budget_cases(bytes: &[u8], policy: &ImagePreprocessingConfig, source_peak: usize, target_peak: usize) {
+        for (name, budget, expected) in [
+            ("source_at_peak", source_peak, ExpectedImage::Original),
+            ("source_below_peak", source_peak - 1, ExpectedImage::WorkspaceError),
+            ("target_at_peak", target_peak, ExpectedImage::Upscaled),
+        ] {
+            let result = prepare_png(bytes, policy, budget);
+            let (dimensions, scale, skipped) = match expected {
+                ExpectedImage::Original => ((200, 100, 100), 1.0, true),
+                ExpectedImage::Upscaled => ((600, 300, 300), 3.0, false),
+                ExpectedImage::WorkspaceError => {
+                    let error = result
+                        .err()
+                        .unwrap_or_else(|| panic!("{name}: expected a workspace refusal"));
+                    assert!(
+                        matches!(&error, crate::XbergError::Validation { message, .. }
+                            if message == &format!("OCR native image workspace exceeds security_limits.max_content_size \
+                                ({budget} bytes). Raise security_limits.max_content_size")),
+                        "{name}: {error}"
+                    );
+                    continue;
+                }
+            };
+            let image = result.unwrap_or_else(|error| panic!("{name}: {error}"));
+            assert_eq!((image.width, image.height, image.source_dpi), dimensions, "{name}");
+            let metadata = image
+                .image_preprocessing
+                .unwrap_or_else(|| panic!("{name}: missing DPI metadata"));
+            assert_eq!(metadata.target_dpi, 300, "{name}");
+            assert_eq!(metadata.final_dpi, dimensions.2, "{name}");
+            assert_eq!(metadata.scale_factor, scale, "{name}");
+            assert_eq!(metadata.skipped_resize, skipped, "{name}");
+        }
+    }
+
+    #[test]
+    fn budgeted_png_without_resize_keeps_the_real_source_resolution() {
+        let bytes = png_fixture([245; 3], true);
+        let policy = contrast_policy();
+        let source_peak = native_image_budget::known_gray_phase_peak(200, 100, bytes.len(), Some(&policy))
             .unwrap()
             .unwrap() as usize;
+        let target_peak = native_image_budget::known_gray_phase_peak(600, 300, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert_budget_cases(&bytes, &policy, source_peak, target_peak);
+    }
+
+    #[test]
+    fn budgeted_colour_png_uses_the_colour_workspace_boundary() {
+        let bytes = png_fixture([245, 245, 244], false);
+        let policy = contrast_policy();
+        let source_peak = native_image_budget::known_phase_peak(200, 100, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        let target_peak = native_image_budget::known_phase_peak(600, 300, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert_budget_cases(&bytes, &policy, source_peak, target_peak);
+    }
+
+    fn gray_switch_png(pixel: [u8; 3]) -> Vec<u8> {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(200, 100, image::Rgb(pixel))
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        encoded.into_inner()
+    }
+
+    fn prepare_gray_switch(
+        encoded: &[u8],
+        limit: usize,
+        policy: &ImagePreprocessingConfig,
+    ) -> crate::Result<PreparedOcrImage> {
         let config = TesseractConfig {
             source_dpi: Some(100.0),
-            preprocessing: Some(policy),
+            preprocessing: Some(policy.clone()),
             ..Default::default()
         };
         let images = ImageExtractionConfig {
             auto_adjust_dpi: false,
             ..Default::default()
         };
-        let result = prepare_encoded_ocr_image(
-            &encoded,
+        prepare_encoded_ocr_image(
+            encoded,
             &SecurityLimits {
                 max_content_size: limit,
                 ..Default::default()
@@ -606,12 +737,39 @@ mod tests {
             Some(&images),
             false,
         )
-        .expect("the original raster fits its exact workspace");
-        assert_eq!((result.width, result.height, result.source_dpi), (200, 100, 100));
-        let metadata = result.image_preprocessing.expect("budget-aware DPI metadata");
-        assert_eq!(metadata.target_dpi, 300);
-        assert_eq!(metadata.final_dpi, 100);
-        assert_eq!(metadata.scale_factor, 1.0);
-        assert!(metadata.skipped_resize);
+    }
+
+    #[test]
+    fn gray_route_switch_charges_only_the_gray_raster_the_gray_model() {
+        let policy = ImagePreprocessingConfig {
+            contrast_enhance: true,
+            binarization_method: "none".into(),
+            deskew: false,
+            ..Default::default()
+        };
+        let (gray_png, colour_png) = (gray_switch_png([245; 3]), gray_switch_png([245, 245, 200]));
+        let gray_limit = native_image_budget::known_gray_phase_peak(200, 100, colour_png.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert!(
+            gray_png.len() <= colour_png.len(),
+            "the gray raster is admitted under the colour raster's gray peak"
+        );
+        let colour_peak = native_image_budget::known_phase_peak(200, 100, colour_png.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert!(gray_limit < colour_peak, "{gray_limit} vs {colour_peak}");
+        let kept = prepare_gray_switch(&gray_png, gray_limit, &policy).expect("gray fits the gray model");
+        assert_eq!((kept.width, kept.height), (200, 100));
+        let message = prepare_gray_switch(&colour_png, gray_limit, &policy)
+            .err()
+            .expect("a colour raster is charged the colour model, which the gray budget cannot hold")
+            .to_string();
+        assert!(
+            message.contains(&format!(
+                "exceeds security_limits.max_content_size ({gray_limit} bytes)"
+            )),
+            "{message}"
+        );
     }
 }
