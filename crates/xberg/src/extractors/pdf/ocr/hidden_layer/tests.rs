@@ -874,3 +874,44 @@ fn only_pages_whose_layer_is_not_judged_plausible_are_probed() {
     ];
     assert_eq!(super::pages_to_probe(decisions), [0, 2, 4]);
 }
+
+#[test]
+fn should_preserve_raw_and_ascii85_flate_stream_decoding_and_reject_other_chains() {
+    use super::{Object, stream_filters};
+
+    let expected = b"known stream samples ".repeat(8);
+    let chain = Object::Array(vec![
+        Object::Name("ASCII85Decode".into()),
+        Object::Name("FlateDecode".into()),
+    ]);
+    let filters = stream_filters(Some(&chain)).expect("supported ASCII85 then Flate stream");
+    assert!(matches!(filters, StreamFilters::Ascii85Flate));
+    assert_eq!(
+        decode_probe_stream(
+            b"Gaut&b:h1?-nZr@:!?Tc:<Y<28M*ua*diP>>amuu~>",
+            filters,
+            expected.len(),
+            4096
+        ),
+        Some(expected.clone())
+    );
+    assert_eq!(
+        decode_probe_stream(&expected, stream_filters(None).unwrap(), expected.len(), 4096),
+        Some(expected)
+    );
+    for filter in [
+        Object::Array(vec![]),
+        Object::Array(vec![Object::Name("ASCII85Decode".into())]),
+        Object::Array(vec![
+            Object::Name("FlateDecode".into()),
+            Object::Name("ASCII85Decode".into()),
+        ]),
+        Object::Array(vec![
+            Object::Name("FlateDecode".into()),
+            Object::Name("FlateDecode".into()),
+        ]),
+        Object::Array(vec![Object::Null]),
+    ] {
+        assert!(stream_filters(Some(&filter)).is_none(), "{filter:?}");
+    }
+}

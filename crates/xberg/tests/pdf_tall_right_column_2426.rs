@@ -67,7 +67,7 @@ fn pinned_page() -> Vec<u8> {
     isolated
 }
 
-fn singleton_filter_page() -> Vec<u8> {
+fn synthetic_singleton_filter_page() -> Vec<u8> {
     let mut document = lopdf::Document::load_mem(&pinned_page()).unwrap();
     let mut changed = 0;
     for object in document.objects.values_mut() {
@@ -212,10 +212,10 @@ async fn ordered_right_column_adds_only_source_lines_and_preserves_both_original
 }
 
 #[tokio::test]
-async fn singleton_flate_filter_preserves_the_certified_right_column_and_original_table() {
+async fn synthetic_singleton_flate_spelling_preserves_the_certified_right_column_and_original_table() {
     let tessdata = tempfile::tempdir().expect("private tessdata directory");
     write_english_model(tessdata.path());
-    let bytes = singleton_filter_page();
+    let bytes = synthetic_singleton_filter_page();
     let config = pinned_config(false, false, tessdata.path());
     let doc = read_pinned(&xberg::engine::Engine::new_default(), &bytes, &config).await;
     let stock = read_stock(&bytes, tessdata.path()).await;
