@@ -2028,19 +2028,30 @@ fn reads_up_or_down(rotation_degrees: f32) -> bool {
     (rotation_degrees.rem_euclid(180.0) - 90.0).abs() < 45.0
 }
 
-/// The extent of a segment across its reading direction. The extractor sizes a run turned up or down
-/// by its length (`width`), so its thickness is its height, or its font size where that is larger.
+/// The extent of a segment across its reading direction. `x` and `y` are the run's baseline origin and
+/// `height` extends perpendicular to the baseline (the extractor sizes a run turned up or down by its
+/// length in `width`), so the thickness is the height, or the font size where that is larger. The glyphs
+/// stand on the left of the baseline for text read bottom to top (matrix `0 1 -1 0 x y`, 90 degrees) and
+/// on the right for 270 degrees. Upright text stands above its baseline and text turned 180 degrees below.
 fn across_extent(segment: &SegmentData) -> (f32, f32) {
-    if reads_up_or_down(segment.rotation_degrees) {
-        (segment.x, segment.x + segment.height.max(segment.font_size))
+    let thickness = segment.height.max(segment.font_size);
+    let flipped = (45.0..225.0).contains(&segment.rotation_degrees.rem_euclid(360.0));
+    let origin = if reads_up_or_down(segment.rotation_degrees) {
+        segment.x
     } else {
-        (segment.y, segment.y + segment.height)
+        segment.y
+    };
+    if flipped {
+        (origin - thickness, origin)
+    } else {
+        (origin, origin + thickness)
     }
 }
 
 /// The right and top edge of a page, read from its text as the structure pipeline reads page heights:
 /// the far side of the text, and at least a US Letter page. The left and bottom edge are at zero. A run
-/// turned up or down reaches right by its thickness, not by its length.
+/// turned up or down reaches right by its thickness, not by its length. Text turned 180 degrees still
+/// reaches right by its width from `x`.
 fn page_extent(page: &[PdfParagraph]) -> (f32, f32) {
     use super::pipeline::{FALLBACK_PAGE_HEIGHT_PTS, FALLBACK_PAGE_WIDTH_PTS};
     let segments = page
@@ -2583,6 +2594,22 @@ mod tests {
         let at = |x: f32| [(x, 600.0, 90.0), (x, 400.0, 90.0), (x, 200.0, 90.0)];
         assert_eq!(placed_stamp_parts_of_width(at(300.0), 178.0), [false; 3]);
         assert_eq!(placed_stamp_parts_of_width(at(20.0), 178.0), [true; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_long_stamp_turned_270_degrees_at_the_right_edge() {
+        let at = |x: f32| [(x, 600.0, 270.0), (x, 400.0, 270.0), (x, 200.0, 270.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(585.0), 178.0), [true; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(300.0), 178.0), [false; 3]);
+    }
+
+    /// The glyphs of text turned 90 degrees stand left of the baseline origin, so a part at `x` covers
+    /// `x - 20 .. x`; the margin zone is a tenth of the 612 point page, 61.2 points.
+    #[test]
+    fn arxiv_noise_measures_a_stamp_turned_90_degrees_to_the_left_of_its_origin() {
+        let at = |x: f32| [(x, 600.0, 90.0), (x, 400.0, 90.0), (x, 200.0, 90.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(80.0), 178.0), [true; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(82.0), 178.0), [false; 3]);
     }
 
     #[test]

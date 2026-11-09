@@ -260,9 +260,14 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 @test "Rust unit runner should reject a Tesseract exit cleanup leg that lists the wrong number of tests" {
 	for listed in 0 2; do
 		export TESSERACT_LISTED=$listed
+		: >"$XBERG_TRACE"
 		run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 		xberg_assert_status 1
 		xberg_assert_output_contains "expected 3 collected tests, observed $listed"
+		grep -Fq -- '-p xberg-tesseract --all-features --test exit_cleanup_leak --test exit_cleanup_race -- --list' "$XBERG_TRACE"
+		refute_trace_pattern 'xberg-tesseract.*--no-fail-fast'
+		refute_trace_pattern '-p xberg-libheif'
+		[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 13 ]
 	done
 }
 
