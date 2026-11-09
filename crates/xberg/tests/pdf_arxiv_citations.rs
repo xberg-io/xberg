@@ -183,12 +183,17 @@ fn rotated_stamp() -> String {
 /// The same stamp drawn as three strings far apart along the margin, so the extractor reads its
 /// identifier, its category and its date as three paragraphs.
 fn split_stamp() -> String {
+    split_stamp_at(32.0)
+}
+
+/// The three strings of the split stamp, turned 90 degrees with their baselines at `x`.
+fn split_stamp_at(x: f32) -> String {
     [
         (150.0, "arXiv:2311.04567v3"),
         (400.0, "[hep-ph]"),
         (520.0, "6 Dec 2023"),
     ]
-    .map(|(y, part)| format!("q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 32 {y} Tm ({part}) Tj ET Q\n"))
+    .map(|(y, part)| format!("q 0.5 G 0.5 g BT /F1 20 Tf 0 1 -1 0 {x} {y} Tm ({part}) Tj ET Q\n"))
     .concat()
 }
 
@@ -260,10 +265,8 @@ fn plain_output_removes_a_stamp_split_across_paragraphs() {
 }
 
 #[test]
-fn a_split_stamp_far_from_the_page_edge_is_kept() {
-    // The extractor measures a rotated run by its length (about 178 points here), so the stamp
-    // stands clear of both edges only where x exceeds that and x + 178 leaves 178 points to the right.
-    let stamp = split_stamp().replace(" 32 ", " 200 ");
+fn a_split_stamp_in_the_middle_of_the_page_is_kept() {
+    let stamp = split_stamp_at(300.0);
     let content = extract_with_stamp(&stamp, OutputFormat::Markdown, false);
     for part in ["arXiv:2311.04567v3", "[hep-ph]", "6 Dec 2023"] {
         assert!(content.contains(part), "{part:?} missing from {content:?}");
