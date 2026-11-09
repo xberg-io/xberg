@@ -592,6 +592,29 @@ fn c09_td_with_a_small_line_move_does_not_continue() {
     assert_eq!(words(&spans), "The quick bro wn fox", "{}", runs(&spans));
 }
 
+/// The side table is reset at each span extraction. The second stream puts a span at the sequence
+/// and x of the first stream's marked span, under a small line move; a stale mark would join it. ~keep
+#[test]
+fn c12_a_pen_mark_does_not_outlive_its_extraction() {
+    let font = std_font("Helvetica");
+    let marked = tj_seam(&font, &QUICK, &WN_FOX, Seam::default());
+    let moved = tj_seam(
+        &font,
+        &QUICK,
+        &WN_FOX,
+        Seam {
+            ty: 0.1,
+            ..Seam::default()
+        },
+    );
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), font);
+    let first = extractor.extract_text_spans(marked.as_bytes()).unwrap();
+    assert_eq!(words(&first), "The quick brown fox", "{}", runs(&first));
+    let second = extractor.extract_text_spans(moved.as_bytes()).unwrap();
+    assert_eq!(words(&second), "The quick bro wn fox", "{}", runs(&second));
+}
+
 /// No `/Widths` and no Adobe metrics: the extractor's pen is the fallback's, not the producer's, so a
 /// `Td` back to the extractor's own pen is not read as the producer's seam. ~keep
 #[test]
