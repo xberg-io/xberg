@@ -1762,12 +1762,48 @@ fn looks_like_standalone_heading_text(text: &str) -> bool {
     false
 }
 
+/// Keys that identify one piece of margin text across pages.
+///
+/// The first key ignores spacing and punctuation, so "All rights reserved" and
+/// "Allrightsreserved" match. The second key is the sorted list of words, so the same words
+/// joined in a different order match: a stamp whose values join as "A B" on some pages and "B A"
+/// on others is one repeated line, not two lines that each fall under the page threshold.
+fn margin_text_keys(normalized: &str) -> Vec<String> {
+    let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
+    if alphanum_key.is_empty() {
+        return Vec::new();
+    }
+    let mut words: Vec<String> = normalized
+        .split_whitespace()
+        .map(|w| w.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+        .filter(|w| !w.is_empty())
+        .collect();
+    words.sort_unstable();
+    let word_set_key = format!("words|{}", words.join(" "));
+    vec![alphanum_key, word_set_key]
+}
+
+/// True when a paragraph sits in a page margin and is not already page furniture.
+fn is_margin_candidate(para: &PdfParagraph, top_margin_y: f32, bottom_margin_y: f32) -> bool {
+    if para.is_page_furniture
+        || matches!(
+            para.layout_class,
+            Some(LayoutHintClass::PageHeader | LayoutHintClass::PageFooter)
+        )
+    {
+        return false;
+    }
+    para.block_bbox
+        .is_some_and(|(_, bottom, _, top)| top > top_margin_y || bottom < bottom_margin_y)
+}
+
 /// Detect paragraphs in page margins that repeat across pages.
 ///
 /// Only considers paragraphs whose bounding box falls in the page margins
 /// (top 10%, bottom 10%, or narrow left/right strips). If the same text
 /// appears in the margins on >50% of pages, it's furniture (running headers,
-/// footers, metadata stamps, watermarks).
+/// footers, metadata stamps, watermarks). Text matches when its characters
+/// match, or when its words match in any order (see `margin_text_keys`).
 ///
 /// `page_heights` provides the height of each page for margin calculation.
 pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>], page_heights: &[f32]) {
@@ -1777,8 +1813,7 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
 
     let margin_frac = 0.10;
 
-    let mut text_page_count: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
-    let mut alphanum_to_exact: ahash::AHashMap<String, ahash::AHashSet<String>> = ahash::AHashMap::new();
+    let mut key_page_count: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
     let mut first_seen_page: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
 
     for (page_idx, page) in all_pages.iter().enumerate() {
@@ -1788,60 +1823,29 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
 
         let mut seen: ahash::AHashSet<String> = ahash::AHashSet::new();
         for para in page {
-            if para.is_page_furniture
-                || matches!(
-                    para.layout_class,
-                    Some(LayoutHintClass::PageHeader | LayoutHintClass::PageFooter)
-                )
-            {
+            if !is_margin_candidate(para, top_margin_y, bottom_margin_y) {
                 continue;
             }
-
-            let in_margin = para
-                .block_bbox
-                .is_some_and(|(_, bottom, _, top)| top > top_margin_y || bottom < bottom_margin_y);
-            if !in_margin {
-                continue;
-            }
-
-            let text = paragraph_plain_text(para);
-            let normalized = text.trim().to_lowercase();
-            if normalized.is_empty() {
-                continue;
-            }
-
-            let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
-            if alphanum_key.is_empty() {
-                continue;
-            }
-
-            alphanum_to_exact
-                .entry(alphanum_key.clone())
-                .or_default()
-                .insert(normalized.clone());
-
-            if seen.insert(alphanum_key.clone()) {
-                let count = text_page_count.entry(alphanum_key.clone()).or_insert(0);
-                if *count == 0 {
-                    first_seen_page.insert(alphanum_key, page_idx);
+            let normalized = paragraph_plain_text(para).trim().to_lowercase();
+            for key in margin_text_keys(&normalized) {
+                if seen.insert(key.clone()) {
+                    let count = key_page_count.entry(key.clone()).or_insert(0);
+                    if *count == 0 {
+                        first_seen_page.insert(key, page_idx);
+                    }
+                    *count += 1;
                 }
-                *count += 1;
             }
         }
     }
 
     let threshold = all_pages.len() / 2;
 
-    let mut repeating: ahash::AHashSet<String> = ahash::AHashSet::new();
-    for (alphanum_key, count) in &text_page_count {
-        if *count > threshold
-            && let Some(variants) = alphanum_to_exact.get(alphanum_key)
-        {
-            for v in variants {
-                repeating.insert(v.clone());
-            }
-        }
-    }
+    let repeating: ahash::AHashSet<&String> = key_page_count
+        .iter()
+        .filter(|(_, count)| **count > threshold)
+        .map(|(key, _)| key)
+        .collect();
 
     if repeating.is_empty() {
         return;
@@ -1860,35 +1864,27 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
         let bottom_margin_y = page_h * margin_frac;
 
         for para in page.iter_mut() {
-            if para.is_page_furniture
-                || matches!(
-                    para.layout_class,
-                    Some(LayoutHintClass::PageHeader | LayoutHintClass::PageFooter)
-                )
-            {
+            if !is_margin_candidate(para, top_margin_y, bottom_margin_y) {
                 continue;
             }
-            let in_margin = para
-                .block_bbox
-                .is_some_and(|(_, bottom, _, top)| top > top_margin_y || bottom < bottom_margin_y);
-            if !in_margin {
+            let normalized = paragraph_plain_text(para).trim().to_lowercase();
+            let matched: Vec<String> = margin_text_keys(&normalized)
+                .into_iter()
+                .filter(|key| repeating.contains(key))
+                .collect();
+            let Some(earliest) = matched.iter().filter_map(|key| first_seen_page.get(key).copied()).min() else {
+                continue;
+            };
+            if earliest == page_idx {
                 continue;
             }
-            let text = paragraph_plain_text(para);
-            let normalized = text.trim().to_lowercase();
-            if repeating.contains(&normalized) {
-                let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
-                if first_seen_page.get(&alphanum_key).copied() == Some(page_idx) {
-                    continue;
-                }
-                tracing::trace!(
-                    text = %normalized.chars().take(60).collect::<String>(),
-                    was_heading = ?para.heading_level,
-                    "marking margin text as furniture"
-                );
-                para.is_page_furniture = true;
-                para.heading_level = None;
-            }
+            tracing::trace!(
+                text = %normalized.chars().take(60).collect::<String>(),
+                was_heading = ?para.heading_level,
+                "marking margin text as furniture"
+            );
+            para.is_page_furniture = true;
+            para.heading_level = None;
         }
     }
 }
@@ -2670,6 +2666,62 @@ mod tests {
         );
         assert!(!pages[0][1].is_page_furniture);
         assert!(!pages[3][1].is_page_furniture);
+    }
+
+    /// A stamp whose values join in two orders across pages is one repeated line. Each order
+    /// alone is on fewer than half of the 13 pages, so only a word-set comparison sees it.
+    #[test]
+    fn test_cross_page_repeating_text_matches_reordered_words() {
+        let page_heights = vec![792.0; 13];
+        let forward = "09/17/2012 01/08/2013 1/9/2013 6:25 AM";
+        let reversed = "1/9/2013 6:25 AM 09/17/2012 01/08/2013";
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..13)
+            .map(|i| {
+                let stamp = match i {
+                    0..=5 => forward,
+                    6..=8 => reversed,
+                    _ => "09/17/2012",
+                };
+                vec![make_margin_body(stamp), make_body_center(&format!("Body {i}"))]
+            })
+            .collect();
+        mark_cross_page_repeating_text(&mut pages, &page_heights);
+
+        assert!(!pages[0][0].is_page_furniture, "first occurrence must stay");
+        for (i, page) in pages.iter().enumerate().take(9).skip(1) {
+            assert!(page[0].is_page_furniture, "page {i} stamp must be furniture");
+        }
+        for (i, page) in pages.iter().enumerate().skip(9) {
+            assert!(
+                !page[0].is_page_furniture,
+                "page {i} holds a different line and must stay"
+            );
+        }
+        assert!(pages.iter().all(|page| !page[1].is_page_furniture));
+    }
+
+    /// Two lines that share most words but not all are two lines: their page counts must not add.
+    #[test]
+    fn test_cross_page_repeating_text_keeps_lines_with_different_word_sets() {
+        let page_heights = vec![792.0; 13];
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..13)
+            .map(|i| {
+                let stamp = match i {
+                    0..=5 => "Annual report 2012 final draft",
+                    6..=11 => "final draft annual report 2013",
+                    _ => "Unique footer",
+                };
+                vec![make_margin_body(stamp), make_body_center(&format!("Body {i}"))]
+            })
+            .collect();
+        mark_cross_page_repeating_text(&mut pages, &page_heights);
+
+        for (i, page) in pages.iter().enumerate() {
+            assert!(
+                !page[0].is_page_furniture,
+                "page {i}: neither line is on more than half the pages"
+            );
+        }
     }
 
     #[test]
