@@ -1059,8 +1059,13 @@ fn layer_lines_missing_and_owned<'a>(layer: &'a str, boxes: &PageLineBoxes) -> R
         }
     }
     // A row the geometry cannot place (no native box with its text, or no single OCR row that
-    // its box owns) comes from OCR when one OCR row holds it whole, in words no other row took. ~keep
-    for (row, line) in unplaced {
+    // its box owns) comes from OCR when one OCR row holds it whole, in words no other row took.
+    // Rows without markers take their words first, so a marked row never takes the read of an
+    // equal one. ~keep
+    let (marked, unmarked): (Vec<_>, Vec<_>) = unplaced
+        .into_iter()
+        .partition(|(_, line)| line.contains(super::super::unmapped_glyphs::is_lost_glyph));
+    for (row, line) in unmarked.into_iter().chain(marked) {
         let key = line_key(line);
         if read.take_whole(&key) {
             continue;
@@ -1091,12 +1096,57 @@ impl<'a> OcrRowSpans<'a> {
         let taken = rows.iter().map(|row| vec![false; row.len()]).collect();
         Self { rows, taken }
     }
-    /// The first untaken run of the words of `key` in OCR row `at`, marked taken. A row with
-    /// lost-glyph markers takes no words: its match is a pattern, not a word run. ~keep
+    /// The first untaken run of words in OCR row `at` that reads `key`, marked taken: the words of
+    /// `key` in order, or for a key with lost-glyph markers the words its marker-aware pattern
+    /// matches. ~keep
     fn spend(&mut self, at: usize, key: &str) -> bool {
-        if key.contains(super::super::unmapped_glyphs::is_lost_glyph) {
-            return true;
+        match marked_row_pattern(key, false) {
+            Some(pattern) => self.spend_match(at, &pattern),
+            None => self.spend_words(at, key),
         }
+    }
+    /// Whether one OCR row holds `key` whole in untaken words, read marker-aware, and takes them. ~keep
+    fn take_whole(&mut self, key: &str) -> bool {
+        match marked_row_pattern(key, false) {
+            Some(pattern) => (0..self.rows.len()).any(|at| self.spend_match(at, &pattern)),
+            None => (0..self.rows.len()).any(|at| self.spend_words(at, key)),
+        }
+    }
+    /// The first match of `pattern` inside one run of untaken words of OCR row `at`, marked taken.
+    /// The pattern matches whole words (`marked_row_pattern`), so the words inside the match are
+    /// the words it read. ~keep
+    fn spend_match(&mut self, at: usize, pattern: &regex::Regex) -> bool {
+        let (Some(row), Some(taken)) = (self.rows.get(at), self.taken.get_mut(at)) else {
+            return false;
+        };
+        let mut start = 0;
+        while start < row.len() {
+            if taken[start] {
+                start += 1;
+                continue;
+            }
+            let end = (start..row.len()).find(|word| taken[*word]).unwrap_or(row.len());
+            if let Some(found) = pattern.find(&row[start..end].join(" ")) {
+                let mut offset = 0;
+                let mut matched = None::<(usize, usize)>;
+                for (word, text) in row[start..end].iter().enumerate() {
+                    if offset >= found.start() && offset + text.len() <= found.end() {
+                        let first = matched.map_or(start + word, |(first, _)| first);
+                        matched = Some((first, start + word + 1));
+                    }
+                    offset += text.len() + 1;
+                }
+                if let Some((first, last)) = matched {
+                    taken[first..last].fill(true);
+                    return true;
+                }
+            }
+            start = end;
+        }
+        false
+    }
+    /// The first untaken run of the words of `key` in OCR row `at`, marked taken. ~keep
+    fn spend_words(&mut self, at: usize, key: &str) -> bool {
         let words: Vec<&str> = key.split_whitespace().collect();
         let (Some(row), Some(taken)) = (self.rows.get(at), self.taken.get_mut(at)) else {
             return false;
@@ -1111,13 +1161,6 @@ impl<'a> OcrRowSpans<'a> {
         };
         taken[start..start + words.len()].fill(true);
         true
-    }
-    /// Whether one OCR row holds `key` whole in untaken words, read marker-aware. ~keep
-    fn take_whole(&mut self, key: &str) -> bool {
-        if let Some(pattern) = marked_row_pattern(key, false) {
-            return self.rows.iter().any(|row| pattern.is_match(&row.join(" ")));
-        }
-        (0..self.rows.len()).any(|at| self.spend(at, key))
     }
 }
 /// Restore unproved native rows after the OCR stage has been chosen. Without geometry, only
@@ -2057,31 +2100,30 @@ pub(crate) fn merge_ocr_pages_into_native(
         boundaries,
         ocr_results,
         &OcrQualityThresholds::default(),
-        true,
+        &ahash::AHashSet::new(),
     );
     apply_ocr_page_replacements(native_text, boundaries, &accepted)
 }
 /// Whether the OCR text of a page would discard most of a healthy native text layer, as the
-/// alnum count the page held and the count OCR read. With `judge_marked_pages`, a page with
-/// lost-glyph markers is judged on its readable text, and each lost glyph is a character the page
-/// holds and the readable text lacks, so the page is judged against what it held, not against what
-/// survived. Without it, the markers count as the garble they are, so a marked page is judged as
-/// before the markers were kept: a pipeline the user configured keeps its replacement. ~keep
+/// alnum count the page held and the count OCR read. A page with lost-glyph markers is judged only
+/// with `layer_has_page_evidence`: on its readable text, and each lost glyph is a character the
+/// page holds and the readable text lacks, so the page is judged against what it held, not against
+/// what survived. Without that evidence, the markers say the layer is not what the page shows, so
+/// the read replaces it. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn destructive_ocr_information_loss(
     native_page: &str,
     ocr_text: &str,
     thresholds: &OcrQualityThresholds,
-    judge_marked_pages: bool,
+    layer_has_page_evidence: bool,
 ) -> Option<(usize, usize)> {
-    let (readable, lost_glyphs) = if judge_marked_pages {
-        let lost = native_page
-            .matches(super::super::unmapped_glyphs::is_lost_glyph)
-            .count();
-        (super::super::unmapped_glyphs::readable_text(native_page), lost)
-    } else {
-        (std::borrow::Cow::Borrowed(native_page), 0)
-    };
+    let lost_glyphs = native_page
+        .matches(super::super::unmapped_glyphs::is_lost_glyph)
+        .count();
+    if lost_glyphs > 0 && !layer_has_page_evidence {
+        return None;
+    }
+    let readable = super::super::unmapped_glyphs::readable_text(native_page);
     let native_decision = evaluate_native_text_for_ocr(&readable, Some(1), thresholds);
     if native_decision.fallback {
         return None;
@@ -2094,15 +2136,16 @@ pub(super) fn destructive_ocr_information_loss(
 }
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
-/// `judge_marked_pages` as for `destructive_ocr_information_loss`: true unless the user configured
-/// an OCR pipeline or the run probes a hidden layer. ~keep
+/// `evidence_pages` holds the pages whose native layer has same-page evidence: the ink proof gave
+/// the read's ink to the native text, or the read covers every native word. Only those pages are
+/// judged on their readable text, as for `destructive_ocr_information_loss`. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn accepted_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
     thresholds: &OcrQualityThresholds,
-    judge_marked_pages: bool,
+    evidence_pages: &ahash::AHashSet<u32>,
 ) -> ahash::AHashMap<u32, String> {
     let mut page_counts = std::collections::HashMap::new();
     for boundary in boundaries {
@@ -2172,7 +2215,7 @@ pub(super) fn accepted_ocr_page_replacements(
                 return false;
             }
             let native_page = &native_text[byte_start..byte_end];
-            let loss = destructive_ocr_information_loss(native_page, text, thresholds, judge_marked_pages);
+            let loss = destructive_ocr_information_loss(native_page, text, thresholds, evidence_pages.contains(*page));
             if let Some((native_alnum, ocr_alnum)) = loss {
                 tracing::warn!(
                     page = **page,
@@ -3942,7 +3985,7 @@ mod public_ocr_handoff_tests {
             &boundaries,
             &ahash::AHashMap::from_iter([(1, text.into())]),
             &Default::default(),
-            true,
+            &ahash::AHashSet::new(),
         )
     }
 

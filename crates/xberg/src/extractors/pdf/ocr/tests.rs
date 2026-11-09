@@ -206,7 +206,7 @@ pub(super) mod tests {
             &boundaries,
             &ocr_results,
             &OcrQualityThresholds::default(),
-            true,
+            &ahash::AHashSet::new(),
         );
         assert!(
             accepted.is_empty(),
@@ -239,7 +239,7 @@ pub(super) mod tests {
             &boundaries,
             &ocr_results,
             &OcrQualityThresholds::default(),
-            true,
+            &ahash::AHashSet::new(),
         );
         assert_eq!(accepted.len(), 1, "a page with real OCR text must be accepted");
 
@@ -263,7 +263,7 @@ pub(super) mod tests {
             &boundaries,
             &ocr_results,
             &OcrQualityThresholds::default(),
-            true,
+            &ahash::AHashSet::new(),
         );
         assert!(
             accepted.is_empty(),
@@ -1403,8 +1403,13 @@ pub(super) mod tests {
         raw.insert(6, "overlap two".to_string());
         raw.insert(7, "   ".to_string());
 
-        let accepted =
-            accepted_ocr_page_replacements(native, &boundaries, &raw, &OcrQualityThresholds::default(), true);
+        let accepted = accepted_ocr_page_replacements(
+            native,
+            &boundaries,
+            &raw,
+            &OcrQualityThresholds::default(),
+            &ahash::AHashSet::new(),
+        );
 
         assert_eq!(accepted.len(), 1);
         assert_eq!(accepted.get(&1).map(String::as_str), Some("accepted"));
@@ -1428,7 +1433,13 @@ pub(super) mod tests {
         ];
         let raw = ahash::AHashMap::from_iter([(2, "page two".to_string()), (1, "page one|".to_string())]);
 
-        let accepted = accepted_ocr_page_replacements("", &boundaries, &raw, &OcrQualityThresholds::default(), true);
+        let accepted = accepted_ocr_page_replacements(
+            "",
+            &boundaries,
+            &raw,
+            &OcrQualityThresholds::default(),
+            &ahash::AHashSet::new(),
+        );
         let merged = apply_ocr_page_replacements("", &boundaries, &accepted);
 
         assert_eq!(merged, "page one|page two");

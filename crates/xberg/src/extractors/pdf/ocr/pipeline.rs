@@ -2491,15 +2491,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
     #[cfg(feature = "layout-detection")]
     let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
-    // A marked page is judged on the text it held unless the user configured an OCR pipeline or the
-    // run probes a hidden layer; a pipeline the build or layout inputs make does not turn it off. ~keep
-    let judge_marked_pages = !probing_hidden_layer && ocr_config_owned.pipeline.is_none();
+    // A marked page is judged on the text it held only on same-page evidence for its layer. The
+    // ink proof and the coverage check run only where native preservation is automatic for the
+    // page, so a page the caller forces to OCR is never in this set. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let evidence_pages: ahash::AHashSet<u32> = native_ink_owned_pages
+        .union(&native_words_covered_pages)
+        .copied()
+        .collect();
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let evidence_pages = ahash::AHashSet::new();
     let mut accepted_replacements = accepted_ocr_page_replacements(
         native_text,
         boundaries,
         &ocr_results,
         &ocr_output_thresholds,
-        judge_marked_pages,
+        &evidence_pages,
     );
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if probing_hidden_layer || !pages.preserve_native.is_empty() {
