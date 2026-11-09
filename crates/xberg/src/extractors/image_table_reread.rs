@@ -125,15 +125,15 @@ fn wide_gaps(row: &[WordBox], tolerance: u32) -> usize {
 /// Rows with words on at least [`MIN_COLUMNS_PER_ROW`] distinct shared column edges and a wide
 /// gap between each pair of columns, and how many shared edges the page has. Prose shares only
 /// its left margin, and a justified two-column page has one gutter, not a gap per column.
-fn column_structure(doc: &InternalDocument) -> (usize, usize) {
+fn column_structure(doc: &InternalDocument) -> (Vec<Vec<WordBox>>, usize) {
     let Some(words) = word_boxes(doc) else {
-        return (0, 0);
+        return (Vec::new(), 0);
     };
     let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
     let rows = rows(&words, tolerance);
     let edges = column_edges(&rows, tolerance);
     let on_columns = rows
-        .iter()
+        .into_iter()
         .filter(|row| {
             let mut hit: Vec<usize> = row
                 .iter()
@@ -148,7 +148,7 @@ fn column_structure(doc: &InternalDocument) -> (usize, usize) {
             hit.dedup();
             hit.len() >= MIN_COLUMNS_PER_ROW && wide_gaps(row, tolerance) >= MIN_COLUMNS_PER_ROW - 1
         })
-        .count();
+        .collect();
     (on_columns, edges.len())
 }
 
@@ -189,6 +189,7 @@ fn emits_row_by_row(words: &[WordBox], tolerance: u32) -> bool {
 /// dozens of edges is a grid of cells, not a table. Every refusal is logged with the counts.
 pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
     let (rows, edges) = column_structure(doc);
+    let rows = rows.len();
     if edges > MAX_SHARED_EDGES {
         tracing::debug!(
             rows,
@@ -240,13 +241,10 @@ fn is_leader(text: &str) -> bool {
     text.chars().count() >= MIN_LEADER_DOTS && text.chars().all(|c| c == '.')
 }
 
-/// Text rows holding at least one leader word.
+/// Text rows that take part in the column structure and hold at least one leader word.
 fn leader_rows(doc: &InternalDocument) -> usize {
-    let Some(words) = word_boxes(doc) else {
-        return 0;
-    };
-    let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
-    rows(&words, tolerance)
+    column_structure(doc)
+        .0
         .iter()
         .filter(|row| row.iter().any(|word| word.leader))
         .count()
@@ -254,6 +252,7 @@ fn leader_rows(doc: &InternalDocument) -> usize {
 
 /// A block read that found no table but whose rows are dot-leader rows on shared column edges: the
 /// table check drops a dot-leader table as prose, and the row recovery keeps each row on one line.
+/// The leader rows are the column rows themselves, so leaders elsewhere on the page do not count.
 fn reads_leader_rows(doc: &InternalDocument) -> bool {
     leader_rows(doc) >= MIN_LEADER_ROWS && shows_column_structure(doc)
 }
@@ -356,7 +355,7 @@ mod tests {
     #[test]
     fn aligned_columns_show_a_column_structure() {
         let table = doc(table(8));
-        assert_eq!(column_structure(&table).0, 8);
+        assert_eq!(column_structure(&table).0.len(), 8);
         assert!(shows_column_structure(&table));
     }
 
@@ -371,7 +370,7 @@ mod tests {
     #[test]
     fn ragged_prose_shows_no_column_structure() {
         let prose = doc(prose(10));
-        assert!(!shows_column_structure(&prose), "{:?}", column_structure(&prose));
+        assert!(!shows_column_structure(&prose), "{:?}", column_structure(&prose).1);
     }
 
     fn two_columns(row_major: bool) -> Vec<OcrElement> {
@@ -524,6 +523,16 @@ mod tests {
     }
 
     #[test]
+    fn leaders_outside_the_column_rows_do_not_make_a_leader_table() {
+        let mut read = table(8);
+        read.extend((0..4).map(|row| element(".........", 900, 410 + row * 40, 140)));
+        let read = doc(read);
+        assert!(shows_column_structure(&read));
+        assert_eq!(leader_rows(&read), 0);
+        assert_eq!(second_read_is_usable(&doc(table(8)), &read), NO_TABLE);
+    }
+
+    #[test]
     fn leader_rows_with_too_few_letters_are_still_refused() {
         let mut first = table(6);
         first.push(element(
@@ -550,7 +559,11 @@ mod tests {
                 ]
             })
             .collect();
-        assert!(leader_rows(&doc(toc.clone())) >= MIN_LEADER_ROWS);
+        assert_eq!(
+            leader_rows(&doc(toc.clone())),
+            0,
+            "no title/leader/page line is a column row"
+        );
         assert_eq!(second_read_is_usable(&doc(toc.clone()), &doc(toc)), NO_TABLE);
     }
 
