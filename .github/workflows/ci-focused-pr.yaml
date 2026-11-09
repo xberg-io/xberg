@@ -6,6 +6,9 @@ on:
     paths:
       - ".cargo/**"
       - ".github/workflows/ci-focused-pr.yaml"
+      - ".github/workflows/ci-rust.yaml"
+      - ".github/actions/setup-onnx-runtime/**"
+      - "scripts/ci/actions/setup-onnx-runtime/**"
       - "crates/**"
       - "fixtures/**"
       - "vendored/**"
@@ -64,8 +67,15 @@ jobs:
 
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          install: "false"
+          install: ${{ matrix.suite == 'nli' && 'true' || 'false' }}
+          install-args: cargo-deny
           cache: "false"
+
+      - name: Setup ONNX Runtime for NLI admission tests
+        if: matrix.suite == 'nli'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
 
       - name: Install OCR build dependencies and pinned English data
         if: matrix.suite == 'pdf-ocr'

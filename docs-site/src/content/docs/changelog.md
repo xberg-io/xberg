@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(benchmarks): Freeze experimental NLI accounting plans and validate completed reports.** (#2334)
+  The standalone runner calls the existing local classifier with pinned inputs and artifacts; report validation checks accounting consistency and does not qualify a model or prove inference occurred.
+
 - **(layout): Add an experimental `model` selector for layout detection.** (#2284)
   `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
 
@@ -225,13 +228,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover a sideways page with two tables when the first read held extra filtered words.** (#2497)
   The implicit orientation retry refused two rotated tables unless the first read's iterator word count equalled its reported count, so dictionary-filtered words left the page on its noise read. It now accepts iterator words that include every retained token (extra filtered words only widen the protection check), with the same exact table, geometry and protected-word proofs.
 
+- **(pdf): Remove a painted orphan glyph beside a table whatever the glyph (#2616).**
+  The standalone orphan that a painted table cell already carries was deleted only when it was an ASCII digit, so a "%", "-", currency sign or non-Latin digit stayed as a duplicate paragraph. It is now deleted when it is the single remaining source glyph of a painted overhang and the exact plain source paragraph; two competing glyphs, a multi-character word and blank text are still refused. A symbol candidate beside a digit candidate now counts as competing and is refused, where the symbol used to be ignored.
+
 - **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
   Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
 
 - **(ocr): Limit the glued-cell veto's leader exemption to the gap at the leader (#2704).**
   A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` counts as a leader and `‥` counts toward one.
 
-- **(ocr): Run no-binarization contrast preprocessing on the 8-bit plane for genuinely gray input.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which shrank or refused the sparse-retry fallback's upscale. A raster whose channels are equal in every pixel now becomes an 8-bit Pix and frees its RGB before background normalization and sharpening; the result is pixel-identical to the colour path, and the native phases peak at 7.0 bytes per pixel as measured with Leptonica's allocator (29,360,128 bytes at 2048x2048 against a modelled 29,360,384). Colour input keeps the colour path and its model, a step that fails after the RGB is freed keeps the best Pix already built, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does. The receipt OCR test is ignored until #2699 is resolved: its expected spelling does not reproduce at default limits and the cause is not isolated.
+- **(ocr): Run no-binarization contrast preprocessing on the 8-bit plane for genuinely gray input.** (#2699) Since ca6be8f1d3 the image workspace model charged this path about 17 bytes per pixel, which shrank or refused the sparse-retry fallback's upscale. A raster whose channels are equal in every pixel now becomes an 8-bit Pix and frees its RGB before background normalization and sharpening; the result is pixel-identical to the colour path, and the native phases peak at 7.0 bytes per pixel as measured with Leptonica's allocator (29,360,128 bytes at 2048x2048 against a modelled 29,360,384). Colour input keeps the colour path and its model, a step that fails after the RGB is freed keeps the best Pix already built, and an engine-selected JPEG upscale that does not fit shrinks to the largest size that does. The scale-dependent receipt OCR test was replaced with deterministic tests of the fallback gate (#2699); the lost receipt-header recovery is tracked in #2741.
 
 - **(pdf): Honor graphics-state dash patterns and zero-opacity strokes in native PDF path extraction.** (#2332)
   All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour for clamped zero opacity; this prevents false HTML headers from those separators.

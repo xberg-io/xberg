@@ -643,4 +643,72 @@ mod tests {
         assert_eq!(metadata.scale_factor, 1.0);
         assert!(metadata.skipped_resize);
     }
+
+    fn gray_switch_png(pixel: [u8; 3]) -> Vec<u8> {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(200, 100, image::Rgb(pixel))
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        encoded.into_inner()
+    }
+
+    fn prepare_gray_switch(
+        encoded: &[u8],
+        limit: usize,
+        policy: &ImagePreprocessingConfig,
+    ) -> crate::Result<PreparedOcrImage> {
+        let config = TesseractConfig {
+            source_dpi: Some(100.0),
+            preprocessing: Some(policy.clone()),
+            ..Default::default()
+        };
+        let images = ImageExtractionConfig {
+            auto_adjust_dpi: false,
+            ..Default::default()
+        };
+        prepare_encoded_ocr_image(
+            encoded,
+            &SecurityLimits {
+                max_content_size: limit,
+                ..Default::default()
+            },
+            &config,
+            Some(&images),
+            false,
+        )
+    }
+
+    #[test]
+    fn gray_route_switch_charges_only_the_gray_raster_the_gray_model() {
+        let policy = ImagePreprocessingConfig {
+            contrast_enhance: true,
+            binarization_method: "none".into(),
+            deskew: false,
+            ..Default::default()
+        };
+        let (gray_png, colour_png) = (gray_switch_png([245; 3]), gray_switch_png([245, 245, 200]));
+        let gray_limit = native_image_budget::known_gray_phase_peak(200, 100, colour_png.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert!(
+            gray_png.len() <= colour_png.len(),
+            "the gray raster is admitted under the colour raster's gray peak"
+        );
+        let colour_peak = native_image_budget::known_phase_peak(200, 100, colour_png.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert!(gray_limit < colour_peak, "{gray_limit} vs {colour_peak}");
+        let kept = prepare_gray_switch(&gray_png, gray_limit, &policy).expect("gray fits the gray model");
+        assert_eq!((kept.width, kept.height), (200, 100));
+        let message = prepare_gray_switch(&colour_png, gray_limit, &policy)
+            .err()
+            .expect("a colour raster is charged the colour model, which the gray budget cannot hold")
+            .to_string();
+        assert!(
+            message.contains(&format!(
+                "exceeds security_limits.max_content_size ({gray_limit} bytes)"
+            )),
+            "{message}"
+        );
+    }
 }
