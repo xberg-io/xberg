@@ -139,6 +139,30 @@ mod tests {
     }
 
     #[test]
+    fn should_keep_a_pipe_in_cell_math_inside_its_cell() {
+        let text = "$|x|$";
+        let (cells, encoded) = encoded_inline_cell(text, 0..text.len());
+        let mut builder = InternalDocumentBuilder::new("docx");
+        let element = builder.push_table_from_cells(
+            &[
+                vec!["H".to_string(), "G".to_string()],
+                vec![cells[0][0].clone(), "b".to_string()],
+            ],
+            None,
+            None,
+        );
+        builder.set_table_math_annotations(element, encoded);
+        let rendered = super::super::render_markdown(&builder.build());
+        let arena = comrak::Arena::new();
+        let parsed = comrak::parse_document(&arena, &rendered, &super::super::markdown::comrak_options());
+        let cells = parsed
+            .descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::TableCell))
+            .count();
+        assert_eq!(cells, 4, "{rendered}");
+    }
+
+    #[test]
     fn should_reject_invalid_cached_cell_math_provenance_gh2256() {
         let text = "é $x$";
         let (cells, encoded) = encoded_inline_cell(text, "é ".len()..text.len());

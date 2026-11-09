@@ -294,7 +294,7 @@ impl Builder {
                 self.text(&code.literal);
                 self.style.code -= 1;
             }
-            NodeValue::Math(math) => self.text(&math.literal.trim().replace(['\r', '\n'], " ")),
+            NodeValue::Math(math) => self.text(&crate::rendering::common::join_tex_lines(&math.literal)),
             NodeValue::HtmlInline(text) | NodeValue::Raw(text) => self.text(text),
             NodeValue::EscapedTag(text) => self.text(text),
             NodeValue::FootnoteReference(reference) => {

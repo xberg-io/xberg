@@ -19,8 +19,9 @@ use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotat
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement, list_item_source_label_from_attributes};
 
 use super::common::{
-    FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, is_body_element,
-    is_container_end, parse_metadata_entries, sorted_inline_annotations, valid_math_annotation,
+    FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, has_tex_comment,
+    is_body_element, is_container_end, join_tex_lines, parse_metadata_entries, sorted_inline_annotations,
+    valid_math_annotation,
 };
 
 pub(super) fn admonition_alert_type(kind: &str) -> Option<comrak::nodes::AlertType> {
@@ -282,12 +283,18 @@ fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
     let top_level = paragraph
         .and_then(|paragraph| paragraph.parent())
         .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Document));
-    if let NodeValue::Math(math) = &mut node.data.borrow_mut().value {
-        math.literal = if math.display_math && paragraph.is_some() {
-            dollar_math_display(&math.literal, top_level)
-        } else {
-            dollar_math_inline(&math.literal)
-        };
+    let mut data = node.data.borrow_mut();
+    let NodeValue::Math(math) = &mut data.value else {
+        return;
+    };
+    if !math.display_math || paragraph.is_none() {
+        math.literal = dollar_math_inline(&math.literal);
+    } else if let Some(literal) = dollar_math_display(&math.literal, top_level) {
+        math.literal = literal;
+    } else {
+        let math = std::mem::take(math);
+        drop(data);
+        write_backtick_math_as_code(node, math, true);
     }
 }
 
@@ -309,27 +316,34 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
     }
     node.data.borrow_mut().value = NodeValue::Code(NodeCode {
         num_backticks: 1,
-        literal: one_line(&math.literal),
+        literal: join_tex_lines(&math.literal),
     });
 }
 
-/// Display TeX for math alone in a paragraph. At the top level it is the literal between `$$`
-/// delimiter lines. Inside a quote, list item or footnote a container prefix would indent each of
-/// those lines, so the TeX is written on one line, `$$tex$$`, as it is when a line opens a Markdown
-/// block (a quote, list or heading marker), which would end the paragraph for a reader without
-/// math. Line breaks stay only where a `%` comment makes them significant. No blank line, no
-/// unescaped `$`, and no `<` that opens a tag in a reader without math.
-fn dollar_math_display(tex: &str, top_level: bool) -> String {
+/// Display TeX for math alone in a paragraph, or `None` when no `$$` form holds it.
+///
+/// At the top level it is the literal between `$$` delimiter lines. Inside a quote, list item or
+/// footnote a container prefix would indent each of those lines, so the TeX is written on one
+/// line, `$$tex$$`; so it is when a line opens a Markdown block (a quote, list or heading marker),
+/// which would end the paragraph for a reader without math. A `%` comment makes the line breaks
+/// significant, so TeX with one that needs either of those has no `$$` form and keeps the fence.
+/// The TeX holds no blank line, which would end the block, and no unescaped `$`.
+fn dollar_math_display(tex: &str, top_level: bool) -> Option<String> {
+    let comment = has_tex_comment(tex);
     let tex = neutralize_markup(&escape_math_dollars(&unix_lines(tex)));
     let lines: Vec<&str> = tex
         .lines()
         .map(str::trim_end)
         .filter(|line| !line.trim().is_empty())
         .collect();
-    if !tex.contains('%') && (!top_level || lines.iter().any(|line| opens_block(line))) {
-        return lines.iter().map(|line| line.trim()).collect::<Vec<_>>().join(" ");
+    let one_line = !top_level || lines.iter().any(|line| opens_block(line));
+    match (one_line, comment) {
+        (true, true) => None,
+        (true, false) => Some(guard_trailing_backslash(
+            lines.iter().map(|line| line.trim()).collect::<Vec<_>>().join(" "),
+        )),
+        (false, _) => Some(format!("\n{}\n", lines.join("\n"))),
     }
-    format!("\n{}\n", lines.join("\n"))
 }
 
 fn opens_block(line: &str) -> bool {
@@ -341,10 +355,11 @@ fn opens_block(line: &str) -> bool {
 
 /// Inline TeX on one line, without the edge whitespace that stops `$` from opening or closing math.
 fn dollar_math_inline(tex: &str) -> String {
-    let mut tex = neutralize_markup(&escape_math_dollars(&one_line(tex)))
-        .trim()
-        .to_string();
-    // An odd run of trailing backslashes would escape the closing "$".
+    guard_trailing_backslash(neutralize_markup(&escape_math_dollars(&join_tex_lines(tex))))
+}
+
+/// An odd run of trailing backslashes would escape the closing "$".
+fn guard_trailing_backslash(mut tex: String) -> String {
     if (tex.len() - tex.trim_end_matches('\\').len()) % 2 == 1 {
         tex.push(' ');
     }
@@ -364,15 +379,20 @@ fn escape_math_dollars(tex: &str) -> String {
     out
 }
 
-/// A space after `<` changes nothing in TeX, and keeps `<img` or `<https://x>` from reading as markup.
+/// A space after `<` changes nothing in TeX, and keeps `<img ...>` or `<https://x>` from reading as
+/// a tag or autolink to a CommonMark reader. Only a `<` before a letter, `/`, `!` or `?` with a `>`
+/// later can open one. The space is visible inside `\text{}` and `\mathrm{}`, and `$` to `\$` in
+/// `escape_math_dollars` is lossy there too.
 fn neutralize_markup(tex: &str) -> String {
     let mut out = String::with_capacity(tex.len());
-    let mut chars = tex.chars().peekable();
-    while let Some(ch) = chars.next() {
+    for (index, ch) in tex.char_indices() {
         out.push(ch);
+        let rest = &tex[index + 1..];
         if ch == '<'
-            && chars
-                .peek()
+            && rest.contains('>')
+            && rest
+                .chars()
+                .next()
                 .is_some_and(|next| next.is_ascii_alphabetic() || matches!(next, '/' | '!' | '?'))
         {
             out.push(' ');
@@ -388,7 +408,7 @@ fn escape_dollars<'a>(node: &'a AstNode<'a>, arena: &'a comrak::Arena<'a>, math_
     let mut data = node.data.borrow_mut();
     match &mut data.value {
         NodeValue::Math(math) if math_as_code => {
-            let literal = one_line(std::mem::take(&mut math.literal).trim());
+            let literal = join_tex_lines(&std::mem::take(&mut math.literal));
             data.value = NodeValue::Code(NodeCode {
                 num_backticks: 1,
                 literal,
@@ -3087,7 +3107,7 @@ mod tests {
         );
         let mut dollars = Options::default();
         dollars.extension.math_dollars = true;
-        assert_no_html(markdown, &dollars);
+        assert_eq!(literals(markdown, &dollars), expected, "{markdown}");
     }
 
     fn assert_no_html(markdown: &str, options: &Options) {
@@ -3112,7 +3132,7 @@ mod tests {
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_eq!(
             markdown,
-            "Let $a< b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
+            "Let $a<b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
         );
         assert!(!markdown.contains("```math"), "{markdown}");
     }
@@ -3148,8 +3168,51 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_formula("a\n- b\n> c", None, None);
         builder.push_formula("a % note\n- b", None, None);
+        builder.push_formula("a % note\nb", None, None);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "$$a - b > c$$\n\n$$\na % note\n- b\n$$\n");
+        assert_eq!(
+            markdown,
+            "$$a - b > c$$\n\n```math\na % note\n- b\n```\n\n$$\na % note\nb\n$$\n"
+        );
+    }
+
+    #[test]
+    fn should_write_container_display_math_on_one_line_unless_a_comment_needs_the_breaks() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_quote_start();
+        builder.push_formula("a\nb", None, None);
+        builder.push_formula("a % note\nb", None, None);
+        builder.push_formula("a \\% 5\nb", None, None);
+        builder.push_formula("x \\", None, None);
+        builder.push_quote_end();
+        builder.push_list(false);
+        builder.push_list_item("item", false, vec![], None, None);
+        builder.push_formula("x \\", None, None);
+        builder.push_formula("p % q\nr", None, None);
+        builder.end_list();
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert!(markdown.contains("> $$a b$$"), "{markdown}");
+        assert!(markdown.contains("> ```math\n> a % note\n> b\n> ```"), "{markdown}");
+        assert!(markdown.contains("> $$a \\% 5 b$$"), "{markdown}");
+        assert!(markdown.contains("> $$x \\ $$"), "{markdown}");
+        assert!(markdown.contains("  $$x \\ $$"), "{markdown}");
+        assert!(markdown.contains("  ```math\n  p % q\n  r\n  ```"), "{markdown}");
+    }
+
+    #[test]
+    fn should_drop_a_tex_comment_instead_of_joining_a_line_into_it() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        push_math_paragraph(&mut builder, "Let $a % c\nb \\% d$ hold.", &["$a % c\nb \\% d$"]);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(markdown, "Let $a b \\% d$ hold.\n");
+    }
+
+    #[test]
+    fn should_escape_currency_beside_math_and_keep_a_bare_angle_bracket() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        push_math_paragraph(&mut builder, "Cost $5 or $7 and $a<b$.", &["$a<b$"]);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(markdown, "Cost \\$5 or \\$7 and $a<b$.\n");
     }
 
     #[test]
@@ -3174,7 +3237,7 @@ mod tests {
             &[
                 "< img src=x onerror=alert(1)>",
                 "< https://x>",
-                "x  < img src=x>",
+                "x < img src=x>",
                 "a`$<img src=x>",
                 "\n< script>\nalert(1)\n< /script>\n",
                 "a\n```\n<b>",

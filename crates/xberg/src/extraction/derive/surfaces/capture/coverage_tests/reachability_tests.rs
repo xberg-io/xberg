@@ -510,3 +510,58 @@ async fn canonical_sensitive_math_first_footnote_remains_completely_redactable()
     )
     .await;
 }
+
+async fn assert_display_math_redactable(document: InternalDocument, markdown_shape: &str) {
+    let mut result = prepare(document);
+    let markdown = result.formatted_content.clone().unwrap();
+    assert!(markdown.contains(markdown_shape), "{markdown}");
+    apply(&mut result, rule())
+        .await
+        .expect("display math in a container must remain redactable");
+    let result = finish(result);
+    assert!(!result.content.contains("Jane Doe"), "{}", result.content);
+    assert!(result.redaction_report.as_ref().unwrap().total_redacted > 0);
+}
+
+fn display_math_in_container(tex: &str, container: &str) -> InternalDocument {
+    let mut builder = InternalDocumentBuilder::new("test");
+    match container {
+        "quote" => builder.push_quote_start(),
+        _ => {
+            builder.push_list(false);
+            builder.push_list_item("item", false, vec![], None, None);
+        }
+    }
+    builder.push_formula(tex, None, None);
+    match container {
+        "quote" => builder.push_quote_end(),
+        _ => builder.end_list(),
+    }
+    builder.build()
+}
+
+#[tokio::test]
+async fn display_math_in_a_quote_is_redacted_on_one_line() {
+    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "quote"), "> $$Jane Doe x$$").await;
+}
+
+#[tokio::test]
+async fn display_math_in_a_list_item_is_redacted_on_one_line() {
+    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "list"), "  $$Jane Doe x$$").await;
+}
+
+#[tokio::test]
+async fn display_math_with_a_comment_in_a_quote_is_redacted_as_a_fence() {
+    assert_display_math_redactable(
+        display_math_in_container("Jane Doe % note\nx", "quote"),
+        "> ```math\n> Jane Doe % note\n> x\n> ```",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn display_math_with_a_comment_at_the_top_level_is_redacted_between_dollar_lines() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_formula("Jane Doe % note\nx", None, None);
+    assert_display_math_redactable(builder.build(), "$$\nJane Doe % note\nx\n$$").await;
+}
