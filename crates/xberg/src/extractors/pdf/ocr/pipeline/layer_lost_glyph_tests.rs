@@ -363,15 +363,24 @@ async fn short_read_failures(marked: u32, forced: bool) -> Vec<String> {
     .await;
     let run = match run {
         Ok(run) => run,
-        Err(failed) => return vec![format!("page {marked} forced {forced}: the page reads: {:?}", failed.error)],
+        Err(failed) => {
+            return vec![format!(
+                "page {marked} forced {forced}: the page reads: {:?}",
+                failed.error
+            )];
+        }
     };
     let text = &run.output.0;
     let mut failures = Vec::new();
     if text.matches(SHORT_READ).count() != 1 {
-        failures.push(format!("page {marked} forced {forced}: the short read prints once: {text:?}"));
+        failures.push(format!(
+            "page {marked} forced {forced}: the short read prints once: {text:?}"
+        ));
     }
     if LONG_MARKED.iter().any(|row| text.contains(row)) {
-        failures.push(format!("page {marked} forced {forced}: the unproved marked layer is dropped: {text:?}"));
+        failures.push(format!(
+            "page {marked} forced {forced}: the unproved marked layer is dropped: {text:?}"
+        ));
     }
     if text.matches(CLEAN_PAGE).count() != 1 {
         failures.push(format!("page {marked} forced {forced}: the clean page stays: {text:?}"));

@@ -1716,7 +1716,10 @@ fn a_marked_page_without_same_page_evidence_goes_to_ocr() {
     let one_marker = format!("{clean}A\u{FFFD}B\n");
     let accepted =
         accepted_ocr_page_replacements(&one_marker, &one_page(&one_marker), &read, &thresholds, &evidence(&[]));
-    assert!(accepted.contains_key(&1), "a page with one marker and no evidence goes to OCR");
+    assert!(
+        accepted.contains_key(&1),
+        "a page with one marker and no evidence goes to OCR"
+    );
     let accepted =
         accepted_ocr_page_replacements(&one_marker, &one_page(&one_marker), &read, &thresholds, &evidence(&[1]));
     assert!(

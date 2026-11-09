@@ -292,7 +292,10 @@ fn short_visible_read_wins(covered_first: bool) {
             .iter()
             .filter(|line| source.contains(line.as_str()))
             .count();
-        assert_eq!(held, COVERED_ROWS, "{format:?}: the native route prints the covered layer");
+        assert_eq!(
+            held, COVERED_ROWS,
+            "{format:?}: the native route prints the covered layer"
+        );
         let automatic = extract(&bytes, &config, format.clone(), Mode::Automatic);
         if automatic.extraction_method != Some(ExtractionMethod::Mixed) {
             failures.push(format!(
@@ -311,7 +314,9 @@ fn short_visible_read_wins(covered_first: bool) {
             .iter()
             .any(|warning| warning.message.starts_with(&prefix))
         {
-            failures.push(format!("{format:?} automatic: the covered page reports native retention"));
+            failures.push(format!(
+                "{format:?} automatic: the covered page reports native retention"
+            ));
         }
         let selected = extract(&bytes, &config, format.clone(), Mode::Selected(covered as u32 + 1));
         failures.extend(read_wins(&format!("{format:?} selected"), &selected, covered));
