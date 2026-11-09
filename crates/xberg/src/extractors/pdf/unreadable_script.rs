@@ -243,11 +243,35 @@ fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> 
     })
 }
 
+/// The setting the languages of the first stage were taken from, which is what a caller edits.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum LanguageSource {
+    OcrLanguage,
+    StageLanguage,
+    TesseractConfig,
+}
+
 /// The stage whose result a Tesseract route returns first, and where its languages come from.
 struct FirstStage {
     languages: Vec<String>,
-    /// Whether the stage sets its own `language`; if not, `ocr.language` is what the caller edits.
-    own_language: bool,
+    source: LanguageSource,
+}
+
+/// Where `effective_tesseract_language_for` takes the languages from: `tesseract_config.language`
+/// only while the language it is given is the default `eng`, otherwise the language itself.
+fn language_source(
+    language: &[String],
+    stage_sets_language: bool,
+    tesseract: Option<&crate::types::TesseractConfig>,
+) -> LanguageSource {
+    let default = language.len() == 1 && language[0] == crate::core::config::ocr::DEFAULT_OCR_LANGUAGE;
+    if default && tesseract.is_some_and(|tesseract| !tesseract.language.is_empty()) {
+        LanguageSource::TesseractConfig
+    } else if stage_sets_language {
+        LanguageSource::StageLanguage
+    } else {
+        LanguageSource::OcrLanguage
+    }
 }
 
 /// The stage that reads the page first, or `None` when the route makes no claim about what it reads.
@@ -255,8 +279,14 @@ struct FirstStage {
 /// and a `vlm_fallback` other than `Disabled` are "no claim", so a route that can reach one is never
 /// judged. The executor (`run_ocr_pipeline_stages`) runs the stages by descending priority, the first
 /// listed first among equals, and returns the first result that clears `pipeline_min_quality`. The
-/// first stage therefore decides: if it reads the script, OCR is the better reader; if it does not,
-/// it produces the page's text and replaces the native layer.
+/// first stage therefore decides when it succeeds and clears the gate: if it reads the script, OCR is
+/// the better reader; if it does not, it produces the page's text and replaces the native layer.
+///
+/// Residual: when the first stage fails (a missing model), is unavailable or scores below
+/// `pipeline_min_quality`, the executor hands the page to the next stage and returns the best result
+/// of any stage. With `[khm, eng]` a failing `khm` stage therefore lets the `eng` stage replace the
+/// Khmer layer, and the native layer is not kept for that page. Keeping it whenever any later stage
+/// cannot read the script would instead keep it for every healthy `khm`-first pipeline (#2738).
 fn first_stage(ocr: &crate::OcrConfig) -> Option<FirstStage> {
     if !ocr.enabled || ocr.vlm_fallback != VlmFallbackPolicy::Disabled {
         return None;
@@ -264,7 +294,7 @@ fn first_stage(ocr: &crate::OcrConfig) -> Option<FirstStage> {
     let Some(pipeline) = &ocr.pipeline else {
         return (ocr.backend == "tesseract").then(|| FirstStage {
             languages: ocr.effective_tesseract_language(),
-            own_language: false,
+            source: language_source(&ocr.language, false, ocr.tesseract_config.as_ref()),
         });
     };
     if !pipeline
@@ -278,9 +308,14 @@ fn first_stage(ocr: &crate::OcrConfig) -> Option<FirstStage> {
         .stages
         .iter()
         .min_by_key(|stage| std::cmp::Reverse(stage.priority))?;
+    let inputs = StageModelInputs::new(ocr, stage);
     Some(FirstStage {
-        languages: StageModelInputs::new(ocr, stage).languages(),
-        own_language: stage.language.is_some(),
+        languages: inputs.languages(),
+        source: language_source(
+            stage.language.as_deref().unwrap_or(&ocr.language),
+            stage.language.is_some(),
+            inputs.tesseract(),
+        ),
     })
 }
 
@@ -426,25 +461,38 @@ fn warning(message: String) -> crate::types::ProcessingWarning {
     }
 }
 
-/// Where the caller adds the model: `ocr.language`, or the `language` of the stage that reads first.
+/// Where the caller adds the model: the setting the shown languages were taken from.
 fn where_to_add(stage: &FirstStage) -> &'static str {
-    if stage.own_language {
-        "the language of the first stage of ocr.pipeline"
-    } else {
-        "ocr.language"
+    match stage.source {
+        LanguageSource::StageLanguage => "the language of the first stage of ocr.pipeline",
+        LanguageSource::TesseractConfig => "tesseract_config.language",
+        LanguageSource::OcrLanguage => "ocr.language",
     }
 }
 
-fn kept_pages_warning(
-    kept: &[(u32, Vec<Script>)],
-    lost_glyphs: bool,
-    stage: &FirstStage,
-) -> crate::types::ProcessingWarning {
-    let lost = if lost_glyphs {
-        ", and glyphs it has no Unicode value for stay lost"
+/// The clause on glyphs with no Unicode value: all kept pages, or the marked ones by number.
+fn lost_glyphs_clause(kept: &[(u32, Vec<Script>, bool)]) -> String {
+    let marked: Vec<String> = kept
+        .iter()
+        .filter(|(.., marked)| *marked)
+        .map(|(page, ..)| page.to_string())
+        .collect();
+    if marked.is_empty() {
+        String::new()
+    } else if marked.len() == kept.len() {
+        ", and glyphs it has no Unicode value for stay lost".to_string()
     } else {
-        ""
-    };
+        format!(
+            ", and glyphs it has no Unicode value for stay lost on page {}",
+            marked.join(", ")
+        )
+    }
+}
+
+fn kept_pages_warning(kept: &[(u32, Vec<Script>, bool)], stage: &FirstStage) -> crate::types::ProcessingWarning {
+    let lost = lost_glyphs_clause(kept);
+    let kept: Vec<_> = kept.iter().map(|(page, scripts, _)| (*page, scripts.clone())).collect();
+    let kept = kept.as_slice();
     warning(format!(
         "OCR was skipped for {}: the native text is in a script the configured OCR languages \
          ({}) cannot read, so it was kept as extracted{lost}. \
@@ -527,16 +575,14 @@ pub(super) fn retain_unreadable_script_pages(
         .into_iter()
         .partition(|(page, ..)| page_is_scan(&document, *page as usize - 1));
     let read: Vec<_> = read.into_iter().map(|(page, scripts, _)| (page, scripts)).collect();
-    let lost_glyphs = kept.iter().any(|(.., marked)| *marked);
-    let kept: Vec<_> = kept.into_iter().map(|(page, scripts, _)| (page, scripts)).collect();
     let mut warnings = Vec::new();
     if !kept.is_empty() {
         decision
             .failing_pages
-            .retain(|page| !kept.iter().any(|(kept_page, _)| kept_page == page));
+            .retain(|page| !kept.iter().any(|(kept_page, ..)| kept_page == page));
         decision.fallback = !decision.failing_pages.is_empty();
         decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
-        warnings.push(kept_pages_warning(&kept, lost_glyphs, &stage));
+        warnings.push(kept_pages_warning(&kept, &stage));
     }
     if !read.is_empty() {
         warnings.push(read_pages_warning(&read, &stage));
@@ -992,6 +1038,56 @@ mod tests {
                 inherited[0].message
             );
         }
+    }
+
+    #[test]
+    fn the_warning_names_tesseract_config_when_the_shown_languages_came_from_it() {
+        let mut inherited = pipeline_config(serde_json::json!({"stages": [{"backend": "tesseract", "priority": 100}]}));
+        with_tesseract_language(&mut inherited, "deu");
+        let mut plain = config_with(&["eng"]);
+        with_tesseract_language(&mut plain, "deu");
+        let mut stage_eng = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["eng"]},
+        ]}));
+        with_tesseract_language(&mut stage_eng, "deu");
+        let mut stage_language = pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": ["fra"]},
+        ]}));
+        with_tesseract_language(&mut stage_language, "deu");
+        for content in [ONE_PAGE, SCAN_WITH_OVERLAY] {
+            for config in [&inherited, &plain, &stage_eng] {
+                let (_, warnings) = run(&[KHMER_MARKED], content, config);
+                assert_eq!(warnings.len(), 1);
+                assert!(warnings[0].message.contains("(deu"), "{}", warnings[0].message);
+                assert!(
+                    warnings[0].message.contains("tesseract_config.language"),
+                    "{}",
+                    warnings[0].message
+                );
+            }
+            let (_, warnings) = run(&[KHMER_MARKED], content, &stage_language);
+            assert!(
+                warnings[0].message.contains("first stage of ocr.pipeline"),
+                "{}",
+                warnings[0].message
+            );
+        }
+    }
+
+    #[test]
+    fn the_lost_glyph_clause_names_the_marked_pages_unless_every_kept_page_is_marked() {
+        let stage = FirstStage {
+            languages: langs(&["eng"]),
+            source: LanguageSource::OcrLanguage,
+        };
+        let page = |number, marked| (number, vec![Script::Khmer], marked);
+        let mixed = kept_pages_warning(&[page(1, true), page(2, false), page(3, true)], &stage).message;
+        assert!(mixed.contains("stay lost on page 1, 3"), "{mixed}");
+        let all = kept_pages_warning(&[page(1, true), page(2, true)], &stage).message;
+        assert!(all.contains("stay lost.") || all.contains("stay lost,"), "{all}");
+        assert!(!all.contains("stay lost on page"), "{all}");
+        let none = kept_pages_warning(&[page(1, false), page(2, false)], &stage).message;
+        assert!(!none.contains("stay lost"), "{none}");
     }
 
     #[test]
