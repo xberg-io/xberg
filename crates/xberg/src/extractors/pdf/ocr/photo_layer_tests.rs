@@ -64,6 +64,62 @@ fn should_read_a_markdown_table_row_of_the_ocr_text_as_the_plain_row_it_holds() 
     );
 }
 
+/// With geometry, the cells of a recognised table have no OCR line box, so the geometry cannot
+/// place the native rows the table reads. The OCR text covers them: a row the table reads whole
+/// (a table border read as `\|` adds no word) is not put first, and the one row the table misreads
+/// is put first in place of its table row. ~keep
+#[test]
+fn should_hold_the_rows_the_geometry_cannot_place_against_the_ocr_table_text() {
+    use super::document::{OcrPayload, layer_lines_to_put_first, text_with_layer_first};
+    let table_rows = [
+        "7 Elm Township 1,200,400 45",
+        "8 Oak Township – 950,300 38",
+        "9 Ash Township 410,000 12",
+    ];
+    let layer: Vec<&str> = MINUTES[..3]
+        .iter()
+        .chain(&table_rows)
+        .chain(&MINUTES[3..])
+        .copied()
+        .collect();
+    let (before, after) = (MINUTES[..3].join("\n"), MINUTES[3..].join("\n"));
+    let ocr = format!(
+        "{before}\n| No | Township | Value | Seats |\n| --- | --- | --- | --- |\n\
+         | \\| 7 | Elm Township | 1,200,400 | 45 |\n| 8 | Oak Township - | 950,300 | 38 |\n\
+         | 9 | Ash Township | 410,000 | 13 |\n{after}"
+    );
+    // Only the plain OCR lines have a line box, on the rows of their layer lines. ~keep
+    let boxes = page_boxes(
+        &layer,
+        &lines_at_rows(&format!("{before}\n{after}"), &[0, 1, 2, 6, 7, 8, 9, 10]),
+    );
+    let first = layer_lines_to_put_first(
+        &layer.join("\n"),
+        &ocr,
+        false,
+        &OcrQualityThresholds::default(),
+        Some(&boxes),
+        OcrPayload::Plain,
+    )
+    .expect("the misread row and the row with a wrong digit are put first");
+    assert_eq!(
+        first.lines, "8 Oak Township – 950,300 38\n9 Ash Township 410,000 12",
+        "the row the table reads whole is covered, the misread row and the row with a differing digit are not"
+    );
+    let merged = text_with_layer_first(&ocr, &first);
+    assert_eq!(
+        merged.matches("Oak Township").count(),
+        1,
+        "the table row that misreads a restored row (a dash read as a hyphen) is not printed beside it: {merged}"
+    );
+    assert_eq!(
+        merged.matches("Ash Township").count(),
+        2,
+        "a differing digit is no misread, both rows print: {merged}"
+    );
+    assert_eq!(merged.matches("Elm Township").count(), 1, "{merged}");
+}
+
 /// The letters of a layer word that occur in the OCR text only across a word boundary, or in a
 /// longer word, are not evidence that the OCR read the word. ~keep
 #[test]

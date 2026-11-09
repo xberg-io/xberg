@@ -771,12 +771,14 @@ pub(crate) struct LayerFirst {
     /// text and the structured page once, so the row is printed once, as the native read it. ~keep
     pub(crate) misread_ocr_rows: Vec<String>,
 }
-/// Literal source identity normalizes case, whitespace and the Markdown cell delimiter, so that a
-/// table row of the OCR text keys like the plain native row it reads; every other delimiter stays.
-/// Fuzzy page confirmation uses `whole_words` separately. ~keep
+/// Literal source identity normalizes case, whitespace and the Markdown cell delimiter (`|`, and
+/// `\|` for a cell that holds one), so that a table row of the OCR text keys like the plain native
+/// row it reads; every other delimiter stays. Fuzzy page confirmation uses `whole_words`
+/// separately. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn line_key(line: &str) -> String {
-    line.split(|c: char| c.is_whitespace() || c == '|')
+    line.replace("\\|", " ")
+        .split(|c: char| c.is_whitespace() || c == '|')
         .filter(|word| !word.is_empty())
         .map(str::to_lowercase)
         .collect::<Vec<_>>()
@@ -1098,9 +1100,11 @@ impl<'a> OcrRowSpans<'a> {
 }
 /// Restore unproved native rows after the OCR stage has been chosen. Without geometry, only
 /// complete equal OCR row occurrences certify coverage. With geometry, complete ordered
-/// native-token coverage is sufficient. Ambiguous and differing OCR payloads remain beside
-/// restored native rows, except the one OCR row that misreads a restored row on a page of plain
-/// OCR text (`ocr_row_misreads_native_row`, `OcrPayload`): that row is not printed. ~keep
+/// native-token coverage is sufficient, and a row the geometry leaves uncovered is then held
+/// against the OCR text as without geometry: a row OCR read into a table (its cells have no line
+/// box) is covered. Ambiguous and differing OCR payloads remain beside restored native rows,
+/// except the one OCR row that misreads a restored row on a page of plain OCR text
+/// (`ocr_row_misreads_native_row`, `OcrPayload`): that row is not printed. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn layer_lines_to_put_first(
     layer: &str,
@@ -1114,7 +1118,9 @@ pub(crate) fn layer_lines_to_put_first(
         return None;
     }
     let restore = match boxes {
-        Some(boxes) if !noise_verdict => layer_lines_missing_and_owned(layer, boxes),
+        Some(boxes) if !noise_verdict => {
+            rows_the_ocr_text_lacks_too(layer, layer_lines_missing_and_owned(layer, boxes), ocr_text, boxes)?
+        }
         _ => layer_lines_absent_from_ocr(layer, ocr_text)?,
     };
     let mut lines = restore.rows.join("\n");
@@ -1129,6 +1135,72 @@ pub(crate) fn layer_lines_to_put_first(
         lost_glyphs,
         misread_ocr_rows,
     })
+}
+/// The rows of `geometry` that the OCR text lines without a line box (the rows of a recognised
+/// table) lack as well, in their order: as many rows of each key as `layer_lines_absent_from_ocr`
+/// finds absent over the whole layer, so one OCR occurrence covers one native occurrence whichever
+/// one each check took. With them, the OCR rows that misread one of them, from the geometry and
+/// from the text. `None` when those lines hold every row. The lines with a box were the geometry's
+/// work, which stays bounded to one band per layer line. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn rows_the_ocr_text_lacks_too<'a>(
+    layer: &'a str,
+    geometry: RowsToRestore<'a>,
+    ocr_text: &str,
+    boxes: &PageLineBoxes,
+) -> Option<RowsToRestore<'a>> {
+    let boxed: std::collections::HashSet<&str> = boxes.ocr.iter().map(|line| line.key.as_str()).collect();
+    let unboxed: Vec<&str> = ocr_text
+        .lines()
+        .filter(|line| {
+            let key = line_key(line);
+            !key.is_empty() && !boxed.contains(key.as_str())
+        })
+        .collect();
+    if unboxed.is_empty() {
+        return Some(geometry);
+    }
+    let unboxed = unboxed.join("\n");
+    let text = layer_lines_absent_from_ocr(layer, &unboxed)?;
+    let mut lacking = KeyCounts::new(text.rows.iter().map(|row| line_key(row)));
+    let rows: Vec<&'a str> = geometry
+        .rows
+        .into_iter()
+        .filter(|row| lacking.take(&line_key(row)))
+        .collect();
+    if rows.is_empty() {
+        return None;
+    }
+    let joined = rows.join("\n");
+    let from_text = layer_lines_absent_from_ocr(&joined, &unboxed).map_or_else(Vec::new, |found| found.misread);
+    // Both checks can name the same OCR row: it leaves the text once (`take_misread_row`). ~keep
+    let mut misread = geometry.misread;
+    let mut named = KeyCounts::new(misread.iter().cloned());
+    misread.extend(from_text.into_iter().filter(|key| !named.take(key)));
+    Some(RowsToRestore { rows, misread })
+}
+/// How often each row key occurs in a list of rows; `take` spends one occurrence. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct KeyCounts(ahash::AHashMap<String, usize>);
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl KeyCounts {
+    fn new(keys: impl IntoIterator<Item = String>) -> Self {
+        let mut counts = ahash::AHashMap::new();
+        for key in keys {
+            *counts.entry(key).or_default() += 1;
+        }
+        Self(counts)
+    }
+    /// Whether `key` had an occurrence left, which is spent. ~keep
+    fn take(&mut self, key: &str) -> bool {
+        match self.0.get_mut(key) {
+            Some(left) if *left > 0 => {
+                *left -= 1;
+                true
+            }
+            _ => false,
+        }
+    }
 }
 /// The restored native rows, then the OCR text of a page without the rows that misread one of
 /// them. ~keep
