@@ -52,7 +52,7 @@ pub(super) fn stock_backend(config: &ExtractionConfig) -> Option<Arc<dyn OcrBack
         || ocr.quality_thresholds.is_some()
         || ocr.paddle_ocr_config.is_some()
         || ocr.paddle_ocr_settings.is_some()
-        || ocr.auto_rotate
+        || ocr.auto_rotate == Some(true)
         || ocr.numeric_repair
         || !matches!(ocr.vlm_fallback, VlmFallbackPolicy::Disabled)
     {

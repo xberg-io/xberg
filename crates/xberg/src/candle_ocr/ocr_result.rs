@@ -153,7 +153,7 @@ pub(crate) fn build_ocr_document(
 /// not happen, but the rest of the extraction is otherwise sound, so failing
 /// the whole call would be a worse outcome than telling them.
 fn auto_rotate_unsupported_warning(config: &OcrConfig, backend_name: &'static str) -> Option<ProcessingWarning> {
-    if !config.auto_rotate {
+    if config.auto_rotate != Some(true) {
         return None;
     }
     Some(crate::core::diagnostics::warning(
@@ -602,7 +602,7 @@ mod tests {
     #[test]
     fn should_warn_when_auto_rotate_requested_of_a_backend_with_no_rotation_support() {
         let config = OcrConfig {
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         };
 
@@ -639,8 +639,8 @@ mod tests {
     fn should_not_warn_when_auto_rotate_is_not_requested() {
         let config = OcrConfig::default();
         assert!(
-            !config.auto_rotate,
-            "test assumes the OcrConfig default is auto_rotate: false"
+            config.auto_rotate != Some(true),
+            "test assumes the OcrConfig default does not request auto_rotate"
         );
 
         let doc = build_ocr_document(
