@@ -12,6 +12,7 @@ use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageCo
 
 const PICTURE_11PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/11.png");
 const PICTURE_11PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/11.tsv");
+const TABLE_OF_CONTENTS: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/toc.png");
 const TWO_COLUMN_PROSE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/two_column.png");
 const PICTURE_20PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
 const PICTURE_20PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/20.tsv");
@@ -104,7 +105,7 @@ fn default_route_rereads_a_standalone_leader_picture_whose_block_read_has_no_tab
         .lines()
         .filter(|row| row_lines(&result.content, row) == 1)
         .count();
-    assert!(kept >= 10, "{kept} of 12 rows kept whole:\n{}", result.content);
+    assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
 }
 
 #[test]
@@ -118,5 +119,11 @@ fn explicit_caller_psm_wins_on_a_standalone_leader_picture_that_would_be_reread(
 #[test]
 fn a_standalone_prose_picture_keeps_the_default_route() {
     let result = helpers::extract_bytes_document_blocking(TWO_COLUMN_PROSE, "image/png", &config(None)).unwrap();
+    assert_eq!(recorded_psm(&result), "11");
+}
+
+#[test]
+fn a_dot_leader_table_of_contents_is_not_read_again_as_a_table() {
+    let result = helpers::extract_bytes_document_blocking(TABLE_OF_CONTENTS, "image/png", &config(None)).unwrap();
     assert_eq!(recorded_psm(&result), "11");
 }

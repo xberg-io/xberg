@@ -31,6 +31,7 @@ struct WordBox {
     right: u32,
     center: u32,
     height: u32,
+    leader: bool,
 }
 
 fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
@@ -49,6 +50,7 @@ fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
                 right: left.saturating_add(width),
                 center: top.saturating_add(height / 2),
                 height,
+                leader: is_leader(&element.text),
             }),
             _ => None,
         })
@@ -228,25 +230,32 @@ fn alphanumeric_count(doc: &InternalDocument) -> usize {
 
 /// Dots in a run a word must hold to count as a leader.
 const MIN_LEADER_DOTS: usize = 5;
+/// Rows that must carry a leader for a block read with no table to be taken as a dot-leader table.
+const MIN_LEADER_ROWS: usize = 4;
 
-/// Words that are nothing but a run of dots: the leaders a block read keeps between a label and its
+/// A word that is nothing but a run of dots: the leader a block read keeps between a label and its
 /// values.
-fn leader_words(doc: &InternalDocument) -> usize {
-    doc.prebuilt_ocr_elements
+fn is_leader(text: &str) -> bool {
+    let text = text.trim();
+    text.chars().count() >= MIN_LEADER_DOTS && text.chars().all(|c| c == '.')
+}
+
+/// Text rows holding at least one leader word.
+fn leader_rows(doc: &InternalDocument) -> usize {
+    let Some(words) = word_boxes(doc) else {
+        return 0;
+    };
+    let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
+    rows(&words, tolerance)
         .iter()
-        .flatten()
-        .filter(|element| element.level == OcrElementLevel::Word)
-        .filter(|element| {
-            let text = element.text.trim();
-            text.chars().count() >= MIN_LEADER_DOTS && text.chars().all(|c| c == '.')
-        })
+        .filter(|row| row.iter().any(|word| word.leader))
         .count()
 }
 
-/// A block read that found no table but whose words are leader rows on shared column edges: the
+/// A block read that found no table but whose rows are dot-leader rows on shared column edges: the
 /// table check drops a dot-leader table as prose, and the row recovery keeps each row on one line.
 fn reads_leader_rows(doc: &InternalDocument) -> bool {
-    leader_words(doc) >= MIN_ROWS_PER_COLUMN && shows_column_structure(doc)
+    leader_rows(doc) >= MIN_LEADER_ROWS && shows_column_structure(doc)
 }
 
 /// A second read with no letters or digits in its word elements, or with less than three quarters
@@ -450,41 +459,99 @@ mod tests {
         assert_eq!(second_read_is_usable(&first, &doc_with_table(table(6))), Ok(()));
     }
 
-    fn leader_table(rows: usize, leader: &str) -> Vec<OcrElement> {
+    /// `rows` table rows, the first `with_leader` of which carry `leader` between label and values.
+    fn leader_table(rows: usize, with_leader: usize, leader: &str) -> Vec<OcrElement> {
         (0..rows as u32)
             .flat_map(|row| {
                 let top = 10 + row * 40;
-                [
+                let mut cells = vec![
                     element("Label", 10, top, 120),
-                    element(leader, 140, top, 140),
                     element("12", 300, top, 30),
                     element("345,678", 420, top, 90),
                     element("(9.10)", 600, top, 70),
-                ]
+                ];
+                if (row as usize) < with_leader {
+                    cells.push(element(leader, 140, top, 140));
+                }
+                cells
             })
             .collect()
     }
 
+    const NO_TABLE: Result<(), &str> = Err("the second read found no table");
+
+    fn leader_read(rows: usize, with_leader: usize, leader: &str) -> Result<(), &'static str> {
+        second_read_is_usable(&doc(table(rows)), &doc(leader_table(rows, with_leader, leader)))
+    }
+
     #[test]
     fn a_re_read_without_a_table_is_adopted_when_its_rows_carry_leaders() {
-        let first = doc(table(6));
-        let reason = "the second read found no table";
+        assert_eq!(leader_read(6, 6, "........."), Ok(()));
+        assert_eq!(leader_read(6, 6, "ee eae"), NO_TABLE);
+    }
+
+    #[test]
+    fn exactly_four_leader_rows_are_adopted_and_three_are_not() {
+        assert_eq!(leader_read(4, 4, "....."), Ok(()));
+        assert_eq!(leader_read(6, 4, "....."), Ok(()));
+        assert_eq!(leader_read(6, 3, "....."), NO_TABLE, "3 of 6 rows is under the floor");
+        assert_eq!(leader_read(4, 3, "....."), NO_TABLE);
+    }
+
+    #[test]
+    fn a_leader_is_at_least_five_dots() {
+        assert_eq!(leader_read(4, 4, "....."), Ok(()));
+        assert_eq!(leader_read(4, 4, "...."), NO_TABLE);
+        assert_eq!(leader_read(6, 6, "......"), Ok(()));
+    }
+
+    #[test]
+    fn several_leaders_in_one_row_count_that_row_once() {
+        let mut read = leader_table(6, 3, ".....");
+        read.extend((0..3).map(|row| element(".....", 200, 10 + row * 40, 60)));
+        assert_eq!(second_read_is_usable(&doc(table(6)), &doc(read)), NO_TABLE);
+    }
+
+    #[test]
+    fn four_leader_words_in_one_row_are_one_leader_row() {
+        let mut read = table(6);
+        for _ in 0..4 {
+            read.insert(4, element(".........", 140, 10, 140));
+        }
+        assert!(shows_column_structure(&doc(read.clone())));
+        assert_eq!(leader_rows(&doc(read.clone())), 1);
+        assert_eq!(second_read_is_usable(&doc(table(6)), &doc(read)), NO_TABLE);
+    }
+
+    #[test]
+    fn leader_rows_with_too_few_letters_are_still_refused() {
+        let mut first = table(6);
+        first.push(element(
+            "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz",
+            10,
+            400,
+            300,
+        ));
         assert_eq!(
-            second_read_is_usable(&first, &doc(leader_table(6, "........."))),
-            Ok(())
+            second_read_is_usable(&doc(first), &doc(leader_table(6, 6, "........."))),
+            Err("the second read kept too few letters and digits")
         );
-        assert_eq!(
-            second_read_is_usable(&first, &doc(leader_table(6, "...."))),
-            Err(reason)
-        );
-        assert_eq!(
-            second_read_is_usable(&first, &doc(leader_table(6, "ee eae"))),
-            Err(reason)
-        );
-        assert_eq!(
-            second_read_is_usable(&doc(table(3)), &doc(leader_table(3, "........."))),
-            Err(reason)
-        );
+    }
+
+    #[test]
+    fn a_table_of_contents_is_not_a_leader_table() {
+        let toc: Vec<_> = (0..8)
+            .flat_map(|row| {
+                let top = 10 + row * 40;
+                [
+                    element("Chapter", 10, top, 160),
+                    element(".............", 180, top, 400),
+                    element("12", 600, top, 30),
+                ]
+            })
+            .collect();
+        assert!(leader_rows(&doc(toc.clone())) >= MIN_LEADER_ROWS);
+        assert_eq!(second_read_is_usable(&doc(toc.clone()), &doc(toc)), NO_TABLE);
     }
 
     #[test]
@@ -492,10 +559,7 @@ mod tests {
         let first = doc(vec![element("abcd", 10, 400, 30)]);
         let mut leaders: Vec<_> = (0..6).map(|row| element(".........", 10, 10 + row * 40, 140)).collect();
         leaders.push(element("abcd", 10, 400, 30));
-        assert_eq!(
-            second_read_is_usable(&first, &doc(leaders)),
-            Err("the second read found no table")
-        );
+        assert_eq!(second_read_is_usable(&first, &doc(leaders)), NO_TABLE);
     }
 
     #[test]
