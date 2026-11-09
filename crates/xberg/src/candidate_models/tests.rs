@@ -89,7 +89,7 @@ fn the_nli_graph_alternatives_are_pinned_and_its_license_caveat_is_recorded() {
 }
 
 #[test]
-fn every_required_file_and_the_license_are_pinned_with_a_nonzero_size() {
+fn every_required_file_and_the_license_are_pinned_with_a_sha256() {
     for model in &CANDIDATE_MODELS {
         let files = model.files().unwrap();
         let pinned: BTreeSet<&str> = files.iter().map(|f| f.path.as_str()).collect();
@@ -98,26 +98,16 @@ fn every_required_file_and_the_license_are_pinned_with_a_nonzero_size() {
             assert!(pinned.contains(path.as_str()), "{path} is not pinned");
         }
         for file in &files {
-            assert!(file.size_bytes > 0, "{} has no size", file.path);
             assert_eq!(file.sha256.len(), 64, "{}", file.path);
         }
     }
 }
 
 #[test]
-fn size_and_checksum_manifests_describe_exactly_the_same_files() {
-    let sums: BTreeSet<String> = pins_of(CLASSIFICATION_SHA256_MANIFEST)
-        .into_iter()
-        .chain(pins_of(CAPTIONING_SHA256_MANIFEST))
-        .collect();
-    let sizes: BTreeSet<String> = SIZE_MANIFEST
-        .lines()
-        .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
-        .map(|line| line.split_once("  ").unwrap().1.to_owned())
-        .collect();
-    assert_eq!(sums, sizes);
+fn every_checksum_path_belongs_to_exactly_one_candidate() {
+    let sums = pins_of(CLASSIFICATION_SHA256_MANIFEST).len() + pins_of(CAPTIONING_SHA256_MANIFEST).len();
     let inventoried: usize = CANDIDATE_MODELS.iter().map(|m| m.files().unwrap().len()).sum();
-    assert_eq!(inventoried, sums.len(), "a manifest path belongs to no candidate");
+    assert_eq!(inventoried, sums, "a manifest path belongs to no candidate");
 }
 
 #[test]
@@ -161,7 +151,6 @@ fn model_pinning(bytes: &[u8]) -> CandidateModel {
     let mut model = CANDIDATE_MODELS[0];
     model.id = "probe";
     model.sha256_manifest = format!("{sha}  probe/file.bin\n").leak();
-    model.size_manifest = format!("{}  probe/file.bin\n", bytes.len()).leak();
     model
 }
 
@@ -192,10 +181,7 @@ fn verify_file_rejects_truncation_and_growth() {
     for content in [&b"pinned byte"[..], b"pinned bytes!"] {
         std::fs::write(&file, content).unwrap();
         let error = model.verify_file("file.bin", &file).unwrap_err();
-        assert!(
-            error.contains("Size mismatch for probe/file.bin: expected 12 bytes"),
-            "{error}"
-        );
+        assert!(error.contains("Checksum mismatch for probe/file.bin"), "{error}");
     }
 }
 
@@ -208,7 +194,7 @@ fn verify_file_rejects_missing_and_unpinned_files() {
         model
             .verify_file("file.bin", &missing)
             .unwrap_err()
-            .contains("cannot stat probe/file.bin")
+            .contains("Failed to open file for checksum")
     );
     std::fs::write(&missing, b"pinned bytes").unwrap();
     assert!(
@@ -228,7 +214,7 @@ fn verify_file_checks_the_real_pins_of_the_inventory() {
         .verify_file("tokenizer_config.json", &file)
         .unwrap_err();
     assert!(
-        error.contains("Size mismatch for nli-minilm2-l6-h768/tokenizer_config.json"),
+        error.contains("Checksum mismatch for nli-minilm2-l6-h768/tokenizer_config.json"),
         "{error}"
     );
 }
