@@ -1,0 +1,44 @@
+[graph]
+all-features = true
+
+[advisories]
+unmaintained = "all"
+yanked = "warn"
+unused-ignored-advisory = "deny"
+ignore = [
+  { id = "RUSTSEC-2024-0436", reason = "Existing project exception narrowed to this leaf: tokenizers 0.23.2 uses unmaintained paste 1.0.15 with no patched release; no vulnerability is ignored (#2334)." },
+]
+
+[licenses]
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "MIT-0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unlicense",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "BSL-1.0",
+]
+confidence-threshold = 0.8
+exceptions = [{ crate = "option-ext", allow = ["MPL-2.0"] }, { crate = "colored", allow = ["MPL-2.0"] }]
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

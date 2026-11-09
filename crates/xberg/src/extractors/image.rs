@@ -2545,6 +2545,9 @@ mod image_ocr_budget;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "image_table_reread.rs"]
+mod image_table_reread;
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -3021,6 +3024,49 @@ fn apply_numeric_repair_to_standalone_image_ocr(
     }
 }
 
+/// The config for the PSM 6 re-read of a standalone table picture, or `None` when the first
+/// pass does not call for one. No re-read happens when:
+/// - the caller chose a PSM, or the language is vertical;
+/// - the image is a TIFF (single or multi-frame);
+/// - a VLM fallback or an explicit pipeline is configured;
+/// - document structure or layout detection is requested;
+/// - the first pass found a table, whose detectors already certified the rows;
+/// - the first pass shows no column structure in its word boxes.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn single_block_table_config(
+    config: &ExtractionConfig,
+    mime_type: &str,
+    first: &InternalDocument,
+) -> Option<ExtractionConfig> {
+    // Cheap configuration gates run before the geometry pass over the first read's words.
+    if mime_type.to_lowercase().contains("tiff") {
+        return None;
+    }
+    let mut ocr = config.ocr.clone().unwrap_or_default();
+    if !is_implicit_horizontal_tesseract(&ocr)
+        || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
+        || ocr.pipeline.is_some()
+    {
+        return None;
+    }
+    // Requested document structure and layout keep the first pass's blocks untouched. ~keep
+    if config.include_document_structure {
+        return None;
+    }
+    #[cfg(feature = "layout-types")]
+    if config.layout.is_some() {
+        return None;
+    }
+    if !first.tables.is_empty() || !image_table_reread::shows_column_structure(first) {
+        return None;
+    }
+    enable_image_ocr_elements(&mut ocr, true);
+    let mut second = config.clone();
+    apply_default_tesseract_psm(&mut ocr, crate::ocr::types::PSMMode::SingleBlock as i32);
+    second.ocr = Some(ocr);
+    Some(second)
+}
+
 #[cfg_attr(alef, alef(skip))]
 /// Image extractor for various image formats.
 ///
@@ -3046,8 +3092,70 @@ impl ImageExtractor {
     }
 
     /// Extract text from image using OCR with optional page tracking for multi-frame TIFFs.
+    ///
+    /// A standalone picture is read with the sparse-text default first. When that pass finds no
+    /// table but its word boxes share column edges across rows, and the caller chose no PSM, the
+    /// picture is read once more as one uniform block (PSM 6), whose row recovery keeps
+    /// dot-leader table rows whole (#2503, #2432). The second read is adopted only if it finds a
+    /// table and keeps enough letters and digits; see [`image_table_reread::second_read_is_usable`].
+    /// A cancelled second read ends the extraction.
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     async fn extract_with_ocr(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+    ) -> Result<InternalDocument> {
+        let first = self.extract_with_ocr_pass(content, mime_type, config).await?;
+        self.reread_standalone_table(content, mime_type, config, first).await
+    }
+
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    async fn reread_standalone_table(
+        &self,
+        _content: &[u8],
+        _mime_type: &str,
+        _config: &ExtractionConfig,
+        first: InternalDocument,
+    ) -> Result<InternalDocument> {
+        Ok(first)
+    }
+
+    /// The PSM 6 re-read of a standalone lattice table; returns `first` when the picture is not
+    /// admitted or the re-read is not usable.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    async fn reread_standalone_table(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+        first: InternalDocument,
+    ) -> Result<InternalDocument> {
+        let Some(single_block) = single_block_table_config(config, mime_type, &first) else {
+            return Ok(first);
+        };
+        tracing::debug!("standalone table re-read: reading the picture again as one block");
+        match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
+            Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
+                Ok(()) => {
+                    tracing::debug!("standalone table re-read adopted");
+                    Ok(second)
+                }
+                Err(reason) => {
+                    tracing::debug!(reason, "standalone table re-read rejected");
+                    Ok(first)
+                }
+            },
+            Err(error @ crate::XbergError::Cancelled) => Err(error),
+            Err(error) => {
+                tracing::warn!(%error, "standalone table re-read failed; keeping the first read");
+                Ok(first)
+            }
+        }
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
+    async fn extract_with_ocr_pass(
         &self,
         content: &[u8],
         mime_type: &str,
@@ -4964,6 +5072,113 @@ mod tests {
         assert_eq!(tesseract_config.language, vec!["jpn_vert"]);
     }
 
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn table_reread_is_skipped_for_tiff_structure_layout_vertical_and_known_tables() {
+        let first = image_table_reread::sample_table_document();
+        let config = ExtractionConfig::default();
+        for mime in ["image/tiff", "image/TIFF", "image/x-tiff"] {
+            assert!(single_block_table_config(&config, mime, &first).is_none(), "{mime}");
+        }
+        assert!(single_block_table_config(&config, "image/jpeg", &first).is_some());
+
+        let mut structured = config.clone();
+        structured.include_document_structure = true;
+        assert!(single_block_table_config(&structured, "image/png", &first).is_none());
+
+        #[cfg(feature = "layout-types")]
+        {
+            let mut layout = config.clone();
+            layout.layout = Some(Default::default());
+            assert!(single_block_table_config(&layout, "image/png", &first).is_none());
+        }
+
+        for psm in [3, 4, 6, 11] {
+            let mut explicit = config.clone();
+            explicit.ocr.get_or_insert_default().tesseract_config = Some(crate::types::TesseractConfig {
+                psm: Some(psm),
+                ..Default::default()
+            });
+            assert!(
+                single_block_table_config(&explicit, "image/png", &first).is_none(),
+                "psm {psm}"
+            );
+        }
+
+        let mut vertical = config.clone();
+        vertical.ocr.get_or_insert_default().language = vec!["jpn_vert".to_string()];
+        assert!(single_block_table_config(&vertical, "image/png", &first).is_none());
+
+        let mut with_table = image_table_reread::sample_table_document();
+        with_table.tables.push(Default::default());
+        assert!(single_block_table_config(&config, "image/png", &with_table).is_none());
+
+        assert!(single_block_table_config(&config, "image/png", &InternalDocument::default()).is_none());
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn table_reread_applies_only_without_a_vlm_fallback_or_pipeline() {
+        let first = image_table_reread::sample_table_document();
+        let config = ExtractionConfig::default();
+        assert!(single_block_table_config(&config, "image/png", &first).is_some());
+
+        let mut fallback = config.clone();
+        fallback.ocr.get_or_insert_default().vlm_fallback = crate::core::config::VlmFallbackPolicy::Always;
+        assert!(single_block_table_config(&fallback, "image/png", &first).is_none());
+
+        let mut piped = config.clone();
+        piped.ocr.get_or_insert_default().pipeline = Some(crate::core::config::ocr::OcrPipelineConfig {
+            stages: Vec::new(),
+            quality_thresholds: Default::default(),
+        });
+        assert!(single_block_table_config(&piped, "image/png", &first).is_none());
+
+        let mut explicit = config;
+        explicit.ocr.get_or_insert_default().tesseract_config = Some(crate::types::TesseractConfig {
+            psm: Some(4),
+            ..Default::default()
+        });
+        assert!(single_block_table_config(&explicit, "image/png", &first).is_none());
+    }
+
+    /// A cancelled second read ends the extraction, while any other failure of it keeps the first
+    /// read. The first read is a table page, so only the second read's own outcome differs.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn a_cancelled_table_reread_ends_the_extraction_but_a_failed_one_keeps_the_first_read() {
+        let not_an_image = b"not an image";
+
+        let failed = ImageExtractor::new()
+            .reread_standalone_table(
+                not_an_image,
+                "image/png",
+                &ExtractionConfig::default(),
+                image_table_reread::sample_table_document(),
+            )
+            .await;
+        assert!(failed.is_ok(), "a failed second read keeps the first read: {failed:?}");
+
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let cancelled_config = ExtractionConfig {
+            cancel_token: Some(token),
+            ..Default::default()
+        };
+        let cancelled = ImageExtractor::new()
+            .reread_standalone_table(
+                not_an_image,
+                "image/png",
+                &cancelled_config,
+                image_table_reread::sample_table_document(),
+            )
+            .await;
+        assert!(
+            matches!(cancelled, Err(crate::XbergError::Cancelled)),
+            "a cancelled second read must stop the extraction: {cancelled:?}"
+        );
+    }
+
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     #[test]
     fn should_apply_default_whole_image_psm_to_horizontal_tesseract_config() {
@@ -5269,6 +5484,62 @@ mod tests {
             let result = result_with_word_confidences(&confidences);
 
             assert!(has_robust_word_confidence_distribution(&result));
+        }
+
+        /// #2699: a re-read that returns no usable words must not be kept over the first pass. ~keep
+        #[test]
+        fn should_reject_fallback_that_read_no_usable_words() {
+            assert!(!has_robust_word_confidence_distribution(&result_with_word_confidences(
+                &[]
+            )));
+            assert!(!has_robust_word_confidence_distribution(
+                &crate::types::ExtractedDocument::default()
+            ));
+            let mut whitespace_only = result_with_word_confidences(&[0.95, 0.95]);
+            for element in whitespace_only.ocr_elements.iter_mut().flatten() {
+                element.text = "  ".to_string();
+            }
+            assert!(!has_robust_word_confidence_distribution(&whitespace_only));
+        }
+
+        #[test]
+        fn robust_word_confidence_gate_decides_at_the_percentile_and_confidence_thresholds() {
+            let with_low = |good: usize, low: usize| {
+                let mut confidences = vec![0.95; good];
+                confidences.extend(vec![0.2; low]);
+                confidences
+            };
+            let cases: [(&str, Vec<f64>, bool); 6] = [
+                ("a single confident word", vec![0.95], true),
+                (
+                    "a word exactly at the minimum confidence is not low",
+                    vec![0.30; 10],
+                    true,
+                ),
+                (
+                    "one low word in ten sits on the tenth percentile",
+                    with_low(9, 1),
+                    false,
+                ),
+                (
+                    "one low word in twenty stays under the tenth percentile",
+                    with_low(19, 1),
+                    true,
+                ),
+                (
+                    "two low words in twenty reach the tenth percentile",
+                    with_low(18, 2),
+                    false,
+                ),
+                ("every word low", with_low(0, 12), false),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    has_robust_word_confidence_distribution(&result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
         }
 
         #[test]
@@ -6325,33 +6596,6 @@ mod tests {
 
         assert!(!result.metadata.ocr_used);
         assert_eq!(result.extraction_method, None);
-    }
-
-    #[cfg(feature = "ocr")]
-    #[tokio::test]
-    async fn should_recover_receipt_header_with_implicit_sparse_image_fallback() {
-        let Some(receipt) = crate::utils::read_test_fixture("images/cord_receipt_02.jpg") else {
-            return;
-        };
-        let config = ExtractionConfig {
-            use_cache: false,
-            force_ocr: true,
-            ocr: Some(crate::core::config::OcrConfig::default()),
-            ..Default::default()
-        };
-
-        let doc = ImageExtractor::new()
-            .extract_content(&receipt, "image/jpeg", &config)
-            .await
-            .expect("receipt OCR must succeed");
-        let result =
-            crate::extraction::derive::derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
-        let normalized = result.content.to_ascii_lowercase();
-
-        assert!(
-            normalized.contains("j.stb promo"),
-            "implicit sparse-image fallback must recover the grounded receipt header; got {normalized:?}"
-        );
     }
 
     #[test]

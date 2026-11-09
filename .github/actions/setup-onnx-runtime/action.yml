@@ -3,7 +3,12 @@ description: Download and stage ONNX Runtime libraries for bindings
 inputs:
   ort-version:
     description: ONNX Runtime version to download
-    required: true
+    required: false
+    default: "1.24.2"
+  verify-linux-archive:
+    description: Verify a supported Linux archive against the committed checksum manifest before extraction
+    required: false
+    default: "false"
   dest-dir:
     description: Directory (relative to workspace) where libraries should be copied
     required: false
@@ -37,7 +42,7 @@ runs:
     - name: Prepare ONNX Runtime (Linux)
       if: runner.os == 'Linux'
       shell: bash
-      run: scripts/ci/actions/setup-onnx-runtime/linux.sh "${{ inputs.ort-version }}" "${{ inputs.dest-dir }}" "${{ inputs.arch-id }}" "${{ inputs.strategy }}"
+      run: scripts/ci/actions/setup-onnx-runtime/linux.sh "${{ inputs.ort-version }}" "${{ inputs.dest-dir }}" "${{ inputs.arch-id }}" "${{ inputs.strategy }}" "${{ inputs.verify-linux-archive }}"
 
     - name: Prepare ONNX Runtime (macOS)
       if: runner.os == 'macOS'

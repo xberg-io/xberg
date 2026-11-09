@@ -824,6 +824,24 @@ impl PageRenderer {
 
     /// Load resources (fonts, color spaces) into local cache.
     fn load_resources(&mut self, doc: &PdfDocument, resources: &Object) -> Result<()> {
+        // A form's /Resources is often an indirect object; without resolving it the form's fonts are never
+        // loaded and its text is drawn without font metrics. ~keep
+        // A direct dictionary is read in place; only a reference is loaded. ~keep
+        let loaded = resources.as_reference().and_then(|reference| {
+            doc.load_object(reference)
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        target: crate::LOG_TARGET_ROOT,
+                        operation = "load_render_resources",
+                        object_number = reference.id,
+                        error_code = error.telemetry_code(),
+                        error_offset = ?error.telemetry_offset(),
+                        "rendering without the resources of an unreadable object"
+                    );
+                })
+                .ok()
+        });
+        let resources = loaded.as_ref().unwrap_or(resources);
         if let Object::Dictionary(res_dict) = resources {
             tracing::debug!("Loading resources, keys: {:?}", res_dict.keys());
             if let Some(font_obj) = res_dict.get("Font") {

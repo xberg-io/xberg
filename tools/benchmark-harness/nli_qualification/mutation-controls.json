@@ -1,0 +1,615 @@
+{
+  "schema_version": 1,
+  "expected_controls": 67,
+  "controls": [
+    {
+      "id": "primary-01",
+      "name": "CLI freeze validation",
+      "path": "src/main.rs",
+      "before": "            plan.validate()?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-02",
+      "name": "CLI report validation",
+      "path": "src/main.rs",
+      "before": "            report.validate(&plan)?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-03",
+      "name": "identity repository",
+      "path": "src/report.rs",
+      "before": "self.model.repository == model.repository",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-04",
+      "name": "identity revision",
+      "path": "src/report.rs",
+      "before": "self.model.revision == model.revision",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-05",
+      "name": "identity model_file",
+      "path": "src/report.rs",
+      "before": "self.model.model_file == model.model_file",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-06",
+      "name": "identity model_sha256",
+      "path": "src/report.rs",
+      "before": "self.model.model_sha256 == variant.graph_sha256()?",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-07",
+      "name": "identity manifest_sha256",
+      "path": "src/report.rs",
+      "before": "self.model.manifest_sha256 == digest(model.sha256_manifest.as_bytes())",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-08",
+      "name": "identity experimental",
+      "path": "src/report.rs",
+      "before": "self.model.experimental",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test validate_refuses_each_tampered_report_through_the_public_cli ... FAILED"
+    },
+    {
+      "id": "primary-09",
+      "name": "plan qualified",
+      "path": "src/plan.rs",
+      "before": "!self.qualified",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-10",
+      "name": "plan schema",
+      "path": "src/plan.rs",
+      "before": "self.schema_version == 1",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-11",
+      "name": "thread declaration",
+      "path": "src/plan.rs",
+      "before": "runtime.threads == 0",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-12",
+      "name": "deadline declaration",
+      "path": "src/plan.rs",
+      "before": "runtime.deadline_ms > 0",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-13",
+      "name": "label count minimum",
+      "path": "src/plan.rs",
+      "before": "!self.labels.is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-14",
+      "name": "label count ceiling",
+      "path": "src/plan.rs",
+      "before": "self.labels.len() <= 64",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-15",
+      "name": "runner hex",
+      "path": "src/plan.rs",
+      "before": "hex(&runtime.runner_sha256, 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-16",
+      "name": "lock hex",
+      "path": "src/plan.rs",
+      "before": "hex(&runtime.dependency_lock_sha256, 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-17",
+      "name": "corpus hex",
+      "path": "src/plan.rs",
+      "before": "hex(&self.provenance.corpus_receipt_sha256, 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-18",
+      "name": "split hex",
+      "path": "src/plan.rs",
+      "before": "hex(&self.provenance.split_audit_sha256, 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-19",
+      "name": "source revision hex",
+      "path": "src/plan.rs",
+      "before": "hex(&self.source_revision, 40)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-20",
+      "name": "export hex",
+      "path": "src/plan.rs",
+      "before": "hex(&self.export_recipe_sha256, 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-21",
+      "name": "license hex",
+      "path": "src/plan.rs",
+      "before": "hex(&self.license_receipt_sha256, 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-22",
+      "name": "model revision hex",
+      "path": "src/plan.rs",
+      "before": "hex(&config.model.revision, 40)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-23",
+      "name": "repository arity",
+      "path": "src/plan.rs",
+      "before": "config.model.repository.split('/').count() == 2",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-24",
+      "name": "template placeholder",
+      "path": "src/plan.rs",
+      "before": "config.hypothesis_template.matches(\"{label}\").count() == 1",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-25",
+      "name": "threshold range",
+      "path": "src/plan.rs",
+      "before": "(0.0..=1.0).contains(&config.confidence_threshold)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-26",
+      "name": "entailment bound",
+      "path": "src/plan.rs",
+      "before": "config.model.entailment_index < 3",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-27",
+      "name": "contradiction bound",
+      "path": "src/plan.rs",
+      "before": "config.model.contradiction_index < 3",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-28",
+      "name": "indices distinct",
+      "path": "src/plan.rs",
+      "before": "config.model.entailment_index != config.model.contradiction_index",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-29",
+      "name": "manifest hex",
+      "path": "src/plan.rs",
+      "before": "hex(fields[0], 64)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-30",
+      "name": "candidate identifier",
+      "path": "src/plan.rs",
+      "before": "identifier(&candidate.id)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-31",
+      "name": "unique blank",
+      "path": "src/plan.rs",
+      "before": "!value.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-32",
+      "name": "unique whitespace",
+      "path": "src/plan.rs",
+      "before": "value == value.trim()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-33",
+      "name": "unique collisions",
+      "path": "src/plan.rs",
+      "before": "seen.insert(value.to_ascii_lowercase())",
+      "after": "{ seen.insert(value.to_ascii_lowercase()); true }",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-34",
+      "name": "arm names",
+      "path": "src/plan.rs",
+      "before": "self.arms\n                .iter()\n                .all(|arm| matches!(arm.as_str(), \"fp32\" | \"int8\" | \"uint8\"))",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-35",
+      "name": "gold vocabulary",
+      "path": "src/plan.rs",
+      "before": "doc.gold.iter().all(|label| self.labels.contains(label))",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-36",
+      "name": "candidate arm set",
+      "path": "src/plan.rs",
+      "before": "candidate.variants.keys().collect::<BTreeSet<_>>() == arms",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-37",
+      "name": "runtime ort_build_info",
+      "path": "src/plan.rs",
+      "before": "!runtime.ort_build_info.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-38",
+      "name": "runtime os",
+      "path": "src/plan.rs",
+      "before": "!runtime.os.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-39",
+      "name": "runtime arch",
+      "path": "src/plan.rs",
+      "before": "!runtime.arch.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-40",
+      "name": "runtime cpu",
+      "path": "src/plan.rs",
+      "before": "!runtime.cpu.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-41",
+      "name": "hex length",
+      "path": "src/lib.rs",
+      "before": "value.len() == length",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-42",
+      "name": "hex alphabet",
+      "path": "src/lib.rs",
+      "before": "value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-43",
+      "name": "identifier length",
+      "path": "src/lib.rs",
+      "before": "value.len() <= 128",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-44",
+      "name": "identifier alphabet",
+      "path": "src/lib.rs",
+      "before": "value.bytes().all(|b| b.is_ascii_alphanumeric() || b\"-_\".contains(&b))",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-45",
+      "name": "limit positive",
+      "path": "src/config.rs",
+      "before": "value > 0",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-46",
+      "name": "limit ceiling",
+      "path": "src/config.rs",
+      "before": "value <= maximum",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-47",
+      "name": "template byte ceiling",
+      "path": "src/config.rs",
+      "before": "config.hypothesis_template.len() <= MAX_TEMPLATE_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-48",
+      "name": "cache blank",
+      "path": "src/config.rs",
+      "before": "!path.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-49",
+      "name": "cache bytes",
+      "path": "src/config.rs",
+      "before": "path.len() <= MAX_TEMPLATE_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-50",
+      "name": "repository bytes",
+      "path": "src/config.rs",
+      "before": "model.repository.len() <= MAX_NAME_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-51",
+      "name": "output blank",
+      "path": "src/config.rs",
+      "before": "!model.output_name.trim().is_empty()",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-52",
+      "name": "output bytes",
+      "path": "src/config.rs",
+      "before": "model.output_name.len() <= MAX_NAME_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-53",
+      "name": "graph bytes",
+      "path": "src/config.rs",
+      "before": "model.model_file.len() <= MAX_DESCRIPTOR_PATH_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-54",
+      "name": "manifest bytes",
+      "path": "src/config.rs",
+      "before": "model.sha256_manifest.len() <= MAX_MANIFEST_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-55",
+      "name": "tensor count",
+      "path": "src/config.rs",
+      "before": "model.external_files.len() <= MAX_EXTERNAL_FILES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-56",
+      "name": "external bytes",
+      "path": "src/config.rs",
+      "before": "path.len() <= MAX_DESCRIPTOR_PATH_BYTES",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-57",
+      "name": "external prefix",
+      "path": "src/config.rs",
+      "before": "path.starts_with(&parent)",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-58",
+      "name": "path device stems",
+      "path": "src/config.rs",
+      "before": "!matches!(stem.as_str(), \"CON\" | \"PRN\" | \"AUX\" | \"NUL\")",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-59",
+      "name": "path trailing dot",
+      "path": "src/config.rs",
+      "before": "!part.ends_with('.')",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "primary-60",
+      "name": "Windows COM/LPT port",
+      "path": "src/config.rs",
+      "before": "!port.is_some_and(|value| matches!(value, \"1\" | \"2\" | \"3\" | \"4\" | \"5\" | \"6\" | \"7\" | \"8\" | \"9\"))",
+      "after": "true",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-01",
+      "name": "label uniqueness",
+      "path": "src/plan.rs",
+      "before": "unique(self.labels.iter().map(String::as_str), \"labels\")?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-02",
+      "name": "arm uniqueness",
+      "path": "src/plan.rs",
+      "before": "unique(self.arms.iter().map(String::as_str), \"arms\")?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-03",
+      "name": "document uniqueness",
+      "path": "src/plan.rs",
+      "before": "unique(self.documents.iter().map(|doc| doc.id.as_str()), \"document IDs\")?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-04",
+      "name": "gold uniqueness",
+      "path": "src/plan.rs",
+      "before": "unique(doc.gold.iter().map(String::as_str), \"gold labels\")?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-05",
+      "name": "portable wrapper",
+      "path": "src/plan.rs",
+      "before": "self.validate_portable()?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-06",
+      "name": "candidate uniqueness",
+      "path": "src/plan.rs",
+      "before": "unique(\n            self.candidates.iter().map(|candidate| candidate.id.as_str()),\n            \"candidate IDs\",\n        )?;",
+      "after": "",
+      "args": ["--test", "cli", "--test", "refusals"],
+      "failure_marker": "test freeze_refuses_each_bad_plan_without_writing_a_frozen_artifact ... FAILED"
+    },
+    {
+      "id": "supplement-07",
+      "name": "SDK superscript policy drift",
+      "path": "src/config.rs",
+      "before": "        repository_component(part)",
+      "after": "        true",
+      "args": [
+        "--features",
+        "runtime",
+        "--test",
+        "refusals",
+        "portable_admission_agrees_with_sdk_constructor_on_edge_configurations"
+      ],
+      "failure_marker": "portable admitted artifact path COM¹.onnx"
+    }
+  ]
+}
