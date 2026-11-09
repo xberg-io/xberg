@@ -180,6 +180,7 @@ fn recovers_the_painted_zero_once_at_its_source_position() {
         assert_eq!(text.matches('០').count(), 1, "one painted source occurrence: {text}");
         assert!(text.find('០').unwrap() < text.find(PROSE[0]).unwrap(), "{text}");
     }
+    assert_two_page_numbers(&config, 1);
 }
 
 fn provisioned_config() -> (tempfile::TempDir, ExtractionConfig) {
@@ -212,12 +213,142 @@ fn english_only_keeps_the_unverified_ocr_read() {
             "English cannot independently verify Khmer zero"
         );
     }
+    assert_eq!(
+        missing_model_warnings(&result),
+        1,
+        "known native script needs a caller-visible warning"
+    );
+    let without_layer = without_native_claim();
+    let native = ExtractionConfig {
+        disable_ocr: true,
+        ..config.clone()
+    };
+    assert_eq!(extract(&without_layer, &native).content.trim(), "");
+    assert!(rendered(MATCHING) == rendered(&without_layer));
+    let no_claim = extract(&without_layer, &config);
+    assert_eq!(
+        no_claim.content, result.content,
+        "diagnostics must not change English OCR"
+    );
+    assert_eq!(missing_model_warnings(&no_claim), 0, "no native script evidence");
+    assert_two_page_numbers(&config, 0);
+}
+
+fn duplicated_page() -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(MATCHING).unwrap();
+    let page_id = *doc.get_pages().get(&1).unwrap();
+    let page = doc.get_object(page_id).unwrap().as_dict().unwrap().clone();
+    let parent_id = page.get(b"Parent").unwrap().as_reference().unwrap();
+    let second = doc.add_object(page);
+    let parent = doc.get_object_mut(parent_id).unwrap().as_dict_mut().unwrap();
+    let children = parent.get_mut(b"Kids").unwrap().as_array_mut().unwrap();
+    assert_eq!(children.len(), 1);
+    children.push(lopdf::Object::Reference(second));
+    parent.set("Count", 2);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    assert_eq!(PdfDocument::from_bytes(bytes.clone()).unwrap().page_count().unwrap(), 2);
+    bytes
+}
+
+fn assert_two_page_numbers(config: &ExtractionConfig, count_per_page: usize) {
+    let result = helpers::extract_bytes_document_blocking(&duplicated_page(), "application/pdf", config).unwrap();
+    let pages = result.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 2);
+    for page in pages {
+        assert!(PROSE.iter().all(|line| page.content.contains(line)), "{}", page.content);
+        assert_eq!(page.content.matches('០').count(), count_per_page);
+    }
+    assert_eq!(result.content.matches('០').count(), 2 * count_per_page);
+    let expected_warnings = if count_per_page == 0 { 2 } else { 0 };
+    assert_eq!(missing_model_warnings(&result), expected_warnings);
+    if expected_warnings != 0 {
+        for page in [1, 2] {
+            assert!(
+                result
+                    .processing_warnings
+                    .iter()
+                    .any(|warning| warning.message.contains(&format!("PDF page {page}")))
+            );
+        }
+    }
+}
+
+fn missing_model_warnings(result: &ExtractedDocument) -> usize {
+    result
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "ocr" && warning.message.contains("khm.traineddata"))
+        .count()
+}
+
+fn without_native_claim() -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(MATCHING).unwrap();
+    let mut changed = 0;
+    for object in doc.objects.values_mut() {
+        let Ok(stream) = object.as_stream_mut() else { continue };
+        let Ok(bytes) = stream.decompressed_content() else {
+            continue;
+        };
+        if let Ok(text) = String::from_utf8(bytes)
+            && text.contains("100 650 Tm")
+        {
+            let mut content = lopdf::content::Content::decode(text.as_bytes()).unwrap();
+            for operation in &mut content.operations {
+                if operation.operator == "Tj" {
+                    operation.operands[0] = lopdf::Object::string_literal(Vec::<u8>::new());
+                    changed += 1;
+                }
+            }
+            stream.set_plain_content(content.encode().unwrap());
+        }
+    }
+    assert_eq!(changed, 1, "remove exactly one native text claim");
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn assert_verified_positive(config: &ExtractionConfig) {
+    let result = extract(MATCHING, config);
+    assert_ocr_retains_prose(&result);
+    assert_eq!(
+        result.content.matches('០').count(),
+        1,
+        "the verifier must actually recover its positive"
+    );
+    assert_eq!(missing_model_warnings(&result), 0, "provisioned model is available");
+}
+
+fn assert_crop_recognizer_reads_zero(models: &std::path::Path) {
+    let raster = image::load_from_memory(&rendered(MISLEADING)).unwrap().into_rgb8();
+    let crop = image::imageops::crop_imm(&raster, 248, 233, 40, 63).to_image();
+    let mut padded = image::RgbImage::from_pixel(56, 79, image::Rgb([255; 3]));
+    image::imageops::replace(&mut padded, &crop, 8, 8);
+    let api = xberg_tesseract::TesseractAPI::new().unwrap();
+    api.init_2(models.to_str().unwrap(), "khm", 3).unwrap();
+    api.set_page_seg_mode(xberg_tesseract::TessPageSegMode::PSM_SINGLE_WORD)
+        .unwrap();
+    api.set_image(padded.as_raw(), 56, 79, 3, 168).unwrap();
+    api.set_source_resolution(150).unwrap();
+    api.recognize().unwrap();
+    let read = api.get_utf8_text().unwrap();
+    let normalized: String = read
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != '\u{200b}')
+        .collect();
+    assert_eq!(
+        normalized, "០",
+        "the actual misleading crop must read zero, not nothing: {read:?}"
+    );
 }
 
 #[test]
 #[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
 fn provisioned_recognition_still_refuses_false_native_digits() {
-    let (_models, config) = provisioned_config();
+    let (models, config) = provisioned_config();
+    assert_crop_recognizer_reads_zero(models.path());
+    assert_verified_positive(&config);
     for input in [MISLEADING.to_vec(), wrong_unicode()] {
         let result = extract(&input, &config);
         assert_ocr_retains_prose(&result);
@@ -315,6 +446,7 @@ fn recovery_keeps_a_bottom_number_after_the_prose_in_plain_and_markdown() {
 #[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
 fn a_number_in_a_blank_source_crop_is_not_recovered() {
     let (_models, config) = provisioned_config();
+    assert_verified_positive(&config);
     let shifted = moved_number(false);
     let result = extract(&shifted, &config);
     assert_ocr_retains_prose(&result);
@@ -353,6 +485,7 @@ fn installing_a_model_does_not_reuse_an_english_only_cached_result() {
 #[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
 fn forced_english_ocr_does_not_promote_native_numbers() {
     let (_models, mut config) = provisioned_config();
+    assert_verified_positive(&config);
     config.force_ocr = true;
     let result = extract(MATCHING, &config);
     assert_ocr_retains_prose(&result);
@@ -401,6 +534,7 @@ fn overlapping_native_claims_cannot_multiply_one_painted_number() {
         "two native claims survive character extraction"
     );
     let (_models, config) = provisioned_config();
+    assert_verified_positive(&config);
     let result = extract(&input, &config);
     assert_ocr_retains_prose(&result);
     for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
@@ -430,6 +564,7 @@ fn deskewed_primary_does_not_promote_a_number_in_the_original_source_frame() {
     let mut bytes = Vec::new();
     doc.save_to(&mut bytes).unwrap();
     let (_models, config) = provisioned_config();
+    assert_verified_positive(&config);
     let result = extract(&bytes, &config);
     assert_ocr_retains_prose(&result);
     for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {

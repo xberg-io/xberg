@@ -20,6 +20,29 @@ struct Number {
     baseline: f32,
 }
 
+#[derive(Default)]
+pub(super) struct Run {
+    processor: once_cell::sync::OnceCell<OcrProcessor>,
+}
+
+pub(super) struct PagePolicy {
+    pub(super) accepted: bool,
+    pub(super) scale_only: bool,
+    pub(super) layout: bool,
+    pub(super) transformed: bool,
+    pub(super) structured: bool,
+    pub(super) builtin: bool,
+}
+
+pub(super) fn applicable(policy: PagePolicy) -> bool {
+    policy.accepted
+        && policy.scale_only
+        && !policy.layout
+        && !policy.transformed
+        && !policy.structured
+        && policy.builtin
+}
+
 fn is_khmer_digit(character: char) -> bool {
     ('\u{17e0}'..='\u{17e9}').contains(&character)
 }
@@ -38,6 +61,8 @@ pub(super) async fn recover(
     paragraphs: &mut [PdfParagraph],
     read: &mut String,
     config: &ExtractionConfig,
+    run: &std::sync::Arc<Run>,
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) {
     let count = source
         .layer
@@ -57,6 +82,7 @@ pub(super) async fn recover(
     // Model presence changes the result even when configuration and PDF bytes do not. ~keep
     crate::core::extractor::cacheability::invalidate_current();
     let Some(directory) = model_directory(config) else {
+        missing_model_warning(warnings, source.index);
         return;
     };
     let (media, numbers) = match source_numbers(&source) {
@@ -74,7 +100,7 @@ pub(super) async fn recover(
     }
     let scale = (media.width / frame.0 as f32, media.height / frame.1 as f32);
     let max_work = proof_limits(config).max_iterations;
-    let numbers = recognize(source.raster, media, numbers, directory, config.clone()).await;
+    let numbers = recognize(source.raster, media, numbers, directory, config.clone(), run.clone()).await;
     if insert(numbers, paragraphs, scale, max_work) {
         *read = super::document::ocr_paragraphs_plain_text(paragraphs);
     }
@@ -99,8 +125,9 @@ async fn recognize(
     numbers: Vec<Number>,
     directory: String,
     config: ExtractionConfig,
+    run: std::sync::Arc<Run>,
 ) -> Vec<Number> {
-    match tokio::task::spawn_blocking(move || verify_source(raster, media, numbers, &directory, &config)).await {
+    match tokio::task::spawn_blocking(move || verify_source(raster, media, numbers, &directory, &config, &run)).await {
         Ok(Ok(numbers)) => numbers,
         Ok(Err(error)) => {
             tracing::warn!(%error, "Unable to verify native numeric source crops");
@@ -155,6 +182,7 @@ pub(super) fn prepare_read(
     config: &ExtractionConfig,
     page: usize,
     layer: Option<&str>,
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> (crate::core::config::OcrConfig, bool) {
     let count = layer.map_or(0, |text| {
         text.chars().filter(|character| is_khmer_digit(*character)).count()
@@ -164,6 +192,7 @@ pub(super) fn prepare_read(
     }
     crate::core::extractor::cacheability::invalidate_current();
     if model_directory(config).is_none() {
+        missing_model_warning(warnings, page);
         return (primary, false);
     }
     let options = primary.backend_options.get_or_insert_with(|| serde_json::json!({}));
@@ -173,6 +202,16 @@ pub(super) fn prepare_read(
     // A cached read cannot certify whether deskew changed this raster. ~keep
     options.insert("use_cache".into(), false.into());
     (primary, true)
+}
+
+fn missing_model_warning(warnings: &mut Vec<crate::types::ProcessingWarning>, index: usize) {
+    let page = index.saturating_add(1);
+    let message = format!(
+        "The native text on PDF page {page} contains Khmer-script numbers, but no khm.traineddata accompanies \
+         the selected OCR model. Those numbers cannot be verified and may be missing from the OCR text."
+    );
+    tracing::warn!(page, script = "Khmer", "{message}");
+    crate::core::diagnostics::push_warning(warnings, "ocr", message);
 }
 
 fn proof_error(error: impl std::error::Error + Send + Sync + 'static) -> crate::XbergError {
@@ -216,9 +255,11 @@ fn verify_source(
     numbers: Vec<Number>,
     directory: &str,
     config: &ExtractionConfig,
+    run: &Run,
 ) -> crate::Result<Vec<Number>> {
     let limits = proof_limits(config);
-    if numbers.iter().map(|number| number.text.chars().count()).sum::<usize>() > MAX_NUMBER_GLYPHS
+    if numbers.is_empty()
+        || numbers.iter().map(|number| number.text.chars().count()).sum::<usize>() > MAX_NUMBER_GLYPHS
         || numbers.len() > limits.max_iterations
     {
         return Ok(Vec::new());
@@ -229,7 +270,9 @@ fn verify_source(
         u64::try_from(encoded.capacity()).unwrap_or(u64::MAX),
     )?;
     let raster = image::DynamicImage::ImageRgb8(raster);
-    let processor = OcrProcessor::new(None).map_err(proof_error)?;
+    let processor = run
+        .processor
+        .get_or_try_init(|| OcrProcessor::new(None).map_err(proof_error))?;
     let retained = encoded.capacity().saturating_add(raster.as_bytes().len());
     let mut recognition = recognition_config(
         directory,
@@ -245,13 +288,19 @@ fn verify_source(
         if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
             break;
         }
-        if let Some(read) = recognize_crop(&raster, media, number.bbox, &processor, &mut recognition, &budget)?
-            && read.content.trim() == number.text
+        if let Some(read) = recognize_crop(&raster, media, number.bbox, processor, &mut recognition, &budget)?
+            && recognized_number_matches(&read.content, &number.text)
         {
             verified.push(number);
         }
     }
     Ok(verified)
+}
+
+fn recognized_number_matches(read: &str, number: &str) -> bool {
+    read.chars()
+        .filter(|character| !character.is_whitespace() && *character != '\u{200b}')
+        .eq(number.chars())
 }
 
 struct CropBudget<'a> {
@@ -384,20 +433,30 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
     for (paragraph, line, number, bbox) in planned {
         let paragraph = &mut paragraphs[paragraph];
         let line = &mut paragraph.lines[line];
-        let mut segment = line.segments[0].clone();
-        segment.text = number.text;
-        segment.x = bbox.x;
-        segment.y = bbox.y;
-        segment.width = bbox.width;
-        segment.height = bbox.height;
-        segment.baseline_y = number.baseline / scale.1;
-        segment.assigned_role = None;
+        let segment = numeric_segment(number, bbox, scale.1);
         let position = line.segments.partition_point(|existing| existing.x <= bbox.x);
         line.segments.insert(position, segment);
         paragraph.text.clear();
         paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
     }
     changed
+}
+
+fn numeric_segment(number: Number, bbox: Rect, scale: f32) -> crate::pdf::hierarchy::SegmentData {
+    crate::pdf::hierarchy::SegmentData {
+        text: number.text,
+        x: bbox.x,
+        y: bbox.y,
+        width: bbox.width,
+        height: bbox.height,
+        baseline_y: number.baseline / scale,
+        font_size: 0.0,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    }
 }
 
 fn bounded_unique_crops(numbers: &[Number], lines: usize, max_work: usize) -> bool {

@@ -231,8 +231,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(ocr): Recover independently verified native Khmer numbers at their source lines.** (#2408)
-  When Khmer traineddata already accompanies the selected primary model, upright numeric crops can restore numbers omitted by the ordinary OCR read. English-only extraction and forced OCR stay unchanged; no auxiliary model is downloaded.
+- **(ocr): Optionally recover native Khmer numbers with provisioned Khmer traineddata.** (Refs #2408)
+  Upright numeric crops can restore numbers omitted by the ordinary OCR read when `khm.traineddata`
+  already accompanies the selected primary model. English-only text and forced OCR stay unchanged;
+  a missing Khmer model produces a processing warning. Recovery retains original OCR tokens, can
+  leave a misread neighbor beside a number, and declines transformed or ambiguous source claims.
+  No auxiliary model is downloaded at runtime; the original reporter page remains unverified.
 
 - **(ocr): Adopt the block re-read of a standalone dot-leader table picture.** (#2503)
   A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.

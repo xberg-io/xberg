@@ -3587,6 +3587,44 @@ fn type0_ocr_rejection() -> FailedOcrRun {
     .into()
 }
 
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+struct PageRead<OrderedProof, CaptionProof> {
+    page_idx: usize,
+    correction_degrees: u32,
+    upright_width: u32,
+    upright_height: u32,
+    result: crate::Result<crate::types::ExtractedDocument>,
+    ordered_proof: Option<OrderedProof>,
+    detached_frame_read: bool,
+    captured_caption: Option<CaptionProof>,
+    number_frame: bool,
+}
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+impl<OrderedProof, CaptionProof> PageRead<OrderedProof, CaptionProof> {
+    fn failed(page_idx: usize, correction_degrees: u32, dimensions: (u32, u32), error: crate::XbergError) -> Self {
+        Self {
+            page_idx,
+            correction_degrees,
+            upright_width: dimensions.0,
+            upright_height: dimensions.1,
+            result: Err(error),
+            ordered_proof: None,
+            detached_frame_read: false,
+            captured_caption: None,
+            number_frame: false,
+        }
+    }
+}
+
 /// Same as [`extract_with_ocr`], but `page_rotation_override` -- when non-zero -- is used as
 /// the known `/Rotate` value for every image in `images` instead of this function's own
 /// content-based per-page lookup (`lazy_pdf_render_state` / `external_image_page_rotations`).
@@ -4104,6 +4142,13 @@ pub(super) async fn extract_with_ocr_for_page(
         super::rendering::PageRasterDpis::new()
     };
     let mut backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let number_recovery = Arc::new(super::number_recovery::Run::default());
     let mut backend_additional_metadata: Option<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>> =
         None;
     let mut page_segmentation_modes = std::collections::BTreeMap::<u32, i32>::new();
@@ -4306,17 +4351,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 // real OCR work to get it. ~keep
                 if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     let task = crate::engine::seams::inherit_progress(async move {
-                        (
-                            idx,
-                            0,
-                            0,
-                            0,
-                            Err(crate::XbergError::Cancelled),
-                            None,
-                            false,
-                            None,
-                            false,
-                        )
+                        PageRead::failed(idx, 0, (0, 0), crate::XbergError::Cancelled)
                     });
                     join_set.spawn(crate::core::extractor::cacheability::inherit(task));
                     continue;
@@ -4408,6 +4443,7 @@ pub(super) async fn extract_with_ocr_for_page(
                                 })
                                 .and_then(|layers| layers.get(&((page_index_offset + *page_idx + 1) as u32)))
                                 .map(String::as_str),
+                            &mut backend_page_warnings,
                         )
                     } else {
                         (config_clone, false)
@@ -4473,16 +4509,11 @@ pub(super) async fn extract_with_ocr_for_page(
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                        return (
+                        return PageRead::failed(
                             idx,
                             correction_degrees,
-                            upright_width,
-                            upright_height,
-                            Err(crate::XbergError::Cancelled),
-                            None,
-                            false,
-                            None,
-                            false,
+                            (upright_width, upright_height),
+                            crate::XbergError::Cancelled,
                         );
                     }
                     let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
@@ -4492,17 +4523,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     ) {
                         Ok(configs) => configs,
                         Err(error) => {
-                            return (
-                                idx,
-                                correction_degrees,
-                                upright_width,
-                                upright_height,
-                                Err(error),
-                                None,
-                                false,
-                                None,
-                                false,
-                            );
+                            return PageRead::failed(idx, correction_degrees, (upright_width, upright_height), error);
                         }
                     };
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -4624,8 +4645,8 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(feature = "ocr")]
                     let captured_caption = captured_caption
                         .filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches_selected(selected)));
-                    (
-                        idx,
+                    PageRead {
+                        page_idx: idx,
                         correction_degrees,
                         upright_width,
                         upright_height,
@@ -4634,22 +4655,22 @@ pub(super) async fn extract_with_ocr_for_page(
                         detached_frame_read,
                         captured_caption,
                         number_frame,
-                    )
+                    }
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
             }
             while let Some(join_result) = join_set.join_next().await {
-                let (
+                let PageRead {
                     page_idx,
                     correction_degrees,
                     upright_width,
                     upright_height,
-                    ocr_result,
+                    result: ocr_result,
                     ordered_proof,
                     detached_frame_read,
                     captured_caption,
                     number_frame,
-                ) = join_result.map_err(|e| crate::XbergError::Plugin {
+                } = join_result.map_err(|e| crate::XbergError::Plugin {
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
                 })?;
@@ -5562,34 +5583,33 @@ pub(super) async fn extract_with_ocr_for_page(
                     feature = "tokio-runtime",
                     not(target_arch = "wasm32")
                 ))]
-                if !acceptance.discarded
-                    && number_frame_reads[offset]
-                    && acceptance.verdict.is_none()
-                    && !has_layout_detections
-                    && !tall_source_used
-                    && batch_upright_correction[offset].0 == 0
-                    && !pages_with_recovered_xobject_payload[page_idx]
-                    && collected_tables
+                if super::number_recovery::applicable(super::number_recovery::PagePolicy {
+                    accepted: !acceptance.discarded && acceptance.verdict.is_none(),
+                    scale_only: number_frame_reads[offset],
+                    layout: has_layout_detections,
+                    transformed: tall_source_used
+                        || batch_upright_correction[offset].0 != 0
+                        || pages_with_recovered_xobject_payload[page_idx],
+                    structured: collected_tables
                         .iter()
-                        .all(|table| table.page_number != document_page_number)
-                    && accumulated_formulas
-                        .iter()
-                        .all(|formula| formula.page != Some(document_page_number))
-                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
-                    && let (Some(pdf), Some(layer), Some(paragraphs)) = (
-                        xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
-                        page_ocr_hints
-                            .as_ref()
-                            .and_then(|hints| {
-                                hints
-                                    .native_coverage_layers
-                                    .as_ref()
-                                    .or(hints.native_page_layers.as_ref())
-                            })
-                            .and_then(|layers| layers.get(&document_page_number)),
-                        all_page_paragraphs[page_idx].as_mut(),
-                    )
-                {
+                        .any(|table| table.page_number == document_page_number)
+                        || accumulated_formulas
+                            .iter()
+                            .any(|formula| formula.page == Some(document_page_number)),
+                    builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
+                }) && let (Some(pdf), Some(layer), Some(paragraphs)) = (
+                    xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| {
+                            hints
+                                .native_coverage_layers
+                                .as_ref()
+                                .or(hints.native_page_layers.as_ref())
+                        })
+                        .and_then(|layers| layers.get(&document_page_number)),
+                    all_page_paragraphs[page_idx].as_mut(),
+                ) {
                     super::number_recovery::recover(
                         super::number_recovery::PageSource {
                             document: pdf,
@@ -5602,6 +5622,8 @@ pub(super) async fn extract_with_ocr_for_page(
                         paragraphs,
                         &mut page_texts[page_idx],
                         config,
+                        &number_recovery,
+                        &mut backend_page_warnings,
                     )
                     .await;
                 }
@@ -5707,34 +5729,33 @@ pub(super) async fn extract_with_ocr_for_page(
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            if !acceptance.discarded
-                && number_frame_reads[offset]
-                && acceptance.verdict.is_none()
-                && !has_layout_detections
-                && !tall_source_used
-                && batch_upright_correction[offset].0 == 0
-                && !pages_with_recovered_xobject_payload[page_idx]
-                && collected_tables
+            if super::number_recovery::applicable(super::number_recovery::PagePolicy {
+                accepted: !acceptance.discarded && acceptance.verdict.is_none(),
+                scale_only: number_frame_reads[offset],
+                layout: has_layout_detections,
+                transformed: tall_source_used
+                    || batch_upright_correction[offset].0 != 0
+                    || pages_with_recovered_xobject_payload[page_idx],
+                structured: collected_tables
                     .iter()
-                    .all(|table| table.page_number != document_page_number)
-                && accumulated_formulas
-                    .iter()
-                    .all(|formula| formula.page != Some(document_page_number))
-                && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
-                && let (Some(pdf), Some(layer), Some(paragraphs)) = (
-                    xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
-                    page_ocr_hints
-                        .as_ref()
-                        .and_then(|hints| {
-                            hints
-                                .native_coverage_layers
-                                .as_ref()
-                                .or(hints.native_page_layers.as_ref())
-                        })
-                        .and_then(|layers| layers.get(&document_page_number)),
-                    all_page_paragraphs[page_idx].as_mut(),
-                )
-            {
+                    .any(|table| table.page_number == document_page_number)
+                    || accumulated_formulas
+                        .iter()
+                        .any(|formula| formula.page == Some(document_page_number)),
+                builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
+            }) && let (Some(pdf), Some(layer), Some(paragraphs)) = (
+                xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
+                page_ocr_hints
+                    .as_ref()
+                    .and_then(|hints| {
+                        hints
+                            .native_coverage_layers
+                            .as_ref()
+                            .or(hints.native_page_layers.as_ref())
+                    })
+                    .and_then(|layers| layers.get(&document_page_number)),
+                all_page_paragraphs[page_idx].as_mut(),
+            ) {
                 super::number_recovery::recover(
                     super::number_recovery::PageSource {
                         document: pdf,
@@ -5747,6 +5768,8 @@ pub(super) async fn extract_with_ocr_for_page(
                     paragraphs,
                     &mut page_texts[page_idx],
                     config,
+                    &number_recovery,
+                    &mut backend_page_warnings,
                 )
                 .await;
             }
