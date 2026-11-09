@@ -3125,6 +3125,81 @@ mod tests {
         }
     }
 
+    /// The TeX of the one math node in `markdown`, read with each reader, failing on any raw HTML.
+    fn only_math_literal(markdown: &str) -> String {
+        let mut dollars = Options::default();
+        dollars.extension.math_dollars = true;
+        let mut read = Vec::new();
+        for options in [crate::rendering::markdown::comrak_options(), dollars] {
+            let maths: Vec<_> = literals(markdown, &options);
+            assert_eq!(maths.len(), 1, "{markdown}");
+            read.push(maths[0].clone());
+        }
+        assert_eq!(read[0], read[1], "{markdown}");
+        read.remove(0)
+    }
+
+    fn without_whitespace(text: &str) -> String {
+        text.split_whitespace().collect()
+    }
+
+    #[test]
+    fn should_write_non_ascii_math_in_inline_and_display_form() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        push_math_paragraph(&mut builder, "Let $α+β$ hold ∑.", &["$α+β$"]);
+        push_math_paragraph(&mut builder, "Then $$∑ α<β$$ holds.", &["$$∑ α<β$$"]);
+        builder.push_formula("α+β\nγ", None, None);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(
+            markdown,
+            "Let $α+β$ hold ∑.\n\nThen $$∑ α<β$$ holds.\n\n$$\nα+β\nγ\n$$\n"
+        );
+    }
+
+    #[test]
+    fn should_not_let_display_math_open_an_html_block() {
+        let openers = [
+            "<script",
+            "<pre",
+            "<style",
+            "<textarea",
+            "<!--",
+            "</div",
+            "<div",
+            "<?php",
+            "<![CDATA[",
+            "<!DOCTYPE",
+        ];
+        for opener in openers {
+            let tex = format!("a\n{opener}\nb");
+            let mut builder = InternalDocumentBuilder::new("test");
+            builder.push_formula(&tex, None, None);
+            let markdown = crate::rendering::render_markdown(&builder.build());
+            assert_no_html(&markdown, &Options::default());
+            assert_eq!(
+                without_whitespace(&only_math_literal(&markdown)),
+                without_whitespace(&tex),
+                "{markdown}"
+            );
+        }
+    }
+
+    #[test]
+    fn should_not_let_display_math_open_an_html_block_inside_a_container() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_quote_start();
+        builder.push_formula("a\n<div\nb", None, None);
+        builder.push_quote_end();
+        builder.push_list(false);
+        builder.push_list_item("item", false, vec![], None, None);
+        builder.push_formula("a\n<script\nb", None, None);
+        builder.end_list();
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_no_html(&markdown, &Options::default());
+        assert!(markdown.contains("> $$a <div b$$"), "{markdown}");
+        assert!(markdown.contains("  $$a <script b$$"), "{markdown}");
+    }
+
     #[test]
     fn should_write_math_as_dollar_math() {
         let mut builder = InternalDocumentBuilder::new("test");
