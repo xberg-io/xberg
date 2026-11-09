@@ -972,12 +972,12 @@ fn fragmented_hocr_budget(hocr: &str, tsv: &str, limits: &SecurityLimits) -> Opt
     limits.max_iterations.checked_sub(bytes.saturating_mul(4))
 }
 
-fn prove_fragmented_table_rows<'a>(
+fn prove_fragmented_table_rows_budgeted<'a>(
     words: &'a mut Vec<HocrWord>,
     bbox: BoundingBox,
     cells: &[Vec<String>],
     row_threshold: f64,
-    budget: usize,
+    budget: &mut usize,
     allow_dot_leader: bool,
 ) -> Option<Vec<&'a HocrWord>> {
     if cells.is_empty() || words.len() > MAX_FRAGMENTED_HOCR_WORDS {
@@ -993,7 +993,7 @@ fn prove_fragmented_table_rows<'a>(
     });
     // Both row detection and nearest-row assignment can scan every word for
     // each row. The word cap makes the multiplication safe.
-    let budget = budget.checked_sub(2 * words.len() * words.len())?;
+    *budget = budget.checked_sub(2 * words.len() * words.len())?;
     let row_positions = detect_rows(words, row_threshold);
     let alignments = row_positions.len().checked_sub(cells.len())? + 1;
     if alignments > MAX_FRAGMENTED_HOCR_ALIGNMENTS {
@@ -1004,7 +1004,8 @@ fn prove_fragmented_table_rows<'a>(
         .map(|word| word.text.len() + 1)
         .chain(cells.iter().flatten().map(|cell| cell.len() + 1))
         .fold(0usize, usize::saturating_add);
-    if comparison_bytes.saturating_mul(alignments) > budget {
+    let comparison_work = comparison_bytes.saturating_mul(alignments);
+    if comparison_work > *budget {
         return None;
     }
     let mut rows = vec![Vec::new(); row_positions.len()];
@@ -1014,12 +1015,27 @@ fn prove_fragmented_table_rows<'a>(
     for row in &mut rows {
         sort_ocr_line_word_refs(row);
     }
+    *budget = budget.checked_sub(comparison_work)?;
     let matched = unique_table_row_window(&rows, cells, false).or_else(|| {
-        (allow_dot_leader && comparison_bytes.saturating_mul(alignments).saturating_mul(2) <= budget)
-            .then(|| unique_table_row_window(&rows, cells, true))
-            .flatten()
+        if !allow_dot_leader {
+            return None;
+        }
+        *budget = budget.checked_sub(comparison_work)?;
+        unique_table_row_window(&rows, cells, true)
     })?;
     Some(matched.iter().flatten().copied().collect())
+}
+
+#[cfg(test)]
+fn prove_fragmented_table_rows<'a>(
+    words: &'a mut Vec<HocrWord>,
+    bbox: BoundingBox,
+    cells: &[Vec<String>],
+    row_threshold: f64,
+    mut budget: usize,
+    allow_dot_leader: bool,
+) -> Option<Vec<&'a HocrWord>> {
+    prove_fragmented_table_rows_budgeted(words, bbox, cells, row_threshold, &mut budget, allow_dot_leader)
 }
 
 // ~keep A matching window can omit a caption, but ambiguous matches cannot claim any words.
@@ -1078,6 +1094,163 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
                 .min(right.top.saturating_add(right.height))
 }
 
+fn fragmented_table_boxes(
+    tables: &[OcrTable],
+    page: u32,
+    limits: &SecurityLimits,
+    budget: &mut usize,
+) -> Option<Vec<BoundingBox>> {
+    if tables.is_empty() || tables.len() > MAX_FRAGMENTED_HOCR_WORDS {
+        return None;
+    }
+    *budget = budget.checked_sub(tables.len().saturating_mul(tables.len()))?;
+    let mut cells = 0usize;
+    let mut boxes: Vec<BoundingBox> = Vec::with_capacity(tables.len());
+    for table in tables {
+        if table.cells.is_empty()
+            || table.cells.len() > MAX_FRAGMENTED_HOCR_WORDS
+            || table.cells.iter().any(Vec::is_empty)
+        {
+            return None;
+        }
+        cells = cells.checked_add(table.cells.iter().map(Vec::len).sum::<usize>())?;
+        let cell_bytes = table
+            .cells
+            .iter()
+            .flatten()
+            .map(|cell| cell.len() + 1)
+            .fold(0usize, usize::saturating_add);
+        *budget = budget.checked_sub(cell_bytes)?;
+        let bbox = ocr_table_bbox(table)?;
+        if table.page_number != page
+            || cells > limits.max_table_cells
+            || bbox.x0 >= bbox.x1
+            || bbox.y0 >= bbox.y1
+            || boxes
+                .iter()
+                .any(|other| bbox.x0 <= other.x1 && other.x0 <= bbox.x1 && bbox.y0 <= other.y1 && other.y0 <= bbox.y1)
+        {
+            return None;
+        }
+        boxes.push(bbox);
+    }
+    Some(boxes)
+}
+
+fn fragmented_hocr_attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+    let (_, value) = tag.split_once(name)?;
+    let quote = value.as_bytes().first().copied()?;
+    if quote != b'\'' && quote != b'"' {
+        return None;
+    }
+    value[1..].split_once(char::from(quote)).map(|(value, _)| value)
+}
+
+fn fragmented_hocr_local_page(tag: &str) -> bool {
+    let Some(title) = fragmented_hocr_attribute(tag, "title=") else {
+        return false;
+    };
+    let pages: Vec<_> = title
+        .split(';')
+        .filter_map(|part| {
+            let mut fields = part.split_whitespace();
+            (fields.next()? == "ppageno").then(|| fields.collect::<Vec<_>>())
+        })
+        .collect();
+    pages == [vec!["0"]]
+}
+
+type FragmentedWordKey = (String, [u32; 4]);
+
+fn fragmented_hocr_word(
+    remaining: &str,
+    end: usize,
+    name: &str,
+    budget: &mut usize,
+) -> Option<(FragmentedWordKey, usize)> {
+    let closing = format!("</{name}>");
+    let word_end = remaining[end + 1..].find(&closing)? + end + 1 + closing.len();
+    let fragment = format!("<p class=\"ocr_par\"><{}</p>", &remaining[..word_end]);
+    *budget = budget.checked_sub(fragment.len().saturating_mul(4))?;
+    let parsed = parse_hocr_to_internal_document_with_page_offset_and_stats(&fragment, None, 1).document;
+    let [word] = parsed.elements.as_slice() else {
+        return None;
+    };
+    let bbox = word.bbox.as_ref()?;
+    Some((
+        (
+            word.text.clone(),
+            [bbox.x0 as u32, bbox.y0 as u32, bbox.x1 as u32, bbox.y1 as u32],
+        ),
+        word_end,
+    ))
+}
+
+// ~keep Parse each source word through the removal parser itself, so text normalization and
+// geometry agree. Count occurrences before its set-based removal can hide duplicates.
+fn fragmented_hocr_source_matches(hocr: &str, source: &[HocrWord], budget: &mut usize) -> Option<()> {
+    let mut remaining = hocr;
+    let mut page_seen = false;
+    let mut page_depth = None;
+    let mut stack = Vec::new();
+    let mut occurrences = HashMap::new();
+    while let Some(start) = remaining.find('<') {
+        remaining = &remaining[start + 1..];
+        let end = remaining.find('>')?;
+        let tag = &remaining[..end];
+        if let Some(closing) = tag.strip_prefix('/') {
+            if stack.pop()? != closing.trim() {
+                return None;
+            }
+            if page_depth.is_some_and(|depth| stack.len() < depth) {
+                page_depth = None;
+            }
+            remaining = &remaining[end + 1..];
+            continue;
+        }
+        let name = tag.split_whitespace().next()?;
+        let class = fragmented_hocr_attribute(tag, "class=").unwrap_or("");
+        if class.split_whitespace().any(|class| class == "ocr_page") {
+            if page_seen || !fragmented_hocr_local_page(tag) {
+                return None;
+            }
+            page_seen = true;
+            page_depth = Some(stack.len() + 1);
+        }
+        if class.split_whitespace().any(|class| class == "ocrx_word") {
+            if page_depth.is_none() || occurrences.len() >= MAX_FRAGMENTED_HOCR_WORDS {
+                return None;
+            }
+            let (key, word_end) = fragmented_hocr_word(remaining, end, name, budget)?;
+            if occurrences.insert(key, 1usize).is_some() {
+                return None;
+            }
+            remaining = &remaining[word_end..];
+        } else {
+            if !tag.ends_with('/')
+                && !name.starts_with(['!', '?'])
+                && !matches!(name, "meta" | "link" | "br" | "hr" | "img" | "input")
+            {
+                stack.push(name);
+            }
+            remaining = &remaining[end + 1..];
+        }
+    }
+    if !stack.is_empty() || !page_seen || occurrences.len() != source.len() {
+        return None;
+    }
+    for word in source {
+        let bbox = [
+            word.left,
+            word.top,
+            word.left.checked_add(word.width)?,
+            word.top.checked_add(word.height)?,
+        ];
+        occurrences.remove(&(word.text.clone(), bbox))?;
+    }
+    occurrences.is_empty().then_some(())
+}
+
 fn reconcile_fragmented_hocr_table_rows(
     hocr: &str,
     document: &InternalDocument,
@@ -1086,25 +1259,37 @@ fn reconcile_fragmented_hocr_table_rows(
     config: &TesseractConfig,
     limits: &SecurityLimits,
     allow_dot_leader: bool,
-) -> Option<InternalDocument> {
-    let [table] = tables else { return None };
-    let budget = fragmented_hocr_budget(hocr, tsv, limits)?;
-    if table.cells.iter().map(Vec::len).fold(0usize, usize::saturating_add) > limits.max_table_cells {
+) -> Option<(InternalDocument, Vec<OcrTableBoundingBox>)> {
+    let mut budget = fragmented_hocr_budget(hocr, tsv, limits)?;
+    let boxes = fragmented_table_boxes(tables, config.page_number, limits, &mut budget)?;
+    let source = crate::ocr::table::tsv_parser::words_on_lines(tsv, 0.0);
+    if source.is_empty()
+        || source.len() > MAX_FRAGMENTED_HOCR_WORDS
+        || source.iter().any(|(line, _)| line.is_none_or(|line| line[0] != 1))
+    {
         return None;
     }
-    let bbox = ocr_table_bbox(table)?;
-    if table_retains_region_words(&document.elements, &bbox, &table.cells) {
-        return None;
+    let source: Vec<_> = source.into_iter().map(|(_, word)| word).collect();
+    fragmented_hocr_source_matches(hocr, &source, &mut budget)?;
+    let mut table_words = Vec::with_capacity(tables.len());
+    for (table, bbox) in tables.iter().zip(boxes) {
+        budget = budget.checked_sub(source.iter().map(|word| word.text.len() + 1).sum::<usize>())?;
+        let mut words = source.clone();
+        let proved = prove_fragmented_table_rows_budgeted(
+            &mut words,
+            bbox,
+            &table.cells,
+            config.table_row_threshold_ratio,
+            &mut budget,
+            allow_dot_leader,
+        )?;
+        table_words.push(proved.into_iter().cloned().collect::<Vec<_>>());
     }
-    let mut words = extract_words_from_tsv(tsv, 0.0).ok()?;
-    let proved = prove_fragmented_table_rows(
-        &mut words,
-        bbox,
-        &table.cells,
-        config.table_row_threshold_ratio,
-        budget,
-        allow_dot_leader,
-    )?;
+    let proved: Vec<_> = table_words.iter().flatten().collect();
+    let claimed_words = proved
+        .iter()
+        .map(|word| word.text.split_whitespace().count())
+        .sum::<usize>();
     let mut reconciled = parse_hocr_without_proved_table_fragments(hocr, config.page_number, proved);
     let words = |doc: &InternalDocument| {
         doc.elements
@@ -1114,7 +1299,37 @@ fn reconcile_fragmented_hocr_table_rows(
     };
     let remaining = words(&reconciled);
     reconciled.ocr_text_claimed_by_tables = remaining == 0;
-    (remaining < words(document)).then_some(reconciled)
+    if claimed_words == 0 || words(document).checked_sub(remaining) != Some(claimed_words) {
+        return None;
+    }
+    let bounds = if tables.len() == 2 && remaining > 0 {
+        table_words
+            .iter()
+            .map(|words| proved_fragment_bounds(words))
+            .collect::<Option<Vec<_>>>()?
+    } else {
+        Vec::new()
+    };
+    Some((reconciled, bounds))
+}
+
+fn proved_fragment_bounds(words: &[HocrWord]) -> Option<OcrTableBoundingBox> {
+    Some(OcrTableBoundingBox {
+        left: words.iter().map(|word| word.left).min()?,
+        top: words.iter().map(|word| word.top).min()?,
+        right: words
+            .iter()
+            .map(|word| word.left.checked_add(word.width))
+            .collect::<Option<Vec<_>>>()?
+            .into_iter()
+            .max()?,
+        bottom: words
+            .iter()
+            .map(|word| word.top.checked_add(word.height))
+            .collect::<Option<Vec<_>>>()?
+            .into_iter()
+            .max()?,
+    })
 }
 
 fn reconcile_grouped_hocr_table_rows(
@@ -2991,10 +3206,16 @@ pub(super) fn perform_ocr(
                             policy == ImageOcrPolicy::StandaloneDotLeaderRows,
                         )
                     })
-                    .or_else(|| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number))
+                    .or_else(|| {
+                        reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number)
+                            .map(|document| (document, Vec::new()))
+                    })
             });
-        if let Some(reconciled) = reconciled {
+        if let Some((reconciled, bounds)) = reconciled {
             *document = reconciled;
+            for (table, bbox) in tables.iter_mut().zip(bounds) {
+                table.bounding_box = Some(bbox);
+            }
         } else {
             filter_elements_covered_by_tables(document, &tables);
         }
@@ -4181,7 +4402,7 @@ mod tests {
         };
         let config = TesseractConfig::default();
         let limits = SecurityLimits::default();
-        let reconciled = reconcile_fragmented_hocr_table_rows(
+        let (reconciled, _) = reconcile_fragmented_hocr_table_rows(
             &hocr,
             &document,
             std::slice::from_ref(&table),
@@ -4227,6 +4448,306 @@ mod tests {
         table.cells[1][1].clear();
         assert!(
             reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config, &limits, false).is_none()
+        );
+    }
+
+    fn two_fragmented_hocr_tables() -> (String, String, InternalDocument, Vec<OcrTable>) {
+        let fragments = [
+            ("Inventory", 10, 10),
+            ("Apples", 10, 40),
+            ("20", 70, 40),
+            ("Pears", 10, 70),
+            ("30", 70, 70),
+            ("Between", 10, 105),
+            ("Peaches", 10, 140),
+            ("60", 70, 140),
+            ("Grapes", 10, 170),
+            ("70", 70, 170),
+            ("Footer", 10, 205),
+        ];
+        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
+        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            .to_owned();
+        for (text, left, top) in fragments {
+            hocr.push_str(&format!(r#"<p class="ocr_par"><span class="ocr_line"><span class="ocrx_word" title="bbox {left} {top} {} {}">{text}</span></span></p>"#, left+15, top+10));
+            tsv.push_str(&format!("5\t1\t1\t1\t1\t1\t{left}\t{top}\t15\t10\t90\t{text}\n"));
+        }
+        hocr.push_str("</div>");
+        let tables = [
+            (10, 80, [["Apples", "20"], ["Pears", "30"]]),
+            (105, 180, [["Peaches", "60"], ["Grapes", "70"]]),
+        ]
+        .into_iter()
+        .map(|(top, bottom, cells)| OcrTable {
+            cells: cells.into_iter().map(|row| row.map(str::to_owned).to_vec()).collect(),
+            markdown: String::new(),
+            page_number: 1,
+            bounding_box: Some(OcrTableBoundingBox {
+                left: 10,
+                top,
+                right: 85,
+                bottom,
+            }),
+        })
+        .collect();
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+        (hocr, tsv, document, tables)
+    }
+
+    #[test]
+    fn fragmented_rows_of_two_tables_preserve_heading_interlude_and_footer() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        let (reconciled, _) = reconcile_fragmented_hocr_table_rows(
+            &hocr,
+            &document,
+            &tables,
+            &tsv,
+            &Default::default(),
+            &Default::default(),
+            false,
+        )
+        .expect("both disjoint source grids prove their own fragmented words");
+        assert_eq!(
+            reconciled
+                .elements
+                .iter()
+                .map(|element| element.text.as_str())
+                .collect::<Vec<_>>(),
+            ["Inventory", "Between", "Footer"]
+        );
+        assert!(!reconciled.ocr_text_claimed_by_tables);
+        assert_eq!(reconciled.elements[0].bbox, document.elements[0].bbox);
+    }
+
+    #[test]
+    fn fragmented_tables_allow_an_already_complete_sibling_region() {
+        let (hocr, tsv, _, tables) = two_fragmented_hocr_tables();
+        let hocr = hocr.replace("bbox 10 105 25 115", "bbox 10 90 25 100");
+        let tsv = tsv.replace("\t10\t105\t15\t10\t", "\t10\t90\t15\t10\t");
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+        assert!(table_retains_region_words(
+            &document.elements,
+            &ocr_table_bbox(&tables[1]).unwrap(),
+            &tables[1].cells
+        ));
+        let (reconciled, _) = reconcile_fragmented_hocr_table_rows(
+            &hocr,
+            &document,
+            &tables,
+            &tsv,
+            &Default::default(),
+            &Default::default(),
+            false,
+        )
+        .expect("a complete sibling must not block exact removal of fragmented source rows");
+        assert_eq!(
+            reconciled
+                .elements
+                .iter()
+                .map(|element| element.text.as_str())
+                .collect::<Vec<_>>(),
+            ["Inventory", "Between", "Footer"]
+        );
+    }
+
+    #[test]
+    fn fragmented_multiple_table_claims_are_atomic_and_disjoint() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        let prove = |tables: &[OcrTable], limits: &SecurityLimits| {
+            reconcile_fragmented_hocr_table_rows(&hocr, &document, tables, &tsv, &Default::default(), limits, false)
+        };
+        assert!(
+            prove(&tables, &Default::default()).is_some(),
+            "valid combined source must reach the rejection guards"
+        );
+        assert!(prove(&tables[..1], &Default::default()).is_some());
+        let mut wrong = tables.clone();
+        wrong[1].cells[1][1] = "71".into();
+        assert!(
+            prove(&wrong, &Default::default()).is_none(),
+            "never partially claim the first table"
+        );
+        let mut overlaps = tables.clone();
+        overlaps[1].bounding_box.as_mut().unwrap().top = 60;
+        assert!(prove(&overlaps, &Default::default()).is_none());
+        assert!(prove(&[tables[0].clone(), tables[0].clone()], &Default::default()).is_none());
+        let mut foreign_page = tables.clone();
+        foreign_page[1].page_number = 2;
+        assert!(prove(&foreign_page, &Default::default()).is_none());
+        assert!(
+            prove(
+                &tables,
+                &SecurityLimits {
+                    max_table_cells: 7,
+                    ..Default::default()
+                }
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn fragmented_table_does_not_partially_claim_disagreeing_hocr_and_tsv() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        assert_fragmented_source_control(&hocr, &tsv, &document, &tables);
+        let hocr = hocr.replace(">70<", ">71<");
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+        assert!(
+            reconcile_fragmented_hocr_table_rows(
+                &hocr,
+                &document,
+                &tables[1..],
+                &tsv,
+                &Default::default(),
+                &Default::default(),
+                false
+            )
+            .is_none(),
+            "one mismatched source word must prevent the entire claim"
+        );
+    }
+
+    #[test]
+    fn fragmented_tables_share_one_work_budget() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        let prove = |tables: &[OcrTable], iterations| {
+            reconcile_fragmented_hocr_table_rows(
+                &hocr,
+                &document,
+                tables,
+                &tsv,
+                &Default::default(),
+                &SecurityLimits {
+                    max_iterations: iterations,
+                    ..Default::default()
+                },
+                false,
+            )
+        };
+        let minimum = |table: &[OcrTable]| {
+            let (mut low, mut high) = (0, SecurityLimits::default().max_iterations);
+            assert!(prove(table, high).is_some());
+            while low < high {
+                let middle = low + (high - low) / 2;
+                if prove(table, middle).is_some() {
+                    high = middle;
+                } else {
+                    low = middle + 1;
+                }
+            }
+            low
+        };
+        let single_budget = minimum(&tables[..1]).max(minimum(&tables[1..]));
+        assert!(
+            prove(&tables, SecurityLimits::default().max_iterations).is_some(),
+            "combined proof must pass before testing exhaustion"
+        );
+        assert!(prove(&tables[..1], single_budget).is_some());
+        assert!(prove(&tables[1..], single_budget).is_some());
+        assert!(
+            prove(&tables, single_budget).is_none(),
+            "two claims cannot each reuse the full budget"
+        );
+    }
+
+    #[test]
+    fn fragmented_table_refuses_duplicate_hocr_source_occurrences() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        assert_fragmented_source_control(&hocr, &tsv, &document, &tables);
+        let duplicate = r#"<p class="ocr_par"><span class="ocr_line"><span class="ocrx_word" title="bbox 70 40 85 50">20</span></span></p></div>"#;
+        let hocr = hocr.replace("</div>", duplicate);
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+        assert!(
+            reconcile_fragmented_hocr_table_rows(
+                &hocr,
+                &document,
+                &tables[..1],
+                &tsv,
+                &Default::default(),
+                &Default::default(),
+                false
+            )
+            .is_none(),
+            "one TSV occurrence cannot certify duplicated hOCR source nodes"
+        );
+    }
+
+    #[test]
+    fn fragmented_table_refuses_foreign_tsv_source_pages() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        assert_fragmented_source_control(&hocr, &tsv, &document, &tables);
+        let tsv = tsv.replace("5\t1\t", "5\t2\t");
+        assert!(
+            reconcile_fragmented_hocr_table_rows(
+                &hocr,
+                &document,
+                &tables[..1],
+                &tsv,
+                &Default::default(),
+                &Default::default(),
+                false
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn fragmented_table_refuses_foreign_or_missing_hocr_page_ids() {
+        let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+        assert_fragmented_source_control(&hocr, &tsv, &document, &tables);
+        for hocr in [hocr.replace("ppageno 0", "ppageno 1"), hocr.replace("ppageno 0", "")] {
+            let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+            assert!(
+                reconcile_fragmented_hocr_table_rows(
+                    &hocr,
+                    &document,
+                    &tables[..1],
+                    &tsv,
+                    &Default::default(),
+                    &Default::default(),
+                    false
+                )
+                .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn fragmented_table_maps_local_source_page_one_to_the_logical_pdf_page() {
+        let (hocr, tsv, _, mut tables) = two_fragmented_hocr_tables();
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document_with_page_offset(&hocr, None, 4);
+        tables[0].page_number = 4;
+        let config = TesseractConfig {
+            page_number: 4,
+            ..Default::default()
+        };
+        let (reconciled, _) = reconcile_fragmented_hocr_table_rows(
+            &hocr,
+            &document,
+            &tables[..1],
+            &tsv,
+            &config,
+            &Default::default(),
+            false,
+        )
+        .unwrap();
+        assert!(reconciled.elements.iter().all(|element| element.page == Some(4)));
+        assert_eq!(reconciled.elements[0].text, "Inventory");
+    }
+
+    fn assert_fragmented_source_control(hocr: &str, tsv: &str, document: &InternalDocument, tables: &[OcrTable]) {
+        assert!(
+            reconcile_fragmented_hocr_table_rows(
+                hocr,
+                document,
+                &tables[..1],
+                tsv,
+                &Default::default(),
+                &Default::default(),
+                false
+            )
+            .is_some(),
+            "unmodified source must pass before testing a source disagreement"
         );
     }
 

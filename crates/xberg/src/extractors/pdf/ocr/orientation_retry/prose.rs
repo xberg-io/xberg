@@ -62,7 +62,7 @@ pub(super) fn complete_text(result: &ExtractedDocument, row_threshold: f64) -> O
     )
 }
 
-fn reads_in_order(elements: &[&OcrElement], text: &str, row_threshold: f64) -> bool {
+pub(super) fn reads_in_order(elements: &[&OcrElement], text: &str, row_threshold: f64) -> bool {
     let mut words = Vec::with_capacity(elements.len());
     for element in elements {
         let OcrBoundingGeometry::Rectangle {
