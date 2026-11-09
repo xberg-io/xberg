@@ -107,6 +107,10 @@ async fn automatic_two_tables_and_heading_preserve_every_source_word() {
             ..Default::default()
         };
         assert!(!config.force_ocr && config.ocr.is_none());
+        let mut unset = config.clone();
+        unset.ocr = Some(xberg::OcrConfig::default());
+        assert_eq!(unset.ocr.as_ref().unwrap().auto_rotate, None);
+        readings.push((format!("unset-{angle}"), angle, read_pdf(&pdf, &unset).await));
         if angle != 0 {
             let mut enabled = config.clone();
             enabled.ocr = Some(serde_json::from_value(serde_json::json!({"auto_rotate": true})).unwrap());
@@ -140,7 +144,7 @@ async fn automatic_two_tables_and_heading_preserve_every_source_word() {
         }
         readings.push((angle.to_string(), angle, document));
     }
-    assert_eq!(readings.len(), 5);
+    assert_eq!(readings.len(), 8);
     for (route, angle, document) in readings {
         assert!(document.metadata.ocr_used);
         assert_eq!(
@@ -291,48 +295,51 @@ async fn detached_mixed_tables_keep_source_words_structure_and_frames() {
         (90, image::imageops::rotate90(&upright)),
         (270, image::imageops::rotate270(&upright)),
     ] {
-        let config = ExtractionConfig {
-            force_ocr: true,
-            use_cache: false,
-            include_document_structure: true,
-            pages: Some(xberg::core::config::PageConfig {
-                extract_pages: true,
+        for ocr in [None, Some(xberg::OcrConfig::default())] {
+            let config = ExtractionConfig {
+                ocr,
+                force_ocr: true,
+                use_cache: false,
+                include_document_structure: true,
+                pages: Some(xberg::core::config::PageConfig {
+                    extract_pages: true,
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let output = xberg::extract(
-            ExtractInput::from_bytes(grayscale_scan_pdf(&raster), "application/pdf", None),
-            &config,
-        )
-        .await
-        .unwrap();
-        assert!(output.errors.is_empty(), "angle {angle}: {:?}", output.errors);
-        let [document] = <[_; 1]>::try_from(output.results).unwrap();
-        assert_eq!(
-            document.content.split_whitespace().collect::<Vec<_>>(),
-            expected,
-            "angle {angle}"
-        );
-        assert_eq!(document.tables.len(), 2);
-        for ((table, expected), source) in document.tables.iter().zip(&cells).zip(source_table_regions(angle)) {
-            assert_eq!(&table.cells, expected);
-            let actual = table.bounding_box.expect("source-owned PDF point bounds");
-            assert!(
-                owns_source_table_bounds(actual, source),
-                "angle {angle}: {actual:?} outside {source:?}"
+            };
+            let output = xberg::extract(
+                ExtractInput::from_bytes(grayscale_scan_pdf(&raster), "application/pdf", None),
+                &config,
+            )
+            .await
+            .unwrap();
+            assert!(output.errors.is_empty(), "angle {angle}: {:?}", output.errors);
+            let [document] = <[_; 1]>::try_from(output.results).unwrap();
+            assert_eq!(
+                document.content.split_whitespace().collect::<Vec<_>>(),
+                expected,
+                "angle {angle}"
+            );
+            assert_eq!(document.tables.len(), 2);
+            for ((table, expected), source) in document.tables.iter().zip(&cells).zip(source_table_regions(angle)) {
+                assert_eq!(&table.cells, expected);
+                let actual = table.bounding_box.expect("source-owned PDF point bounds");
+                assert!(
+                    owns_source_table_bounds(actual, source),
+                    "angle {angle}: {actual:?} outside {source:?}"
+                );
+            }
+            let structure = serde_json::to_value(document.document.expect("requested structure")).unwrap();
+            let nodes = structure["nodes"].as_array().unwrap();
+            assert_eq!(nodes.len(), 3, "one heading and two tables at angle {angle}");
+            assert_eq!(
+                nodes
+                    .iter()
+                    .filter(|node| node["content"]["node_type"] == "table")
+                    .count(),
+                2
             );
         }
-        let structure = serde_json::to_value(document.document.expect("requested structure")).unwrap();
-        let nodes = structure["nodes"].as_array().unwrap();
-        assert_eq!(nodes.len(), 3, "one heading and two tables at angle {angle}");
-        assert_eq!(
-            nodes
-                .iter()
-                .filter(|node| node["content"]["node_type"] == "table")
-                .count(),
-            2
-        );
     }
 }
 

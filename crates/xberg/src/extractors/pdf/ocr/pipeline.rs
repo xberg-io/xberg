@@ -4430,7 +4430,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     && whole_page_raster
                     && page_rotation_degrees == 0
                     && correction_degrees == 0
-                    && base_ocr_config.auto_rotate != Some(true)
+                    && base_ocr_config.auto_rotate.is_none()
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
                 let task = crate::engine::seams::inherit_progress(async move {

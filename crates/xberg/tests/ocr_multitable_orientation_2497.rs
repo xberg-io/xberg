@@ -187,7 +187,14 @@ async fn implicit_rotation_recovers_two_tables_when_primary_iterator_words_cover
         )
         .await;
         assert_tables(&forced, &expected, (792., 612.48));
-        let disabled = extract(rotated, Some(OcrConfig::default())).await;
+        let disabled = extract(
+            rotated,
+            Some(OcrConfig {
+                auto_rotate: Some(false),
+                ..Default::default()
+            }),
+        )
+        .await;
         assert!(disabled.tables.is_empty(), "an explicit false rotation keeps its read");
         assert!(disabled.ocr_elements.is_none());
         assert_ne!(disabled.content, forced.content);
@@ -369,7 +376,14 @@ async fn implicit_rotation_keeps_a_noise_read_when_no_tables_are_recovered() {
         "fixtures/ocr/multitable_orientation_2497/two-tables-90.pdf"
     ));
     let implicit = extract(&noise, None).await;
-    let disabled = extract(&noise, Some(OcrConfig::default())).await;
+    let disabled = extract(
+        &noise,
+        Some(OcrConfig {
+            auto_rotate: Some(false),
+            ..Default::default()
+        }),
+    )
+    .await;
     assert!(!implicit.content.trim().is_empty());
     assert!(implicit.tables.is_empty());
     assert!(implicit.ocr_elements.is_none());

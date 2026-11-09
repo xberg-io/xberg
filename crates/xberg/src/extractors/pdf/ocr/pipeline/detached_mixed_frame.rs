@@ -10,6 +10,7 @@ pub(super) fn supports(config: &crate::core::config::ExtractionConfig, page_coun
         return false;
     }
     page_count == Some(1)
+        && config.ocr.as_ref().is_none_or(|ocr| ocr.auto_rotate.is_none())
         && !config.use_cache
         && config.output_format == crate::core::config::OutputFormat::Plain
         && config.content_filter.is_none()
@@ -209,6 +210,16 @@ mod tests {
         };
         assert!(!config.include_document_structure);
         assert!(supports(&config, Some(1)));
+        for (ocr, expected) in [
+            (crate::core::config::OcrConfig::default(), true),
+            (serde_json::from_str("{}").unwrap(), true),
+            (serde_json::from_str(r#"{"auto_rotate":false}"#).unwrap(), false),
+            (serde_json::from_str(r#"{"auto_rotate":true}"#).unwrap(), false),
+        ] {
+            let mut explicit = config.clone();
+            explicit.ocr = Some(ocr);
+            assert_eq!(supports(&explicit, Some(1)), expected, "policy {:?}", explicit.ocr);
+        }
     }
 
     #[test]
