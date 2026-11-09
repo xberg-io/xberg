@@ -944,38 +944,31 @@ fn corrected_space_gap(
     }
 }
 
-/// detect whether a glyph's mapped text
-/// represents an AGL Latin ligature (`/ff` / `/fi` / `/fl` / `/ffi` /
-/// `/ffl`). When the upstream space-emission heuristic processes a
-/// glyph adjacent to a ligature, the small intra-word kerning that
-/// surrounds the ligature glyph can trigger spurious space
-/// insertion (producing `di ff cult` for `difficult`). The detection
-/// here lets the heuristic suppress space insertion at ligature
-/// boundaries.
+/// Whether the text is one ligature code point of the Latin Ligatures block
+/// (U+FB00..U+FB06), such as `ﬀ` or `ﬁ`. The space-emission heuristic inflates its
+/// threshold at the boundary of such a run, because the small intra-word kerning
+/// around the glyph would otherwise produce `di ff cult` for `difficult`.
 ///
-/// Returns true when the text *is* a bare AGL ligature glyph — a
-/// single codepoint in the Latin Ligatures block (U+FB00..U+FB06) or
-/// the multi-char ASCII fallback ("ff"/"fi"/"fl"/"ffi"/"ffl"). The
-/// suppression at the call site targets the pdfTeX-style emission
-/// pattern where the ligature is its own cluster between two
-/// intra-word fragments (e.g. "di"→"ﬃ"→"cult" or "di"→"ffi"→"cult").
-/// A multi-char cluster that merely starts with a ligature
-/// (e.g. "ﬂuid" or "ffective") is a full word whose boundary with the
-/// previous span is a legitimate space, so we return false in that
-/// case.
+/// The test reads the code point only. A ligature that the font decoded to letters
+/// (`ff`, `fi`) is not recognised by its text, since real words contain those
+/// letters; the decoder marks such a span with `TextSpan::ligature_glyph` and the
+/// callers read that mark. A multi-character run that merely starts with a ligature
+/// (`ﬂuid`) is a full word whose boundary with the previous span is a legitimate
+/// space, so it returns false.
 #[inline]
 pub(crate) fn starts_with_agl_ligature(text: &str) -> bool {
     let mut chars = text.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if ('\u{FB00}'..='\u{FB06}').contains(&first) && chars.next().is_none() {
-        return true;
-    }
-    // Multi-character AGL outputs from non-PUA fallbacks — match only
-    // when the cluster IS the ligature, never when it just begins
-    // with one. ~keep
-    matches!(text, "ff" | "fi" | "fl" | "ffi" | "ffl")
+    chars
+        .next()
+        .is_some_and(|first| ('\u{FB00}'..='\u{FB06}').contains(&first) && chars.next().is_none())
+}
+
+/// Whether the text is the letters that one ligature code point of the Latin Ligatures block
+/// (U+FB00..U+FB06) stands for under Unicode compatibility decomposition: `ff`, `fi`, `fl`, `ffi`,
+/// `ffl` or `st`. A short word that a font draws as one glyph (`to`, `of`) is not a ligature.
+pub(crate) fn is_ligature_expansion(text: &str) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    ('\u{FB00}'..='\u{FB06}').any(|ligature| ligature.nfkd().eq(text.chars()))
 }
 
 /// How much wider a gap must be to separate words when one side is a ligature glyph.
@@ -983,9 +976,12 @@ pub(crate) const LIGATURE_BOUNDARY_GAP_FACTOR: f32 = 1.5;
 
 /// Whether the boundary between two adjacent runs touches a ligature glyph: the
 /// following run is a bare ligature, or the preceding run ends in one.
+/// `expanded_edge` is true when the preceding run ends in, or the following run is, a
+/// ligature that the decoder expanded to letters (`TextSpan::ligature_glyph`).
 #[inline]
-pub(crate) fn is_ligature_boundary(preceding: &str, following: &str) -> bool {
-    starts_with_agl_ligature(following)
+pub(crate) fn is_ligature_boundary(preceding: &str, following: &str, expanded_edge: bool) -> bool {
+    expanded_edge
+        || starts_with_agl_ligature(following)
         || preceding
             .chars()
             .next_back()
@@ -1206,6 +1202,7 @@ fn should_insert_space(
     next_bbox: Option<&crate::geometry::Rect>,
     prev_font_size: f32,
     next_font_size: f32,
+    ligature_edge: bool,
 ) -> SpaceDecision {
     if has_boundary_space(preceding_text, following_text) {
         return SpaceDecision::no_space(SpaceSource::AlreadyPresent, 1.0);
@@ -1387,7 +1384,7 @@ fn should_insert_space(
 
     // The small kerning gap around a ligature glyph is an intra-word position artefact
     // of pdfTeX-style ligature emission, not a word boundary (`di ff cult`). ~keep
-    let geometric_threshold = if is_ligature_boundary(preceding_text, following_text) {
+    let geometric_threshold = if is_ligature_boundary(preceding_text, following_text, ligature_edge) {
         geometric_threshold * LIGATURE_BOUNDARY_GAP_FACTOR
     } else {
         geometric_threshold
@@ -1848,6 +1845,10 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// The length of `unicode` after its first decode when that decode was one character code that
+    /// the font expanded to a ligature's letters, else 0. The buffer is a lone ligature while its
+    /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
+    ligature_len: usize,
 }
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
@@ -1974,7 +1975,35 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            ligature_len: 0,
         }
+    }
+
+    /// Note a decode into the buffer: when the buffer was empty, the string held one character code,
+    /// and that code gave a ligature's letters, the buffer is a lone ligature until more text follows.
+    /// A path that cannot give such letters (the UTF-8 repair keeps a code point above U+00FF) skips it.
+    fn record_decode(&mut self, len_before: usize, single_code: impl FnOnce() -> bool) {
+        Self::note_decode(&self.unicode, &mut self.ligature_len, len_before, single_code);
+    }
+
+    /// The field-wise form of `record_decode`, for a caller that holds a borrow of `cached_font`. ~keep
+    fn note_decode(unicode: &str, ligature_len: &mut usize, len_before: usize, single_code: impl FnOnce() -> bool) {
+        if len_before == 0 && single_code() && is_ligature_expansion(unicode) {
+            *ligature_len = unicode.len();
+        }
+    }
+
+    /// Push the `/ActualText` that replaces a marked-content sequence. Replacement text that is a
+    /// ligature's letters stands for one ligature glyph, so an empty buffer becomes a lone ligature.
+    fn push_actual_text(&mut self, actual_text: &str) {
+        let len_before = self.unicode.len();
+        self.unicode.push_str(actual_text);
+        self.record_decode(len_before, || true);
+    }
+
+    /// Whether the whole buffer is still the one ligature glyph that `record_decode` noted.
+    fn is_lone_ligature(&self) -> bool {
+        self.ligature_len != 0 && self.ligature_len == self.unicode.len()
     }
 
     /// Check if the buffer is empty.
@@ -2003,6 +2032,7 @@ impl TjBuffer {
         let bytes = if bytes.len() > 32_767 { &bytes[..32_767] } else { bytes };
 
         let font = self.cached_font.as_deref();
+        let len_before = self.unicode.len();
 
         // Fast path: OneByte fonts push chars directly into buffer via lookup table.
         // Avoids String allocation in decode_text_to_unicode (2 allocations per call). ~keep
@@ -2046,6 +2076,7 @@ impl TjBuffer {
                     }
                 }
             }
+            self.record_decode(len_before, || bytes.len() == 1);
             return Ok(());
         }
 
@@ -2062,6 +2093,9 @@ impl TjBuffer {
             None,
         );
         self.unicode.push_str(&unicode_text);
+        Self::note_decode(&self.unicode, &mut self.ligature_len, len_before, || {
+            TextCharIter::new(bytes, font).take(2).count() == 1
+        });
 
         Ok(())
     }
