@@ -1,0 +1,4 @@
+# Source: GitHub release asset digest fields, microsoft/onnxruntime v1.24.2.
+# https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.24.2
+43725474ba5663642e17684717946693850e2005efbd724ac72da278fead25e6  onnxruntime-linux-x64-1.24.2.tgz
+6715b3d19965a2a6981e78ed4ba24f17a8c30d2d26420dbed10aac7ceca0085e  onnxruntime-linux-aarch64-1.24.2.tgz
