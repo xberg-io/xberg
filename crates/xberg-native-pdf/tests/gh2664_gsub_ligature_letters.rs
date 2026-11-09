@@ -58,6 +58,9 @@ struct Fixture {
     cid_font_type: &'static str,
     /// Whether the program carries its `cmap` table. Without one the renderer paints the run by CID.
     unicode_cmap: bool,
+    /// Whether the ligature lookup sits behind a LookupType 7 (Extension) lookup, as in a font whose
+    /// GSUB outgrew 16-bit offsets.
+    extension: bool,
 }
 
 impl Fixture {
@@ -71,6 +74,7 @@ impl Fixture {
             feature: b"liga",
             cid_font_type: "CIDFontType2",
             unicode_cmap: true,
+            extension: false,
         }
     }
 }
@@ -146,7 +150,7 @@ fn cmap_table() -> Vec<u8> {
 
 /// A GSUB table with one LookupType 4 lookup holding every rule in one Format 1 subtable, referenced by one
 /// feature with the tag `feature`.
-fn gsub_table(rules: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
+fn gsub_table(rules: &[(Vec<u16>, u16)], feature: &[u8; 4], extension: bool) -> Vec<u8> {
     let mut firsts: Vec<u16> = rules.iter().map(|(comps, _)| comps[0]).collect();
     firsts.sort_unstable();
     firsts.dedup();
@@ -190,8 +194,14 @@ fn gsub_table(rules: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
     sets.iter().for_each(|set| subst.extend(set));
 
     let mut lookup: Vec<u8> = Vec::new();
-    for v in [4u16, 0, 1, 8] {
+    for v in [if extension { 7u16 } else { 4 }, 0, 1, 8] {
         lookup.extend(be16(v));
+    }
+    if extension {
+        // ExtensionSubstFormat1: format, the wrapped lookup type, and a 32-bit offset to the subtable.
+        lookup.extend(be16(1));
+        lookup.extend(be16(4));
+        lookup.extend(be32(8));
     }
     lookup.extend(&subst);
 
@@ -210,7 +220,7 @@ fn gsub_table(rules: &[(Vec<u16>, u16)], feature: &[u8; 4]) -> Vec<u8> {
 }
 
 /// The font program: box glyphs, a letters-only `cmap`, `post` format 3, and the GSUB rules.
-fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4], unicode_cmap: bool) -> Vec<u8> {
+fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4], unicode_cmap: bool, extension: bool) -> Vec<u8> {
     let outline = box_glyph();
     let mut glyf: Vec<u8> = Vec::new();
     // Short loca (offset / 2): .notdef is empty, then one box per glyph. ~keep
@@ -262,7 +272,7 @@ fn font_program(ligatures: &[(Vec<u16>, u16)], feature: &[u8; 4], unicode_cmap: 
 
     let mut tables: Vec<(&[u8; 4], Vec<u8>)> = Vec::new();
     if !ligatures.is_empty() {
-        tables.push((b"GSUB", gsub_table(ligatures, feature)));
+        tables.push((b"GSUB", gsub_table(ligatures, feature, extension)));
     }
     if unicode_cmap {
         tables.push((b"cmap", cmap_table()));
@@ -325,7 +335,12 @@ fn push_object(pdf: &mut Vec<u8>, offsets: &mut Vec<usize>, dict: &str, stream: 
 
 /// A one-page PDF that draws "potential" in the fixture font.
 fn fixture_pdf(fixture: &Fixture) -> Vec<u8> {
-    let font = font_program(&fixture.ligatures, fixture.feature, fixture.unicode_cmap);
+    let font = font_program(
+        &fixture.ligatures,
+        fixture.feature,
+        fixture.unicode_cmap,
+        fixture.extension,
+    );
     let truetype = fixture.cid_font_type == "CIDFontType2";
     let codes: String = DRAWN
         .iter()
@@ -610,5 +625,18 @@ fn a_shaping_form_ligature_gives_no_letters() {
     assert!(
         !text.contains("potential"),
         "a ligature from a shaping feature took the letters of its glyph-order components: {text:?}"
+    );
+}
+
+#[test]
+fn a_ligature_lookup_behind_an_extension_lookup_gives_the_letters() {
+    let fixture = Fixture {
+        extension: true,
+        ..Fixture::standard()
+    };
+    let text = extract(&fixture);
+    assert!(
+        text.contains("potential"),
+        "a ligature lookup wrapped in an Extension lookup was not read: {text:?}"
     );
 }
