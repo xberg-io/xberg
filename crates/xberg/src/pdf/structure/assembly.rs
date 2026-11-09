@@ -2323,14 +2323,22 @@ mod tests {
             let page = [glyph_paragraph(glyph, 33.0)];
             let key = SegmentKey::from(&page[0].lines[0].segments[0]);
             let candidates = ahash::AHashSet::from_iter([&key]);
-            assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), Some(0), "{glyph}");
+            assert_eq!(
+                isolated_painted_orphan(&page, &candidates, &hyphens),
+                Some(0),
+                "{glyph}"
+            );
         }
     }
 
     #[test]
     fn painted_orphan_refuses_ambiguous_or_multi_glyph_candidates() {
         let hyphens = Default::default();
-        let page = [glyph_paragraph("%", 13.0), glyph_paragraph("0", 33.0), glyph_paragraph("1", 53.0)];
+        let page = [
+            glyph_paragraph("%", 13.0),
+            glyph_paragraph("0", 33.0),
+            glyph_paragraph("1", 53.0),
+        ];
         let [punctuation, first, second] = page.each_ref().map(|p| SegmentKey::from(&p.lines[0].segments[0]));
         let candidates = ahash::AHashSet::from_iter([&first]);
         assert_eq!(isolated_painted_orphan(&page, &candidates, &hyphens), Some(1));
