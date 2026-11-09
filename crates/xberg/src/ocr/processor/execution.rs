@@ -3343,6 +3343,28 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
+    /// The hOCR page and the TSV table of a list of words (text, left, top, width, height, TSV line), each
+    /// word on its own hOCR line, as a sparse-text read gives.
+    pub(in crate::ocr::processor::execution) fn word_table_markup<'a>(
+        words: impl IntoIterator<Item = (&'a str, u32, u32, u32, u32, usize)>,
+    ) -> (String, String) {
+        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
+        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            .to_owned();
+        for (text, left, top, width, height, line) in words {
+            let (right, bottom) = (left + width, top + height);
+            hocr.push_str(r#"<p class="ocr_par"><span class="ocr_line">"#);
+            hocr.push_str(&format!(
+                r#"<span class="ocrx_word" title="bbox {left} {top} {right} {bottom}">{text}</span></span></p>"#
+            ));
+            tsv.push_str(&format!(
+                "5\t1\t1\t1\t{line}\t1\t{left}\t{top}\t{width}\t{height}\t90\t{text}\n"
+            ));
+        }
+        hocr.push_str("</div>");
+        (hocr, tsv)
+    }
+
     #[test]
     fn ocr_line_sort_uses_each_lines_direction_and_preserves_identifiers() {
         let word = |text: &str, left| HocrWord {
@@ -4139,21 +4161,11 @@ mod tests {
             ("$1,010", 101, 40, 30, 10),
             ("3.2%", 140, 40, 26, 10),
         ];
-        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
-        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-            .to_owned();
-        for (text, left, top, width, height) in fragments {
-            hocr.push_str(r#"<p class="ocr_par"><span class="ocr_line">"#);
-            hocr.push_str(&format!(
-                r#"<span class="ocrx_word" title="bbox {left} {top} {} {}">{text}</span></span></p>"#,
-                left + width,
-                top + height,
-            ));
-            tsv.push_str(&format!(
-                "5\t1\t1\t1\t1\t1\t{left}\t{top}\t{width}\t{height}\t90\t{text}\n"
-            ));
-        }
-        hocr.push_str("</div>");
+        let (hocr, tsv) = word_table_markup(
+            fragments
+                .into_iter()
+                .map(|(text, left, top, width, height)| (text, left, top, width, height, 1)),
+        );
         let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
         let table = OcrTable {
             cells: vec![vec!["Item 4(b)".into(), "$1,010".into(), "3.2%".into()]],
@@ -5604,6 +5616,47 @@ mod tests {
         assert!(duplicate_in_document(&default_warm));
         assert!(!duplicate_in_document(&standalone_warm));
         assert_eq!(cache.get_stats().unwrap().total_files, 2);
+    }
+
+    #[test]
+    fn a_symbol_dot_leader_row_is_claimed_only_under_the_standalone_leader_policy() {
+        let dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(dir.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!("../../../tests/fixtures/ocr_dot_leader_2503/symbol-rows.png");
+        let config = TesseractConfig {
+            psm: crate::ocr::types::PSMMode::SingleBlock as u8,
+            use_cache: false,
+            ..Default::default()
+        };
+        let row_in_document = |policy| {
+            let result = process_image_with_cache_and_policy(
+                image,
+                &config,
+                &cache,
+                &pool,
+                Some(crate::core::config::OutputFormat::Plain),
+                policy,
+            )
+            .unwrap();
+            assert_eq!(result.tables.len(), 1, "the table holds the rows");
+            result
+                .internal_document
+                .as_ref()
+                .unwrap()
+                .elements
+                .iter()
+                .flat_map(|element| element.text.lines())
+                .any(|line| line == "Field lights .......... $640 2.7% -9")
+        };
+        assert!(
+            row_in_document(ImageOcrPolicy::Default),
+            "control: a default read leaves the symbol row beside the table"
+        );
+        assert!(
+            !row_in_document(ImageOcrPolicy::StandaloneDotLeaderRows),
+            "a standalone leader scan claims the symbol row for the table"
+        );
     }
 
     #[test]

@@ -260,9 +260,8 @@ fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
 /// The retry of a refused page on its embedded image runs on the mixed route, where a native page
 /// precedes the scan. The dimension clamp leaves the read illegible, so the page stays unread and
 /// its failure names the noise instead of reporting the read as the page text.
-#[test]
-fn tall_gray_jpeg_page_read_as_noise_is_reported_as_a_failure_not_adopted() {
-    let document = extract(MIXED_JPEG, &extraction_config());
+fn assert_noisy_retry_read_is_a_page_failure(config: &ExtractionConfig) {
+    let document = extract(MIXED_JPEG, config);
     let native = "The native page remains unchanged.\n".repeat(10);
     assert_eq!(words(&document.content), words(&native));
     let pages = document.pages.as_ref().expect("two original PDF pages");
@@ -280,6 +279,28 @@ fn tall_gray_jpeg_page_read_as_noise_is_reported_as_a_failure_not_adopted() {
     for part in ["image working budget", "the retry read was rejected as noise"] {
         assert!(failure.error.contains(part), "{part}: {}", failure.error);
     }
+}
+
+#[test]
+fn tall_gray_jpeg_page_read_as_noise_is_reported_as_a_failure_not_adopted() {
+    assert_noisy_retry_read_is_a_page_failure(&extraction_config());
+}
+
+/// An explicit pipeline takes its own retry on the refused page, with its own noise check.
+#[test]
+fn explicit_pipeline_reports_a_noisy_retry_read_as_a_page_failure_too() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "use_cache": false,
+        "ocr": {
+            "backend": "tesseract",
+            "language": ["eng"],
+            "pipeline": {"stages": [{"backend": "tesseract", "backend_options": {"use_cache": false}}]},
+        },
+        "pages": {"extract_pages": true},
+        "concurrency": {"max_threads": 1},
+    }))
+    .expect("one-thread explicit-pipeline Tesseract configuration");
+    assert_noisy_retry_read_is_a_page_failure(&config);
 }
 
 fn assert_exact_tall_source_text(source: &[u8]) {

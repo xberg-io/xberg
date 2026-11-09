@@ -276,7 +276,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
-- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2443).**
+- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2644).**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 
 - **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text (GH#2616).**
@@ -297,7 +297,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover more tall scans: Indexed scans at 120 DPI, Markdown output and an explicit Tesseract page mode, and report when strips were not used.** (#2502)
   Indexed sources down to 120 DPI use source-image strips, each of which must match its source ink rows; bilevel, neutral RGB and JPEG scans rendered at 120 DPI did not read back as their source words and keep the 150 DPI floor. A Tesseract page mode such as PSM 3 no longer turns recovery off, and Markdown output recovers the words as plain paragraphs with a warning that no Markdown structure was rebuilt. Strips now join as separate paragraphs. A page read from a render downscaled below 150 DPI carries a warning that names why its strips were not used.
 
-- **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
+- **(pdf): Keep a marked native page that the configured OCR languages cannot read (GH#2536).**
   A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
 
 - **(pdf): Keep any native page the configured OCR languages cannot read, also through a Tesseract pipeline, and warn when a scan is in such a script.** (#2536)
