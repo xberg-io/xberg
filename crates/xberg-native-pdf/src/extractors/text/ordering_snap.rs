@@ -10,6 +10,9 @@ fn is_list_marker(text: &str) -> bool {
     )
 }
 
+/// Largest rise of a phrase above its base line, in ems of the phrase: a phrase is a line of text, not a mark.
+const PHRASE_MAX_RISE_EM: f32 = 0.25;
+
 fn is_phrase(text: &str) -> bool {
     let trimmed = text.trim();
     trimmed.chars().count() > 3 || trimmed.contains(char::is_whitespace)
@@ -17,9 +20,9 @@ fn is_phrase(text: &str) -> bool {
 
 /// Base-line Y each span snaps to for reading order, or `None` when it stays on its own line.
 ///
-/// Raised glyphs that touch on one baseline form a cluster, and a cluster snaps only when every
-/// glyph in it does, so `(\u{2217})` is never split between two rows. List markers never count as
-/// marks, and a phrase snaps only when it abuts its base.
+/// Raised glyphs that touch on one baseline form a cluster. The cluster snaps whole when its
+/// first glyph abuts the base, so `(\u{2217})` and `1/t` are never split between two rows. List
+/// markers never count as marks, and a phrase snaps only when it abuts its base on its own line.
 pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Option<f32>> {
     let snapshot: Vec<_> = spans.iter().map(|&(_, x, y, w, fs)| (x, y, w, fs)).collect();
     let single = snapped_script_baselines(&snapshot, SnapReach::ORDERING);
@@ -28,11 +31,11 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Optio
     let own: Vec<Option<f32>> = spans
         .iter()
         .enumerate()
-        .map(|(i, &(text, ..))| {
+        .map(|(i, &(text, _, y, _, fs))| {
             if is_list_marker(text) {
                 None
             } else if is_phrase(text) {
-                phrase[i]
+                phrase[i].filter(|&base_y| y - base_y <= fs * PHRASE_MAX_RISE_EM)
             } else {
                 single[i]
             }
@@ -43,7 +46,7 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Optio
     members.sort_by(|&a, &b| {
         crate::utils::safe_float_cmp(spans[a].2, spans[b].2).then(crate::utils::safe_float_cmp(spans[a].1, spans[b].1))
     });
-    let mut result = own.clone();
+    let mut result = vec![None; spans.len()];
     let mut start = 0;
     while start < members.len() {
         let mut end = start + 1;
@@ -56,9 +59,12 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Optio
             }
             end += 1;
         }
-        if members[start..end].iter().any(|&i| own[i].is_none()) {
-            for &i in &members[start..end] {
-                result[i] = None;
+        let cluster = &members[start..end];
+        if let Some(base_y) = own[cluster[0]]
+            && !cluster.iter().any(|&i| is_list_marker(spans[i].0))
+        {
+            for &i in cluster {
+                result[i] = Some(base_y);
             }
         }
         start = end;

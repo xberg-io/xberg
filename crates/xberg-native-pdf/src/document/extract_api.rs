@@ -2228,10 +2228,10 @@ mod order_on_script_base_lines_tests {
 
     fn page() -> Vec<TextSpan> {
         vec![
-            span("near-mark", 110.0, 703.0, 4.0, 8.0, 5),
+            span("n", 110.0, 703.0, 4.0, 8.0, 5),
             span("near-other", 500.0, 702.0, 20.0, 12.0, 5),
             span("near-base", 100.0, 700.0, 10.0, 12.0, 1),
-            span("far-mark", 210.0, 605.5, 4.0, 8.0, 5),
+            span("f", 210.0, 605.5, 4.0, 8.0, 5),
             span("far-other", 500.0, 602.0, 20.0, 12.0, 5),
             span("far-base", 200.0, 600.0, 10.0, 12.0, 2),
         ]
@@ -2251,14 +2251,7 @@ mod order_on_script_base_lines_tests {
         order_on_script_base_lines(&mut spans, |spans| by_row(spans));
         assert_eq!(
             texts(&spans),
-            [
-                "near-other",
-                "near-base",
-                "near-mark",
-                "far-mark",
-                "far-other",
-                "far-base"
-            ]
+            ["near-other", "near-base", "n", "f", "far-other", "far-base"]
         );
     }
 
@@ -2311,7 +2304,7 @@ mod order_on_script_base_lines_tests {
             span("base", 100.0, 700.0, 10.0, 10.0, 1),
         ];
         order_on_script_base_lines(&mut spans, |spans| by_row(spans));
-        assert_eq!(texts(&spans), ["(", "\u{2217}", ")", "other", "base"]);
+        assert_eq!(texts(&spans), ["other", "base", "(", "\u{2217}", ")"]);
     }
 
     #[test]
@@ -2325,6 +2318,29 @@ mod order_on_script_base_lines_tests {
         ];
         order_on_script_base_lines(&mut spans, |spans| by_row(spans));
         assert_eq!(texts(&spans), ["other", "base", "(", "\u{2217}", ")"]);
+    }
+
+    #[test]
+    fn should_snap_a_touching_exponent_whose_first_glyph_abuts_the_base() {
+        let mut spans = vec![
+            span("1", 130.0, 703.0, 4.0, 7.0, 5),
+            span("/t", 134.0, 703.0, 7.0, 7.0, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("(1 \u{2212} \u{3b4})", 100.0, 700.0, 30.0, 10.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "(1 \u{2212} \u{3b4})", "1", "/t"]);
+    }
+
+    #[test]
+    fn should_not_pull_pull_quote_lines_onto_a_large_opening_quote() {
+        let mut spans = vec![
+            span("the types of content that", 80.0, 1013.0, 160.0, 17.0, 5),
+            span("other", 500.0, 1012.0, 20.0, 17.0, 5),
+            span("\u{201c}", 60.0, 1000.0, 20.0, 40.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["the types of content that", "other", "\u{201c}"]);
     }
 
     #[test]
