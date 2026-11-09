@@ -1,7 +1,7 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:025df7e4b6c9e1dd2a98b81236a46d427816da719521512e3b03bc2ae15ae065
-Source-Hash: blake3:1e46ba9bed26e6452c3c82c60b33a2fde65ced1c447fbee44693532abe509487
+Content-Hash: blake3:d9846749cb2b57685af6f077cfe2d16d5d7e58768437f14ee12f3c78a260106e
+Source-Hash: blake3:ab2bcd453f9c2ded67752f6a9800186d42b6921f4be16f6ab3a773254a9fba00
 Schema-Version: v1
 -->
 
@@ -115,7 +115,7 @@ Nested sections (each `None`/unset by default unless noted): `ocr`, `xberg-chunk
 enabled = true
 backend = "tesseract"
 language = ["eng"]
-auto_rotate = false
+auto_rotate = true
 ```
 
 | Option         | Type             | Default     | Description                                                            |
@@ -123,7 +123,7 @@ auto_rotate = false
 | `enabled`      | boolean          | `true`      | Whether OCR is enabled. Setting `false` is equivalent to `disable_ocr` |
 | `backend`      | string           | `"tesseract"` | OCR backend: `tesseract`, `paddleocr`/`paddle-ocr`, or `vlm`         |
 | `language`     | string or array  | `["eng"]`   | Language code(s). Accepts `"eng"` or `["eng", "deu"]`. Tesseract joins with `+` |
-| `auto_rotate`  | boolean          | `false`     | Enable automatic page rotation based on orientation detection         |
+| `auto_rotate`  | boolean \| null  | `null`      | `true` always rotates, `false` never rotates or retries, unset keeps the orientation retry |
 | `vlm_fallback` | string           | `"disabled"` | VLM fallback policy                                                   |
 | `output_format`| string \| null   | `null`      | Optional OCR output format override                                    |
 
