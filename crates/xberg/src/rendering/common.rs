@@ -29,6 +29,39 @@ pub(crate) fn annotated_math<'a>(span: &'a str, kind: &AnnotationKind) -> Option
     Some((literal, display))
 }
 
+/// Byte offset of the first `%` in a TeX line that starts a comment: one preceded by an even
+/// number of backslashes, since `\%` is a literal percent sign. Verbatim text such as
+/// `\verb|%|` is not understood: its `%` counts as a comment.
+pub(crate) fn tex_comment_start(line: &str) -> Option<usize> {
+    let mut backslashes = 0;
+    for (index, byte) in line.bytes().enumerate() {
+        if byte == b'%' && backslashes % 2 == 0 {
+            return Some(index);
+        }
+        backslashes = if byte == b'\\' { backslashes + 1 } else { 0 };
+    }
+    None
+}
+
+pub(crate) fn has_tex_comment(tex: &str) -> bool {
+    tex.lines().any(|line| tex_comment_start(line).is_some())
+}
+
+/// TeX on one line: a comment runs to the end of its line, so joining lines with a space would
+/// bring the next line into it. The comments, which render nothing, are dropped before the join.
+pub(crate) fn join_tex_lines(tex: &str) -> String {
+    tex.replace("\r\n", "\n")
+        .split(['\r', '\n'])
+        .map(|line| {
+            line.get(..tex_comment_start(line).unwrap_or(line.len()))
+                .unwrap_or(line)
+                .trim()
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn valid_math_annotation(text: &str, annotation: &TextAnnotation) -> bool {
     text.get(annotation.start as usize..annotation.end as usize)
         .and_then(|span| annotated_math(span, &annotation.kind))
