@@ -307,10 +307,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Preserve native PDF leaf headers beneath repeated column groups.** (#2332)
-  Grouped tables with repeated leaf labels and a shaded first data row retain those labels as header cells in HTML
-  and document grids, preserving body cells, table bounds and spans.
-
+- **(pdf): Keep a page's native text when the OCR read of a script it is written in contains none of that script.** (#2794)
+  When a Tesseract pipeline's first stage reads a native layer's script (such as `khm` for Khmer) but fails or scores below `pipeline_min_quality`, a later stage for another script (such as `eng`) no longer replaces the native text with its own. The page keeps its native text and an `ocr` warning names the script. A healthy read in the script still replaces the page, and pages the unreadable-script rule did not mark are unchanged. A whole-document read that drops the script on every page of the document is discarded and the native text is returned, with no second OCR pass; a document where only some pages drop it keeps the whole-document read, and so does a page whose Latin letters outnumber its Khmer. The discarded read's page failures (marked not recovered) and warnings are still reported, while its layout and LLM usage are dropped.
 - **(ocr): Print each row of a dot-leader table picture once when the block read keeps a line the table already holds.** (#2783)
   The PSM 6 read's hOCR grouped some rows into one multi-line paragraph, and a line is dropped as claimed only on an exact token match with a table row. A leader token or a stray `=` the table cell lacks kept the line, so the row appeared as text and in the table. Standalone dot-leader reads now compare a line with a table row without its leader tokens (dots, `=`, `_`); every other route still matches exactly.
 - **(pdf): Keep a word joined after a ligature that the font decodes to letters.** (GH#2718)
@@ -365,6 +363,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   All path consumers, including line, rectangle and table-grid extraction, receive ExtGState dash patterns and no stroke colour when the stroke opacity (`CA`) is zero or negative; this prevents false HTML headers from those separators.
   Repeated uses of a graphics-state name reuse its parsed settings until the resource scope changes.
   Partial stroke opacity, fill opacity (`ca`), soft masks (`SMask`) and blend modes (`BM`) remain unmodelled in path-based header visibility proof.
+
+- **(pdf): Preserve native PDF leaf headers beneath repeated column groups.** (#2332)
+  Grouped tables with repeated leaf labels and a shaded first data row retain those labels as header cells in HTML
+  and document grids, preserving body cells, table bounds and spans.
 
 - **(ocr): Keep the words that a glued native token hides on a table page (#2691).**
   The check that lets native text stand in for an OCR read credited a native word when the joined read words contained it, so a token such as `1ThreadOvf_PMC1` counted as agreement for the three words the read separates, and page 4443 of the Intel SDM lost `Ovf_PMC1` to `Ovf_PMC3`; a native word that joins read words a cell apart now keeps the OCR read.
