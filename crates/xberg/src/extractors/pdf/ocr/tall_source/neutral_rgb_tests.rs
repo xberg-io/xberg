@@ -219,13 +219,26 @@ async fn a_bilevel_scan_at_150_dpi_is_asked_for_line_certificates() {
     );
 }
 
+/// `source_frame` refuses a read whose width is at least 98% of the source's: 1175 of 1200 px is
+/// admitted and 1176 is not.
 #[tokio::test]
-async fn the_read_width_not_the_rendered_width_is_checked_against_the_source() {
-    // A render as wide as the source is refused, but the page was read at 1000 px.
+async fn the_source_is_refused_from_a_read_at_98_percent_of_its_width() {
     let document = neutral_rgb_scan();
-    let (replaced, ..) = replace(&document, (WIDTH, HEIGHT), None).await;
-    assert!(!replaced, "a read as wide as the source has nothing to recover");
-    let (replaced, original, _) = replace(&document, (WIDTH, HEIGHT), Some((1000, 3667))).await;
+    let (replaced, original, _) = replace(&document, (1175, 4308), None).await;
     assert!(replaced);
     assert_eq!(original.content, format!("{WORDS}\n\n{WORDS}"));
+    let (replaced, ..) = replace(&document, (1176, 4312), None).await;
+    assert!(!replaced);
+}
+
+#[tokio::test]
+async fn the_read_width_not_the_rendered_width_is_checked_against_the_source() {
+    let document = neutral_rgb_scan();
+    let (replaced, ..) = replace(&document, (WIDTH, HEIGHT), None).await;
+    assert!(!replaced, "a render as wide as the source has nothing to recover");
+    let (replaced, original, _) = replace(&document, (WIDTH, HEIGHT), Some((1175, 4308))).await;
+    assert!(replaced, "the page was read at 1175 px");
+    assert_eq!(original.content, format!("{WORDS}\n\n{WORDS}"));
+    let (replaced, ..) = replace(&document, (WIDTH, HEIGHT), Some((1176, 4312))).await;
+    assert!(!replaced, "the page was read at 1176 px");
 }
