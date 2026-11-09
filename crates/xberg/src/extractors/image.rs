@@ -5144,6 +5144,39 @@ mod tests {
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     #[test]
+    fn table_reread_applies_to_a_first_read_table_garbled_by_misread_leaders() {
+        let mut garbled = image_table_reread::sample_table_document();
+        garbled.tables.push(Default::default());
+        // Each misread leader follows the label of its row, as the engine emits it.
+        for row in (0..4usize).rev() {
+            let top = 10 + row as u32 * 40;
+            garbled.prebuilt_ocr_elements.as_mut().unwrap().insert(
+                row * 4 + 1,
+                crate::types::OcrElement {
+                    text: "eae".to_string(),
+                    geometry: crate::types::OcrBoundingGeometry::Rectangle {
+                        left: 150,
+                        top,
+                        width: 120,
+                        height: 20,
+                    },
+                    confidence: crate::types::OcrConfidence {
+                        detection: None,
+                        recognition: 0.1,
+                    },
+                    level: crate::types::OcrElementLevel::Word,
+                    rotation: None,
+                    page_number: 1,
+                    parent_id: None,
+                    backend_metadata: Default::default(),
+                },
+            );
+        }
+        assert!(single_block_table_config(&ExtractionConfig::default(), "image/png", &garbled).is_some());
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
     fn table_reread_applies_only_without_a_vlm_fallback_or_pipeline() {
         let first = image_table_reread::sample_table_document();
         let config = ExtractionConfig::default();

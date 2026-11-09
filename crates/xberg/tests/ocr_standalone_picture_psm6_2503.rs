@@ -168,16 +168,14 @@ fn plain_keeps_the_rows_of_an_adopted_leader_picture_on_consecutive_lines() {
     );
 }
 
-/// Rows of the 14 px picture that sit whole on one line; "Pool repairs" is joined by the block read
-/// and counted as kept, as in the PSM 6 fixture test.
+/// Rows of the 14 px picture that sit whole on one line; the block read joins "Pool repairs" into
+/// "Poolrepairs", which is asserted separately and counted as kept.
 fn kept_14px_rows(content: &str) -> usize {
+    assert!(content.contains("Poolrepairs"), "the known join is gone:\n{content}");
+    let normalized = content.replace("Poolrepairs", "Pool repairs");
     PICTURE_14PX_ROWS
         .lines()
-        .filter(|row| {
-            row_lines(content, row) == 1
-                || (row.starts_with("Pool repairs")
-                    && row_lines(&content.replace("Poolrepairs", "Pool repairs"), row) == 1)
-        })
+        .filter(|row| row_lines(&normalized, row) == 1)
         .count()
 }
 

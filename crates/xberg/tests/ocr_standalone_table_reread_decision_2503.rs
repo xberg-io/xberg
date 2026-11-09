@@ -74,7 +74,7 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
     assert!(leader.iter().any(|event| event.contains("adopted")), "{leader:?}");
 
     assert_eq!(psm(TWO_COLUMN_PROSE), "11", "the page keeps its first read");
-    let prose = events.0.lock().unwrap().clone();
+    let prose = std::mem::take(&mut *events.0.lock().unwrap());
     assert!(
         !prose
             .iter()
@@ -86,13 +86,12 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
         "the page is refused by the geometry admission: {prose:?}"
     );
 
-    events.0.lock().unwrap().clear();
     assert_eq!(
         psm(UPSIDE_DOWN_TABLE),
         "11",
         "a second read with no table is not adopted"
     );
-    let upside_down = events.0.lock().unwrap().clone();
+    let upside_down = std::mem::take(&mut *events.0.lock().unwrap());
     assert!(
         upside_down
             .iter()
@@ -110,7 +109,6 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
         "{upside_down:?}"
     );
 
-    events.0.lock().unwrap().clear();
     assert_eq!(psm(CLEAN_TABLE), "11", "a correct first-read table is kept");
     let clean = std::mem::take(&mut *events.0.lock().unwrap());
     assert!(
@@ -119,7 +117,7 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
     );
 
     assert_eq!(psm(GARBLED_14PX), "6", "a garbled first-read table is replaced");
-    let garbled = events.0.lock().unwrap().clone();
+    let garbled = std::mem::take(&mut *events.0.lock().unwrap());
     assert!(
         garbled.iter().any(|event| event.contains("reading the picture again")),
         "{garbled:?}"

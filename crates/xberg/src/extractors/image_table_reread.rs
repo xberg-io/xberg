@@ -1,12 +1,14 @@
 //! The decision to read a standalone picture a second time as one uniform block, and to keep
 //! that read (#2503, #2432).
 //!
-//! Admission is geometry only: the first read's word boxes must form a lattice table. Four or
+//! Admission is geometry first: the first read's word boxes must form a lattice table. Four or
 //! more rows share a few column edges with wide gaps between at least three columns, the words
-//! come out row by row, and the page is not a lattice of dozens of edges. Nothing depends on what
-//! a word says. The second read is adopted only if it finds a table, so a page that is not a
-//! readable table keeps its first read. A token it misreads is kept; a read that failed outright
-//! is discarded (see [`second_read_is_usable`]).
+//! come out row by row, and the page is not a lattice of dozens of edges. A first read that
+//! already holds a table is admitted only when its column rows hold the low-confidence noise a
+//! small dot leader decays into (see [`first_read_is_garbled`]). The second read is adopted only
+//! if it finds a table (or, for a first read with none, dot-leader rows), and a garbled first read
+//! is replaced only by a read with leader rows. A token it misreads is kept; a read that failed
+//! outright is discarded (see [`second_read_is_usable`]).
 
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrBoundingGeometry, OcrElementLevel};
@@ -272,6 +274,8 @@ fn column_rows_with(doc: &InternalDocument, test: fn(&WordBox) -> bool) -> usize
         .count()
 }
 
+/// Admitting a garbled first read costs one extra OCR pass whenever the re-read is then refused.
+///
 /// The first read found a table, but its column rows hold the misread leaders of a dot-leader
 /// table: a block read can recover what the table check parsed around noise. Four or more column
 /// rows must carry such a word, so a clean table (even one with a stray low-confidence cell) is
@@ -322,7 +326,11 @@ pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalD
     } else {
         alphanumeric_count(first)
     };
-    let after = alphanumeric_count(second);
+    let after = if garbled {
+        confident_alphanumeric_count(second)
+    } else {
+        alphanumeric_count(second)
+    };
     tracing::debug!(before, after, "standalone table re-read: letters and digits per read");
     if after == 0 {
         return Err("the second read has no letters or digits in its word elements");
@@ -708,6 +716,20 @@ mod tests {
             second_read_is_usable(&first, &doc(leader_table(6, 6, "........."))),
             Err(reason)
         );
+    }
+
+    #[test]
+    fn a_first_read_with_lowercase_codes_is_kept_when_the_re_read_has_no_leader_rows() {
+        let reason = "the second read does not recover the leader rows of the garbled table";
+        for code in ["mm", "ea", "id"] {
+            let first = garbled_read(6, 6, code, 0.3);
+            assert!(first_read_is_garbled(&first), "{code} is admitted to a second read");
+            assert_eq!(
+                second_read_is_usable(&first, &doc_with_table(table(6))),
+                Err(reason),
+                "{code}: a re-read with a table but no dotted rows leaves the first read"
+            );
+        }
     }
 
     #[test]
