@@ -335,10 +335,6 @@ pub(super) fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<image
             actual.0, actual.1
         )));
     }
-    // The decoder compares this limit with the finished output only after all scans, so it does not
-    // bound the decode; the admission arithmetic is the guard. ~keep
-    let output = usize::from(width) * usize::from(height) * info.pixel_format.pixel_bytes();
-    decoder.set_max_decoding_buffer_size(output);
     let pixels = decoder.decode().map_err(failed)?;
     let (width, height) = (u32::from(width), u32::from(height));
     match info.pixel_format {

@@ -15,6 +15,20 @@ const PER_PAGE_ENOUGH: usize = 2_500_000;
 const PER_PAGE_TOO_SMALL: usize = 1_000_000;
 const SCAN_SHA256: &str = "1a50bafc441829efcfdde16a7deaa965f9eeccd526d77768344ae1ce89ebd6b2";
 const SCAN: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
+const SEVEN_SCAN_SHA256: &str = "de8e63934387c8e66d72d487ddc919f25d7164bc866ba86c96e87a259ad2cdab";
+const SEVEN_SCAN: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2694/seven-page-junk-layer.pdf");
+const SEVEN_PAGE_WORDS: [&str; 7] = [
+    "lighthouse",
+    "Volunteers",
+    "Fishing",
+    "evening",
+    "Carpenters",
+    "Children",
+    "Orchard",
+];
+/// A page costs about 27 million units; this buys 30 million per page (16 units per iteration), so
+/// the document ceiling of six per-page budgets covers six pages and leaves less than a seventh.
+const PER_PAGE_ONE_SCAN_AND_A_BIT: usize = 1_875_000;
 const PAGE_WORDS: [&str; 4] = ["lighthouse", "Volunteers", "Fishing", "evening"];
 const JUNK: &str = "47110";
 
@@ -28,15 +42,22 @@ fn scan() -> Vec<u8> {
 }
 
 async fn read(security_limits: Option<xberg::extractors::security::SecurityLimits>) -> xberg::ExtractedDocument {
+    read_bytes(scan(), security_limits).await
+}
+
+async fn read_bytes(
+    bytes: Vec<u8>,
+    security_limits: Option<xberg::extractors::security::SecurityLimits>,
+) -> xberg::ExtractedDocument {
     let config = ExtractionConfig {
         use_cache: false,
         ocr: Some(OcrConfig::default()),
         security_limits,
         ..Default::default()
     };
-    let output = xberg::extract(ExtractInput::from_bytes(scan(), "application/pdf", None), &config)
+    let output = xberg::extract(ExtractInput::from_bytes(bytes, "application/pdf", None), &config)
         .await
-        .expect("extract the four-page scan");
+        .expect("extract the scan");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     output.results.into_iter().next().expect("one document")
 }
@@ -88,4 +109,38 @@ async fn a_per_page_budget_below_one_scan_keeps_every_junk_layer() {
     for word in PAGE_WORDS {
         assert!(!document.content.contains(word), "{word}");
     }
+}
+
+#[tokio::test]
+async fn the_document_ceiling_is_six_per_page_budgets() {
+    assert_eq!(
+        hex::encode(Sha256::digest(SEVEN_SCAN)),
+        SEVEN_SCAN_SHA256,
+        "regenerate with the fixture README"
+    );
+    let document = read_bytes(
+        SEVEN_SCAN.to_vec(),
+        Some(xberg::extractors::security::SecurityLimits {
+            max_iterations: PER_PAGE_ONE_SCAN_AND_A_BIT,
+            ..Default::default()
+        }),
+    )
+    .await;
+    for word in &SEVEN_PAGE_WORDS[..6] {
+        assert!(
+            document.content.contains(word),
+            "{word} missing, the first six pages must be read: {:?}",
+            document.content
+        );
+    }
+    assert!(
+        !document.content.contains(SEVEN_PAGE_WORDS[6]),
+        "the seventh page is read: the ceiling is more than six per-page budgets"
+    );
+    assert_eq!(
+        document.content.matches(JUNK).count(),
+        3,
+        "the seventh page keeps its junk layer: {:?}",
+        document.content
+    );
 }

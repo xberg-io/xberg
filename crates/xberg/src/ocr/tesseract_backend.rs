@@ -228,8 +228,17 @@ impl TesseractBackend {
         if internal.language.trim().is_empty() {
             internal.language = crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string();
         }
-        if config.auto_rotate {
-            internal.auto_rotate = true;
+        match config.auto_rotate {
+            Some(true) => internal.auto_rotate = true,
+            // An explicit `false` is the outer policy: it overrides the nested preprocessing flag
+            // (both feed the same effective rotation decision). ~keep
+            Some(false) => {
+                internal.auto_rotate = false;
+                if let Some(preprocessing) = internal.preprocessing.as_mut() {
+                    preprocessing.auto_rotate = false;
+                }
+            }
+            None => {}
         }
         // GH#1651: without this the caller's limits die here -- `TesseractConfig` is the only
         // channel from `OcrConfig` down to the decode, because `OcrBackend::process_image`
@@ -2043,6 +2052,33 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(backend.config_to_tesseract(&ocr_config_with_tess).language, "eng");
+    }
+
+    #[test]
+    fn explicit_false_overrides_the_nested_preprocessing_rotation_and_other_states_do_not() {
+        let backend = TesseractBackend::new();
+        let effective = |policy: Option<bool>| {
+            let ocr_config = OcrConfig {
+                backend: "tesseract".to_string(),
+                auto_rotate: policy,
+                tesseract_config: Some(crate::types::TesseractConfig {
+                    preprocessing: Some(crate::types::ImagePreprocessingConfig {
+                        auto_rotate: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let internal = backend.config_to_tesseract(&ocr_config);
+            internal.auto_rotate || internal.preprocessing.as_ref().is_some_and(|p| p.auto_rotate)
+        };
+        assert!(!effective(Some(false)), "an explicit false means never rotate");
+        assert!(
+            effective(None),
+            "the nested flag still applies when the outer policy is unset"
+        );
+        assert!(effective(Some(true)));
     }
 
     #[test]

@@ -2898,6 +2898,9 @@ public func __alef_phantom_vec_table_overlap_preference() -> RustVec<TableOverla
 public func __alef_phantom_vec_whisper_model() -> RustVec<WhisperModel> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_whisper_model())
 }
+public func __alefCloneExtractInput(_ value: ExtractInputRef) -> ExtractInput {
+    ExtractInput(ptr: __swift_bridge__$__alef_clone_extract_input(value.ptr))
+}
 
 public class AlefBridgeError: AlefBridgeErrorRefMut {
     public var isOwned: Bool = true
@@ -16144,8 +16147,8 @@ public class LayoutDetectionConfig: LayoutDetectionConfigRefMut {
     }
 }
 extension LayoutDetectionConfig {
-    public convenience init(_ strategy: LayoutStrategy, _ model: LayoutDetectionModel, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool) {
-        self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), {model.isOwned = false; return model.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
+    public convenience init(_ strategy: LayoutStrategy, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool, _ model: LayoutDetectionModel) {
+        self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding, {model.isOwned = false; return model.ptr;}()))
     }
 }
 public class LayoutDetectionConfigRefMut: LayoutDetectionConfigRef {
@@ -16163,10 +16166,6 @@ public class LayoutDetectionConfigRef {
 extension LayoutDetectionConfigRef {
     public func strategy() -> RustString {
         RustString(ptr: __swift_bridge__$LayoutDetectionConfig$strategy(ptr))
-    }
-
-    public func model() -> RustString {
-        RustString(ptr: __swift_bridge__$LayoutDetectionConfig$model(ptr))
     }
 
     public func confidenceThreshold() -> Optional<Float> {
@@ -16195,6 +16194,10 @@ extension LayoutDetectionConfigRef {
 
     public func enableChartUnderstanding() -> Bool {
         __swift_bridge__$LayoutDetectionConfig$enable_chart_understanding(ptr)
+    }
+
+    public func model() -> RustString {
+        RustString(ptr: __swift_bridge__$LayoutDetectionConfig$model(ptr))
     }
 }
 extension LayoutDetectionConfig: Vectorizable {
@@ -18399,8 +18402,8 @@ extension OcrConfigRef {
         { let val = __swift_bridge__$OcrConfig$pipeline(ptr); if val != nil { return OcrPipelineConfig(ptr: val!) } else { return nil } }()
     }
 
-    public func autoRotate() -> Bool {
-        __swift_bridge__$OcrConfig$auto_rotate(ptr)
+    public func autoRotate() -> Optional<Bool> {
+        __swift_bridge__$OcrConfig$auto_rotate(ptr).intoSwiftRepr()
     }
 
     public func vlmFallback() -> RustString {

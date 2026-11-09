@@ -6,13 +6,15 @@ use super::document_with_resource_objects;
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    static ALLOCATED_BYTES: Cell<usize> = const { Cell::new(0) };
 }
 
 struct CountingAllocator;
 
-fn record_allocation() {
+fn record_allocation(size: usize) {
     if COUNTING.try_with(Cell::get).unwrap_or(false) {
         let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        let _ = ALLOCATED_BYTES.try_with(|count| count.set(count.get() + size));
     }
 }
 
@@ -23,7 +25,7 @@ fn record_allocation() {
 )]
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        record_allocation();
+        record_allocation(layout.size());
         // SAFETY: The caller supplies the allocation layout required by GlobalAlloc.
         unsafe { System.alloc(layout) }
     }
@@ -34,7 +36,7 @@ unsafe impl GlobalAlloc for CountingAllocator {
     }
 
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        record_allocation();
+        record_allocation(size);
         // SAFETY: The caller's allocation and requested size are forwarded unchanged.
         unsafe { System.realloc(pointer, layout, size) }
     }
@@ -44,6 +46,16 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 struct CountingScope;
+
+pub(super) fn measure<T>(action: impl FnOnce() -> T) -> (T, usize, usize) {
+    ALLOCATIONS.set(0);
+    ALLOCATED_BYTES.set(0);
+    COUNTING.set(true);
+    let scope = CountingScope;
+    let output = action();
+    drop(scope);
+    (output, ALLOCATIONS.get(), ALLOCATED_BYTES.get())
+}
 
 impl Drop for CountingScope {
     fn drop(&mut self) {
@@ -111,4 +123,45 @@ fn should_not_clone_indirect_extgstate_dictionary_for_each_gs_operator() {
 #[test]
 fn should_not_clone_indirect_named_state_for_each_gs_operator() {
     assert_bounded_state_allocations(StateStorage::IndirectState);
+}
+
+/// Every `/S{i}` is used exactly once, so each name is a cache miss in its resource scope.
+fn distinct_name_allocations(states: usize, storage: StateStorage) -> usize {
+    let dictionary = (0..states)
+        .map(|index| format!("/S{index} << /CA 1 >>"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let content = format!(
+        "{}0 700 m 300 700 l S",
+        (0..states).map(|index| format!("/S{index} gs ")).collect::<String>()
+    );
+    let (resources, objects) = match storage {
+        StateStorage::Inline => (format!("/ExtGState << {dictionary} >>"), vec![]),
+        _ => ("/ExtGState 5 0 R".to_owned(), vec![format!("<< {dictionary} >>")]),
+    };
+    let objects = objects.iter().map(String::as_str).collect::<Vec<_>>();
+    let document = document_with_resource_objects(content.as_bytes(), &resources, &objects);
+    ALLOCATIONS.set(0);
+    COUNTING.set(true);
+    let scope = CountingScope;
+    let paths = document.extract_paths(0).expect("distinct gs extraction");
+    drop(scope);
+    assert_eq!(paths.len(), 1);
+    ALLOCATIONS.get()
+}
+
+#[test]
+fn should_resolve_indirect_extgstate_once_for_many_distinct_names() {
+    const NAMES: usize = 2000;
+    let small = distinct_name_allocations(NAMES, StateStorage::IndirectDictionary);
+    let large = distinct_name_allocations(2 * NAMES, StateStorage::IndirectDictionary);
+    let inline = distinct_name_allocations(2 * NAMES, StateStorage::Inline);
+    assert!(
+        large < small * 3,
+        "allocations grew superlinearly: N={small}, 2N={large}"
+    );
+    assert!(
+        large <= inline * 2,
+        "indirect dictionary costs far more than inline: indirect={large}, inline={inline}"
+    );
 }

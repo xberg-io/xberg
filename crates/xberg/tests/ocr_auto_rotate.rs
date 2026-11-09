@@ -19,7 +19,7 @@ async fn should_extract_with_auto_rotate_without_crashing() {
         ocr: Some(xberg::core::config::OcrConfig {
             backend: "tesseract".to_string(),
             language: vec!["eng".to_string()],
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         }),
         ..Default::default()
@@ -143,7 +143,7 @@ fn implicit_pdf_ocr_recovers_a_low_confidence_rotated_page() {
     let implicit = extract(&config);
     let explicit = extract(&ExtractionConfig {
         ocr: Some(OcrConfig {
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         }),
         ..config.clone()
@@ -151,7 +151,7 @@ fn implicit_pdf_ocr_recovers_a_low_confidence_rotated_page() {
     assert_eq!(normalize(&explicit.content), expected, "cached orientation control");
     let disabled = extract(&ExtractionConfig {
         ocr: Some(OcrConfig {
-            auto_rotate: false,
+            auto_rotate: Some(false),
             ..Default::default()
         }),
         ..config
@@ -197,7 +197,7 @@ fn implicit_pdf_ocr_keeps_its_original_warning_when_no_orientation_model_is_avai
     let implicit = extract(&config);
     let disabled = extract(&ExtractionConfig {
         ocr: Some(OcrConfig {
-            auto_rotate: false,
+            auto_rotate: Some(false),
             ..Default::default()
         }),
         ..config
@@ -247,7 +247,7 @@ fn implicit_upright_pdf_ocr_preserves_text_confidence_and_geometry() {
     let implicit = extract(&config);
     let disabled = extract(&ExtractionConfig {
         ocr: Some(OcrConfig {
-            auto_rotate: false,
+            auto_rotate: Some(false),
             ..Default::default()
         }),
         ..config
@@ -320,7 +320,7 @@ fn implicit_pdf_ocr_recovers_the_empty_270_degree_scan() {
     let implicit = scan_270_text(None);
     assert_eq!(
         scan_270_text(Some(xberg::OcrConfig {
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         })),
         expected,
@@ -361,7 +361,7 @@ fn implicit_pdf_ocr_recovers_the_complete_rotated_table() {
 
     let disabled = extract(&ExtractionConfig {
         ocr: Some(OcrConfig {
-            auto_rotate: false,
+            auto_rotate: Some(false),
             ..Default::default()
         }),
         ..config

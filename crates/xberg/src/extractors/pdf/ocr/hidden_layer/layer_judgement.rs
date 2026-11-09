@@ -63,3 +63,60 @@ pub(in crate::extractors::pdf::ocr) fn ocr_supersedes_disjoint_layer(native: &st
 pub(in crate::extractors::pdf::ocr) fn confidence_clears_replacement_floor(score: Option<f64>) -> bool {
     score.is_some_and(|score| score >= OcrQualityThresholds::default().min_ocr_mean_confidence / 100.0)
 }
+
+/// Fragmentation is deliberately not a veto: a table of numbers is mostly short tokens.
+pub(in crate::extractors::pdf::ocr) fn confident_read_replaces_layer(
+    low_confidence: bool,
+    dictionary_noise: bool,
+    score: Option<f64>,
+    native: &str,
+    read: &str,
+) -> bool {
+    !low_confidence
+        && !dictionary_noise
+        && confidence_clears_replacement_floor(score)
+        && ocr_supersedes_disjoint_layer(native, read)
+}
+
+/// Whether the language check judges the covering layer of a probed page plausible prose. Only a
+/// covered page (`needed == Some(false)`) with layer text can be.
+pub(in crate::extractors::pdf::ocr) fn layer_judged_plausible(
+    needed: Option<bool>,
+    layer_text: Option<&str>,
+    thresholds: &OcrQualityThresholds,
+) -> bool {
+    needed == Some(false)
+        && layer_text.is_some_and(|text| {
+            let boundary = crate::types::PageBoundary {
+                byte_start: 0,
+                byte_end: text.len(),
+                page_number: 1,
+            };
+            !crate::extractors::pdf::ocr::plausibility::scan_text_plausibility(
+                text,
+                Some(&[boundary]),
+                None,
+                thresholds,
+            )
+            .plausible
+            .is_empty()
+        })
+}
+
+/// The pages the OCR probe reads, from `(page index, coverage verdict, layer judged plausible)`.
+pub(in crate::extractors::pdf::ocr) fn pages_to_probe(decisions: Vec<(usize, Option<bool>, bool)>) -> Vec<usize> {
+    decisions
+        .into_iter()
+        .filter_map(|(index, needed, plausible)| {
+            let probed = super::probes_page(needed, plausible);
+            tracing::debug!(
+                page = index + 1,
+                ?needed,
+                plausible,
+                probed,
+                "Hidden PDF text probe decision"
+            );
+            probed.then_some(index)
+        })
+        .collect()
+}
