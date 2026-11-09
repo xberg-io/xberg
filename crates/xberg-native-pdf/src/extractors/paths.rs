@@ -322,7 +322,7 @@ impl PathExtractor {
         (prev_resources, prev_cache, prev_extgstates, prev_container)
     }
 
-    /// Restore a (resources, cached_dict) pair previously returned by
+    /// Restore the scope previously returned by
     /// [`swap_resources`].
     pub(crate) fn restore_resources(&mut self, saved: SavedResourceScope) {
         self.resources = saved.0;
