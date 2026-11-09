@@ -1,24 +1,23 @@
 Where H~s~(f, t) denotes the CSI measurements transmitted by static paths such as ceiling/wall reflections, termed as static CSI component. H~m~(f, t) and H~n~(f, t) represent the CSI measurements transmitted via body reflection paths and limb reflection paths, respectively. H(f, t) can also be expressed as:
 
-H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2)
+Where ∥H(f, t)∥ and e<sup>iθ</sup> CSI can be rewritten as:
 
-Where ∥H(f, t)∥ and e<sup>iθ</sup> symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received CSI can be rewritten as:
+H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2) symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received
 
-jθ jθs jθm
+∥H(f, t)∥ · e<sup>jθ</sup>
 
-∥ H ( f, t ) ∥
+= ∥H~s~(f, t)∥ · e<sup>jθs</sup>
 
-- e = ∥ H s ( f, t ) ∥
-- e + ∥ H m ( f, t ) ∥
-- e (3)
+\+ ∥H~m~(f, t)∥ · e<sup>jθm</sup> (3)
 
 \+∥H~n~(f, t)∥ · e<sup>jθn</sup> However, the phase information in CSI is often affected by factors like carrier frequency offset and sampling frequency offset, leading to significant errors in CSI phase information. Also, the amplitude information in CSI changes with device restarts. Hence, the actual measured CSI is:
 
-∥H~R~(f, t)∥ · e<sup>jθ</sup>
+jθ~R~ jθs
 
-R
+∥ H R ( f, t ) ∥
 
-= α(∥H~s~(f, t)∥ · e<sup>jθs</sup> (4)
+- e = α ( ∥ H s ( f, t ) ∥
+- e (4)
 
 jθm jθn jθe
 
@@ -40,17 +39,12 @@ Specifically, an integrated analysis of data and fitting the distribution using 
 
 These differences are attributed to inherent antenna properties. Stability is maintained even after system reboots. Consequently, we adjust the CSI for consistent angular offsets and normalize amplitude. The calibrated CSI is represented as:
 
-j∆θ~N~
+jθ~R~ j∆θ~N~
 
-|H (f, t)| · e<sup>jθ</sup>
-
-R
+| H R ( M,N ) ( f, t ) |
 
 - e
-
-R(M,N)
-
-H~cali~(M, N) = P~M~ (5)
+- e H cali ( M, N ) = P M (5)
 
 1
 
