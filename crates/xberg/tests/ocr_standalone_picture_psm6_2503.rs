@@ -127,3 +127,16 @@ fn a_dot_leader_table_of_contents_is_not_read_again_as_a_table() {
     let result = helpers::extract_bytes_document_blocking(TABLE_OF_CONTENTS, "image/png", &config(None)).unwrap();
     assert_eq!(recorded_psm(&result), "11");
 }
+
+#[test]
+fn markdown_keeps_every_row_of_an_adopted_leader_picture_on_its_own_line() {
+    let mut markdown = config(None);
+    markdown.output_format = OutputFormat::Markdown;
+    let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &markdown).unwrap();
+    assert_eq!(recorded_psm(&result), "6");
+    let kept = PICTURE_11PX_ROWS
+        .lines()
+        .filter(|row| row_lines(&result.content, row) == 1)
+        .count();
+    assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
+}

@@ -3136,9 +3136,12 @@ impl ImageExtractor {
         };
         tracing::debug!("standalone table re-read: reading the picture again as one block");
         match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-            Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
+            Ok(mut second) => match image_table_reread::second_read_is_usable(&first, &second) {
                 Ok(()) => {
                     tracing::debug!("standalone table re-read adopted");
+                    if second.tables.is_empty() {
+                        split_leader_rows_into_paragraphs(&mut second);
+                    }
                     Ok(second)
                 }
                 Err(reason) => {
@@ -4022,6 +4025,32 @@ fn build_image_internal_document(
         push_image_placeholder(&mut builder);
     }
     builder.build()
+}
+
+/// Gives each line of an adopted leader-row read its own paragraph. A paragraph's line breaks
+/// render as spaces in Markdown, which would weld every row of a table with no cell structure into
+/// one line (#2503).
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn split_leader_rows_into_paragraphs(doc: &mut InternalDocument) {
+    use crate::types::internal::ElementKind;
+
+    if !doc.relationships.is_empty() {
+        return;
+    }
+    let elements = std::mem::take(&mut doc.elements);
+    for element in elements {
+        if element.kind == ElementKind::Paragraph && element.annotations.is_empty() && element.text.contains('\n') {
+            for line in element.text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+                let mut row = element.clone();
+                row.text = line.to_owned();
+                let index = doc.elements.len() as u32;
+                doc.push_element(row.with_index(index));
+            }
+        } else {
+            let index = doc.elements.len() as u32;
+            doc.push_element(element.with_index(index));
+        }
+    }
 }
 
 fn split_ocr_paragraphs(text: &str) -> Vec<String> {

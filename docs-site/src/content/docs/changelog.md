@@ -233,6 +233,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Adopt the block re-read of a standalone dot-leader table picture.** (#2503)
   A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.
+- **(ocr): Keep each row of an adopted dot-leader table picture on its own line in Markdown.** (#2503)
+  The adopted block re-read has no table, so its rows were one paragraph whose line breaks Markdown renders as spaces, welding the whole table into a single line. Each row is now its own paragraph. Plain output and pictures whose re-read finds a table are unchanged.
 - **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
   An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
 - **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
