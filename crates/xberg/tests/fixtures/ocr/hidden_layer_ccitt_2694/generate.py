@@ -1,7 +1,8 @@
-"""Build a synthetic 4-page PDF for #2694.
+"""Build a synthetic multi-page PDF for #2694 and #2730.
 
 Each page is a 300 dpi CCITT Group 4 scan behind a junk render-mode-3 numeric text layer.
-Run: uv run --no-project --isolated --with pillow==11.3.0 python generate.py out.pdf
+Run: uv run --no-project --isolated --with pillow==11.3.0 python generate.py out.pdf [pages]
+The page count is 4 (the default) or 7.
 """
 
 import io
@@ -18,6 +19,9 @@ PAGES = [
     ["Harbor ledger two", "Volunteers carried the maps into the room", "and labeled each drawer beside the register"],
     ["Harbor ledger three", "Fishing boats arrived with silver baskets", "while neighbors delivered warm bread"],
     ["Harbor ledger four", "The evening tide rose gently over the dock", "and the lamps were counted twice"],
+    ["Harbor ledger five", "Carpenters mended the pier before sunrise", "and stacked the planks beside the shed"],
+    ["Harbor ledger six", "Children sketched the gulls above the bridge", "while a ferry crossed toward the island"],
+    ["Harbor ledger seven", "Orchard growers weighed their crates today", "then shipped them upriver by barge"],
 ]
 JUNK = "47110 20960 33850 18420 90210 55730 61240 70380"
 
@@ -48,12 +52,15 @@ def stream(fields: str, data: bytes) -> bytes:
 
 
 def main() -> None:
-    entries: list[bytes] = [b""] * (3 + 3 * len(PAGES))
+    page_count = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+    assert page_count in (4, 7), "the page count is 4 or 7"
+    pages = PAGES[:page_count]
+    entries: list[bytes] = [b""] * (3 + 3 * len(pages))
     entries[0] = b"<< /Type /Catalog /Pages 2 0 R >>"
-    kids = " ".join(f"{4 + 3 * index} 0 R" for index in range(len(PAGES)))
-    entries[1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(PAGES)} >>".encode()
+    kids = " ".join(f"{4 + 3 * index} 0 R" for index in range(len(pages)))
+    entries[1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode()
     entries[2] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-    for index, lines in enumerate(PAGES):
+    for index, lines in enumerate(pages):
         page_id, content_id, image_id = 4 + 3 * index, 5 + 3 * index, 6 + 3 * index
         rows = "".join(
             f"1 0 0 1 96 {PAGE_HEIGHT - (400 + row * 180) * 72 / DPI - 20:g} Tm ({JUNK}) Tj\n"

@@ -646,7 +646,14 @@ fn a_refused_charge_debits_nothing_and_the_ceiling_is_a_multiple_of_the_page_lim
 
     let defaults = PreviewWorkBudget::new(&crate::ExtractionConfig::default());
     assert_eq!(defaults.per_page, 10_000_000 * PREVIEW_WORK_PER_ITERATION);
-    assert_eq!(defaults.remaining, defaults.per_page * PREVIEW_FULL_BUDGET_PAGES);
+    assert_eq!(
+        PREVIEW_FULL_BUDGET_PAGES, 6,
+        "the document ceiling is six per-page budgets"
+    );
+    assert_eq!(
+        defaults.remaining, 960_000_000,
+        "six budgets of 160 million units at the default limit; this literal also moves with the default max_iterations"
+    );
 
     let mut unbounded = PreviewWorkBudget::with_pages(usize::MAX, PREVIEW_FULL_BUDGET_PAGES);
     assert_eq!(
@@ -711,6 +718,49 @@ fn the_document_ceiling_stops_the_probe_after_the_pages_it_buys() {
         .map(|page| budget.probe_page(|work| super::needs_ocr(&doc, page, 100 * 1024 * 1024, work, || false)))
         .collect();
     assert_eq!(verdicts, [Some(false), Some(false), None, None]);
+}
+
+#[test]
+fn the_default_budget_covers_six_pages_and_refuses_the_seventh() {
+    use super::{PREVIEW_WORK_PER_ITERATION, PreviewWorkBudget};
+
+    let bytes = include_bytes!("../../../../../tests/fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
+    let doc = super::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
+    let mut work = usize::MAX / 2;
+    let start = work;
+    assert_eq!(
+        super::needs_ocr(&doc, 0, 100 * 1024 * 1024, &mut work, || false),
+        Some(false)
+    );
+    let page_cost = start - work;
+    // Page 0 is probed seven times: only the budget accounting matters, not the page. Each
+    // budget is 1.1 page costs, so six budgets are 6.6 costs; six probes spend 6.0 and the
+    // remaining 0.6 of a cost is less than the seventh probe needs, so it is refused.
+    let max_iterations = (page_cost + page_cost / 10).div_ceil(PREVIEW_WORK_PER_ITERATION);
+    let config = crate::ExtractionConfig {
+        security_limits: Some(crate::extractors::security::SecurityLimits {
+            max_iterations,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut budget = PreviewWorkBudget::new(&config);
+    let mut verdicts = Vec::new();
+    for _ in 0..7 {
+        verdicts.push(budget.probe_page(|work| super::needs_ocr(&doc, 0, 100 * 1024 * 1024, work, || false)));
+    }
+    assert_eq!(
+        verdicts,
+        [
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            None
+        ]
+    );
 }
 
 #[test]
