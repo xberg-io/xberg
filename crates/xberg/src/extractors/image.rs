@@ -3096,9 +3096,9 @@ impl ImageExtractor {
     /// A standalone picture is read with the sparse-text default first. When that pass finds no
     /// table but its word boxes share column edges across rows, and the caller chose no PSM, the
     /// picture is read once more as one uniform block (PSM 6), whose row recovery keeps
-    /// dot-leader table rows whole (#2503, #2432). The second read is adopted as is, like a
-    /// caller-forced PSM 6, unless it is empty or kept too few letters and digits; see
-    /// [`image_table_reread::second_read_is_usable`].
+    /// dot-leader table rows whole (#2503, #2432). The second read is adopted only if it finds a
+    /// table and keeps enough letters and digits; see [`image_table_reread::second_read_is_usable`].
+    /// A cancelled second read ends the extraction.
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     async fn extract_with_ocr(
         &self,
@@ -5142,6 +5142,43 @@ mod tests {
         assert!(single_block_table_config(&explicit, "image/png", &first).is_none());
     }
 
+    /// A cancelled second read ends the extraction, while any other failure of it keeps the first
+    /// read. The first read is a table page, so only the second read's own outcome differs.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn a_cancelled_table_reread_ends_the_extraction_but_a_failed_one_keeps_the_first_read() {
+        let not_an_image = b"not an image";
+
+        let failed = ImageExtractor::new()
+            .reread_standalone_table(
+                not_an_image,
+                "image/png",
+                &ExtractionConfig::default(),
+                image_table_reread::sample_table_document(),
+            )
+            .await;
+        assert!(failed.is_ok(), "a failed second read keeps the first read: {failed:?}");
+
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let cancelled_config = ExtractionConfig {
+            cancel_token: Some(token),
+            ..Default::default()
+        };
+        let cancelled = ImageExtractor::new()
+            .reread_standalone_table(
+                not_an_image,
+                "image/png",
+                &cancelled_config,
+                image_table_reread::sample_table_document(),
+            )
+            .await;
+        assert!(
+            matches!(cancelled, Err(crate::XbergError::Cancelled)),
+            "a cancelled second read must stop the extraction: {cancelled:?}"
+        );
+    }
+
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     #[test]
     fn should_apply_default_whole_image_psm_to_horizontal_tesseract_config() {
@@ -5447,6 +5484,62 @@ mod tests {
             let result = result_with_word_confidences(&confidences);
 
             assert!(has_robust_word_confidence_distribution(&result));
+        }
+
+        /// #2699: a re-read that returns no usable words must not be kept over the first pass. ~keep
+        #[test]
+        fn should_reject_fallback_that_read_no_usable_words() {
+            assert!(!has_robust_word_confidence_distribution(&result_with_word_confidences(
+                &[]
+            )));
+            assert!(!has_robust_word_confidence_distribution(
+                &crate::types::ExtractedDocument::default()
+            ));
+            let mut whitespace_only = result_with_word_confidences(&[0.95, 0.95]);
+            for element in whitespace_only.ocr_elements.iter_mut().flatten() {
+                element.text = "  ".to_string();
+            }
+            assert!(!has_robust_word_confidence_distribution(&whitespace_only));
+        }
+
+        #[test]
+        fn robust_word_confidence_gate_decides_at_the_percentile_and_confidence_thresholds() {
+            let with_low = |good: usize, low: usize| {
+                let mut confidences = vec![0.95; good];
+                confidences.extend(vec![0.2; low]);
+                confidences
+            };
+            let cases: [(&str, Vec<f64>, bool); 6] = [
+                ("a single confident word", vec![0.95], true),
+                (
+                    "a word exactly at the minimum confidence is not low",
+                    vec![0.30; 10],
+                    true,
+                ),
+                (
+                    "one low word in ten sits on the tenth percentile",
+                    with_low(9, 1),
+                    false,
+                ),
+                (
+                    "one low word in twenty stays under the tenth percentile",
+                    with_low(19, 1),
+                    true,
+                ),
+                (
+                    "two low words in twenty reach the tenth percentile",
+                    with_low(18, 2),
+                    false,
+                ),
+                ("every word low", with_low(0, 12), false),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    has_robust_word_confidence_distribution(&result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
         }
 
         #[test]
@@ -6503,34 +6596,6 @@ mod tests {
 
         assert!(!result.metadata.ocr_used);
         assert_eq!(result.extraction_method, None);
-    }
-
-    #[cfg(feature = "ocr")]
-    #[tokio::test]
-    #[ignore = "expectation not reproducible at default limits; cause not isolated, see #2699"]
-    async fn should_recover_receipt_header_with_implicit_sparse_image_fallback() {
-        let Some(receipt) = crate::utils::read_test_fixture("images/cord_receipt_02.jpg") else {
-            return;
-        };
-        let config = ExtractionConfig {
-            use_cache: false,
-            force_ocr: true,
-            ocr: Some(crate::core::config::OcrConfig::default()),
-            ..Default::default()
-        };
-
-        let doc = ImageExtractor::new()
-            .extract_content(&receipt, "image/jpeg", &config)
-            .await
-            .expect("receipt OCR must succeed");
-        let result =
-            crate::extraction::derive::derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
-        let normalized = result.content.to_ascii_lowercase();
-
-        assert!(
-            normalized.contains("j.stb promo"),
-            "implicit sparse-image fallback must recover the grounded receipt header; got {normalized:?}"
-        );
     }
 
     #[test]

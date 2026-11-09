@@ -1,6 +1,9 @@
 use nli_qualification::cpu::linux_cpu_identity;
 
-const ARM: &str = "processor\t: 0\nCPU implementer\t: 0x41\nCPU architecture: 8\nCPU variant: 0x0\nCPU part: 0xd0c\nCPU revision: 1\nHardware: Example ARM board\n";
+const ARM: &str = concat!(
+    "processor\t: 0\nCPU implementer\t: 0x41\nCPU architecture: 8\nCPU variant: 0x0\n",
+    "CPU part: 0xd0c\nCPU revision: 1\nHardware: Example ARM board\n"
+);
 
 #[test]
 fn linux_arm_records_available_stable_identifiers_without_model_name() {
@@ -27,7 +30,9 @@ fn linux_x86_preserves_model_name() {
     .expect("x86 CPU identity");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&value).unwrap(),
-        serde_json::json!({"cores": [{"model name": ["Example x86 CPU"], "vendor_id": ["GenuineIntel"]}], "platform": {}})
+        serde_json::json!({
+            "cores": [{"model name": ["Example x86 CPU"], "vendor_id": ["GenuineIntel"]}], "platform": {}
+        })
     );
 }
 

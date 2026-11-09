@@ -10,21 +10,23 @@ import random
 import sys
 
 SEED = 20260108
-POSITIONS = 300
-TIE_STARTS = (40, 120, 200, 260)
-MASK_SHAPE = [300, 200, 200]
+POSITIONS = 240
+TIE_STARTS = (30, 95, 170)
+MASK_SHAPE = [240, 200, 200]
 DESCRIPTION = (
-    "Synthetic evidence shaped like a PP-DocLayoutV3 cross-runtime comparison: page 1 has four exact two-way "
-    "sort ties whose rows swap rank, page 2 has five mask-bit flips from three boundary logits. Generated "
+    "Synthetic evidence shaped like a PP-DocLayoutV3 cross-runtime comparison: page 1 has three exact two-way "
+    "sort ties whose rows swap rank, page 2 has seven mask-bit flips from four boundary logits. Generated "
     "with a fixed seed by generate_v3_cross_runtime_synthetic.py; derived from no real document and no model "
     "output. The 1e-4 epsilon was fitted on real development pages and must be re-checked on held-out pages."
 )
 FLIPS = [
-    (11, 5, 9, 2.2e-6, -1.6e-6),
-    (40, 5, 9, 2.2e-6, -1.6e-6),
-    (77, 31, 150, 4.1e-5, -1.2e-5),
-    (120, 88, 12, 5.5e-6, -9.0e-6),
-    (205, 88, 12, 5.5e-6, -9.0e-6),
+    (7, 5, 9, 3.1e-6, -2.4e-6),
+    (52, 5, 9, 3.1e-6, -2.4e-6),
+    (63, 17, 140, 2.8e-5, -1.9e-5),
+    (101, 64, 33, 7.7e-6, -4.6e-6),
+    (176, 64, 33, 7.7e-6, -4.6e-6),
+    (188, 90, 7, 6.3e-5, -8.8e-6),
+    (219, 90, 7, 6.3e-5, -8.8e-6),
 ]
 
 
@@ -52,7 +54,7 @@ def make_keys(rng: random.Random, tie_starts: tuple[int, ...], jitter: float) ->
 def build() -> dict:
     rng = random.Random(SEED)
     ref_keys, act_keys = make_keys(rng, TIE_STARTS, 0.03)
-    positions = sorted(rng.sample(range(POSITIONS), 128))
+    positions = sorted(rng.sample(range(POSITIONS), 92))
     for start in TIE_STARTS:
         for p in (start, start + 1):
             if p not in positions:

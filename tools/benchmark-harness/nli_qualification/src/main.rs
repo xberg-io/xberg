@@ -21,12 +21,20 @@ fn execute(args: &[String]) -> Result<()> {
             let plan = files::load_plan(Path::new(path), sha256)?;
             let report: RunReport = files::read_json(Path::new(report))?;
             report.validate(&plan)?;
-            println!("{} / {} inferences; qualified=false", report.rows.len(), plan.expected_inferences);
+            println!(
+                "{} / {} inferences; qualified=false",
+                report.rows.len(),
+                plan.expected_inferences
+            );
             Ok(())
         }
         ["run", path, sha256, output] => run(Path::new(path), sha256, Path::new(output)),
         ["identity", deadline] => identity(deadline),
-        _ => Err("usage: freeze INPUT NEW_PLAN | validate PLAN SHA256 REPORT | run PLAN SHA256 NEW_REPORT | identity DEADLINE_MS".into()),
+        _ => Err(concat!(
+            "usage: freeze INPUT NEW_PLAN | validate PLAN SHA256 REPORT | ",
+            "run PLAN SHA256 NEW_REPORT | identity DEADLINE_MS"
+        )
+        .into()),
     }
 }
 

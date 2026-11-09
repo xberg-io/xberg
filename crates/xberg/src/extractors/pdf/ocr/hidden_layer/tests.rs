@@ -507,7 +507,7 @@ fn only_the_filtered_two_stream_audit_allows_more_than_the_single_stream_operato
 
 #[test]
 fn a_layer_yields_to_ocr_only_when_nearly_disjoint_from_it() {
-    use super::ocr_supersedes_disjoint_layer as supersedes;
+    use super::layer_judgement::ocr_supersedes_disjoint_layer as supersedes;
 
     let words = |prefix: &str, count: usize| (0..count).map(|n| format!("{prefix}{n}")).collect::<Vec<_>>();
     let layer = words("junk", 20).join(" ");
@@ -534,7 +534,7 @@ fn a_layer_yields_to_ocr_only_when_nearly_disjoint_from_it() {
 
 #[test]
 fn disjointness_compares_normalized_words_of_a_layer_with_enough_words() {
-    use super::ocr_supersedes_disjoint_layer as supersedes;
+    use super::layer_judgement::ocr_supersedes_disjoint_layer as supersedes;
 
     let spaced = (0..20).map(|n| format!("Word{n}.")).collect::<Vec<_>>().join(" ");
     let read = (0..20).map(|n| format!("(word{n})")).collect::<Vec<_>>().join(" ");
@@ -556,7 +556,7 @@ fn disjointness_compares_normalized_words_of_a_layer_with_enough_words() {
 
 #[test]
 fn replacement_needs_the_default_confidence_gate_whatever_the_caller_set() {
-    use super::confidence_clears_replacement_floor as clears;
+    use super::layer_judgement::confidence_clears_replacement_floor as clears;
 
     assert!(clears(Some(0.76)));
     assert!(clears(Some(0.75)));
@@ -646,7 +646,14 @@ fn a_refused_charge_debits_nothing_and_the_ceiling_is_a_multiple_of_the_page_lim
 
     let defaults = PreviewWorkBudget::new(&crate::ExtractionConfig::default());
     assert_eq!(defaults.per_page, 10_000_000 * PREVIEW_WORK_PER_ITERATION);
-    assert_eq!(defaults.remaining, defaults.per_page * PREVIEW_FULL_BUDGET_PAGES);
+    assert_eq!(
+        PREVIEW_FULL_BUDGET_PAGES, 6,
+        "the document ceiling is six per-page budgets"
+    );
+    assert_eq!(
+        defaults.remaining, 960_000_000,
+        "six budgets of 160 million units at the default limit; this literal also moves with the default max_iterations"
+    );
 
     let mut unbounded = PreviewWorkBudget::with_pages(usize::MAX, PREVIEW_FULL_BUDGET_PAGES);
     assert_eq!(
@@ -714,6 +721,49 @@ fn the_document_ceiling_stops_the_probe_after_the_pages_it_buys() {
 }
 
 #[test]
+fn the_default_budget_covers_six_pages_and_refuses_the_seventh() {
+    use super::{PREVIEW_WORK_PER_ITERATION, PreviewWorkBudget};
+
+    let bytes = include_bytes!("../../../../../tests/fixtures/ocr/hidden_layer_ccitt_2694/four-page-junk-layer.pdf");
+    let doc = super::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
+    let mut work = usize::MAX / 2;
+    let start = work;
+    assert_eq!(
+        super::needs_ocr(&doc, 0, 100 * 1024 * 1024, &mut work, || false),
+        Some(false)
+    );
+    let page_cost = start - work;
+    // Page 0 is probed seven times: only the budget accounting matters, not the page. Each
+    // budget is 1.1 page costs, so six budgets are 6.6 costs; six probes spend 6.0 and the
+    // remaining 0.6 of a cost is less than the seventh probe needs, so it is refused.
+    let max_iterations = (page_cost + page_cost / 10).div_ceil(PREVIEW_WORK_PER_ITERATION);
+    let config = crate::ExtractionConfig {
+        security_limits: Some(crate::extractors::security::SecurityLimits {
+            max_iterations,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut budget = PreviewWorkBudget::new(&config);
+    let mut verdicts = Vec::new();
+    for _ in 0..7 {
+        verdicts.push(budget.probe_page(|work| super::needs_ocr(&doc, 0, 100 * 1024 * 1024, work, || false)));
+    }
+    assert_eq!(
+        verdicts,
+        [
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            None
+        ]
+    );
+}
+
+#[test]
 fn only_an_audited_covered_layer_that_is_not_judged_plausible_prose_is_probed() {
     use super::probes_page;
 
@@ -729,4 +779,98 @@ fn only_an_audited_covered_layer_that_is_not_judged_plausible_prose_is_probed() 
     );
     assert!(!probes_page(None, false), "an unaudited page is never probed");
     assert!(!probes_page(None, true));
+}
+
+const JUNK_LAYER: &str = "qzx vbk wrt plm ghj fdn cxs ztr bnm kld \
+    hgf jdk slq wpe rty uio mnb vcx zas qwe";
+const CONFIDENT_READ: &str = "The lighthouse keeper recorded every vessel that crossed the channel";
+
+#[test]
+fn a_confident_disjoint_read_replaces_the_layer_only_without_a_veto() {
+    use super::confident_read_replaces_layer as replaces;
+    use crate::core::config::OcrQualityThresholds;
+
+    assert_eq!(JUNK_LAYER.split_whitespace().count(), 20);
+    assert_eq!(
+        OcrQualityThresholds::default().min_ocr_mean_confidence,
+        75.0,
+        "the 0.74 below sits just under the default floor it reads"
+    );
+    assert!(replaces(false, false, Some(0.9), JUNK_LAYER, CONFIDENT_READ));
+    assert!(
+        !replaces(true, false, Some(0.9), JUNK_LAYER, CONFIDENT_READ),
+        "a low-confidence verdict keeps the layer"
+    );
+    assert!(
+        !replaces(false, true, Some(0.9), JUNK_LAYER, CONFIDENT_READ),
+        "a dictionary-noise verdict keeps the layer"
+    );
+    assert!(
+        !replaces(false, false, Some(0.74), JUNK_LAYER, CONFIDENT_READ),
+        "a score under the default floor keeps the layer"
+    );
+    assert!(
+        !replaces(false, false, None, JUNK_LAYER, CONFIDENT_READ),
+        "an uncalibrated score keeps the layer"
+    );
+    assert!(
+        !replaces(false, false, Some(0.9), JUNK_LAYER, JUNK_LAYER),
+        "a read that repeats the layer does not replace it"
+    );
+}
+
+const PLAUSIBLE_PROSE: &str = "When in the course of human events it becomes necessary for one \
+    people to dissolve the political bands which have connected them with another and to assume \
+    among the powers of the earth the separate and equal station to which the laws of nature and \
+    of natures god entitle them a decent respect to the opinions of mankind requires that they \
+    should declare the causes which impel them to the separation we hold these truths to be self \
+    evident that all men are created equal that they are endowed by their creator with certain \
+    unalienable rights that among these are life liberty and the pursuit of happiness that to \
+    secure these rights governments are instituted among men deriving their just powers from the \
+    consent of the governed";
+
+#[test]
+fn a_covered_layer_is_plausible_only_when_the_language_check_says_so() {
+    use super::layer_judged_plausible as judged;
+    use crate::core::config::OcrQualityThresholds;
+
+    let thresholds = OcrQualityThresholds::default();
+    let shifted: String = PLAUSIBLE_PROSE
+        .chars()
+        .map(|c| match c {
+            'a'..='z' => (((c as u8 - b'a' + 3) % 26) + b'a') as char,
+            other => other,
+        })
+        .collect();
+    assert!(judged(Some(false), Some(PLAUSIBLE_PROSE), &thresholds));
+    assert!(
+        !judged(Some(false), Some(&shifted), &thresholds),
+        "a layer that reads as no language is not plausible"
+    );
+    assert!(
+        !judged(Some(true), Some(PLAUSIBLE_PROSE), &thresholds),
+        "uncovered ink is never plausible"
+    );
+    assert!(!judged(None, Some(PLAUSIBLE_PROSE), &thresholds));
+    assert!(!judged(Some(false), None, &thresholds), "a page without layer text");
+    let routing_off = OcrQualityThresholds {
+        enable_plausibility_ocr_routing: false,
+        ..OcrQualityThresholds::default()
+    };
+    assert!(
+        !judged(Some(false), Some(PLAUSIBLE_PROSE), &routing_off),
+        "with plausibility routing disabled nothing is judged plausible"
+    );
+}
+
+#[test]
+fn only_pages_whose_layer_is_not_judged_plausible_are_probed() {
+    let decisions = vec![
+        (0, Some(true), false),
+        (1, Some(false), true),
+        (2, Some(false), false),
+        (3, None, false),
+        (4, Some(true), true),
+    ];
+    assert_eq!(super::pages_to_probe(decisions), [0, 2, 4]);
 }

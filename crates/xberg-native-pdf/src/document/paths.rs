@@ -414,9 +414,8 @@ impl PdfDocument {
         if extractor.apply_cached_path_extgstate(name, stack.current_mut()) {
             return;
         }
-        let patch = self
-            .resolve_path_extgstate(name, extractor.current_resources())
-            .unwrap_or_default();
+        extractor.extgstate_container(|reference| self.load_object(reference).ok());
+        let patch = self.resolve_path_extgstate(name, extractor).unwrap_or_default();
         extractor.cache_path_extgstate(name, patch);
         extractor.apply_cached_path_extgstate(name, stack.current_mut());
     }
@@ -424,11 +423,14 @@ impl PdfDocument {
     fn resolve_path_extgstate(
         &self,
         name: &str,
-        resources: Option<&crate::object::Object>,
+        extractor: &crate::extractors::paths::PathExtractor,
     ) -> Option<crate::extractors::paths::PathGraphicsPatch> {
-        let states = resources
-            .and_then(|resources| resources.as_dict()?.get("ExtGState"))
-            .and_then(|states| self.path_state_object(states))?;
+        let entry = extractor.current_resources()?.as_dict()?.get("ExtGState")?;
+        let states = if entry.as_reference().is_some() {
+            extractor.loaded_extgstate_container()?
+        } else {
+            entry
+        };
         let dictionary = states
             .as_dict()
             .and_then(|states| states.get(name))

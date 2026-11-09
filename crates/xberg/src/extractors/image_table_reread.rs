@@ -4,8 +4,9 @@
 //! Admission is geometry only: the first read's word boxes must form a lattice table. Four or
 //! more rows share a few column edges with wide gaps between at least three columns, the words
 //! come out row by row, and the page is not a lattice of dozens of edges. Nothing depends on what
-//! a word says. The second read is then adopted as a caller-forced PSM 6 would be, so a token it
-//! misreads is kept; only a read that failed outright is discarded (see [`second_read_is_usable`]).
+//! a word says. The second read is adopted only if it finds a table, so a page that is not a
+//! readable table keeps its first read. A token it misreads is kept; a read that failed outright
+//! is discarded (see [`second_read_is_usable`]).
 
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrBoundingGeometry, OcrElementLevel};
@@ -226,10 +227,11 @@ fn alphanumeric_count(doc: &InternalDocument) -> usize {
 }
 
 /// A second read with no letters or digits in its word elements, or with less than three quarters
-/// of the first read's, failed to read the picture; any other second read is adopted as is, like a
-/// caller-forced PSM 6. A first read with none is replaced by any second read that has some. A
-/// second read with more is not capped: a block read legitimately recovers text the sparse read
-/// missed, and the guard only separates a failed read from a read.
+/// of the first read's, failed to read the picture. A second read with no table did not confirm the
+/// table the geometry showed, so the first read stands. Any other second read is adopted as is. A
+/// first read with no letters or digits is replaced by any second read that has some and a table. A
+/// second read with more letters is not capped: a block read legitimately recovers text the sparse
+/// read missed, and the guard only separates a failed read from a read.
 pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalDocument) -> Result<(), &'static str> {
     let (before, after) = (alphanumeric_count(first), alphanumeric_count(second));
     tracing::debug!(before, after, "standalone table re-read: letters and digits per read");
@@ -238,6 +240,9 @@ pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalD
     }
     if after * MIN_RETAINED.1 < before * MIN_RETAINED.0 {
         return Err("the second read kept too few letters and digits");
+    }
+    if second.tables.is_empty() {
+        return Err("the second read found no table");
     }
     Ok(())
 }
@@ -276,6 +281,13 @@ mod tests {
             prebuilt_ocr_elements: Some(elements),
             ..Default::default()
         }
+    }
+
+    /// A read that found a table among its words.
+    fn doc_with_table(elements: Vec<OcrElement>) -> InternalDocument {
+        let mut read = doc(elements);
+        read.tables.push(Default::default());
+        read
     }
 
     fn table_row(row: u32) -> [OcrElement; 4] {
@@ -385,13 +397,13 @@ mod tests {
         let mut changed = table(6);
         changed[1].text = "17".to_string();
         changed[3].text = "9.10".to_string();
-        assert_eq!(second_read_is_usable(&first, &doc(changed)), Ok(()));
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(changed)), Ok(()));
     }
 
     fn reads_of(first: &str, second: &str) -> Result<(), &'static str> {
         second_read_is_usable(
             &doc(vec![element(first, 0, 0, 10)]),
-            &doc(vec![element(second, 0, 0, 10)]),
+            &doc_with_table(vec![element(second, 0, 0, 10)]),
         )
     }
 
@@ -404,6 +416,14 @@ mod tests {
         let mut lines_only = element("abcd", 0, 0, 10);
         lines_only.level = OcrElementLevel::Line;
         assert_eq!(second_read_is_usable(&first, &doc(vec![lines_only])), Err(reason));
+    }
+
+    #[test]
+    fn a_re_read_without_a_table_is_refused_but_the_same_read_with_one_is_adopted() {
+        let first = doc(table(6));
+        let reason = "the second read found no table";
+        assert_eq!(second_read_is_usable(&first, &doc(table(6))), Err(reason));
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(table(6))), Ok(()));
     }
 
     #[test]
@@ -447,6 +467,6 @@ mod tests {
         assert!(second_read_is_usable(&first, &doc(lost_label)).is_err());
         let mut lost_count = table(6);
         lost_count.retain(|word| word.text != "12");
-        assert_eq!(second_read_is_usable(&first, &doc(lost_count)), Ok(()));
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(lost_count)), Ok(()));
     }
 }
