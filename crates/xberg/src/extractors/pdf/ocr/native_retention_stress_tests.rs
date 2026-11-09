@@ -39,7 +39,7 @@ fn repeated_rows(count: usize) -> (InternalDocument, LayerFirst, InternalElement
         false,
         &crate::core::config::OcrQualityThresholds::default(),
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("each native occurrence lacks literal OCR coverage");
     (document, first, unowned)
@@ -93,7 +93,7 @@ fn preserved_payload_case(kind: ElementKind, extra: bool, annotated: bool) {
         false,
         &OcrQualityThresholds::default(),
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .unwrap();
     let mut document = InternalDocument::new("pdf");
@@ -446,7 +446,7 @@ fn should_reject_sparse_native_unmapped_markers_without_stripping_ocr_payload() 
             false,
             &thresholds,
             Some(&boxes),
-            crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+            crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
         )
         .unwrap();
         let merged = text_with_layer_first(&read, &first);
@@ -475,7 +475,7 @@ fn lexical_copy_case(native: &str, read: &str) -> LexicalCopyCase {
         false,
         &crate::core::config::OcrQualityThresholds::default(),
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .unwrap();
     let mut document = InternalDocument::new("pdf");
@@ -763,7 +763,7 @@ fn merged_page(native: &str, read: &str, boxes: Option<&super::super::document::
         false,
         &thresholds,
         boxes,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .map_or_else(|| read.to_string(), |first| text_with_layer_first(read, &first))
 }
@@ -998,7 +998,7 @@ fn a_marked_row_the_ocr_read_lacks_is_put_first_once_and_counts_only_its_own_mar
         false,
         &thresholds,
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("row 4 is missing");
     assert_eq!(first.lines, forty_rows()[4].replacen("approved", "appr ved", 1));
@@ -1022,7 +1022,7 @@ fn a_row_of_markers_alone_is_not_put_first() {
         false,
         &thresholds,
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("row 39 is missing");
     assert_eq!(first.lines, clean[39]);
@@ -1044,7 +1044,7 @@ fn an_equal_row_takes_its_ocr_row_before_a_marked_row_does() {
         false,
         &thresholds,
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("one of the two rows 0 is missing");
     assert_eq!(first.lines, clean[0].replacen("approved", "appr ved", 1));
@@ -1321,20 +1321,33 @@ fn an_ocr_row_too_unlike_the_native_row_stays_beside_it() {
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
-fn a_page_of_rich_ocr_payload_keeps_the_ocr_row_that_misreads_a_native_row() {
-    use super::super::document::{OcrPayload, layer_lines_to_put_first, text_with_layer_first};
+fn an_ocr_row_that_misreads_a_native_row_inside_a_heading_stays_beside_it() {
+    use super::super::document::{PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let (native, read) = measure_rows();
     let boxes = row_boxes(&native, &read);
+    let mut doc = InternalDocument::new("pdf");
+    for (index, row) in read.iter().enumerate() {
+        let kind = if index == 3 {
+            ElementKind::Heading { level: 2 }
+        } else {
+            ElementKind::Paragraph
+        };
+        let mut element = InternalElement::text(kind, row.as_str(), 0);
+        element.page = Some(1);
+        doc.push_element(element);
+    }
     let read = read.join("\n");
     let layer = stored_layer(&native.join("\n"));
     for boxes in [None, Some(&boxes)] {
-        let first = layer_lines_to_put_first(&layer, &read, false, &thresholds, boxes, OcrPayload::Rich)
-            .expect("row 3 is put first");
+        let plain_rows = PlainOcrRows::of_page(Some(&doc), Some(1));
+        let first =
+            layer_lines_to_put_first(&layer, &read, false, &thresholds, boxes, plain_rows).expect("row 3 is put first");
         assert_eq!(first.lines, native[3]);
         assert!(
             first.misread_ocr_rows.is_empty(),
-            "no OCR row of a rich page is dropped"
+            "the misread row is a heading, which no native row replaces"
         );
         assert_eq!(text_with_layer_first(&read, &first), format!("{}\n\n{read}", native[3]));
     }

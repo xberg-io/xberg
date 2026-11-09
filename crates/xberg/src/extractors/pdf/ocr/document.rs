@@ -286,39 +286,49 @@ fn letter_runs(text: &str) -> Vec<String> {
         .map(str::to_lowercase)
         .collect()
 }
-/// What the OCR payload of a page holds beside its text. An OCR row that misreads a native row
-/// leaves a page of plain OCR text only: a page with a heading, a table, an annotation or an
-/// anchor keeps every OCR row, and the native row is printed beside its misread as before. ~keep
+/// The OCR rows of a page that plain OCR text holds, by row key (`line_key`): an OCR row that
+/// misreads a native row leaves the page only when one of these holds it. A row inside a table
+/// cell, a heading, an annotated or an anchored element stays beside the native row. Without a
+/// structured document every row of the OCR text is plain. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum OcrPayload {
-    Plain,
-    Rich,
-}
-/// The payload of `page` in `doc`, or of every page when `page` is `None`: plain when each
-/// element of the page is unannotated OCR text, rich otherwise. No document is plain. ~keep
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-pub(crate) fn ocr_payload_of_page(
-    doc: Option<&crate::types::internal::InternalDocument>,
-    page: Option<u32>,
-) -> OcrPayload {
-    let Some(doc) = doc else {
-        return OcrPayload::Plain;
-    };
-    let mut of_page = doc
-        .elements
-        .iter()
-        .filter(|element| page.is_none_or(|page| element.page == Some(page)));
-    if of_page.all(unannotated_ocr_text) {
-        OcrPayload::Plain
-    } else {
-        OcrPayload::Rich
+pub(crate) struct PlainOcrRows(Option<KeyCounts>);
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl PlainOcrRows {
+    /// Every OCR row is plain: the page has no structured document. ~keep
+    pub(crate) fn every() -> Self {
+        Self(None)
     }
-}
-/// Without the `pdf` feature no element kind of a page is known as plain OCR text. ~keep
-#[cfg(all(not(feature = "pdf"), any(feature = "ocr", feature = "ocr-pipeline")))]
-pub(crate) fn ocr_payload_of_page(_: Option<&crate::types::internal::InternalDocument>, _: Option<u32>) -> OcrPayload {
-    OcrPayload::Rich
+    /// No OCR row is plain: every misread row stays. ~keep
+    pub(crate) fn none() -> Self {
+        Self(Some(KeyCounts::new([])))
+    }
+    /// The rows of the unannotated OCR text elements of `page` in `doc`, or of every page when
+    /// `page` is `None`. `None` for `doc` is a page without a structured document. ~keep
+    #[cfg(feature = "pdf")]
+    pub(crate) fn of_page(doc: Option<&crate::types::internal::InternalDocument>, page: Option<u32>) -> Self {
+        let Some(doc) = doc else {
+            return Self::every();
+        };
+        let keys = doc
+            .elements
+            .iter()
+            .filter(|element| page.is_none_or(|page| element.page == Some(page)))
+            .filter(|element| unannotated_ocr_text(element))
+            .flat_map(|element| element.text.lines().map(line_key));
+        Self(Some(KeyCounts::new(keys)))
+    }
+    /// Without the `pdf` feature no element kind of a page is known as plain OCR text. ~keep
+    #[cfg(not(feature = "pdf"))]
+    pub(crate) fn of_page(_: Option<&crate::types::internal::InternalDocument>, _: Option<u32>) -> Self {
+        Self::none()
+    }
+    /// Whether a plain OCR row has the key, which then spends that row. ~keep
+    fn take(&mut self, key: &str) -> bool {
+        match &mut self.0 {
+            None => true,
+            Some(counts) => counts.take(key),
+        }
+    }
 }
 /// The source rows of a layer: trimmed, and holding a character that is not a lost-glyph marker.
 /// A row of markers alone has no text to restore and reads as no OCR row. ~keep
@@ -551,6 +561,21 @@ fn no_ocr_rich_assets_besides_tables(doc: &crate::types::internal::InternalDocum
         && doc.processing_warnings.is_empty()
         && doc.ocr_page_failures.is_empty()
         && doc.uris_dropped == 0
+}
+
+/// Whether a misread OCR row may leave `element`: plain OCR text only (`PlainOcrRows`). Without
+/// the `pdf` feature no element kind is known as plain, and no misread row names an element. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn holds_plain_ocr_rows(element: &crate::types::internal::InternalElement) -> bool {
+    #[cfg(feature = "pdf")]
+    {
+        unannotated_ocr_text(element)
+    }
+    #[cfg(not(feature = "pdf"))]
+    {
+        let _ = element;
+        false
+    }
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -1103,8 +1128,8 @@ impl<'a> OcrRowSpans<'a> {
 /// native-token coverage is sufficient, and a row the geometry leaves uncovered is then held
 /// against the OCR text as without geometry: a row OCR read into a table (its cells have no line
 /// box) is covered. Ambiguous and differing OCR payloads remain beside restored native rows,
-/// except the one OCR row that misreads a restored row on a page of plain OCR text
-/// (`ocr_row_misreads_native_row`, `OcrPayload`): that row is not printed. ~keep
+/// except the one OCR row that misreads a restored row and that plain OCR text holds
+/// (`ocr_row_misreads_native_row`, `PlainOcrRows`): that row is not printed. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn layer_lines_to_put_first(
     layer: &str,
@@ -1112,7 +1137,7 @@ pub(crate) fn layer_lines_to_put_first(
     noise_verdict: bool,
     thresholds: &OcrQualityThresholds,
     boxes: Option<&PageLineBoxes>,
-    ocr_payload: OcrPayload,
+    mut plain_rows: PlainOcrRows,
 ) -> Option<LayerFirst> {
     if !noise_verdict && !ocr_confirms_layer(layer, ocr_text, thresholds) {
         return None;
@@ -1126,10 +1151,13 @@ pub(crate) fn layer_lines_to_put_first(
     let mut lines = restore.rows.join("\n");
     // The rows put first are the only layer text that reaches the output: strip them once. ~keep
     let lost_glyphs = super::super::unmapped_glyphs::strip_native_fragment(&mut lines);
-    let misread_ocr_rows = match ocr_payload {
-        OcrPayload::Plain => restore.misread,
-        OcrPayload::Rich => Vec::new(),
-    };
+    // A misread row leaves only from plain OCR text: a table cell, heading, annotated or anchored
+    // element keeps its row beside the native one. ~keep
+    let misread_ocr_rows: Vec<String> = restore
+        .misread
+        .into_iter()
+        .filter(|key| plain_rows.take(key))
+        .collect();
     (!lines.is_empty()).then_some(LayerFirst {
         lines,
         lost_glyphs,
@@ -1274,9 +1302,9 @@ pub(super) fn insert_layer_into_document(
 }
 
 /// Restore native rows on a structured OCR document. The OCR rows that misread a restored row
-/// leave the elements of `page` (every element when `page` is `None`), an element left without
-/// text leaves the document, and the restored rows go first. Every other OCR row, annotation,
-/// anchor and rich payload is unchanged. ~keep
+/// leave the plain OCR text elements of `page` (of every page when `page` is `None`), an element
+/// left without text leaves the document, and the restored rows go first. Every other OCR row,
+/// annotation, anchor and rich payload is unchanged. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn put_layer_first_in_document(
     doc: &mut crate::types::internal::InternalDocument,
@@ -1288,9 +1316,9 @@ pub(super) fn put_layer_first_in_document(
     }
     insert_layer_into_document(doc, page, &first.lines);
 }
-/// Remove each of `rows` once from the text of the elements of `page`, and remove an element
-/// left without text. Relationships of a removed element go with it; the others move down by the
-/// elements removed before them. ~keep
+/// Remove each of `rows` once from the text of the plain OCR text elements of `page`, and remove
+/// an element left without text. Relationships of a removed element go with it; the others move
+/// down by the elements removed before them. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn remove_misread_rows_from_document(
     doc: &mut crate::types::internal::InternalDocument,
@@ -1305,7 +1333,7 @@ fn remove_misread_rows_from_document(
         if misread.is_empty() {
             break;
         }
-        if page.is_some_and(|page| element.page != Some(page)) {
+        if page.is_some_and(|page| element.page != Some(page)) || !holds_plain_ocr_rows(element) {
             continue;
         }
         let before = element.text.lines().count();
@@ -1412,14 +1440,14 @@ pub(super) fn put_layers_first_in_run(
         else {
             continue;
         };
-        let payload = ocr_payload_of_page(doc.as_deref(), Some(page));
+        let plain_rows = PlainOcrRows::of_page(doc.as_deref(), Some(page));
         let Some(first) = layer_lines_to_put_first(
             layer,
             page_text,
             noise_verdict,
             &thresholds,
             layers.boxes.get(&page),
-            payload,
+            plain_rows,
         ) else {
             continue;
         };

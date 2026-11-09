@@ -233,7 +233,7 @@ fn should_preserve_both_ocr_alternatives_for_one_native_row() {
         false,
         &thresholds,
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("the OCR text confirms the layer and lacks its last line");
     let text = text_with_layer_first(&ocr_text, &first);
@@ -412,7 +412,7 @@ fn should_remove_nothing_without_ownership_or_without_boxes() {
         false,
         &thresholds,
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("the OCR text confirms the layer and lacks one line");
     assert_eq!(first.lines, "Total 100");
@@ -473,7 +473,7 @@ fn should_bound_the_matching_work_to_the_band_of_each_layer_line() {
                 false,
                 &thresholds,
                 Some(&boxes),
-                crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+                crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
             )
             .expect("every layer line is missing");
             let ms = start.elapsed().as_millis();

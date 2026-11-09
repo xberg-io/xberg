@@ -25,7 +25,7 @@ fn an_owned_copy_does_not_delete_a_different_equal_line_and_its_annotation() {
         false,
         &OcrQualityThresholds::default(),
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("the spatially owned misread requires restoration");
     assert_eq!(first.lines, "Total 100");
@@ -65,7 +65,7 @@ fn equal_ocr_occurrences(with_boxes: bool) -> (InternalDocument, super::super::d
         false,
         &OcrQualityThresholds::default(),
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .unwrap();
     let mut document = InternalDocument::new("pdf");
@@ -161,7 +161,7 @@ fn should_retain_repeated_native_occurrences_when_line_geometry_is_unavailable()
         false,
         &OcrQualityThresholds::default(),
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("one OCR occurrence cannot cover two native occurrences");
     assert_eq!(first.lines, "Total 100");
@@ -208,7 +208,7 @@ fn should_preserve_signed_native_values_and_all_ocr_payload_without_geometry() {
             false,
             &OcrQualityThresholds::default(),
             None,
-            crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+            crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
         )
         .expect("semantic native value was not read");
         assert_eq!(first.lines, native);
@@ -231,7 +231,7 @@ fn should_not_borrow_pieces_of_a_missing_native_row_from_other_ocr_rows() {
         false,
         &OcrQualityThresholds::default(),
         None,
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("no OCR row contains the native source row");
     assert_eq!(first.lines, "Total 100");
@@ -274,7 +274,7 @@ fn should_restore_native_value_without_discarding_ocr_only_suffix_or_its_payload
         false,
         &OcrQualityThresholds::default(),
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .unwrap();
     assert_eq!(first.lines, "Total 100");
@@ -297,7 +297,7 @@ fn should_keep_a_native_covered_ocr_row_and_harmless_suffix_unchanged() {
             false,
             &OcrQualityThresholds::default(),
             Some(&boxes),
-            crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+            crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
         )
         .is_none()
     );

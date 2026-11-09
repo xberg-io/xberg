@@ -433,7 +433,7 @@ fn should_restore_native_rows_without_deleting_unproved_ocr_alternatives() {
         false,
         &OcrQualityThresholds::default(),
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("all source rows lack complete literal OCR coverage");
     assert_eq!(first.lines, layer);
@@ -534,7 +534,7 @@ fn should_not_drop_an_exact_ocr_line_as_the_copy_of_its_near_twin_in_the_layer()
         false,
         &thresholds,
         Some(&boxes),
-        crate::extractors::pdf::ocr::document::OcrPayload::Plain,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("the OCR text confirms the layer, and the twin and two more lines are absent from it");
     assert!(

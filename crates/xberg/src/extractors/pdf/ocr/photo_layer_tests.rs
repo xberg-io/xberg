@@ -70,7 +70,7 @@ fn should_read_a_markdown_table_row_of_the_ocr_text_as_the_plain_row_it_holds() 
 /// is put first in place of its table row. ~keep
 #[test]
 fn should_hold_the_rows_the_geometry_cannot_place_against_the_ocr_table_text() {
-    use super::document::{OcrPayload, layer_lines_to_put_first, text_with_layer_first};
+    use super::document::{PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
     let table_rows = [
         "7 Elm Township 1,200,400 45",
         "8 Oak Township – 950,300 38",
@@ -99,7 +99,7 @@ fn should_hold_the_rows_the_geometry_cannot_place_against_the_ocr_table_text() {
         false,
         &OcrQualityThresholds::default(),
         Some(&boxes),
-        OcrPayload::Plain,
+        PlainOcrRows::every(),
     )
     .expect("the misread row and the row with a wrong digit are put first");
     assert_eq!(

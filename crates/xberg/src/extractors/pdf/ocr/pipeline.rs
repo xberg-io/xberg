@@ -2600,7 +2600,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
                     boxes.as_ref(),
-                    super::document::ocr_payload_of_page(structured_ocr_pages.get(page_number), None),
+                    super::document::PlainOcrRows::of_page(structured_ocr_pages.get(page_number), None),
                 )
             {
                 if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(first.lost_glyphs, config) {
