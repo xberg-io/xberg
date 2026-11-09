@@ -1,8 +1,8 @@
 # Documentation site and snippet tasks, included from mise.toml [task_config]. ~keep
 
 ["docs:verify:changelog"]
-description = "Check the docs-site changelog carries every release section from CHANGELOG.md"
-run = "python3 scripts/ci/check-changelog-sync.py"
+description = "Test and verify current and archived changelog synchronization"
+run = ["python3 -m unittest scripts/ci/test_changelog_sync.py", "python3 scripts/ci/check-changelog-sync.py"]
 
 # --strict fails the run when a language's validator reports Unavailable (or Skip/Downgraded)
 # instead of silently passing. Without it, a language whose toolchain isn't on the runner's PATH
