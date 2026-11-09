@@ -19,7 +19,7 @@ fn ligature_cmap(target: &str) -> crate::fonts::LazyCMap {
 }
 
 /// A simple font: every glyph is half an em wide, the space a quarter em, the ligature code one em.
-fn ligature_font(target: &str, glyph_name: Option<&str>) -> FontInfo {
+pub(super) fn ligature_font(target: &str, glyph_name: Option<&str>) -> FontInfo {
     let mut font = create_test_font();
     font.base_font = "Helvetica".to_string();
     font.widths = Some(

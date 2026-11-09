@@ -159,42 +159,34 @@ impl<'doc> TextExtractor<'doc> {
                     self.flush_tj_span_buffer()?;
                 }
 
-                let state = self.state_stack.current_mut();
-                state.text_matrix = Matrix { a, b, c, d, e, f };
-                state.text_line_matrix = state.text_matrix;
+                self.position_pen(Matrix { a, b, c, d, e, f });
             }
             Operator::Td { tx, ty } => {
                 self.flush_tj_span_buffer()?;
                 self.carry_pen_seam(seam, ty);
-                let state = self.state_stack.current_mut();
                 // Per ISO 32000-1:2008 §9.4.2, Table 108:
                 // Tlm_new = T(tx,ty) × Tlm_old
                 // The translation is in text-line space, so it must be
                 // pre-multiplied to be scaled by the existing Tlm transform. ~keep
                 let tm = Matrix::translation(tx, ty);
-                state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                state.text_matrix = state.text_line_matrix;
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
             }
             Operator::TD { tx, ty } => {
                 self.flush_tj_span_buffer()?;
                 self.carry_pen_seam(seam, ty);
 
-                let state = self.state_stack.current_mut();
-                state.leading = -ty;
+                self.state_stack.current_mut().leading = -ty;
                 // Per ISO 32000-1:2008 §9.4.2: Tlm_new = T(tx,ty) × Tlm_old ~keep
                 let tm = Matrix::translation(tx, ty);
-                state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                state.text_matrix = state.text_line_matrix;
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
             }
             Operator::TStar => {
                 self.flush_tj_span_buffer()?;
 
                 let leading = self.state_stack.current().leading;
-                let state = self.state_stack.current_mut();
                 // Per ISO 32000-1:2008 §9.4.2: Tlm_new = T(0,-TL) × Tlm_old ~keep
                 let tm = Matrix::translation(0.0, -leading);
-                state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                state.text_matrix = state.text_line_matrix;
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
             }
 
             Operator::Tj { text } => {
@@ -442,12 +434,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.flush_tj_span_buffer()?;
 
                 let leading = self.state_stack.current().leading;
-                {
-                    let state = self.state_stack.current_mut();
-                    let tm = Matrix::translation(0.0, -leading);
-                    state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                    state.text_matrix = state.text_line_matrix;
-                }
+                let tm = Matrix::translation(0.0, -leading);
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
 
                 if self.extract_spans {
                     if self.tj_span_buffer.is_none() {
@@ -476,11 +464,10 @@ impl<'doc> TextExtractor<'doc> {
                     let state = self.state_stack.current_mut();
                     state.word_space = word_space;
                     state.char_space = char_space;
-                    let leading = state.leading;
-                    let tm = Matrix::translation(0.0, -leading);
-                    state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                    state.text_matrix = state.text_line_matrix;
                 }
+                let leading = self.state_stack.current().leading;
+                let tm = Matrix::translation(0.0, -leading);
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
 
                 if self.extract_spans {
                     if self.tj_span_buffer.is_none() {
@@ -529,6 +516,7 @@ impl<'doc> TextExtractor<'doc> {
             Operator::RestoreState => {
                 self.flush_tj_span_buffer()?;
                 self.state_stack.restore();
+                self.forget_drawn_end();
                 let current_font = self
                     .state_stack
                     .current()
@@ -565,6 +553,7 @@ impl<'doc> TextExtractor<'doc> {
                 let new_ctm = Matrix { a, b, c, d, e, f };
                 // PDF spec ISO 32000-1:2008 §8.3.4: cm concatenates as M_cm × CTM ~keep
                 state.ctm = new_ctm.multiply(&state.ctm);
+                self.forget_drawn_end();
             }
 
             Operator::SetFillRgb { r, g, b } => {
@@ -719,9 +708,7 @@ impl<'doc> TextExtractor<'doc> {
             // "At the beginning of a text object, Tm and Tlm shall be
             // initialized to the identity matrix." ~keep
             Operator::BeginText => {
-                let state = self.state_stack.current_mut();
-                state.text_matrix = Matrix::identity();
-                state.text_line_matrix = Matrix::identity();
+                self.position_pen(Matrix::identity());
             }
             Operator::EndText => {
                 self.flush_tj_span_buffer()?;
@@ -896,6 +883,7 @@ impl<'doc> TextExtractor<'doc> {
                 // the form's text is emitted, so subsequent Tj chars
                 // would be stitched into the wrong cluster. ~keep
                 self.flush_tj_span_buffer()?;
+                self.forget_drawn_end();
 
                 // Process Form XObjects to extract text from reusable content.
                 // Form XObjects can contain text that is not duplicated in the main stream.
@@ -908,6 +896,7 @@ impl<'doc> TextExtractor<'doc> {
                         "failed to process XObject"
                     );
                 }
+                self.forget_drawn_end();
             }
 
             _ => {}

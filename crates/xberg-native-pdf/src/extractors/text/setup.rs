@@ -84,6 +84,9 @@ impl<'doc> TextExtractor<'doc> {
             tj_stats_len: 0,
             tj_character_array: Vec::new(),
             current_x_position: 0.0,
+            positioned_pen: None,
+            drawn_end: None,
+            lead_threshold: None,
             word_boundary_mode,
             cached_current_font: None,
             extraction_width_tables: HashMap::new(),
@@ -224,6 +227,7 @@ impl<'doc> TextExtractor<'doc> {
         self.spans.clear();
         self.span_sequence_counter = 0;
         self.pen_seam = None;
+        self.forget_drawn_end();
         self.pen_continuations.clear();
     }
 
