@@ -307,6 +307,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep a page's native text when the OCR read of a script it is written in contains none of that script.** (#2794)
+  When a Tesseract pipeline's first stage reads a native layer's script (such as `khm` for Khmer) but fails or scores below `pipeline_min_quality`, a later stage for another script (such as `eng`) no longer replaces the native text with its own. The page keeps its native text and an `ocr` warning names the script. A healthy read in the script still replaces the page, and pages the unreadable-script rule did not mark are unchanged. A whole-document read that drops the script on every page of the document is discarded and the native text is returned, with no second OCR pass; a document where only some pages drop it keeps the whole-document read, and so does a page whose Latin letters outnumber its Khmer. The discarded read's page failures (marked not recovered) and warnings are still reported, while its layout and LLM usage are dropped.
 - **(ocr): Print each row of a dot-leader table picture once when the block read keeps a line the table already holds.** (#2783)
   The PSM 6 read's hOCR grouped some rows into one multi-line paragraph, and a line is dropped as claimed only on an exact token match with a table row. A leader token or a stray `=` the table cell lacks kept the line, so the row appeared as text and in the table. Standalone dot-leader reads now compare a line with a table row without its leader tokens (dots, `=`, `_`); every other route still matches exactly.
 - **(pdf): Keep a word joined after a ligature that the font decodes to letters.** (GH#2718)
