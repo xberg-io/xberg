@@ -433,7 +433,7 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
     for (paragraph, line, number, bbox) in planned {
         let paragraph = &mut paragraphs[paragraph];
         let line = &mut paragraph.lines[line];
-        let segment = numeric_segment(number, bbox, scale.1);
+        let segment = numeric_segment(number, bbox, scale.1, line.dominant_font_size);
         let position = line.segments.partition_point(|existing| existing.x <= bbox.x);
         line.segments.insert(position, segment);
         paragraph.text.clear();
@@ -442,7 +442,7 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
     changed
 }
 
-fn numeric_segment(number: Number, bbox: Rect, scale: f32) -> crate::pdf::hierarchy::SegmentData {
+fn numeric_segment(number: Number, bbox: Rect, scale: f32, font_size: f32) -> crate::pdf::hierarchy::SegmentData {
     crate::pdf::hierarchy::SegmentData {
         text: number.text,
         x: bbox.x,
@@ -450,7 +450,7 @@ fn numeric_segment(number: Number, bbox: Rect, scale: f32) -> crate::pdf::hierar
         width: bbox.width,
         height: bbox.height,
         baseline_y: number.baseline / scale,
-        font_size: 0.0,
+        font_size,
         is_bold: false,
         is_italic: false,
         is_monospace: false,
@@ -482,6 +482,9 @@ fn located_text_covers_paragraph(paragraph: &PdfParagraph) -> bool {
 }
 
 fn line_owns(line: &PdfLine, bbox: Rect) -> bool {
+    if !line.dominant_font_size.is_finite() || line.dominant_font_size <= 0.0 {
+        return false;
+    }
     let Some(first) = line.segments.first() else {
         return false;
     };

@@ -305,8 +305,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Optionally recover native Khmer numbers with provisioned `khm.traineddata`.** (Refs #2408)
   Upright crops can restore omitted numbers when the model accompanies the selected primary model.
-  English-only text and forced OCR stay unchanged; missing Khmer models warn. Recovery retains
-  OCR tokens, so misread neighbors can remain, and declines transformed or ambiguous source claims.
+  English-only text and forced OCR stay unchanged. Missing Khmer models warn on eligible default
+  automatic pages only. Recovery retains OCR tokens, so misread neighbors can remain, and declines
+  transformed or ambiguous source claims.
   No runtime model download; the original reporter page remains unverified.
 
 - **(ocr): Re-read a standalone dot-leader table picture whose first read holds a garbled table.** (#2503)

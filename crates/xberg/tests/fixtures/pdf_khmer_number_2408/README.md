@@ -28,8 +28,11 @@ cannot authenticate the digit's Unicode value.
 
 Recovery requires an already-provisioned `khm.traineddata` in the same tessdata
 directory selected for the primary English read. The English OCR text is
-unchanged when that model is absent; the result carries an OCR processing
-warning explaining that the native Khmer numbers could not be verified.
+unchanged when that model is absent; eligible default automatic pages carry
+an OCR processing warning that the native Khmer numbers could not be verified.
+Forced OCR, custom Tesseract options, layout and other excluded paths do not
+receive this numeric-recovery warning. The separate unreadable-script guard
+uses letter and cluster evidence and does not cover every numeric-only layer.
 Extraction never downloads or searches for an auxiliary model.
 
 Each promoted numeric run must be independently read from its own painted crop
@@ -42,8 +45,10 @@ claims cannot multiply one painted occurrence.
 
 Insertion retains the original OCR tokens, including a misread `O`, `m` or `v`
 next to a recovered number. Replacing them would require separate word-level
-proof. New numeric segments carry neutral typography rather than copying a
-neighbor's style; no OCR confidence is invented. Forced OCR stays unchanged.
+proof. New numeric segments keep neutral style flags and use their owning line's
+positive finite font scale for structure heuristics, rather than copying a
+neighbor's style or claiming measured source typography. Invalid line scales
+decline recovery; no OCR confidence is invented. Forced OCR stays unchanged.
 
 One lazy processor is retained for the OCR run. Its bounded native pool reuses
 the initialized Khmer engine across pages, while crops remain serial with at

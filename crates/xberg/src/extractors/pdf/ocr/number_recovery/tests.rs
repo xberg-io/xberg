@@ -145,10 +145,80 @@ fn should_keep_ocr_junk_but_add_an_unstyled_verified_number() {
         (false, false, false)
     );
     assert_eq!(
-        added.font_size, 0.0,
-        "source numeric verification supplies no typography"
+        added.font_size, 20.0,
+        "the owning line supplies the structural scale, not the first neighbor"
     );
     assert!(added.assigned_role.is_none());
+    assert_number_keeps_heading_structure();
+    assert_invalid_owner_font_is_refused();
+}
+
+fn heading_control_paragraphs() -> Vec<PdfParagraph> {
+    (0..8)
+        .map(|index| {
+            let text = if index == 0 {
+                "SECTION TITLE"
+            } else {
+                "Ordinary descriptive prose remains readable as the body paragraph."
+            };
+            let mut value = paragraph(text, text);
+            let font_size = if index == 0 { 30.0 } else { 20.0 };
+            value.dominant_font_size = font_size;
+            value.lines[0].dominant_font_size = font_size;
+            let baseline = 500.0 - index as f32 * 40.0;
+            value.lines[0].baseline_y = baseline;
+            let segment = &mut value.lines[0].segments[0];
+            segment.y = baseline;
+            segment.baseline_y = baseline;
+            segment.font_size = font_size;
+            value
+        })
+        .collect()
+}
+
+fn heading_signature(paragraphs: Vec<PdfParagraph>) -> Vec<(u8, String)> {
+    let config = ExtractionConfig {
+        output_format: crate::OutputFormat::Markdown,
+        ..Default::default()
+    };
+    super::super::document::heuristically_restructured_ocr_pages(&[paragraphs], &[600.0], &[], &config)
+        .expect("the real document heading pass produces structure")
+        .elements
+        .into_iter()
+        .filter_map(|element| match element.kind {
+            crate::types::internal::ElementKind::Heading { level } => Some((level, element.text)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn assert_number_keeps_heading_structure() {
+    let mut paragraphs = heading_control_paragraphs();
+    let before = heading_signature(paragraphs.clone());
+    assert_eq!(before, vec![(1, "SECTION TITLE".into())]);
+    let mut numeric = number("០", 30.0);
+    numeric.bbox.y = 460.0;
+    numeric.baseline = 460.0;
+    assert!(insert(vec![numeric], &mut paragraphs, (1.0, 1.0), 100));
+    let segments = crate::pdf::structure::adapters::segments_from_ocr_pages(&[paragraphs.clone()]);
+    assert!(
+        segments[0]
+            .iter()
+            .all(|segment| segment.font_size.is_finite() && segment.font_size > 0.0)
+    );
+    assert_eq!(heading_signature(paragraphs), before);
+}
+
+fn assert_invalid_owner_font_is_refused() {
+    for font_size in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        let mut paragraphs = [paragraph("body", "body")];
+        paragraphs[0].lines[0].dominant_font_size = font_size;
+        assert!(
+            !insert(vec![number("០", 30.0)], &mut paragraphs, (1.0, 1.0), 100),
+            "invalid owning-line font scale {font_size}"
+        );
+        assert_eq!(paragraphs[0].text, "body");
+    }
 }
 
 #[test]
