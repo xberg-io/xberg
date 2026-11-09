@@ -574,6 +574,30 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
         })
 }
 
+/// The share of a read's meaningful words the native text must also spell before the native layer
+/// is treated as the page's visible content. Pages whose render merely lost glyphs shared 0.43 and
+/// 0.75 of their read words; a covered layer beside a short visible line shared none. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) const MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE: f64 = 0.25;
+
+/// The share of the read's meaningful words that the native text also spells, once the lost-glyph
+/// markers are removed so a word the render dropped a letter from still matches its read. A
+/// covered or contradicted layer shares none of the words visible ink reads; a layer whose render
+/// merely lost glyphs shares most of them. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn read_words_in_native_share(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> f64 {
+    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+
+    let spelled: std::collections::HashSet<String> = whole_words(&native.replace(LOST_GLYPH_MARKER, "")).collect();
+    let meaningful: Vec<String> = whole_words(read)
+        .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)
+        .collect();
+    if meaningful.is_empty() {
+        return 0.0;
+    }
+    meaningful.iter().filter(|word| spelled.contains(*word)).count() as f64 / meaningful.len() as f64
+}
+
 /// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {

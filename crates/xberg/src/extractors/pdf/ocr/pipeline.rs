@@ -2779,6 +2779,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .is_some_and(|raster| raster.type0_ink_loss)
                 && accepted_replacements.contains_key(&page)
                 && let (Some(native), Some(read)) = (native, ocr_results.get(&page))
+                && (native_ink_owned_pages.contains(&page)
+                    || native_words_covered_pages.contains(&page)
+                    || super::document::read_words_in_native_share(native, read, &ocr_output_thresholds)
+                        >= super::document::MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE)
                 && super::document::native_survives_type0_ink_loss(native, read, &ocr_output_thresholds)
             {
                 complete_native_pages.insert(page);
