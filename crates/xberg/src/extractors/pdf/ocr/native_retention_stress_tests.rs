@@ -1568,7 +1568,7 @@ fn a_lost_glyph_of_an_unknown_font_glued_by_the_ocr_is_a_whole_read() {
 fn a_word_with_a_lost_glyph_inside_comes_from_the_ocr_that_read_it_whole() {
     let mut native = forty_rows();
     native[0] = native[0].replacen("approved", "appr\u{FFFD}ved", 1);
-    native[1] = native[1].replacen("approved", "appr\u{FFFF}ved", 1);
+    native[1] = native[1].replacen("approved", &format!("appr{LOST_SYMBOL_GLYPH_MARKER}ved"), 1);
     let read = forty_rows();
     let boxes = row_boxes(&native, &read);
     let read = read.join("\n");
@@ -1582,7 +1582,7 @@ fn a_word_with_a_lost_glyph_inside_comes_from_the_ocr_that_read_it_whole() {
 fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
     use super::super::document::{accepted_ocr_page_replacements, clean_native_page_layers};
     let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let page = "\u{FFFF} #%& \u{FFFD} @!* ~~ \u{FFFF}\u{FFFF} |||\n".repeat(30);
+    let page = format!("{m} #%& \u{FFFD} @!* ~~ {m}{m} |||\n", m = LOST_SYMBOL_GLYPH_MARKER).repeat(30);
     assert!(
         !clean_native_page_layers(&page, &one_page(&page), None, &thresholds).contains_key(&1),
         "nothing readable remains to keep"

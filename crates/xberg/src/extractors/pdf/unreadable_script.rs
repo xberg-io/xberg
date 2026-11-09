@@ -1056,7 +1056,10 @@ mod tests {
             judged_scripts(&greek_gibberish, &langs(&["eng"])).is_none(),
             "control: no marker, no script evidence alone"
         );
-        for marker in ['\u{FFFD}', '\u{FFFF}'] {
+        for marker in [
+            super::super::unmapped_glyphs::LOST_GLYPH_MARKER,
+            super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER,
+        ] {
             let marked = format!("{greek_gibberish}{marker}");
             assert!(
                 judged_scripts(&marked, &langs(&["eng"])).is_some(),
@@ -1075,7 +1078,10 @@ mod tests {
             expected,
             "control: the letters alone"
         );
-        for marker in ['\u{FFFD}', '\u{FFFF}'] {
+        for marker in [
+            super::super::unmapped_glyphs::LOST_GLYPH_MARKER,
+            super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER,
+        ] {
             let padded = format!("{greek}{}", marker.to_string().repeat(letters));
             assert_eq!(
                 uncovered_script_counts(&padded, &langs(&["eng"])),

@@ -555,10 +555,13 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3
 }
 
 /// The marker a preserved decode leaves for a glyph without a Unicode value when its font is a
-/// symbol font ([`FontInfo::is_symbol_font`]): a noncharacter, so no text layer holds it, and one
-/// outside the right-to-left blocks, so no bidi pass reorders a row that starts with it (U+FDD0 to
-/// U+FDEF sit inside Arabic Presentation Forms-A). Every other preserved loss stays U+FFFD. ~keep
-pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFF}';
+/// symbol font ([`FontInfo::is_symbol_font`]): a noncharacter outside the right-to-left blocks, so
+/// no bidi pass reorders a row that starts with it (U+FDD0 to U+FDEF sit inside Arabic
+/// Presentation Forms-A). A font program can decode a glyph to a noncharacter too (a ToUnicode
+/// entry, a CID read as its own code point: U+FFFF is common), so the extractor keeps this one for
+/// itself: [`decode_text_to_unicode`] reads a raw U+FFFE as a glyph without a Unicode value. Every
+/// other preserved loss stays U+FFFD. ~keep
+pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFE}';
 
 pub(crate) fn decode_text_to_unicode(
     bytes: &[u8],
@@ -578,7 +581,20 @@ pub(crate) fn decode_text_to_unicode(
         decode_latin1_fallback(bytes)
     };
 
+    let raw_result = reserve_symbol_marker(raw_result, policy);
     filter_decoded_text(&mark_symbol_font_losses(raw_result, font, policy), policy)
+}
+
+/// A glyph the font program decodes to [`LOST_SYMBOL_GLYPH_MARKER`] itself has no Unicode value:
+/// it becomes what the decoders make of an unmapped glyph (U+FFFD when losses are preserved,
+/// nothing otherwise), so the marker in a decode is always the extractor's. Runs before
+/// `mark_symbol_font_losses`, which may then make such a glyph of a symbol font the marker. ~keep
+fn reserve_symbol_marker(decoded: String, policy: DecodePolicy) -> String {
+    if !decoded.contains(LOST_SYMBOL_GLYPH_MARKER) {
+        return decoded;
+    }
+    let lost = if policy.preserve_unmapped { "\u{FFFD}" } else { "" };
+    decoded.replace(LOST_SYMBOL_GLYPH_MARKER, lost)
 }
 
 /// A preserved U+FFFD of a symbol font becomes [`LOST_SYMBOL_GLYPH_MARKER`]. Runs after the
