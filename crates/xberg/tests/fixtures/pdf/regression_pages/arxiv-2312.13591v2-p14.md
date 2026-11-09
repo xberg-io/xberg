@@ -1,8 +1,8 @@
 - [19] C. W. Xiao, J. Nieves, and E. Oset, Heavy quark spin symmet-
 
-∗) (∗)
+(∗) (∗)
 
-¯<sup>(</sup> ric molecular states from D Σ~c~ and other coupled channels in the light of the recent LHCb pentaquarks, Phys. Rev. D **100** , 014021 (2019), arXiv:1904.01296 [hep-ph].
+¯ ric molecular states from D Σ~c~ and other coupled channels in the light of the recent LHCb pentaquarks, Phys. Rev. D **100** , 014021 (2019), arXiv:1904.01296 [hep-ph].
 
 - [20] J. He, Study of P~c~(4457), P~c~(4440), and P~c~(4312) in a quasipotential Bethe-Salpeter equation approach, Eur. Phys. J. C
 
@@ -53,9 +53,9 @@ bottom molecular pentaquarks in chiral effective field theory, JHEP **11** , 108
 
 - [31] N. Yalikun, Y.-H. Lin, F.-K. Guo, Y. Kamiya, and B.-S. Zou,
 
-(∗) ∗)
+(∗) (∗)
 
-¯<sup>(</sup> ¯ Coupled-channel effects of the Σ~c~ D −Λ (2595)~c~ D system and molecular nature of the Pc pentaquark states from one-boson exchange model, Phys. Rev. D **104** , 094039 (2021), arXiv:2109.03504 [hep-ph].
+¯ ¯ Coupled-channel effects of the Σ~c~ D −Λ (2595)~c~ D system and molecular nature of the Pc pentaquark states from one-boson exchange model, Phys. Rev. D **104** , 094039 (2021), arXiv:2109.03504 [hep-ph].
 
 - [32] H. Xing, J. Liang, L. Liu, P. Sun, and Y.-B. Yang, First observation of the hidden-charm pentaquarks on lattice, (2022), arXiv:2210.08555 [hep-lat].
 - [33] Z. Zhang, J. Liu, J. Hu, Q. Wang, and U.-G. Meißner, Revealing the nature of hidden charm pentaquarks with machine learning, Sci. Bull.
@@ -132,15 +132,15 @@ B → J/ψΛ¯p Decays, Phys. Rev. Lett. **131** , 031901 (2023), arXiv:2210.103
 
 - [48] F.-L. Wang, X.-D. Yang, R. Chen, and X. Liu, Hidden-charm
 
-(∗) ∗)
+(∗) (∗)
 
-¯<sup>(</sup> pentaquarks with triple strangeness due to the Ω~c~ D~s~ interactions, Phys. Rev. D **103** , 054025 (2021), arXiv:2101.11200 [hep-ph].
+¯ pentaquarks with triple strangeness due to the Ω~c~ D~s~ interactions, Phys. Rev. D **103** , 054025 (2021), arXiv:2101.11200 [hep-ph].
 
 - [49] J.-T. Zhu, L.-Q. Song, and J. He, P~cs~(4459) and other possi-
 
-(∗) ∗) ′ ∗)
+(∗) (∗) ′ (∗)
 
-¯<sup>(</sup> ¯<sup>(</sup> ble molecular states from Ξ~c~ D and Ξ~c~D interactions, Phys. Rev. D **103** , 074007 (2021), arXiv:2101.12441 [hep-ph].
+¯ ¯ ble molecular states from Ξ~c~ D and Ξ~c~D interactions, Phys. Rev. D **103** , 074007 (2021), arXiv:2101.12441 [hep-ph].
 
 - [50] C. W. Xiao, J. J. Wu, and B. S. Zou, Molecular nature of P~cs~(4459) and its heavy quark spin partners, Phys. Rev. D
 
