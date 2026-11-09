@@ -142,7 +142,11 @@ impl<'doc> TextExtractor<'doc> {
             .iter()
             .map(|s| (s.bbox.x, s.bbox.y, s.bbox.width, s.font_size))
             .collect();
-        for (span, base_y) in self.spans.iter_mut().zip(snapped_script_baselines(&snapshot, SnapReach::EXTRACTOR)) {
+        for (span, base_y) in self
+            .spans
+            .iter_mut()
+            .zip(snapped_script_baselines(&snapshot, SnapReach::EXTRACTOR))
+        {
             if let Some(base_y) = base_y {
                 span.bbox.y = base_y;
             }
@@ -754,7 +758,7 @@ pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], reach:
 pub(crate) struct SnapReach {
     /// Largest rise above the base line, in ems of the base.
     pub(crate) max_shift_em: f32,
-    /// The base font size must exceed the mark's by this factor.
+    /// The base font size must be at least the mark's times this factor.
     pub(crate) min_base_size_factor: f32,
     /// Largest gap between the base's right edge and the mark, in ems of the base.
     pub(crate) max_gap_em: f32,
@@ -767,7 +771,7 @@ impl SnapReach {
         min_base_size_factor: 1.15,
         max_gap_em: 1.0,
     };
-    /// The reading-order snap. A mark here is a real script: at most 0.8 of its base, abutting it.
+    /// The reading-order snap. A mark here is a real script: at most 0.8 of its base (0.8 itself qualifies), abutting it.
     /// Prose at 0.83 of a bullet, or a word 17pt right of a caution icon, is not a mark. ~keep
     pub(crate) const ORDERING: Self = Self {
         max_shift_em: 0.35,
@@ -806,7 +810,7 @@ impl SnapBaseSearch<'_> {
                 continue;
             }
             let (bx, by, bw, bfs) = self.snapshot[j];
-            if bfs <= sfs * self.reach.min_base_size_factor {
+            if bfs < sfs * self.reach.min_base_size_factor {
                 continue;
             }
             let y_offset = sy - by;
@@ -829,7 +833,7 @@ impl SnapBaseSearch<'_> {
             // left for kerning. Combining diacritics are
             // excluded by the size-ratio gate above (they
             // typically share font_size with their base
-            // letter, failing `bfs > sfs * 1.15`). ~keep
+            // letter, failing the size-ratio gate). ~keep
             let base_right = bx + bw;
             let dx = sx - base_right;
             if dx < -bfs * 0.25 || dx > bfs * self.reach.max_gap_em {

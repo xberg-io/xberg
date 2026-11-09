@@ -2254,6 +2254,45 @@ mod order_on_script_base_lines_tests {
         );
     }
 
+    fn mark_beside_base(mark_x: f32, mark_size: f32) -> Vec<TextSpan> {
+        vec![
+            span("mark", mark_x, 703.0, 4.0, mark_size, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("base", 100.0, 700.0, 10.0, 10.0, 1),
+        ]
+    }
+
+    const SNAPPED: [&str; 3] = ["other", "base", "mark"];
+    const RAW: [&str; 3] = ["mark", "other", "base"];
+
+    #[test]
+    fn should_order_a_mark_of_exactly_08_of_its_base_size() {
+        let mut spans = mark_beside_base(110.0, 8.0);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), SNAPPED);
+    }
+
+    #[test]
+    fn should_not_order_a_mark_larger_than_08_of_its_base_size() {
+        let mut spans = mark_beside_base(110.0, 8.1);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), RAW);
+    }
+
+    #[test]
+    fn should_order_a_mark_02em_right_of_its_base() {
+        let mut spans = mark_beside_base(112.0, 7.0);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), SNAPPED);
+    }
+
+    #[test]
+    fn should_not_order_a_mark_03em_right_of_its_base() {
+        let mut spans = mark_beside_base(113.0, 7.0);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), RAW);
+    }
+
     #[test]
     fn should_not_snap_prose_that_is_only_slightly_smaller_than_a_bullet_beside_it() {
         let mut spans = vec![
