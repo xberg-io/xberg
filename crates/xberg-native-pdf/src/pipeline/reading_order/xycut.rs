@@ -283,6 +283,10 @@ const MIN_LABEL_VALUE_ROWS: usize = 3;
 // cut is prose running across the gutter, not column content. Matches the minimum column
 // width a cut must leave on each side. ~keep
 const MIN_STRADDLING_INK_PTS: f32 = 60.0;
+// The two sides of a column cut must share rows: their y-extents overlap over at least this
+// share of the shorter side's height. Two blocks that overlap less are stacked, not side by
+// side, and the row split reads them top-down. ~keep
+const MIN_SHARED_ROWS_FRACTION: f32 = 0.5;
 
 /// Group `indices` into visual lines: anchored (not chained) on `y`, top to bottom, and
 /// further split on `x` wherever consecutive items are more than `MAX_INTRA_LINE_GAP_EM`
@@ -2125,6 +2129,15 @@ impl XYCutStrategy {
             return None;
         }
 
+        // Two x-sides are columns only when they share rows. A block that sits wholly above the
+        // other side (a letterhead at the right of a letter's top, above the address that starts
+        // below it) leaves a clean x-gap too, and cutting there reads the lower block before the
+        // upper one. Refusing the cut lets the row split, or the top-down sort, read the stacked
+        // blocks in page order. The decision is the y-geometry, not a content class. ~keep
+        if !Self::sides_share_rows(all_spans, &left, &right) {
+            return None;
+        }
+
         // Table-row guard (PMC8025747). A genuine column gutter is a
         // vertical CORRIDOR: the left column's glyphs END before the gutter
         // and the right column's glyphs BEGIN after it, so the two sides are
@@ -2188,6 +2201,17 @@ impl XYCutStrategy {
         }
 
         Some((left, right))
+    }
+
+    /// True when the y-extents of the two sides of a column cut overlap over at least
+    /// `MIN_SHARED_ROWS_FRACTION` of the shorter side's height. A side of one zero-height span
+    /// shares rows when it lies inside the other side's extent. ~keep
+    fn sides_share_rows(all_spans: &[TextSpan], left: &[usize], right: &[usize]) -> bool {
+        let left_box = union_bboxes(all_spans, left);
+        let right_box = union_bboxes(all_spans, right);
+        let overlap = left_box.bottom().min(right_box.bottom()) - left_box.top().max(right_box.top());
+        let shorter = (left_box.bottom() - left_box.top()).min(right_box.bottom() - right_box.top());
+        overlap >= MIN_SHARED_ROWS_FRACTION * shorter
     }
 
     /// True when the cut at `split_x` would separate short label/value pairs that share a
