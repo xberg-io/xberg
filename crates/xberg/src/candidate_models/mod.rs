@@ -6,6 +6,12 @@
 //! a supported preset or a bundling decision: each stays experimental until the qualification in
 //! xberg-io/xberg#2334 passes. The inventory only names and pins artifacts; consumers acquire
 //! them through the shared model download and cache infrastructure.
+//!
+//! The NLI-MiniLM2 candidate carries a license caveat: the cross-encoder declares Apache-2.0, but
+//! its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license on
+//! its card (the work derives from `microsoft/unilm`, MIT). Resolve that before any qualified use.
+//!
+//! The module is crate-private: the inventory is not a stable public API.
 
 use std::path::Path;
 
@@ -69,12 +75,13 @@ pub struct CandidateModel {
     pub upstream_repository: &'static str,
     /// Immutable commit of the upstream repository.
     pub upstream_revision: &'static str,
-    /// SPDX license identifier of the upstream weights.
+    /// SPDX license identifier of the upstream weights, with any caveat in parentheses.
     pub license: &'static str,
     /// Files, relative to the model directory, that inference needs. Alternatives such as quantized
     /// variants are pinned too but not listed here.
     pub required_files: &'static [&'static str],
     sha256_manifest: &'static str,
+    size_manifest: &'static str,
 }
 
 const NLI_MINILM2_L6_H768: CandidateModel = CandidateModel {
@@ -85,7 +92,7 @@ const NLI_MINILM2_L6_H768: CandidateModel = CandidateModel {
     revision: CLASSIFICATION_MODELS_REVISION,
     upstream_repository: "cross-encoder/nli-MiniLM2-L6-H768",
     upstream_revision: "b95119ce93d3e065de6214e38cd4a97b0f2f2c6d",
-    license: "Apache-2.0",
+    license: "Apache-2.0 (base model license unstated)",
     required_files: &[
         "model.onnx",
         "tokenizer.json",
@@ -94,6 +101,7 @@ const NLI_MINILM2_L6_H768: CandidateModel = CandidateModel {
         "special_tokens_map.json",
     ],
     sha256_manifest: CLASSIFICATION_SHA256_MANIFEST,
+    size_manifest: SIZE_MANIFEST,
 };
 
 const SMOLVLM_COMMON: [&str; 9] = [
@@ -119,6 +127,7 @@ const SMOLVLM_256M_INSTRUCT: CandidateModel = CandidateModel {
     license: "Apache-2.0",
     required_files: &SMOLVLM_COMMON,
     sha256_manifest: CAPTIONING_SHA256_MANIFEST,
+    size_manifest: SIZE_MANIFEST,
 };
 
 const SMOLVLM_500M_INSTRUCT: CandidateModel = CandidateModel {
@@ -132,6 +141,7 @@ const SMOLVLM_500M_INSTRUCT: CandidateModel = CandidateModel {
     license: "Apache-2.0",
     required_files: &SMOLVLM_COMMON,
     sha256_manifest: CAPTIONING_SHA256_MANIFEST,
+    size_manifest: SIZE_MANIFEST,
 };
 
 const FLORENCE_2_BASE: CandidateModel = CandidateModel {
@@ -157,6 +167,7 @@ const FLORENCE_2_BASE: CandidateModel = CandidateModel {
         "added_tokens.json",
     ],
     sha256_manifest: CAPTIONING_SHA256_MANIFEST,
+    size_manifest: SIZE_MANIFEST,
 };
 
 /// Every staged candidate, none of them a default.
@@ -193,7 +204,8 @@ impl CandidateModel {
     /// Every pinned file of this model, with SHA-256 and size, sorted by path.
     pub fn files(&self) -> Result<Vec<CandidateFile>, String> {
         let prefix = format!("{}/", self.id);
-        let sizes: std::collections::HashMap<String, u64> = SIZE_MANIFEST
+        let sizes: std::collections::HashMap<String, u64> = self
+            .size_manifest
             .lines()
             .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
             .map(|line| {
@@ -251,16 +263,43 @@ fn verify_against_pin(pin: &CandidateFile, local: &Path) -> Result<(), String> {
     crate::model_download::verify_sha256(local, &pin.sha256, &pin.path)
 }
 
+/// Graph the NLI descriptor selects on this architecture. The fp32 graph (328,649,957 bytes) exceeds
+/// the adapter's graph size cap, so only the dynamically quantized graph for the host ISA is usable.
+#[cfg(feature = "classification-onnx")]
+pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
+    if cfg!(target_arch = "aarch64") {
+        Some("model_qint8_arm64.onnx")
+    } else if cfg!(target_arch = "x86_64") {
+        Some("model_quint8_avx2.onnx")
+    } else {
+        None
+    }
+}
+
 /// The Rust-only NLI classifier descriptor for the NLI-MiniLM2 candidate, usable as
 /// [`crate::local_classification::LocalClassificationConfig::model`]. Logits are ordered
-/// contradiction, entailment, neutral.
+/// contradiction, entailment, neutral. Fails on an architecture without a quantized graph that fits
+/// the adapter's caps rather than substituting the oversized fp32 graph.
 #[cfg(feature = "classification-onnx")]
-#[cfg_attr(alef, alef(skip))]
-pub fn nli_minilm2_l6_h768_classifier() -> Result<crate::local_classification::LocalNliModel, String> {
+pub(crate) fn nli_minilm2_l6_h768_classifier() -> Result<crate::local_classification::LocalNliModel, String> {
+    let graph = nli_minilm2_l6_h768_graph().ok_or_else(|| {
+        format!(
+            "{} has no quantized graph within the adapter's size cap for {}",
+            NLI_MINILM2_L6_H768.id,
+            std::env::consts::ARCH
+        )
+    })?;
+    nli_minilm2_l6_h768_classifier_for(graph)
+}
+
+#[cfg(feature = "classification-onnx")]
+pub(crate) fn nli_minilm2_l6_h768_classifier_for(
+    graph: &str,
+) -> Result<crate::local_classification::LocalNliModel, String> {
     let model = &NLI_MINILM2_L6_H768;
     let files = model.files()?;
     let mut manifest = String::new();
-    for required in model.required_files {
+    for required in std::iter::once(graph).chain(model.required_files.iter().copied().filter(|f| *f != "model.onnx")) {
         let path = format!("{}/{required}", model.id);
         let pin = files
             .iter()
@@ -271,7 +310,7 @@ pub fn nli_minilm2_l6_h768_classifier() -> Result<crate::local_classification::L
     Ok(crate::local_classification::LocalNliModel {
         repository: model.repository.to_owned(),
         revision: model.revision.to_owned(),
-        model_file: format!("{}/model.onnx", model.id),
+        model_file: format!("{}/{graph}", model.id),
         external_files: vec![],
         sha256_manifest: manifest,
         output_name: "logits".to_owned(),

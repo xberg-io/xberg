@@ -270,7 +270,8 @@ pub mod captioning;
 
 /// Pinned inventory of experimental candidate models staged on owned Hugging Face repositories.
 #[cfg(feature = "onnx-runtime")]
-pub mod candidate_models;
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) mod candidate_models;
 
 /// Experimental Rust-only CPU natural-language-inference classification with caller-pinned artifacts.
 #[cfg(feature = "classification-onnx-types")]

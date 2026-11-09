@@ -36,7 +36,11 @@ fn every_candidate_is_experimental_permissive_and_owned_by_xberg() {
         assert!(ids.insert(model.id), "duplicate id {}", model.id);
         assert_eq!(model.status, CandidateStatus::ExperimentalNotQualified, "{}", model.id);
         assert!(model.repository.starts_with("xberg-io/"), "{}", model.id);
-        assert!(["Apache-2.0", "MIT"].contains(&model.license), "{}", model.id);
+        assert!(
+            model.license.starts_with("Apache-2.0") || model.license == "MIT",
+            "{}",
+            model.id
+        );
         assert!(!model.upstream_repository.starts_with("xberg-io/"), "{}", model.id);
         assert_eq!(CandidateModel::find(model.id), Some(model));
     }
@@ -54,10 +58,18 @@ fn revisions_are_immutable_commit_hashes_and_floating_refs_are_rejected() {
     for floating in ["main", "refs/heads/main", "v1", "", upper, short, non_hex] {
         let mut model = CANDIDATE_MODELS[0];
         model.revision = floating;
-        assert!(model.validate_revisions().is_err(), "owned revision {floating:?}");
+        let error = model.validate_revisions().unwrap_err();
+        assert!(
+            error.contains("owned revision") && error.contains("not an immutable commit hash"),
+            "{error}"
+        );
         let mut model = CANDIDATE_MODELS[0];
         model.upstream_revision = floating;
-        assert!(model.validate_revisions().is_err(), "upstream revision {floating:?}");
+        let error = model.validate_revisions().unwrap_err();
+        assert!(
+            error.contains("upstream revision") && error.contains("not an immutable commit hash"),
+            "{error}"
+        );
     }
     assert_ne!(CLASSIFICATION_MODELS_REVISION, CAPTIONING_MODELS_REVISION);
 }
@@ -116,59 +128,106 @@ fn truncated_or_malformed_checksum_lines_are_rejected_by_the_shared_parser() {
         .split_once("  ")
         .unwrap();
     let truncated = format!("{}  nli-minilm2-l6-h768/model.onnx\n", &line[..63]);
-    assert!(crate::model_download::parse_sha256_manifest(&truncated).is_err());
+    assert!(
+        crate::model_download::parse_sha256_manifest(&truncated)
+            .unwrap_err()
+            .contains("checksum must be SHA256 hex")
+    );
     let traversal = format!("{line}  ../nli-minilm2-l6-h768/model.onnx\n");
-    assert!(crate::model_download::parse_sha256_manifest(&traversal).is_err());
+    assert!(
+        crate::model_download::parse_sha256_manifest(&traversal)
+            .unwrap_err()
+            .contains("path must be a relative artifact file")
+    );
 }
 
-fn small_pin(bytes: &[u8]) -> CandidateFile {
-    CandidateFile {
-        path: "m/file.bin".to_owned(),
-        sha256: hex::encode(Sha256::digest(bytes)),
-        size_bytes: bytes.len() as u64,
+/// A candidate whose pins describe `bytes`, so `verify_file` runs against real temp files.
+fn model_pinning(bytes: &[u8]) -> CandidateModel {
+    let sha = hex::encode(Sha256::digest(bytes));
+    let mut model = CANDIDATE_MODELS[0];
+    model.id = "probe";
+    model.sha256_manifest = format!("{sha}  probe/file.bin\n").leak();
+    model.size_manifest = format!("{}  probe/file.bin\n", bytes.len()).leak();
+    model
+}
+
+#[test]
+fn verify_file_accepts_exact_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("file.bin");
+    std::fs::write(&file, b"pinned bytes").unwrap();
+    model_pinning(b"pinned bytes").verify_file("file.bin", &file).unwrap();
+}
+
+#[test]
+fn verify_file_rejects_same_size_corruption() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("file.bin");
+    std::fs::write(&file, b"pinned bytez").unwrap();
+    let error = model_pinning(b"pinned bytes")
+        .verify_file("file.bin", &file)
+        .unwrap_err();
+    assert!(error.contains("Checksum mismatch for probe/file.bin"), "{error}");
+}
+
+#[test]
+fn verify_file_rejects_truncation_and_growth() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("file.bin");
+    let model = model_pinning(b"pinned bytes");
+    for content in [&b"pinned byte"[..], b"pinned bytes!"] {
+        std::fs::write(&file, content).unwrap();
+        let error = model.verify_file("file.bin", &file).unwrap_err();
+        assert!(
+            error.contains("Size mismatch for probe/file.bin: expected 12 bytes"),
+            "{error}"
+        );
     }
 }
 
 #[test]
-fn exact_bytes_pass_and_corrupted_truncated_or_other_revision_bytes_fail() {
+fn verify_file_rejects_missing_and_unpinned_files() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("file.bin");
-    let pin = small_pin(b"upstream revision A");
-
-    std::fs::write(&file, b"upstream revision A").unwrap();
-    verify_against_pin(&pin, &file).unwrap();
-
-    std::fs::write(&file, b"upstream revision B").unwrap();
+    let model = model_pinning(b"pinned bytes");
+    let missing = dir.path().join("absent.bin");
     assert!(
-        verify_against_pin(&pin, &file)
+        model
+            .verify_file("file.bin", &missing)
             .unwrap_err()
-            .contains("Checksum mismatch"),
-        "same-size corruption or a file from another revision"
+            .contains("cannot stat probe/file.bin")
     );
-
-    std::fs::write(&file, b"upstream revision").unwrap();
-    assert!(verify_against_pin(&pin, &file).unwrap_err().contains("Size mismatch"));
-
-    std::fs::remove_file(&file).unwrap();
-    assert!(verify_against_pin(&pin, &file).unwrap_err().contains("cannot stat"));
+    std::fs::write(&missing, b"pinned bytes").unwrap();
+    assert!(
+        model
+            .verify_file("other.bin", &missing)
+            .unwrap_err()
+            .contains("probe/other.bin is not pinned for probe")
+    );
 }
 
 #[test]
-fn a_real_pin_rejects_a_file_with_other_content_and_unpinned_names() {
+fn verify_file_checks_the_real_pins_of_the_inventory() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("tokenizer_config.json");
     std::fs::write(&file, b"{}").unwrap();
-    let model = &CANDIDATE_MODELS[0];
+    let error = CANDIDATE_MODELS[0]
+        .verify_file("tokenizer_config.json", &file)
+        .unwrap_err();
     assert!(
-        model
-            .verify_file("tokenizer_config.json", &file)
-            .unwrap_err()
-            .contains("Size mismatch")
+        error.contains("Size mismatch for nli-minilm2-l6-h768/tokenizer_config.json"),
+        "{error}"
     );
-    assert!(
-        model
-            .verify_file("not-pinned.bin", &file)
-            .unwrap_err()
-            .contains("is not pinned")
-    );
+}
+
+#[test]
+fn both_candidate_families_are_registered_in_the_vendored_manifest_registry() {
+    let registry = crate::model_download::vendored_model_manifests();
+    for (family, manifest) in [
+        ("candidate_classification", CLASSIFICATION_SHA256_MANIFEST),
+        ("candidate_captioning", CAPTIONING_SHA256_MANIFEST),
+    ] {
+        let registered: Vec<_> = registry.iter().filter(|(name, _)| *name == family).collect();
+        assert_eq!(registered.len(), 1, "{family} must be registered exactly once");
+        assert_eq!(registered[0].1, manifest, "{family}");
+    }
 }
