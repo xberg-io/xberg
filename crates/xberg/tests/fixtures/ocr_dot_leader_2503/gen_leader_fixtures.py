@@ -6,9 +6,9 @@ usage: uv run --no-project --with pillow python gen_leader_fixtures.py <DejaVuSa
 no grid; its table_rows seed there is 15); draw_table and table_rows are copied from that script.
 """
 
-import os
 import random
 import sys
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -43,7 +43,7 @@ def amounts(rng, i):
 
 def table_rows(seed, n=12):
     rng = random.Random(seed)
-    return [[LABELS[(seed + i) % len(LABELS)]] + amounts(rng, i) for i in range(n)]
+    return [[LABELS[(seed + i) % len(LABELS)], *amounts(rng, i)] for i in range(n)]
 
 
 def draw_table(font, rows, px):
@@ -53,7 +53,7 @@ def draw_table(font, rows, px):
     w, h = sum(colw) + 2 * px, rowh * (len(rows) + 1) + 2 * px
     im = Image.new("RGB", (w, h), (255, 255, 255))
     d = ImageDraw.Draw(im)
-    for r, row in enumerate([["Item", "Count", "Budget", "Change"]] + rows):
+    for r, row in enumerate([["Item", "Count", "Budget", "Change"], *rows]):
         y = px + r * rowh
         x = px
         for c, cell in enumerate(row):
@@ -103,13 +103,13 @@ def toc(font, px=20):
 
 
 def main():
-    font, out = sys.argv[1], sys.argv[2]
-    os.makedirs(out, exist_ok=True)
+    font, out = sys.argv[1], Path(sys.argv[2])
+    out.mkdir(parents=True, exist_ok=True)
     rows = table_rows(15)
-    draw_table(font, rows, 11).save(os.path.join(out, "11.png"), format="PNG")
-    with open(os.path.join(out, "11.tsv"), "w") as tsv:
+    draw_table(font, rows, 11).save(out / "11.png", format="PNG")
+    with (out / "11.tsv").open("w") as tsv:
         tsv.writelines("\t".join(row) + "\n" for row in rows)
-    toc(font).save(os.path.join(out, "toc.png"), format="PNG")
+    toc(font).save(out / "toc.png", format="PNG")
 
 
 if __name__ == "__main__":
