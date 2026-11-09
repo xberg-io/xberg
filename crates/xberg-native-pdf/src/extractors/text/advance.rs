@@ -177,7 +177,6 @@ impl<'doc> TextExtractor<'doc> {
                             w_sum += w;
                         }
                         let char_count = decoded.chars().count();
-                        let run_start = buffer.unicode.len();
                         if char_count > 0 {
                             let per_char = w_sum / char_count as f32;
                             for ch in decoded.chars() {
@@ -185,7 +184,6 @@ impl<'doc> TextExtractor<'doc> {
                                 buffer.char_widths.push(per_char);
                             }
                         }
-                        buffer.record_decode(run_start, || false);
                         // Fall through to the matrix update at the
                         // bottom of the function via `w_sum`. Vertical
                         // mode flips the axis inside the helper. ~keep
@@ -378,7 +376,6 @@ impl<'doc> TextExtractor<'doc> {
                                     w_sum += w;
                                 }
                                 let char_count = decoded.chars().count();
-                                let run_start = buffer.unicode.len();
                                 if char_count > 0 {
                                     let per_char = w_sum / char_count as f32;
                                     for ch in decoded.chars() {
@@ -386,7 +383,6 @@ impl<'doc> TextExtractor<'doc> {
                                         buffer.char_widths.push(per_char);
                                     }
                                 }
-                                buffer.record_decode(run_start, || false);
                                 tracing::trace!(target: LOG_TARGET,
                                     "UTF-8 mojibake repair: decoded {} Latin-1 bytes as {} chars via UTF-8 in font '{}'",
                                     text.len(),
@@ -755,6 +751,7 @@ impl<'doc> TextExtractor<'doc> {
             // geometric detector when `char_widths` give us per-char x,
             // falling back to the coarse `accumulated_width > 0`
             // heuristic only when ambiguous. ~keep
+            let ligature_glyph = buffer.is_lone_ligature();
             let mut text = std::mem::take(&mut buffer.unicode);
             if text.len() > 1 {
                 let has_rtl = text.chars().any(|c| crate::text::rtl_detector::is_rtl_text(c as u32));
@@ -827,7 +824,7 @@ impl<'doc> TextExtractor<'doc> {
                 wmode: buffer.wmode,
                 text_rise: buffer.text_rise,
                 rtl_draw_logical: false,
-                ligature_glyph: buffer.lone_ligature,
+                ligature_glyph,
                 mirrored: buffer.mirrored,
                 page_rotation_applied: 0,
             };

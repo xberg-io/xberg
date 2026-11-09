@@ -963,6 +963,14 @@ pub(crate) fn starts_with_agl_ligature(text: &str) -> bool {
         .is_some_and(|first| ('\u{FB00}'..='\u{FB06}').contains(&first) && chars.next().is_none())
 }
 
+/// Whether the text is the letters that one ligature code point of the Latin Ligatures block
+/// (U+FB00..U+FB06) stands for under Unicode compatibility decomposition: `ff`, `fi`, `fl`, `ffi`,
+/// `ffl` or `st`. A short word that a font draws as one glyph (`to`, `of`) is not a ligature.
+fn is_ligature_expansion(text: &str) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    ('\u{FB00}'..='\u{FB06}').any(|ligature| ligature.nfkd().eq(text.chars()))
+}
+
 /// How much wider a gap must be to separate words when one side is a ligature glyph.
 pub(crate) const LIGATURE_BOUNDARY_GAP_FACTOR: f32 = 1.5;
 
@@ -1837,9 +1845,10 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
-    /// Whether the whole buffer is one glyph that the font decoded to several Latin letters (a
-    /// ligature such as `ff`). Set by `record_decode`, read by the flush that builds the span.
-    lone_ligature: bool,
+    /// The length of `unicode` after its first decode when that decode was one character code that
+    /// the font expanded to a ligature's letters, else 0. The buffer is a lone ligature while its
+    /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
+    ligature_len: usize,
 }
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
@@ -1966,24 +1975,35 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
-            lone_ligature: false,
+            ligature_len: 0,
         }
     }
 
-    /// Note what a decode appended after `len_before`: the buffer is a lone ligature when it was
-    /// empty, the string held one character code, and that code gave two or more Latin letters.
-    /// Call it once per decoded string, after the decode, on every path that fills `unicode`.
+    /// Note a decode into the buffer: when the buffer was empty, the string held one character code,
+    /// and that code gave a ligature's letters, the buffer is a lone ligature until more text follows.
+    /// A path that cannot give such letters (the UTF-8 repair keeps a code point above U+00FF) skips it.
     fn record_decode(&mut self, len_before: usize, single_code: impl FnOnce() -> bool) {
-        Self::note_decode(&self.unicode, &mut self.lone_ligature, len_before, single_code);
+        Self::note_decode(&self.unicode, &mut self.ligature_len, len_before, single_code);
     }
 
     /// The field-wise form of `record_decode`, for a caller that holds a borrow of `cached_font`. ~keep
-    fn note_decode(unicode: &str, lone_ligature: &mut bool, len_before: usize, single_code: impl FnOnce() -> bool) {
-        let added = &unicode[len_before..];
-        *lone_ligature = len_before == 0
-            && added.chars().nth(1).is_some()
-            && added.chars().all(|c| c.is_ascii_alphabetic())
-            && single_code();
+    fn note_decode(unicode: &str, ligature_len: &mut usize, len_before: usize, single_code: impl FnOnce() -> bool) {
+        if len_before == 0 && single_code() && is_ligature_expansion(unicode) {
+            *ligature_len = unicode.len();
+        }
+    }
+
+    /// Push the `/ActualText` that replaces a marked-content sequence. Replacement text that is a
+    /// ligature's letters stands for one ligature glyph, so an empty buffer becomes a lone ligature.
+    fn push_actual_text(&mut self, actual_text: &str) {
+        let len_before = self.unicode.len();
+        self.unicode.push_str(actual_text);
+        self.record_decode(len_before, || true);
+    }
+
+    /// Whether the whole buffer is still the one ligature glyph that `record_decode` noted.
+    fn is_lone_ligature(&self) -> bool {
+        self.ligature_len != 0 && self.ligature_len == self.unicode.len()
     }
 
     /// Check if the buffer is empty.
@@ -2036,7 +2056,6 @@ impl TjBuffer {
                     for ch in decoded.chars() {
                         self.unicode.push(ch);
                     }
-                    self.record_decode(len_before, || false);
                     return Ok(());
                 }
             }
@@ -2074,7 +2093,7 @@ impl TjBuffer {
             None,
         );
         self.unicode.push_str(&unicode_text);
-        Self::note_decode(&self.unicode, &mut self.lone_ligature, len_before, || {
+        Self::note_decode(&self.unicode, &mut self.ligature_len, len_before, || {
             TextCharIter::new(bytes, font).take(2).count() == 1
         });
 
