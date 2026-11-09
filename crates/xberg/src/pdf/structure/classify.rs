@@ -14,6 +14,7 @@ use super::constants::{
 };
 use super::regions::{looks_like_bare_url, looks_like_figure_label};
 use super::types::{LayoutHintClass, PdfParagraph};
+use crate::pdf::hierarchy::SegmentData;
 
 const SAL_DIRECTION_PREFIXES: [&str; 6] = [
     "__deref__inout",
@@ -2021,8 +2022,25 @@ fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
     }
 }
 
+/// Whether text with this rotation reads up or down the page: a rotation nearer 90 or 270 degrees
+/// than 0 or 180.
+fn reads_up_or_down(rotation_degrees: f32) -> bool {
+    (rotation_degrees.rem_euclid(180.0) - 90.0).abs() < 45.0
+}
+
+/// The extent of a segment across its reading direction. The extractor sizes a run turned up or down
+/// by its length (`width`), so its thickness is its height, or its font size where that is larger.
+fn across_extent(segment: &SegmentData) -> (f32, f32) {
+    if reads_up_or_down(segment.rotation_degrees) {
+        (segment.x, segment.x + segment.height.max(segment.font_size))
+    } else {
+        (segment.y, segment.y + segment.height)
+    }
+}
+
 /// The right and top edge of a page, read from its text as the structure pipeline reads page heights:
-/// the far side of the text, and at least a US Letter page. The left and bottom edge are at zero.
+/// the far side of the text, and at least a US Letter page. The left and bottom edge are at zero. A run
+/// turned up or down reaches right by its thickness, not by its length.
 fn page_extent(page: &[PdfParagraph]) -> (f32, f32) {
     use super::pipeline::{FALLBACK_PAGE_HEIGHT_PTS, FALLBACK_PAGE_WIDTH_PTS};
     let segments = page
@@ -2030,23 +2048,32 @@ fn page_extent(page: &[PdfParagraph]) -> (f32, f32) {
         .flat_map(|para| para.lines.iter().flat_map(|line| line.segments.iter()));
     segments.fold(
         (FALLBACK_PAGE_WIDTH_PTS, FALLBACK_PAGE_HEIGHT_PTS),
-        |(right, top), s| (right.max(s.x + s.width), top.max(s.y + s.height)),
+        |(right, top), s| {
+            let reach = if reads_up_or_down(s.rotation_degrees) {
+                across_extent(s).1
+            } else {
+                s.x + s.width
+            };
+            (right.max(reach), top.max(s.y + s.height))
+        },
     )
 }
 
 /// Whether the paragraphs are the parts of one margin stamp. All parts are drawn with one rotation and
-/// sit on one line in their reading direction: text read up or down (a rotation nearer 90 or 270 degrees
-/// than 0 or 180) shares a band of x values, text read across shares a band of y values. That line lies
-/// in a margin: the parts' extent across it, the stamp width, is at least the distance from the parts to
-/// the page edge on one side. Rotations are compared modulo 360 degrees, so 90 and -270 are one rotation.
+/// sit on one line in their reading direction: text read up or down shares a band of x values, text read
+/// across shares a band of y values, each band measured by the thickness of the text. That line lies in
+/// a margin: the parts' extent across it lies within a tenth of the page from one page edge. Rotations
+/// are compared modulo 360 degrees, so 90 and -270 are one rotation.
 fn share_one_margin(parts: &[&PdfParagraph], (page_right, page_top): (f32, f32)) -> bool {
     /// Rotations closer than this many degrees are one rotation.
     const SAME_ROTATION_DEGREES: f32 = 0.5;
+    /// The share of the page, from each edge, that counts as a margin.
+    const MARGIN_ZONE: f32 = 0.1;
     let mut rotation: Option<f32> = None;
     // (lowest, highest) across the reading direction: the shared band, and the extent of all parts.
     let mut band = (f32::NEG_INFINITY, f32::INFINITY);
     let mut extent = (f32::INFINITY, f32::NEG_INFINITY);
-    let mut reads_up_or_down = false;
+    let mut up_or_down = false;
     for paragraph in parts {
         let segments: Vec<_> = paragraph.lines.iter().flat_map(|line| line.segments.iter()).collect();
         if segments.is_empty() {
@@ -2061,26 +2088,24 @@ fn share_one_margin(parts: &[&PdfParagraph], (page_right, page_top): (f32, f32))
                 }
             } else {
                 rotation = Some(degrees);
-                reads_up_or_down = (degrees.rem_euclid(180.0) - 90.0).abs() < 45.0;
+                up_or_down = reads_up_or_down(degrees);
             }
         }
-        let left = segments.iter().map(|s| s.x).fold(f32::INFINITY, f32::min);
-        let right = segments.iter().map(|s| s.x + s.width).fold(f32::NEG_INFINITY, f32::max);
-        let bottom = segments.iter().map(|s| s.y).fold(f32::INFINITY, f32::min);
-        let top = segments
+        let (low, high) = segments
             .iter()
-            .map(|s| s.y + s.height)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let (low, high) = if reads_up_or_down { (left, right) } else { (bottom, top) };
+            .map(|s| across_extent(s))
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(low, high), (l, h)| {
+                (low.min(l), high.max(h))
+            });
         band = (band.0.max(low), band.1.min(high));
         extent = (extent.0.min(low), extent.1.max(high));
     }
     if band.0 > band.1 {
         return false;
     }
-    let stamp_width = extent.1 - extent.0;
-    let far_edge = if reads_up_or_down { page_right } else { page_top };
-    extent.0 <= stamp_width || far_edge - extent.1 <= stamp_width
+    let page_across = if up_or_down { page_right } else { page_top };
+    let zone = page_across * MARGIN_ZONE;
+    extent.0 <= zone || page_across - extent.1 <= zone
 }
 
 /// Remove the last `count` white-space separated words from the text of a paragraph.
@@ -2534,15 +2559,37 @@ mod tests {
 
     /// The three parts of a stamp with a position and a rotation for each: `(x, y, rotation)`.
     fn placed_stamp_parts(places: [(f32, f32, f32); 3]) -> Vec<bool> {
+        placed_stamp_parts_of_width(places, 40.0)
+    }
+
+    /// The same, with every part as long as `width`: the extractor sizes a run turned up or down by its length.
+    fn placed_stamp_parts_of_width(places: [(f32, f32, f32); 3], width: f32) -> Vec<bool> {
         let texts = ["arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"];
         let mut page: Vec<PdfParagraph> = texts.iter().map(|text| paragraph_with_text(text)).collect();
         for (para, (x, y, rotation)) in page.iter_mut().zip(places) {
             let segment = &mut para.lines[0].segments[0];
             (segment.x, segment.y, segment.rotation_degrees) = (x, y, rotation);
+            segment.width = width;
+            segment.height = 20.0;
+            segment.font_size = 20.0;
         }
         let mut pages = vec![page];
         mark_arxiv_noise(&mut pages);
         pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_long_rotated_stamp_parts_in_the_middle_of_the_page() {
+        let at = |x: f32| [(x, 600.0, 90.0), (x, 400.0, 90.0), (x, 200.0, 90.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(300.0), 178.0), [false; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(20.0), 178.0), [true; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_long_rotated_stamp_parts_that_do_not_share_a_line() {
+        let marked =
+            placed_stamp_parts_of_width([(20.0, 600.0, 90.0), (150.0, 400.0, 90.0), (20.0, 200.0, 90.0)], 178.0);
+        assert_eq!(marked, [false; 3]);
     }
 
     #[test]

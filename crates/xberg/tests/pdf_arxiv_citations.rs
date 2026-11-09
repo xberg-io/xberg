@@ -186,7 +186,7 @@ fn split_stamp() -> String {
     split_stamp_at(32.0)
 }
 
-/// The split stamp with its three strings at `x` points from the left edge of the page.
+/// The three strings of the split stamp, turned 90 degrees with their baselines at `x`.
 fn split_stamp_at(x: f32) -> String {
     [
         (150.0, "arXiv:2311.04567v3"),
@@ -264,12 +264,10 @@ fn plain_output_removes_a_stamp_split_across_paragraphs() {
     assert!(content.contains(VERSIONED_CITATION), "{content:?}");
 }
 
-/// A split stamp 200 points from the left edge is not in a margin, so its parts are body text. A stamp
-/// 300 points from the edge is still taken for a margin stamp and removed (measured); the margin rule is
-/// not changed here.
 #[test]
-fn a_split_stamp_away_from_the_page_edge_stays_body_text() {
-    let content = extract_with_stamp(&split_stamp_at(200.0), OutputFormat::Markdown, false);
+fn a_split_stamp_in_the_middle_of_the_page_is_kept() {
+    let stamp = split_stamp_at(300.0);
+    let content = extract_with_stamp(&stamp, OutputFormat::Markdown, false);
     for part in ["arXiv:2311.04567v3", "[hep-ph]", "6 Dec 2023"] {
         assert!(content.contains(part), "{part:?} missing from {content:?}");
     }
@@ -325,7 +323,8 @@ fn word_counts(text: &str) -> std::collections::BTreeMap<&str, usize> {
 ///
 /// On these three pages the extractor reads the stamp as one paragraph, so they cover the whole-stamp
 /// path. None of them reaches the split-stamp path (measured with a print in that path: no page has a
-/// partial stamp paragraph). The split path is covered by the synthetic page above and the unit tests.
+/// partial stamp paragraph), so the real pages cover the whole-stamp path only. The split path is covered by
+/// the synthetic page above and the unit tests.
 fn assert_real_stamps_removed_alone(output_format: OutputFormat) {
     for (name, stamp) in ARXIV_PAGES {
         let (Some(kept), Some(removed)) = (
