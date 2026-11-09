@@ -726,3 +726,117 @@ fn a_partial_body_rule_does_not_reject_the_header() {
     rules.push(PathContent::line(0.0, -HEIGHT, 30.0, -HEIGHT));
     assert!(retained(rows, &rules));
 }
+
+fn repeated_schema_rows() -> Vec<TableRow> {
+    let mut rows = standard_rows();
+    rows[1] = leaves(["Item", "Value", "Count", "Value", "Count"], true);
+    rows
+}
+
+fn shaded_first_body() -> Vec<PathContent> {
+    let mut fill = white_fill(0.0, -HEIGHT, COLUMNS as f32 * WIDTH, HEIGHT);
+    fill.fill_color = Some(Color::new(0.9, 0.9, 0.9));
+    vec![fill]
+}
+
+#[test]
+fn repeated_group_schema_and_shaded_first_body_supply_independent_header_evidence() {
+    assert!(retained(repeated_schema_rows(), &shaded_first_body()));
+}
+
+#[test]
+fn repeated_schema_requires_full_first_body_shading_and_unshaded_headers() {
+    assert!(!retained(repeated_schema_rows(), &[]));
+    let mut partial = shaded_first_body();
+    partial[0].bbox.width -= WIDTH;
+    assert!(!retained(repeated_schema_rows(), &partial));
+    let mut shaded_header = shaded_first_body();
+    let mut header_fill = shaded_header[0].clone();
+    header_fill.bbox.y = 0.0;
+    shaded_header.push(header_fill);
+    assert!(!retained(repeated_schema_rows(), &shaded_header));
+}
+
+#[test]
+fn different_or_constant_leaf_schemas_do_not_supply_header_evidence() {
+    let mut different = repeated_schema_rows();
+    different[1].cells[4].text = "Other".into();
+    assert!(!retained(different, &shaded_first_body()));
+    let mut constant = repeated_schema_rows();
+    for cell in &mut constant[1].cells[1..] {
+        cell.text = "Value".into();
+    }
+    assert!(!retained(constant, &shaded_first_body()));
+}
+
+#[test]
+fn repeated_schema_does_not_override_body_style_or_source_geometry() {
+    let mut bold = repeated_schema_rows();
+    bold[2] = body(true);
+    assert!(!retained(bold, &shaded_first_body()));
+    for column in 0..COLUMNS {
+        let mut shifted = repeated_schema_rows();
+        shifted[2].cells[column].bbox.as_mut().unwrap().x += 2.0;
+        assert!(!retained(shifted, &shaded_first_body()));
+        let mut separated = repeated_schema_rows();
+        separated[2].cells[column].bbox.as_mut().unwrap().y -= 2.0;
+        assert!(!retained(separated, &shaded_first_body()));
+    }
+}
+
+#[test]
+fn later_rectangular_paint_withholds_the_shading_proof() {
+    let mut erased = shaded_first_body();
+    erased.push(white_fill(0.0, -HEIGHT, COLUMNS as f32 * WIDTH, HEIGHT));
+    assert!(!retained(repeated_schema_rows(), &erased));
+    erased.extend(shaded_first_body());
+    assert!(retained(repeated_schema_rows(), &erased));
+}
+
+#[test]
+fn repeated_schema_requires_an_ascii_digit_in_each_body_value_after_column_zero() {
+    let mut rows = repeated_schema_rows();
+    rows[2].cells[1].text = "Note".into();
+    assert!(!retained(rows, &shaded_first_body()));
+}
+
+#[test]
+fn possible_header_shading_remains_ambiguous_after_partial_overpainting() {
+    let mut paths = shaded_first_body();
+    let mut leaf_fill = paths[0].clone();
+    leaf_fill.bbox.y = 0.0;
+    paths.push(leaf_fill);
+    paths.push(white_fill(0.0, 0.0, 1.0, 1.0));
+    assert!(!retained(repeated_schema_rows(), &paths));
+}
+
+#[test]
+fn the_same_leaf_and_body_rule_vetoes_independent_shading_evidence() {
+    let mut paths = shaded_first_body();
+    paths.push(PathContent::line(0.0, 0.0, COLUMNS as f32 * WIDTH, 0.0));
+    paths.push(PathContent::line(0.0, -HEIGHT, COLUMNS as f32 * WIDTH, -HEIGHT));
+    assert!(!retained(repeated_schema_rows(), &paths));
+}
+
+#[test]
+fn numeric_only_leaf_schemas_need_visible_rules() {
+    let mut rows = repeated_schema_rows();
+    rows[1] = leaves(["Item", "2023", "2024", "2023", "2024"], true);
+    assert!(complete_source_band(&rows[1], COLUMNS, true));
+    assert!(grouped_leaves(&rows[0], &rows[1]).is_some());
+    assert!(!retained(rows, &shaded_first_body()));
+}
+
+#[test]
+fn body_column_alignment_is_required_even_when_text_moves_with_its_cell() {
+    let mut rows = repeated_schema_rows();
+    let value = &mut rows[2].cells[2];
+    value.bbox.as_mut().unwrap().x += 2.0;
+    for span in &mut value.spans {
+        span.bbox.x += 2.0;
+    }
+    assert!(complete_source_band(&rows[2], COLUMNS, false));
+    let shading = shaded_first_body();
+    assert!(cell_is_shaded(&rows[2].cells[2], &shading_rectangles(shading.iter())));
+    assert!(!retained(rows, &shading));
+}
