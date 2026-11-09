@@ -84,3 +84,10 @@ routes and rows already containing OCR numbers remain unchanged.
 
 [khm]: https://github.com/tesseract-ocr/tessdata_fast/blob/87416418657359cb625c412a48b6e1d6d41c29bd/khm.traineddata
 [lic]: https://github.com/tesseract-ocr/tessdata_fast/blob/87416418657359cb625c412a48b6e1d6d41c29bd/LICENSE
+
+When one OCR segment contains multiple words and overlaps a numeric source crop,
+recovery leaves that segment unchanged: its word positions are unavailable, so
+appending the number could move it past suffix prose. Single OCR tokens remain
+intact and can still appear beside a recovered number. The ordering control
+uses readable prose on both sides of the painted digit, compares the result with
+the primary-only read, and retains the standalone top/bottom recovery positives.

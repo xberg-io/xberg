@@ -311,7 +311,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Upright crops can restore omitted numbers when the model accompanies the selected primary model.
   English-only text and forced OCR stay unchanged. Missing Khmer models warn on eligible default
   automatic pages only. Recovery retains OCR tokens, so misread neighbors can remain, and declines
-  transformed or ambiguous source claims.
+  transformed or ambiguous source claims. Numeric crops overlapping merged prose
+  segments are declined when their internal word positions are unavailable.
   No runtime model download; the original reporter page remains unverified.
 
 - **(pdf): Keep a page's native text when the OCR read of a script it is written in contains none of that script.** (#2794)

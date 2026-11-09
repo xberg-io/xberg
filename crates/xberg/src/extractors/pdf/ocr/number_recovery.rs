@@ -491,11 +491,12 @@ fn line_owns(line: &PdfLine, bbox: Rect) -> bool {
     if !line.segments.windows(2).all(|pair| pair[0].x <= pair[1].x) {
         return false;
     }
-    if line
-        .segments
-        .iter()
-        .any(|segment| segment.text.chars().any(char::is_numeric))
-    {
+    if line.segments.iter().any(|segment| {
+        segment.text.chars().any(char::is_numeric)
+            || (segment.text.split_whitespace().nth(1).is_some()
+                && segment.x < bbox.x + bbox.width
+                && bbox.x < segment.x + segment.width)
+    }) {
         return false;
     }
     let bounds = line.segments.iter().fold(

@@ -107,7 +107,7 @@ fn should_refuse_overlapping_claims_for_one_painted_occurrence() {
 }
 
 #[test]
-fn should_keep_original_prose_with_descending_x_reading_order() {
+fn should_keep_original_prose_when_numeric_order_is_not_proved() {
     let mut paragraphs = [paragraph("right left", "right")];
     paragraphs[0].lines[0].segments[0].x = 80.0;
     let mut left = segment("left");
@@ -116,6 +116,10 @@ fn should_keep_original_prose_with_descending_x_reading_order() {
     assert!(!insert(vec![number("០", 60.0)], &mut paragraphs, (1.0, 1.0), 100));
     assert_eq!(paragraphs[0].text, "right left");
     assert_eq!(paragraphs[0].lines[0].segments[0].text, "right");
+    let mut merged = [paragraph("Amount O due", "Amount O due")];
+    assert!(!insert(vec![number("០", 30.0)], &mut merged, (1.0, 1.0), 100));
+    assert_eq!(merged[0].text, "Amount O due");
+    assert_eq!(merged[0].lines[0].segments[0].text, "Amount O due");
 }
 
 #[test]
@@ -194,6 +198,14 @@ fn heading_signature(paragraphs: Vec<PdfParagraph>) -> Vec<(u8, String)> {
 
 fn assert_number_keeps_heading_structure() {
     let mut paragraphs = heading_control_paragraphs();
+    let line = &mut paragraphs[1].lines[0];
+    let mut suffix = line.segments[0].clone();
+    line.segments[0].text = "Ordinary".into();
+    line.segments[0].width = 20.0;
+    suffix.text = "descriptive prose remains readable as the body paragraph.".into();
+    suffix.x = 50.0;
+    suffix.width = 50.0;
+    line.segments.push(suffix);
     let before = heading_signature(paragraphs.clone());
     assert_eq!(before, vec![(1, "SECTION TITLE".into())]);
     let mut numeric = number("០", 30.0);

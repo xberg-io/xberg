@@ -416,15 +416,17 @@ fn replace_scan(doc: &mut lopdf::Document, raster: image::RgbImage) {
 
 #[test]
 #[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
-fn recovery_keeps_a_bottom_number_after_the_prose_in_plain_and_markdown() {
+fn recovery_keeps_prose_order_without_guessing_inline_word_boundaries() {
     let (_models, config) = provisioned_config();
     let moved = moved_number(true);
+    let inline = inline_number_between_prose();
     for format in [xberg::OutputFormat::Plain, xberg::OutputFormat::Markdown] {
         let config = ExtractionConfig {
             output_format: format,
             include_document_structure: true,
             ..config.clone()
         };
+        assert_inline_prose_is_unchanged(&inline, &config);
         let result = extract(&moved, &config);
         assert_ocr_retains_prose(&result);
         for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
@@ -574,4 +576,55 @@ fn deskewed_primary_does_not_promote_a_number_in_the_original_source_frame() {
             "a deskewed frame needs its transform: {text}"
         );
     }
+}
+
+fn inline_number_between_prose() -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(MATCHING).unwrap();
+    let mut raster = image::load_from_memory(&rendered(MATCHING)).unwrap().into_rgb8();
+    let word = image::imageops::crop_imm(&raster, 200, 220, 135, 100).to_image();
+    let prose = image::imageops::crop_imm(&raster, 204, 365, 151, 45).to_image();
+    let prose = image::imageops::resize(&prose, 302, 90, image::imageops::FilterType::Lanczos3);
+    for y in 220..320 {
+        for x in 200..335 {
+            raster.put_pixel(x, y, image::Rgb([255; 3]));
+        }
+    }
+    image::imageops::replace(&mut raster, &word, 617, 220);
+    image::imageops::replace(&mut raster, &prose, 280, 226);
+    image::imageops::replace(&mut raster, &prose, 787, 226);
+    replace_scan(&mut doc, raster);
+    let mut changed = 0;
+    for object in doc.objects.values_mut() {
+        let Ok(stream) = object.as_stream_mut() else { continue };
+        let Ok(bytes) = stream.decompressed_content() else {
+            continue;
+        };
+        if let Ok(text) = String::from_utf8(bytes)
+            && text.contains("100 650 Tm")
+        {
+            assert_eq!(text.matches("100 650 Tm").count(), 1);
+            stream.set_plain_content(text.replace("100 650 Tm", "300 650 Tm").into_bytes());
+            changed += 1;
+        }
+    }
+    assert_eq!(changed, 1);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn assert_inline_prose_is_unchanged(input: &[u8], config: &ExtractionConfig) {
+    let mut primary_only = config.clone();
+    primary_only.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({"use_cache": false}));
+    let before = extract(input, &primary_only);
+    assert_ocr_retains_prose(&before);
+    assert!(before.content.lines().any(|line| line.matches("office").count() == 2));
+    assert_eq!(before.content.matches('០').count(), 0);
+    let after = extract(input, config);
+    assert_ocr_retains_prose(&after);
+    assert_eq!(after.content, before.content, "no proved interior word boundary");
+    assert_eq!(
+        after.pages.as_ref().unwrap()[0].content,
+        before.pages.as_ref().unwrap()[0].content
+    );
 }
