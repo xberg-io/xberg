@@ -875,7 +875,11 @@ fn test_extractor_prepare_for_span_extraction() {
     extractor.extract_spans = false;
     extractor.span_sequence_counter = 42;
     extractor.pen_seam = Some(PenSeam::ContinuesPen);
-    extractor.pen_continuations.insert(SpanKey { sequence: 7, x_bits: 0 });
+    extractor.pen_continuations.insert(SpanKey {
+        sequence: 7,
+        x_bits: 0,
+        y_bits: 0,
+    });
     extractor.prepare_for_span_extraction();
     assert!(extractor.extract_spans);
     assert_eq!(extractor.span_sequence_counter, 0);
@@ -887,6 +891,19 @@ fn test_extractor_prepare_for_span_extraction() {
     assert!(
         extractor.pen_continuations.is_empty(),
         "pen marks do not outlive the extraction they were set in"
+    );
+}
+
+#[test]
+fn span_key_tells_two_spans_apart_that_differ_only_in_y() {
+    // A cached form replays spans with the sequence numbers of an earlier extraction, so a later
+    // span can share sequence and x with a marked one on another line.
+    let marked = snap_span("a", 100.0, 700.0, 10.0, 10.0, 3);
+    let later = snap_span("a", 100.0, 650.0, 10.0, 10.0, 3);
+    assert_ne!(SpanKey::of(&marked), SpanKey::of(&later));
+    assert_eq!(
+        SpanKey::of(&marked),
+        SpanKey::of(&snap_span("b", 100.0, 700.0, 4.0, 10.0, 3))
     );
 }
 

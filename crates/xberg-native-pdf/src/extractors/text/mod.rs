@@ -1871,23 +1871,30 @@ enum PenSeam {
     ContinuesPen,
 }
 
-/// The identity of a span before the merge: its sequence number and the bits of its x coordinate.
+/// The identity of a span before the merge: its sequence number and the bits of its x and y coordinates.
 ///
 /// Sequence numbers are unique within one extraction, but a cached form XObject replays spans with
-/// the sequence numbers of an earlier extraction, so the key holds the x coordinate too. The y
-/// coordinate is not part of the key: the script snap moves it before the merge. ~keep
+/// the sequence numbers of an earlier extraction, so the key holds the position too. A script snap
+/// that moves the y of a raised glyph before the merge drops its mark, which is the safe side: the
+/// gap is then read through the fallback-width correction, as before. ~keep
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SpanKey {
     sequence: usize,
     x_bits: u32,
+    y_bits: u32,
 }
 
 impl SpanKey {
-    fn of(span: &TextSpan) -> Self {
+    fn at(sequence: usize, x: f32, y: f32) -> Self {
         SpanKey {
-            sequence: span.sequence,
-            x_bits: span.bbox.x.to_bits(),
+            sequence,
+            x_bits: x.to_bits(),
+            y_bits: y.to_bits(),
         }
+    }
+
+    fn of(span: &TextSpan) -> Self {
+        Self::at(span.sequence, span.bbox.x, span.bbox.y)
     }
 }
 
