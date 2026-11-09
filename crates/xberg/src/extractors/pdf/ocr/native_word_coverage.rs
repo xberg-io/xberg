@@ -645,6 +645,27 @@ pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDo
         && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
 }
 
+/// Only for a complete read already certified by `native_text_paints_all_read_ink`: its final
+/// structure may omit words, but every retained occurrence and asset must remain certified. ~keep
+pub(super) fn uses_only_certified_tesseract_text_and_tables(doc: &InternalDocument, read: &str) -> bool {
+    doc.prebuilt_ocr_elements.is_none()
+        && super::document::ocr_page_uses_only_read_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
+}
+
+/// Only an admission with a complete native layer may omit words from the final structure.
+/// Marker-bearing layers and later ink-only admissions retain exact matching. ~keep
+pub(super) fn ink_owned_table_structure_can_yield_to_native(
+    doc: &InternalDocument,
+    read: &str,
+    original_native_layer: Option<&str>,
+) -> bool {
+    if original_native_layer.is_some_and(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)) {
+        uses_only_certified_tesseract_text_and_tables(doc, read)
+    } else {
+        only_segments_certified_tesseract_text_and_tables(doc, read)
+    }
+}
+
 fn is_hocr_bookkeeping_with_tables(key: &str, value: &serde_json::Value) -> bool {
     match key {
         "tables_detected" | "table_count" | "table_rows" | "table_cols" => value.as_u64().is_some(),
@@ -678,3 +699,7 @@ fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {
 #[cfg(test)]
 #[path = "native_word_coverage_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "native_word_coverage_structure_tests.rs"]
+mod structure_tests;
