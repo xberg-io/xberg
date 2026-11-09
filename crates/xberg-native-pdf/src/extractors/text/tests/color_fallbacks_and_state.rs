@@ -191,6 +191,7 @@ fn test_should_insert_space_with_email_config() {
         None,
         12.0,
         12.0,
+        false,
     );
     assert!(
         !decision.insert_space,
@@ -220,6 +221,7 @@ fn test_should_insert_space_email_large_gap() {
         None,
         12.0,
         12.0,
+        false,
     );
     assert!(decision.insert_space, "Email context should insert space for large gap");
 }
@@ -248,6 +250,7 @@ fn test_should_insert_space_email_with_font_info() {
         None,
         12.0,
         12.0,
+        false,
     );
     assert!(!decision.insert_space);
 }
@@ -277,6 +280,7 @@ fn test_should_insert_space_citation_context() {
         Some(&next_bbox),
         12.0,
         7.2,
+        false,
     );
     assert!(decision.insert_space, "Citation context with TJ should insert space");
 }
@@ -297,7 +301,7 @@ fn test_should_insert_space_emoji_letter_boundary() {
     // The real case (arxiv_2510.26287): a wide emoji glyph abuts the next
     // token, so the gap is exactly 0. The space must still be kept. ~keep
     let decision0 = should_insert_space(
-        "📄", "README", 0.0, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0,
+        "📄", "README", 0.0, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(
         decision0.insert_space,
@@ -305,7 +309,7 @@ fn test_should_insert_space_emoji_letter_boundary() {
     );
 
     let decision = should_insert_space(
-        "📄", "README", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0,
+        "📄", "README", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(
         decision.insert_space,
@@ -315,7 +319,7 @@ fn test_should_insert_space_emoji_letter_boundary() {
     // A combined emoji sequence (next char is another pictograph, not a
     // letter) must NOT be forced into a space by this rule. ~keep
     let combined = should_insert_space(
-        "📄", "📄", 0.0, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0,
+        "📄", "📄", 0.0, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(!combined.insert_space, "emoji→emoji must not be forced into a space");
 }
@@ -344,6 +348,7 @@ fn test_should_insert_space_citation_geometric() {
         Some(&next_bbox),
         12.0,
         7.2,
+        false,
     );
     assert!(
         decision.insert_space,
@@ -376,6 +381,7 @@ fn test_should_insert_space_citation_with_font() {
         Some(&next_bbox),
         12.0,
         7.2,
+        false,
     );
     assert!(decision.insert_space);
 }
@@ -401,6 +407,7 @@ fn test_line_break_different_column() {
         Some(&next_bbox),
         12.0,
         12.0,
+        false,
     );
     // Different column - should not trigger same_column line break path
     // The default no space path should apply ~keep
@@ -427,6 +434,7 @@ fn test_line_break_not_triggered_small_vertical_gap() {
         Some(&next_bbox),
         12.0,
         12.0,
+        false,
     );
 }
 
@@ -453,6 +461,7 @@ fn test_should_insert_space_tiebreaker_with_bboxes() {
         Some(&next_bbox),
         12.0,
         12.0,
+        false,
     );
     // Result depends on WordBoundaryDetector ~keep
 }
@@ -479,6 +488,7 @@ fn test_should_insert_space_geometric_only_conflict() {
         Some(&next_bbox),
         12.0,
         12.0,
+        false,
     );
     // Geometric alone - should go through tiebreaker path ~keep
 }
@@ -491,7 +501,7 @@ fn test_should_insert_space_font_aware() {
 
     // With font info, threshold is calculated from font metrics ~keep
     let decision = should_insert_space(
-        "word", "next", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0,
+        "word", "next", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     // The result depends on font-specific threshold ~keep
 }
@@ -885,6 +895,7 @@ fn test_deduplicate_content_based() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -915,6 +926,7 @@ fn test_deduplicate_content_based() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
