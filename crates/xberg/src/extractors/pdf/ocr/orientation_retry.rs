@@ -86,6 +86,18 @@ impl OrientationRetry {
     }
 
     #[cfg(auto_rotate)]
+    async fn classifier_ready(&self) -> bool {
+        *self
+            .cached_model_ready
+            .get_or_init(|| async {
+                tokio::task::spawn_blocking(|| tesseract_detector().prepare_cached())
+                    .await
+                    .unwrap_or(false)
+            })
+            .await
+    }
+
+    #[cfg(auto_rotate)]
     async fn prepare_retry(
         &self,
         cancel: Option<&CancellationToken>,
@@ -95,14 +107,7 @@ impl OrientationRetry {
         if self.attempts.lock().step().is_err() {
             return Ok(false);
         }
-        let ready = self
-            .cached_model_ready
-            .get_or_init(|| async {
-                tokio::task::spawn_blocking(|| tesseract_detector().prepare_cached())
-                    .await
-                    .unwrap_or(false)
-            })
-            .await;
+        let ready = self.classifier_ready().await;
         check_cancelled(cancel)?;
         if !ready {
             return Ok(false);
@@ -276,7 +281,16 @@ impl OrientationRetry {
             // excludes tables and formulas, so `after_implicit`'s own early return on them
             // agrees with it. ~keep
             #[cfg(auto_rotate)]
-            return self.after_implicit(backend, raster, config, original, cancel).await;
+            {
+                // A read kept because the classifier is not installed yet must not be served
+                // after it is: the cache context tracks OSD readiness, not the classifier's. ~keep
+                if !self.classifier_ready().await {
+                    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+                    crate::core::extractor::cacheability::invalidate_current();
+                    return Ok(original);
+                }
+                return self.after_implicit(backend, raster, config, original, cancel).await;
+            }
             #[cfg(not(auto_rotate))]
             return Ok(original);
         };

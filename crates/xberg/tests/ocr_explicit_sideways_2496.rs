@@ -502,6 +502,47 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     assert_route("after", &after, Route::Osd);
 }
 
+#[cfg(feature = "auto-rotate-tract")]
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn a_read_kept_before_the_classifier_is_installed_is_not_cached_or_served_after_it() {
+    const CASE: &str = "a_read_kept_before_the_classifier_is_installed_is_not_cached_or_served_after_it";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child_without_classifier(CASE);
+        return;
+    }
+    let models = tempfile::tempdir().unwrap();
+    let mut config = no_osd_config(models.path(), None);
+    config.use_cache = true;
+    let cache = std::sync::Arc::new(DocumentResultsCache::default());
+    let engine = xberg::engine::Engine::builder()
+        .with_cache_backend(cache.clone())
+        .build();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let before = read_engine(&engine, &runtime, &config);
+    assert_original_read(&before);
+    assert_eq!(
+        cache.writes.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "a read kept only because the classifier is missing must not be cached"
+    );
+    let model = std::fs::read(std::env::var_os("XBERG_ORIENTATION_TEST_MODEL").unwrap()).unwrap();
+    let destination = std::path::PathBuf::from(std::env::var_os("HF_HUB_CACHE").unwrap()).join(
+        "models--xberg-io--paddleocr-onnx-models/snapshots/bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8/\
+         v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx",
+    );
+    std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    std::fs::write(destination, model).unwrap();
+    let after = read_engine(&engine, &runtime, &config);
+    assert_source_table(&after);
+    assert_route("after", &after, Route::Classifier);
+    assert_eq!(cache.hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(cache.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
 #[derive(Default)]
 struct DocumentResultsCache {
     entries: std::sync::Mutex<HashMap<String, Vec<u8>>>,
@@ -752,10 +793,22 @@ fn report(name: &str, result: &ExtractedDocument) {
 }
 
 fn run_private_child(case: &str) {
+    spawn_private_child(case, true);
+}
+
+/// Like `run_private_child`, but the hub starts without the orientation classifier.
+#[cfg(feature = "auto-rotate-tract")]
+fn run_private_child_without_classifier(case: &str) {
+    spawn_private_child(case, false);
+}
+
+fn spawn_private_child(case: &str, seed_classifier: bool) {
+    #[cfg(not(feature = "auto-rotate-tract"))]
+    let _ = seed_classifier;
     let root = tempfile::tempdir().unwrap();
     let hub = root.path().join("hub");
     #[cfg(feature = "auto-rotate-tract")]
-    {
+    if seed_classifier {
         let model = std::fs::read(
             std::env::var_os("XBERG_ORIENTATION_TEST_MODEL")
                 .expect("set the pinned orientation model path; this test must not silently skip"),
