@@ -1762,12 +1762,14 @@ fn mixed_route_config(backend: &str, pipeline: bool) -> crate::core::config::Ext
     }
 }
 
-/// The mixed route judges a marked page on its readable text: a weak OCR read does not replace the
-/// page under a single backend, and a pipeline the user configured replaces it as before. ~keep
+/// The mixed route judges a marked page on its readable text only on same-page evidence for its
+/// layer, which only the built-in Tesseract read gives. A custom backend gives none, so its weak
+/// read replaces the marked page under a single backend and under a configured pipeline alike.
+/// The twin: the same page and read with evidence for the page keep the native text. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial_test::serial]
-async fn the_mixed_route_keeps_a_marked_page_unless_the_user_configured_a_pipeline() {
+async fn the_mixed_route_gives_a_marked_page_without_evidence_to_ocr_with_or_without_a_pipeline() {
     use super::super::pipeline::extract_mixed_ocr_native;
     const BACKEND: &str = "marked-page-route-backend";
     const READ: &str = "two stray words only";
@@ -1788,19 +1790,28 @@ async fn the_mixed_route_keeps_a_marked_page_unless_the_user_configured_a_pipeli
     crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
     for (pipeline, run) in results {
         let (text, replaced, ..) = run.unwrap();
-        if pipeline {
-            assert!(
-                replaced.get(&1).is_some_and(|text| text.contains(READ)),
-                "a configured pipeline replaces the marked page: {text:?}"
-            );
-        } else {
-            assert!(
-                replaced.is_empty(),
-                "a single backend keeps the marked page: {replaced:?}"
-            );
-            assert_eq!(text, page, "the native text of the kept page is unchanged");
-        }
+        assert!(
+            replaced.get(&1).is_some_and(|text| text.contains(READ)),
+            "pipeline {pipeline}: the read replaces the marked page without evidence: {text:?}"
+        );
+        assert!(
+            !text.contains('\u{FFFD}'),
+            "pipeline {pipeline}: no marker of the replaced layer is printed: {text:?}"
+        );
     }
+    use super::super::document::{accepted_ocr_page_replacements, apply_ocr_page_replacements};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let read: ahash::AHashMap<u32, String> = [(1, READ.to_string())].into_iter().collect();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, &evidence(&[1]));
+    assert!(
+        accepted.is_empty(),
+        "twin: same-page evidence keeps the weak read out: {accepted:?}"
+    );
+    assert_eq!(
+        apply_ocr_page_replacements(&page, &one_page(&page), &accepted),
+        page,
+        "twin: the native text of the kept page is unchanged"
+    );
 }
 
 /// The premise of the route test: under the `full` build the default config has an effective
