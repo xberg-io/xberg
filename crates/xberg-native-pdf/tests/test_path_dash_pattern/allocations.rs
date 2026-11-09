@@ -112,3 +112,44 @@ fn should_not_clone_indirect_extgstate_dictionary_for_each_gs_operator() {
 fn should_not_clone_indirect_named_state_for_each_gs_operator() {
     assert_bounded_state_allocations(StateStorage::IndirectState);
 }
+
+/// Every `/S{i}` is used exactly once, so each name is a cache miss in its resource scope.
+fn distinct_name_allocations(states: usize, storage: StateStorage) -> usize {
+    let dictionary = (0..states)
+        .map(|index| format!("/S{index} << /CA 1 >>"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let content = format!(
+        "{}0 700 m 300 700 l S",
+        (0..states).map(|index| format!("/S{index} gs ")).collect::<String>()
+    );
+    let (resources, objects) = match storage {
+        StateStorage::Inline => (format!("/ExtGState << {dictionary} >>"), vec![]),
+        _ => ("/ExtGState 5 0 R".to_owned(), vec![format!("<< {dictionary} >>")]),
+    };
+    let objects = objects.iter().map(String::as_str).collect::<Vec<_>>();
+    let document = document_with_resource_objects(content.as_bytes(), &resources, &objects);
+    ALLOCATIONS.set(0);
+    COUNTING.set(true);
+    let scope = CountingScope;
+    let paths = document.extract_paths(0).expect("distinct gs extraction");
+    drop(scope);
+    assert_eq!(paths.len(), 1);
+    ALLOCATIONS.get()
+}
+
+#[test]
+fn should_resolve_indirect_extgstate_once_for_many_distinct_names() {
+    const NAMES: usize = 2000;
+    let small = distinct_name_allocations(NAMES, StateStorage::IndirectDictionary);
+    let large = distinct_name_allocations(2 * NAMES, StateStorage::IndirectDictionary);
+    let inline = distinct_name_allocations(2 * NAMES, StateStorage::Inline);
+    assert!(
+        large < small * 3,
+        "allocations grew superlinearly: N={small}, 2N={large}"
+    );
+    assert!(
+        large <= inline * 2,
+        "indirect dictionary costs far more than inline: indirect={large}, inline={inline}"
+    );
+}

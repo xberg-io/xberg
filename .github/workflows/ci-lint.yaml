@@ -107,6 +107,8 @@ jobs:
         run: mise run fixtures:test
       - name: Test the classic OCR cache acceptance harness
         run: mise run test:classic-ocr-cache:harness
+      - name: Test the PP-DocLayoutV3 cross-runtime comparison
+        run: mise run test:v3-cross-runtime
 
   plugin-freshness:
     if: >-
