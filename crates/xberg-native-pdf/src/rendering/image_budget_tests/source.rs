@@ -9,6 +9,15 @@ pub(super) fn jpeg(dimension: u32) -> Vec<u8> {
     bytes
 }
 
+pub(super) fn jpeg_of(width: u32, height: u32) -> Vec<u8> {
+    let pixels = vec![0; width as usize * height as usize * 3];
+    let mut bytes = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+        .encode(&pixels, width, height, image::ExtendedColorType::Rgb8)
+        .unwrap();
+    bytes
+}
+
 /// A header-valid four-component sequential JPEG: an RGB frame whose SOF0 declares four components.
 /// Only the headers are read for admission.
 pub(super) fn cmyk_jpeg(dimension: u32) -> Vec<u8> {
@@ -51,6 +60,18 @@ pub(super) fn document_with_paint(jpeg: &[u8], declared: u32, overlay: bool, ins
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
         stream("", &content),
         stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode"), jpeg),
+    ];
+    from_objects(&objects)
+}
+
+/// A 32 pt page painting `/Im0` under `content`, with `entries` added to the image dictionary.
+pub(super) fn document_painting(jpeg: &[u8], declared: u32, content: &[u8], entries: &str) -> PdfDocument {
+    let objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
+        stream("", content),
+        stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode {entries}"), jpeg),
     ];
     from_objects(&objects)
 }

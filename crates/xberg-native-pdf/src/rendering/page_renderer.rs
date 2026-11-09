@@ -3735,8 +3735,8 @@ impl PageRenderer {
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
             canvas = sidecar.saturating_add(pixmap.data().len() as u64);
-            // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
-            if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
+            // A colour-key /Mask indexes the full-size samples. ~keep
+            if matches!(mask_obj, Some(Object::Array(_))) {
                 budget.admit_jpeg(&pdf_image, canvas)?;
             } else {
                 let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
