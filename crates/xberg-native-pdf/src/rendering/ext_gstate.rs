@@ -199,7 +199,8 @@ fn parse_dash(d: &Object, doc: &impl ObjectResolver) -> Option<(Vec<f32>, f32)> 
 /// each is resolved before pattern-matching its name. ~keep
 fn parse_blend_mode(bm: &Object, doc: &impl ObjectResolver) -> String {
     match bm {
-        Object::Name(n) => n.clone(),
+        Object::Name(n) if crate::rendering::sidecar::is_recognised_mode(n) => n.clone(),
+        Object::Name(_) => "Normal".to_string(),
         Object::Array(arr) => arr
             .iter()
             .filter_map(|elem| doc.resolve_object(elem).ok())
